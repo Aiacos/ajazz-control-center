@@ -2,6 +2,7 @@
 #include "ajazz/core/event_bus.hpp"
 
 #include <atomic>
+
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("event bus delivers to every subscriber", "[eventbus]") {
@@ -14,7 +15,7 @@ TEST_CASE("event bus delivers to every subscriber", "[eventbus]") {
     bus.subscribe([&](auto const&, auto const&) { ++bCount; });
 
     for (int i = 0; i < 5; ++i) {
-        bus.publish({ 0x1234, 0x5678, "serial" }, {});
+        bus.publish({0x1234, 0x5678, "serial"}, {});
     }
 
     REQUIRE(aCount == 5);

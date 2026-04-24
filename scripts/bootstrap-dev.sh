@@ -119,6 +119,24 @@ detect_and_install() {
     install_udev
 }
 
+# ---------- pre-commit hooks ----------------------------------------------
+install_precommit() {
+    step "Installing pre-commit hooks"
+    if ! need pre-commit; then
+        if need pipx; then
+            pipx install pre-commit
+        else
+            pip install --user pre-commit || {
+                warn "pip install failed; skipping pre-commit setup. Run 'pip install pre-commit' manually later."
+                return 0
+            }
+        fi
+    fi
+    (cd "$ROOT" && pre-commit install && pre-commit install --hook-type commit-msg) || \
+        warn "pre-commit install skipped (not a git repo yet?)"
+    ok "pre-commit installed — hooks run automatically on every commit"
+}
+
 # ---------- build ----------------------------------------------------------
 build() {
     step "Configuring with preset 'dev'"
@@ -132,6 +150,7 @@ build() {
 main() {
     cd "$ROOT"
     detect_and_install
+    install_precommit
     build
     cat <<EOF
 

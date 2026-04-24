@@ -55,11 +55,70 @@ See [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md). In short
 2. Document the protocol in `docs/protocols/<family>/<model>.md`.
 3. Implement the backend under `src/devices/<family>/<model>/`.
 4. Add at least one capture-replay integration test.
-5. Update `README.md`'s support matrix.
+5. **Add an entry to `docs/_data/devices.yaml`** — the README support matrix
+   and every table in the wiki are regenerated from this YAML. Do not edit
+   the tables by hand; see §7.2 below.
 
 ### 7. Documentation
 
 Any change that alters a public API, configuration file, packaging artifact or user-visible behavior must update the corresponding documentation page.
+
+#### 7.1 Docs live in two places
+
+- `README.md` — repository landing page.
+- `docs/wiki/*.md` — published to the GitHub Wiki on every push to `main`
+  by the `wiki.yml` workflow.
+
+Keep deep-dive content in the wiki; keep the README short and marketing-y.
+
+#### 7.2 README and wiki are generated — never hand-edit AUTOGEN blocks
+
+Device tables, statistics and legends appear in multiple files. To avoid
+drift, they are **generated** from a single source of truth:
+
+- **Source of truth:** [`docs/_data/devices.yaml`](docs/_data/devices.yaml)
+- **Generator:** [`scripts/generate-docs.py`](scripts/generate-docs.py)
+- **Targets:** `README.md`, `docs/wiki/Supported-Devices.md`,
+  `docs/wiki/Home.md`
+
+Inside each target, a block of the form
+
+```markdown
+<!-- BEGIN AUTOGEN: devices-by-family -->
+   … generated table …
+<!-- END AUTOGEN: devices-by-family -->
+```
+
+is rewritten in place on every run. Available block names:
+`devices-table`, `devices-by-family`, `platform-matrix`, `stats`,
+`legend`, `toc-wiki`.
+
+**Workflow:**
+
+```bash
+# Edit the source
+$EDITOR docs/_data/devices.yaml
+
+# Regenerate all AUTOGEN blocks
+make docs
+
+# Commit both the YAML and the regenerated files together
+git add docs/_data/devices.yaml README.md docs/wiki/
+git commit -m "docs(devices): add AKP815"
+```
+
+**Automation keeps this invariant:**
+
+- A pre-commit hook (`regenerate-docs`) runs `make docs` whenever
+  `docs/_data/**`, `src/devices/**`, the generator script, the README or
+  any wiki page changes — so you (almost) never have to remember `make
+  docs`.
+- CI runs `python3 scripts/generate-docs.py --check` and fails a PR if
+  any AUTOGEN block is out of date.
+
+If you *really* need custom prose next to a generated table, add it
+*outside* the `BEGIN`/`END` markers. Anything between the markers will be
+overwritten.
 
 ### 8. Signing off
 

@@ -24,12 +24,12 @@ class ITransport {
 public:
     virtual ~ITransport() = default;
 
-    ITransport(ITransport const&)            = delete;
+    ITransport(ITransport const&) = delete;
     ITransport& operator=(ITransport const&) = delete;
-    ITransport(ITransport&&)                 = delete;
-    ITransport& operator=(ITransport&&)      = delete;
+    ITransport(ITransport&&) = delete;
+    ITransport& operator=(ITransport&&) = delete;
 
-    virtual void open()  = 0;
+    virtual void open() = 0;
     virtual void close() = 0;
     [[nodiscard]] virtual bool isOpen() const noexcept = 0;
 
@@ -42,7 +42,7 @@ public:
     virtual std::size_t read(std::span<std::uint8_t> out, std::chrono::milliseconds timeout) = 0;
 
     virtual std::size_t writeFeature(std::span<std::uint8_t const> data) = 0;
-    virtual std::size_t readFeature(std::span<std::uint8_t> out)         = 0;
+    virtual std::size_t readFeature(std::span<std::uint8_t> out) = 0;
 
     [[nodiscard]] virtual TransportStats stats() const noexcept = 0;
 
@@ -52,8 +52,8 @@ protected:
 
 using TransportPtr = std::unique_ptr<ITransport>;
 
-}  // namespace ajazz::core
+} // namespace ajazz::core
 
 // <chrono> is kept out of the public surface by forward-declaring the type
 // above; include it here so consumers do not need to.
-#include <chrono>  // IWYU pragma: keep
+#include <chrono> // IWYU pragma: keep

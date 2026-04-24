@@ -15,24 +15,24 @@
 namespace ajazz::streamdeck::akp153 {
 
 // USB ids observed on the HSV293S hardware family.
-inline constexpr std::uint16_t VendorId              = 0x0300;
-inline constexpr std::uint16_t ProductIdInternational = 0x1001;  // AKP153
-inline constexpr std::uint16_t ProductIdChinese      = 0x1002;  // AKP153E
+inline constexpr std::uint16_t VendorId = 0x0300;
+inline constexpr std::uint16_t ProductIdInternational = 0x1001; // AKP153
+inline constexpr std::uint16_t ProductIdChinese = 0x1002;       // AKP153E
 
 // Display: 15 keys, 85×85 JPEG-encoded.
-inline constexpr std::uint8_t  KeyCount     = 15;
-inline constexpr std::uint16_t KeyWidthPx   = 85;
-inline constexpr std::uint16_t KeyHeightPx  = 85;
+inline constexpr std::uint8_t KeyCount = 15;
+inline constexpr std::uint16_t KeyWidthPx = 85;
+inline constexpr std::uint16_t KeyHeightPx = 85;
 
-inline constexpr std::size_t   PacketSize   = 512;
+inline constexpr std::size_t PacketSize = 512;
 
 // Command prefixes observed in captures.
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54};  // "CRT"
+inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; // "CRT"
 
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};   // "LIG"
-inline constexpr std::array<std::uint8_t, 3> CmdBat  {0x42, 0x41, 0x54};   // "BAT"
-inline constexpr std::array<std::uint8_t, 3> CmdStop {0x53, 0x54, 0x50};   // "STP"
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};   // "CLE"
+inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47}; // "LIG"
+inline constexpr std::array<std::uint8_t, 3> CmdBat{0x42, 0x41, 0x54};   // "BAT"
+inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  // "STP"
+inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; // "CLE"
 
 /// Build a `Set Brightness` output report (512 bytes, zero padded).
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent);
@@ -57,10 +57,10 @@ inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};   // "C
 /// ACK frames or malformed packets.
 struct KeyEvent {
     std::uint8_t keyIndex;
-    bool         pressed;
+    bool pressed;
 };
 [[nodiscard]] std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame);
 
-}  // namespace ajazz::streamdeck::akp153
+} // namespace ajazz::streamdeck::akp153
 
-#include <optional>  // IWYU pragma: keep
+#include <optional> // IWYU pragma: keep

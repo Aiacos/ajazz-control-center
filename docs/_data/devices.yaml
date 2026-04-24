@@ -1,0 +1,168 @@
+# =============================================================================
+# Single source of truth for device support data.
+#
+# Every table or list in README.md / docs/wiki/Supported-Devices.md that
+# mentions device status, USB IDs, features, or capabilities is GENERATED
+# from this file by `scripts/generate-docs.py`.
+#
+# To update the public-facing docs:
+#   1. Edit this file (or just add a new entry at the bottom).
+#   2. Run `make docs` (or let the pre-commit hook / CI do it for you).
+#
+# Never hand-edit the AUTOGEN blocks in README.md or the wiki — any manual
+# change there will be overwritten at the next sync.
+# =============================================================================
+
+# status buckets — order controls table sort + legend order
+statuses:
+  stable:       { emoji: "🟢", label: "stable",       description: "every vendor feature works" }
+  functional:   { emoji: "🟢", label: "functional",   description: "core I/O works (keys/LEDs)" }
+  scaffolded:   { emoji: "🟡", label: "scaffolded",   description: "enumerated, protocol being mapped" }
+  requested:    { emoji: "🟠", label: "requested",    description: "captures wanted" }
+
+# capability keys → human label (used in feature matrix)
+capabilities:
+  display:  "Per-key display"
+  rgb:      "RGB backlight"
+  encoder:  "Encoder / dial"
+  touch:    "Touch strip"
+  macros:   "Macros"
+  dpi:      "DPI stages"
+  layers:   "Layers"
+  firmware: "Firmware version"
+
+# ---------------------------------------------------------------------------
+# Devices
+# ---------------------------------------------------------------------------
+devices:
+  # ----- Stream decks ------------------------------------------------------
+  - codename:    akp153
+    family:      streamdeck
+    name:        "AJAZZ AKP153 / Mirabox HSV293S"
+    vid:         "0x0300"
+    pid:         "0x1001"
+    keys:        15
+    encoders:    0
+    status:      functional
+    capabilities: [display, rgb, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes:       "Reference implementation. JPEG 85×85 per-key images."
+
+  - codename:    akp153e
+    family:      streamdeck
+    name:        "AJAZZ AKP153E (China variant)"
+    vid:         "0x0300"
+    pid:         "0x1002"
+    keys:        15
+    encoders:    0
+    status:      functional
+    capabilities: [display, rgb, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes:       "Same protocol family as AKP153."
+
+  - codename:    akp03
+    family:      streamdeck
+    name:        "AJAZZ AKP03 / Mirabox N3"
+    vid:         "0x0300"
+    pid:         "0x3001"
+    keys:        6
+    encoders:    1
+    status:      scaffolded
+    capabilities: [display, rgb, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes:       "6-key + knob variant. PNG 72×72 image codec."
+
+  - codename:    akp05
+    family:      streamdeck
+    name:        "AJAZZ AKP05 / AKP05E (knobs)"
+    vid:         "0x0300"
+    pid:         "0x5001"
+    keys:        15
+    encoders:    4
+    status:      scaffolded
+    capabilities: [display, rgb, encoder, touch, macros]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes:       "Stream Dock Plus class: encoders + touch strip + main LCD."
+
+  # ----- Keyboards ---------------------------------------------------------
+  - codename:    via_generic
+    family:      keyboard
+    name:        "AJAZZ AK series (QMK/VIA-compatible)"
+    vid:         "0x3151"
+    pid:         "various"
+    status:      functional
+    capabilities: [rgb, macros, layers, firmware]
+    protocol_doc: docs/protocols/keyboard/via.md
+    notes:       "Any VIA JSON layout is supported."
+
+  - codename:    proprietary
+    family:      keyboard
+    name:        "AJAZZ AK series (proprietary)"
+    vid:         "0x3151"
+    pid:         "various"
+    status:      scaffolded
+    capabilities: [rgb, macros, layers]
+    protocol_doc: docs/protocols/keyboard/proprietary.md
+    notes:       "Closed firmware; reverse-engineering in progress."
+
+  # ----- Mice --------------------------------------------------------------
+  - codename:    aj159
+    family:      mouse
+    name:        "AJAZZ AJ159"
+    vid:         "0x3554"
+    pid:         "0xf51a"
+    status:      functional
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages:  4
+    notes:       "PAW3395 sensor."
+
+  - codename:    aj199
+    family:      mouse
+    name:        "AJAZZ AJ199"
+    vid:         "0x3554"
+    pid:         "0xf51b"
+    status:      functional
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages:  4
+    notes:       "PAW3395 sensor."
+
+  - codename:    aj339
+    family:      mouse
+    name:        "AJAZZ AJ339"
+    vid:         "0x3554"
+    pid:         "0xf51c"
+    status:      functional
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages:  6
+    notes:       "PAW3395 sensor, wireless variant pending."
+
+  - codename:    aj380
+    family:      mouse
+    name:        "AJAZZ AJ380"
+    vid:         "0x3554"
+    pid:         "0xf51d"
+    status:      scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages:  6
+    notes:       "PAW3950 sensor."
+
+# ---------------------------------------------------------------------------
+# Platform support matrix (used in README build-from-source table)
+# ---------------------------------------------------------------------------
+platforms:
+  - name:     "Linux"
+    build:    "✅ first-class"
+    install:  ".rpm / .deb / .flatpak"
+    notes:    "udev `TAG+=uaccess` — no group, no logout"
+  - name:     "macOS"
+    build:    "✅ universal"
+    install:  ".dmg (arm64 + x86_64)"
+    notes:    "Grant Input Monitoring on first launch"
+  - name:     "Windows"
+    build:    "✅ MSVC 2022"
+    install:  ".msi (winget)"
+    notes:    "No drivers required"

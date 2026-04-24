@@ -26,21 +26,21 @@ public:
     /// or the device cannot be opened.
     [[nodiscard]] DevicePtr open(DeviceId const& id) const;
 
-    DeviceRegistry(DeviceRegistry const&)            = delete;
+    DeviceRegistry(DeviceRegistry const&) = delete;
     DeviceRegistry& operator=(DeviceRegistry const&) = delete;
-    DeviceRegistry(DeviceRegistry&&)                 = delete;
-    DeviceRegistry& operator=(DeviceRegistry&&)      = delete;
+    DeviceRegistry(DeviceRegistry&&) = delete;
+    DeviceRegistry& operator=(DeviceRegistry&&) = delete;
 
 private:
     DeviceRegistry() = default;
 
     struct Entry {
         DeviceDescriptor descriptor;
-        DeviceFactory    factory;
+        DeviceFactory factory;
     };
 
     mutable std::mutex m_mutex;
     std::vector<Entry> m_entries;
 };
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

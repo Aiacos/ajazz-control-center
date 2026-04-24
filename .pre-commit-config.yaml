@@ -1,0 +1,178 @@
+# ============================================================================
+# Pre-commit hooks — run automatically on every `git commit`.
+#
+# Install once per clone:
+#   pipx install pre-commit        # or: pip install --user pre-commit
+#   pre-commit install             # sets up the git hook
+#   pre-commit install --hook-type commit-msg
+#
+# Run manually across the whole tree:
+#   pre-commit run --all-files
+#
+# `make bootstrap` already does `pre-commit install` for you.
+# ============================================================================
+
+default_language_version:
+  python: python3
+
+# Skip huge auto-generated artifacts + reference material.
+exclude: |
+  (?x)^(
+      build/.*|
+      dist/.*|
+      \.venv/.*|
+      docs/protocols/captures/.*|
+      .*\.pcapng|
+      .*\.min\.(js|css)
+  )$
+
+repos:
+  # --------------------------------------------------------------------------
+  # Hygiene: trailing whitespace, EOF newlines, large files, merge conflicts.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-added-large-files
+        args: [--maxkb=2048]
+      - id: check-merge-conflict
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+      - id: check-yaml
+        args: [--unsafe]   # allow !reference, GitHub Actions syntax
+      - id: check-json
+      - id: check-toml
+
+  # --------------------------------------------------------------------------
+  # C++ — clang-format (format) + clang-tidy (static analysis).
+  # clang-format auto-fixes; clang-tidy only reports in the pre-commit hook
+  # and runs a full pass in CI.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-clang-format
+    rev: v18.1.8
+    hooks:
+      - id: clang-format
+        types_or: [c++, c]
+        args: [-i, --style=file]
+
+  # --------------------------------------------------------------------------
+  # Python — ruff (format + lint) is the one tool to rule them all.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # --------------------------------------------------------------------------
+  # CMake — cmake-format keeps our CMakeLists readable and consistent.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/cheshirekow/cmake-format-precommit
+    rev: v0.6.13
+    hooks:
+      - id: cmake-format
+        additional_dependencies: [pyyaml]
+      - id: cmake-lint
+        additional_dependencies: [pyyaml]
+
+  # --------------------------------------------------------------------------
+  # YAML — yamllint catches indentation + style drift in workflows/manifests.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/adrienverge/yamllint
+    rev: v1.35.1
+    hooks:
+      - id: yamllint
+        args: [--config-file=.yamllint.yaml]
+
+  # --------------------------------------------------------------------------
+  # Shell — shellcheck for correctness + shfmt for consistent formatting.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.10.0.1
+    hooks:
+      - id: shellcheck
+        args: [--severity=warning]
+
+  - repo: https://github.com/scop/pre-commit-shfmt
+    rev: v3.10.0-2
+    hooks:
+      - id: shfmt
+        args: [-w, -s, -i, "4", -ci]
+
+  # --------------------------------------------------------------------------
+  # Markdown — mdformat keeps docs and wiki consistent.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/executablebooks/mdformat
+    rev: 0.7.21
+    hooks:
+      - id: mdformat
+        additional_dependencies:
+          - mdformat-gfm
+          - mdformat-frontmatter
+          - mdformat-footnote
+          - mdformat-tables
+
+  # --------------------------------------------------------------------------
+  # GitHub Actions — actionlint catches workflow mistakes at commit time.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.4
+    hooks:
+      - id: actionlint
+
+  # --------------------------------------------------------------------------
+  # Typos — catch spelling mistakes in code, comments, docs.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.28.4
+    hooks:
+      - id: typos
+        args: [--write-changes]
+
+  # --------------------------------------------------------------------------
+  # Docs auto-sync — keep README + wiki AUTOGEN blocks up to date whenever
+  # the single source of truth (docs/_data/devices.yaml) or a device backend
+  # changes. The regenerator rewrites README.md and docs/wiki/*.md in place.
+  # A second hook in CI (`make docs-check`) guards the invariant on main.
+  # --------------------------------------------------------------------------
+  - repo: local
+    hooks:
+      - id: regenerate-docs
+        name: Regenerate README + wiki AUTOGEN blocks
+        entry: python3 scripts/generate-docs.py
+        language: system
+        pass_filenames: false
+        files: '^(docs/_data/.*\.ya?ml|src/devices/.*|scripts/generate-docs\.py|README\.md|docs/wiki/.*\.md)$'
+        additional_dependencies: [pyyaml]
+
+  # --------------------------------------------------------------------------
+  # Commitlint — enforce Conventional Commits on the commit message.
+  # --------------------------------------------------------------------------
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v3.6.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - --strict
+          - --verbose
+          - feat
+          - fix
+          - docs
+          - style
+          - refactor
+          - perf
+          - test
+          - build
+          - ci
+          - chore
+          - revert

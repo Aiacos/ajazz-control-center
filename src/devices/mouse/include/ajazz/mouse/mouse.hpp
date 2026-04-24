@@ -12,4 +12,4 @@ void registerAll();
 /// accepts the same command envelope with model-specific payloads.
 [[nodiscard]] core::DevicePtr makeAjSeries(core::DeviceDescriptor const& d, core::DeviceId id);
 
-}  // namespace ajazz::mouse
+} // namespace ajazz::mouse

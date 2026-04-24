@@ -1,0 +1,32 @@
+# typos configuration — spell-check code, comments and docs.
+[default]
+extend-ignore-identifiers-re = [
+    # Hex constants and 4-byte magic literals.
+    "[0-9a-fA-F]{6,}",
+]
+
+[default.extend-words]
+# Domain vocabulary that is NOT a typo.
+AJAZZ    = "AJAZZ"
+Mirabox  = "Mirabox"
+hidraw   = "hidraw"
+hidapi   = "hidapi"
+udev     = "udev"
+libudev  = "libudev"
+QMK      = "QMK"
+VIA      = "VIA"
+pybind   = "pybind"
+Aiacos   = "Aiacos"
+Argentieri = "Argentieri"
+
+[files]
+extend-exclude = [
+    "build/**",
+    "dist/**",
+    "_deps/**",
+    "docs/protocols/captures/**",
+    "*.pcapng",
+    "*.svg",
+    "resources/icons/*",
+    "python/ajazz_plugins/examples/**/assets/**",
+]

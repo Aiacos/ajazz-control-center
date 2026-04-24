@@ -35,8 +35,8 @@ struct DeviceDescriptor {
     std::uint16_t vendorId{0};
     std::uint16_t productId{0};
     DeviceFamily family{DeviceFamily::Unknown};
-    std::string model;       ///< e.g. "AJAZZ AKP153"
-    std::string codename;    ///< e.g. "akp153" (matches backend directory)
+    std::string model;    ///< e.g. "AJAZZ AKP153"
+    std::string codename; ///< e.g. "akp153" (matches backend directory)
 };
 
 /// Event emitted by the device when user interaction happens.
@@ -52,8 +52,8 @@ struct DeviceEvent {
     };
 
     Kind kind{Kind::Connected};
-    std::uint16_t index{0};  ///< button/encoder index, 0 when not applicable
-    std::int32_t value{0};   ///< encoder delta / touch position
+    std::uint16_t index{0}; ///< button/encoder index, 0 when not applicable
+    std::int32_t value{0};  ///< encoder delta / touch position
 };
 
 using EventCallback = std::function<void(DeviceEvent const&)>;
@@ -72,7 +72,7 @@ public:
     [[nodiscard]] virtual DeviceId id() const noexcept = 0;
     [[nodiscard]] virtual std::string firmwareVersion() const = 0;
 
-    virtual void open()  = 0;
+    virtual void open() = 0;
     virtual void close() = 0;
     [[nodiscard]] virtual bool isOpen() const noexcept = 0;
 
@@ -93,4 +93,4 @@ using DevicePtr = std::unique_ptr<IDevice>;
 /// Factory used by DeviceRegistry to instantiate a backend for a given match.
 using DeviceFactory = std::function<DevicePtr(DeviceDescriptor const&, DeviceId)>;
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

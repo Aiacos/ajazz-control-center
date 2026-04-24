@@ -5,6 +5,7 @@
 #include "profile_controller.hpp"
 
 #include <QObject>
+
 #include <memory>
 
 class QQmlApplicationEngine;
@@ -24,8 +25,8 @@ public:
     void exposeToQml(QQmlApplicationEngine& engine);
 
 private:
-    std::unique_ptr<DeviceModel>        m_deviceModel;
-    std::unique_ptr<ProfileController>  m_profileController;
+    std::unique_ptr<DeviceModel> m_deviceModel;
+    std::unique_ptr<ProfileController> m_profileController;
 };
 
-}  // namespace ajazz::app
+} // namespace ajazz::app

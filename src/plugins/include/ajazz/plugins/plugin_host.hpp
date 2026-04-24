@@ -16,7 +16,7 @@
 namespace ajazz::plugins {
 
 struct PluginInfo {
-    std::string id;      ///< e.g. "com.example.obs"
+    std::string id; ///< e.g. "com.example.obs"
     std::string name;
     std::string version;
     std::string authors;
@@ -28,10 +28,10 @@ public:
     PluginHost();
     ~PluginHost();
 
-    PluginHost(PluginHost const&)            = delete;
+    PluginHost(PluginHost const&) = delete;
     PluginHost& operator=(PluginHost const&) = delete;
-    PluginHost(PluginHost&&)                 = delete;
-    PluginHost& operator=(PluginHost&&)      = delete;
+    PluginHost(PluginHost&&) = delete;
+    PluginHost& operator=(PluginHost&&) = delete;
 
     /// Add a directory to scan for plugin packages. Each sub-directory
     /// containing `plugin.py` is loaded as a package.
@@ -54,4 +54,4 @@ private:
     std::unique_ptr<Impl> m_impl;
 };
 
-}  // namespace ajazz::plugins
+} // namespace ajazz::plugins

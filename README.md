@@ -1,15 +1,21 @@
 # AJAZZ Control Center
 
-[![CI](https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml/badge.svg)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml)
-[![Release](https://github.com/Aiacos/ajazz-control-center/actions/workflows/release.yml/badge.svg)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/release.yml)
+[![CI](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/ci.yml?branch=main&label=CI&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml)
+[![Lint](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/lint.yml?branch=main&label=lint&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/lint.yml)
+[![Release](https://img.shields.io/github/v/release/Aiacos/ajazz-control-center?include_prereleases&logo=github&color=blueviolet)](https://github.com/Aiacos/ajazz-control-center/releases)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Qt 6.7+](https://img.shields.io/badge/Qt-6.7%2B-41CD52?logo=qt)](https://www.qt.io/)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python)](https://www.python.org/)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 
 A modern, open, cross-platform control center for AJAZZ devices — stream decks, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.
 
 > **Status:** early alpha. Scaffolding, architecture and CI are in place. Device backends are under active development.
+
+<!-- BEGIN AUTOGEN: stats -->
+**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 6 functional, 4 scaffolded.
+<!-- END AUTOGEN: stats -->
 
 ---
 
@@ -27,18 +33,42 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 
 ## Supported (and planned) devices
 
-| Family       | Device                               | Status       | Protocol source                    |
-|--------------|--------------------------------------|--------------|------------------------------------|
-| Stream deck  | AJAZZ AKP153 / Mirabox HSV293S       | 🟡 planned   | USB capture + published notes      |
-| Stream deck  | AJAZZ AKP153E (China variant)        | 🟡 planned   | USB capture                        |
-| Stream deck  | AJAZZ AKP03 / Mirabox N3             | 🟡 planned   | USB capture                        |
-| Stream deck  | AJAZZ AKP05 / AKP05E (knobs)         | 🟠 research  | USB capture required               |
-| Stream deck  | AJAZZ AKP815                         | 🟠 research  | USB capture required               |
-| Keyboards    | AJAZZ AK series (QMK/VIA-compatible) | 🟡 planned   | VIA JSON layer                     |
-| Keyboards    | AJAZZ AK series (proprietary)        | 🟠 research  | USB capture required               |
-| Mice         | AJAZZ AJ199 / AJ159 / AJ series      | 🟠 research  | USB capture + manufacturer utils   |
+<!--
+  The tables below are generated from `docs/_data/devices.yaml`.
+  Do NOT edit them by hand — run `make docs` (or let pre-commit/CI do it).
+-->
 
-Legend: 🟢 working · 🟡 in progress · 🟠 research phase
+<!-- BEGIN AUTOGEN: devices-by-family -->
+### Stream decks
+
+| Device | USB | Status | Features | Notes |
+|--------|-----|--------|----------|-------|
+| [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Reference implementation. JPEG 85×85 per-key images. |
+| [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Same protocol family as AKP153. |
+| [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟡 scaffolded | Per-key display, RGB backlight, Encoder / dial, Macros | 6-key + knob variant. PNG 72×72 image codec. |
+| [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟡 scaffolded | Per-key display, RGB backlight, Encoder / dial, Touch strip, Macros | Stream Dock Plus class: encoders + touch strip + main LCD. |
+
+### Keyboards
+
+| Device | USB | Status | Features | Notes |
+|--------|-----|--------|----------|-------|
+| [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Any VIA JSON layout is supported. |
+| [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | 🟡 scaffolded | RGB backlight, Macros, Layers | Closed firmware; reverse-engineering in progress. |
+
+### Mice
+
+| Device | USB | Status | Features | Notes |
+|--------|-----|--------|----------|-------|
+| [AJAZZ AJ159](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51a` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor. |
+| [AJAZZ AJ199](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51b` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor. |
+| [AJAZZ AJ339](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51c` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor, wireless variant pending. |
+| [AJAZZ AJ380](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51d` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | PAW3950 sensor. |
+
+<!-- END AUTOGEN: devices-by-family -->
+
+<!-- BEGIN AUTOGEN: legend -->
+🟢 **stable** — every vendor feature works · 🟢 **functional** — core I/O works (keys/LEDs) · 🟡 **scaffolded** — enumerated, protocol being mapped · 🟠 **requested** — captures wanted
+<!-- END AUTOGEN: legend -->
 
 ## Architecture at a glance
 
@@ -110,6 +140,16 @@ obvious thing. Run `make help` for the full list.
 
 Prefer pure CMake? `cmake --preset dev && cmake --build --preset dev`
 works too. Full reference in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
+
+### Platform support matrix
+
+<!-- BEGIN AUTOGEN: platform-matrix -->
+| Platform | Build | Install | Notes |
+|----------|-------|---------|-------|
+| Linux | ✅ first-class | .rpm / .deb / .flatpak | udev `TAG+=uaccess` — no group, no logout |
+| macOS | ✅ universal | .dmg (arm64 + x86_64) | Grant Input Monitoring on first launch |
+| Windows | ✅ MSVC 2022 | .msi (winget) | No drivers required |
+<!-- END AUTOGEN: platform-matrix -->
 
 ## Python plugins
 

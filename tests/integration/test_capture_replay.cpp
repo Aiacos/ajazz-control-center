@@ -7,6 +7,7 @@
 #include "akp153_protocol.hpp"
 
 #include <array>
+
 #include <catch2/catch_test_macros.hpp>
 
 TEST_CASE("captured firmware response decodes to a key event", "[integration][akp153]") {

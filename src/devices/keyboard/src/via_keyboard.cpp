@@ -49,18 +49,26 @@ public:
     [[nodiscard]] DeviceId id() const noexcept override { return m_id; }
     [[nodiscard]] std::string firmwareVersion() const override {
         std::array<std::uint8_t, kReportSize> pkt{};
-        pkt[0] = 0x00;  // report id
-        pkt[1] = 0x01;  // id_get_protocol_version
-        (void) m_transport->write(pkt);
+        pkt[0] = 0x00; // report id
+        pkt[1] = 0x01; // id_get_protocol_version
+        (void)m_transport->write(pkt);
         std::array<std::uint8_t, kReportSize> resp{};
-        (void) m_transport->read(resp, std::chrono::milliseconds{100});
+        (void)m_transport->read(resp, std::chrono::milliseconds{100});
         char buf[8] = {};
-        (void) std::snprintf(buf, sizeof(buf), "%u", (resp[2] << 8) | resp[3]);
+        (void)std::snprintf(buf, sizeof(buf), "%u", (resp[2] << 8) | resp[3]);
         return std::string{buf};
     }
 
-    void open()  override { if (!m_transport->isOpen()) { m_transport->open(); } }
-    void close() override { if ( m_transport->isOpen()) { m_transport->close(); } }
+    void open() override {
+        if (!m_transport->isOpen()) {
+            m_transport->open();
+        }
+    }
+    void close() override {
+        if (m_transport->isOpen()) {
+            m_transport->close();
+        }
+    }
     [[nodiscard]] bool isOpen() const noexcept override { return m_transport->isOpen(); }
 
     void onEvent(EventCallback cb) override {
@@ -71,30 +79,33 @@ public:
 
     // IKeyRemappable
     [[nodiscard]] KeyboardLayout layout() const noexcept override {
-        return KeyboardLayout{ .rows = 6, .cols = 16, .layers = 4 };
+        return KeyboardLayout{.rows = 6, .cols = 16, .layers = 4};
     }
 
-    void setKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col,
+    void setKeycode(std::uint8_t layer,
+                    std::uint8_t row,
+                    std::uint8_t col,
                     std::uint16_t keycode) override {
         std::array<std::uint8_t, kReportSize> pkt{};
-        pkt[1] = 0x05;  // id_dynamic_keymap_set_keycode
+        pkt[1] = 0x05; // id_dynamic_keymap_set_keycode
         pkt[2] = layer;
         pkt[3] = row;
         pkt[4] = col;
         pkt[5] = static_cast<std::uint8_t>(keycode >> 8);
         pkt[6] = static_cast<std::uint8_t>(keycode & 0xff);
-        (void) m_transport->write(pkt);
+        (void)m_transport->write(pkt);
     }
 
-    [[nodiscard]] std::uint16_t keycode(std::uint8_t layer,
-                                        std::uint8_t row,
-                                        std::uint8_t col) const override {
+    [[nodiscard]] std::uint16_t
+    keycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col) const override {
         std::array<std::uint8_t, kReportSize> pkt{};
         pkt[1] = 0x04;
-        pkt[2] = layer; pkt[3] = row; pkt[4] = col;
-        (void) m_transport->write(pkt);
+        pkt[2] = layer;
+        pkt[3] = row;
+        pkt[4] = col;
+        (void)m_transport->write(pkt);
         std::array<std::uint8_t, kReportSize> resp{};
-        (void) m_transport->read(resp, std::chrono::milliseconds{100});
+        (void)m_transport->read(resp, std::chrono::milliseconds{100});
         return static_cast<std::uint16_t>((resp[5] << 8) | resp[6]);
     }
 
@@ -111,41 +122,41 @@ public:
             for (std::size_t i = 0; i < take; ++i) {
                 pkt[5 + i] = bytes[offset + i];
             }
-            (void) m_transport->write(pkt);
+            (void)m_transport->write(pkt);
             offset += take;
         }
     }
 
     void commit() override {
         std::array<std::uint8_t, kReportSize> pkt{};
-        pkt[1] = 0x0A;  // id_custom_save
-        (void) m_transport->write(pkt);
+        pkt[1] = 0x0A; // id_custom_save
+        (void)m_transport->write(pkt);
     }
 
     // IRgbCapable
     [[nodiscard]] std::vector<RgbZone> rgbZones() const override {
-        return { RgbZone{ .name = "keys", .ledCount = 96 } };
+        return {RgbZone{.name = "keys", .ledCount = 96}};
     }
 
     void setRgbStatic(std::string_view /*zone*/, Rgb color) override {
         std::array<std::uint8_t, kReportSize> pkt{};
-        pkt[1] = 0x08;  // id_custom_set_value
-        pkt[2] = 0x01;  // channel: qmk_rgblight
-        pkt[3] = 0x04;  // sub: color
+        pkt[1] = 0x08; // id_custom_set_value
+        pkt[2] = 0x01; // channel: qmk_rgblight
+        pkt[3] = 0x04; // sub: color
         pkt[4] = color.r;
         pkt[5] = color.g;
         pkt[6] = color.b;
-        (void) m_transport->write(pkt);
+        (void)m_transport->write(pkt);
     }
 
     void setRgbEffect(std::string_view, RgbEffect effect, std::uint8_t speed) override {
         std::array<std::uint8_t, kReportSize> pkt{};
         pkt[1] = 0x08;
         pkt[2] = 0x01;
-        pkt[3] = 0x03;  // sub: effect
+        pkt[3] = 0x03; // sub: effect
         pkt[4] = static_cast<std::uint8_t>(effect);
         pkt[5] = speed;
-        (void) m_transport->write(pkt);
+        (void)m_transport->write(pkt);
     }
 
     void setRgbBuffer(std::string_view, std::span<Rgb const> /*colors*/) override {
@@ -154,15 +165,17 @@ public:
 
     void setRgbBrightness(std::uint8_t percent) override {
         std::array<std::uint8_t, kReportSize> pkt{};
-        pkt[1] = 0x08; pkt[2] = 0x01; pkt[3] = 0x02;
+        pkt[1] = 0x08;
+        pkt[2] = 0x01;
+        pkt[3] = 0x02;
         pkt[4] = static_cast<std::uint8_t>((percent * 255u) / 100u);
-        (void) m_transport->write(pkt);
+        (void)m_transport->write(pkt);
     }
 
     // IFirmwareCapable
     [[nodiscard]] FirmwareInfo firmwareInfo() const override {
-        return FirmwareInfo{ .version = firmwareVersion(), .buildDate = {},
-                             .bootloaderAvailable = false };
+        return FirmwareInfo{
+            .version = firmwareVersion(), .buildDate = {}, .bootloaderAvailable = false};
     }
     std::uint32_t beginFirmwareUpdate(std::span<std::uint8_t const>) override {
         throw std::runtime_error("VIA fw update over raw HID not supported");
@@ -171,16 +184,16 @@ public:
 
 private:
     DeviceDescriptor m_descriptor;
-    DeviceId         m_id;
-    TransportPtr     m_transport;
-    EventCallback    m_callback;
-    std::mutex       m_mutex;
+    DeviceId m_id;
+    TransportPtr m_transport;
+    EventCallback m_callback;
+    std::mutex m_mutex;
 };
 
-}  // namespace
+} // namespace
 
 core::DevicePtr makeViaKeyboard(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_unique<ViaKeyboard>(d, std::move(id));
 }
 
-}  // namespace ajazz::keyboard
+} // namespace ajazz::keyboard

@@ -8,15 +8,21 @@ AJAZZ Control Center (`acc`) is a Qt 6 / C++20 desktop application with an
 embedded Python plugin runtime. It is an independent, clean-room project
 and is not affiliated with, endorsed by, or supported by AJAZZ.
 
+<!-- BEGIN AUTOGEN: stats -->
+**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 6 functional, 4 scaffolded.
+<!-- END AUTOGEN: stats -->
+
 ## Quick links
 
-- [Quick Start](Quick-Start) — install and run your first profile in 5 minutes.
-- [Supported Devices](Supported-Devices) — what works today and what is in progress.
-- [Building from Source](Building) — full developer build instructions.
-- [Plugin Development](Plugin-Development) — write your first Python action.
-- [Reverse Engineering Notes](Reverse-Engineering) — protocol documentation.
-- [FAQ](FAQ) — frequently asked questions.
-- [Troubleshooting](Troubleshooting) — common issues and fixes.
+<!-- BEGIN AUTOGEN: toc-wiki -->
+- [Building](Building)
+- [FAQ](FAQ)
+- [Plugin Development](Plugin-Development)
+- [Quick Start](Quick-Start)
+- [Reverse Engineering](Reverse-Engineering)
+- [Supported Devices](Supported-Devices)
+- [Troubleshooting](Troubleshooting)
+<!-- END AUTOGEN: toc-wiki -->
 
 ## Project goals
 

@@ -8,12 +8,12 @@ using namespace ajazz::streamdeck::akp153;
 TEST_CASE("set brightness packet matches spec", "[akp153][protocol]") {
     auto const pkt = buildSetBrightness(75);
     REQUIRE(pkt.size() == PacketSize);
-    REQUIRE(pkt[0] == 0x43);  // C
-    REQUIRE(pkt[1] == 0x52);  // R
-    REQUIRE(pkt[2] == 0x54);  // T
-    REQUIRE(pkt[5] == 0x4c);  // L
-    REQUIRE(pkt[6] == 0x49);  // I
-    REQUIRE(pkt[7] == 0x47);  // G
+    REQUIRE(pkt[0] == 0x43); // C
+    REQUIRE(pkt[1] == 0x52); // R
+    REQUIRE(pkt[2] == 0x54); // T
+    REQUIRE(pkt[5] == 0x4c); // L
+    REQUIRE(pkt[6] == 0x49); // I
+    REQUIRE(pkt[7] == 0x47); // G
     REQUIRE(pkt[10] == 75);
 }
 
@@ -47,7 +47,7 @@ TEST_CASE("image header encodes big-endian size and key id", "[akp153][protocol]
 }
 
 TEST_CASE("parser rejects ACK frames", "[akp153][protocol]") {
-    std::array<std::uint8_t, 16> frame{'A','C','K',0,0,'O','K',0,0,0,0,0,0,0,0,0};
+    std::array<std::uint8_t, 16> frame{'A', 'C', 'K', 0, 0, 'O', 'K', 0, 0, 0, 0, 0, 0, 0, 0, 0};
     auto const ev = parseInputReport(frame);
     REQUIRE(!ev.has_value());
 }

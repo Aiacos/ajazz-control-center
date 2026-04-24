@@ -19,7 +19,7 @@ namespace ajazz::core {
 class EventBus {
 public:
     using Subscription = std::uint64_t;
-    using Handler      = std::function<void(DeviceId const&, DeviceEvent const&)>;
+    using Handler = std::function<void(DeviceId const&, DeviceEvent const&)>;
 
     Subscription subscribe(Handler handler);
     void unsubscribe(Subscription token) noexcept;
@@ -31,9 +31,9 @@ public:
     void publish(DeviceId const& id, DeviceEvent const& event) const;
 
 private:
-    mutable std::mutex                     m_mutex;
+    mutable std::mutex m_mutex;
     std::unordered_map<Subscription, Handler> m_handlers;
-    Subscription                           m_nextToken{1};
+    Subscription m_nextToken{1};
 };
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

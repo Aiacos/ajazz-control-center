@@ -30,7 +30,8 @@ BIN_RELEASE       := $(BUILD_DIR_RELEASE)/src/app/ajazz-control-center
 JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 .PHONY: default help bootstrap build release configure run test package \
-        install uninstall clean format lint wiki udev doctor
+        install uninstall clean format lint lint-all lint-fix precommit \
+        wiki udev doctor docs docs-check
 
 default: build
 
@@ -90,9 +91,31 @@ format: ## Auto-format every C++ source file (clang-format)
 lint: configure ## Run clang-tidy across the tree
 	@cmake --build --preset dev --target clang-tidy
 
+lint-all: ## Run EVERY linter via pre-commit (clang-format, ruff, yamllint, shellcheck, …)
+	@command -v pre-commit >/dev/null || pip install --user pre-commit
+	@pre-commit run --all-files
+
+lint-fix: ## Run every linter with auto-fix enabled
+	@command -v pre-commit >/dev/null || pip install --user pre-commit
+	@pre-commit run --all-files --show-diff-on-failure || true
+	@echo "Auto-fixable issues applied. Review & commit."
+
+precommit: ## Install the git pre-commit hook
+	@command -v pre-commit >/dev/null || pip install --user pre-commit
+	@pre-commit install && pre-commit install --hook-type commit-msg
+	@echo "pre-commit hook installed."
+
 wiki: ## Preview GitHub Wiki locally on http://localhost:3030
 	@command -v mdbook >/dev/null || { echo "Install mdbook: cargo install mdbook"; exit 1; }
 	@cd docs/wiki && mdbook serve --port 3030
+
+docs: ## Regenerate README + wiki AUTOGEN blocks from docs/_data/devices.yaml
+	@python3 -c 'import yaml' 2>/dev/null || pip install --user --quiet pyyaml
+	@python3 scripts/generate-docs.py
+
+docs-check: ## Fail if README or wiki AUTOGEN blocks are out of date (CI mode)
+	@python3 -c 'import yaml' 2>/dev/null || pip install --user --quiet pyyaml
+	@python3 scripts/generate-docs.py --check
 
 udev: ## (Linux) (re)install the udev rule without a full install
 	@sudo install -m 644 resources/linux/99-ajazz.rules /etc/udev/rules.d/

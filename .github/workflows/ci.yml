@@ -1,57 +1,28 @@
 name: CI
 
+# Build + test on Linux / Windows / macOS. Linting lives in its own
+# workflow (`lint.yml`) so formatting churn does not block builds.
+
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   # ---------------------------------------------------------------------------
-  # Linting: clang-format, clang-tidy (header-only sanity), Python (ruff/black/mypy)
-  # ---------------------------------------------------------------------------
-  lint:
-    name: Lint
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y clang-format-18 clang-tidy-18 python3 python3-pip
-          sudo update-alternatives --install /usr/bin/clang-format clang-format \
-              /usr/bin/clang-format-18 100
-          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy \
-              /usr/bin/clang-tidy-18 100
-          python3 -m pip install --user ruff black mypy
-
-      - name: clang-format (check only)
-        run: |
-          find src tests -name '*.cpp' -o -name '*.hpp' | \
-              xargs clang-format --dry-run -Werror
-
-      - name: Python lint (ruff + black)
-        run: |
-          python3 -m ruff check python/
-          python3 -m black --check python/
-
-      - name: YAML lint
-        run: |
-          python3 -m pip install --user yamllint
-          python3 -m yamllint -d relaxed .github/ *.yml 2>/dev/null || true
-
-  # ---------------------------------------------------------------------------
-  # Build & test matrix — Linux, Windows, macOS (Intel + Apple Silicon)
+  # Build & test matrix — Linux, Windows, macOS.
   # ---------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.os }} · ${{ matrix.build_type }}
-    needs: lint
     strategy:
       fail-fast: false
       matrix:
@@ -70,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ---- System dependencies ------------------------------------------
+      # ---- System dependencies --------------------------------------------
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
@@ -92,7 +63,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@v1
 
-      # ---- Qt 6 ---------------------------------------------------------
+      # ---- Qt 6 -----------------------------------------------------------
       - name: Install Qt 6
         uses: jurplel/install-qt-action@v4
         with:
@@ -100,13 +71,13 @@ jobs:
           cache: true
           modules: qtshadertools
 
-      # ---- Python -------------------------------------------------------
+      # ---- Python ---------------------------------------------------------
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
+          python-version: "3.11"
 
-      # ---- Configure, build, test ---------------------------------------
+      # ---- Configure, build, test -----------------------------------------
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}
 
@@ -116,16 +87,15 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
-      # ---- Python tests -------------------------------------------------
+      # ---- Python tests ---------------------------------------------------
       - name: Install Python package
-        run: |
-          pip install -e .[dev]
+        run: pip install -e .[dev]
 
       - name: Run Python tests
         run: pytest python/ -q
 
   # ---------------------------------------------------------------------------
-  # Coverage — Linux debug + gcov/lcov
+  # Coverage — Linux debug + gcov/lcov.
   # ---------------------------------------------------------------------------
   coverage:
     name: Code coverage
@@ -134,28 +104,38 @@ jobs:
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v4
+
       - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build lcov libudev-dev \
               libusb-1.0-0-dev libhidapi-dev python3-dev \
               libgl1-mesa-dev libxkbcommon-dev
+
       - uses: jurplel/install-qt-action@v4
-        with: { version: 6.7.3, cache: true }
+        with:
+          version: 6.7.3
+          cache: true
+
       - name: Configure
         run: |
           cmake -S . -B build-cov -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
             -DAJAZZ_ENABLE_COVERAGE=ON \
             -DAJAZZ_ENABLE_WERROR=OFF
+
       - name: Build & test
         run: |
           cmake --build build-cov
           ctest --test-dir build-cov --output-on-failure
+
       - name: Generate report
         run: |
           lcov --capture --directory build-cov --output-file coverage.info
           lcov --remove coverage.info '/usr/*' '*/_deps/*' --output-file coverage.info
           lcov --list coverage.info
+
       - uses: actions/upload-artifact@v4
-        with: { name: coverage, path: coverage.info }
+        with:
+          name: coverage
+          path: coverage.info

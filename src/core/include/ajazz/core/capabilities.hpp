@@ -25,22 +25,22 @@ namespace ajazz::core {
 
 /// Bit-flags describing coarse-grained device features.
 enum class Capability : std::uint32_t {
-    None           = 0,
-    PerKeyDisplay  = 1u << 0,   ///< LCD/OLED behind keys (stream deck)
-    MainDisplay    = 1u << 1,   ///< primary touch strip / dial screen
-    PerKeyRgb      = 1u << 2,   ///< individually addressable RGB per key
-    GlobalRgb      = 1u << 3,   ///< single RGB zone
-    RgbZones       = 1u << 4,   ///< multiple named RGB zones
-    Encoders       = 1u << 5,   ///< endless rotary encoders (AKP05)
-    EncoderPress   = 1u << 6,   ///< encoders can be pressed
-    TouchStrip     = 1u << 7,   ///< horizontal touch strip (stream deck plus)
-    Macros         = 1u << 8,   ///< on-device macro playback
-    KeyRemap       = 1u << 9,   ///< keyboards with remappable keymap (VIA)
-    DpiSwitch      = 1u << 10,  ///< mice with runtime DPI presets
-    PollRate       = 1u << 11,  ///< configurable USB poll rate
-    Battery        = 1u << 12,  ///< wireless device, battery level available
-    Firmware       = 1u << 13,  ///< firmware version query + update
-    PerAppProfiles = 1u << 14,  ///< on-device per-application profiles
+    None = 0,
+    PerKeyDisplay = 1u << 0,   ///< LCD/OLED behind keys (stream deck)
+    MainDisplay = 1u << 1,     ///< primary touch strip / dial screen
+    PerKeyRgb = 1u << 2,       ///< individually addressable RGB per key
+    GlobalRgb = 1u << 3,       ///< single RGB zone
+    RgbZones = 1u << 4,        ///< multiple named RGB zones
+    Encoders = 1u << 5,        ///< endless rotary encoders (AKP05)
+    EncoderPress = 1u << 6,    ///< encoders can be pressed
+    TouchStrip = 1u << 7,      ///< horizontal touch strip (stream deck plus)
+    Macros = 1u << 8,          ///< on-device macro playback
+    KeyRemap = 1u << 9,        ///< keyboards with remappable keymap (VIA)
+    DpiSwitch = 1u << 10,      ///< mice with runtime DPI presets
+    PollRate = 1u << 11,       ///< configurable USB poll rate
+    Battery = 1u << 12,        ///< wireless device, battery level available
+    Firmware = 1u << 13,       ///< firmware version query + update
+    PerAppProfiles = 1u << 14, ///< on-device per-application profiles
 };
 
 [[nodiscard]] constexpr std::uint32_t operator|(Capability a, Capability b) noexcept {
@@ -65,9 +65,9 @@ struct Rgb {
 struct DisplayInfo {
     std::uint16_t widthPx{0};
     std::uint16_t heightPx{0};
-    std::uint8_t  keyRows{0};
-    std::uint8_t  keyCols{0};
-    bool          jpegEncoded{false};  ///< true on AKP153-family, false on Elgato PNG decks
+    std::uint8_t keyRows{0};
+    std::uint8_t keyCols{0};
+    bool jpegEncoded{false}; ///< true on AKP153-family, false on Elgato PNG decks
 };
 
 /// Mix-in for devices with on-key or main displays.
@@ -92,9 +92,8 @@ public:
     virtual void clearKey(std::uint8_t keyIndex) = 0;
 
     /// Push an image to the main/touch-strip display, if present.
-    virtual void setMainImage(std::span<std::uint8_t const> rgba,
-                              std::uint16_t width,
-                              std::uint16_t height) = 0;
+    virtual void
+    setMainImage(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint16_t height) = 0;
 
     /// Global display brightness, 0..100.
     virtual void setBrightness(std::uint8_t percent) = 0;
@@ -116,7 +115,7 @@ enum class RgbEffect : std::uint8_t {
 };
 
 struct RgbZone {
-    std::string   name;
+    std::string name;
     std::uint16_t ledCount{0};
 };
 
@@ -141,8 +140,8 @@ public:
 // -----------------------------------------------------------------------------
 struct EncoderInfo {
     std::uint8_t count{0};
-    bool         pressable{false};
-    bool         hasScreens{false};      ///< tiny LCDs above encoders
+    bool pressable{false};
+    bool hasScreens{false};              ///< tiny LCDs above encoders
     std::uint16_t stepsPerRevolution{0}; ///< 0 = endless/indeterminate
 };
 
@@ -175,13 +174,12 @@ public:
     [[nodiscard]] virtual KeyboardLayout layout() const noexcept = 0;
 
     /// Assign an HID usage code to a (layer, row, col) key.
-    virtual void setKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col,
-                            std::uint16_t keycode) = 0;
+    virtual void
+    setKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col, std::uint16_t keycode) = 0;
 
     /// Read the current keycode for a (layer, row, col) slot.
-    [[nodiscard]] virtual std::uint16_t keycode(std::uint8_t layer,
-                                                std::uint8_t row,
-                                                std::uint8_t col) const = 0;
+    [[nodiscard]] virtual std::uint16_t
+    keycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col) const = 0;
 
     /// Upload a macro identified by 0..N-1.
     virtual void setMacro(std::uint8_t slot, std::span<std::uint8_t const> bytes) = 0;
@@ -195,7 +193,7 @@ public:
 // -----------------------------------------------------------------------------
 struct DpiStage {
     std::uint16_t dpi{0};
-    Rgb           indicator{};
+    Rgb indicator{};
 };
 
 class IMouseCapable {
@@ -203,13 +201,13 @@ public:
     virtual ~IMouseCapable() = default;
 
     [[nodiscard]] virtual std::uint8_t dpiStageCount() const noexcept = 0;
-    virtual void setDpiStages(std::span<DpiStage const> stages)       = 0;
-    virtual void setActiveDpiStage(std::uint8_t index)                = 0;
+    virtual void setDpiStages(std::span<DpiStage const> stages) = 0;
+    virtual void setActiveDpiStage(std::uint8_t index) = 0;
 
-    virtual void setPollRateHz(std::uint16_t hz)                      = 0;
-    [[nodiscard]] virtual std::uint16_t pollRateHz() const noexcept   = 0;
+    virtual void setPollRateHz(std::uint16_t hz) = 0;
+    [[nodiscard]] virtual std::uint16_t pollRateHz() const noexcept = 0;
 
-    virtual void setLiftOffDistanceMm(float mm)                       = 0;
+    virtual void setLiftOffDistanceMm(float mm) = 0;
 
     /// Assign an HID usage code or macro id to a physical button.
     virtual void setButtonBinding(std::uint8_t button, std::uint32_t action) = 0;
@@ -223,7 +221,7 @@ public:
 struct FirmwareInfo {
     std::string version;
     std::string buildDate;
-    bool        bootloaderAvailable{false};
+    bool bootloaderAvailable{false};
 };
 
 class IFirmwareCapable {
@@ -239,4 +237,4 @@ public:
     [[nodiscard]] virtual std::uint8_t firmwareUpdateProgress(std::uint32_t token) const = 0;
 };
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

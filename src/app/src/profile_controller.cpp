@@ -13,4 +13,4 @@ void ProfileController::saveProfile(QString const& /*path*/) {
     // TODO: serialize current profile via ajazz::core::profileToJson.
 }
 
-}  // namespace ajazz::app
+} // namespace ajazz::app

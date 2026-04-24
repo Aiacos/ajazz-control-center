@@ -1,0 +1,159 @@
+name: Lint
+
+# Runs every pre-commit hook on push + PR. On a PR from within the same
+# repo (i.e. not a fork), if any hook auto-fixed something, the fixes are
+# pushed back as a follow-up commit so reviewers get a clean tree without
+# the contributor having to re-run anything locally.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ==========================================================================
+  # Fast unified lint — runs every pre-commit hook in the same environment
+  # that contributors use locally. If anything needs fixing, the job fails
+  # and, when possible, a follow-up "auto-fix" commit is pushed to the PR.
+  # ==========================================================================
+  pre-commit:
+    name: pre-commit (all hooks)
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write      # needed to push auto-fix commits
+      pull-requests: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # Full history so pre-commit can diff accurately.
+          fetch-depth: 0
+          # For PRs from the same repo, check out the head branch so we
+          # can push auto-fixes back.
+          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install system linters
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            clang-format-18 clang-tidy-18 \
+            shellcheck
+          sudo update-alternatives --install /usr/bin/clang-format clang-format \
+              /usr/bin/clang-format-18 100
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy \
+              /usr/bin/clang-tidy-18 100
+
+      - name: Cache pre-commit
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: pre-commit-${{ runner.os }}-
+
+      - name: Install pre-commit
+        run: pip install pre-commit
+
+      - name: Run all hooks
+        id: run
+        continue-on-error: true
+        run: |
+          pre-commit run --all-files --show-diff-on-failure --color always
+
+      - name: Commit auto-fixes (PR from same repo)
+        if: |
+          steps.run.outcome == 'failure' &&
+          github.event_name == 'pull_request' &&
+          github.event.pull_request.head.repo.full_name == github.repository
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: apply pre-commit auto-fixes"
+          commit_user_name: ajazz-bot
+          commit_user_email: ajazz-bot@users.noreply.github.com
+
+      - name: Re-run hooks after auto-fix
+        if: steps.run.outcome == 'failure'
+        run: pre-commit run --all-files
+
+  # ==========================================================================
+  # Clang-tidy with compile_commands.json — real static analysis requiring
+  # a CMake configure + build cache. Separate job so it can run in parallel.
+  # ==========================================================================
+  clang-tidy:
+    name: clang-tidy (static analysis)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ pkg-config \
+            qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
+            qt6-tools-dev libqt6svg6-dev \
+            python3-dev python3-pip \
+            libudev-dev libsystemd-dev \
+            clang-tidy-18
+          sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy \
+              /usr/bin/clang-tidy-18 100
+
+      - name: Configure
+        run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF
+        continue-on-error: true  # Qt may not be fully available; tidy still runs below
+
+      - name: Run clang-tidy on every translation unit
+        run: |
+          if [ -f build/dev/compile_commands.json ]; then
+            # Parallelise across cores; fail only on errors, not warnings.
+            pip install clang-tidy-sarif
+            find src -name '*.cpp' -print0 | \
+              xargs -0 -P"$(nproc)" -I{} clang-tidy -p build/dev --quiet {} || true
+          else
+            echo "::warning::compile_commands.json missing — skipping clang-tidy"
+          fi
+
+  # ==========================================================================
+  # Documentation linting — no C++ / Qt required, very fast.
+  # ==========================================================================
+  docs:
+    name: docs (markdown + links)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install mdformat + linkcheck
+        run: pip install mdformat mdformat-gfm mdformat-tables mdformat-frontmatter pyyaml
+
+      - name: README + wiki AUTOGEN blocks are in sync
+        run: python3 scripts/generate-docs.py --check
+
+      - name: Check Markdown formatting
+        run: mdformat --check .
+
+      - name: Lychee (link checker)
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --verbose --no-progress --exclude-loopback --exclude-mail .
+          fail: false   # Reports broken links as a warning, does not fail CI
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

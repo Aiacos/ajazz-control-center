@@ -17,4 +17,4 @@ signals:
     void profileChanged();
 };
 
-}  // namespace ajazz::app
+} // namespace ajazz::app

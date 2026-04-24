@@ -18,4 +18,4 @@ void registerAll();
 [[nodiscard]] core::DevicePtr makeProprietaryKeyboard(core::DeviceDescriptor const& d,
                                                       core::DeviceId id);
 
-}  // namespace ajazz::keyboard
+} // namespace ajazz::keyboard

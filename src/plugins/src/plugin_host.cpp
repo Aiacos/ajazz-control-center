@@ -3,10 +3,10 @@
 
 #include "ajazz/core/logger.hpp"
 
-#include <pybind11/embed.h>
-
 #include <mutex>
 #include <unordered_map>
+
+#include <pybind11/embed.h>
 
 namespace py = pybind11;
 
@@ -15,7 +15,7 @@ namespace ajazz::plugins {
 struct PluginHost::Impl {
     py::scoped_interpreter guard{};
     std::vector<std::filesystem::path> searchPaths;
-    std::unordered_map<std::string, py::object> plugins;  // id -> instance
+    std::unordered_map<std::string, py::object> plugins; // id -> instance
     std::mutex mutex;
 };
 
@@ -39,13 +39,19 @@ void PluginHost::loadAll() {
         auto sysPath = sys.attr("path").cast<py::list>();
 
         for (auto const& path : m_impl->searchPaths) {
-            if (!std::filesystem::is_directory(path)) { continue; }
+            if (!std::filesystem::is_directory(path)) {
+                continue;
+            }
             sysPath.append(path.string());
 
             for (auto const& entry : std::filesystem::directory_iterator(path)) {
-                if (!entry.is_directory()) { continue; }
+                if (!entry.is_directory()) {
+                    continue;
+                }
                 auto const pluginPy = entry.path() / "plugin.py";
-                if (!std::filesystem::is_regular_file(pluginPy)) { continue; }
+                if (!std::filesystem::is_regular_file(pluginPy)) {
+                    continue;
+                }
 
                 auto const pkgName = entry.path().filename().string();
                 try {
@@ -71,10 +77,12 @@ std::vector<PluginInfo> PluginHost::plugins() const {
     out.reserve(m_impl->plugins.size());
     for (auto const& [id, obj] : m_impl->plugins) {
         PluginInfo info;
-        info.id      = id;
-        info.name    = py::hasattr(obj, "name")    ? py::str(obj.attr("name")).cast<std::string>()    : id;
-        info.version = py::hasattr(obj, "version") ? py::str(obj.attr("version")).cast<std::string>() : "";
-        info.authors = py::hasattr(obj, "authors") ? py::str(obj.attr("authors")).cast<std::string>() : "";
+        info.id = id;
+        info.name = py::hasattr(obj, "name") ? py::str(obj.attr("name")).cast<std::string>() : id;
+        info.version =
+            py::hasattr(obj, "version") ? py::str(obj.attr("version")).cast<std::string>() : "";
+        info.authors =
+            py::hasattr(obj, "authors") ? py::str(obj.attr("authors")).cast<std::string>() : "";
         out.push_back(std::move(info));
     }
     return out;
@@ -102,4 +110,4 @@ void PluginHost::dispatch(core::Action const& action) {
     }
 }
 
-}  // namespace ajazz::plugins
+} // namespace ajazz::plugins

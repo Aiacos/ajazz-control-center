@@ -11,11 +11,11 @@ void registerAll() {
     // are populated from `resources/device-db/keyboards.json` at runtime.
     reg.registerDevice(
         core::DeviceDescriptor{
-            .vendorId  = 0x3151,   // SONiX vendor prefix used by VIA
+            .vendorId = 0x3151, // SONiX vendor prefix used by VIA
             .productId = 0x4021,
-            .family    = core::DeviceFamily::Keyboard,
-            .model     = "AJAZZ AK820 Pro (VIA)",
-            .codename  = "ak820pro",
+            .family = core::DeviceFamily::Keyboard,
+            .model = "AJAZZ AK820 Pro (VIA)",
+            .codename = "ak820pro",
         },
         &makeViaKeyboard);
 
@@ -23,13 +23,13 @@ void registerAll() {
     // via the device database.
     reg.registerDevice(
         core::DeviceDescriptor{
-            .vendorId  = 0x05ac,
+            .vendorId = 0x05ac,
             .productId = 0x024f,
-            .family    = core::DeviceFamily::Keyboard,
-            .model     = "AJAZZ AK (proprietary)",
-            .codename  = "ak-proprietary",
+            .family = core::DeviceFamily::Keyboard,
+            .model = "AJAZZ AK (proprietary)",
+            .codename = "ak-proprietary",
         },
         &makeProprietaryKeyboard);
 }
 
-}  // namespace ajazz::keyboard
+} // namespace ajazz::keyboard

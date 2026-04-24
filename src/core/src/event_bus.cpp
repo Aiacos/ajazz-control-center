@@ -26,4 +26,4 @@ void EventBus::publish(DeviceId const& id, DeviceEvent const& event) const {
     }
 }
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

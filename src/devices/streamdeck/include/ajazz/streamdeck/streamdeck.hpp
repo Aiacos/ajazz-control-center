@@ -14,7 +14,7 @@ void registerAll();
 
 /// Concrete factories exposed for tests and plugin consumers.
 [[nodiscard]] core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id);
-[[nodiscard]] core::DevicePtr makeAkp03 (core::DeviceDescriptor const& d, core::DeviceId id);
-[[nodiscard]] core::DevicePtr makeAkp05 (core::DeviceDescriptor const& d, core::DeviceId id);
+[[nodiscard]] core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id);
+[[nodiscard]] core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id);
 
-}  // namespace ajazz::streamdeck
+} // namespace ajazz::streamdeck

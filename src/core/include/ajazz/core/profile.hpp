@@ -33,11 +33,11 @@ struct Action {
 
 /// Visual state for a single key (image, text, color).
 struct KeyState {
-    std::optional<std::string> imagePath;   ///< absolute or resource path
-    std::optional<std::string> text;        ///< overlay text
-    std::optional<Rgb>         background;
-    std::optional<Rgb>         foreground;
-    std::uint8_t               fontSize{14};
+    std::optional<std::string> imagePath; ///< absolute or resource path
+    std::optional<std::string> text;      ///< overlay text
+    std::optional<Rgb> background;
+    std::optional<Rgb> foreground;
+    std::uint8_t fontSize{14};
 };
 
 /// Binding of a physical control to an action chain.
@@ -45,17 +45,17 @@ struct Binding {
     std::vector<Action> onPress;
     std::vector<Action> onRelease;
     std::vector<Action> onLongPress;
-    KeyState            state;
+    KeyState state;
 };
 
 /// Composite profile mapping every physical control.
 struct Profile {
-    std::string                                      id;      ///< UUIDv4
-    std::string                                      name;
-    std::string                                      deviceCodename;
-    std::unordered_map<std::uint16_t, Binding>       keys;
-    std::unordered_map<std::uint16_t, Binding>       encoders;
-    std::unordered_map<std::string,   Binding>       mouseButtons;
+    std::string id; ///< UUIDv4
+    std::string name;
+    std::string deviceCodename;
+    std::unordered_map<std::uint16_t, Binding> keys;
+    std::unordered_map<std::uint16_t, Binding> encoders;
+    std::unordered_map<std::string, Binding> mouseButtons;
 
     /// Optional per-application triggers: when the foreground app matches
     /// any of these hints, this profile auto-activates.
@@ -64,6 +64,6 @@ struct Profile {
 
 /// Serialize / deserialize profiles to JSON. Defined in profile.cpp.
 [[nodiscard]] std::string profileToJson(Profile const& profile);
-[[nodiscard]] Profile     profileFromJson(std::string_view json);
+[[nodiscard]] Profile profileFromJson(std::string_view json);
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

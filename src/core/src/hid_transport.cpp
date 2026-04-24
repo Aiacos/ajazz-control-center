@@ -3,15 +3,14 @@
 // HID transport backed by libhidapi. Implemented as a thin RAII wrapper so
 // backend code can stay platform-agnostic.
 //
-#include "ajazz/core/transport.hpp"
-
 #include "ajazz/core/logger.hpp"
-
-#include <hidapi/hidapi.h>
+#include "ajazz/core/transport.hpp"
 
 #include <array>
 #include <atomic>
 #include <stdexcept>
+
+#include <hidapi/hidapi.h>
 
 namespace ajazz::core {
 namespace {
@@ -21,12 +20,12 @@ public:
     HidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial)
         : m_vid(vid), m_pid(pid), m_serial(std::move(serial)) {}
 
-    ~HidTransport() override {
-        HidTransport::close();
-    }
+    ~HidTransport() override { HidTransport::close(); }
 
     void open() override {
-        if (m_handle) { return; }
+        if (m_handle) {
+            return;
+        }
         std::wstring const wserial(m_serial.begin(), m_serial.end());
         m_handle = ::hid_open(m_vid, m_pid, m_serial.empty() ? nullptr : wserial.c_str());
         if (!m_handle) {
@@ -44,9 +43,7 @@ public:
         }
     }
 
-    [[nodiscard]] bool isOpen() const noexcept override {
-        return m_handle != nullptr;
-    }
+    [[nodiscard]] bool isOpen() const noexcept override { return m_handle != nullptr; }
 
     std::size_t write(std::span<std::uint8_t const> data) override {
         ensureOpen();
@@ -61,8 +58,8 @@ public:
 
     std::size_t read(std::span<std::uint8_t> out, std::chrono::milliseconds timeout) override {
         ensureOpen();
-        auto const n = ::hid_read_timeout(m_handle, out.data(), out.size(),
-                                          static_cast<int>(timeout.count()));
+        auto const n =
+            ::hid_read_timeout(m_handle, out.data(), out.size(), static_cast<int>(timeout.count()));
         if (n < 0) {
             ++m_stats.errors;
             throw std::runtime_error("hid_read_timeout failed");
@@ -102,14 +99,14 @@ private:
 
     std::uint16_t m_vid{0};
     std::uint16_t m_pid{0};
-    std::string   m_serial;
+    std::string m_serial;
     ::hid_device* m_handle{nullptr};
     TransportStats m_stats{};
 };
 
 std::atomic<int> gInitCount{0};
 
-}  // namespace
+} // namespace
 
 // Factory visible to the rest of the core.
 TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial) {
@@ -119,4 +116,4 @@ TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string 
     return std::make_unique<HidTransport>(vid, pid, std::move(serial));
 }
 
-}  // namespace ajazz::core
+} // namespace ajazz::core

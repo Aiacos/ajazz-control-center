@@ -1,0 +1,27 @@
+# yamllint config — strict enough to catch real issues, relaxed enough to
+# not fight with GitHub Actions multi-line strings.
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  comments:
+    min-spaces-from-content: 1
+  comments-indentation: disable
+  document-start: disable
+  truthy:
+    check-keys: false   # GitHub Actions uses `on:` which yamllint mislabels
+  indentation:
+    spaces: 2
+    indent-sequences: consistent
+  braces:
+    max-spaces-inside: 1
+  brackets:
+    max-spaces-inside: 1
+
+ignore: |
+  build/
+  dist/
+  .venv/
+  _deps/
