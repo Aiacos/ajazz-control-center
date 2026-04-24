@@ -85,22 +85,71 @@ if(AJAZZ_BUILD_TESTS)
 endif()
 
 # -----------------------------------------------------------------------------
-# Install / packaging
+# Install (shared resources: udev, desktop entry, icon, AppStream)
 # -----------------------------------------------------------------------------
-include(CPack)
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    install(FILES resources/linux/99-ajazz.rules
+            DESTINATION /usr/lib/udev/rules.d
+            COMPONENT   udev)
+    install(FILES resources/linux/ajazz-control-center.desktop
+            DESTINATION share/applications
+            COMPONENT   desktop)
+    install(FILES resources/linux/io.github.Aiacos.AjazzControlCenter.appdata.xml
+            DESTINATION share/metainfo
+            COMPONENT   metainfo)
+    install(FILES resources/icons/app.svg
+            DESTINATION share/icons/hicolor/scalable/apps
+            RENAME      io.github.Aiacos.AjazzControlCenter.svg
+            COMPONENT   icon)
+endif()
+
+# -----------------------------------------------------------------------------
+# Packaging
+# -----------------------------------------------------------------------------
 set(CPACK_PACKAGE_NAME "ajazz-control-center")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "AJAZZ Control Center contributors")
 set(CPACK_PACKAGE_CONTACT "https://github.com/Aiacos/ajazz-control-center")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README  "${CMAKE_SOURCE_DIR}/README.md")
+set(CPACK_STRIP_FILES TRUE)
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_GENERATOR "DEB;RPM")
-    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lorenzo Argentieri")
-    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+
+    # .deb
+    set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lorenzo Argentieri <uni.lorenzo.a@gmail.com>")
+    set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS  ON)
+    set(CPACK_DEBIAN_PACKAGE_SECTION    "utils")
+    set(CPACK_DEBIAN_PACKAGE_HOMEPAGE   "${PROJECT_HOMEPAGE_URL}")
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+        "${CMAKE_SOURCE_DIR}/packaging/linux/postinst.sh;${CMAKE_SOURCE_DIR}/packaging/linux/postrm.sh")
+
+    # .rpm
+    set(CPACK_RPM_PACKAGE_LICENSE       "GPL-3.0-or-later")
+    set(CPACK_RPM_PACKAGE_GROUP         "Applications/System")
+    set(CPACK_RPM_PACKAGE_URL           "${PROJECT_HOMEPAGE_URL}")
+    set(CPACK_RPM_PACKAGE_AUTOREQ       ON)
+    set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE
+        "${CMAKE_SOURCE_DIR}/packaging/linux/postinst.sh")
+    set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE
+        "${CMAKE_SOURCE_DIR}/packaging/linux/postrm.sh")
+    # Don't let RPM claim /usr/lib/udev/rules.d — distros already own it.
+    set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+        "/usr/lib/udev" "/usr/lib/udev/rules.d"
+        "/usr/share/applications" "/usr/share/metainfo"
+        "/usr/share/icons" "/usr/share/icons/hicolor"
+        "/usr/share/icons/hicolor/scalable"
+        "/usr/share/icons/hicolor/scalable/apps")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(CPACK_GENERATOR "WIX;ZIP")
+    set(CPACK_WIX_UPGRADE_GUID "9b7e8f2c-5d4a-4e6f-8b1c-3a9e7d2f4c8b")
+    set(CPACK_WIX_PRODUCT_ICON "${CMAKE_SOURCE_DIR}/resources/icons/app.ico")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CPACK_GENERATOR "DragNDrop;TGZ")
+    set(CPACK_DMG_VOLUME_NAME "AJAZZ Control Center")
 endif()
+
+include(CPack)

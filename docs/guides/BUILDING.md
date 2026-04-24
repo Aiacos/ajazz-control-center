@@ -1,101 +1,134 @@
-# Building from source
+# Building AJAZZ Control Center
 
-AJAZZ Control Center ships a single CMake build with presets for each supported OS. The build pulls hidapi and Catch2 via `FetchContent` — the only system dependencies you need are a compiler, CMake, Qt 6 and Python 3.
+> TL;DR — `make bootstrap && make run`. The rest of this document is
+> only needed when something goes wrong or you want to understand what
+> those commands are actually doing.
 
-## Prerequisites
-
-### Linux (Ubuntu 24.04 is the tested baseline)
+## The friendly path (recommended)
 
 ```bash
-sudo apt-get install -y \
-    build-essential cmake ninja-build pkg-config \
-    libudev-dev libusb-1.0-0-dev libhidapi-dev \
-    libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
-    libxcb-cursor-dev libxkbcommon-x11-dev \
-    python3-dev python3-pip
+git clone https://github.com/Aiacos/ajazz-control-center.git
+cd ajazz-control-center
 
-# Qt 6.7+ — via your distro package or the official online installer.
+make bootstrap   # installs every system dep, udev rules, and builds
+make run         # launches the freshly-built app
 ```
 
-### Windows
+`make bootstrap` calls [`scripts/bootstrap-dev.sh`](../../scripts/bootstrap-dev.sh),
+which:
 
-- Visual Studio 2022 with "Desktop development with C++"
-- CMake 3.28+ (bundled with VS 2022)
-- Qt 6.7+ (online installer, MSVC 2022 kit)
-- Python 3.11+ (from python.org)
+1. Detects your distro (Fedora / RHEL / openSUSE / Debian / Ubuntu /
+   Arch / macOS).
+2. Installs every build dependency through the native package manager.
+3. Installs the udev rule (Linux only) so device access works
+   immediately — no group membership, no logout, no replug.
+4. Configures CMake with the `dev` preset and builds.
+
+Common follow-up targets:
+
+| Command           | What it does                                             |
+|-------------------|----------------------------------------------------------|
+| `make`            | Incremental debug build (alias for `make build`).        |
+| `make run`        | Build + launch the app.                                  |
+| `make test`       | Build + run the full test suite.                         |
+| `make release`    | Optimized build (no sanitizers).                         |
+| `make package`    | Produce `.deb`/`.rpm` (Linux), `.dmg` (macOS), `.msi` (Windows). |
+| `make install`    | Install into `/usr/local` (Linux / macOS).               |
+| `make uninstall`  | Remove what `make install` placed.                       |
+| `make format`     | Run `clang-format` across the tree.                      |
+| `make lint`       | Run `clang-tidy` across the tree.                        |
+| `make doctor`     | Diagnose your environment (toolchain, Qt, devices).      |
+| `make help`       | Show the full list.                                      |
+
+## Manual CMake (if you prefer)
+
+The Makefile is just a thin wrapper. The underlying build is plain CMake:
+
+```bash
+cmake --preset dev
+cmake --build --preset dev
+ctest --preset dev
+```
+
+Presets live in [`CMakePresets.json`](../../CMakePresets.json). The
+available ones are:
+
+| Preset       | Purpose                                        |
+|--------------|------------------------------------------------|
+| `dev`        | Debug build with sanitizers, compile commands. |
+| `release`    | Optimized build, LTO, strip.                   |
+| `coverage`   | Debug + `--coverage` instrumentation for CI.   |
+| `clang`      | Same as `dev` but forced to Clang/libc++.      |
+
+## Prerequisites (for curious developers)
+
+| Dependency    | Minimum | Typical provider                              |
+|---------------|---------|-----------------------------------------------|
+| CMake         | 3.28    | `dnf install cmake` / `brew install cmake`    |
+| Ninja         | 1.11    | `dnf install ninja-build`                     |
+| C++ compiler  | GCC 13 / Clang 17 / MSVC 19.39 | distro / Xcode / VS 2022        |
+| Qt            | 6.7     | `qt6-*-devel` on Linux, `brew install qt@6`   |
+| Python        | 3.11    | system                                        |
+| libusb/hidapi | bundled | fetched automatically                          |
+
+If you want to install these yourself instead of running
+`make bootstrap`, the per-distro commands are in the bootstrap script —
+it is designed to be readable as documentation.
+
+## Platform notes
+
+### Linux
+
+- On Wayland the app runs out of the box. On X11 you may want
+  `QT_QPA_PLATFORM=xcb`.
+- The udev rule uses `TAG+="uaccess"`. This grants the currently
+  logged-in user device access through systemd-logind ACLs. No
+  `plugdev` group membership is required, and you do **not** need to
+  log out and back in — newly-plugged devices are re-ACL'd
+  automatically.
+- Installing via the `.deb` / `.rpm` packages takes care of the udev
+  rule automatically via post-install scripts
+  ([`packaging/linux/postinst.sh`](../../packaging/linux/postinst.sh)).
 
 ### macOS
 
+- Build produces a universal binary (`arm64;x86_64`) when Xcode
+  supports both.
+- On first launch grant **Input Monitoring** and **Accessibility**
+  permission in *System Settings → Privacy & Security* so the app can
+  emit synthetic keystrokes for macros.
+
+### Windows
+
+- Use the *Developer PowerShell for VS 2022* so the MSVC compiler is on
+  `PATH`.
+- Qt must be installed via the Qt online installer; point CMake at it
+  with `-DCMAKE_PREFIX_PATH="C:\Qt\6.7.3\msvc2022_64"`.
+- WIX Toolset 3.14+ is required for `make package` to produce an MSI.
+
+## Packaging locally
+
 ```bash
-brew install cmake ninja pkg-config
-# Qt 6.7 via the official installer or qt6 formula (brew install qt).
+make package
 ```
 
-## Configure & build
+produces:
 
-The presets live in `CMakePresets.json`:
+- on Linux: `build/release/ajazz-control-center-*.deb` and `*.rpm`
+- on macOS: `build/release/ajazz-control-center-*.dmg`
+- on Windows: `build/release/ajazz-control-center-*.msi`
 
-| Host     | Configure preset   | Build preset       |
-|----------|--------------------|--------------------|
-| Linux    | `linux-release`    | `linux-release`    |
-| Linux    | `linux-debug`      | `linux-debug`      |
-| Windows  | `windows-release`  | `windows-release`  |
-| macOS    | `macos-release`    | `macos-release`    |
+For Flatpak, use the manifest directly:
 
 ```bash
-cmake --preset linux-release
-cmake --build --preset linux-release --parallel
-ctest --preset linux-release
-```
-
-The resulting binary lives at `build/linux-release/src/app/ajazz-control-center`.
-
-## Options
-
-| Option                     | Default | Description                              |
-|----------------------------|---------|------------------------------------------|
-| `AJAZZ_BUILD_APP`          | `ON`    | Build the Qt desktop application         |
-| `AJAZZ_BUILD_TESTS`        | `ON`    | Build Catch2 unit + integration tests    |
-| `AJAZZ_BUILD_PYTHON_HOST`  | `ON`    | Embed the Python plugin host             |
-| `AJAZZ_ENABLE_WERROR`      | `ON`    | Treat compiler warnings as errors        |
-| `AJAZZ_ENABLE_SANITIZERS`  | `OFF`   | Enable ASan + UBSan (Debug builds only)  |
-| `AJAZZ_ENABLE_COVERAGE`    | `OFF`   | Add `--coverage` flags                   |
-
-Example:
-
-```bash
-cmake --preset linux-debug -DAJAZZ_ENABLE_SANITIZERS=ON
-cmake --build --preset linux-debug
-```
-
-## Packaging (local)
-
-```bash
-cmake --build --preset linux-release
-cd build/linux-release
-cpack -G DEB
-cpack -G RPM
-```
-
-For Flatpak:
-
-```bash
-flatpak-builder --user --install build-flatpak \
+flatpak-builder --user --install --force-clean build-flatpak \
     packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
 ```
 
-On Windows: `cpack -G WIX` from the build directory.
-On macOS: `cpack -G DragNDrop`.
+## Troubleshooting the build
 
-## Running without installing
-
-```bash
-./build/linux-release/src/app/ajazz-control-center
-```
-
-On Linux the app needs the udev rules installed once to access devices without root:
-
-```bash
-sudo install -m 644 resources/linux/99-ajazz.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
+- `make doctor` prints a health check of your toolchain.
+- `make clean` deletes every build directory.
+- CI uses exactly the same commands as the Makefile, so if it passes on
+  CI but not locally, comparing the workflow logs and `make doctor`
+  usually points to the problem in seconds.

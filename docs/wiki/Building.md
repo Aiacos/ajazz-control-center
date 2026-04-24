@@ -45,22 +45,28 @@ export CMAKE_PREFIX_PATH="$(brew --prefix qt@6)"
 Studio 2022 with the *Desktop development with C++* workload. Use the
 *Developer PowerShell for VS 2022*.
 
-## Configure and build
+## One-command bootstrap
 
 ```bash
 git clone https://github.com/Aiacos/ajazz-control-center.git
 cd ajazz-control-center
+make bootstrap   # installs every dep, udev rule, and builds
+make run         # launches the app
+```
 
-# Debug preset (recommended for contributors)
-cmake --preset dev
+`make bootstrap` detects your distro and installs every prerequisite
+through the native package manager. On Linux it also installs the udev
+rule so the app can talk to devices **without `plugdev` membership and
+without a logout**.
 
-# Or Release with sanitizers disabled
-cmake --preset release
+## Manual configure & build
 
-# Build
+If you prefer invoking CMake directly:
+
+```bash
+cmake --preset dev            # debug
+cmake --preset release        # optimized
 cmake --build --preset dev
-
-# Run tests
 ctest --preset dev
 ```
 
@@ -70,16 +76,14 @@ Presets are defined in
 ## Running the app
 
 ```bash
-./build/dev/src/app/ajazz-control-center
+./build/dev/src/app/ajazz-control-center     # or `make run`
 ```
 
-On Linux the first run will fail on permission errors until the udev
-rule is installed:
+If you skipped `make bootstrap`, install the udev rule once (nothing
+else, no user group, no logout):
 
 ```bash
-sudo cp resources/linux/99-ajazz.rules /etc/udev/rules.d/
-sudo udevadm control --reload
-sudo udevadm trigger
+make udev
 ```
 
 ## Packaging

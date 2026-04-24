@@ -5,37 +5,45 @@ five minutes.
 
 ## 1. Install
 
-Pick the package for your platform from the
-[Releases page](https://github.com/Aiacos/ajazz-control-center/releases).
-
-### Linux
-
-- **Fedora / RHEL / openSUSE:** download the `.rpm` and
-  `sudo dnf install ./ajazz-control-center-*.rpm`.
-- **Debian / Ubuntu:** download the `.deb` and
-  `sudo apt install ./ajazz-control-center-*.deb`.
-- **Flatpak (any distro):**
-  `flatpak install flathub io.github.Aiacos.AjazzControlCenter` *(pending submission — today use the `.flatpak` bundle from Releases)*.
-
-The Linux packages install a udev rule at
-`/etc/udev/rules.d/99-ajazz.rules` granting the `plugdev` group access to
-AJAZZ HID interfaces. Make sure your user is in that group:
+### One-line install (Linux & macOS)
 
 ```bash
-sudo usermod -aG plugdev "$USER"
-# then log out and back in
+curl -fsSL https://raw.githubusercontent.com/Aiacos/ajazz-control-center/main/scripts/install.sh | bash
 ```
+
+That's it. The installer picks the best channel for your platform
+(Flatpak on Linux if available, native `.deb` / `.rpm` otherwise,
+Homebrew cask on macOS). It installs the udev rule automatically and
+**does not** require group membership, logout, or replugging.
 
 ### Windows
 
-Run the `.msi` installer. No drivers need to be installed — AJAZZ devices
-present as standard HID and are claimed via `hid.dll`.
+```powershell
+winget install Aiacos.AjazzControlCenter
+```
 
-### macOS
+### Manual download
 
-Open the universal `.dmg` and drag the app to **Applications**. On first
-launch you may need to grant **Input Monitoring** permission in
-**System Settings → Privacy & Security** so macros can be sent.
+Prefer to pick the file yourself? Every release publishes `.deb`,
+`.rpm`, `.flatpak`, `.msi` and a universal `.dmg` on the
+[Releases page](https://github.com/Aiacos/ajazz-control-center/releases).
+
+- **Fedora / RHEL / openSUSE:** `sudo dnf install ./ajazz-control-center-*.rpm`
+- **Debian / Ubuntu:** `sudo apt install ./ajazz-control-center-*.deb`
+- **Flatpak:** `flatpak install ./ajazz-control-center-*.flatpak`
+- **macOS:** open the `.dmg` and drag the app to **Applications**. On
+  first launch grant **Input Monitoring** in *System Settings → Privacy
+  & Security* so macros can be sent.
+- **Windows:** run the `.msi`. No drivers to install.
+
+### Why you don't need `plugdev` or a logout
+
+The udev rule shipped with the package uses `TAG+="uaccess"`. That tells
+`systemd-logind` to attach an ACL granting the current desktop user
+read/write access to the device node — at the moment the device appears.
+It works on every modern distro (Fedora, Ubuntu, Debian, openSUSE, Arch,
+NixOS) and with any desktop session (GNOME, KDE, Hyprland, Sway, tty
+login).
 
 ## 2. Connect a device
 

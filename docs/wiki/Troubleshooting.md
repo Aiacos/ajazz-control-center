@@ -18,19 +18,30 @@ and attach it to the issue.
 
    If nothing is shown, it is a cable / kernel issue, not an app issue.
 
-2. Install the udev rule (the packages do this automatically; if you
-   are running from source, you must copy it manually):
+2. Install the udev rule (the `.deb`/`.rpm`/`.flatpak` packages do this
+   automatically via post-install; if you built from source, run the
+   Makefile shortcut):
 
    ```bash
-   sudo cp resources/linux/99-ajazz.rules /etc/udev/rules.d/
-   sudo udevadm control --reload
-   sudo udevadm trigger
+   make udev
    ```
 
-3. Add yourself to the `plugdev` group and log out / log in:
+   You do **not** need to add yourself to a group, log out, or replug
+   the device — the rule uses `TAG+="uaccess"` so the current desktop
+   user is granted access via ACLs by systemd-logind.
+
+3. Check the rule was picked up:
 
    ```bash
-   sudo usermod -aG plugdev "$USER"
+   ls -l /dev/hidraw* | grep $USER
+   ```
+
+   You should see your username in the ACL (or the `+` sign). If not,
+   unplug + replug the device; for stubborn systems (rare):
+
+   ```bash
+   sudo udevadm control --reload-rules
+   sudo udevadm trigger --subsystem-match=usb --subsystem-match=hidraw
    ```
 
 4. Make sure no other process owns the HID interface:
@@ -41,6 +52,12 @@ and attach it to the issue.
 
    Killing the vendor app or a competing tool (OpenDeck, streamdeck-ui)
    will free the device.
+
+5. Run the environment health check:
+
+   ```bash
+   make doctor
+   ```
 
 ## Windows: device is detected but no input / no display
 

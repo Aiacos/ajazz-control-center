@@ -66,36 +66,50 @@ Legend: 🟢 working · 🟡 in progress · 🟠 research phase
 
 See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for the full design.
 
-## Building from source
+## Install (end users)
 
-### Prerequisites
+One command, any platform. No group membership, no logout, no replug.
 
-| Platform | Tools                                                                |
-|----------|----------------------------------------------------------------------|
-| Linux    | GCC 13+ or Clang 17+, CMake 3.28+, Qt 6.7+, Python 3.11+, libudev, libusb-1.0, libhidapi |
-| Windows  | Visual Studio 2022, CMake 3.28+, Qt 6.7+, Python 3.11+               |
-| macOS    | Xcode 15+, CMake 3.28+, Qt 6.7+, Python 3.11+                        |
-
-### Quick start
+### Linux / macOS
 
 ```bash
-git clone git@github.com:Aiacos/ajazz-control-center.git
+curl -fsSL https://raw.githubusercontent.com/Aiacos/ajazz-control-center/main/scripts/install.sh | bash
+```
+
+The installer auto-detects your distro and uses the native package
+manager (Flatpak / `dnf` / `apt` / Homebrew). On Linux it installs a
+udev rule that uses `TAG+="uaccess"` so systemd-logind grants your user
+device access automatically — no `plugdev` group, no logout, no replug.
+
+### Windows
+
+```powershell
+winget install Aiacos.AjazzControlCenter
+```
+
+Or grab the `.msi` from the [latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest).
+
+### Manual downloads
+
+Every release on the [Releases page](https://github.com/Aiacos/ajazz-control-center/releases)
+ships `.deb`, `.rpm`, `.flatpak`, `.msi` and a universal `.dmg`.
+
+## Build from source (developers)
+
+```bash
+git clone https://github.com/Aiacos/ajazz-control-center.git
 cd ajazz-control-center
-cmake --preset linux-release        # or windows-release / macos-release
-cmake --build --preset linux-release
-ctest --preset linux-release
+make bootstrap          # installs deps + udev rule + builds
+make run                # launches the app
 ```
 
-Detailed platform-specific instructions are in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
+`make bootstrap` detects Fedora / RHEL / openSUSE / Debian / Ubuntu /
+Arch / macOS and installs every build dependency via the native package
+manager. After that, `make build` / `make test` / `make package` do the
+obvious thing. Run `make help` for the full list.
 
-### Linux permissions
-
-AJAZZ devices need udev rules to be accessible without root. After the first build, install them:
-
-```bash
-sudo install -m 644 resources/udev/99-ajazz.rules /etc/udev/rules.d/
-sudo udevadm control --reload-rules && sudo udevadm trigger
-```
+Prefer pure CMake? `cmake --preset dev && cmake --build --preset dev`
+works too. Full reference in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
 
 ## Python plugins
 

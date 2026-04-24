@@ -1,22 +1,39 @@
 # udev rules for AJAZZ / Mirabox devices.
-# Grants access to the `plugdev` group so AJAZZ Control Center can open
-# devices without elevated privileges.
+#
+# These rules use `TAG+="uaccess"` which tells systemd-logind to grant
+# read/write access to the *currently logged-in user* automatically, via
+# ACLs on the device node. There is no need to:
+#
+#   * belong to any group (no `plugdev`, no `input`)
+#   * log out and back in
+#   * run the app as root
+#   * replug the device
+#
+# Just install this file, reload udev, and AJAZZ Control Center works.
 #
 # Install:
-#   sudo cp 99-ajazz.rules /etc/udev/rules.d/
-#   sudo udevadm control --reload-rules && sudo udevadm trigger
+#   sudo install -m 644 99-ajazz.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules
+#   sudo udevadm trigger
+#
+# Linux packages (deb/rpm/flatpak) do this automatically in their
+# post-install step; you only need to run the commands above if you are
+# building from source.
 
-# Stream decks (Mirabox HSV293S family, AKP153 / AKP153E)
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="1001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="1002", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="3001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="5001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-KERNEL=="hidraw*", ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+# ---------------------------------------------------------------------------
+# Stream decks (Mirabox HSV293S family, AKP153 / AKP153E / AKP03 / AKP05)
+# ---------------------------------------------------------------------------
+SUBSYSTEM=="usb",     ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
 
+# ---------------------------------------------------------------------------
 # VIA-compatible AJAZZ keyboards (SONiX vendor prefix 0x3151)
-SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-KERNEL=="hidraw*", ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+# ---------------------------------------------------------------------------
+SUBSYSTEM=="usb",     ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
 
-# AJAZZ AJ-series mice
-SUBSYSTEM=="usb", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess", GROUP="plugdev"
-KERNEL=="hidraw*", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+# ---------------------------------------------------------------------------
+# AJAZZ AJ-series mice (AJ159 / AJ199 / AJ339 / AJ380)
+# ---------------------------------------------------------------------------
+SUBSYSTEM=="usb",     ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
