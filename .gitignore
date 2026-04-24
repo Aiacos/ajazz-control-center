@@ -11,10 +11,14 @@ CMakeCache.txt
 CMakeFiles/
 CMakeScripts/
 cmake_install.cmake
-Makefile
 CTestTestfile.cmake
 _deps/
 *.cmake.user
+
+# Generated Makefiles (CMake writes one inside build/, which is already
+# ignored). Our top-level hand-written Makefile must NOT be ignored.
+build/**/Makefile
+!/Makefile
 
 # Qt
 .qmake.stash
