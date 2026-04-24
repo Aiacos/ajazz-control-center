@@ -10,6 +10,7 @@
 
 #include <array>
 #include <cstdint>
+#include <optional>
 #include <span>
 
 namespace ajazz::streamdeck::akp153 {
@@ -62,5 +63,3 @@ struct KeyEvent {
 [[nodiscard]] std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame);
 
 } // namespace ajazz::streamdeck::akp153
-
-#include <optional> // IWYU pragma: keep

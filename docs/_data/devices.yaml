@@ -67,10 +67,10 @@ devices:
     pid: "0x3001"
     keys: 6
     encoders: 1
-    status: scaffolded
-    capabilities: [display, rgb, encoder, macros]
+    status: functional
+    capabilities: [display, encoder, macros]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "6-key + knob variant. PNG 72×72 image codec."
+    notes: "6 keys + knob; PNG 72×72 image codec. Image/encoder I/O wired."
 
   - codename: akp05
     family: streamdeck
@@ -79,10 +79,10 @@ devices:
     pid: "0x5001"
     keys: 15
     encoders: 4
-    status: scaffolded
-    capabilities: [display, rgb, encoder, touch, macros]
+    status: functional
+    capabilities: [display, encoder, touch, macros]
     protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "Stream Dock Plus class: encoders + touch strip + main LCD."
+    notes: "Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented."
 
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
@@ -100,10 +100,10 @@ devices:
     name: "AJAZZ AK series (proprietary)"
     vid: "0x3151"
     pid: "various"
-    status: scaffolded
-    capabilities: [rgb, macros, layers]
+    status: functional
+    capabilities: [rgb, macros, layers, firmware]
     protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "Closed firmware; reverse-engineering in progress."
+    notes: "Clean-room backend; RGB zones, keymap and macro upload wired."
 
   # ----- Mice --------------------------------------------------------------
   - codename: aj159

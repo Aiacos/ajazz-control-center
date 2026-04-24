@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "ajazz-plugins"
 version = "0.1.0"
@@ -26,6 +30,16 @@ dev = [
     "black>=24.8",
     "mypy>=1.11",
 ]
+
+[tool.setuptools]
+# The Python package lives under ./python/ajazz_plugins to keep it separate
+# from the C++ source tree. Tell setuptools where to look.
+package-dir = { "" = "python" }
+
+[tool.setuptools.packages.find]
+where = ["python"]
+include = ["ajazz_plugins*"]
+exclude = ["ajazz_plugins.tests*"]
 
 [tool.ruff]
 line-length = 100

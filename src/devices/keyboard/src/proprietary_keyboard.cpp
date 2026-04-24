@@ -1,60 +1,320 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// AJAZZ keyboards with closed-source Windows software (e.g. AK680, AK510).
-// Protocol work in progress — the backend is a stub that declares the
-// capability set so the UI can show the device greyed-out with a pointer
-// to the contribution guide.
+// Backend for AJAZZ keyboards shipping with the closed-source Windows tool
+// (AK680, AK510 and similar "gaming" models). The wire protocol is a
+// clean-room reconstruction from USB captures; see
+// docs/protocols/keyboard/proprietary.md for the authoritative byte-level
+// reference. No vendor firmware, driver or SDK code is reused.
 //
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/hid_transport.hpp"
+#include "ajazz/core/logger.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
+#include "proprietary_protocol.hpp"
 
+#include <algorithm>
+#include <array>
+#include <cstdio>
+#include <cstring>
 #include <mutex>
+#include <stdexcept>
+#include <string>
+#include <string_view>
 
 namespace ajazz::keyboard {
+
+namespace proprietary {
+
+// -----------------------------------------------------------------------------
+// Pure protocol helpers — every command below is verifiable in isolation.
+// -----------------------------------------------------------------------------
+std::array<std::uint8_t, ReportSize> buildGetFirmwareVersion() {
+    return makeReport(CmdGetFirmwareVersion);
+}
+
+std::array<std::uint8_t, ReportSize>
+buildSetKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col, std::uint16_t keycode) {
+    auto pkt = makeReport(CmdSetKeycode);
+    pkt[2] = layer;
+    pkt[3] = row;
+    pkt[4] = col;
+    pkt[5] = static_cast<std::uint8_t>((keycode >> 8) & 0xffu);
+    pkt[6] = static_cast<std::uint8_t>(keycode & 0xffu);
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize>
+buildSetRgbStatic(std::uint8_t zone, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
+    auto pkt = makeReport(CmdSetRgbStatic);
+    pkt[2] = zone;
+    pkt[3] = r;
+    pkt[4] = g;
+    pkt[5] = b;
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize>
+buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed) {
+    auto pkt = makeReport(CmdSetRgbEffect);
+    pkt[2] = zone;
+    pkt[3] = effectId;
+    pkt[4] = speed;
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize> buildSetRgbBrightness(std::uint8_t percent) {
+    auto pkt = makeReport(CmdSetRgbBrightness);
+    pkt[2] = std::min<std::uint8_t>(percent, 100);
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize> buildSetLayer(std::uint8_t layer) {
+    auto pkt = makeReport(CmdSetLayer);
+    pkt[2] = std::min<std::uint8_t>(layer, static_cast<std::uint8_t>(MaxLayers - 1));
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize> buildCommitEeprom() {
+    return makeReport(CmdCommitEeprom);
+}
+
+std::uint16_t ledCountForZone(std::uint8_t zone) {
+    switch (zone) {
+    case ZoneKeys:
+        return LedCountKeys;
+    case ZoneSides:
+        return LedCountSides;
+    case ZoneLogo:
+        return LedCountLogo;
+    default:
+        return 0;
+    }
+}
+
+std::uint8_t zoneIdFromName(std::string_view name) {
+    if (name == "keys") {
+        return ZoneKeys;
+    }
+    if (name == "sides") {
+        return ZoneSides;
+    }
+    if (name == "logo") {
+        return ZoneLogo;
+    }
+    return 0xff;
+}
+
+} // namespace proprietary
 
 namespace {
 
 using namespace ajazz::core;
+using namespace ajazz::keyboard::proprietary;
 
-class ProprietaryKeyboard final : public IDevice, public IRgbCapable {
+class ProprietaryKeyboard final : public IDevice,
+                                  public IKeyRemappable,
+                                  public IRgbCapable,
+                                  public IFirmwareCapable {
 public:
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
           m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
 
+    // ---- IDevice ------------------------------------------------------------
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {
         return m_descriptor;
     }
     [[nodiscard]] DeviceId id() const noexcept override { return m_id; }
-    [[nodiscard]] std::string firmwareVersion() const override { return "unknown"; }
+
+    [[nodiscard]] std::string firmwareVersion() const override {
+        auto const pkt = buildGetFirmwareVersion();
+        try {
+            (void)m_transport->write(pkt);
+            std::array<std::uint8_t, ReportSize> resp{};
+            auto const n = m_transport->read(resp, std::chrono::milliseconds{100});
+            if (n >= 5) {
+                char buf[16]{};
+                (void)std::snprintf(buf, sizeof(buf), "%u.%u.%u", resp[2], resp[3], resp[4]);
+                return std::string{buf};
+            }
+        } catch (...) { /* fall through to unknown */
+        }
+        return "unknown";
+    }
 
     void open() override {
         if (!m_transport->isOpen()) {
             m_transport->open();
+            AJAZZ_LOG_INFO("kbd/proprietary", "device opened: {}", m_descriptor.model);
         }
     }
+
     void close() override {
         if (m_transport->isOpen()) {
             m_transport->close();
         }
     }
+
     [[nodiscard]] bool isOpen() const noexcept override { return m_transport->isOpen(); }
 
     void onEvent(EventCallback cb) override {
         std::lock_guard const lock(m_mutex);
         m_callback = std::move(cb);
     }
-    std::size_t poll() override { return 0; }
 
-    [[nodiscard]] std::vector<RgbZone> rgbZones() const override {
-        return {RgbZone{.name = "keys", .ledCount = 104}, RgbZone{.name = "sides", .ledCount = 18}};
+    std::size_t poll() override {
+        std::array<std::uint8_t, ReportSize> buf{};
+        std::size_t emitted = 0;
+        for (int i = 0; i < 4; ++i) {
+            auto const n = m_transport->read(buf, std::chrono::milliseconds{0});
+            if (n == 0) {
+                break;
+            }
+            // Input reports currently surface only the active layer change;
+            // per-key HID events travel on the keyboard's standard
+            // boot-protocol interface and are consumed by the OS.
+            if (n >= 3 && buf[0] == ReportId && buf[1] == CmdSetLayer) {
+                DeviceEvent devEv{};
+                devEv.kind = DeviceEvent::Kind::KeyPressed;
+                devEv.index = 0;
+                devEv.value = buf[2];
+                EventCallback cb;
+                {
+                    std::lock_guard const lock(m_mutex);
+                    cb = m_callback;
+                }
+                if (cb) {
+                    cb(devEv);
+                }
+                ++emitted;
+            }
+        }
+        return emitted;
     }
-    void setRgbStatic(std::string_view, Rgb) override {}
-    void setRgbEffect(std::string_view, RgbEffect, std::uint8_t) override {}
-    void setRgbBuffer(std::string_view, std::span<Rgb const>) override {}
-    void setRgbBrightness(std::uint8_t) override {}
+
+    // ---- IKeyRemappable -----------------------------------------------------
+    [[nodiscard]] KeyboardLayout layout() const noexcept override {
+        // Conservative TKL layout that fits every supported model; the real
+        // numbers come from resources/device-db/keyboards.json once the
+        // device database ships.
+        return KeyboardLayout{.rows = 6, .cols = 17, .layers = MaxLayers};
+    }
+
+    void setKeycode(std::uint8_t layer,
+                    std::uint8_t row,
+                    std::uint8_t col,
+                    std::uint16_t keycode) override {
+        auto const pkt = buildSetKeycode(layer, row, col, keycode);
+        (void)m_transport->write(pkt);
+    }
+
+    [[nodiscard]] std::uint16_t
+    keycode(std::uint8_t /*layer*/, std::uint8_t /*row*/, std::uint8_t /*col*/) const override {
+        // Read-back uses command 0x04 but its payload format is not yet
+        // confirmed across all models; defer until a capture lands.
+        throw std::runtime_error("proprietary keyboard keycode read-back not yet implemented");
+    }
+
+    void setMacro(std::uint8_t slot, std::span<std::uint8_t const> bytes) override {
+        std::size_t offset = 0;
+        while (offset < bytes.size()) {
+            auto pkt = makeReport(CmdUploadMacro);
+            pkt[2] = slot;
+            pkt[3] = static_cast<std::uint8_t>((offset >> 8) & 0xffu);
+            pkt[4] = static_cast<std::uint8_t>(offset & 0xffu);
+            auto const take = std::min<std::size_t>(MacroChunk, bytes.size() - offset);
+            pkt[5] = static_cast<std::uint8_t>(take);
+            // Bytes [6..7] reserved; payload starts at byte 8.
+            std::memcpy(pkt.data() + 8, bytes.data() + offset, take);
+            (void)m_transport->write(pkt);
+            offset += take;
+        }
+    }
+
+    void commit() override {
+        auto const pkt = buildCommitEeprom();
+        (void)m_transport->write(pkt);
+    }
+
+    // ---- IRgbCapable --------------------------------------------------------
+    [[nodiscard]] std::vector<RgbZone> rgbZones() const override {
+        return {RgbZone{.name = "keys", .ledCount = LedCountKeys},
+                RgbZone{.name = "sides", .ledCount = LedCountSides},
+                RgbZone{.name = "logo", .ledCount = LedCountLogo}};
+    }
+
+    void setRgbStatic(std::string_view zone, Rgb color) override {
+        auto const zoneId = zoneIdFromName(zone);
+        if (zoneId == 0xff) {
+            throw std::invalid_argument("unknown RGB zone");
+        }
+        auto const pkt = buildSetRgbStatic(zoneId, color.r, color.g, color.b);
+        (void)m_transport->write(pkt);
+    }
+
+    void setRgbEffect(std::string_view zone, RgbEffect effect, std::uint8_t speed) override {
+        auto const zoneId = zoneIdFromName(zone);
+        if (zoneId == 0xff) {
+            throw std::invalid_argument("unknown RGB zone");
+        }
+        auto const pkt = buildSetRgbEffect(zoneId, static_cast<std::uint8_t>(effect), speed);
+        (void)m_transport->write(pkt);
+    }
+
+    void setRgbBuffer(std::string_view zone, std::span<Rgb const> colors) override {
+        auto const zoneId = zoneIdFromName(zone);
+        if (zoneId == 0xff) {
+            throw std::invalid_argument("unknown RGB zone");
+        }
+        auto const expected = ledCountForZone(zoneId);
+        if (colors.size() != expected) {
+            throw std::invalid_argument("RGB buffer size mismatch for zone");
+        }
+
+        // Flatten to a contiguous RGB8 byte buffer, then upload in 60-byte
+        // chunks (20 LEDs per report).
+        std::vector<std::uint8_t> flat;
+        flat.reserve(colors.size() * 3);
+        for (auto const& c : colors) {
+            flat.push_back(c.r);
+            flat.push_back(c.g);
+            flat.push_back(c.b);
+        }
+
+        std::size_t offset = 0;
+        while (offset < flat.size()) {
+            auto pkt = makeReport(CmdSetRgbBuffer);
+            pkt[2] = zoneId;
+            pkt[3] = static_cast<std::uint8_t>((offset >> 8) & 0xffu);
+            pkt[4] = static_cast<std::uint8_t>(offset & 0xffu);
+            auto const take = std::min<std::size_t>(RgbBufferChunk, flat.size() - offset);
+            // Byte 5 reports the length of this chunk.
+            pkt[5] = static_cast<std::uint8_t>(take);
+            std::memcpy(
+                pkt.data() + 6, flat.data() + offset, std::min<std::size_t>(take, ReportSize - 6));
+            (void)m_transport->write(pkt);
+            offset += take;
+        }
+    }
+
+    void setRgbBrightness(std::uint8_t percent) override {
+        auto const pkt = buildSetRgbBrightness(percent);
+        (void)m_transport->write(pkt);
+    }
+
+    // ---- IFirmwareCapable ---------------------------------------------------
+    [[nodiscard]] FirmwareInfo firmwareInfo() const override {
+        return FirmwareInfo{
+            .version = firmwareVersion(), .buildDate = {}, .bootloaderAvailable = false};
+    }
+
+    std::uint32_t beginFirmwareUpdate(std::span<std::uint8_t const>) override {
+        throw std::runtime_error(
+            "proprietary keyboard firmware update not yet supported (bootloader unknown)");
+    }
+
+    [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
 
 private:
     DeviceDescriptor m_descriptor;

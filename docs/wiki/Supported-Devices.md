@@ -7,7 +7,7 @@
 -->
 
 <!-- BEGIN AUTOGEN: stats -->
-**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 6 functional, 4 scaffolded.
+**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 9 functional, 1 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 Support levels:
@@ -26,10 +26,10 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 |--------|--------|---------|:----:|:--------:|--------|--------------|
 | streamdeck | [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
 | streamdeck | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
-| streamdeck | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 1 | 🟡 scaffolded | display, rgb, encoder, macros |
-| streamdeck | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 15 | 4 | 🟡 scaffolded | display, rgb, encoder, touch, macros |
+| streamdeck | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 1 | 🟢 functional | display, encoder, macros |
+| streamdeck | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 15 | 4 | 🟢 functional | display, encoder, touch, macros |
 | keyboard | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
-| keyboard | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | — | — | 🟡 scaffolded | rgb, macros, layers |
+| keyboard | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | mouse | [AJAZZ AJ159](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51a` | — | — | 🟢 functional | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ199](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51b` | — | — | 🟢 functional | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ339](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51c` | — | — | 🟢 functional | rgb, dpi, firmware |
@@ -45,15 +45,15 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 |--------|-----|--------|----------|-------|
 | [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Reference implementation. JPEG 85×85 per-key images. |
 | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Same protocol family as AKP153. |
-| [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟡 scaffolded | Per-key display, RGB backlight, Encoder / dial, Macros | 6-key + knob variant. PNG 72×72 image codec. |
-| [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟡 scaffolded | Per-key display, RGB backlight, Encoder / dial, Touch strip, Macros | Stream Dock Plus class: encoders + touch strip + main LCD. |
+| [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟢 functional | Per-key display, Encoder / dial, Macros | 6 keys + knob; PNG 72×72 image codec. Image/encoder I/O wired. |
+| [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟢 functional | Per-key display, Encoder / dial, Touch strip, Macros | Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented. |
 
 ### Keyboards
 
 | Device | USB | Status | Features | Notes |
 |--------|-----|--------|----------|-------|
 | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Any VIA JSON layout is supported. |
-| [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | 🟡 scaffolded | RGB backlight, Macros, Layers | Closed firmware; reverse-engineering in progress. |
+| [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Clean-room backend; RGB zones, keymap and macro upload wired. |
 
 ### Mice
 

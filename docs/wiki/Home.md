@@ -9,7 +9,7 @@ embedded Python plugin runtime. It is an independent, clean-room project
 and is not affiliated with, endorsed by, or supported by AJAZZ.
 
 <!-- BEGIN AUTOGEN: stats -->
-**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 6 functional, 4 scaffolded.
+**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 9 functional, 1 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 ## Quick links

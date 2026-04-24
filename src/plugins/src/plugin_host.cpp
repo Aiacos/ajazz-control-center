@@ -12,7 +12,15 @@ namespace py = pybind11;
 
 namespace ajazz::plugins {
 
-struct PluginHost::Impl {
+// pybind11 types carry hidden visibility; annotate Impl hidden to avoid
+// -Werror=attributes on GCC when its containing class has default visibility.
+#if defined(__GNUC__) && !defined(_WIN32)
+#define AJAZZ_HIDDEN __attribute__((visibility("hidden")))
+#else
+#define AJAZZ_HIDDEN
+#endif
+
+struct AJAZZ_HIDDEN PluginHost::Impl {
     py::scoped_interpreter guard{};
     std::vector<std::filesystem::path> searchPaths;
     std::unordered_map<std::string, py::object> plugins; // id -> instance

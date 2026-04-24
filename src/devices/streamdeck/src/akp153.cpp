@@ -257,7 +257,7 @@ private:
     DeviceDescriptor m_descriptor;
     DeviceId m_id;
     TransportPtr m_transport;
-    FirmwareInfo m_firmware{.version = "unknown"};
+    FirmwareInfo m_firmware{.version = "unknown", .buildDate = {}, .bootloaderAvailable = false};
     EventCallback m_callback;
     std::mutex m_mutex;
 };
