@@ -1,0 +1,77 @@
+{
+    "version": 6,
+    "cmakeMinimumRequired": { "major": 3, "minor": 28, "patch": 0 },
+    "configurePresets": [
+        {
+            "name": "base",
+            "hidden": true,
+            "binaryDir": "${sourceDir}/build/${presetName}",
+            "generator": "Ninja",
+            "cacheVariables": {
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "AJAZZ_ENABLE_WERROR": "ON"
+            }
+        },
+        {
+            "name": "linux-debug",
+            "inherits": "base",
+            "displayName": "Linux · Debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "AJAZZ_ENABLE_SANITIZERS": "ON"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+        },
+        {
+            "name": "linux-release",
+            "inherits": "base",
+            "displayName": "Linux · Release",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
+        },
+        {
+            "name": "windows-debug",
+            "inherits": "base",
+            "displayName": "Windows · Debug",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "windows-release",
+            "inherits": "base",
+            "displayName": "Windows · Release",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }
+        },
+        {
+            "name": "macos-debug",
+            "inherits": "base",
+            "displayName": "macOS · Debug",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "Debug" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+        },
+        {
+            "name": "macos-release",
+            "inherits": "base",
+            "displayName": "macOS · Release",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+        }
+    ],
+    "buildPresets": [
+        { "name": "linux-debug",     "configurePreset": "linux-debug"   },
+        { "name": "linux-release",   "configurePreset": "linux-release" },
+        { "name": "windows-debug",   "configurePreset": "windows-debug"   },
+        { "name": "windows-release", "configurePreset": "windows-release" },
+        { "name": "macos-debug",     "configurePreset": "macos-debug"   },
+        { "name": "macos-release",   "configurePreset": "macos-release" }
+    ],
+    "testPresets": [
+        { "name": "linux-debug",     "configurePreset": "linux-debug",     "output": { "outputOnFailure": true } },
+        { "name": "linux-release",   "configurePreset": "linux-release",   "output": { "outputOnFailure": true } },
+        { "name": "windows-debug",   "configurePreset": "windows-debug",   "output": { "outputOnFailure": true } },
+        { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
+        { "name": "macos-debug",     "configurePreset": "macos-debug",     "output": { "outputOnFailure": true } },
+        { "name": "macos-release",   "configurePreset": "macos-release",   "output": { "outputOnFailure": true } }
+    ]
+}

@@ -1,0 +1,75 @@
+# Build output
+build/
+build-*/
+out/
+cmake-build-*/
+dist/
+install/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+CMakeScripts/
+cmake_install.cmake
+Makefile
+CTestTestfile.cmake
+_deps/
+*.cmake.user
+
+# Qt
+.qmake.stash
+.qmake.cache
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.qmlc
+*.jsc
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.tox/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+
+# IDE / editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.cache/
+compile_commands.json
+.clangd/
+
+# Logs, temp captures (NEVER commit device captures without sanitization)
+*.log
+captures/*.pcapng
+captures/*.pcap
+captures/raw/
+
+# Packaging
+*.deb
+*.rpm
+*.dmg
+*.msi
+*.pkg
+*.AppImage
+
+# Local secrets
+.env
+.env.local

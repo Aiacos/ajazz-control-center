@@ -1,0 +1,18 @@
+name: Device support request
+description: Ask for support of an additional AJAZZ / Mirabox device.
+labels: [ device-support, enhancement ]
+body:
+  - type: input
+    id: model
+    attributes: { label: Device model, placeholder: e.g. AJAZZ AKP815 }
+    validations: { required: true }
+  - type: input
+    id: vidpid
+    attributes:
+      label: USB VID / PID
+      description: Output of `lsusb` (Linux) or Device Manager details (Windows).
+  - type: textarea
+    id: captures
+    attributes:
+      label: USB capture available?
+      description: Can you share a Wireshark/USBPcap capture of the official software driving the device?

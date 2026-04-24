@@ -1,0 +1,22 @@
+# udev rules for AJAZZ / Mirabox devices.
+# Grants access to the `plugdev` group so AJAZZ Control Center can open
+# devices without elevated privileges.
+#
+# Install:
+#   sudo cp 99-ajazz.rules /etc/udev/rules.d/
+#   sudo udevadm control --reload-rules && sudo udevadm trigger
+
+# Stream decks (Mirabox HSV293S family, AKP153 / AKP153E)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="1001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="1002", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="3001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTRS{idVendor}=="0300", ATTRS{idProduct}=="5001", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+KERNEL=="hidraw*", ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+
+# VIA-compatible AJAZZ keyboards (SONiX vendor prefix 0x3151)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+KERNEL=="hidraw*", ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+
+# AJAZZ AJ-series mice
+SUBSYSTEM=="usb", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess", GROUP="plugdev"
+KERNEL=="hidraw*", ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess", GROUP="plugdev"

@@ -1,0 +1,52 @@
+app-id: io.github.Aiacos.AjazzControlCenter
+runtime: org.kde.Platform
+runtime-version: '6.7'
+sdk: org.kde.Sdk
+command: ajazz-control-center
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # USB / HID access via libhidapi. Plugdev is preferred on the host; inside
+  # Flatpak the permission is mediated by `--device=all`.
+  - --device=all
+  - --filesystem=xdg-config/ajazz-control-center:create
+  - --filesystem=xdg-data/ajazz-control-center:create
+
+modules:
+  - name: hidapi
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DHIDAPI_BUILD_HIDTEST=OFF
+      - -DHIDAPI_WITH_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/libusb/hidapi.git
+        tag: hidapi-0.14.0
+
+  - name: pybind11
+    buildsystem: cmake-ninja
+    sources:
+      - type: git
+        url: https://github.com/pybind/pybind11.git
+        tag: v2.13.6
+
+  - name: ajazz-control-center
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DAJAZZ_BUILD_TESTS=OFF
+      - -DAJAZZ_ENABLE_WERROR=OFF
+    sources:
+      - type: dir
+        path: ../..
+    post-install:
+      - install -Dm644 resources/linux/io.github.Aiacos.AjazzControlCenter.appdata.xml
+          /app/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
+      - install -Dm644 resources/linux/ajazz-control-center.desktop
+          /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
+      - install -Dm644 resources/icons/app.svg
+          /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg

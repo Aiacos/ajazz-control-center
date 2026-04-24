@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux — .deb + .rpm via CPack
+  # ---------------------------------------------------------------------------
+  linux-packages:
+    name: Linux · deb + rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config \
+              libudev-dev libusb-1.0-0-dev libhidapi-dev \
+              libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
+              libxcb-cursor-dev libxkbcommon-x11-dev \
+              python3-dev rpm file
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure
+        run: cmake --preset linux-release
+      - name: Build
+        run: cmake --build --preset linux-release
+      - name: Package (deb + rpm)
+        working-directory: build/linux-release
+        run: |
+          cpack -G DEB
+          cpack -G RPM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-packages
+          path: |
+            build/linux-release/*.deb
+            build/linux-release/*.rpm
+
+  # ---------------------------------------------------------------------------
+  # Linux — Flatpak bundle
+  # ---------------------------------------------------------------------------
+  linux-flatpak:
+    name: Linux · Flatpak
+    runs-on: ubuntu-24.04
+    container:
+      image: bilelmoussaoui/flatpak-github-actions:kde-6.7
+      options: --privileged
+    steps:
+      - uses: actions/checkout@v4
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: ajazz-control-center.flatpak
+          manifest-path: packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
+          cache-key: flatpak-builder-${{ github.sha }}
+
+  # ---------------------------------------------------------------------------
+  # Windows — MSI installer via CPack/WIX
+  # ---------------------------------------------------------------------------
+  windows-msi:
+    name: Windows · MSI
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure
+        run: cmake --preset windows-release
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Package (MSI + ZIP)
+        working-directory: build/windows-release
+        run: |
+          cpack -G WIX
+          cpack -G ZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-packages
+          path: |
+            build/windows-release/*.msi
+            build/windows-release/*.zip
+
+  # ---------------------------------------------------------------------------
+  # macOS — universal DMG (x86_64 + arm64)
+  # ---------------------------------------------------------------------------
+  macos-dmg:
+    name: macOS · Universal DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: brew install ninja create-dmg
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure (universal)
+        run: |
+          cmake -S . -B build/macos-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Build
+        run: cmake --build build/macos-release
+      - name: Package (DMG + TGZ)
+        working-directory: build/macos-release
+        run: |
+          cpack -G DragNDrop
+          cpack -G TGZ
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-packages
+          path: |
+            build/macos-release/*.dmg
+            build/macos-release/*.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # Publish GitHub release
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish GitHub release
+    needs: [ linux-packages, linux-flatpak, windows-msi, macos-dmg ]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+      - name: List artifacts
+        run: find dist -type f
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || github.event.inputs.tag }}
+          generate_release_notes: true
+          fail_on_unmatched_files: false
+          files: |
+            dist/linux-packages/*
+            dist/windows-packages/*
+            dist/macos-packages/*
+            dist/*.flatpak

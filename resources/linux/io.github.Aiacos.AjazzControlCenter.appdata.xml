@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Aiacos.AjazzControlCenter</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>AJAZZ Control Center</name>
+  <summary>Configure AJAZZ stream decks, keyboards and mice</summary>
+  <description>
+    <p>
+      AJAZZ Control Center is a modern, open, cross-platform control panel for
+      AJAZZ (and Mirabox-OEM) devices. It supports stream decks, mechanical
+      keyboards, and gaming mice under Linux, Windows and macOS with a single,
+      consistent Qt 6 user interface and a Python plugin system.
+    </p>
+    <p>Supported device families:</p>
+    <ul>
+      <li>Stream decks: AKP153, AKP153E, AKP03, AKP05 and Mirabox-OEM siblings.</li>
+      <li>Keyboards: VIA-compatible AK series plus research-stage proprietary models.</li>
+      <li>Mice: AJ159, AJ199, AJ339 Pro, AJ380.</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">ajazz-control-center.desktop</launchable>
+  <url type="homepage">https://github.com/Aiacos/ajazz-control-center</url>
+  <url type="bugtracker">https://github.com/Aiacos/ajazz-control-center/issues</url>
+  <url type="help">https://github.com/Aiacos/ajazz-control-center/wiki</url>
+  <developer_name>Lorenzo Argentieri</developer_name>
+  <releases>
+    <release version="0.1.0" date="2026-05-01">
+      <description>
+        <p>Initial alpha scaffolding.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Utility</category>
+    <category>HardwareSettings</category>
+  </categories>
+</component>

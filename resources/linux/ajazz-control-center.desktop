@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=AJAZZ Control Center
+GenericName=Device Control Panel
+Comment=Configure AJAZZ stream decks, keyboards and mice
+Exec=ajazz-control-center %F
+Icon=ajazz-control-center
+Categories=Utility;Settings;HardwareSettings;
+Keywords=ajazz;mirabox;streamdeck;keyboard;mouse;rgb;
+StartupNotify=true
+StartupWMClass=ajazz-control-center
+Terminal=false
