@@ -1,5 +1,11 @@
 name: Publish wiki
 
+# GitHub Wiki is only available on public repositories for free accounts,
+# or on paid (Team / Enterprise) accounts for private repositories. If the
+# repository is private on a free plan, `has_wiki` will be false and this
+# workflow exits gracefully. In all other cases the contents of
+# `docs/wiki/` are mirrored to the GitHub Wiki.
+
 on:
   push:
     branches: [ main ]
@@ -8,13 +14,29 @@ on:
       - '.github/workflows/wiki.yml'
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     name: Sync docs/wiki → GitHub Wiki
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - name: Check wiki availability
+        id: check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          has_wiki=$(gh api "repos/${{ github.repository }}" --jq '.has_wiki')
+          echo "has_wiki=$has_wiki" >> "$GITHUB_OUTPUT"
+          if [ "$has_wiki" != "true" ]; then
+            echo "::notice::Wiki is disabled for this repository (has_wiki=$has_wiki). Skipping sync. The wiki source remains available under docs/wiki/ in the repo."
+          fi
+
       - name: Push wiki
+        if: steps.check.outputs.has_wiki == 'true'
         uses: Andrew-Chen-Wang/github-wiki-action@v4
         with:
           path: docs/wiki
