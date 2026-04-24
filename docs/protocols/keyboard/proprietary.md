@@ -27,25 +27,25 @@ byte N+1.. : zero padding
 
 ## Command table
 
-| ID     | Name                          | Payload                                |
-| ------ | ----------------------------- | -------------------------------------- |
-| `0x01` | `GET_FIRMWARE_VERSION`        | —                                      |
-| `0x05` | `SET_KEYCODE(layer,row,col)`  | BE16 keycode                           |
-| `0x08` | `SET_RGB_STATIC(zone,r,g,b)`  | zone id + 24-bit RGB                   |
-| `0x09` | `SET_RGB_EFFECT(zone,fx,spd)` | zone id + effect id + speed            |
-| `0x0A` | `SET_RGB_BUFFER(zone,off,n)`  | chunked 60-byte LED buffer             |
-| `0x0B` | `SET_RGB_BRIGHTNESS(percent)` | 0..100                                 |
-| `0x0C` | `SET_LAYER(layer)`            | layer id 0..3                          |
-| `0x0D` | `UPLOAD_MACRO(slot,off,len)`  | chunked 56-byte macro buffer           |
-| `0x0E` | `COMMIT_EEPROM`               | —                                      |
+| ID     | Name                          | Payload                      |
+| ------ | ----------------------------- | ---------------------------- |
+| `0x01` | `GET_FIRMWARE_VERSION`        | —                            |
+| `0x05` | `SET_KEYCODE(layer,row,col)`  | BE16 keycode                 |
+| `0x08` | `SET_RGB_STATIC(zone,r,g,b)`  | zone id + 24-bit RGB         |
+| `0x09` | `SET_RGB_EFFECT(zone,fx,spd)` | zone id + effect id + speed  |
+| `0x0A` | `SET_RGB_BUFFER(zone,off,n)`  | chunked 60-byte LED buffer   |
+| `0x0B` | `SET_RGB_BRIGHTNESS(percent)` | 0..100                       |
+| `0x0C` | `SET_LAYER(layer)`            | layer id 0..3                |
+| `0x0D` | `UPLOAD_MACRO(slot,off,len)`  | chunked 56-byte macro buffer |
+| `0x0E` | `COMMIT_EEPROM`               | —                            |
 
 ## Zones
 
-| ID     | Name       | LED count |
-| ------ | ---------- | --------- |
-| `0x00` | `keys`     | 104       |
-| `0x01` | `sides`    | 18        |
-| `0x02` | `logo`     | 4         |
+| ID     | Name    | LED count |
+| ------ | ------- | --------- |
+| `0x00` | `keys`  | 104       |
+| `0x01` | `sides` | 18        |
+| `0x02` | `logo`  | 4         |
 
 ## Layers
 
@@ -55,14 +55,14 @@ Up to 4 layers are supported (fn, fn+shift, etc.). The current active layer is r
 
 These map onto `ajazz::core::RgbEffect`:
 
-| Effect id | Name            |
-| --------- | --------------- |
-| `0x00`    | `Static`        |
-| `0x01`    | `Breathing`     |
-| `0x02`    | `Wave`          |
-| `0x03`    | `ReactiveRipple`|
-| `0x04`    | `ColorCycle`    |
-| `0x05`    | `Custom`        |
+| Effect id | Name             |
+| --------- | ---------------- |
+| `0x00`    | `Static`         |
+| `0x01`    | `Breathing`      |
+| `0x02`    | `Wave`           |
+| `0x03`    | `ReactiveRipple` |
+| `0x04`    | `ColorCycle`     |
+| `0x05`    | `Custom`         |
 
 ## Status
 
