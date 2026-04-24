@@ -18,6 +18,13 @@ VIA      = "VIA"
 pybind   = "pybind"
 Aiacos   = "Aiacos"
 Argentieri = "Argentieri"
+# Qt MOC macro; typos keeps proposing INVOCABLE which does not exist.
+INVOKABLE = "INVOKABLE"
+Invokable = "Invokable"
+invokable = "invokable"
+# Lift-off distance command abbreviation used in the AJ mouse protocol.
+Lod = "Lod"
+kCmdLod = "kCmdLod"
 
 [files]
 extend-exclude = [

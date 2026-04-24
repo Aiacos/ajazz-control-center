@@ -9,10 +9,12 @@ here are the *only* public surface plugins should rely on.
 from __future__ import annotations
 
 import inspect
+import json
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
-__all__ = ["Plugin", "action", "ActionContext"]
+__all__ = ["ActionContext", "Plugin", "action"]
 
 
 @dataclass
@@ -57,6 +59,7 @@ class Plugin:
     authors: str = ""
 
     def actions(self) -> dict[str, Callable[..., Any]]:
+        """Discover all ``@action``-decorated methods bound to this instance."""
         out: dict[str, Callable[..., Any]] = {}
         for _, method in inspect.getmembers(self, inspect.ismethod):
             meta = getattr(method, "__ajazz_action__", None)
@@ -67,8 +70,6 @@ class Plugin:
 
     def dispatch(self, action_id: str, settings_json: str) -> None:
         """Entry point invoked by the C++ host."""
-        import json
-
         handler = self.actions().get(action_id)
         if handler is None:
             raise KeyError(f"unknown action: {action_id}")

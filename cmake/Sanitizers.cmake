@@ -5,14 +5,11 @@ add_library(ajazz::sanitizers ALIAS ajazz_sanitizers)
 
 if(AJAZZ_ENABLE_SANITIZERS)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-        target_compile_options(ajazz_sanitizers INTERFACE
-            -fsanitize=address,undefined
-            -fno-omit-frame-pointer
-            -fno-sanitize-recover=all
+        target_compile_options(
+            ajazz_sanitizers INTERFACE -fsanitize=address,undefined -fno-omit-frame-pointer
+                                       -fno-sanitize-recover=all
         )
-        target_link_options(ajazz_sanitizers INTERFACE
-            -fsanitize=address,undefined
-        )
+        target_link_options(ajazz_sanitizers INTERFACE -fsanitize=address,undefined)
     elseif(MSVC)
         target_compile_options(ajazz_sanitizers INTERFACE /fsanitize=address)
     endif()

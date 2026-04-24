@@ -14,7 +14,7 @@ namespace ajazz::core {
 
 namespace {
 
-void writeRgb(std::ostringstream& out, Rgb const& c) {
+[[maybe_unused]] void writeRgb(std::ostringstream& out, Rgb const& c) {
     out << "[" << static_cast<int>(c.r) << "," << static_cast<int>(c.g) << ","
         << static_cast<int>(c.b) << "]";
 }

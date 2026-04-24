@@ -10,7 +10,10 @@
 #include <atomic>
 #include <stdexcept>
 
-#include <hidapi/hidapi.h>
+// hidapi's top-level CMake target exports its headers without the "hidapi/"
+// prefix (this matches Debian's /usr/include/hidapi symlink and the upstream
+// Windows headers). Use the unprefixed form.
+#include <hidapi.h>
 
 namespace ajazz::core {
 namespace {

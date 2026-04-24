@@ -6,6 +6,7 @@
 //
 #pragma once
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -53,7 +54,3 @@ protected:
 using TransportPtr = std::unique_ptr<ITransport>;
 
 } // namespace ajazz::core
-
-// <chrono> is kept out of the public surface by forward-declaring the type
-// above; include it here so consumers do not need to.
-#include <chrono> // IWYU pragma: keep

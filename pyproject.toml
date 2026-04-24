@@ -52,7 +52,6 @@ select = [
     "PT",            # pytest style
 ]
 ignore = [
-    "ANN101", "ANN102",   # self/cls don't need annotations
     "D100", "D104", "D107",   # missing docstring in module/package/__init__
     "D203", "D213",   # conflicting pydocstyle rules
     "PLR0913",        # too many args (plugin entry points need many)
@@ -63,6 +62,7 @@ ignore = [
 "tests/**/*.py" = ["D", "ANN", "S101", "PLR2004", "ARG"]
 "python/ajazz_plugins/tests/**/*.py" = ["D", "ANN", "S101", "PLR2004", "ARG"]
 "python/ajazz_plugins/examples/**/*.py" = ["D", "ANN", "ARG"]
+"scripts/**/*.py" = ["D", "ANN", "PLR2004", "S603"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"

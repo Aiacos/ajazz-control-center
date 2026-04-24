@@ -35,17 +35,30 @@ APP_ID="io.github.Aiacos.AjazzControlCenter"
 
 # ---------- pretty output --------------------------------------------------
 if [[ -t 1 ]]; then
-    BOLD=$(tput bold); DIM=$(tput dim); RED=$(tput setaf 1)
-    GRN=$(tput setaf 2); YLW=$(tput setaf 3); BLU=$(tput setaf 4)
+    BOLD=$(tput bold)
+    DIM=$(tput dim)
+    RED=$(tput setaf 1)
+    GRN=$(tput setaf 2)
+    YLW=$(tput setaf 3)
+    BLU=$(tput setaf 4)
     RST=$(tput sgr0)
 else
-    BOLD=; DIM=; RED=; GRN=; YLW=; BLU=; RST=
+    BOLD=
+    DIM=
+    RED=
+    GRN=
+    YLW=
+    BLU=
+    RST=
 fi
-step()  { printf '%s==>%s %s%s%s\n' "$BLU" "$RST" "$BOLD" "$*" "$RST"; }
-info()  { printf '    %s\n' "$*"; }
-ok()    { printf '%s ok%s %s\n' "$GRN" "$RST" "$*"; }
-warn()  { printf '%swarn%s %s\n' "$YLW" "$RST" "$*"; }
-die()   { printf '%sfail%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
+step() { printf '%s==>%s %s%s%s\n' "$BLU" "$RST" "$BOLD" "$*" "$RST"; }
+info() { printf '    %s\n' "$*"; }
+ok() { printf '%s ok%s %s\n' "$GRN" "$RST" "$*"; }
+warn() { printf '%swarn%s %s\n' "$YLW" "$RST" "$*"; }
+die() {
+    printf '%sfail%s %s\n' "$RED" "$RST" "$*" >&2
+    exit 1
+}
 
 # ---------- helpers --------------------------------------------------------
 need() { command -v "$1" >/dev/null 2>&1; }
@@ -54,14 +67,14 @@ latest_tag() {
     # Return the latest release tag (e.g. `v0.1.0`). Empty string if there
     # is no release yet — the script then tries `main` as a fallback when
     # the distro supports building from source.
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null \
-        | awk -F'"' '/"tag_name":/ {print $4; exit}' || true
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" 2>/dev/null |
+        awk -F'"' '/"tag_name":/ {print $4; exit}' || true
 }
 
 asset_url() {
     # $1 = tag, $2 = filename regex
-    curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/$1" 2>/dev/null \
-        | awk -F'"' -v want="$2" '$2=="browser_download_url" && $4 ~ want {print $4; exit}'
+    curl -fsSL "https://api.github.com/repos/${REPO}/releases/tags/$1" 2>/dev/null |
+        awk -F'"' -v want="$2" '$2=="browser_download_url" && $4 ~ want {print $4; exit}'
 }
 
 sudo_cmd() {
@@ -76,11 +89,12 @@ sudo_cmd() {
 
 # ---------- detection ------------------------------------------------------
 detect_os() {
-    local u; u=$(uname -s)
+    local u
+    u=$(uname -s)
     case "$u" in
-        Linux)  OS=linux ;;
+        Linux) OS=linux ;;
         Darwin) OS=macos ;;
-        MINGW*|MSYS*|CYGWIN*) OS=windows ;;
+        MINGW* | MSYS* | CYGWIN*) OS=windows ;;
         *) die "unsupported OS: $u" ;;
     esac
 }
@@ -93,7 +107,7 @@ detect_linux_installer() {
     elif need apt-get; then
         INSTALLER=apt
     elif need pacman; then
-        INSTALLER=manual-rpm   # Arch users: grab .rpm via rpm-ostree? Offer manual AppImage route.
+        INSTALLER=manual-rpm # Arch users: grab .rpm via rpm-ostree? Offer manual AppImage route.
         warn "Arch Linux is not a first-class target; will offer the .flatpak instead."
         INSTALLER=flatpak-bundle
     else
@@ -112,9 +126,9 @@ install_linux_flatpak() {
     # Until published on Flathub, fall back to sideload bundle
     local tag url tmp
     tag=$(latest_tag)
-    [[ -n "$tag" ]] || die "no release published yet"
+    [[ -n $tag ]] || die "no release published yet"
     url=$(asset_url "$tag" "\\.flatpak$")
-    [[ -n "$url" ]] || die "no .flatpak asset in release $tag"
+    [[ -n $url ]] || die "no .flatpak asset in release $tag"
     tmp=$(mktemp -t acc-XXXXXX.flatpak)
     info "Downloading $tag bundle…"
     curl -fsSL -o "$tmp" "$url"
@@ -126,9 +140,10 @@ install_linux_flatpak() {
 install_linux_dnf() {
     step "Installing AJAZZ Control Center via dnf"
     local tag url tmp
-    tag=$(latest_tag); [[ -n "$tag" ]] || die "no release published yet"
+    tag=$(latest_tag)
+    [[ -n $tag ]] || die "no release published yet"
     url=$(asset_url "$tag" "\\.rpm$")
-    [[ -n "$url" ]] || die "no .rpm asset in release $tag"
+    [[ -n $url ]] || die "no .rpm asset in release $tag"
     tmp=$(mktemp -t acc-XXXXXX.rpm)
     info "Downloading $tag RPM…"
     curl -fsSL -o "$tmp" "$url"
@@ -140,9 +155,10 @@ install_linux_dnf() {
 install_linux_apt() {
     step "Installing AJAZZ Control Center via apt"
     local tag url tmp
-    tag=$(latest_tag); [[ -n "$tag" ]] || die "no release published yet"
+    tag=$(latest_tag)
+    [[ -n $tag ]] || die "no release published yet"
     url=$(asset_url "$tag" "\\.deb$")
-    [[ -n "$url" ]] || die "no .deb asset in release $tag"
+    [[ -n $url ]] || die "no .deb asset in release $tag"
     tmp=$(mktemp -t acc-XXXXXX.deb)
     info "Downloading $tag DEB…"
     curl -fsSL -o "$tmp" "$url"
@@ -167,14 +183,17 @@ install_macos() {
 
 install_macos_dmg() {
     local tag url tmp
-    tag=$(latest_tag); [[ -n "$tag" ]] || die "no release published yet"
+    tag=$(latest_tag)
+    [[ -n $tag ]] || die "no release published yet"
     url=$(asset_url "$tag" "\\.dmg$")
-    [[ -n "$url" ]] || die "no .dmg asset in release $tag"
+    [[ -n $url ]] || die "no .dmg asset in release $tag"
     tmp=$(mktemp -t acc-XXXXXX.dmg)
     info "Downloading $tag DMG…"
     curl -fsSL -o "$tmp" "$url"
     hdiutil attach "$tmp" -nobrowse -quiet
-    local vol; vol=$(ls /Volumes | grep -i ajazz | head -1)
+    local vol
+    # shellcheck disable=SC2010 # ls+grep is fine here for mounted volume matching
+    vol=$(ls /Volumes | grep -i ajazz | head -1)
     cp -R "/Volumes/$vol/AJAZZ Control Center.app" /Applications/
     hdiutil detach "/Volumes/$vol" -quiet || true
     rm -f "$tmp"
@@ -205,16 +224,16 @@ main() {
             detect_linux_installer
             info "Installer: $INSTALLER"
             case "$INSTALLER" in
-                flatpak|flatpak-bundle) install_linux_flatpak ;;
-                dnf)                    install_linux_dnf ;;
-                apt)                    install_linux_apt ;;
+                flatpak | flatpak-bundle) install_linux_flatpak ;;
+                dnf) install_linux_dnf ;;
+                apt) install_linux_apt ;;
                 *) die "no supported installer found" ;;
             esac
             info
             info "${DIM}Device access is granted via udev uaccess ACLs."
             info "${DIM}No group membership, no logout, no replug required.${RST}"
             ;;
-        macos)   install_macos ;;
+        macos) install_macos ;;
         windows) install_windows_hint ;;
     esac
     step "Done."

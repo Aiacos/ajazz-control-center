@@ -19,6 +19,14 @@ rules:
     max-spaces-inside: 1
   brackets:
     max-spaces-inside: 1
+  # Allow our table-aligned YAML (docs/_data/devices.yaml) which pads
+  # values with extra spaces so colons line up for readability.
+  colons:
+    max-spaces-after: -1
+  commas:
+    max-spaces-after: -1
+  empty-lines:
+    max: 2
 
 ignore: |
   build/

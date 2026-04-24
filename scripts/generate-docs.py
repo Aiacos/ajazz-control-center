@@ -52,6 +52,7 @@ BLOCK_RE = re.compile(
     re.DOTALL,
 )
 
+
 # ---------------------------------------------------------------------------
 # Data model
 # ---------------------------------------------------------------------------
@@ -121,8 +122,8 @@ def render_devices_by_family(d: Data) -> str:
 
     titles = {
         "streamdeck": "Stream decks",
-        "keyboard":   "Keyboards",
-        "mouse":      "Mice",
+        "keyboard": "Keyboards",
+        "mouse": "Mice",
     }
 
     for fam_key in ["streamdeck", "keyboard", "mouse"]:
@@ -146,18 +147,12 @@ def render_devices_by_family(d: Data) -> str:
 def render_platform_matrix(d: Data) -> str:
     hdr = "| Platform | Build | Install | Notes |\n"
     hdr += "|----------|-------|---------|-------|\n"
-    rows = [
-        f"| {p['name']} | {p['build']} | {p['install']} | {p['notes']} |"
-        for p in d.platforms
-    ]
+    rows = [f"| {p['name']} | {p['build']} | {p['install']} | {p['notes']} |" for p in d.platforms]
     return "\n" + hdr + "\n".join(rows) + "\n"
 
 
 def render_legend(d: Data) -> str:
-    parts = [
-        f"{s['emoji']} **{s['label']}** — {s['description']}"
-        for s in d.statuses.values()
-    ]
+    parts = [f"{s['emoji']} **{s['label']}** — {s['description']}" for s in d.statuses.values()]
     return "\n" + " · ".join(parts) + "\n"
 
 
@@ -179,17 +174,21 @@ def render_toc_wiki(_: Data) -> str:
     """List every wiki page except the Home itself."""
     wiki_dir = ROOT / "docs" / "wiki"
     pages = sorted(p.name for p in wiki_dir.glob("*.md") if p.name != "Home.md")
-    lines = ["", *(f"- [{p.replace('.md', '').replace('-', ' ')}]({p.replace('.md', '')})" for p in pages), ""]
+    lines = [
+        "",
+        *(f"- [{p.replace('.md', '').replace('-', ' ')}]({p.replace('.md', '')})" for p in pages),
+        "",
+    ]
     return "\n".join(lines)
 
 
 RENDERERS = {
-    "devices-table":     render_devices_table,
+    "devices-table": render_devices_table,
     "devices-by-family": render_devices_by_family,
-    "platform-matrix":   render_platform_matrix,
-    "legend":            render_legend,
-    "stats":             render_stats,
-    "toc-wiki":          render_toc_wiki,
+    "platform-matrix": render_platform_matrix,
+    "legend": render_legend,
+    "stats": render_stats,
+    "toc-wiki": render_toc_wiki,
 }
 
 

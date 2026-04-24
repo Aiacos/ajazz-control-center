@@ -23,21 +23,43 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$SCRIPT_DIR/.." && pwd)
 
 # ---------- pretty output (same style as install.sh) ----------------------
+# shellcheck disable=SC2034 # DIM kept for symmetry with install.sh even if unused here
 if [[ -t 1 ]]; then
-    BOLD=$(tput bold); DIM=$(tput dim); RED=$(tput setaf 1)
-    GRN=$(tput setaf 2); YLW=$(tput setaf 3); BLU=$(tput setaf 4); RST=$(tput sgr0)
-else BOLD=; DIM=; RED=; GRN=; YLW=; BLU=; RST=; fi
-step()  { printf '%s==>%s %s%s%s\n' "$BLU" "$RST" "$BOLD" "$*" "$RST"; }
-info()  { printf '    %s\n' "$*"; }
-ok()    { printf '%s ok%s %s\n' "$GRN" "$RST" "$*"; }
-warn()  { printf '%swarn%s %s\n' "$YLW" "$RST" "$*"; }
-die()   { printf '%sfail%s %s\n' "$RED" "$RST" "$*" >&2; exit 1; }
-need()  { command -v "$1" >/dev/null 2>&1; }
+    BOLD=$(tput bold)
+    DIM=$(tput dim)
+    RED=$(tput setaf 1)
+    GRN=$(tput setaf 2)
+    YLW=$(tput setaf 3)
+    BLU=$(tput setaf 4)
+    RST=$(tput sgr0)
+else
+    BOLD=
+    DIM=
+    RED=
+    GRN=
+    YLW=
+    BLU=
+    RST=
+fi
+# shellcheck disable=SC2034 # DIM referenced via export for callers
+export DIM
+step() { printf '%s==>%s %s%s%s\n' "$BLU" "$RST" "$BOLD" "$*" "$RST"; }
+info() { printf '    %s\n' "$*"; }
+ok() { printf '%s ok%s %s\n' "$GRN" "$RST" "$*"; }
+warn() { printf '%swarn%s %s\n' "$YLW" "$RST" "$*"; }
+die() {
+    printf '%sfail%s %s\n' "$RED" "$RST" "$*" >&2
+    exit 1
+}
+need() { command -v "$1" >/dev/null 2>&1; }
 
 sudo_cmd() {
-    if [[ $EUID -eq 0 ]]; then "$@"
-    elif need sudo; then sudo "$@"
-    else die "need root for: $*"
+    if [[ $EUID -eq 0 ]]; then
+        "$@"
+    elif need sudo; then
+        sudo "$@"
+    else
+        die "need root for: $*"
     fi
 }
 
@@ -80,7 +102,8 @@ install_deps_macos() {
         die "Homebrew not found. Install it first: https://brew.sh"
     fi
     brew install cmake ninja qt@6 python@3.11 pkg-config
-    local qt_prefix; qt_prefix=$(brew --prefix qt@6)
+    local qt_prefix
+    qt_prefix=$(brew --prefix qt@6)
     export CMAKE_PREFIX_PATH="$qt_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
     info "CMAKE_PREFIX_PATH set to include $qt_prefix"
 }
@@ -88,7 +111,10 @@ install_deps_macos() {
 # ---------- udev rule (Linux only) ----------------------------------------
 install_udev() {
     local rule="$ROOT/resources/linux/99-ajazz.rules"
-    [[ -f "$rule" ]] || { warn "udev rule not found at $rule, skipping"; return; }
+    [[ -f $rule ]] || {
+        warn "udev rule not found at $rule, skipping"
+        return
+    }
     step "Installing udev rule (user-level device access, no logout required)"
     sudo_cmd install -m 644 "$rule" /etc/udev/rules.d/99-ajazz.rules
     sudo_cmd udevadm control --reload-rules
@@ -99,18 +125,21 @@ install_udev() {
 # ---------- distro detection ----------------------------------------------
 detect_and_install() {
     case "$(uname -s)" in
-        Darwin) install_deps_macos; return ;;
-        Linux)  ;;
-        *)      die "unsupported OS: $(uname -s)" ;;
+        Darwin)
+            install_deps_macos
+            return
+            ;;
+        Linux) ;;
+        *) die "unsupported OS: $(uname -s)" ;;
     esac
 
     if [[ -r /etc/os-release ]]; then
         # shellcheck disable=SC1091
         . /etc/os-release
         case "${ID}${ID_LIKE:+ $ID_LIKE}" in
-            *fedora*|*rhel*|*centos*|*opensuse*|*suse*) install_deps_fedora ;;
-            *debian*|*ubuntu*)                          install_deps_debian ;;
-            *arch*|*manjaro*)                           install_deps_arch ;;
+            *fedora* | *rhel* | *centos* | *opensuse* | *suse*) install_deps_fedora ;;
+            *debian* | *ubuntu*) install_deps_debian ;;
+            *arch* | *manjaro*) install_deps_arch ;;
             *) die "unsupported distro: $ID (open an issue or install deps manually)" ;;
         esac
     else
@@ -132,7 +161,7 @@ install_precommit() {
             }
         fi
     fi
-    (cd "$ROOT" && pre-commit install && pre-commit install --hook-type commit-msg) || \
+    (cd "$ROOT" && pre-commit install && pre-commit install --hook-type commit-msg) ||
         warn "pre-commit install skipped (not a git repo yet?)"
     ok "pre-commit installed — hooks run automatically on every commit"
 }
