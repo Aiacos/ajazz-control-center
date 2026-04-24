@@ -8,11 +8,11 @@ The AKP03 is a small 6-key + knob controller sold under both the AJAZZ and Mirab
 
 ## Identification
 
-| Property       | Value (provisional)        |
-|----------------|----------------------------|
-| Vendor ID      | `0x0300`                   |
-| Product ID     | `0x3001`                   |
-| Packet size    | 512 bytes                  |
+| Property    | Value (provisional) |
+| ----------- | ------------------- |
+| Vendor ID   | `0x0300`            |
+| Product ID  | `0x3001`            |
+| Packet size | 512 bytes           |
 
 The VID/PID above is a placeholder in the registry and will be refined once a capture is committed. Contributions welcome — see [`docs/guides/ADDING_A_DEVICE.md`](../../guides/ADDING_A_DEVICE.md).
 
@@ -22,9 +22,9 @@ See [`opendeck-akp03`](https://github.com/4ndv/opendeck-akp03) for a Rust implem
 
 ## Status in this repository
 
-| Area                   | State       |
-|------------------------|-------------|
-| Backend scaffolding    | ✅ present   |
-| Image upload           | 🟠 stubbed   |
-| Encoder events         | 🟠 stubbed   |
-| Integration test fixt. | 🟠 missing   |
+| Area                   | State      |
+| ---------------------- | ---------- |
+| Backend scaffolding    | ✅ present |
+| Image upload           | 🟠 stubbed |
+| Encoder events         | 🟠 stubbed |
+| Integration test fixt. | 🟠 missing |

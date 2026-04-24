@@ -29,14 +29,14 @@ AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core librar
 
 ## Module boundaries
 
-| Module                | Directory                       | Depends on        | Public surface                       |
-|-----------------------|---------------------------------|-------------------|--------------------------------------|
-| `ajazz::core`         | `src/core`                      | Qt6::Core, hidapi | `IDevice`, `IRegistry`, `ITransport`, capability mix-ins, profile, logger |
-| `ajazz::streamdeck`   | `src/devices/streamdeck`        | `core`            | `registerAll()`, per-model factories |
-| `ajazz::keyboard`     | `src/devices/keyboard`          | `core`            | `registerAll()`, VIA + proprietary factories |
-| `ajazz::mouse`        | `src/devices/mouse`             | `core`            | `registerAll()`, `makeAjSeries`      |
-| `ajazz::plugins`      | `src/plugins`                   | `core`, pybind11  | `PluginHost`, `ajazz` runtime module |
-| `ajazz::app`          | `src/app`                       | all of the above  | Qt/QML entry point                   |
+| Module              | Directory                | Depends on        | Public surface                                                            |
+| ------------------- | ------------------------ | ----------------- | ------------------------------------------------------------------------- |
+| `ajazz::core`       | `src/core`               | Qt6::Core, hidapi | `IDevice`, `IRegistry`, `ITransport`, capability mix-ins, profile, logger |
+| `ajazz::streamdeck` | `src/devices/streamdeck` | `core`            | `registerAll()`, per-model factories                                      |
+| `ajazz::keyboard`   | `src/devices/keyboard`   | `core`            | `registerAll()`, VIA + proprietary factories                              |
+| `ajazz::mouse`      | `src/devices/mouse`      | `core`            | `registerAll()`, `makeAjSeries`                                           |
+| `ajazz::plugins`    | `src/plugins`            | `core`, pybind11  | `PluginHost`, `ajazz` runtime module                                      |
+| `ajazz::app`        | `src/app`                | all of the above  | Qt/QML entry point                                                        |
 
 Modules talk to each other exclusively through the headers in `src/core/include/ajazz/core/`. No device backend includes headers from another; no UI code reaches into protocol internals; no plugin sees raw transports.
 

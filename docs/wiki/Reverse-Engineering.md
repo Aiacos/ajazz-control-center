@@ -26,23 +26,23 @@ and we will remove or replace it.
 
 ## Tools
 
-| Platform | Capture tool | Decoder |
-|----------|--------------|---------|
-| Linux    | Wireshark + `modprobe usbmon` | Wireshark USB HID dissector, `hid-tools` |
-| Windows  | [USBPcap](https://desowin.org/usbpcap/) + Wireshark | Wireshark |
-| macOS    | `PacketLogger` (Apple extra tools) + Wireshark | Wireshark |
+| Platform | Capture tool                                        | Decoder                                  |
+| -------- | --------------------------------------------------- | ---------------------------------------- |
+| Linux    | Wireshark + `modprobe usbmon`                       | Wireshark USB HID dissector, `hid-tools` |
+| Windows  | [USBPcap](https://desowin.org/usbpcap/) + Wireshark | Wireshark                                |
+| macOS    | `PacketLogger` (Apple extra tools) + Wireshark      | Wireshark                                |
 
 Bluetooth: `btmon` on Linux, `PacketLogger` on macOS.
 
 ## Capture workflow
 
 1. Start the capture with the device **unplugged**.
-2. Plug in the device — enumeration descriptors are critical.
-3. Open the vendor app. For each **one** setting change (e.g. brightness
+1. Plug in the device — enumeration descriptors are critical.
+1. Open the vendor app. For each **one** setting change (e.g. brightness
    0 → 100), save and immediately snapshot the capture with a note.
-4. Change every parameter at least three times so you can see the
+1. Change every parameter at least three times so you can see the
    encoding (constant vs. delta).
-5. Change **one thing at a time**. A capture with N simultaneous changes
+1. Change **one thing at a time**. A capture with N simultaneous changes
    is almost useless.
 
 ## Analysis pattern

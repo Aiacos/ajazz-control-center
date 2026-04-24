@@ -81,8 +81,8 @@ If your AJAZZ device is not listed:
 
 1. Capture USB traffic with Wireshark + `usbmon` (Linux) or USBPcap
    (Windows) while the vendor app changes every setting.
-2. Save the `.pcapng` and a short README of what you changed.
-3. Open a
+1. Save the `.pcapng` and a short README of what you changed.
+1. Open a
    [Device Request](https://github.com/Aiacos/ajazz-control-center/issues/new?template=device_request.yml).
 
 See [Reverse Engineering](Reverse-Engineering) for the methodology.

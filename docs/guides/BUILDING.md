@@ -19,26 +19,26 @@ which:
 
 1. Detects your distro (Fedora / RHEL / openSUSE / Debian / Ubuntu /
    Arch / macOS).
-2. Installs every build dependency through the native package manager.
-3. Installs the udev rule (Linux only) so device access works
+1. Installs every build dependency through the native package manager.
+1. Installs the udev rule (Linux only) so device access works
    immediately — no group membership, no logout, no replug.
-4. Configures CMake with the `dev` preset and builds.
+1. Configures CMake with the `dev` preset and builds.
 
 Common follow-up targets:
 
-| Command           | What it does                                             |
-|-------------------|----------------------------------------------------------|
-| `make`            | Incremental debug build (alias for `make build`).        |
-| `make run`        | Build + launch the app.                                  |
-| `make test`       | Build + run the full test suite.                         |
-| `make release`    | Optimized build (no sanitizers).                         |
-| `make package`    | Produce `.deb`/`.rpm` (Linux), `.dmg` (macOS), `.msi` (Windows). |
-| `make install`    | Install into `/usr/local` (Linux / macOS).               |
-| `make uninstall`  | Remove what `make install` placed.                       |
-| `make format`     | Run `clang-format` across the tree.                      |
-| `make lint`       | Run `clang-tidy` across the tree.                        |
-| `make doctor`     | Diagnose your environment (toolchain, Qt, devices).      |
-| `make help`       | Show the full list.                                      |
+| Command          | What it does                                                     |
+| ---------------- | ---------------------------------------------------------------- |
+| `make`           | Incremental debug build (alias for `make build`).                |
+| `make run`       | Build + launch the app.                                          |
+| `make test`      | Build + run the full test suite.                                 |
+| `make release`   | Optimized build (no sanitizers).                                 |
+| `make package`   | Produce `.deb`/`.rpm` (Linux), `.dmg` (macOS), `.msi` (Windows). |
+| `make install`   | Install into `/usr/local` (Linux / macOS).                       |
+| `make uninstall` | Remove what `make install` placed.                               |
+| `make format`    | Run `clang-format` across the tree.                              |
+| `make lint`      | Run `clang-tidy` across the tree.                                |
+| `make doctor`    | Diagnose your environment (toolchain, Qt, devices).              |
+| `make help`      | Show the full list.                                              |
 
 ## Manual CMake (if you prefer)
 
@@ -53,23 +53,23 @@ ctest --preset dev
 Presets live in [`CMakePresets.json`](../../CMakePresets.json). The
 available ones are:
 
-| Preset       | Purpose                                        |
-|--------------|------------------------------------------------|
-| `dev`        | Debug build with sanitizers, compile commands. |
-| `release`    | Optimized build, LTO, strip.                   |
-| `coverage`   | Debug + `--coverage` instrumentation for CI.   |
-| `clang`      | Same as `dev` but forced to Clang/libc++.      |
+| Preset     | Purpose                                        |
+| ---------- | ---------------------------------------------- |
+| `dev`      | Debug build with sanitizers, compile commands. |
+| `release`  | Optimized build, LTO, strip.                   |
+| `coverage` | Debug + `--coverage` instrumentation for CI.   |
+| `clang`    | Same as `dev` but forced to Clang/libc++.      |
 
 ## Prerequisites (for curious developers)
 
-| Dependency    | Minimum | Typical provider                              |
-|---------------|---------|-----------------------------------------------|
-| CMake         | 3.28    | `dnf install cmake` / `brew install cmake`    |
-| Ninja         | 1.11    | `dnf install ninja-build`                     |
-| C++ compiler  | GCC 13 / Clang 17 / MSVC 19.39 | distro / Xcode / VS 2022        |
-| Qt            | 6.7     | `qt6-*-devel` on Linux, `brew install qt@6`   |
-| Python        | 3.11    | system                                        |
-| libusb/hidapi | bundled | fetched automatically                          |
+| Dependency    | Minimum                        | Typical provider                            |
+| ------------- | ------------------------------ | ------------------------------------------- |
+| CMake         | 3.28                           | `dnf install cmake` / `brew install cmake`  |
+| Ninja         | 1.11                           | `dnf install ninja-build`                   |
+| C++ compiler  | GCC 13 / Clang 17 / MSVC 19.39 | distro / Xcode / VS 2022                    |
+| Qt            | 6.7                            | `qt6-*-devel` on Linux, `brew install qt@6` |
+| Python        | 3.11                           | system                                      |
+| libusb/hidapi | bundled                        | fetched automatically                       |
 
 If you want to install these yourself instead of running
 `make bootstrap`, the per-distro commands are in the bootstrap script —

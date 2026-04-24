@@ -5,6 +5,12 @@ qt_add_executable(ajazz-control-center
     src/profile_controller.cpp
 )
 
+# Icon lives outside this directory, so give Qt a stable relative resource
+# alias to satisfy qt_add_qml_module's "no absolute paths" rule.
+set(_ACC_APP_ICON ${CMAKE_SOURCE_DIR}/resources/icons/app.svg)
+set_source_files_properties(${_ACC_APP_ICON}
+    PROPERTIES QT_RESOURCE_ALIAS icons/app.svg)
+
 qt_add_qml_module(ajazz-control-center
     URI AjazzControlCenter
     VERSION 1.0
@@ -17,7 +23,7 @@ qt_add_qml_module(ajazz-control-center
         qml/EncoderPanel.qml
         qml/MousePanel.qml
     RESOURCES
-        ${CMAKE_SOURCE_DIR}/resources/icons/app.svg
+        ${_ACC_APP_ICON}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

@@ -115,6 +115,15 @@ repos:
     rev: 0.7.21
     hooks:
       - id: mdformat
+        # These files host AUTOGEN blocks whose layout is controlled by
+        # scripts/generate-docs.py; mdformat's aggressive table padding
+        # would fight the regenerator and cause ping-pong diffs.
+        exclude: |
+          (?x)^(
+              README\.md|
+              docs/wiki/.*\.md|
+              CHANGELOG\.md
+          )$
         additional_dependencies:
           - mdformat-gfm
           - mdformat-frontmatter
@@ -149,8 +158,9 @@ repos:
       - id: regenerate-docs
         name: Regenerate README + wiki AUTOGEN blocks
         entry: python3 scripts/generate-docs.py
-        language: system
+        language: python
         pass_filenames: false
+        always_run: false
         files: '^(docs/_data/.*\.ya?ml|src/devices/.*|scripts/generate-docs\.py|README\.md|docs/wiki/.*\.md)$'
         additional_dependencies: [pyyaml]
 

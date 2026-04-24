@@ -18,7 +18,7 @@ and attach it to the issue.
 
    If nothing is shown, it is a cable / kernel issue, not an app issue.
 
-2. Install the udev rule (the `.deb`/`.rpm`/`.flatpak` packages do this
+1. Install the udev rule (the `.deb`/`.rpm`/`.flatpak` packages do this
    automatically via post-install; if you built from source, run the
    Makefile shortcut):
 
@@ -30,7 +30,7 @@ and attach it to the issue.
    the device — the rule uses `TAG+="uaccess"` so the current desktop
    user is granted access via ACLs by systemd-logind.
 
-3. Check the rule was picked up:
+1. Check the rule was picked up:
 
    ```bash
    ls -l /dev/hidraw* | grep $USER
@@ -44,7 +44,7 @@ and attach it to the issue.
    sudo udevadm trigger --subsystem-match=usb --subsystem-match=hidraw
    ```
 
-4. Make sure no other process owns the HID interface:
+1. Make sure no other process owns the HID interface:
 
    ```bash
    sudo fuser /dev/hidraw*
@@ -53,7 +53,7 @@ and attach it to the issue.
    Killing the vendor app or a competing tool (OpenDeck, streamdeck-ui)
    will free the device.
 
-5. Run the environment health check:
+1. Run the environment health check:
 
    ```bash
    make doctor
@@ -98,21 +98,20 @@ flatpak override --user --device=all io.github.Aiacos.AjazzControlCenter
    acc --list-plugins
    ```
 
-2. Check the log for import errors:
+1. Check the log for import errors:
 
    ```bash
    acc --log-level=debug 2>&1 | grep plugin
    ```
 
-3. Make sure your `pyproject.toml` has
+1. Make sure your `pyproject.toml` has
    `[project.entry-points."ajazz.plugins"]` set.
 
 ## CI build failure after local commit
 
 - Ensure `clang-format --style=file -n src/**/*.{hpp,cpp}` returns clean.
 - Run `cmake --build --preset dev --target clang-tidy` locally.
-- YAML / JSON / Python are all validated by the lint job; `pre-commit
-  run --all-files` catches everything before you push.
+- YAML / JSON / Python are all validated by the lint job; `pre-commit run --all-files` catches everything before you push.
 
 ## Crash on startup with `QQmlApplicationEngine failed to load component`
 

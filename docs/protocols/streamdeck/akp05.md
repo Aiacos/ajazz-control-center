@@ -4,11 +4,11 @@
 
 ## Identification
 
-| Property       | Value (provisional)        |
-|----------------|----------------------------|
-| Vendor ID      | `0x0300`                   |
-| Product ID     | `0x5001`                   |
-| Packet size    | 512 bytes                  |
+| Property    | Value (provisional) |
+| ----------- | ------------------- |
+| Vendor ID   | `0x0300`            |
+| Product ID  | `0x5001`            |
+| Packet size | 512 bytes           |
 
 ## Encoder events
 
@@ -27,10 +27,10 @@ The horizontal strip reports absolute X position (0..639) and gesture hints (tap
 
 ## Status
 
-| Area                  | State       |
-|-----------------------|-------------|
-| Backend scaffolding   | ✅ present   |
-| Image upload          | 🟠 stubbed   |
-| Encoder / dial events | 🟠 stubbed   |
-| Touch strip           | 🟠 stubbed   |
-| Integration fixtures  | 🟠 missing   |
+| Area                  | State      |
+| --------------------- | ---------- |
+| Backend scaffolding   | ✅ present |
+| Image upload          | 🟠 stubbed |
+| Encoder / dial events | 🟠 stubbed |
+| Touch strip           | 🟠 stubbed |
+| Integration fixtures  | 🟠 missing |

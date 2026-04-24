@@ -29,12 +29,12 @@ and is not affiliated with, endorsed by, or supported by AJAZZ.
 1. **One app, every AJAZZ device.** Stream decks (AKP153/AKP03/AKP05),
    keyboards (VIA-compatible + proprietary) and AJ-series mice, all in a
    single Qt application.
-2. **Every function, every platform.** Displays, RGB, encoders, dials,
+1. **Every function, every platform.** Displays, RGB, encoders, dials,
    macros, per-app profiles, DPI curves, firmware reporting — on Linux,
    Windows and macOS.
-3. **Scriptable.** A first-class Python plugin SDK so the community can
+1. **Scriptable.** A first-class Python plugin SDK so the community can
    ship actions faster than any vendor tool.
-4. **Transparent.** Clean-room protocols, public captures, reproducible
+1. **Transparent.** Clean-room protocols, public captures, reproducible
    builds, signed release artifacts.
 
 ## Status

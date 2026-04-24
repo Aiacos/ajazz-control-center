@@ -14,11 +14,11 @@ Note the USB **Vendor ID** and **Product ID**. Cross-reference with existing ent
 
 ## 2. Pick the right family
 
-| If the device has…                 | Put it under            |
-|------------------------------------|-------------------------|
-| LCD keys and/or dials              | `src/devices/streamdeck`|
-| Alphanumeric keys and RGB matrix   | `src/devices/keyboard`  |
-| DPI stages, scroll wheel, buttons  | `src/devices/mouse`     |
+| If the device has…                | Put it under             |
+| --------------------------------- | ------------------------ |
+| LCD keys and/or dials             | `src/devices/streamdeck` |
+| Alphanumeric keys and RGB matrix  | `src/devices/keyboard`   |
+| DPI stages, scroll wheel, buttons | `src/devices/mouse`      |
 
 ## 3. Capture traffic
 

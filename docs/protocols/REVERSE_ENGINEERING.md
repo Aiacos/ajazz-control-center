@@ -3,17 +3,17 @@
 Every protocol implemented in AJAZZ Control Center is derived through a documented, clean-room procedure. The goal is three-fold:
 
 1. Produce correct implementations that match the real hardware.
-2. Keep a legally defensible paper trail: no closed-source code is read, disassembled or copied.
-3. Make the knowledge re-usable by anyone who wants to audit, extend or port the backend.
+1. Keep a legally defensible paper trail: no closed-source code is read, disassembled or copied.
+1. Make the knowledge re-usable by anyone who wants to audit, extend or port the backend.
 
 ## Workflow
 
 ### 1. Capture
 
 1. Install the vendor's official software in a clean Windows (or macOS) VM. The VM must be isolated from your workstation's main profile.
-2. In the VM, install Wireshark + USBPcap (Windows) or enable `usbmon` (Linux) on the host if the device works under Linux.
-3. Connect the device. Identify its USB bus/address from `lsusb`/Device Manager.
-4. Start a capture on the specific USB endpoint. Exercise every feature of the device one at a time — brightness, image upload, RGB effect, encoder press, DPI change, etc. Annotate the capture timestamps in a text file while you do it.
+1. In the VM, install Wireshark + USBPcap (Windows) or enable `usbmon` (Linux) on the host if the device works under Linux.
+1. Connect the device. Identify its USB bus/address from `lsusb`/Device Manager.
+1. Start a capture on the specific USB endpoint. Exercise every feature of the device one at a time — brightness, image upload, RGB effect, encoder press, DPI change, etc. Annotate the capture timestamps in a text file while you do it.
 
 ### 2. Annotate
 
@@ -39,15 +39,15 @@ Every protocol implemented in AJAZZ Control Center is derived through a document
 
 ## Tools we use
 
-| Tool                     | Purpose                                     |
-|--------------------------|---------------------------------------------|
-| **Wireshark + USBPcap**  | Windows USB capture                          |
-| **tshark**               | Headless export of decoded packets           |
-| **`usbmon`**             | Linux kernel USB capture                     |
-| **`lsusb -v`**           | Device descriptors (interface / endpoint)    |
-| **`hidapi` + `hid-dump`**| Inspect HID report descriptors               |
-| **Python + `cffi`**      | One-off prototyping of command sequences     |
-| **KiCad, oscilloscope**  | When all else fails, look at the wire        |
+| Tool                      | Purpose                                   |
+| ------------------------- | ----------------------------------------- |
+| **Wireshark + USBPcap**   | Windows USB capture                       |
+| **tshark**                | Headless export of decoded packets        |
+| **`usbmon`**              | Linux kernel USB capture                  |
+| **`lsusb -v`**            | Device descriptors (interface / endpoint) |
+| **`hidapi` + `hid-dump`** | Inspect HID report descriptors            |
+| **Python + `cffi`**       | One-off prototyping of command sequences  |
+| **KiCad, oscilloscope**   | When all else fails, look at the wire     |
 
 ## Legal considerations
 

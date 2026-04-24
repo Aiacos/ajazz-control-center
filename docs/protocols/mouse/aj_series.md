@@ -15,15 +15,15 @@ byte 63 : checksum = (sum of bytes 1..62) mod 256
 
 ## Command ids
 
-| Id   | Name        | Sub-commands |
-|------|-------------|--------------|
+| Id   | Name        | Sub-commands                                     |
+| ---- | ----------- | ------------------------------------------------ |
 | 0x21 | DPI         | 0x00 set-stage, 0x01 set-active, 0x02 get-stages |
-| 0x22 | Poll rate   | 0x00 set, 0x01 get |
-| 0x23 | Lift-off    | 0x00 set (deci-mm), 0x01 get |
-| 0x24 | Button bind | 0x00 set-binding, 0x01 set-macro |
-| 0x30 | RGB         | 0x00 static color, 0x01 effect, 0x02 brightness |
-| 0x40 | Battery     | 0x00 status (wireless only) |
-| 0x50 | Commit      | 0x00 save to EEPROM |
+| 0x22 | Poll rate   | 0x00 set, 0x01 get                               |
+| 0x23 | Lift-off    | 0x00 set (deci-mm), 0x01 get                     |
+| 0x24 | Button bind | 0x00 set-binding, 0x01 set-macro                 |
+| 0x30 | RGB         | 0x00 static color, 0x01 effect, 0x02 brightness  |
+| 0x40 | Battery     | 0x00 status (wireless only)                      |
+| 0x50 | Commit      | 0x00 save to EEPROM                              |
 
 ## Example frames
 

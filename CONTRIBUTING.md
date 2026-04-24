@@ -52,10 +52,10 @@ Scopes match top-level module directories (`core`, `app`, `streamdeck`, `keyboar
 See [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md). In short:
 
 1. Capture USB traffic with Wireshark + usbmon (Linux) or USBPcap (Windows).
-2. Document the protocol in `docs/protocols/<family>/<model>.md`.
-3. Implement the backend under `src/devices/<family>/<model>/`.
-4. Add at least one capture-replay integration test.
-5. **Add an entry to `docs/_data/devices.yaml`** — the README support matrix
+1. Document the protocol in `docs/protocols/<family>/<model>.md`.
+1. Implement the backend under `src/devices/<family>/<model>/`.
+1. Add at least one capture-replay integration test.
+1. **Add an entry to `docs/_data/devices.yaml`** — the README support matrix
    and every table in the wiki are regenerated from this YAML. Do not edit
    the tables by hand; see §7.2 below.
 
@@ -111,8 +111,7 @@ git commit -m "docs(devices): add AKP815"
 
 - A pre-commit hook (`regenerate-docs`) runs `make docs` whenever
   `docs/_data/**`, `src/devices/**`, the generator script, the README or
-  any wiki page changes — so you (almost) never have to remember `make
-  docs`.
+  any wiki page changes — so you (almost) never have to remember `make docs`.
 - CI runs `python3 scripts/generate-docs.py --check` and fails a PR if
   any AUTOGEN block is out of date.
 

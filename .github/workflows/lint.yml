@@ -147,8 +147,17 @@ jobs:
       - name: README + wiki AUTOGEN blocks are in sync
         run: python3 scripts/generate-docs.py --check
 
-      - name: Check Markdown formatting
-        run: mdformat --check .
+      - name: Check Markdown formatting (excluding AUTOGEN targets)
+        run: |
+          # README + wiki pages are owned by scripts/generate-docs.py;
+          # mdformat would reflow the generated tables and fight it.
+          find . -type f -name '*.md' \
+            -not -path './README.md' \
+            -not -path './CHANGELOG.md' \
+            -not -path './docs/wiki/*' \
+            -not -path './build/*' \
+            -not -path './.venv/*' \
+            -print0 | xargs -0 mdformat --check
 
       - name: Lychee (link checker)
         uses: lycheeverse/lychee-action@v2

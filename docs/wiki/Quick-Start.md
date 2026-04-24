@@ -60,14 +60,14 @@ not:
 ## 3. Create your first profile
 
 1. Select the device in the left pane.
-2. Click **New Profile** and give it a name (e.g. `Blender`).
-3. For a stream-deck key: drag **Hotkey → Ctrl+S** from the action
+1. Click **New Profile** and give it a name (e.g. `Blender`).
+1. For a stream-deck key: drag **Hotkey → Ctrl+S** from the action
    palette onto key 1. Set an icon from the **Image** tab.
-4. For a keyboard: switch to the **Layer** tab, click a key on the
+1. For a keyboard: switch to the **Layer** tab, click a key on the
    virtual layout, then choose **Macro → Play Macro** from the panel.
-5. For a mouse: open the **DPI** tab and edit the DPI stages and their
+1. For a mouse: open the **DPI** tab and edit the DPI stages and their
    LED colours.
-6. Click **Apply**. The profile is written to the device immediately and
+1. Click **Apply**. The profile is written to the device immediately and
    saved to `~/.config/ajazz-control-center/profiles/` (Linux),
    `%APPDATA%\ajazz-control-center\profiles\` (Windows) or
    `~/Library/Application Support/ajazz-control-center/profiles/`

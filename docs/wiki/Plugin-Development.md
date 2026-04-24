@@ -55,14 +55,14 @@ acc --install-plugin ./my_plugin
 
 ## The `ActionContext` object
 
-| Attribute | Description |
-|-----------|-------------|
-| `ctx.device` | The device the action is firing on (stream deck / keyboard / mouse). |
-| `ctx.key_index` | For stream decks, which key was pressed. |
-| `ctx.event` | `press`, `release`, `rotate_cw`, `rotate_ccw`, `dial_press`. |
-| `ctx.value` | For encoders, the integer delta. |
-| `ctx.log` | Python `logging.Logger` routed to the app logger. |
-| `ctx.settings` | Per-action JSON-serializable settings. |
+| Attribute       | Description                                                          |
+| --------------- | -------------------------------------------------------------------- |
+| `ctx.device`    | The device the action is firing on (stream deck / keyboard / mouse). |
+| `ctx.key_index` | For stream decks, which key was pressed.                             |
+| `ctx.event`     | `press`, `release`, `rotate_cw`, `rotate_ccw`, `dial_press`.         |
+| `ctx.value`     | For encoders, the integer delta.                                     |
+| `ctx.log`       | Python `logging.Logger` routed to the app logger.                    |
+| `ctx.settings`  | Per-action JSON-serializable settings.                               |
 
 ## Capability-aware actions
 
