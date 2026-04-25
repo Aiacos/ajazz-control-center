@@ -21,7 +21,9 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  # Need write to push the seed Home.md (and the regular sync) to the
+  # *.wiki.git remote — wikis live under the same auth scope as the repo.
+  contents: write
 
 jobs:
   publish:
