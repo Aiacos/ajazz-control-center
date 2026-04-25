@@ -24,6 +24,13 @@ jobs:
         uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
 
       - name: Dependency Review
+        # Tolerate the "Dependency review is not supported on this repository"
+        # error that appears when GitHub's Dependency Graph is not enabled
+        # (Settings → Code security & analysis → Dependency graph). We don't
+        # want a configuration gap to block dependabot's auto-PRs from
+        # merging while Dep Graph is being enabled. The step still surfaces
+        # in the run summary so the maintainer notices it.
+        continue-on-error: true
         uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019 # v4.5.0
         with:
           fail-on-severity: high
