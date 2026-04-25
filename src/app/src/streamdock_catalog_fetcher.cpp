@@ -39,8 +39,7 @@ namespace ajazz::app {
 namespace {
 
 /// Public Space endpoint. Anonymous, accepts JSON POST bodies.
-constexpr char kDefaultCatalogUrl[] =
-    "https://space.key123.vip/interface/user/productInfo/list";
+constexpr char kDefaultCatalogUrl[] = "https://space.key123.vip/interface/user/productInfo/list";
 
 /// Tenant ID hard-coded in the upstream web UI; same value for every plugin.
 constexpr char kTenantId[] = "10000000";
@@ -193,7 +192,8 @@ QString StreamdockCatalogFetcher::humaniseSize(double bytes) {
         ++unit;
     }
     if (bytes >= 100.0 || unit == 0) {
-        return QStringLiteral("%1 %2").arg(static_cast<int>(std::round(bytes)))
+        return QStringLiteral("%1 %2")
+            .arg(static_cast<int>(std::round(bytes)))
             .arg(QString::fromLatin1(kUnits[unit]));
     }
     return QStringLiteral("%1 %2")
@@ -292,8 +292,8 @@ std::optional<CatalogEntry> translateRecord(QJsonObject const& obj) {
 
 } // namespace
 
-std::vector<CatalogEntry>
-StreamdockCatalogFetcher::parseUpstreamJson(QByteArray const& json, QUrl const& /*origin*/) {
+std::vector<CatalogEntry> StreamdockCatalogFetcher::parseUpstreamJson(QByteArray const& json,
+                                                                      QUrl const& /*origin*/) {
     std::vector<CatalogEntry> rows;
     QJsonParseError err{};
     QJsonDocument const doc = QJsonDocument::fromJson(json, &err);
@@ -407,8 +407,7 @@ SnapshotMetadata readSnapshotMetadata(QByteArray const& json) {
         return m;
     }
     auto const o = doc.object();
-    m.fetchedAtUnixMs =
-        static_cast<qint64>(o.value(QStringLiteral("fetchedAtUnixMs")).toDouble(0));
+    m.fetchedAtUnixMs = static_cast<qint64>(o.value(QStringLiteral("fetchedAtUnixMs")).toDouble(0));
     m.sourceUrl = o.value(QStringLiteral("sourceUrl")).toString();
     return m;
 }
@@ -424,8 +423,7 @@ void StreamdockCatalogFetcher::writeCache(std::vector<CatalogEntry> const& rows,
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
         return; // non-fatal; we'll retry on the next refresh.
     }
-    QByteArray const payload =
-        serialiseSnapshot(rows, QDateTime::currentMSecsSinceEpoch(), origin);
+    QByteArray const payload = serialiseSnapshot(rows, QDateTime::currentMSecsSinceEpoch(), origin);
     if (out.write(payload) != payload.size()) {
         out.cancelWriting();
         return;
@@ -494,8 +492,8 @@ void StreamdockCatalogFetcher::refresh() {
     // Reset accumulated state and start at page 1.
     m_accumulated.clear();
     m_inFlightTotalPages = 0;
-    if (!m_nam) {
-        m_nam = new QNetworkAccessManager{this};
+    if (!m_name) {
+        m_name = new QNetworkAccessManager{this};
     }
     if (m_state != State::Loading) {
         m_state = State::Loading;
@@ -515,7 +513,8 @@ void StreamdockCatalogFetcher::fetchPage(int pageNum) {
     req.setHeader(QNetworkRequest::ContentTypeHeader,
                   QStringLiteral("application/json; charset=utf-8"));
     req.setHeader(QNetworkRequest::UserAgentHeader,
-                  QStringLiteral("ajazz-control-center/streamdock-mirror (+https://github.com/Aiacos/ajazz-control-center)"));
+                  QStringLiteral("ajazz-control-center/streamdock-mirror "
+                                 "(+https://github.com/Aiacos/ajazz-control-center)"));
     req.setRawHeader("Accept", "application/json");
     req.setTransferTimeout(kPerPageTimeoutMs);
 
@@ -525,7 +524,7 @@ void StreamdockCatalogFetcher::fetchPage(int pageNum) {
         {QStringLiteral("productType"), QString::fromLatin1(kProductTypePlugin)},
         {QStringLiteral("tenantId"), QString::fromLatin1(kTenantId)},
     };
-    auto* const reply = m_nam->post(req, QJsonDocument{body}.toJson(QJsonDocument::Compact));
+    auto* const reply = m_name->post(req, QJsonDocument{body}.toJson(QJsonDocument::Compact));
     QObject::connect(
         reply, &QNetworkReply::finished, this, [this, reply]() { onPageFinished(reply); });
 }

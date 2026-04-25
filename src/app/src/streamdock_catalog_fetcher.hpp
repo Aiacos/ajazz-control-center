@@ -130,7 +130,7 @@ public:
      * @return Translated rows; empty when @p json is malformed.
      */
     [[nodiscard]] static std::vector<CatalogEntry> parseUpstreamJson(QByteArray const& json,
-                                                                    QUrl const& origin = {});
+                                                                     QUrl const& origin = {});
 
     /// Helper used by @ref parseUpstreamJson; exposed for unit tests.
     [[nodiscard]] static QStringList mapUpstreamDevices(QStringList const& upstreamDeviceUuids);
@@ -192,15 +192,15 @@ private:
     /// Emit @ref snapshotReady and update state accordingly.
     void emitSnapshot(Snapshot snapshot);
 
-    QNetworkAccessManager* m_nam = nullptr;        ///< Lazily created on first refresh.
-    QString m_cacheDirOverride;                    ///< Empty = use QStandardPaths::CacheLocation.
-    QString m_catalogUrlOverride;                  ///< Empty = use env / default.
-    State m_state = State::Idle;                   ///< Last-known fetch state.
-    std::vector<CatalogEntry> m_accumulated;       ///< Rows accumulated across paged fetches.
-    int m_inFlightTotalPages = 0;                  ///< Reported by upstream after page 1.
-    static constexpr int kPageSize = 50;           ///< Matches the upstream UI's pageSize.
-    static constexpr int kPerPageTimeoutMs = 10000;///< Hard cap per page before we abort.
-    static constexpr int kMaxPages = 20;           ///< Safety net (= 1000 plugins).
+    QNetworkAccessManager* m_name = nullptr;         ///< Lazily created on first refresh.
+    QString m_cacheDirOverride;                     ///< Empty = use QStandardPaths::CacheLocation.
+    QString m_catalogUrlOverride;                   ///< Empty = use env / default.
+    State m_state = State::Idle;                    ///< Last-known fetch state.
+    std::vector<CatalogEntry> m_accumulated;        ///< Rows accumulated across paged fetches.
+    int m_inFlightTotalPages = 0;                   ///< Reported by upstream after page 1.
+    static constexpr int kPageSize = 50;            ///< Matches the upstream UI's pageSize.
+    static constexpr int kPerPageTimeoutMs = 10000; ///< Hard cap per page before we abort.
+    static constexpr int kMaxPages = 20;            ///< Safety net (= 1000 plugins).
 };
 
 } // namespace ajazz::app

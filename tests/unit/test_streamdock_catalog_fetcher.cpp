@@ -18,10 +18,10 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
-#include <catch2/catch_test_macros.hpp>
-
 #include <algorithm>
 #include <vector>
+
+#include <catch2/catch_test_macros.hpp>
 
 using ajazz::app::CatalogEntry;
 using ajazz::app::StreamdockCatalogFetcher;
@@ -195,8 +195,7 @@ TEST_CASE("mapUpstreamDevices splits comma-joined ids and drops unknowns",
     REQUIRE(none.isEmpty());
 }
 
-TEST_CASE("humaniseSize crosses the byte / KB / MB / GB boundaries",
-          "[streamdock][humanise]") {
+TEST_CASE("humaniseSize crosses the byte / KB / MB / GB boundaries", "[streamdock][humanise]") {
     qtApp();
     // Zero / negative → em-dash.
     REQUIRE(StreamdockCatalogFetcher::humaniseSize(0.0) == QString(QChar(0x2014)));
@@ -214,19 +213,18 @@ TEST_CASE("humaniseSize crosses the byte / KB / MB / GB boundaries",
     REQUIRE(gb.endsWith(QStringLiteral("GB")));
 }
 
-TEST_CASE("deriveUuid produces deterministic, slug-safe identifiers",
-          "[streamdock][derive]") {
+TEST_CASE("deriveUuid produces deterministic, slug-safe identifiers", "[streamdock][derive]") {
     qtApp();
-    auto const a = StreamdockCatalogFetcher::deriveUuid(
-        QStringLiteral("42"), QStringLiteral("Hello World!"));
-    auto const b = StreamdockCatalogFetcher::deriveUuid(
-        QStringLiteral("42"), QStringLiteral("Hello World!"));
+    auto const a =
+        StreamdockCatalogFetcher::deriveUuid(QStringLiteral("42"), QStringLiteral("Hello World!"));
+    auto const b =
+        StreamdockCatalogFetcher::deriveUuid(QStringLiteral("42"), QStringLiteral("Hello World!"));
     REQUIRE(a == b);
     REQUIRE(a == QStringLiteral("com.streamdock.hello-world.42"));
 
     // Special characters collapse cleanly without trailing dashes.
-    auto const c = StreamdockCatalogFetcher::deriveUuid(
-        QStringLiteral("7"), QStringLiteral("Foo --- Bar / Baz"));
+    auto const c = StreamdockCatalogFetcher::deriveUuid(QStringLiteral("7"),
+                                                        QStringLiteral("Foo --- Bar / Baz"));
     REQUIRE(c == QStringLiteral("com.streamdock.foo-bar-baz.7"));
 
     // Empty / whitespace-only name falls back to the id-based shape.
@@ -235,8 +233,7 @@ TEST_CASE("deriveUuid produces deterministic, slug-safe identifiers",
     REQUIRE(d == QStringLiteral("com.streamdock.id.13"));
 }
 
-TEST_CASE("snapshot survives a round-trip through the on-disk cache",
-          "[streamdock][cache]") {
+TEST_CASE("snapshot survives a round-trip through the on-disk cache", "[streamdock][cache]") {
     qtApp();
     QTemporaryDir tmp;
     REQUIRE(tmp.isValid());
@@ -261,8 +258,7 @@ TEST_CASE("snapshot survives a round-trip through the on-disk cache",
     REQUIRE(snap.fetchedAtUnixMs == 1714000000000LL);
 }
 
-TEST_CASE("bundled fallback resource yields a non-empty snapshot",
-          "[streamdock][fallback]") {
+TEST_CASE("bundled fallback resource yields a non-empty snapshot", "[streamdock][fallback]") {
     qtApp();
     auto const fallback = StreamdockCatalogFetcher::loadBundledFallback();
     REQUIRE_FALSE(fallback.rows.empty());
