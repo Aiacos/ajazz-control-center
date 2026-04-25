@@ -30,11 +30,10 @@ ______________________________________________________________________
 
 ### Quick wins (≤ 1 hour each)
 
-- [ ] **Wire AJAZZ banner into AppHeader.qml** — banner is in
-  `resources/branding/ajazz-logo.png` but not yet visible in the UI. Add an
-  `Image { source: "qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png" }`
-  to the header strip. Tray and app icons stay placeholder until a square
-  variant exists.
+- [x] **Wire AJAZZ banner into AppHeader.qml** — done. The wordmark image is
+  rendered with PreserveAspectFit at 32 px height; the redundant text label
+  is hidden when the image loads. Tray and app icons stay placeholder until
+  a square variant exists.
 - [ ] **`app.ico` regenerate** for Windows installer once a square brand
   asset is available; today `resources/icons/app.ico` is a placeholder.
 - [ ] **README + wiki screenshots** of the Material UI in light and dark
@@ -64,11 +63,12 @@ ______________________________________________________________________
   produces mostly whitespace and looks worse than the current
   geometric placeholder. Either ask AJAZZ for a square logo or design a
   custom monogram inspired by the wordmark.
-- [ ] **`make test` Windows fixture for `concurrent writers`**: still
-  flaky on `windows-2022` despite the retry-budget bump in `210232d`
-  (rare but seen ~1/100). Investigate whether MoveFileExW on Windows
-  Server 2022 + GitHub-runner antivirus has a hard ceiling we can't
-  retry past, and either tune more or switch to ReplaceFileW.
+- [x] **`make test` Windows fixture for `concurrent writers`** — switched
+  to `ReplaceFileW` for the existing-destination case (the common path
+  under contention) and widened the retry set to also catch
+  `ERROR_LOCK_VIOLATION` and `ERROR_USER_MAPPED_FILE`. `MoveFileExW` is
+  kept as the no-destination-yet fallback. Should eliminate the residual
+  ~1/100 flake on windows-2022.
 - [ ] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
   drop the three `SUBSYSTEM=="usb"` lines so only `KERNEL=="hidraw*"`
   grants `uaccess`. **Risk**: untested whether hidapi's libusb backend
@@ -112,25 +112,21 @@ ______________________________________________________________________
 
 ### Security hardening
 
-- [ ] **S2 — Plugin module name shadowing** (HIGH,
-  `src/plugins/src/plugin_host.cpp:146`): a malicious plugin directory
-  basename like `os` / `subprocess` shadows stdlib for any later import
-  in the host. Fix: `importlib.util.spec_from_file_location` under a
-  dedicated `ajazz_plugins.<id>` namespace, OR blocklist
-  `sys.stdlib_module_names`.
-- [ ] **S3 — `sys.path` accumulation** (MED,
-  `src/plugins/src/plugin_host.cpp:113-123`): repeated `loadAll()` calls
-  append paths without dedup. Wrap each load in a RAII guard that
-  prepends + removes.
-- [ ] **S4 — Profile-IO TOCTOU / symlink follow / parent-dir fsync**
-  (MED, `src/core/src/profile_io.cpp:155-191`): the atomic-rename path
-  doesn't use `O_NOFOLLOW` and never fsyncs the parent directory. Move
-  to `openat(O_DIRECTORY|O_NOFOLLOW)` + `renameat` + parent fsync.
-- [ ] **S6 — `syncFile` reopen** (LOW,
-  `src/core/src/profile_io.cpp:63-78`): fsyncs a freshly-reopened RO
-  fd; doesn't guarantee the original ofstream's stdio buffer reached
-  the kernel. Drop the reopen and fsync the original fd via `dup`, or
-  switch the whole write path to POSIX `::open`.
+- [x] **S2 — Plugin module name shadowing** — done. `loadAll()` calls
+  `sys.stdlib_module_names` (Python 3.10+) before importing any plugin
+  directory and rejects directories whose basename collides with a stdlib
+  module name. Pre-3.10 best-effort: relies on `isSafePluginId`.
+- [x] **S3 — `sys.path` accumulation** — done. `loadAll()` snapshots the
+  current `sys.path` into an unordered_set and appends only paths not yet
+  present.
+- [x] **S4 — Profile-IO TOCTOU / symlink follow / parent-dir fsync** —
+  done. Switched the Linux/macOS write path from `std::ofstream` to POSIX
+  `::open(O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600)`, fsync the
+  parent directory after the rename, and let `O_EXCL` reject any racing
+  symlink.
+- [x] **S6 — `syncFile` reopen** — done. The new POSIX write path
+  fsyncs the *original* fd before close; no reopen, no buffered-stdio
+  loss window.
 - [ ] **S7 — Substring-only profile validator** (LOW, intentional —
   `src/core/src/profile_io.cpp:123-153`): the in-tree `containsKey`
   scanner is documented as a tiny shim; replace with the Qt-side
@@ -177,10 +173,12 @@ v1; backend catalog is parallel work.
   (illustration + onboarding hint).
 - [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
   Snackbar pattern.
-- [ ] **Settings page** (`src/app/qml/Settings.qml`): expose
-  `themeService.mode` (auto/light/dark), `tray.startMinimized`,
-  `autostart.launchOnLogin` in a Material `SwitchDelegate` list.
-  Currently these are toggleable only via QSettings directly.
+- [x] **Settings page** (`src/app/qml/Settings.qml`) — done. Material-styled
+  page exposes `themeService.mode`, `autostart.launchOnLogin`, and
+  `autostart.startMinimised` / `tray.startMinimized` via RadioButton +
+  SwitchDelegate. Component is registered in the QML module; wiring it
+  into the sidebar/StackView is a follow-up (Main.qml is currently a
+  fixed 3-pane layout).
 
 ______________________________________________________________________
 

@@ -58,22 +58,96 @@ std::filesystem::path makeTempPath(std::filesystem::path const& dest) {
     return dest.parent_path() / oss.str();
 }
 
-/**
- * @brief Flush + fsync the file at @p fd / @p path so contents survive a crash.
- */
-void syncFile(std::ostream& stream, std::filesystem::path const& path) {
-    stream.flush();
-    if (!stream) {
-        throw ProfileIoError{"profile_io: stream flush failed for " + path.string()};
-    }
 #if !defined(_WIN32)
-    // Re-open read-only just to fsync the data; the original ofstream's
-    // FILE* is buried inside the standard library so this is the simplest
-    // portable way.
-    int const fd = ::open(path.string().c_str(), O_RDONLY);
-    if (fd >= 0) {
-        ::fsync(fd);
+/**
+ * @brief fsync() the directory containing @p path so the rename of
+ *        a child entry is durable across a power loss (SEC-S4).
+ *
+ * Failure is logged via errno only; the rename itself already succeeded so
+ * we never propagate this as an error to the caller. Best-effort durability.
+ */
+void fsyncParentDir(std::filesystem::path const& path) {
+    auto const parent = path.parent_path();
+    if (parent.empty()) {
+        return;
+    }
+    int const dfd = ::open(parent.string().c_str(), O_RDONLY | O_DIRECTORY);
+    if (dfd < 0) {
+        return;
+    }
+    (void)::fsync(dfd);
+    ::close(dfd);
+}
+#endif
+
+/**
+ * @brief Atomically write @p data to @p path under a tighter security model
+ *        than std::ofstream offers.
+ *
+ * Behaviour (Linux/macOS):
+ *  - O_NOFOLLOW prevents writing into a target reachable through a symlink
+ *    (SEC-S4 mitigation: an attacker who can plant a symlink at the target
+ *    cannot redirect the write).
+ *  - O_CLOEXEC stops the fd from leaking into child processes.
+ *  - Mode 0600 caps permissions even on filesystems that don't honour
+ *    std::filesystem::permissions().
+ *  - fsync() is called on the *original* fd — not on a re-opened copy — so
+ *    the bytes the caller wrote are guaranteed to reach the kernel before
+ *    the rename swap (SEC-S6).
+ *
+ * On Windows the std::ofstream path is preserved because the security model
+ * here (CreateFile sharing flags + atomic MoveFileExW) is different and
+ * already handled by atomicRename().
+ */
+void writeAndSyncFile(std::filesystem::path const& path, std::string const& data) {
+#if defined(_WIN32)
+    std::ofstream out{path, std::ios::binary | std::ios::trunc};
+    if (!out) {
+        throw ProfileIoError{"profile_io: cannot open temporary file " + path.string()};
+    }
+    out.write(data.data(), static_cast<std::streamsize>(data.size()));
+    if (!out) {
+        throw ProfileIoError{"profile_io: write failed for " + path.string()};
+    }
+    out.flush();
+    if (!out) {
+        throw ProfileIoError{"profile_io: flush failed for " + path.string()};
+    }
+#else
+    // O_NOFOLLOW combined with O_CREAT|O_EXCL on a fresh tmp filename means we
+    // either create a new regular file at exactly that path, or we fail — no
+    // symlink trickery in between.
+    int const fd =
+        ::open(path.string().c_str(), O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW | O_CLOEXEC, 0600);
+    if (fd < 0) {
+        std::error_code const ec{errno, std::generic_category()};
+        throw ProfileIoError{"profile_io: cannot open temporary file " + path.string() + ": " +
+                             ec.message()};
+    }
+    auto const* p = data.data();
+    auto remaining = data.size();
+    while (remaining > 0) {
+        ssize_t const n = ::write(fd, p, remaining);
+        if (n < 0) {
+            if (errno == EINTR) {
+                continue;
+            }
+            std::error_code const ec{errno, std::generic_category()};
+            ::close(fd);
+            throw ProfileIoError{"profile_io: write failed for " + path.string() + ": " +
+                                 ec.message()};
+        }
+        p += n;
+        remaining -= static_cast<std::size_t>(n);
+    }
+    if (::fsync(fd) != 0) {
+        std::error_code const ec{errno, std::generic_category()};
         ::close(fd);
+        throw ProfileIoError{"profile_io: fsync failed for " + path.string() + ": " + ec.message()};
+    }
+    if (::close(fd) != 0) {
+        std::error_code const ec{errno, std::generic_category()};
+        throw ProfileIoError{"profile_io: close failed for " + path.string() + ": " + ec.message()};
     }
 #endif
 }
@@ -90,19 +164,41 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
 #if defined(_WIN32)
     DWORD lastError = 0;
     // Up to ~2.5 s of total wait under heavy contention. Concurrent writers from many threads
-    // can stack the AV/indexer holds well past 250 ms; the previous 8-attempt budget could still
-    // miss a small window. We bump to 12 attempts with a base sleep of 4 ms (capped) so the worst
-    // case is ~4 ms * 2^11 = ~8 s but in practice the file frees up well before then.
+    // can stack the AV/indexer holds well past 250 ms.
     constexpr int kMaxAttempts = 12;
+    auto const srcW = src.wstring();
+    auto const dstW = dst.wstring();
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
-        if (MoveFileExW(src.wstring().c_str(),
-                        dst.wstring().c_str(),
-                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+        // Strategy:
+        //  1) If the destination already exists, prefer ReplaceFileW — it is purpose-built for
+        //     atomic-replace-with-backup, holds an internal handle long enough to dodge most
+        //     AV/indexer races, and preserves NTFS metadata (ACLs, owner, timestamps).
+        //  2) Otherwise, MoveFileExW with REPLACE_EXISTING | WRITE_THROUGH is the cheapest
+        //     correct primitive (single rename when nothing exists at the target).
+        BOOL ok = FALSE;
+        DWORD const dstAttrs = GetFileAttributesW(dstW.c_str());
+        bool const dstExists = (dstAttrs != INVALID_FILE_ATTRIBUTES);
+        if (dstExists) {
+            // ReplaceFileW with REPLACEFILE_WRITE_THROUGH issues a write-through replace and
+            // returns FALSE if the destination is held by another process. We feed nullptr as
+            // the backup filename so no .bak is left behind.
+            ok = ReplaceFileW(dstW.c_str(),
+                              srcW.c_str(),
+                              nullptr,
+                              REPLACEFILE_WRITE_THROUGH | REPLACEFILE_IGNORE_MERGE_ERRORS,
+                              nullptr,
+                              nullptr);
+        } else {
+            ok = MoveFileExW(
+                srcW.c_str(), dstW.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+        }
+        if (ok) {
             return;
         }
         lastError = GetLastError();
         // Only retry on transient sharing/permission errors.
-        if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION) {
+        if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION &&
+            lastError != ERROR_LOCK_VIOLATION && lastError != ERROR_USER_MAPPED_FILE) {
             break;
         }
         // Exponential backoff capped at 250 ms per attempt.
@@ -177,27 +273,21 @@ void writeProfileToDisk(std::filesystem::path const& path, Profile const& profil
     }
 
     auto const tmp = makeTempPath(path);
-    {
-        std::ofstream out{tmp, std::ios::binary | std::ios::trunc};
-        if (!out) {
-            throw ProfileIoError{"profile_io: cannot open temporary file " + tmp.string()};
-        }
-        // Tighten permissions to user-only before writing payload: a Profile's
-        // `settingsJson` may carry plugin secrets (API tokens, refresh tokens)
-        // and the surrounding directory may be world-readable. permissions()
-        // is a no-op on Windows for POSIX bits but does not throw.
+    try {
+        writeAndSyncFile(tmp, json);
+#if defined(_WIN32)
+        // Windows: tighten permissions via std::filesystem after the file exists
+        // (no equivalent of POSIX 0600-on-create that fits std::ofstream).
         std::error_code permEc;
         std::filesystem::permissions(tmp,
                                      std::filesystem::perms::owner_read |
                                          std::filesystem::perms::owner_write,
                                      std::filesystem::perm_options::replace,
-                                     permEc); // best-effort; ignore failure on FS without modes
-        out.write(json.data(), static_cast<std::streamsize>(json.size()));
-        if (!out) {
-            std::filesystem::remove(tmp, ec); // best-effort cleanup
-            throw ProfileIoError{"profile_io: write failed for " + tmp.string()};
-        }
-        syncFile(out, tmp);
+                                     permEc); // best-effort
+#endif
+    } catch (...) {
+        std::filesystem::remove(tmp, ec); // best-effort
+        throw;
     }
     try {
         atomicRename(tmp, path);
@@ -205,6 +295,11 @@ void writeProfileToDisk(std::filesystem::path const& path, Profile const& profil
         std::filesystem::remove(tmp, ec); // best-effort
         throw;
     }
+#if !defined(_WIN32)
+    // Durability: fsync the parent directory so the rename is recoverable
+    // even after power loss before the next checkpoint.
+    fsyncParentDir(path);
+#endif
 }
 
 Profile readProfileFromDisk(std::filesystem::path const& path) {

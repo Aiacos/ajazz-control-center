@@ -1,0 +1,170 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Settings.qml — application settings page (theme, tray behaviour, autostart).
+//
+// All state lives in the C++ services exposed as QML context properties:
+//   - themeService.mode (QString: "auto" | "light" | "dark")
+//   - autostart.launchOnLogin (bool)
+//   - autostart.startMinimised (bool)
+//   - tray.startMinimized (bool)
+//
+// The page is a Material-styled scrollable column of switches and a single
+// theme-mode picker. It is intentionally minimal — Settings is a leaf page,
+// not a full preferences modal, so the component count stays small.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Controls.Material
+import QtQuick.Layouts
+import AjazzControlCenter
+
+Page {
+    id: root
+    title: qsTr("Settings")
+    background: Rectangle { color: Theme.bgBase }
+
+    ScrollView {
+        anchors.fill: parent
+        anchors.margins: Theme.spacingLg
+        contentWidth: availableWidth
+
+        ColumnLayout {
+            width: root.width - Theme.spacingLg * 2
+            spacing: Theme.spacingLg
+
+            // --------------------------------------------------------------
+            // Appearance
+            // --------------------------------------------------------------
+            Label {
+                text: qsTr("Appearance")
+                color: Theme.fgPrimary
+                font.pixelSize: Theme.fontLg
+                font.bold: true
+                Accessible.role: Accessible.Heading
+            }
+
+            Frame {
+                Layout.fillWidth: true
+                background: Rectangle {
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+                    radius: Theme.radiusMd
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: Theme.spacingMd
+
+                    Label {
+                        text: qsTr("Theme mode")
+                        color: Theme.fgPrimary
+                        font.pixelSize: Theme.fontMd
+                    }
+                    Label {
+                        text: qsTr("Choose between Auto (follow system), Light, or Dark.")
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.fontSm
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+
+                    RowLayout {
+                        spacing: Theme.spacingMd
+
+                        ButtonGroup { id: themeGroup }
+
+                        Repeater {
+                            model: [
+                                { id: "auto",  label: qsTr("Auto") },
+                                { id: "light", label: qsTr("Light") },
+                                { id: "dark",  label: qsTr("Dark") }
+                            ]
+                            delegate: RadioButton {
+                                required property var modelData
+                                text: modelData.label
+                                ButtonGroup.group: themeGroup
+                                checked: themeService && themeService.mode === modelData.id
+                                onToggled: {
+                                    if (checked && themeService) {
+                                        themeService.mode = modelData.id;
+                                    }
+                                }
+                                Accessible.role: Accessible.RadioButton
+                                Accessible.name: text
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------
+            // Startup behaviour
+            // --------------------------------------------------------------
+            Label {
+                text: qsTr("Startup")
+                color: Theme.fgPrimary
+                font.pixelSize: Theme.fontLg
+                font.bold: true
+                Accessible.role: Accessible.Heading
+            }
+
+            Frame {
+                Layout.fillWidth: true
+                background: Rectangle {
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+                    radius: Theme.radiusMd
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    SwitchDelegate {
+                        Layout.fillWidth: true
+                        text: qsTr("Launch on login")
+                        checked: autostart ? autostart.launchOnLogin : false
+                        enabled: autostart !== null
+                        onToggled: if (autostart) autostart.launchOnLogin = checked
+                        Accessible.role: Accessible.Button
+                        Accessible.name: text
+                        Accessible.description: qsTr("When enabled, the app starts automatically when you log in to your computer.")
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 1
+                        color: Theme.borderSubtle
+                    }
+
+                    SwitchDelegate {
+                        Layout.fillWidth: true
+                        text: qsTr("Start minimised to tray")
+                        checked: autostart ? autostart.startMinimised : false
+                        enabled: (autostart !== null) && (tray !== null) && tray.trayAvailable
+                        onToggled: {
+                            if (autostart) autostart.startMinimised = checked;
+                            if (tray)      tray.startMinimized   = checked;
+                        }
+                        Accessible.role: Accessible.Button
+                        Accessible.name: text
+                        Accessible.description: qsTr("When enabled, the application window stays hidden at startup; access it from the system tray.")
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------
+            // About / version footer (read-only)
+            // --------------------------------------------------------------
+            Label {
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.spacingLg
+                text: branding ? branding.productName : qsTr("AJAZZ Control Center")
+                color: Theme.fgMuted
+                font.pixelSize: Theme.fontSm
+                horizontalAlignment: Text.AlignRight
+            }
+        }
+    }
+}

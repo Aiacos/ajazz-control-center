@@ -26,12 +26,34 @@ Rectangle {
         anchors.rightMargin: Theme.spacingLg
         spacing: Theme.spacingLg
 
-        // Product mark — shows the configured product name (branding.productName).
+        // Product mark — wordmark image (banner) followed by the product name.
+        // The wordmark is shipped at qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png;
+        // hidden gracefully when the override branding directory ships no logo.
+        Image {
+            id: brandLogo
+            source: "qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png"
+            // Constrain to header height while preserving the 3:1 wordmark aspect.
+            Layout.preferredHeight: 32
+            Layout.preferredWidth: status === Image.Ready ? (32 * sourceSize.width / Math.max(1, sourceSize.height)) : 0
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+            visible: status === Image.Ready
+            asynchronous: true
+            cache: true
+            Accessible.role: Accessible.Graphic
+            Accessible.name: branding ? branding.vendorName + " " + branding.productName : qsTr("AJAZZ Control Center")
+        }
+
         Text {
             text: branding ? branding.productName : qsTr("AJAZZ Control Center")
             color: Theme.fgPrimary
             font.pixelSize: Theme.fontLg
             font.bold: true
+            // Hide the redundant product-name text when the wordmark image is rendered,
+            // since the banner already contains the product name. Falls back to text
+            // for branded builds that ship a non-wordmark logo.
+            visible: !brandLogo.visible
             Accessible.role: Accessible.StaticText
             Accessible.name: text
         }

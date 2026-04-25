@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Settings page (`src/app/qml/Settings.qml`): Material-styled controls for theme mode (Auto/Light/Dark), launch-on-login, and start-minimised. Bound to existing `ThemeService` / `AutostartService` / `TrayController` properties.
+- AJAZZ wordmark visible in `AppHeader.qml`: shipped at `qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png`, rendered with PreserveAspectFit at 32 px height. Falls back to the product-name text label when the image fails to load (e.g. branded builds without a logo asset).
+
+### Changed / Hardened
+
+- Plugin host (`src/plugins/src/plugin_host.cpp`): rejects plugin directories whose basename collides with a Python stdlib module name (SEC-S2 hardening, uses `sys.stdlib_module_names`); deduplicates `sys.path` entries across repeated `loadAll()` calls (SEC-S3).
+- Profile IO (`src/core/src/profile_io.cpp`): Linux/macOS write path switched from `std::ofstream` to `::open(O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600)` with `fsync()` on the original fd and `fsync()` of the parent directory after the atomic rename (SEC-S4 + SEC-S6 hardening). Eliminates symlink-redirect races and a buffered-stdio durability gap.
+- Profile IO atomic rename on Windows: now uses `ReplaceFileW` for the existing-destination case (purpose-built for atomic-replace-with-backup, dodges most AV/indexer races) and falls back to `MoveFileExW` only when the target doesn't exist yet. Retry budget widened to also catch `ERROR_LOCK_VIOLATION` and `ERROR_USER_MAPPED_FILE`.
+
 - Multi-action engine (`ActionEngine`) with built-in `Plugin`, `Sleep`, `KeyPress`, `RunCommand`, `OpenUrl`, `OpenFolder`, `BackToParent` action kinds (closes #25).
 - Folder navigation: nested `ProfilePage`s on AKP-class devices via `OpenFolder` / `BackToParent` (closes #28).
 - Encoder bindings: dedicated `EncoderBinding` with `onCw` / `onCcw` / `onPress` chains (closes #29).

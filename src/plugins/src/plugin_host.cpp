@@ -12,7 +12,9 @@
 #include "ajazz/core/logger.hpp"
 
 #include <mutex>
+#include <string>
 #include <unordered_map>
+#include <unordered_set>
 
 #include <pybind11/embed.h>
 
@@ -93,6 +95,30 @@ bool isSafePluginId(std::string_view id) {
     return true;
 }
 
+/**
+ * @brief Test whether @p name shadows a Python stdlib module.
+ *
+ * SEC-S2 hardening: a plugin directory called e.g. "os" or "subprocess"
+ * would, after `sys.path.insert(plugin_dir)`, be imported in preference to
+ * the real stdlib module on every subsequent `import` in any plugin or
+ * helper module. We refuse to import directories whose basename collides
+ * with `sys.stdlib_module_names` (Python 3.10+).
+ *
+ * Caller must hold the GIL.
+ */
+bool shadowsStdlib(std::string_view name) {
+    try {
+        auto sys = py::module_::import("sys");
+        if (!py::hasattr(sys, "stdlib_module_names")) {
+            return false; // Pre-3.10 — best-effort, rely on isSafePluginId.
+        }
+        auto frozen = sys.attr("stdlib_module_names");
+        return frozen.contains(py::str(std::string{name}));
+    } catch (std::exception const&) {
+        return false;
+    }
+}
+
 } // namespace
 
 void PluginHost::loadAll() {
@@ -113,6 +139,16 @@ void PluginHost::loadAll() {
         auto sys = py::module_::import("sys");
         auto sysPath = sys.attr("path").cast<py::list>();
 
+        // SEC-S3 hardening: build a set of paths already on sys.path so we don't
+        // append duplicates on repeated loadAll() invocations. Listing sys.path
+        // each call is O(n) but n is tiny (<100) compared to the per-plugin import
+        // cost, so simplicity wins.
+        std::unordered_set<std::string> existingPaths;
+        existingPaths.reserve(static_cast<std::size_t>(py::len(sysPath)));
+        for (auto const& item : sysPath) {
+            existingPaths.insert(py::str(item).cast<std::string>());
+        }
+
         for (auto const& path : paths) {
             std::error_code ec;
             auto const canon = std::filesystem::canonical(path, ec);
@@ -120,7 +156,10 @@ void PluginHost::loadAll() {
                 AJAZZ_LOG_WARN("plugins", "skipping invalid search path: {}", path.string());
                 continue;
             }
-            sysPath.append(canon.string());
+            auto const canonStr = canon.string();
+            if (existingPaths.insert(canonStr).second) {
+                sysPath.append(canonStr);
+            }
 
             for (auto const& entry : std::filesystem::directory_iterator(canon)) {
                 if (!entry.is_directory()) {
@@ -134,6 +173,16 @@ void PluginHost::loadAll() {
                 auto const pkgName = entry.path().filename().string();
                 if (!isSafePluginId(pkgName)) {
                     AJAZZ_LOG_WARN("plugins", "refusing unsafe plugin dir name: {}", pkgName);
+                    continue;
+                }
+                // SEC-S2 hardening: a plugin directory whose basename collides with a
+                // Python stdlib module name (e.g. "os", "subprocess", "json") would
+                // shadow the stdlib for every subsequent import inside any plugin or
+                // helper module. Reject up-front.
+                if (shadowsStdlib(pkgName)) {
+                    AJAZZ_LOG_WARN("plugins",
+                                   "plugin {} shadows a Python stdlib module name; rejected",
+                                   pkgName);
                     continue;
                 }
                 if (!validateManifest(entry.path())) {

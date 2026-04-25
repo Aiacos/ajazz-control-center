@@ -34,6 +34,15 @@ set_source_files_properties(${ACC_BRAND_APP} PROPERTIES QT_RESOURCE_ALIAS brandi
 set_source_files_properties(${ACC_BRAND_TRAY} PROPERTIES QT_RESOURCE_ALIAS branding/tray.svg)
 set_source_files_properties(${ACC_BRAND_THEME} PROPERTIES QT_RESOURCE_ALIAS branding/theme.json)
 
+# Optional banner / wordmark logo for the application header. The default repo-vendored AJAZZ
+# wordmark is at resources/branding/ajazz-logo.png; integrators can override via AJAZZ_BRAND_DIR by
+# dropping a same-named file there.
+set(ACC_BRAND_LOGO ${_ajazz_brand_dir}/ajazz-logo.png)
+if(NOT EXISTS "${ACC_BRAND_LOGO}")
+    set(ACC_BRAND_LOGO ${_ajazz_brand_default}/ajazz-logo.png)
+endif()
+set_source_files_properties(${ACC_BRAND_LOGO} PROPERTIES QT_RESOURCE_ALIAS branding/ajazz-logo.png)
+
 # Theme.qml is a `pragma Singleton` — it must be marked with the QT_QML_SINGLETON_TYPE source file
 # property *before* qt_add_qml_module so Qt's QML compiler registers it as a singleton in the
 # AjazzControlCenter module instead of as a regular component.
@@ -69,6 +78,7 @@ qt_add_qml_module(
               qml/MousePanel.qml
               qml/Inspector.qml
               qml/PropertyInspector.qml
+              qml/Settings.qml
               qml/components/AppHeader.qml
               qml/components/Card.qml
               qml/components/DeviceRow.qml
@@ -84,6 +94,7 @@ qt_add_qml_module(
               ${ACC_BRAND_TRAY}
               ${ACC_BRAND_THEME}
               ${ACC_BRAND_THEME_LIGHT}
+              ${ACC_BRAND_LOGO}
               ${ACC_DOC_CHANGELOG}
               ${ACC_DOC_PRIVACY}
 )
