@@ -33,6 +33,7 @@ Application::Application(QObject* parent)
       m_trayController(
           std::make_unique<TrayController>(m_branding.get(), m_profileController.get(), this)),
       m_pluginCatalog(std::make_unique<PluginCatalogModel>(this)),
+      m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()) {}
 
 Application::~Application() {
@@ -75,6 +76,8 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     engine.rootContext()->setContextProperty("autostart", m_autostart.get());
     engine.rootContext()->setContextProperty("tray", m_trayController.get());
     engine.rootContext()->setContextProperty("pluginCatalog", m_pluginCatalog.get());
+    engine.rootContext()->setContextProperty("propertyInspectorController",
+                                             m_propertyInspector.get());
 }
 
 void Application::startBackgroundServices(QQmlApplicationEngine& engine) {

@@ -1,3 +1,34 @@
+# ----------------------------------------------------------------------------
+# Optional: Qt WebEngine for the Property Inspector HTML panel
+# ----------------------------------------------------------------------------
+# When ON and Qt6::WebEngineQuick is found, the Property Inspector pane embeds
+# plugin-authored HTML PI pages (Stream Deck SDK-compatible). When OFF or the
+# Qt module is missing — common on minimal Qt installs and headless CI — the
+# build falls back silently to the schema-driven native inspector. The stub
+# controller compiles either way so QML bindings to `propertyInspectorController`
+# never break.
+option(AJAZZ_BUILD_PROPERTY_INSPECTOR "Embed plugin Property Inspector HTML pages via Qt WebEngine"
+       ON
+)
+if(AJAZZ_BUILD_PROPERTY_INSPECTOR)
+    # WebChannel is the JS↔C++ bridge for `$SD` (M3); WebEngineQuick is the rendering surface (M2).
+    # Both must be present for the HTML PI path to activate. Either missing → graceful fallback to
+    # the native renderer.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuick WebChannel)
+    if(Qt6WebEngineQuick_FOUND AND Qt6WebChannel_FOUND)
+        set(AJAZZ_HAVE_WEBENGINE TRUE)
+        message(STATUS "Qt6::WebEngineQuick + Qt6::WebChannel found — Property Inspector enabled")
+    else()
+        set(AJAZZ_HAVE_WEBENGINE FALSE)
+        message(
+            WARNING "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt WebEngineQuick or "
+                    "WebChannel was not found. Falling back to the native inspector placeholder."
+        )
+    endif()
+else()
+    set(AJAZZ_HAVE_WEBENGINE FALSE)
+endif()
+
 qt_add_executable(
     ajazz-control-center
     src/main.cpp
@@ -11,6 +42,10 @@ qt_add_executable(
     src/theme_service.cpp
     src/autostart_service.cpp
     src/single_instance_guard.cpp
+    src/app_icon.cpp
+    src/property_inspector_controller.cpp
+    src/pi_bridge.cpp
+    src/qt_executor.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
@@ -122,6 +157,7 @@ qt_add_qml_module(
               qml/Inspector.qml
               qml/PluginStore.qml
               qml/PropertyInspector.qml
+              qml/NativePropertyInspector.qml
               qml/Settings.qml
               qml/components/AppHeader.qml
               qml/components/Card.qml
@@ -160,6 +196,15 @@ target_link_libraries(
             Qt6::QuickControls2
             Qt6::Svg
 )
+
+if(AJAZZ_HAVE_WEBENGINE)
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannel)
+    target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
+    # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
+    # present. Adding it to the QML module list unconditionally would fail QML compilation on
+    # minimal Qt installs, so we attach it via qt_target_qml_sources only on the WebEngine path.
+    qt_target_qml_sources(ajazz-control-center QML_FILES qml/PIWebView.qml)
+endif()
 
 # ----------------------------------------------------------------------------
 # Branding: forward CMake cache vars to the C++ source via -D defines. All four are optional;

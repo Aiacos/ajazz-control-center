@@ -3,200 +3,93 @@
 // PropertyInspector.qml
 // =====================
 //
-// Generic, schema-driven Property Inspector renderer.
+// Front door for the per-action settings panel. Two render paths:
 //
-// Reads a JS object that conforms to docs/schemas/property_inspector.schema.json
-// and renders a list of QtQuick.Controls inputs. Whenever the user edits
-// any field the component emits `settingsChanged(json)` carrying a JSON
-// string ready to be stored in `Action.settingsJson`.
+//   * PIWebView (HTML, only available when AJAZZ_HAVE_WEBENGINE) renders a
+//     plugin-authored HTML page in an isolated Qt WebEngine view, bridged
+//     to C++ via QWebChannel for the Stream Deck SDK-2 `$SD` API. The
+//     controller decides when this is active; QML follows.
 //
-// Closes #39 (Property Inspector schema + generic renderer).
+//   * NativePropertyInspector renders the schema-driven QtQuick.Controls
+//     form for every action whose settings are described by
+//     docs/schemas/property_inspector.schema.json. Always available — this
+//     is the fallback for builds without Qt WebEngine and the default for
+//     non-plugin (built-in) actions.
+//
+// The wrapper here is a thin Loader-based switcher: it watches
+// `propertyInspectorController.hasHtmlInspector` and `webEngineAvailable`
+// and swaps the active component without leaking either implementation
+// into the other's lifecycle. The schema/settings forwarders are kept on
+// the wrapper so existing callers (Inspector.qml) keep working unchanged.
 
 import QtQuick 6
 import QtQuick.Controls 6
 import QtQuick.Layouts 6
 import AjazzControlCenter
 
-/**
- * Generic schema-driven inspector pane.
- *
- * @property schema    Plain JS object matching property_inspector.schema.json.
- * @property settings  JS object holding the current values; bidirectional.
- *
- * Emits `settingsChanged(string json)` after every edit so the caller can
- * persist the change.
- */
 ColumnLayout {
     id: root
 
-    /// Schema to render; assign a parsed JS object.
+    // ---- API mirrored from NativePropertyInspector for backwards-compat ----
+
+    /// Schema to render in the native fallback path. Ignored when the
+    /// HTML PI is active.
     property var schema: ({ title: "", fields: [] })
 
-    /// Current values keyed by field id.
+    /// Live settings dictionary, bidirectional with the active renderer.
     property var settings: ({})
 
-    /// Emitted with a JSON string of `settings` after every edit.
+    /// Emitted whenever any field commits a new value, with the full
+    /// settings dictionary serialised as JSON. The caller (Inspector.qml)
+    /// persists this to `Action.settingsJson`.
     signal settingsChanged(string json)
 
-    spacing: Theme.spacingSm
+    // ---- Renderer selection ---------------------------------------------
 
-    Text {
-        text: root.schema.title || ""
-        color: Theme.fgPrimary
-        font.pixelSize: Theme.fontLg
-        font.bold: true
-        visible: text.length > 0
+    spacing: 0
+
+    Loader {
+        id: rendererLoader
         Layout.fillWidth: true
-    }
+        Layout.fillHeight: true
 
-    Text {
-        text: root.schema.description || ""
-        color: Theme.fgMuted
-        font.pixelSize: Theme.fontSm
-        wrapMode: Text.Wrap
-        visible: text.length > 0
-        Layout.fillWidth: true
-    }
-
-    // Body — one Repeater entry per declared field.
-    Repeater {
-        model: root.schema.fields || []
-
-        delegate: ColumnLayout {
-            id: row
-            required property var modelData
-            spacing: 4
-            Layout.fillWidth: true
-
-            // Fetch the live value, falling back to the schema default.
-            function currentValue() {
-                if (root.settings && Object.prototype.hasOwnProperty.call(root.settings, row.modelData.id)) {
-                    return root.settings[row.modelData.id]
-                }
-                return row.modelData.default !== undefined ? row.modelData.default : ""
+        // Pick HTML PI when (a) WebEngine is compiled in and (b) the
+        // controller reports an active plugin PI page; otherwise the
+        // schema-driven native renderer takes over. The check is cheap and
+        // the bindings re-evaluate when the controller emits change signals.
+        sourceComponent: {
+            if (typeof propertyInspectorController !== "undefined"
+                    && propertyInspectorController.webEngineAvailable
+                    && propertyInspectorController.hasHtmlInspector) {
+                return htmlComponent
             }
-
-            // Push a new value back into `settings` and notify listeners.
-            function commit(value) {
-                root.settings[row.modelData.id] = value
-                root.settingsChanged(JSON.stringify(root.settings))
-            }
-
-            Text {
-                text: row.modelData.label
-                color: Theme.fgPrimary
-                font.pixelSize: Theme.fontSm
-                Layout.fillWidth: true
-                visible: row.modelData.type !== "section"
-            }
-
-            Loader {
-                Layout.fillWidth: true
-                sourceComponent: {
-                    switch (row.modelData.type) {
-                        case "text":      return textField
-                        case "textarea":  return textArea
-                        case "number":    return spinBox
-                        case "boolean":   return checkBox
-                        case "select":    return comboBox
-                        case "color":     return colorField
-                        case "section":   return sectionHeader
-                        default:          return textField
-                    }
-                }
-
-                onLoaded: {
-                    // Bridge the loaded item with the current value/commit pair.
-                    if (item.applyValue) item.applyValue(row.currentValue())
-                    if (item.committed) item.committed.connect(row.commit)
-                }
-            }
-
-            Text {
-                text: row.modelData.help || ""
-                color: Theme.fgMuted
-                font.pixelSize: Theme.fontXs
-                wrapMode: Text.Wrap
-                visible: text.length > 0
-                Layout.fillWidth: true
-            }
-        }
-    }
-
-    // ---------------------------------------------------------------- //
-    // Per-type sub-components. Each declares applyValue() + committed() //
-    // so the outer Loader.onLoaded bridge can wire them generically.    //
-    // ---------------------------------------------------------------- //
-    Component {
-        id: textField
-        TextField {
-            placeholderText: "value"
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
+            return nativeComponent
         }
     }
 
     Component {
-        id: textArea
-        TextArea {
-            wrapMode: TextArea.Wrap
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
+        id: nativeComponent
+        NativePropertyInspector {
+            schema: root.schema
+            settings: root.settings
+            onSettingsChanged: function(json) { root.settingsChanged(json) }
         }
     }
 
+    // The HTML component is only ever instantiated when the controller
+    // reports a live PI page. PIWebView.qml is only present in the QML
+    // module when CMake found Qt6::WebEngineQuick at configure time; in
+    // builds without WebEngine the Loader's `sourceComponent` selector
+    // never lands on this branch, so the missing file is unreachable
+    // and the QML compiler doesn't fault.
     Component {
-        id: spinBox
-        SpinBox {
-            from: -10000
-            to: 10000
-            signal committed(var value)
-            function applyValue(v) { value = Number(v) || 0 }
-            onValueModified: committed(value)
-        }
-    }
-
-    Component {
-        id: checkBox
-        CheckBox {
-            signal committed(var value)
-            function applyValue(v) { checked = !!v }
-            onToggled: committed(checked)
-        }
-    }
-
-    Component {
-        id: comboBox
-        ComboBox {
-            id: combo
-            textRole: "label"
-            valueRole: "value"
-            signal committed(var value)
-            function applyValue(v) {
-                const idx = combo.indexOfValue(v)
-                if (idx !== -1) combo.currentIndex = idx
-            }
-            onActivated: committed(combo.currentValue)
-        }
-    }
-
-    Component {
-        id: colorField
-        TextField {
-            placeholderText: "#rrggbb"
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
-        }
-    }
-
-    Component {
-        id: sectionHeader
-        Rectangle {
-            height: 1
-            color: Theme.borderSubtle
+        id: htmlComponent
+        Loader {
+            anchors.fill: parent
+            // The string source spelling avoids a hard import that would
+            // turn into a "module has no file PIWebView" compile error in
+            // builds where Qt WebEngine is absent.
+            source: "PIWebView.qml"
         }
     }
 }

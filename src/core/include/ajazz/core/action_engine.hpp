@@ -8,7 +8,7 @@
  * appropriate executor depending on @ref ActionKind:
  *
  *   - `Kind::Plugin`        — forwarded to the plugin host (via callback).
- *   - `Kind::Sleep`         — sleeps `delayMs` milliseconds.
+ *   - `Kind::Sleep`         — defers the rest of the chain via @ref Executor.
  *   - `Kind::KeyPress`      — synthesises an OS key press (delegated callback).
  *   - `Kind::RunCommand`    — launches a shell command (delegated callback).
  *   - `Kind::OpenUrl`       — opens a URL (delegated callback).
@@ -20,15 +20,25 @@
  * Qt / OS dependencies. The app layer provides the executor lambdas at
  * construction time.
  *
+ * Sleep handling (A2): when the engine hits a `Sleep` step it delegates to
+ * the injected @ref Executor — the rest of the chain executes inside the
+ * scheduled continuation, so the calling thread (typically the HID poll
+ * thread or the Qt main thread) is **not** blocked. Headless and test
+ * callers get a @ref BlockingExecutor by default, which preserves the
+ * legacy in-place sleep semantics.
+ *
  * Closes #25 (multi-action engine), #28 (folder navigation), #29 (encoder
  * dispatch contract).
  */
 #pragma once
 
+#include "ajazz/core/executor.hpp"
 #include "ajazz/core/profile.hpp"
 
 #include <chrono>
+#include <cstddef>
 #include <functional>
+#include <memory>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -55,6 +65,13 @@ struct NavigationContext {
  * All callbacks are optional; a missing callback turns the corresponding
  * action into a silent no-op (useful in unit tests). Callbacks must be
  * thread-safe when used by a multi-threaded engine.
+ *
+ * @note The optional `sleep` callback predates the @ref Executor injection
+ *       point. When provided, it is invoked for *recording* / inspection
+ *       purposes (see the test suite); actual deferral of the chain
+ *       continuation is delegated to the @ref Executor passed to
+ *       @ref ActionEngine. Setting `sleep` does **not** make the engine
+ *       sleep on the calling thread.
  */
 struct ActionExecutors {
     /// Run a plugin-defined step. `id` is a dotted "<plugin>.<action>" string.
@@ -65,7 +82,8 @@ struct ActionExecutors {
     std::function<void(std::string_view settingsJson)> runCommand;
     /// Open a URL in the default browser.
     std::function<void(std::string_view url)> openUrl;
-    /// Block the current chain for `duration` (default: std::this_thread::sleep_for).
+    /// Optional: invoked once per encountered Sleep step for telemetry / test
+    /// inspection. The actual delay is provided by the @ref Executor.
     std::function<void(std::chrono::milliseconds duration)> sleep;
 };
 
@@ -73,8 +91,11 @@ struct ActionExecutors {
  * @brief Multi-action engine for chained @ref Action vectors with folder
  *        navigation support.
  *
- * The engine is single-threaded by default; long chains run on the calling
- * thread. Embed in a worker thread / Qt thread pool to avoid blocking the UI.
+ * The engine runs non-Sleep steps inline on the calling thread and defers
+ * the rest of the chain through an injected @ref Executor whenever it
+ * encounters a `Sleep` step. Without an injected executor, a process-wide
+ * @ref BlockingExecutor is used so the legacy semantics still hold for
+ * tests and headless callers.
  */
 class ActionEngine {
 public:
@@ -83,8 +104,12 @@ public:
      *
      * @param executors  Callbacks for each non-plugin action kind. May be
      *                   default-constructed; missing callbacks are no-ops.
+     * @param executor   Continuation scheduler. Defaults to the shared
+     *                   @ref BlockingExecutor returned by @ref defaultExecutor.
+     *                   The pointer must outlive the engine if non-default.
      */
-    explicit ActionEngine(ActionExecutors executors = {}) noexcept;
+    explicit ActionEngine(ActionExecutors executors = {},
+                          std::shared_ptr<Executor> executor = nullptr) noexcept;
 
     /**
      * @brief Replace the active profile.
@@ -109,6 +134,12 @@ public:
      * @ref ActionKind::OpenFolder / @ref ActionKind::BackToParent so
      * subsequent steps execute on the new page.
      *
+     * Sleep steps and non-zero `delayMs` post-step waits are deferred via
+     * the injected @ref Executor; in that case @ref run returns to its
+     * caller before the chain finishes, and the remainder runs inside the
+     * executor's worker thread / event loop. Non-Sleep steps still run
+     * inline, so chains without delays complete synchronously.
+     *
      * @param chain Chain to execute. Empty chains are a no-op.
      */
     void run(ActionChain const& chain);
@@ -120,7 +151,16 @@ public:
     void popPage();
 
 private:
+    /**
+     * @brief Internal helper: dispatch chain steps starting at @p index.
+     *
+     * Either runs to completion (no Sleep / delay encountered) or schedules
+     * a continuation through the executor and returns.
+     */
+    void runFrom(std::shared_ptr<ActionChain const> const& chain, std::size_t index);
+
     ActionExecutors executors_;
+    std::shared_ptr<Executor> executor_;
     Profile profile_;
     NavigationContext nav_;
 };

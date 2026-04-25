@@ -17,6 +17,7 @@
 #   make clean        # delete build directory
 #   make format       # run clang-format on every C++ file
 #   make lint         # run clang-tidy on every C++ file
+#   make tidy-fix     # apply clang-tidy --fix to staged C++ files
 #   make wiki         # preview the wiki locally (requires `mdbook`)
 #   make help         # show this list
 # ============================================================================
@@ -30,8 +31,8 @@ BIN_RELEASE       := $(BUILD_DIR_RELEASE)/src/app/ajazz-control-center
 JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 .PHONY: default help bootstrap build release configure run test package \
-        install uninstall clean format lint tidy lint-all lint-fix precommit \
-        wiki udev doctor docs docs-check
+        install uninstall clean format lint tidy tidy-fix lint-all lint-fix \
+        precommit wiki udev doctor docs docs-check
 
 default: build
 
@@ -95,6 +96,11 @@ tidy: configure ## Run clang-tidy on staged/changed files only
 	@git diff --cached --name-only --diff-filter=AM | grep -E '\.(cpp|hpp|cc|h)$$' | \
 	    xargs -r bash scripts/run-clang-tidy.sh
 
+tidy-fix: configure ## Run clang-tidy with --fix on staged/changed files (applies safe fixes)
+	@git diff --cached --name-only --diff-filter=AM | grep -E '\.(cpp|hpp|cc|h)$$' | \
+	    xargs -r clang-tidy -p $(BUILD_DIR_DEBUG) --fix --fix-errors --quiet
+	@echo "Auto-fixable clang-tidy issues applied. Re-stage and review:  git add -p"
+
 lint-all: ## Run EVERY linter via pre-commit (clang-format, ruff, yamllint, shellcheck, …)
 	@command -v pre-commit >/dev/null || pip install --user pre-commit
 	@pre-commit run --all-files
@@ -104,10 +110,12 @@ lint-fix: ## Run every linter with auto-fix enabled
 	@pre-commit run --all-files --show-diff-on-failure || true
 	@echo "Auto-fixable issues applied. Review & commit."
 
-precommit: ## Install the git pre-commit hook
+precommit: ## Install the git pre-commit, commit-msg and pre-push hooks
 	@command -v pre-commit >/dev/null || pip install --user pre-commit
-	@pre-commit install && pre-commit install --hook-type commit-msg
-	@echo "pre-commit hook installed."
+	@pre-commit install
+	@pre-commit install --hook-type commit-msg
+	@pre-commit install --hook-type pre-push
+	@echo "pre-commit hooks installed (commit + commit-msg + pre-push)."
 
 wiki: ## Preview GitHub Wiki locally on http://localhost:3030
 	@command -v mdbook >/dev/null || { echo "Install mdbook: cargo install mdbook"; exit 1; }

@@ -45,6 +45,22 @@ ______________________________________________________________________
   `share/icons/hicolor/<size>x<size>/apps/`.
 - [ ] **README + wiki screenshots** of the Material UI in light and dark
   mode (replace stale Fusion screenshots).
+- [ ] **Hicolor PNG install rule** — `src/app/CMakeLists.txt` currently
+  installs only `resources/icons/app.svg` (the *legacy* generic mark) at
+  `/usr/share/icons/hicolor/scalable/apps/ajazz-control-center.svg`.
+  After the tray-fix work (`5514ce2`) the runtime icon is the branded
+  `resources/branding/app.svg`, but the desktop-installed copy is
+  stale. Update the install rule to install **`resources/branding/app.svg`**
+  as the scalable variant and add `install(FILES …)` rules for each
+  size in `resources/icons/hicolor/app-{16,24,32,48,64,128,256,512}.png`
+  to the matching `share/icons/hicolor/<n>x<n>/apps/` directory. Also
+  fixes the tray-host icon-name lookup for `.rpm` /
+  `.deb` consumers (currently they see the legacy artwork).
+- [ ] **Logger `CapturingSink` test fixture** — A5 (`e53883e`) shipped
+  the pluggable `LogSink` API but did not add a test that exercises a
+  capturing implementation. Add one under `tests/unit/test_logger.cpp`:
+  install a sink, fire a few `AJAZZ_LOG_INFO` calls, assert the captured
+  records (level / module / message). 30-minute task.
 
 ### User actions (out-of-code, one-time)
 
@@ -92,17 +108,21 @@ ______________________________________________________________________
   `Application`. Keeps the singleton as a transition shim so device
   backends keep compiling. **Why**: per-test isolation, no hidden global
   state. Touches every backend `register*.cpp`.
-- [ ] **A2 — ActionEngine threading model**: `ActionEngine::run()`
-  currently calls `std::this_thread::sleep_for` on the calling thread
-  (typically the HID poll thread or the Qt main thread). Introduce an
-  explicit executor (QThreadPool task or dedicated worker queue) and
-  drop the default in-place sleep. **Why**: Sleep actions must not
-  block HID polling or freeze the UI.
-- [ ] **A3 — EventBus per-event allocation**: `event_bus.cpp:27-36`
-  deep-copies `unordered_map<token, Handler>` on every `publish()`.
-  Replace with `shared_ptr<const vector<…>>` swapped on subscribe /
-  unsubscribe; readers atomic-load and iterate lock-free. **Why**:
-  high-rate encoders (AKP05) generate >100 events/s.
+- [x] **A2 — ActionEngine threading model** ✅ shipped. `ActionEngine`
+  now accepts a pluggable `core::Executor`; on `Sleep` (and on any
+  non-zero post-step `delayMs`) it defers the chain continuation via
+  `executor->scheduleAfter(delay, ...)` instead of calling
+  `std::this_thread::sleep_for` on the caller. Default is `BlockingExecutor`
+  (legacy semantics, kept for tests and headless callers); the GUI app
+  ships `QtExecutor` (backed by `QTimer::singleShot`) so the HID poll
+  thread / Qt main thread is freed immediately. Existing 3 ActionEngine
+  tests still pass; 3 new tests cover the executor abstraction.
+- [x] **A3 — EventBus per-event allocation** ✅ shipped. `event_bus.cpp`
+  now holds the subscribers in a `std::atomic<std::shared_ptr<vector<…> const>>`
+  swapped via copy-on-write on subscribe / unsubscribe; `publish()` is
+  lock-free (atomic-load + iterate immutable snapshot). Writers
+  serialise on a write-only mutex; readers don't take a mutex.
+  Existing 4/4 EventBus tests still pass under TSan.
 - [ ] **A4 — PluginHost out-of-process**: pybind11's
   `scoped_interpreter` runs CPython in-process; a segfault in any
   C-extension imported by a plugin (numpy, opencv, mido) crashes the
@@ -110,11 +130,13 @@ ______________________________________________________________________
   (or seccomp-bpf sandbox if staying in-process). **Why**: bake
   isolation in *before* exposing user-installable plugins; retrofitting
   is 10× more expensive.
-- [ ] **A5 — Logger global → injectable sink**: `core::log()` is a free
-  function with a global `std::atomic<LogLevel>`. Introduce a `LogSink`
-  interface and `setLogSink(unique_ptr<LogSink>)`; keep the macros
-  unchanged so call sites don't touch. **Why**: per-test log capture,
-  routing to journald / syslog without TU patches.
+- [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
+  abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
+  reproduces the legacy formatting. `setLogSink(shared_ptr<LogSink>)`
+  swaps the active sink atomically against concurrent log() calls
+  (slot is `std::atomic<std::shared_ptr<LogSink>>`). All AJAZZ_LOG\_\*
+  macros unchanged; call sites untouched. Tests can now install a
+  capturing sink and assert on what subsystems logged.
 - [ ] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
 
 ### Security hardening
@@ -167,8 +189,36 @@ ______________________________________________________________________
   router, plugin → app and app → plugin). ≈ 5-7 days.
 - [ ] **Plugin lifecycle manager** (install / load / unload / state
   persistence). ≈ 5-7 days.
-- [ ] **Property Inspector embedding** (Qt WebEngine for HTML PI, with
-  bridged messages to the plugin process). ≈ 3-5 days.
+- **Property Inspector embedding** (Qt WebEngine for HTML PI, with
+  bridged messages to the plugin process) — five-step roadmap:
+  - [x] **M1** — controller stub + CMake gating (`AJAZZ_BUILD_PROPERTY_INSPECTOR`).
+  - [x] **M2** — Qt WebEngine surface, per-plugin `QWebEngineProfile`
+    isolation, conservative `QWebEngineSettings` baseline,
+    `QtWebEngineQuick::initialize()` in main.cpp, `PIWebView.qml`
+    behind a Loader switcher.
+  - [x] **M3** — `PIBridge` QObject exposing the Stream Deck SDK-2
+    `\$SD` API surface via `QWebChannel` (registered as `"$SD"` on the
+    page's channel). Method bodies are logging stubs.
+  - [x] **M4** — settings persistence for `setSettings` / `getSettings`
+    / `setGlobalSettings` / `getGlobalSettings` to per-context JSON
+    files under `QStandardPaths::AppDataLocation/plugins/<plugin>/`.
+    Atomic writes via `QSaveFile`, path-traversal validation on uuid
+    components, 1 MiB size cap. Per-context settings land at
+    `settings/<contextUuid>.json`; plugin-wide at `global.json`. Getter
+    methods stay async (return-via-signal contract preserved). All
+    M4-side code is gated by `AJAZZ_HAVE_WEBENGINE` and lives in
+    `src/app/src/pi_bridge.cpp`.
+  - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
+    over the plugin-host WebSocket. Depends on **Plugin process spawner**
+    - **WebSocket protocol bridge** below.
+- [ ] **Property Inspector security hardening pass** — alongside M5:
+  install a `QWebEngineUrlRequestInterceptor` on the per-plugin profile
+  scoped to the PI directory; build the CDN allowlist (Phase 1:
+  `cdn.jsdelivr.net`, `unpkg.com` over https only); wire
+  `\$SD.openUrl(url)` through `QDesktopServices::openUrl` after
+  allowlist validation + a per-plugin first-call confirmation prompt.
+  Also: ship a minimal test PI HTML page in `resources/dev/pi/` so the
+  bridge can be exercised without a live plugin host.
 - [x] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
   Material-styled, virtualized `GridView`, live search/filter, install /
   uninstall / enable-toggle per-plugin, side-sheet details pane). Mounted

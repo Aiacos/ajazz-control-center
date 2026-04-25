@@ -43,6 +43,43 @@ Scopes match top-level module directories (`core`, `app`, `streamdeck`, `keyboar
 - **Python 3.11+**, `ruff` for linting, `black` for formatting, full type hints on public plugin API.
 - **QML**: one component per file, `PascalCase` filenames, imports sorted, use `required property` where possible.
 
+#### Linters and the auto-fix flow
+
+Every formatter and linter the project enforces is wired through `pre-commit`,
+so nothing in CI is supposed to fail in a way you can't reproduce locally.
+You almost never need to remember any of these names — the hooks fire
+automatically — but here's the shape of the loop in case you need to debug
+a CI failure or run things by hand:
+
+1. `make precommit` (one-time per clone) installs the git hooks: a
+   per-commit hook (`clang-format`, `ruff`, `cmake-format`, `mdformat`,
+   `typos`, `actionlint`, `regenerate-docs`, JSON-Schema validators), a
+   `commit-msg` hook (`conventional-pre-commit`), and a `pre-push` hook
+   (`clang-tidy` static analysis).
+1. On `git commit` the per-commit hooks run on staged files; auto-fixable
+   issues (whitespace, format, ruff `--fix`, mdformat, cmake-format,
+   shfmt, typos, README/wiki AUTOGEN regeneration) are applied in place
+   and the commit is re-staged transparently.
+1. On `git push` clang-tidy runs across the whole tree against the
+   currently-configured CMake build directory. Slow (~30 s on a warm
+   build cache) but catches what the per-commit hooks can't see.
+1. If you've left clang-tidy issues in your branch, `make tidy-fix`
+   applies the fixes that clang-tidy can apply automatically (the
+   `modernize-*` and `readability-*` checks); review with `git add -p`
+   before re-staging.
+1. `make lint-all` runs every hook on every file (the same thing CI does
+   in the Lint workflow). Run it before opening a PR if you want CI
+   parity locally.
+1. On a PR opened from a branch in this repo, the Lint workflow's
+   "Commit auto-fixes" step pushes any remaining auto-fixes back to
+   the PR head as a `style:` commit, so the human reviewer always sees
+   a green tree. Forks don't get this push (security boundary) — fork
+   contributors should run `make lint-all` themselves before pushing.
+
+If a hook is being noisy and the fix isn't trivially obvious, run
+`pre-commit run --hook-id <id> --all-files --verbose` to see exactly
+which files and which rule are unhappy.
+
 ### 5. Tests
 
 - Every new module ships with unit tests (`tests/unit`) covering protocol encoders/decoders.
