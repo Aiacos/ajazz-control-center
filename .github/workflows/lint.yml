@@ -165,17 +165,13 @@ jobs:
       - name: README + wiki AUTOGEN blocks are in sync
         run: python3 scripts/generate-docs.py --check
 
-      - name: Check Markdown formatting (excluding AUTOGEN targets)
+      - name: Check Markdown formatting (via pre-commit, single source of truth)
+        # Delegate to the pre-commit mdformat hook so the exclude list
+        # stays in lockstep with .pre-commit-config.yaml and contributors
+        # never see CI-only formatting failures.
         run: |
-          # README + wiki pages are owned by scripts/generate-docs.py;
-          # mdformat would reflow the generated tables and fight it.
-          find . -type f -name '*.md' \
-            -not -path './README.md' \
-            -not -path './CHANGELOG.md' \
-            -not -path './docs/wiki/*' \
-            -not -path './build/*' \
-            -not -path './.venv/*' \
-            -print0 | xargs -0 mdformat --check
+          pip install pre-commit
+          pre-commit run mdformat --all-files --color always
 
       - name: Lychee (link checker)
         uses: lycheeverse/lychee-action@f81112d0d2814ded911bd23e3beaa9dda9093915  # v2.1.0
