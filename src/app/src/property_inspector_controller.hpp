@@ -28,6 +28,17 @@
 
 #include <QObject>
 #include <QString>
+#include <QtCore/qmetatype.h>
+
+#include <memory>
+
+// Forward declare QWebEnginePage so the header doesn't need Qt WebEngine
+// (which is optional — see AJAZZ_BUILD_PROPERTY_INSPECTOR in CMake). The
+// opaque-pointer declaration tells QMetaType that we know it's an
+// incomplete type and to skip the "must be a fully-defined type" assert
+// triggered by `Q_PROPERTY(QWebEnginePage* ...)`.
+class QWebEnginePage;
+Q_DECLARE_OPAQUE_POINTER(QWebEnginePage*)
 
 namespace ajazz::app {
 
@@ -54,12 +65,18 @@ class PropertyInspectorController : public QObject {
     /// @ref closeInspector.
     Q_PROPERTY(bool hasHtmlInspector READ hasHtmlInspector NOTIFY hasHtmlInspectorChanged)
 
+    /// The @c QWebEnginePage currently driving the PI surface, or nullptr
+    /// when none is loaded. Bound by `PIWebView.qml` to its `WebEngineView.page`.
+    /// Always nullptr in builds without Qt WebEngine.
+    Q_PROPERTY(QWebEnginePage* activePage READ activePage NOTIFY activePageChanged)
+
 public:
     explicit PropertyInspectorController(QObject* parent = nullptr);
     ~PropertyInspectorController() override;
 
     [[nodiscard]] bool webEngineAvailable() const noexcept;
     [[nodiscard]] bool hasHtmlInspector() const noexcept { return hasHtmlInspector_; }
+    [[nodiscard]] QWebEnginePage* activePage() const noexcept;
 
     /**
      * @brief Load the Property Inspector for an action context.
@@ -86,9 +103,16 @@ public:
 
 signals:
     void hasHtmlInspectorChanged();
+    void activePageChanged();
 
 private:
     bool hasHtmlInspector_ = false;
+
+    /// PIMPL holding the WebEngineProfile + WebEnginePage. Defined only
+    /// when AJAZZ_HAVE_WEBENGINE is set; when absent the unique_ptr is
+    /// always empty and the controller stays in M1-stub mode at runtime.
+    struct WebEngineImpl;
+    std::unique_ptr<WebEngineImpl> webEngine_;
 };
 
 } // namespace ajazz::app

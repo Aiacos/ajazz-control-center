@@ -141,6 +141,7 @@ qt_add_qml_module(
               qml/Inspector.qml
               qml/PluginStore.qml
               qml/PropertyInspector.qml
+              qml/NativePropertyInspector.qml
               qml/Settings.qml
               qml/components/AppHeader.qml
               qml/components/Card.qml
@@ -181,6 +182,10 @@ target_link_libraries(
 if(AJAZZ_HAVE_WEBENGINE)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
+    # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
+    # present. Adding it to the QML module list unconditionally would fail QML compilation on
+    # minimal Qt installs, so we attach it via qt_target_qml_sources only on the WebEngine path.
+    qt_target_qml_sources(ajazz-control-center QML_FILES qml/PIWebView.qml)
 endif()
 
 # ----------------------------------------------------------------------------

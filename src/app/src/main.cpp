@@ -26,6 +26,10 @@
 #include <QQuickStyle>
 #include <QWindow>
 
+#ifdef AJAZZ_HAVE_WEBENGINE
+#include <QtWebEngineQuick/QtWebEngineQuick>
+#endif
+
 #include <iostream>
 #include <optional>
 
@@ -40,6 +44,16 @@
 #endif
 
 int main(int argc, char* argv[]) {
+#ifdef AJAZZ_HAVE_WEBENGINE
+    // Qt WebEngine requires its renderer-process initialiser to run BEFORE
+    // any QGuiApplication / QApplication is constructed; otherwise the
+    // out-of-process renderer fails to spawn and `WebEngineView` shows a
+    // blank surface. Only compiled in when CMake found Qt6::WebEngineQuick
+    // (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`); minimal Qt installs and
+    // headless CI builds compile this branch out and stay on the
+    // schema-driven Property Inspector renderer at runtime.
+    QtWebEngineQuick::initialize();
+#endif
     // Use QApplication (not QGuiApplication) because TrayController relies on
     // QSystemTrayIcon + QMenu which are part of the QtWidgets module.
     QApplication::setOrganizationName(AJAZZ_VENDOR_NAME);
