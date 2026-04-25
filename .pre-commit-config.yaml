@@ -63,16 +63,17 @@ repos:
         types_or: [c++, c]
         args: [-i, --style=file]
 
-  # clang-tidy: opt-in static analyser. Not run by default because it requires a
-  # configured CMake build directory and can be slow; CI runs the full pass.
-  # Trigger manually with:
-  #   pre-commit run --hook-stage manual clang-tidy
-  # or via `make tidy`. The hook honours .clang-tidy at the repo root.
+  # clang-tidy: static analyser. Runs on `pre-commit run --hook-stage manual`
+  # (or `make tidy`) for ad-hoc invocations, AND automatically on `git push`
+  # via the `pre-push` stage so contributors catch issues before CI does.
+  # Skipped by default in the cheap `pre-commit` (per-commit) stage because it
+  # requires a configured CMake build directory and can take 10-30 seconds.
+  # The hook honours .clang-tidy at the repo root.
   - repo: local
     hooks:
       - id: clang-tidy
-        name: clang-tidy (manual)
-        stages: [manual]
+        name: clang-tidy (manual / pre-push)
+        stages: [manual, pre-push]
         language: system
         types_or: [c++, c]
         entry: scripts/run-clang-tidy.sh
