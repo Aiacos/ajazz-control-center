@@ -54,8 +54,8 @@ TEST_CASE("akp03 parser rejects ACK frames", "[akp03][protocol]") {
 
 TEST_CASE("akp03 parser decodes key press", "[akp03][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 2;   // key index
-    frame[10] = 1;  // pressed
+    frame[9] = 2;  // key index
+    frame[10] = 1; // pressed
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
     REQUIRE(ev->kind == InputEvent::Kind::KeyPressed);

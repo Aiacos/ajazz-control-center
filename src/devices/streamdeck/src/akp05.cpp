@@ -132,8 +132,8 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
     // Bytes 10..11 (big-endian) carry the absolute X coordinate (0..639).
     if ((tag & 0xf0u) == 0x30u) {
         auto const gesture = static_cast<std::uint8_t>(tag & 0x0fu);
-        std::uint16_t const x =
-            static_cast<std::uint16_t>(frame[10]) << 8 | static_cast<std::uint16_t>(frame[11]);
+        auto const x = static_cast<std::uint16_t>((static_cast<std::uint32_t>(frame[10]) << 8U) |
+                                                  static_cast<std::uint32_t>(frame[11]));
 
         InputEvent ev{};
         ev.value = static_cast<std::int16_t>(x);

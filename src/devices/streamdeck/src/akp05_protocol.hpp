@@ -36,13 +36,13 @@ inline constexpr std::uint16_t TouchStripRangeX = 640; ///< 0..639
 inline constexpr std::size_t PacketSize = 512;
 
 // Command words.
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54};   // "CRT"
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};    // "LIG"
-inline constexpr std::array<std::uint8_t, 3> CmdKeyImage{0x42, 0x41, 0x54}; // "BAT"
-inline constexpr std::array<std::uint8_t, 3> CmdEncImage{0x45, 0x4e, 0x43}; // "ENC"
+inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54};    // "CRT"
+inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};     // "LIG"
+inline constexpr std::array<std::uint8_t, 3> CmdKeyImage{0x42, 0x41, 0x54};  // "BAT"
+inline constexpr std::array<std::uint8_t, 3> CmdEncImage{0x45, 0x4e, 0x43};  // "ENC"
 inline constexpr std::array<std::uint8_t, 3> CmdMainImage{0x4d, 0x41, 0x49}; // "MAI"
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};     // "STP"
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};    // "CLE"
+inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};      // "STP"
+inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};     // "CLE"
 
 /// Zero-padded 512-byte command header for `cmd`.
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
@@ -55,7 +55,7 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
 /// Image header for the main 85×85 key grid. Payload follows in 512-byte
 /// chunks (JPEG bytes, as on the AKP153).
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
-                                                                      std::uint16_t jpegSize);
+                                                                       std::uint16_t jpegSize);
 
 /// Image header for an encoder's screen (0..3).
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
@@ -78,8 +78,8 @@ struct InputEvent {
         TouchLongPress,
     };
     Kind kind{Kind::KeyPressed};
-    std::uint8_t index{0};    ///< key or encoder index
-    std::int16_t value{0};    ///< encoder delta or touch x-coordinate
+    std::uint8_t index{0}; ///< key or encoder index
+    std::int16_t value{0}; ///< encoder delta or touch x-coordinate
 };
 
 [[nodiscard]] std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame);

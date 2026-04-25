@@ -84,7 +84,7 @@ TEST_CASE("akp05 parser rejects out-of-range encoder ids", "[akp05][protocol]") 
 
 TEST_CASE("akp05 parser decodes a touch tap with x coordinate", "[akp05][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x30;  // tap
+    frame[9] = 0x30; // tap
     frame[10] = 0x01;
     frame[11] = 0x40; // 0x0140 = 320
     auto const ev = parseInputReport(frame);

@@ -24,19 +24,19 @@ inline constexpr std::uint16_t VendorId = 0x0300;
 inline constexpr std::uint16_t ProductId = 0x3001;
 
 // Geometry.
-inline constexpr std::uint8_t KeyCount = 6;      // 2 rows × 3 cols
-inline constexpr std::uint8_t EncoderCount = 1;  // one knob
+inline constexpr std::uint8_t KeyCount = 6;     // 2 rows × 3 cols
+inline constexpr std::uint8_t EncoderCount = 1; // one knob
 inline constexpr std::uint16_t KeyWidthPx = 72;
 inline constexpr std::uint16_t KeyHeightPx = 72;
 
 inline constexpr std::size_t PacketSize = 512;
 
 // Command words (same framing as AKP153 but PNG-typed image command).
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; // "CRT"
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};  // "LIG"
+inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54};   // "CRT"
+inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};    // "LIG"
 inline constexpr std::array<std::uint8_t, 3> CmdImagePng{0x50, 0x4e, 0x47}; // "PNG"
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};   // "STP"
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};  // "CLE"
+inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};     // "STP"
+inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};    // "CLE"
 
 /// Build the zero-padded 512-byte header for a command word.
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
@@ -66,8 +66,8 @@ struct InputEvent {
         EncoderReleased,
     };
     Kind kind{Kind::KeyPressed};
-    std::uint8_t index{0};  ///< 1-based key index, or encoder index for encoder events
-    std::int8_t delta{0};   ///< encoder rotation; +1 = CW, -1 = CCW, 0 otherwise
+    std::uint8_t index{0}; ///< 1-based key index, or encoder index for encoder events
+    std::int8_t delta{0};  ///< encoder rotation; +1 = CW, -1 = CCW, 0 otherwise
 };
 
 /// Parse a raw input report. Returns std::nullopt for ACK frames and

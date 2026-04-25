@@ -23,8 +23,7 @@ TEST_CASE("proprietary keyboard keycode packet is big-endian", "[proprietary][pr
     REQUIRE(pkt[6] == 0xcd);
 }
 
-TEST_CASE("proprietary keyboard static RGB packet carries zone+color",
-          "[proprietary][protocol]") {
+TEST_CASE("proprietary keyboard static RGB packet carries zone+color", "[proprietary][protocol]") {
     auto const pkt = buildSetRgbStatic(ZoneKeys, 0xaa, 0xbb, 0xcc);
     REQUIRE(pkt[1] == CmdSetRgbStatic);
     REQUIRE(pkt[2] == ZoneKeys);
@@ -48,8 +47,7 @@ TEST_CASE("proprietary keyboard brightness clamps to 100", "[proprietary][protoc
     REQUIRE(pkt[2] == 100);
 }
 
-TEST_CASE("proprietary keyboard layer command clamps to MaxLayers-1",
-          "[proprietary][protocol]") {
+TEST_CASE("proprietary keyboard layer command clamps to MaxLayers-1", "[proprietary][protocol]") {
     auto const pkt = buildSetLayer(10);
     REQUIRE(pkt[1] == CmdSetLayer);
     REQUIRE(pkt[2] == MaxLayers - 1);
