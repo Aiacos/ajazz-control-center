@@ -201,9 +201,16 @@ class ProprietaryKeyboard final : public IDevice,
                                   public IRgbCapable,
                                   public IFirmwareCapable {
 public:
+    /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
+        : ProprietaryKeyboard(std::move(descriptor),
+                              id,
+                              makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /** Test constructor — accepts an injected transport (DI for unit tests). */
+    ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     // ---- IDevice ------------------------------------------------------------
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {

@@ -275,8 +275,14 @@ using namespace ajazz::core;
 class Akp05Device final : public IDevice, public IDisplayCapable, public IEncoderCapable {
 public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
+        : Akp05Device(std::move(descriptor),
+                      id,
+                      makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /// Test constructor with injected transport (COD-026).
+    Akp05Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {
         return m_descriptor;

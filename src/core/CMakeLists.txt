@@ -1,6 +1,12 @@
 add_library(
-    ajazz_core STATIC src/device_registry.cpp src/hid_transport.cpp src/event_bus.cpp
-                      src/profile.cpp src/logger.cpp src/hotplug_monitor.cpp
+    ajazz_core STATIC
+    src/device_registry.cpp
+    src/hid_transport.cpp
+    src/event_bus.cpp
+    src/profile.cpp
+    src/profile_io.cpp
+    src/logger.cpp
+    src/hotplug_monitor.cpp
 )
 
 add_library(ajazz::core ALIAS ajazz_core)

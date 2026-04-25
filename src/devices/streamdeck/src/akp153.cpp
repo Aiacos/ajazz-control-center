@@ -213,9 +213,17 @@ namespace {
  */
 class Akp153Device final : public IDevice, public IDisplayCapable, public IFirmwareCapable {
 public:
+    /// Production constructor: opens a real libhidapi transport for this device.
     Akp153Device(DeviceDescriptor descriptor, DeviceId id)
+        : Akp153Device(std::move(descriptor),
+                       id,
+                       makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /// Test constructor: accepts an injected transport (e.g. a fake) so unit
+    /// tests don't need libhidapi or a real device on the bus (COD-026).
+    Akp153Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     // ---- IDevice ------------------------------------------------------------
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {

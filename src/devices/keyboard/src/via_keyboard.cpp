@@ -53,9 +53,16 @@ class ViaKeyboard final : public IDevice,
                           public IRgbCapable,
                           public IFirmwareCapable {
 public:
+    /** Production constructor — creates a real HID transport. */
     ViaKeyboard(DeviceDescriptor descriptor, DeviceId id)
+        : ViaKeyboard(std::move(descriptor),
+                      id,
+                      makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /** Test constructor with injected transport (DI for unit tests). */
+    ViaKeyboard(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     // IDevice
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {

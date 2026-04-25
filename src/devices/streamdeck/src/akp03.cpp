@@ -210,8 +210,14 @@ public:
      * @param id         Runtime USB identifier of the specific device.
      */
     Akp03Device(DeviceDescriptor descriptor, DeviceId id)
+        : Akp03Device(std::move(descriptor),
+                      id,
+                      makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /// Test constructor with injected transport (COD-026).
+    Akp03Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     // ---- IDevice ------------------------------------------------------------
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {

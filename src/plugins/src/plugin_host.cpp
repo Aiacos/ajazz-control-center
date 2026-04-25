@@ -96,13 +96,24 @@ bool isSafePluginId(std::string_view id) {
 } // namespace
 
 void PluginHost::loadAll() {
-    std::lock_guard const lock(m_impl->mutex);
+    // Mutex hygiene (COD-004/005): hold the host mutex only for state copies.
+    // The Python interpreter and the filesystem are slow and can call back
+    // into PluginHost (plugins are users of the same library), so we must
+    // never hold m_impl->mutex while importing modules.
+    std::vector<std::filesystem::path> paths;
+    {
+        std::lock_guard const lock(m_impl->mutex);
+        paths = m_impl->searchPaths;
+    }
+
+    std::unordered_map<std::string, py::object> loaded;
+
     py::gil_scoped_acquire gil;
     try {
         auto sys = py::module_::import("sys");
         auto sysPath = sys.attr("path").cast<py::list>();
 
-        for (auto const& path : m_impl->searchPaths) {
+        for (auto const& path : paths) {
             std::error_code ec;
             auto const canon = std::filesystem::canonical(path, ec);
             if (ec || !std::filesystem::is_directory(canon)) {
@@ -140,7 +151,7 @@ void PluginHost::loadAll() {
                         AJAZZ_LOG_WARN("plugins", "plugin {} reports unsafe id; rejected", pkgName);
                         continue;
                     }
-                    m_impl->plugins.emplace(id, std::move(instance));
+                    loaded.emplace(id, std::move(instance));
                     AJAZZ_LOG_INFO("plugins", "loaded {} from {}", id, entry.path().string());
                 } catch (std::exception const& e) {
                     AJAZZ_LOG_ERROR("plugins", "failed to load {}: {}", pkgName, e.what());
@@ -150,14 +161,33 @@ void PluginHost::loadAll() {
     } catch (std::exception const& e) {
         AJAZZ_LOG_ERROR("plugins", "loadAll: {}", e.what());
     }
+
+    // Register all newly loaded plugins under the lock. This is fast:
+    // it's only py::object refcount bumps, no Python execution.
+    std::lock_guard const lock(m_impl->mutex);
+    for (auto& [id, instance] : loaded) {
+        m_impl->plugins.insert_or_assign(id, std::move(instance));
+    }
 }
 
 std::vector<PluginInfo> PluginHost::plugins() const {
-    std::lock_guard const lock(m_impl->mutex);
+    // Snapshot the registered py::objects under both the host lock AND the
+    // GIL: copying py::object increments a Python refcount, which requires
+    // the GIL. We then drop the host lock and continue under the GIL only
+    // — holding the host mutex while calling into Python could deadlock if
+    // a plugin signals back into the host on a different thread.
     py::gil_scoped_acquire gil;
+    std::vector<std::pair<std::string, py::object>> snapshot;
+    {
+        std::lock_guard const lock(m_impl->mutex);
+        snapshot.reserve(m_impl->plugins.size());
+        for (auto const& [id, obj] : m_impl->plugins) {
+            snapshot.emplace_back(id, obj); // py::object refcount bump
+        }
+    }
     std::vector<PluginInfo> out;
-    out.reserve(m_impl->plugins.size());
-    for (auto const& [id, obj] : m_impl->plugins) {
+    out.reserve(snapshot.size());
+    for (auto const& [id, obj] : snapshot) {
         PluginInfo info;
         info.id = id;
         info.name = py::hasattr(obj, "name") ? py::str(obj.attr("name")).cast<std::string>() : id;

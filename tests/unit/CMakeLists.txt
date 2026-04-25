@@ -7,6 +7,7 @@ add_executable(
     test_akp05_protocol.cpp
     test_proprietary_keyboard_protocol.cpp
     test_profile_serialization.cpp
+    test_profile_io.cpp
     test_event_bus.cpp
 )
 

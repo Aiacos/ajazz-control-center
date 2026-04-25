@@ -4,14 +4,17 @@
  * @brief QObject bridge for loading and saving device profiles from QML.
  *
  * ProfileController is exposed to QML as the `profileController` context
- * property. It mediates between the QML UI and the core profile I/O
- * functions (ajazz::core::profileToJson / app-layer reader).
+ * property. It mediates between the QML UI and the atomic core profile
+ * I/O layer (ajazz::core::readProfileFromDisk / writeProfileToDisk).
  *
- * @see Profile, Application
+ * @see Profile, ajazz::core::profile_io
  */
 #pragma once
 
+#include "ajazz/core/profile.hpp"
+
 #include <QObject>
+#include <QString>
 
 namespace ajazz::app {
 
@@ -19,9 +22,10 @@ namespace ajazz::app {
  * @class ProfileController
  * @brief QML-accessible controller for profile persistence.
  *
- * Provides two invokable slots and a signal that QML bindings can observe
- * to react when the active profile changes. The implementation is
- * currently a stub pending the full profile I/O pipeline.
+ * Provides two invokable slots (loadProfile / saveProfile) and three
+ * signals: profileChanged, loadFailed, saveFailed. QML bindings observe
+ * profileChanged() to refresh the visual editor; load/save failures
+ * surface a translated error string for an in-app toast.
  *
  * @note Not thread-safe; must be used on the Qt main thread.
  */
@@ -33,8 +37,9 @@ public:
     /**
      * @brief Load a profile from a JSON file and activate it.
      *
-     * Emits profileChanged() on success. The implementation is currently
-     * a stub; full JSON parsing is planned for a future milestone.
+     * Emits profileChanged() on success. On failure emits loadFailed() with
+     * a human-readable error message and leaves the in-memory profile
+     * untouched.
      *
      * @param path Absolute file system path to the `.json` profile file.
      * @invokable Callable from QML as `profileController.loadProfile(path)`.
@@ -42,10 +47,11 @@ public:
     Q_INVOKABLE void loadProfile(QString const& path);
 
     /**
-     * @brief Serialise the current profile and write it to a file.
+     * @brief Atomically serialise the current profile to disk.
      *
-     * Uses ajazz::core::profileToJson() for serialisation. The implementation
-     * is currently a stub.
+     * Uses ajazz::core::writeProfileToDisk() which performs a tmpfile +
+     * fsync + rename sequence so the destination is never partially
+     * written.
      *
      * @param path Absolute file system path for the output `.json` file.
      * @invokable Callable from QML as `profileController.saveProfile(path)`.
@@ -61,6 +67,31 @@ signals:
      * so the UI can refresh key images and labels.
      */
     void profileChanged();
+
+    /**
+     * @signal loadFailed
+     * @brief A profile load operation failed; UI should toast the message.
+     * @param message Human-readable, possibly developer-facing error string.
+     */
+    void loadFailed(QString message);
+
+    /**
+     * @signal saveFailed
+     * @brief A profile save operation failed.
+     * @param message Human-readable error string.
+     */
+    void saveFailed(QString message);
+
+    /**
+     * @signal profileSaved
+     * @brief Emitted after a successful save. UI may use it for toast/auto-close.
+     * @param path Path that was just written.
+     */
+    void profileSaved(QString path);
+
+private:
+    ajazz::core::Profile m_profile{};
+    QString m_path;
 };
 
 } // namespace ajazz::app

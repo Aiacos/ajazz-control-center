@@ -96,9 +96,16 @@ makeEnvelope(std::uint8_t cmd, std::uint8_t sub, std::span<std::uint8_t const> p
  */
 class AjSeriesMouse final : public IDevice, public IMouseCapable, public IRgbCapable {
 public:
+    /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
+        : AjSeriesMouse(std::move(descriptor),
+                        id,
+                        makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+
+    /** Test constructor with injected transport (DI for unit tests). */
+    AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
         : m_descriptor(std::move(descriptor)), m_id(std::move(id)),
-          m_transport(makeHidTransport(m_id.vendorId, m_id.productId, m_id.serial)) {}
+          m_transport(std::move(transport)) {}
 
     [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {
         return m_descriptor;

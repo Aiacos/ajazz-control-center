@@ -13,7 +13,10 @@
 
 #include <array>
 #include <atomic>
+#include <cstdint>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 
 // hidapi's top-level CMake target exports its headers without the "hidapi/"
 // prefix (this matches Debian's /usr/include/hidapi symlink and the upstream
@@ -50,7 +53,11 @@ public:
         if (m_handle) {
             return;
         }
-        std::wstring const wserial(m_serial.begin(), m_serial.end());
+        // libhidapi takes a wchar_t* serial; convert from UTF-8 -> UTF-32/UTF-16
+        // properly so non-ASCII serials (rare but possible on some firmwares)
+        // round-trip correctly. The naive char->wchar_t copy was wrong: it
+        // truncated multi-byte sequences and produced unmatched filters.
+        std::wstring const wserial = utf8ToWide(m_serial);
         m_handle = ::hid_open(m_vid, m_pid, m_serial.empty() ? nullptr : wserial.c_str());
         if (!m_handle) {
             throw std::runtime_error("hid_open failed");
@@ -131,6 +138,54 @@ private:
         }
     }
 
+    /**
+     * @brief Convert a UTF-8 string to wstring as expected by libhidapi.
+     *
+     * On systems with 4-byte wchar_t (Linux, macOS) decodes UTF-8 to UTF-32.
+     * On Windows (2-byte wchar_t) decodes UTF-8 to UTF-16 with surrogate
+     * pairs for code points above the BMP. Invalid bytes are replaced by
+     * U+FFFD.
+     */
+    static std::wstring utf8ToWide(std::string_view in) {
+        std::wstring out;
+        out.reserve(in.size());
+        std::size_t i = 0;
+        while (i < in.size()) {
+            auto b0 = static_cast<unsigned char>(in[i]);
+            std::uint32_t cp = 0xFFFD;
+            std::size_t step = 1;
+            if (b0 < 0x80) {
+                cp = b0;
+            } else if ((b0 & 0xE0) == 0xC0 && i + 1 < in.size()) {
+                cp = ((b0 & 0x1F) << 6) | (static_cast<unsigned char>(in[i + 1]) & 0x3F);
+                step = 2;
+            } else if ((b0 & 0xF0) == 0xE0 && i + 2 < in.size()) {
+                cp = ((b0 & 0x0F) << 12) | ((static_cast<unsigned char>(in[i + 1]) & 0x3F) << 6) |
+                     (static_cast<unsigned char>(in[i + 2]) & 0x3F);
+                step = 3;
+            } else if ((b0 & 0xF8) == 0xF0 && i + 3 < in.size()) {
+                cp = ((b0 & 0x07) << 18) | ((static_cast<unsigned char>(in[i + 1]) & 0x3F) << 12) |
+                     ((static_cast<unsigned char>(in[i + 2]) & 0x3F) << 6) |
+                     (static_cast<unsigned char>(in[i + 3]) & 0x3F);
+                step = 4;
+            }
+            if constexpr (sizeof(wchar_t) >= 4) {
+                out.push_back(static_cast<wchar_t>(cp));
+            } else {
+                if (cp <= 0xFFFF) {
+                    out.push_back(static_cast<wchar_t>(cp));
+                } else {
+                    // UTF-16 surrogate pair.
+                    cp -= 0x10000;
+                    out.push_back(static_cast<wchar_t>(0xD800 | (cp >> 10)));
+                    out.push_back(static_cast<wchar_t>(0xDC00 | (cp & 0x3FF)));
+                }
+            }
+            i += step;
+        }
+        return out;
+    }
+
     std::uint16_t m_vid{0};          ///< USB Vendor ID.
     std::uint16_t m_pid{0};          ///< USB Product ID.
     std::string m_serial;            ///< Serial number filter; empty = first match.
@@ -141,16 +196,53 @@ private:
     std::atomic<std::uint64_t> m_errors{0};
 };
 
-/// Process-wide hidapi initialisation reference count.
-std::atomic<int> gInitCount{0};
+/**
+ * @brief Process-wide hidapi init/exit lifetime guard.
+ *
+ * libhidapi requires `hid_init()` to be balanced by `hid_exit()`. We model
+ * that with a strict reference-count: the first transport created bumps the
+ * count to 1 and calls hid_init(); when the last transport is destroyed the
+ * count drops to 0 and hid_exit() runs. A static instance ensures hid_exit()
+ * runs even if the user forgets to release transports before main() returns.
+ */
+class HidLibraryGuard {
+public:
+    /// Increment refcount; call hid_init on the 0->1 transition.
+    void acquire() {
+        if (m_count.fetch_add(1, std::memory_order_acq_rel) == 0) {
+            if (::hid_init() != 0) {
+                m_count.fetch_sub(1, std::memory_order_acq_rel);
+                throw std::runtime_error("hid_init failed");
+            }
+            AJAZZ_LOG_INFO("hid", "hidapi initialised");
+        }
+    }
+    /// Decrement refcount; call hid_exit on the 1->0 transition.
+    void release() noexcept {
+        if (m_count.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+            ::hid_exit();
+            AJAZZ_LOG_INFO("hid", "hidapi shut down");
+        }
+    }
+
+private:
+    std::atomic<int> m_count{0};
+};
+
+/// Singleton guard; lifetime tied to the process.
+HidLibraryGuard& hidLibrary() {
+    static HidLibraryGuard g;
+    return g;
+}
 
 } // namespace
 
 /**
  * @brief Instantiate an HID transport, initialising hidapi on first call.
  *
- * Uses an atomic reference count (gInitCount) to call hid_init() exactly
- * once per process lifetime regardless of how many transports are created.
+ * Uses HidLibraryGuard's reference count to balance hid_init() and hid_exit()
+ * across the process lifetime. The transport's destructor releases the
+ * reference, so hid_exit() runs once the last transport is gone.
  *
  * @param vid    USB Vendor ID.
  * @param pid    USB Product ID.
@@ -158,10 +250,17 @@ std::atomic<int> gInitCount{0};
  * @return Closed TransportPtr; call open() before I/O.
  */
 TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial) {
-    if (gInitCount.fetch_add(1) == 0) {
-        ::hid_init();
-    }
-    return std::make_unique<HidTransport>(vid, pid, std::move(serial));
+    /**
+     * @brief Decorator that holds a HidLibraryGuard reference for the
+     *        transport's lifetime, balancing hid_init / hid_exit.
+     */
+    class GuardedHidTransport final : public HidTransport {
+    public:
+        using HidTransport::HidTransport;
+        ~GuardedHidTransport() override { hidLibrary().release(); }
+    };
+    hidLibrary().acquire();
+    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial));
 }
 
 } // namespace ajazz::core

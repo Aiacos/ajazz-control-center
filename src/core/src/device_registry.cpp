@@ -52,16 +52,27 @@ std::vector<DeviceDescriptor> DeviceRegistry::enumerate() const {
 }
 
 DevicePtr DeviceRegistry::open(DeviceId const& id) const {
-    std::lock_guard const lock(m_mutex);
-    auto const it = std::ranges::find_if(m_entries, [&](Entry const& e) {
-        return e.descriptor.vendorId == id.vendorId && e.descriptor.productId == id.productId;
-    });
-    if (it == m_entries.end()) {
-        AJAZZ_LOG_WARN(
-            "registry", "no backend for VID={:04x} PID={:04x}", id.vendorId, id.productId);
-        return nullptr;
+    // Mutex hygiene (COD-004/005): never invoke user code (the factory) while
+    // holding the registry mutex. Copy the descriptor + factory out under the
+    // lock, then release before constructing the device. Factories can run
+    // arbitrary I/O (HID open, hidraw ioctls) and must not block other
+    // registry operations.
+    DeviceDescriptor descriptor;
+    DeviceFactory factory;
+    {
+        std::lock_guard const lock(m_mutex);
+        auto const it = std::ranges::find_if(m_entries, [&](Entry const& e) {
+            return e.descriptor.vendorId == id.vendorId && e.descriptor.productId == id.productId;
+        });
+        if (it == m_entries.end()) {
+            AJAZZ_LOG_WARN(
+                "registry", "no backend for VID={:04x} PID={:04x}", id.vendorId, id.productId);
+            return nullptr;
+        }
+        descriptor = it->descriptor;
+        factory = it->factory;
     }
-    return it->factory(it->descriptor, id);
+    return factory(descriptor, id);
 }
 
 } // namespace ajazz::core
