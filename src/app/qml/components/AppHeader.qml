@@ -26,15 +26,36 @@ Rectangle {
         anchors.rightMargin: Theme.spacingLg
         spacing: Theme.spacingLg
 
-        // Product mark — wordmark image (banner) followed by the product name.
-        // The wordmark is shipped at qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png;
-        // hidden gracefully when the override branding directory ships no logo.
+        // Product mark — square app icon (the same artwork used in the README and the
+        // OS tray/installer) followed by either the wordmark banner or the product name.
+        // Keeping the app icon as the leading element ensures the in-app system bar shows
+        // the same brand mark users see at install time and on the desktop / dock.
+        Image {
+            id: appMark
+            source: branding ? branding.appIconUrl
+                             : "qrc:/qt/qml/AjazzControlCenter/branding/app.svg"
+            Layout.preferredHeight: 32
+            Layout.preferredWidth: 32
+            sourceSize.width: 64    // Render at 2x for crisp scaling on HiDPI displays.
+            sourceSize.height: 64
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            mipmap: true
+            asynchronous: true
+            cache: true
+            Accessible.role: Accessible.Graphic
+            Accessible.name: branding ? branding.productName + qsTr(" application icon")
+                                      : qsTr("AJAZZ Control Center application icon")
+        }
+
+        // Optional wordmark banner shown next to the app icon when the integrator ships
+        // one. Hidden gracefully when the override branding directory ships no logo.
         Image {
             id: brandLogo
             source: "qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png"
-            // Constrain to header height while preserving the 3:1 wordmark aspect.
-            Layout.preferredHeight: 32
-            Layout.preferredWidth: status === Image.Ready ? (32 * sourceSize.width / Math.max(1, sourceSize.height)) : 0
+            // Constrain to header height while preserving the wordmark's native aspect.
+            Layout.preferredHeight: 28
+            Layout.preferredWidth: status === Image.Ready ? (28 * sourceSize.width / Math.max(1, sourceSize.height)) : 0
             fillMode: Image.PreserveAspectFit
             smooth: true
             mipmap: true
@@ -52,7 +73,8 @@ Rectangle {
             font.bold: true
             // Hide the redundant product-name text when the wordmark image is rendered,
             // since the banner already contains the product name. Falls back to text
-            // for branded builds that ship a non-wordmark logo.
+            // for branded builds that ship a non-wordmark logo (the square app icon
+            // alone is not self-explanatory).
             visible: !brandLogo.visible
             Accessible.role: Accessible.StaticText
             Accessible.name: text
