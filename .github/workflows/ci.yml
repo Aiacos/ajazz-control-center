@@ -23,6 +23,10 @@ jobs:
   # ---------------------------------------------------------------------------
   build:
     name: Build ${{ matrix.os }} · ${{ matrix.build_type }}
+    # Hard cap so a stuck Qt install or hidapi clone can't burn the action
+    # budget. Build matrix empirically finishes in <15 min; 45 min covers
+    # transient slow runners and Qt cache misses.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -98,6 +102,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: build
     if: github.event_name == 'push'
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Install deps
@@ -150,6 +155,7 @@ jobs:
     name: Sanitizers · ${{ matrix.flavour }}
     runs-on: ubuntu-24.04
     needs: build
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

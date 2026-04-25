@@ -27,6 +27,7 @@ jobs:
   pre-commit:
     name: pre-commit (all hooks)
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write      # needed to push auto-fix commits
       pull-requests: write
@@ -96,6 +97,7 @@ jobs:
   clang-tidy:
     name: clang-tidy (static analysis)
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Install toolchain
@@ -149,6 +151,7 @@ jobs:
   docs:
     name: docs (markdown + links)
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Set up Python

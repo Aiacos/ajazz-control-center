@@ -33,6 +33,7 @@ jobs:
   linux:
     name: Linux · deb + rpm
     runs-on: ubuntu-24.04
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Install deps
@@ -67,6 +68,7 @@ jobs:
   windows:
     name: Windows · MSI + ZIP
     runs-on: windows-2022
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c  # v1.13.0
@@ -94,6 +96,7 @@ jobs:
   macos:
     name: macOS · Universal DMG
     runs-on: macos-14
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Install deps
@@ -126,6 +129,7 @@ jobs:
     name: Publish nightly pre-release
     needs: [ linux, windows, macos ]
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
         with: { fetch-depth: 0 }
