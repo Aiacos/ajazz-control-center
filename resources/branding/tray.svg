@@ -1,20 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AJAZZ Control Center system tray icon.
-  Monochromatic, designed to render correctly against light and dark
-  taskbars/menubars. The shape echoes the 3x3 macropad grid used by the
-  app icon so the brand stays recognisable at 16-22 px.
+  Ajazz Control Center system tray icon.
+  Monochromatic ("currentColor"), designed to render correctly against
+  both light and dark taskbars/menubars. The mark echoes the AJAZZ
+  triangular "A" monogram used by the application icon so the brand stays
+  recognisable down to 16 px. Clean-room redesign by Aiacos — no vendor
+  artwork is reused or traced.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
-  <g fill="currentColor">
-    <rect x="2"  y="2"  width="5" height="5" rx="1"/>
-    <rect x="8.5" y="2"  width="5" height="5" rx="1"/>
-    <rect x="15" y="2"  width="5" height="5" rx="1"/>
-    <rect x="2"  y="8.5" width="5" height="5" rx="1"/>
-    <rect x="8.5" y="8.5" width="5" height="5" rx="1"/>
-    <rect x="15" y="8.5" width="5" height="5" rx="1"/>
-    <rect x="2"  y="15" width="5" height="5" rx="1"/>
-    <rect x="8.5" y="15" width="5" height="5" rx="1"/>
-    <rect x="15" y="15" width="5" height="5" rx="1"/>
+  <g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Outer A triangle. -->
+    <path d="M 11 2.5 L 19.5 18.5 L 2.5 18.5 Z"/>
+    <!-- Inner droplet forming the counter of the A. -->
+    <path d="M 11 7
+             C 13.6 10.4 14.2 13.2 12.6 15.4
+             C 11.0 17.4 8.6 16.6 8.4 14.2
+             C 8.2 11.6 9.6 9.2 11 7 Z"/>
   </g>
 </svg>

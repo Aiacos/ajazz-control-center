@@ -1,21 +1,41 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Ajazz Control Center application icon.
+
+  Design notes (clean-room redesign — original artwork by Aiacos):
+    * Inspired by the AJAZZ visual identity: a triangular "A" monogram with
+      an inner droplet / loop element, rendered in the brand red on a dark
+      square. Geometry is original, drawn from scratch from public memory of
+      the brand's silhouette; no vendor artwork is reused or traced.
+    * 128x128 viewBox, single accent colour (#E63946) so the icon scales
+      cleanly down to 16px without losing identity.
+    * Rounded square background (#0F1014 -> #1B1D24 gradient) keeps parity
+      with the rest of the dark Material theme used in the QML app.
+-->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
   <defs>
     <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%"  stop-color="#1f1f27"/>
-      <stop offset="100%" stop-color="#0a0a0f"/>
+      <stop offset="0%"  stop-color="#1B1D24"/>
+      <stop offset="100%" stop-color="#0A0B10"/>
     </linearGradient>
   </defs>
-  <rect x="2" y="2" width="124" height="124" rx="22" fill="url(#bg)"/>
-  <g transform="translate(20 20)">
-    <rect x="0"  y="0"  width="24" height="24" rx="4" fill="#ff5722"/>
-    <rect x="32" y="0"  width="24" height="24" rx="4" fill="#ffa000"/>
-    <rect x="64" y="0"  width="24" height="24" rx="4" fill="#ffca28"/>
-    <rect x="0"  y="32" width="24" height="24" rx="4" fill="#26c6da"/>
-    <rect x="32" y="32" width="24" height="24" rx="4" fill="#66bb6a"/>
-    <rect x="64" y="32" width="24" height="24" rx="4" fill="#7e57c2"/>
-    <rect x="0"  y="64" width="24" height="24" rx="4" fill="#ef5350"/>
-    <rect x="32" y="64" width="24" height="24" rx="4" fill="#42a5f5"/>
-    <rect x="64" y="64" width="24" height="24" rx="4" fill="#ec407a"/>
+
+  <!-- Rounded dark background. -->
+  <rect x="2" y="2" width="124" height="124" rx="24" fill="url(#bg)"/>
+
+  <!-- Monogram "A": outer triangle + inner droplet, brand red. -->
+  <g fill="none" stroke="#E63946" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Outer A triangle (rounded apex, open base for stability at small sizes). -->
+    <path d="M 64 22
+             L 102 100
+             L 26  100
+             Z"
+          stroke-width="7"/>
+    <!-- Inner droplet / loop forming the counter of the A. -->
+    <path d="M 64 44
+             C 76 60 80 76 72 88
+             C 64 100 52 96 50 84
+             C 48 70 56 56 64 44 Z"
+          stroke-width="5"/>
   </g>
 </svg>
