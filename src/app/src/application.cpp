@@ -35,8 +35,21 @@ Application::Application(QObject* parent)
       m_hotplug(std::make_unique<core::HotplugMonitor>()) {}
 
 Application::~Application() {
+    // Defensive shutdown ordering — the hot-plug worker queues
+    // refresh() lambdas to m_deviceModel via Qt::QueuedConnection. Without
+    // care, an in-flight queued event can fire during member destruction
+    // and dereference an already-destroyed m_deviceModel.
     if (m_hotplug) {
+        // 1. Block further callbacks before joining; an event firing after
+        //    setCallback({}) returns is impossible by HotplugMonitor's contract.
+        m_hotplug->setCallback({});
+        // 2. Join the polling thread; no new events can be posted after this.
         m_hotplug->stop();
+    }
+    // 3. Drain events already in the main-thread queue that target
+    //    m_deviceModel, so they cannot run after its unique_ptr destructor.
+    if (m_deviceModel) {
+        QCoreApplication::removePostedEvents(m_deviceModel.get());
     }
 }
 
