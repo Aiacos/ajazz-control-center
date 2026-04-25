@@ -159,8 +159,8 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(CPACK_GENERATOR "WIX;ZIP")
     set(CPACK_WIX_UPGRADE_GUID "9b7e8f2c-5d4a-4e6f-8b1c-3a9e7d2f4c8b")
     set(CPACK_WIX_PRODUCT_ICON "${CMAKE_SOURCE_DIR}/resources/icons/app.ico")
-    # WiX rejects license files without a .txt or .rtf extension. Stage a copy of
-    # ./LICENSE under the build dir as LICENSE.txt and point CPack at it.
+    # WiX rejects license files without a .txt or .rtf extension. Stage a copy of ./LICENSE under
+    # the build dir as LICENSE.txt and point CPack at it.
     set(_ajazz_wix_license "${CMAKE_BINARY_DIR}/LICENSE.txt")
     configure_file("${CMAKE_SOURCE_DIR}/LICENSE" "${_ajazz_wix_license}" COPYONLY)
     set(CPACK_RESOURCE_FILE_LICENSE "${_ajazz_wix_license}")
