@@ -14,6 +14,12 @@ on:
       - '.github/workflows/wiki.yml'
   workflow_dispatch:
 
+# Cancel any in-flight wiki sync when a newer one arrives so the GitHub
+# Wiki always reflects the most recent push instead of an older queued run.
+concurrency:
+  group: wiki-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
@@ -22,17 +28,52 @@ jobs:
     name: Sync docs/wiki → GitHub Wiki
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8  # v5.0.0
       - name: Check wiki availability
         id: check
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -euo pipefail
           has_wiki=$(gh api "repos/${{ github.repository }}" --jq '.has_wiki')
           echo "has_wiki=$has_wiki" >> "$GITHUB_OUTPUT"
           if [ "$has_wiki" != "true" ]; then
             echo "::notice::Wiki is disabled for this repository (has_wiki=$has_wiki). Skipping sync. The wiki source remains available under docs/wiki/ in the repo."
+            echo "wiki_initialized=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          # has_wiki=true means the feature is enabled in repo settings, but
+          # the underlying *.wiki.git repo only materialises on GitHub once a
+          # human (or this workflow) creates the first page. Probe ls-remote
+          # so the next step knows whether to seed the wiki or just push.
+          if git ls-remote --quiet \
+              "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git" \
+              HEAD >/dev/null 2>&1; then
+            echo "wiki_initialized=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::Wiki feature is enabled but the .wiki.git repo is empty; the next step will seed it with docs/wiki/Home.md."
+            echo "wiki_initialized=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Seed empty wiki with Home.md
+        if: steps.check.outputs.has_wiki == 'true' && steps.check.outputs.wiki_initialized == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          cp docs/wiki/Home.md "$tmp/Home.md"
+          cd "$tmp"
+          git init -q -b master
+          git -c user.email="github-actions[bot]@users.noreply.github.com" \
+              -c user.name="github-actions[bot]" \
+              add Home.md
+          git -c user.email="github-actions[bot]@users.noreply.github.com" \
+              -c user.name="github-actions[bot]" \
+              commit -q -m "Initialize wiki from docs/wiki/Home.md"
+          git remote add origin \
+              "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.wiki.git"
+          git push -q -u origin master
 
       - name: Push wiki
         if: steps.check.outputs.has_wiki == 'true'
