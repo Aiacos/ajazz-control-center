@@ -16,6 +16,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <ios>
 #include <random>
@@ -181,6 +182,16 @@ void writeProfileToDisk(std::filesystem::path const& path, Profile const& profil
         if (!out) {
             throw ProfileIoError{"profile_io: cannot open temporary file " + tmp.string()};
         }
+        // Tighten permissions to user-only before writing payload: a Profile's
+        // `settingsJson` may carry plugin secrets (API tokens, refresh tokens)
+        // and the surrounding directory may be world-readable. permissions()
+        // is a no-op on Windows for POSIX bits but does not throw.
+        std::error_code permEc;
+        std::filesystem::permissions(tmp,
+                                     std::filesystem::perms::owner_read |
+                                         std::filesystem::perms::owner_write,
+                                     std::filesystem::perm_options::replace,
+                                     permEc); // best-effort; ignore failure on FS without modes
         out.write(json.data(), static_cast<std::streamsize>(json.size()));
         if (!out) {
             std::filesystem::remove(tmp, ec); // best-effort cleanup
