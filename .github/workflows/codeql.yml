@@ -11,6 +11,10 @@ on:
     # Weekly Monday at 06:17 UTC.
     - cron: '17 6 * * 1'
 
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   actions: read
   contents: read
