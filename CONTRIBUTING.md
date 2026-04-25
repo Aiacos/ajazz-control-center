@@ -2,6 +2,8 @@
 
 Thank you for your interest in improving AJAZZ Control Center. This document describes the conventions, branching model and review workflow for contributions of any kind — code, documentation, device captures, UI/UX, translations.
 
+> **Read this first:** [`GUIDELINES.md`](GUIDELINES.md) is the canonical reference for project-wide engineering rules — coding standards, the two-command build rule, branding, security, default UX expectations and more. This document focuses on the mechanical contribution flow.
+
 ## Code of conduct
 
 Be respectful, patient and constructive. Hardware reverse engineering is a collaborative, iterative effort: nobody owns a device family, and nobody is expected to know everything. Questions are always welcome.

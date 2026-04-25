@@ -185,7 +185,7 @@ All device protocol work follows a documented clean-room procedure (Wireshark + 
 
 ## Contributing
 
-Pull requests, bug reports and new device captures are very welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md) before you start.
+Pull requests, bug reports and new device captures are very welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md), [`GUIDELINES.md`](GUIDELINES.md) (project-wide engineering rules) and [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md) before you start.
 
 ## License
 

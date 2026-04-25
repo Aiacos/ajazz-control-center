@@ -1,0 +1,197 @@
+[
+  {
+    "title": "[Security/P1] Sandbox Python plugins in subprocesses with signed manifests (SEC-003)",
+    "labels": ["security", "P1", "plugins"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-003, Critical)\n\nPlugins currently run in-process with full host permissions. Any plugin can execute arbitrary code, read files, exfiltrate data, or call into device transports. The P0 batch (commit fe8d2cc) added a plugin-id whitelist + manifest validation regex as a temporary mitigation, but the structural fix is still required:\n\n- [ ] Move plugins out-of-process (subprocess + IPC, e.g. JSON over stdio or local AF_UNIX socket)\n- [ ] Define a capability manifest (`hid.write`, `network`, `fs.read:<path>`, …)\n- [ ] Require Ed25519-signed plugin bundles; embed publisher key + revocation list\n- [ ] Add unsigned-plugin warning UI (already promised by docs, see SEC-019)\n- [ ] Document IPC schema in docs/architecture/PLUGIN-SYSTEM.md\n\nReferences: SEC-003, SEC-004 (mitigated), SEC-005 (mitigated), SEC-019 (Low)."
+  },
+  {
+    "title": "[Security/P1] Bump pinned Qt to a fixed line and track Qt advisories (SEC-013)",
+    "labels": ["security", "P1", "dependencies"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-013, Medium)\n\nCI pins Qt 6.7.3, which public advisories list as affected by Qt XML / QtSvg vulnerabilities (CVE-2025-30348, CVE-2025-10728, CVE-2025-10729).\n\n- [ ] Upgrade pin to Qt 6.8.x (or latest LTS-track fixed release) in `.github/workflows/{ci,release,nightly,lint}.yml`\n- [ ] Verify the qmlcache GCC null-deref workaround in `src/app/CMakeLists.txt` is still needed\n- [ ] Add a CI step (or label-driven Dependabot config) that surfaces Qt CVE advisories"
+  },
+  {
+    "title": "[Security/P1] Pin third-party GitHub Actions and FetchContent to commit SHAs (SEC-016/017)",
+    "labels": ["security", "P2", "supply-chain"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-016 + SEC-017, Medium)\n\n- [ ] Replace `@v4`/`@v6` tag pins with full commit SHAs in every workflow under `.github/workflows/`\n- [ ] Add Dependabot config entry for `package-ecosystem: github-actions` rotation\n- [ ] Pin every `FetchContent_Declare(... GIT_TAG ...)` in `CMakeLists.txt` to a commit SHA\n- [ ] Add a CI check (or Renovate/dependabot) that fails when a tag is pinned"
+  },
+  {
+    "title": "[Security/P1] Add CodeQL, dependency review, and secret scanning workflows (SEC-022)",
+    "labels": ["security", "P2", "ci"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-022, Medium)\n\nNo code-scanning, dependency-review, or secret-detection workflow exists.\n\n- [ ] Add `.github/workflows/codeql.yml` (cpp + python)\n- [ ] Add `.github/workflows/dependency-review.yml` (PRs only)\n- [ ] Add `gitleaks` or trivy/trufflehog for secret scanning\n- [ ] Add SBOM generation (CycloneDX) on release artifacts (also covers SEC-021)"
+  },
+  {
+    "title": "[Security/P1] Restrict Flatpak --device permission to USB only (SEC-006)",
+    "labels": ["security", "P2", "packaging"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-006, Medium)\n\nThe Flatpak manifest grants `--device=all`. We only need USB HID access.\n\n- [ ] Replace `--device=all` with `--device=usb` (Flatpak 1.16+) in `packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml`\n- [ ] Document in `docs/guides/INSTALLING.md` why no extra permissions are requested\n- [ ] Test that hotplug + device IO still work under the narrowed sandbox"
+  },
+  {
+    "title": "[Security/P1] Notarize macOS DMG and code-sign Windows MSI (SEC-020)",
+    "labels": ["security", "P2", "release"],
+    "body": "Source: docs/analysis/security-audit.md (SEC-020, Low → high user impact)\n\nGatekeeper / SmartScreen block unsigned builds on first launch. This kills first-run conversion.\n\n- [ ] Provision Apple Developer ID certificate; add notarization step to release.yml (macos-dmg job)\n- [ ] Provision Windows Authenticode certificate; sign MSI + ZIP\n- [ ] Document the signing chain in docs/wiki/Release-Process.md\n- [ ] Once signed, also drop the SHA256SUMS file into the release notes (already shipping post-fe8d2cc)"
+  },
+  {
+    "title": "[Quality/P1] Atomic-or-mutex profile JSON loader with schema validation (COD-017, SEC-012)",
+    "labels": ["quality", "P1", "profiles"],
+    "body": "Source: docs/analysis/code-audit.md (COD-017, Medium) + docs/analysis/security-audit.md (SEC-012, Medium)\n\n`ProfileController::load()` ignores the path; `save()` is a no-op. There is no central validated profile-IO path.\n\n- [ ] Define a JSON Schema for profiles (`docs/schemas/profile.schema.json`)\n- [ ] Implement `core::ProfileIo::loadFromFile(path)` with bounded size, schema validation, canonical parsing\n- [ ] Implement atomic save (write-tmp + rename)\n- [ ] Wire `ProfileController` to use it; surface errors via a notification service\n- [ ] Add `tests/unit/test_profile_io.cpp` covering schema rejection, size cap, atomic save"
+  },
+  {
+    "title": "[Quality/P1] HID lifecycle: hid_init/hid_exit RAII + UTF-8 serial conversion (COD-007/008)",
+    "labels": ["quality", "P2", "core"],
+    "body": "Source: docs/analysis/code-audit.md\n\n- [ ] COD-007: Wrap `hid_init()`/`hid_exit()` in a process-wide RAII initializer; check return value (today it's silently ignored)\n- [ ] COD-008: Replace byte-by-byte `std::wstring` widening of HID serial numbers with proper UTF-8→UTF-16 conversion (Qt has `QString::fromUtf8` already)\n- [ ] Add unit test that round-trips a non-ASCII serial through the transport layer"
+  },
+  {
+    "title": "[Quality/P1] Mutex hygiene: don't hold registry/plugin-host lock across user code (COD-004/005/006)",
+    "labels": ["quality", "P1", "concurrency"],
+    "body": "Source: docs/analysis/code-audit.md\n\n- [ ] COD-004: Plugin host holds its mutex across Python dispatch — resolve target object under lock, copy, then release before calling Python\n- [ ] COD-005: Public plugin-host methods need `py::gil_scoped_acquire`. P0 commit fe8d2cc fixed `dispatch`, `loadAll`, `plugins`; double-check other entry points\n- [ ] COD-006: `DeviceRegistry::open()` holds the registry mutex during backend factory invocation — same pattern, copy descriptor and factory under lock then release\n- [ ] Document the locking discipline in `docs/architecture/THREADING.md` (also addresses COD-020)"
+  },
+  {
+    "title": "[Quality/P1] Replace TabBar parent.parent with model roles + Loader for sub-views (COD-019, COD-027, F-27, F-28)",
+    "labels": ["quality", "P2", "qml"],
+    "body": "Source: docs/analysis/code-audit.md + docs/analysis/ui-review.md\n\n- [ ] COD-019/F-27: Replace fragile `parent.parent.model` ancestor traversal in `DeviceList.qml`, `EncoderPanel.qml`, `KeyDesigner.qml` with `required property` model roles\n- [ ] F-28: Wrap `KeyDesigner/RgbPicker/EncoderPanel/MousePanel` in `Loader { active: tabs.currentIndex === N }` so only the visible tab is instantiated\n- [ ] COD-027: Add a clang-tidy `local` hook in `.pre-commit-config.yaml` (or remove the misleading comment)"
+  },
+  {
+    "title": "[Quality/P1] Capability-driven UI: drop hard-coded model:15 / 4 / 6 (F-08/09/10/22)",
+    "labels": ["quality", "P1", "qml", "device-capabilities"],
+    "body": "Source: docs/analysis/ui-review.md (F-08/09/10/22, High)\n\nQML hardcodes counts that should come from `device.capabilities.*`:\n\n- [ ] Expose `keyCount`, `gridColumns`, `encoderCount`, `dpiStageCount`, `availableTabs` via `DeviceModel`/`Capability` C++ struct\n- [ ] `KeyDesigner.qml` uses `model: device.capabilities.keyCount`\n- [ ] `EncoderPanel.qml` uses `model: device.capabilities.encoderCount`\n- [ ] `MousePanel.qml` driven by `dpiStageCount`\n- [ ] `ProfileEditor.qml` computes visible tabs from capabilities (F-22)\n- [ ] Tests in `tests/integration/` covering AKP03 (6 keys, 1 enc) vs AKP153 (15 keys) vs AKP05 (5 keys + touch)"
+  },
+  {
+    "title": "[UI/P0] Add Inspector pane for key configuration (F-07)",
+    "labels": ["ui", "P1", "feature"],
+    "body": "Source: docs/analysis/ui-review.md (F-07, High)\n\nThe right-side Inspector panel from the mockup is missing. Without it the user has no way to *configure* a selected key (action, icon, label, press behavior).\n\n- [ ] New file `src/app/qml/Inspector.qml`\n- [ ] Add as third pane in `ProfileEditor.qml` (RowLayout: DeviceList | Tabs | Inspector)\n- [ ] Bind to currently selected element from `KeyDesigner` / `EncoderPanel`\n- [ ] Form fields: Action type, Action params, Icon (file picker), Label, Long-press behavior\n- [ ] Connect to `ProfileController` save\n\nDepends on: F-08 (selection state) and Inspector requires F-26 (selected outline)."
+  },
+  {
+    "title": "[UI/P1] Build shared component library (Card, KeyCell, DeviceRow, Toast, EmptyState) (F-02, F-06, F-23, F-32)",
+    "labels": ["ui", "P1", "components"],
+    "body": "Source: docs/analysis/ui-review.md (F-02 Critical, F-06/23/32)\n\nNo shared QML components — every screen redefines rectangles, text styles, spacing.\n\n- [ ] Create `src/app/qml/components/`\n  - [ ] `Card.qml`\n  - [ ] `KeyCell.qml` (used by KeyDesigner)\n  - [ ] `EncoderCard.qml` (used by EncoderPanel)\n  - [ ] `DeviceRow.qml` (used by DeviceList)\n  - [ ] `FormField.qml`\n  - [ ] `ColorPicker.qml` (HSV wheel + hex + recent colors — also covers F-25)\n  - [ ] `EmptyState.qml`\n  - [ ] `Skeleton.qml`\n  - [ ] `Toast.qml` + `Banner.qml` (covers F-32)\n  - [ ] `PageHeader.qml`\n- [ ] Refactor existing screens to consume them\n- [ ] Add visual-regression smoke screenshots in `tests/ui/`"
+  },
+  {
+    "title": "[UI/P1] WCAG 2.1 AA contrast + keyboard navigation (F-03, F-04, F-34)",
+    "labels": ["ui", "P1", "accessibility"],
+    "body": "Source: docs/analysis/ui-review.md (F-03 Critical, F-04 High, F-34 Low)\n\n- [ ] F-03: 11px `#888` on `#1e1e23` is only 4.0:1 — bump to 12px and Theme.fgMuted (`#aaaaaa`) to reach 4.6:1\n- [ ] F-04: Replace `MouseArea` with `ItemDelegate`/`Button` in DeviceList/KeyDesigner/EncoderPanel; add `Accessible.role`/`name`/`description`; render 2 px focus ring with Theme.accent on activeFocus\n- [ ] F-34: Wrap every icon button in `ToolTip` with `Accessible.description`\n- [ ] Add ax-test job: `qmllint --resource Accessible.qml`-style check or visual screenshot diff"
+  },
+  {
+    "title": "[UI/P1] Header bar + profile picker + responsive sidebar (F-17, F-20, F-21)",
+    "labels": ["ui", "P1", "navigation"],
+    "body": "Source: docs/analysis/ui-review.md (F-17/20/21, Medium-High)\n\n- [ ] F-20: New `AppHeader.qml` with product mark, profile picker dropdown, search, settings, minimize-to-tray button\n- [ ] F-17: Set `minimumWidth: 900` on `Main.qml`; collapse sidebar to icons-only below 700 px (responsive)\n- [ ] F-21: `DeviceList.qml` uses `ListView.section` to group by family; new `SectionHeader.qml`"
+  },
+  {
+    "title": "[UI/P1] i18n sweep + responsive layouts (F-11, F-12, F-13, F-16)",
+    "labels": ["ui", "P2", "i18n", "polish"],
+    "body": "Source: docs/analysis/ui-review.md\n\n- [ ] F-11: Wrap RGB-effect names and polling-rate labels in `qsTr()`\n- [ ] F-12: Wrap `\"connected\"` / `\"offline\"` literals in DeviceList.qml in `qsTr()`\n- [ ] F-13: Replace off-grid spacings (10, 2) with `Theme.spacingSm/Xs` (already 4/8/12/16/24 in Theme.qml after fe8d2cc)\n- [ ] F-16: Make Key/Encoder grids responsive: `anchors.fill` + `columns: Math.max(1, Math.floor(width/120))`\n- [ ] Add Italian + English translation files in `src/app/i18n/`"
+  },
+  {
+    "title": "[UI/P2] Light theme + theme-aware hover lightening (F-24)",
+    "labels": ["ui", "P2", "branding"],
+    "body": "Source: docs/analysis/ui-review.md (F-24, Medium)\n\n- [ ] Ship `resources/branding/theme-light.json`\n- [ ] In `Theme.qml` (singleton from fe8d2cc), gate the hover lightening on luminance — light backgrounds need darker hover, dark backgrounds lighter hover\n- [ ] Add a Settings → Appearance toggle (Auto / Light / Dark)\n- [ ] Wire `BrandingService::loadThemeFile()` to the toggle"
+  },
+  {
+    "title": "[UI/P2] Sticky Apply/Revert footer + Restore-defaults + Undo/Redo (F-19, F-29, F-30)",
+    "labels": ["ui", "P2", "feature"],
+    "body": "Source: docs/analysis/ui-review.md\n\n- [ ] F-19: Build `PrimaryButton`/`SecondaryButton`; add sticky footer with Apply / Revert in `ProfileEditor.qml`\n- [ ] F-29: 'Restore defaults' button on Inspector + each panel\n- [ ] F-30: Bind Ctrl+Z / Ctrl+Shift+Z to a `ProfileController` history (push on every mutator)\n- [ ] User-visible toast on save success/failure (depends on `Toast.qml` in F-02 issue)"
+  },
+  {
+    "title": "[UI/P2] Tray submenu (Quit / Pause / Switch profile) + first-launch tour (F-31, F-33)",
+    "labels": ["ui", "P3", "polish"],
+    "body": "Source: docs/analysis/ui-review.md\n\n- [ ] F-33: Extend `TrayController` with Quit, Pause, and a Switch-profile submenu populated from `ProfileController`\n- [ ] F-31: Three-step welcome dialog on first launch (devices → theme → profiles)"
+  },
+  {
+    "title": "[Feature/P0] Multi-action engine: per-key action chains with delays",
+    "labels": ["feature", "P1", "actions"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nElgato Stream Deck's flagship feature is the [Multi-Action](https://help.elgato.com/hc/en-us/articles/360027960912-Elgato-Stream-Deck-Multi-Actions) — a key fires a chain of steps with per-step delays. ajazz today has a single action slot per key.\n\n- [ ] Extend `core::Action` to a sum type: `KeyPress | Sleep(ms) | RunCommand | OpenUrl | …`\n- [ ] `core::ActionChain { std::vector<Action> steps; }`\n- [ ] `profile.hpp` stores `ActionChain` per key/encoder rotation/encoder press/touch-strip\n- [ ] Inspector UI to add/remove/reorder steps (depends on F-07 issue)\n- [ ] Engine executes the chain on `KeyPress` event\n- [ ] Cancel-on-release for held keys; fire-and-forget for tap"
+  },
+  {
+    "title": "[Feature/P0] Profile auto-switch on focused application",
+    "labels": ["feature", "P1", "profiles"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nEvery competitor (Stream Deck Smart Profiles, iCUE per-game, Armoury Crate Scenario, G HUB game profiles) auto-switches when an app gains focus.\n\n- [ ] New `core::FocusWatcher` with per-OS backends:\n  - Linux: X11 `_NET_ACTIVE_WINDOW` + Wayland portal (xdg-desktop-portal `ActiveWindow`)\n  - macOS: `NSWorkspace.notificationCenter` `didActivateApplicationNotification`\n  - Windows: `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`\n- [ ] `Profile` adds `autoSwitch: { processName: \"...\", windowTitleRegex: \"...\" }`\n- [ ] Settings UI: per-profile binding\n- [ ] Privacy: focus events stay local; no telemetry"
+  },
+  {
+    "title": "[Feature/P0] Live per-key remap editor for VIA + proprietary keyboards",
+    "labels": ["feature", "P1", "keyboard"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nVial offers live remap with no flash; this is the single feature that justifies installing a keyboard utility.\n\n- [ ] Extend `via_keyboard.cpp` with `getKeymap(layer)` / `setKeymap(layer, row, col, keycode)` over the VIA protocol\n- [ ] Same for `proprietary_keyboard.cpp` (vendor-specific protocol)\n- [ ] New `KeymapEditor.qml` with layer tabs and a graphical key picker\n- [ ] Live preview: change is sent to the keyboard within 100 ms of click\n- [ ] Layer combos / dual-function keys"
+  },
+  {
+    "title": "[Feature/P0] Folders / nested folders on AKP devices",
+    "labels": ["feature", "P1", "akp"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nWithout folders the AKP153 15-key ceiling is a hard limit.\n\n- [ ] `core::ProfilePage { std::vector<KeyBinding> keys; std::vector<std::shared_ptr<ProfilePage>> children; }`\n- [ ] Action type `OpenFolder(targetPageId)` and `BackToParent`\n- [ ] Navigation stack in the runtime engine\n- [ ] Inspector lets the user assign a key as a folder\n- [ ] Visual indicator (corner glyph) on folder keys"
+  },
+  {
+    "title": "[Feature/P0] Encoder / dial action bindings",
+    "labels": ["feature", "P1", "akp"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nAKP03/AKP05 already emit encoder events but the action engine ignores them.\n\n- [ ] `Profile` adds `EncoderBinding { Action onCw; Action onCcw; Action onPress; std::vector<Action> stops; }`\n- [ ] Wire `device::EncoderRotated`/`EncoderPressed` to `ActionEngine::dispatch`\n- [ ] Inspector binds CW / CCW / Press separately\n- [ ] Per-encoder LCD label on AKP devices that support it"
+  },
+  {
+    "title": "[Feature/P0] Macro recorder with editable timing",
+    "labels": ["feature", "P1", "macros"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nTable-stakes on every gaming peripheral.\n\n- [ ] OS-level keyboard hook (Linux uinput, macOS CGEventTap, Windows SetWindowsHookEx)\n- [ ] `MacroRecorder` records `{key, timestamp_ns}` events\n- [ ] Editor UI (timeline) to delete events / change delays\n- [ ] Macro stored as `ActionChain` of KeyPress + Sleep entries (reuses Multi-Action engine)\n- [ ] Privacy: recording is opt-in per session, never auto-starts"
+  },
+  {
+    "title": "[Feature/P0] DPI-stage editor with per-stage colour for AJ-series mice",
+    "labels": ["feature", "P1", "mouse"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nThe protocol already supports it; the UI is missing.\n\n- [ ] Extend `aj_series.cpp` with `setDpiStage(idx, dpi, color)` + `getDpiStages()`\n- [ ] Replace `MousePanel.qml`'s static `Repeater {model:6}` (F-10) with a stage list driven by capabilities\n- [ ] Per-stage `ColorPicker.qml` (component from F-02 issue)\n- [ ] Lift-off distance + sniper button toggles (P1 quick-win)\n- [ ] Polling rate / debounce / NKRO toggles for keyboards in same panel pattern"
+  },
+  {
+    "title": "[Feature/P0] Profile import/export to a single shareable file",
+    "labels": ["feature", "P1", "profiles"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nCommunity sharing is impossible without a portable format.\n\n- [ ] `.ajazzprofile` = ZIP containing `profile.json` + embedded icons/sounds + manifest\n- [ ] `core::ProfileBundle::exportTo(path)` / `importFrom(path)`\n- [ ] CLI `ajazz-control-center --export-profile <name> <path>` for headless workflows\n- [ ] UI: File → Export profile / Import profile\n- [ ] Schema validation on import (depends on profile-IO issue)"
+  },
+  {
+    "title": "[Feature/P0] First-party OBS and media-control plugins",
+    "labels": ["feature", "P1", "plugins"],
+    "body": "Source: docs/analysis/feature-gaps.md (Top-10 P0)\n\nThe most-installed Stream Deck plugins; absence is conspicuous.\n\n- [ ] `python/ajazz_plugins/obs/` — uses `obs-websocket` 5.x; actions: switch scene, toggle source, start/stop record/stream, set scene-item visibility\n- [ ] `python/ajazz_plugins/media/` — MPRIS on Linux, MediaRemote/MediaPlayer on macOS, SystemMediaTransportControls on Windows; play/pause/next/prev + now-playing on encoder LCD\n- [ ] Bundle both with default install\n- [ ] Settings UI auto-generated from plugin's Property-Inspector schema (depends on plugin-PI issue below)"
+  },
+  {
+    "title": "[Feature/P1] Battery indicator in tray + low-battery notification",
+    "labels": ["feature", "P2", "mouse", "tray"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1)\n\n- [ ] AJ339/AJ380 wireless mice: extend `aj_series.cpp` to surface battery level (already partially read in COD-010)\n- [ ] `TrayController` shows battery glyph (full / 75 / 50 / 25 / low / charging)\n- [ ] OS notification at 20% / 10% (also touches notification-service issue)\n- [ ] Settings: notification thresholds + per-device overrides"
+  },
+  {
+    "title": "[Feature/P1] Cross-platform autostart on login",
+    "labels": ["feature", "P2", "platform"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1)\n\n- [ ] Linux: write `~/.config/autostart/ajazz-control-center.desktop`\n- [ ] Windows: HKCU `Software\\Microsoft\\Windows\\CurrentVersion\\Run`\n- [ ] macOS: `LaunchAgent` plist in `~/Library/LaunchAgents/`\n- [ ] Settings UI toggle (default: on; respects `--no-autostart` CLI flag)"
+  },
+  {
+    "title": "[Feature/P1] OS notification service (libnotify / NSUserNotification / Win10 Toast)",
+    "labels": ["feature", "P2", "platform"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1)\n\nUsed by the battery, profile-write success, firmware-available cases.\n\n- [ ] `core::NotificationService` API: `notify(level, title, body, actions?)`\n- [ ] Linux: libnotify\n- [ ] macOS: `UNUserNotificationCenter`\n- [ ] Windows: WinRT toast XML\n- [ ] Hook `BrandingService` so notifications carry the configured product name + icon"
+  },
+  {
+    "title": "[Feature/P1] Privacy / no-telemetry policy + in-app changelog viewer",
+    "labels": ["feature", "P2", "trust"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1)\n\n- [ ] Write `docs/PRIVACY.md` (zero-telemetry stance, optional crash-dump opt-in)\n- [ ] Surface it in Help → Privacy and on first launch\n- [ ] In-app changelog viewer reads the existing top-level `CHANGELOG.md` and shows it on update"
+  },
+  {
+    "title": "[Feature/P2] OpenRGB SDK server adapter + Home Assistant / Hue plugins",
+    "labels": ["feature", "P2", "rgb", "ecosystem"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1 + RGB section)\n\n- [ ] Implement `core::OpenRGBSdkServer` on port 6742 (TCP) speaking the [OpenRGB SDK protocol](https://openrgb-wiki.readthedocs.io/en/latest/Developer/sdk.html)\n- [ ] Expose AJAZZ devices (keyboards/mice/AKP keys) as OpenRGB controllers\n- [ ] `python/ajazz_plugins/hue/` — REST + `phue` library; per-bulb action\n- [ ] `python/ajazz_plugins/homeassistant/` — long-lived bearer token; entity action picker\n- [ ] Document in `docs/architecture/RGB-FEDERATION.md`"
+  },
+  {
+    "title": "[Feature/P2] Property-Inspector JSON schema for plugins",
+    "labels": ["feature", "P2", "plugins"],
+    "body": "Source: docs/analysis/feature-gaps.md (Quick-win P1)\n\nUnlocks third-party plugin UI without each author touching QML.\n\n- [ ] Define `property_inspector.schema.json` (subset of [Stream Deck SDK PI](https://docs.elgato.com/streamdeck/sdk/references/property-inspector/))\n- [ ] Plugin manifest declares per-action PI schema\n- [ ] Generic `PropertyInspector.qml` renders form from schema\n- [ ] Wire to plugin host via JSON IPC (depends on sandbox issue)"
+  },
+  {
+    "title": "[Testing/P1] Real HID capture fixtures for AKP and keyboards/mice (COD-024)",
+    "labels": ["quality", "P2", "testing"],
+    "body": "Source: docs/analysis/code-audit.md (COD-024, High)\n\n`tests/integration/test_capture_replay.cpp` claims real captures but actually constructs synthetic frames in code.\n\n- [ ] Capture real HID frames with hidapi-tools or Wireshark USB capture for: AKP03, AKP05, AKP153, VIA keyboard, proprietary keyboard, AJ-series mouse\n- [ ] Check fixtures into `tests/fixtures/<device>/<event>.hex`\n- [ ] Replay all known frame types; assert decoder output\n- [ ] Add malformed/oversize frames to assert SEC-007/008/009/010 rejection paths\n- [ ] CI matrix runs the replay on linux/macos/windows builds"
+  },
+  {
+    "title": "[Testing/P1] ASan/UBSan/TSan CI matrix + EventBus concurrency tests (COD-023, COD-025)",
+    "labels": ["quality", "P2", "testing", "ci"],
+    "body": "Source: docs/analysis/code-audit.md (COD-023/025, Medium)\n\n- [ ] `.github/workflows/ci.yml`: add Linux job using `--preset dev` (sanitizers ON) running `ctest`\n- [ ] Add a Linux TSan job (`-fsanitize=thread`)\n- [ ] `tests/unit/test_event_bus.cpp`: add concurrent publish/subscribe/unsubscribe + reentrant unsubscribe under TSan"
+  },
+  {
+    "title": "[Testing/P1] Inject TransportPtr into device constructors for unit tests (COD-026)",
+    "labels": ["quality", "P2", "testing"],
+    "body": "Source: docs/analysis/code-audit.md (COD-026, Medium)\n\nDevices instantiate hidapi transport directly, so unit tests need real hardware or parser-only coverage.\n\n- [ ] Add `ITransportFactory` interface (or just constructor-inject `TransportPtr`)\n- [ ] Refactor `Akp03/Akp05/Akp153/AjSeries/ViaKeyboard/ProprietaryKeyboard` constructors\n- [ ] `tests/fakes/FakeTransport` records writes and replays scripted reads\n- [ ] Migrate at least 5 existing tests off real HID"
+  },
+  {
+    "title": "[Quality/P2] Build hygiene: Qt6::Core PRIVATE in core; pre-commit clang-tidy hook (COD-031, COD-027, COD-028)",
+    "labels": ["quality", "P3", "build"],
+    "body": "Source: docs/analysis/code-audit.md\n\n- [ ] COD-031: `target_link_libraries(ajazz_core PRIVATE Qt6::Core)` (currently PUBLIC, leaks Qt to downstream consumers even though public headers are STL-only)\n- [ ] COD-027: Add a real local clang-tidy hook in `.pre-commit-config.yaml` (or remove the misleading comment)\n- [ ] COD-028: Add `cppcheck`, `iwyu`, `trivy` (license + CVE), CycloneDX SBOM generation in CI"
+  },
+  {
+    "title": "[Docs/P2] Threading + plugin warning + branding doc fixes (COD-020, COD-030, SEC-019, F-35)",
+    "labels": ["docs", "P3"],
+    "body": "Source: docs/analysis/code-audit.md + security-audit.md + ui-review.md\n\n- [ ] COD-020: `docs/architecture/THREADING.md` describes a `std::shared_mutex` EventBus and lock-free behaviour the implementation lacks — update doc to reflect current `std::mutex` snapshot impl\n- [ ] COD-030: `docs/architecture/ARCHITECTURE.md` promises UI exception → notification conversion that doesn't exist — either implement controller-level try/catch + notification (depends on notification-service issue) or update the doc\n- [ ] SEC-019: `docs/architecture/PLUGIN-SYSTEM.md:104` promises an unsigned-plugin warning UI — either implement (depends on sandbox issue) or remove the claim until then\n- [ ] F-35: `docs/architecture/BRANDING.md` claims 'no hard-coded hex anywhere in the QML files' — fixed by the Theme.qml singleton in fe8d2cc; update doc to reflect new reality"
+  }
+]
