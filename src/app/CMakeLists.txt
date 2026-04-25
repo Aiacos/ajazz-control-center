@@ -1,3 +1,30 @@
+# ----------------------------------------------------------------------------
+# Optional: Qt WebEngine for the Property Inspector HTML panel
+# ----------------------------------------------------------------------------
+# When ON and Qt6::WebEngineQuick is found, the Property Inspector pane embeds
+# plugin-authored HTML PI pages (Stream Deck SDK-compatible). When OFF or the
+# Qt module is missing — common on minimal Qt installs and headless CI — the
+# build falls back silently to the schema-driven native inspector. The stub
+# controller compiles either way so QML bindings to `propertyInspectorController`
+# never break.
+option(AJAZZ_BUILD_PROPERTY_INSPECTOR "Embed plugin Property Inspector HTML pages via Qt WebEngine"
+       ON
+)
+if(AJAZZ_BUILD_PROPERTY_INSPECTOR)
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuick)
+    if(Qt6WebEngineQuick_FOUND)
+        set(AJAZZ_HAVE_WEBENGINE TRUE)
+        message(STATUS "Qt6::WebEngineQuick found — Property Inspector enabled")
+    else()
+        set(AJAZZ_HAVE_WEBENGINE FALSE)
+        message(WARNING "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt6::WebEngineQuick "
+                        "not found. Falling back to native inspector placeholder."
+        )
+    endif()
+else()
+    set(AJAZZ_HAVE_WEBENGINE FALSE)
+endif()
+
 qt_add_executable(
     ajazz-control-center
     src/main.cpp
@@ -11,6 +38,7 @@ qt_add_executable(
     src/autostart_service.cpp
     src/single_instance_guard.cpp
     src/app_icon.cpp
+    src/property_inspector_controller.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
@@ -149,6 +177,11 @@ target_link_libraries(
             Qt6::QuickControls2
             Qt6::Svg
 )
+
+if(AJAZZ_HAVE_WEBENGINE)
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick)
+    target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
+endif()
 
 # ----------------------------------------------------------------------------
 # Branding: forward CMake cache vars to the C++ source via -D defines. All four are optional;
