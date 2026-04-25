@@ -28,17 +28,44 @@
 namespace ajazz::core {
 
 /**
- * @brief A single plugin action that can be bound to a control.
+ * @brief Built-in step kinds understood directly by the action engine,
+ *        independently of any plugin.
  *
- * Actions are identified by a fully-qualified dotted string
- * ("<plugin-id>.<action-id>"). The settings blob is opaque to the core;
- * the plugin host forwards it verbatim to the owning plugin when the
- * action fires.
+ * Plugin-provided actions still use Kind::Plugin and are dispatched via the
+ * plugin host. The remaining kinds are interpreted natively by
+ * @ref ActionEngine and do not require a plugin to be loaded.
+ */
+enum class ActionKind : std::uint8_t {
+    Plugin = 0,   ///< Forward to plugin host (id = "<plugin>.<action>").
+    Sleep,        ///< Pause the chain for `delayMs` milliseconds.
+    KeyPress,     ///< Synthesise an OS-level key press (`settingsJson` carries the keycode).
+    RunCommand,   ///< Run a shell command (`settingsJson` carries argv0 + args).
+    OpenUrl,      ///< Open a URL in the default browser.
+    OpenFolder,   ///< Switch the device to a child ProfilePage (folders — see Profile::pages).
+    BackToParent, ///< Pop one ProfilePage off the navigation stack.
+};
+
+/**
+ * @brief A single step in an @ref ActionChain.
+ *
+ * `kind` selects which interpreter handles the step:
+ *   - `Kind::Plugin` forwards the step to the plugin host. The dotted
+ *     `id` is required; `settingsJson` is forwarded verbatim.
+ *   - `Kind::Sleep` honours `delayMs` and ignores everything else.
+ *   - `Kind::KeyPress`/`RunCommand`/`OpenUrl` use `settingsJson`.
+ *   - `Kind::OpenFolder` reads the target page id from `settingsJson`
+ *     (`{"target": "<page-id>"}`).
+ *   - `Kind::BackToParent` ignores all fields.
+ *
+ * Plugin actions remain backward-compatible because `kind` defaults to
+ * `Kind::Plugin` and unknown JSON keys are tolerated by the reader.
  */
 struct Action {
-    std::string id;           ///< Fully-qualified action id: "<plugin-id>.<action-id>".
-    std::string settingsJson; ///< Free-form JSON blob forwarded to the plugin.
-    std::string label;        ///< User-visible label shown in the UI.
+    ActionKind kind{ActionKind::Plugin}; ///< Step kind; selects the interpreter.
+    std::string id;                      ///< Plugin id when kind == Plugin.
+    std::string settingsJson;            ///< Free-form JSON blob.
+    std::string label;                   ///< User-visible label shown in the UI.
+    std::uint32_t delayMs{0};            ///< Inter-step delay (Sleep + post-step pause).
 };
 
 /**
@@ -60,12 +87,44 @@ struct KeyState {
  *
  * Each trigger event can fire an ordered chain of actions. The `state`
  * field drives the key's visual rendering in the UI and on the device LCD.
+ *
+ * The chain types intentionally use plain `std::vector<Action>` to keep the
+ * profile schema flat and JSON-friendly. The action engine treats every
+ * vector as an @ref ActionChain and walks it sequentially, honouring the
+ * per-step `delayMs`.
  */
 struct Binding {
     std::vector<Action> onPress;     ///< Actions fired when the control is pressed.
     std::vector<Action> onRelease;   ///< Actions fired when the control is released.
     std::vector<Action> onLongPress; ///< Actions fired after a long-press threshold.
     KeyState state;                  ///< Visual appearance for this control slot.
+};
+
+/**
+ * @brief Encoder-specific binding (CW / CCW / Press) used by AKP03 and AKP05.
+ *
+ * Stored separately from @ref Binding so the UI can render three distinct
+ * action-chain editors (rotate clockwise, rotate counter-clockwise, push).
+ */
+struct EncoderBinding {
+    std::vector<Action> onCw;    ///< Chain fired on a clockwise rotation tick.
+    std::vector<Action> onCcw;   ///< Chain fired on a counter-clockwise tick.
+    std::vector<Action> onPress; ///< Chain fired on a knob press.
+    KeyState state;              ///< Optional LCD label for AKP05's encoder strip.
+};
+
+/**
+ * @brief A page of bindings, used to model nested folders on AKP devices.
+ *
+ * `id` is a stable string id (UUIDv4 recommended) referenced by
+ * `Action::OpenFolder` steps. The root page of a profile lives in
+ * `Profile::pages` under the key "root".
+ */
+struct ProfilePage {
+    std::string id;                                  ///< Stable page id.
+    std::string name;                                ///< User-visible name.
+    std::unordered_map<std::uint16_t, Binding> keys; ///< Per-key bindings on this page.
+    std::vector<std::string> children;               ///< Child page ids (sub-folders).
 };
 
 /**
@@ -77,12 +136,21 @@ struct Binding {
  * the active one based on applicationHints or explicit user selection.
  */
 struct Profile {
-    std::string id;                                        ///< Stable UUIDv4 identifier.
-    std::string name;                                      ///< User-visible profile name.
-    std::string deviceCodename;                            ///< Target device, e.g. "akp153".
-    std::unordered_map<std::uint16_t, Binding> keys;       ///< Key index → binding.
-    std::unordered_map<std::uint16_t, Binding> encoders;   ///< Encoder index → binding.
-    std::unordered_map<std::string, Binding> mouseButtons; ///< Button name → binding.
+    std::string id;                                  ///< Stable UUIDv4 identifier.
+    std::string name;                                ///< User-visible profile name.
+    std::string deviceCodename;                      ///< Target device, e.g. "akp153".
+    std::unordered_map<std::uint16_t, Binding> keys; ///< Key index → binding (root page).
+    std::unordered_map<std::uint16_t, EncoderBinding> encoders; ///< Encoder index → binding.
+    std::unordered_map<std::string, Binding> mouseButtons;      ///< Button name → binding.
+
+    /**
+     * @brief Optional folder pages — keyed by ProfilePage::id.
+     *
+     * When non-empty, `keys` is treated as the root page and child pages are
+     * reachable through `Action::OpenFolder` steps. Empty by default for
+     * backwards compatibility with single-page profiles.
+     */
+    std::unordered_map<std::string, ProfilePage> pages;
 
     /**
      * Application process-name hints for auto-activation. When the active

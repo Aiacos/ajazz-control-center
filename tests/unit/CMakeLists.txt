@@ -9,6 +9,7 @@ add_executable(
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp
+    test_action_engine.cpp
 )
 
 target_link_libraries(

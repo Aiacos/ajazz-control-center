@@ -69,6 +69,18 @@ public:
      */
     void ensureTray(QQmlApplicationEngine* engine);
 
+    /**
+     * @brief Update the tray tooltip + warning glyph for low-battery devices.
+     *
+     * Closes #34 (battery awareness in tray). Called by ProfileController /
+     * DeviceModel whenever a wireless device polls a fresh battery reading.
+     *
+     * @param deviceName User-visible name (e.g. "AJ339 Pro").
+     * @param percent    0..100; values < 20 colour the tooltip with a warning
+     *                   prefix and emit a single notification.
+     */
+    Q_INVOKABLE void setDeviceBattery(QString const& deviceName, int percent);
+
 signals:
     /// Emitted when @ref startMinimized changes.
     void startMinimizedChanged();
@@ -87,6 +99,7 @@ private:
     QPointer<QSystemTrayIcon> tray_;
     QPointer<QMenu> menu_;
     bool startMinimized_;
+    QString batteryTooltip_; ///< Last battery summary sent via setDeviceBattery().
 };
 
 } // namespace ajazz::app

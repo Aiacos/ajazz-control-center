@@ -5,6 +5,10 @@ add_library(
     src/event_bus.cpp
     src/profile.cpp
     src/profile_io.cpp
+    src/profile_bundle.cpp
+    src/action_engine.cpp
+    src/macro_recorder.cpp
+    src/notification_service.cpp
     src/logger.cpp
     src/hotplug_monitor.cpp
 )

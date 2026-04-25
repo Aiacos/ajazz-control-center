@@ -79,6 +79,22 @@ public:
      */
     Q_INVOKABLE bool loadThemeFile(QString const& path);
 
+    /**
+     * @brief Return the bundled CHANGELOG.md content as plain Markdown.
+     *
+     * Closes #37 (in-app changelog viewer). The text is read from the
+     * embedded resource `:/changelog/CHANGELOG.md`; if the resource is not
+     * available a short fallback string is returned.
+     */
+    Q_INVOKABLE QString changelogText() const;
+
+    /**
+     * @brief Return the bundled PRIVACY.md as plain Markdown.
+     *
+     * Used by the "Privacy" link in About / Settings.
+     */
+    Q_INVOKABLE QString privacyText() const;
+
 signals:
     /// Emitted whenever any color property changes.
     void themeChanged();

@@ -27,6 +27,7 @@ namespace ajazz::app {
 Application::Application(QObject* parent)
     : QObject(parent), m_branding(std::make_unique<BrandingService>(this)),
       m_themeService(std::make_unique<ThemeService>(m_branding.get(), this)),
+      m_autostart(std::make_unique<AutostartService>(this)),
       m_deviceModel(std::make_unique<DeviceModel>(this)),
       m_profileController(std::make_unique<ProfileController>(this)),
       m_trayController(std::make_unique<TrayController>(m_branding.get(), this)),
@@ -56,6 +57,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     engine.rootContext()->setContextProperty("profileController", m_profileController.get());
     engine.rootContext()->setContextProperty("branding", m_branding.get());
     engine.rootContext()->setContextProperty("themeService", m_themeService.get());
+    engine.rootContext()->setContextProperty("autostart", m_autostart.get());
     engine.rootContext()->setContextProperty("tray", m_trayController.get());
 }
 

@@ -66,16 +66,38 @@ void escape(std::ostringstream& out, std::string_view s) {
     out << '"';
 }
 
+/// Stringify an @ref ActionKind for JSON.
+char const* actionKindName(ActionKind k) noexcept {
+    switch (k) {
+    case ActionKind::Plugin:
+        return "plugin";
+    case ActionKind::Sleep:
+        return "sleep";
+    case ActionKind::KeyPress:
+        return "key";
+    case ActionKind::RunCommand:
+        return "command";
+    case ActionKind::OpenUrl:
+        return "url";
+    case ActionKind::OpenFolder:
+        return "openFolder";
+    case ActionKind::BackToParent:
+        return "back";
+    }
+    return "plugin";
+}
+
 /**
  * @brief Serialise a single Action to JSON object notation.
  *
- * Output: `{"id":<str>,"settings":<str>,"label":<str>}`
+ * Output: `{"kind":<str>,"id":<str>,"settings":<str>,"label":<str>,"delayMs":<int>}`
  *
  * @param out Destination stream.
  * @param a   Action to serialise.
  */
 void writeAction(std::ostringstream& out, Action const& a) {
     out << "{";
+    out << "\"kind\":\"" << actionKindName(a.kind) << "\",";
     out << "\"id\":";
     escape(out, a.id);
     out << ",";
@@ -84,6 +106,7 @@ void writeAction(std::ostringstream& out, Action const& a) {
     out << ",";
     out << "\"label\":";
     escape(out, a.label);
+    out << ",\"delayMs\":" << a.delayMs;
     out << "}";
 }
 
@@ -95,26 +118,38 @@ void writeAction(std::ostringstream& out, Action const& a) {
  * @param out Destination stream.
  * @param b   Binding to serialise.
  */
-void writeBinding(std::ostringstream& out, Binding const& b) {
-    auto writeChain = [&](std::string_view key, std::vector<Action> const& actions) {
-        out << "\"" << key << "\":[";
-        bool first = true;
-        for (auto const& a : actions) {
-            if (!first) {
-                out << ",";
-            }
-            writeAction(out, a);
-            first = false;
+/// Helper: emit a chain of actions as a JSON array under a named key.
+void writeChain(std::ostringstream& out, std::string_view key, std::vector<Action> const& actions) {
+    out << "\"" << key << "\":[";
+    bool first = true;
+    for (auto const& a : actions) {
+        if (!first) {
+            out << ",";
         }
-        out << "]";
-    };
+        writeAction(out, a);
+        first = false;
+    }
+    out << "]";
+}
 
+void writeBinding(std::ostringstream& out, Binding const& b) {
     out << "{";
-    writeChain("onPress", b.onPress);
+    writeChain(out, "onPress", b.onPress);
     out << ",";
-    writeChain("onRelease", b.onRelease);
+    writeChain(out, "onRelease", b.onRelease);
     out << ",";
-    writeChain("onLongPress", b.onLongPress);
+    writeChain(out, "onLongPress", b.onLongPress);
+    out << "}";
+}
+
+/// Serialise an EncoderBinding (CW / CCW / Press chains).
+void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
+    out << "{";
+    writeChain(out, "onCw", b.onCw);
+    out << ",";
+    writeChain(out, "onCcw", b.onCcw);
+    out << ",";
+    writeChain(out, "onPress", b.onPress);
     out << "}";
 }
 
@@ -141,6 +176,54 @@ std::string profileToJson(Profile const& profile) {
         }
         out << "\"" << idx << "\":";
         writeBinding(out, binding);
+        first = false;
+    }
+    out << "}";
+
+    // Encoders (CW / CCW / Press chains).
+    out << ",\"encoders\":{";
+    first = true;
+    for (auto const& [idx, eb] : profile.encoders) {
+        if (!first) {
+            out << ",";
+        }
+        out << "\"" << idx << "\":";
+        writeEncoderBinding(out, eb);
+        first = false;
+    }
+    out << "}";
+
+    // Folder pages (root keys live above; child pages live here).
+    out << ",\"pages\":{";
+    first = true;
+    for (auto const& [pageId, page] : profile.pages) {
+        if (!first) {
+            out << ",";
+        }
+        escape(out, pageId);
+        out << ":{";
+        out << "\"name\":";
+        escape(out, page.name);
+        out << ",\"keys\":{";
+        bool kfirst = true;
+        for (auto const& [idx, binding] : page.keys) {
+            if (!kfirst) {
+                out << ",";
+            }
+            out << "\"" << idx << "\":";
+            writeBinding(out, binding);
+            kfirst = false;
+        }
+        out << "},\"children\":[";
+        bool cfirst = true;
+        for (auto const& child : page.children) {
+            if (!cfirst) {
+                out << ",";
+            }
+            escape(out, child);
+            cfirst = false;
+        }
+        out << "]}";
         first = false;
     }
     out << "}";

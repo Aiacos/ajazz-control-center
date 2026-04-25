@@ -9,14 +9,22 @@
  * If the user has set "start minimized" (default), the QML root window is
  * hidden until the user clicks the tray icon.
  */
+#include "ajazz/core/profile.hpp"
+#include "ajazz/core/profile_bundle.hpp"
+#include "ajazz/core/profile_io.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
 #include "tray_controller.hpp"
 
 #include <QApplication>
+#include <QCommandLineOption>
+#include <QCommandLineParser>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QWindow>
+
+#include <iostream>
+#include <optional>
 
 #ifndef AJAZZ_PRODUCT_NAME
 #define AJAZZ_PRODUCT_NAME "AJAZZ Control Center"
@@ -43,6 +51,61 @@ int main(int argc, char* argv[]) {
     QApplication app(argc, argv);
     QQuickStyle::setStyle("Fusion");
 
+    // ------------------------------------------------------------------
+    // CLI flags. Closes #32 (--export-profile / --import-profile) and
+    // backs the autostart hook's `--minimized` flag (#35).
+    // ------------------------------------------------------------------
+    QCommandLineParser parser;
+    parser.setApplicationDescription(QStringLiteral("AJAZZ Control Center"));
+    parser.addHelpOption();
+    parser.addVersionOption();
+    QCommandLineOption minimizedOpt(QStringLiteral("minimized"),
+                                    QStringLiteral("Start the GUI minimised to tray."));
+    QCommandLineOption exportOpt(
+        QStringLiteral("export-profile"),
+        QStringLiteral("Export PROFILE_PATH to BUNDLE_PATH (`.ajazzprofile`) and exit."),
+        QStringLiteral("profile=bundle"));
+    QCommandLineOption importOpt(
+        QStringLiteral("import-profile"),
+        QStringLiteral("Validate the BUNDLE_PATH (`.ajazzprofile`) and exit."),
+        QStringLiteral("bundle"));
+    parser.addOption(minimizedOpt);
+    parser.addOption(exportOpt);
+    parser.addOption(importOpt);
+    parser.process(app);
+
+    if (parser.isSet(exportOpt)) {
+        // Pair format: "<src.json>=<dst.ajazzprofile>".
+        auto const value = parser.value(exportOpt);
+        auto const eq = value.indexOf(QLatin1Char('='));
+        if (eq <= 0) {
+            std::cerr << "--export-profile expects 'src.json=dst.ajazzprofile'\n";
+            return 2;
+        }
+        auto const src = value.left(eq).toStdString();
+        auto const dst = value.mid(eq + 1).toStdString();
+        try {
+            auto const profile = ajazz::core::readProfileFromDisk(src);
+            ajazz::core::exportProfileBundle(dst, profile, AJAZZ_VENDOR_NAME);
+        } catch (std::exception const& ex) {
+            std::cerr << "export failed: " << ex.what() << "\n";
+            return 3;
+        }
+        return 0;
+    }
+    if (parser.isSet(importOpt)) {
+        try {
+            auto const bundle =
+                ajazz::core::importProfileBundle(parser.value(importOpt).toStdString());
+            std::cout << "bundle ok: " << bundle.profile.name << "\n";
+        } catch (std::exception const& ex) {
+            std::cerr << "import failed: " << ex.what() << "\n";
+            return 4;
+        }
+        return 0;
+    }
+    bool const forceMinimized = parser.isSet(minimizedOpt);
+
     ajazz::app::Application controller;
     controller.bootstrap();
 
@@ -60,7 +123,7 @@ int main(int argc, char* argv[]) {
     // unless the tray is unavailable (in which case showing the window is the
     // only way the user can interact with the app).
     auto* tray = controller.trayController();
-    if (tray && tray->startMinimized() && tray->trayAvailable()) {
+    if (tray && (forceMinimized || tray->startMinimized()) && tray->trayAvailable()) {
         for (QObject* obj : engine.rootObjects()) {
             if (auto* win = qobject_cast<QWindow*>(obj)) {
                 win->hide();

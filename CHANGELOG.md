@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Multi-action engine (`ActionEngine`) with built-in `Plugin`, `Sleep`, `KeyPress`, `RunCommand`, `OpenUrl`, `OpenFolder`, `BackToParent` action kinds (closes #25).
+- Folder navigation: nested `ProfilePage`s on AKP-class devices via `OpenFolder` / `BackToParent` (closes #28).
+- Encoder bindings: dedicated `EncoderBinding` with `onCw` / `onCcw` / `onPress` chains (closes #29).
+- Macro recorder scaffold with portable `MacroRecorder` interface (closes #30).
+- Granular DPI editor: `IMouseCapable::setDpiStage(idx, stage)` + cached `getDpiStages()` (closes #31).
+- Profile import / export as `.ajazzprofile` bundles, including `--export-profile` / `--import-profile` CLI flags (closes #32).
+- Battery-aware tray tooltip + low-battery notification (closes #34).
+- Cross-platform `AutostartService` with launch-on-login + `--minimized` autostart flag (closes #35).
+- Cross-platform `NotificationService` (Linux notify-send back-end ships) (closes #36).
+- In-app changelog and privacy viewer; embedded `CHANGELOG.md` and `docs/PRIVACY.md` (closes #37).
+- `docs/schemas/property_inspector.schema.json` + generic `PropertyInspector.qml` renderer (closes #39).
 - Initial project scaffolding: CMake presets, Qt 6 / QML skeleton UI, C++20 core interfaces.
 - Modular device framework with abstract `IDevice`, `ITransport`, `IProtocol` interfaces.
 - Python plugin host built on pybind11 with `ajazz` runtime module.

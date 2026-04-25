@@ -7,6 +7,7 @@ qt_add_executable(
     src/branding_service.cpp
     src/tray_controller.cpp
     src/theme_service.cpp
+    src/autostart_service.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
@@ -45,6 +46,14 @@ set_source_files_properties(
     ${ACC_BRAND_THEME_LIGHT} PROPERTIES QT_RESOURCE_ALIAS branding/theme-light.json
 )
 
+# Embed CHANGELOG.md and PRIVACY.md so the in-app viewer (#37) can render them without hitting the
+# network. Aliases live at the QML module root so BrandingService::changelogText() / privacyText()
+# find them via QFile.
+set(ACC_DOC_CHANGELOG ${CMAKE_SOURCE_DIR}/CHANGELOG.md)
+set(ACC_DOC_PRIVACY ${CMAKE_SOURCE_DIR}/docs/PRIVACY.md)
+set_source_files_properties(${ACC_DOC_CHANGELOG} PROPERTIES QT_RESOURCE_ALIAS CHANGELOG.md)
+set_source_files_properties(${ACC_DOC_PRIVACY} PROPERTIES QT_RESOURCE_ALIAS PRIVACY.md)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
@@ -58,6 +67,7 @@ qt_add_qml_module(
               qml/EncoderPanel.qml
               qml/MousePanel.qml
               qml/Inspector.qml
+              qml/PropertyInspector.qml
               qml/components/AppHeader.qml
               qml/components/Card.qml
               qml/components/DeviceRow.qml
@@ -68,8 +78,13 @@ qt_add_qml_module(
               qml/components/PrimaryButton.qml
               qml/components/SecondaryButton.qml
               qml/components/Toast.qml
-    RESOURCES ${ACC_APP_ICON} ${ACC_BRAND_APP} ${ACC_BRAND_TRAY} ${ACC_BRAND_THEME}
+    RESOURCES ${ACC_APP_ICON}
+              ${ACC_BRAND_APP}
+              ${ACC_BRAND_TRAY}
+              ${ACC_BRAND_THEME}
               ${ACC_BRAND_THEME_LIGHT}
+              ${ACC_DOC_CHANGELOG}
+              ${ACC_DOC_PRIVACY}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

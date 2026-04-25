@@ -135,20 +135,29 @@ public:
     [[nodiscard]] std::uint8_t dpiStageCount() const noexcept override { return 6; }
 
     void setDpiStages(std::span<DpiStage const> stages) override {
+        // Refresh the host-side cache so getDpiStages() reflects what is now
+        // on the device. The cache is sized once at construction time.
+        m_dpiStages.assign(dpiStageCount(), DpiStage{});
         for (std::size_t i = 0; i < stages.size() && i < dpiStageCount(); ++i) {
-            std::array<std::uint8_t, 6> p{
-                static_cast<std::uint8_t>(i),
-                static_cast<std::uint8_t>(stages[i].dpi >> 8),
-                static_cast<std::uint8_t>(stages[i].dpi & 0xff),
-                stages[i].indicator.r,
-                stages[i].indicator.g,
-                stages[i].indicator.b,
-            };
-            auto const pkt = makeEnvelope(kCmdDpi, 0x00, p);
-            (void)m_transport->writeFeature(pkt);
+            m_dpiStages[i] = stages[i];
+            uploadDpiStage(static_cast<std::uint8_t>(i), stages[i]);
         }
         commit();
     }
+
+    void setDpiStage(std::uint8_t index, DpiStage stage) override {
+        if (index >= dpiStageCount()) {
+            throw std::out_of_range("aj_series: setDpiStage index out of range");
+        }
+        if (m_dpiStages.size() != dpiStageCount()) {
+            m_dpiStages.assign(dpiStageCount(), DpiStage{});
+        }
+        m_dpiStages[index] = stage;
+        uploadDpiStage(index, stage);
+        commit();
+    }
+
+    [[nodiscard]] std::vector<DpiStage> getDpiStages() const override { return m_dpiStages; }
 
     void setActiveDpiStage(std::uint8_t index) override {
         std::array<std::uint8_t, 1> p{index};
@@ -219,6 +228,26 @@ public:
     }
 
 private:
+    /**
+     * @brief Upload a single DPI stage to the mouse without committing.
+     *
+     * Wrapping the per-stage HID write here keeps setDpiStages() and
+     * setDpiStage() in lock-step on the wire format and lets the
+     * unit-test transport intercept either path identically.
+     */
+    void uploadDpiStage(std::uint8_t index, DpiStage const& stage) {
+        std::array<std::uint8_t, 6> p{
+            index,
+            static_cast<std::uint8_t>(stage.dpi >> 8),
+            static_cast<std::uint8_t>(stage.dpi & 0xff),
+            stage.indicator.r,
+            stage.indicator.g,
+            stage.indicator.b,
+        };
+        auto const pkt = makeEnvelope(kCmdDpi, 0x00, p);
+        (void)m_transport->writeFeature(pkt);
+    }
+
     void commit() {
         auto const pkt = makeEnvelope(kCmdCommit, 0x00, {});
         (void)m_transport->writeFeature(pkt);
@@ -230,6 +259,8 @@ private:
     EventCallback m_callback;
     std::mutex m_mutex;
     std::uint16_t m_pollRate{1000};
+    std::vector<DpiStage> m_dpiStages{dpiStageCount(),
+                                      DpiStage{}}; ///< Host-side cache of the on-device DPI table.
 };
 
 } // namespace

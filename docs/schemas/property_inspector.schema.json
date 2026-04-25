@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Aiacos/ajazz-control-center/blob/main/docs/schemas/property_inspector.schema.json",
+  "title": "Ajazz Control Center — Property Inspector schema",
+  "description": "Declarative description of the form a plugin's Property Inspector should render. The QML PropertyInspector component reads this schema and produces an inspector pane without any plugin-side code, mirroring the Stream Deck SDK's pattern.",
+  "type": "object",
+  "required": ["title", "fields"],
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Pane title shown above the form."
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional one-line subtitle rendered under the title."
+    },
+    "fields": {
+      "type": "array",
+      "description": "Ordered list of input fields rendered top-to-bottom.",
+      "items": { "$ref": "#/$defs/field" }
+    }
+  },
+  "$defs": {
+    "field": {
+      "type": "object",
+      "required": ["id", "type", "label"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier; used as the key in the resulting settings JSON.",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+        },
+        "type": {
+          "enum": [
+            "text",
+            "textarea",
+            "number",
+            "boolean",
+            "color",
+            "select",
+            "image",
+            "shortcut",
+            "file",
+            "section"
+          ],
+          "description": "Field kind. The QML renderer maps each kind to a concrete control."
+        },
+        "label": {
+          "type": "string",
+          "description": "Human-readable label shown next to the control."
+        },
+        "help": {
+          "type": "string",
+          "description": "Optional inline help text rendered as a muted subtitle."
+        },
+        "default": {
+          "description": "Default value. Type must match the chosen `type`."
+        },
+        "placeholder": {
+          "type": "string",
+          "description": "Placeholder shown for text/textarea/number fields when empty."
+        },
+        "required": {
+          "type": "boolean",
+          "default": false,
+          "description": "Whether the field must be filled in before the form is considered valid."
+        },
+        "min": {
+          "type": "number",
+          "description": "Lower bound for numeric fields."
+        },
+        "max": {
+          "type": "number",
+          "description": "Upper bound for numeric fields."
+        },
+        "step": {
+          "type": "number",
+          "description": "Step size for numeric fields. Defaults to 1."
+        },
+        "options": {
+          "type": "array",
+          "description": "Choices for select fields.",
+          "items": {
+            "type": "object",
+            "required": ["value", "label"],
+            "properties": {
+              "value": {
+                "type": ["string", "number", "boolean"],
+                "description": "Stored value when this option is chosen."
+              },
+              "label": {
+                "type": "string",
+                "description": "Display label for the option."
+              }
+            }
+          }
+        },
+        "accept": {
+          "type": "string",
+          "description": "MIME glob restricting which files the file/image picker accepts."
+        }
+      }
+    }
+  }
+}

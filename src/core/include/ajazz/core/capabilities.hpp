@@ -422,6 +422,35 @@ public:
     virtual void setDpiStages(std::span<DpiStage const> stages) = 0;
 
     /**
+     * @brief Update a single DPI stage in the host-side cache and re-upload.
+     *
+     * Used by the UI when the user edits one row of the DPI table without
+     * touching the others. Implementations should treat this as the
+     * canonical, granular variant of @ref setDpiStages.
+     *
+     * @param index Zero-based stage index, 0 .. dpiStageCount()-1.
+     * @param stage New DPI value + indicator color for this stage.
+     */
+    virtual void setDpiStage(std::uint8_t index, DpiStage stage) {
+        // Default fallback: if the back-end has not overridden this method,
+        // surface a single-element vector through setDpiStages so existing
+        // implementations remain functional. Sub-classes are encouraged to
+        // override for efficient single-stage uploads.
+        std::array<DpiStage, 1> single{stage};
+        (void)index;
+        setDpiStages(single);
+    }
+
+    /**
+     * @brief Return the host-side cached DPI preset table.
+     *
+     * The cache is populated by @ref setDpiStages / @ref setDpiStage.
+     * Hardware does not currently echo the preset table back, so this is
+     * the authoritative source for the UI's DPI editor.
+     */
+    [[nodiscard]] virtual std::vector<DpiStage> getDpiStages() const = 0;
+
+    /**
      * @brief Switch the active DPI stage immediately.
      * @param index Zero-based stage index, 0 .. dpiStageCount()-1.
      */

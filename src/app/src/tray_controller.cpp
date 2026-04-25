@@ -16,6 +16,8 @@
 #include <QSystemTrayIcon>
 #include <QWindow>
 
+#include <algorithm>
+
 namespace ajazz::app {
 
 TrayController::TrayController(BrandingService* branding, QObject* parent)
@@ -84,6 +86,25 @@ void TrayController::ensureTray(QQmlApplicationEngine* engine) {
                     root->requestActivate();
                 }
             });
+}
+
+void TrayController::setDeviceBattery(QString const& deviceName, int percent) {
+    if (!tray_) {
+        return; // Tray hasn't been created yet (headless session).
+    }
+    auto const clamped = std::clamp(percent, 0, 100);
+    QString const prefix = clamped < 20 ? tr("⚠ Low battery") : tr("Battery");
+    batteryTooltip_ =
+        QStringLiteral("%1 %2: %3%").arg(prefix, deviceName, QString::number(clamped));
+    auto const baseTip =
+        branding_ ? branding_->productName() : QStringLiteral("AJAZZ Control Center");
+    tray_->setToolTip(baseTip + QStringLiteral("\n") + batteryTooltip_);
+    if (clamped < 20) {
+        tray_->showMessage(tr("Low battery"),
+                           tr("%1 is at %2%").arg(deviceName, QString::number(clamped)),
+                           QSystemTrayIcon::Warning,
+                           5000);
+    }
 }
 
 void TrayController::buildMenu() {

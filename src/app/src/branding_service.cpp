@@ -100,6 +100,26 @@ bool BrandingService::loadThemeFile(QString const& path) {
     return true;
 }
 
+QString BrandingService::changelogText() const {
+    QFile f(QStringLiteral(":/qt/qml/AjazzControlCenter/CHANGELOG.md"));
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QString::fromUtf8(f.readAll());
+    }
+    return QStringLiteral(
+        "# Changelog\n\nSee [CHANGELOG.md on GitHub]"
+        "(https://github.com/Aiacos/ajazz-control-center/blob/main/CHANGELOG.md).");
+}
+
+QString BrandingService::privacyText() const {
+    QFile f(QStringLiteral(":/qt/qml/AjazzControlCenter/PRIVACY.md"));
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        return QString::fromUtf8(f.readAll());
+    }
+    return QStringLiteral(
+        "# Privacy\n\nSee [PRIVACY.md on GitHub]"
+        "(https://github.com/Aiacos/ajazz-control-center/blob/main/docs/PRIVACY.md).");
+}
+
 void BrandingService::applyThemeDocument(QJsonObject const& doc) {
     readColor(doc, "accent", accent_);
     readColor(doc, "accent2", accent2_);
