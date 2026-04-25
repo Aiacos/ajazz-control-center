@@ -107,11 +107,13 @@ ______________________________________________________________________
   (or seccomp-bpf sandbox if staying in-process). **Why**: bake
   isolation in *before* exposing user-installable plugins; retrofitting
   is 10× more expensive.
-- [ ] **A5 — Logger global → injectable sink**: `core::log()` is a free
-  function with a global `std::atomic<LogLevel>`. Introduce a `LogSink`
-  interface and `setLogSink(unique_ptr<LogSink>)`; keep the macros
-  unchanged so call sites don't touch. **Why**: per-test log capture,
-  routing to journald / syslog without TU patches.
+- [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
+  abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
+  reproduces the legacy formatting. `setLogSink(shared_ptr<LogSink>)`
+  swaps the active sink atomically against concurrent log() calls
+  (slot is `std::atomic<std::shared_ptr<LogSink>>`). All AJAZZ_LOG\_\*
+  macros unchanged; call sites untouched. Tests can now install a
+  capturing sink and assert on what subsystems logged.
 - [ ] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
 
 ### Security hardening
