@@ -57,7 +57,19 @@ int main(int argc, char* argv[]) {
     // macOS picks the bundle icon from app.icns instead and Windows uses the
     // .rc-embedded app.ico for the .exe; this call covers Linux/X11/Wayland
     // and serves as a runtime fallback on the other platforms.
-    QApplication::setWindowIcon(QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg")));
+    //
+    // We prefer the branded variant (resources/branding/app.svg, the same
+    // artwork shipped in the README, the desktop entry, the tray and the
+    // installer). The legacy generic mark at icons/app.svg is kept only as a
+    // last-resort fallback for custom AJAZZ_BRAND_DIR builds that opt out of
+    // shipping the branded icon.
+    {
+        QIcon windowIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/branding/app.svg"));
+        if (windowIcon.isNull()) {
+            windowIcon = QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg"));
+        }
+        QApplication::setWindowIcon(windowIcon);
+    }
 
     // QtQuick Controls 2 style: "Material" gives a Material Design 3 look that
     // honors light/dark via the Material.theme attached property in Main.qml.
