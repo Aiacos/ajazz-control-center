@@ -71,7 +71,7 @@ install_deps_fedora() {
         qt6-qtbase-devel qt6-qtdeclarative-devel qt6-qtquickcontrols2-devel \
         qt6-qttools-devel qt6-qtsvg-devel \
         python3-devel python3-pip \
-        systemd-devel libudev-devel \
+        systemd-devel libudev-devel libusb1-devel \
         clang-tools-extra
 }
 
@@ -83,7 +83,7 @@ install_deps_debian() {
         qt6-base-dev qt6-declarative-dev qt6-quickcontrols2-dev \
         qt6-tools-dev libqt6svg6-dev \
         python3-dev python3-pip \
-        libudev-dev libsystemd-dev \
+        libudev-dev libsystemd-dev libusb-1.0-0-dev \
         clang-format clang-tidy
 }
 
@@ -92,7 +92,7 @@ install_deps_arch() {
     sudo_cmd pacman -Syu --needed --noconfirm \
         cmake ninja gcc git pkgconf \
         qt6-base qt6-declarative qt6-tools qt6-svg \
-        python python-pip systemd-libs \
+        python python-pip systemd-libs libusb \
         clang
 }
 
