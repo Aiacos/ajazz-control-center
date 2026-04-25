@@ -148,8 +148,12 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-conversion)
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=sign-conversion)
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-sign-conversion)
-    list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=shorten-64-to-32)
-    list(APPEND _ajazz_qmlcache_relax_flags -Wno-shorten-64-to-32)
+    # -Wshorten-64-to-32 is a Clang/AppleClang-only diagnostic; GCC errors out at driver level if it
+    # sees the flag, so guard it.
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang")
+        list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=shorten-64-to-32)
+        list(APPEND _ajazz_qmlcache_relax_flags -Wno-shorten-64-to-32)
+    endif()
     # Loader is emitted at the qmlcache root.
     set_source_files_properties(
         ${_ajazz_qmlcache_root}/ajazz-control-center_qmlcache_loader.cpp
