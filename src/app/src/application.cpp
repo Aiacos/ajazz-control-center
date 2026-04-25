@@ -30,7 +30,8 @@ Application::Application(QObject* parent)
       m_autostart(std::make_unique<AutostartService>(this)),
       m_deviceModel(std::make_unique<DeviceModel>(this)),
       m_profileController(std::make_unique<ProfileController>(this)),
-      m_trayController(std::make_unique<TrayController>(m_branding.get(), this)),
+      m_trayController(
+          std::make_unique<TrayController>(m_branding.get(), m_profileController.get(), this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()) {}
 
 Application::~Application() {
@@ -70,6 +71,13 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     // even when the main window is hidden to the tray.
     QObject::connect(
         m_trayController.get(), &TrayController::quitRequested, qApp, &QCoreApplication::quit);
+
+    // Tray submenu "Switch profile": forward to the profile controller. The
+    // controller owns the load semantics; the tray just emits the requested id.
+    QObject::connect(m_trayController.get(),
+                     &TrayController::profileSwitchRequested,
+                     m_profileController.get(),
+                     &ProfileController::loadProfileById);
 
     // USB hot-plug: callback runs on a background thread; marshal to the GUI
     // thread before touching the QAbstractListModel.

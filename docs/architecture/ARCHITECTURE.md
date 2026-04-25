@@ -93,7 +93,7 @@ Profiles are JSON documents (schema in `docs/protocols/PROFILE_SCHEMA.md`) that 
 
 - Transport errors throw `std::runtime_error`. Device backends decide whether to close the handle or retry.
 - Protocol decoders return `std::optional<T>` and never throw on bad input.
-- Public UI code never throws; exceptions are converted to `QMessageBox`-friendly notifications at the controller layer.
+- Public UI code never throws. Controller-layer slots that call into core (e.g. `ProfileController::loadProfile`) wrap the call in `try` / `catch` and convert exceptions to dedicated Qt signals (`loadFailed(QString)`, `saveFailed(QString)`). QML connects those signals to the in-app toast component, and `NotificationService` (`src/core/include/ajazz/core/notification_service.hpp`) is used for OS-level notifications when the main window is hidden to tray.
 
 ## Why this architecture
 

@@ -43,11 +43,45 @@ void ProfileController::saveProfile(QString const& path) {
         ajazz::core::writeProfileToDisk(fsPath, m_profile);
         m_path = path;
         emit profileSaved(path);
+        emit profilesChanged();
     } catch (ajazz::core::ProfileIoError const& e) {
         emit saveFailed(QString::fromUtf8(e.what()));
     } catch (std::exception const& e) {
         emit saveFailed(QString::fromUtf8(e.what()));
     }
+}
+
+QStringList ProfileController::knownProfileIds() const {
+    QStringList ids;
+    if (!m_profile.id.empty()) {
+        ids << QString::fromStdString(m_profile.id);
+    }
+    return ids;
+}
+
+QString ProfileController::profileNameFor(QString const& profileId) const {
+    if (QString::fromStdString(m_profile.id) == profileId) {
+        return QString::fromStdString(m_profile.name);
+    }
+    return {};
+}
+
+void ProfileController::loadProfileById(QString const& profileId) {
+    if (profileId.isEmpty()) {
+        emit loadFailed(tr("Empty profile id"));
+        return;
+    }
+    if (QString::fromStdString(m_profile.id) == profileId) {
+        // Already active: nothing to do, but re-emit so QML refreshes bindings.
+        emit profileChanged();
+        return;
+    }
+    // The id\:path index is not yet maintained; the tray submenu currently
+    // exposes only the active profile (see issue #24). Surface a clear
+    // message so the UI can prompt the user to use the file picker.
+    emit loadFailed(tr("Profile '%1' is not in the in-memory library; "
+                       "open it from the Profiles page.")
+                        .arg(profileId));
 }
 
 } // namespace ajazz::app

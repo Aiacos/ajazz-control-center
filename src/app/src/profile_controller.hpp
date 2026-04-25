@@ -15,6 +15,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QStringList>
 
 namespace ajazz::app {
 
@@ -58,6 +59,32 @@ public:
      */
     Q_INVOKABLE void saveProfile(QString const& path);
 
+    /**
+     * @brief Return the ids of every profile known to this controller.
+     *
+     * Used by the tray's Switch-profile submenu (#24). The returned ids are
+     * stable and refer to the in-memory profile cache; the active profile
+     * id (if any) is included.
+     */
+    [[nodiscard]] QStringList knownProfileIds() const;
+
+    /**
+     * @brief Return the user-visible name for a profile id, or empty string
+     *        if no such profile is known.
+     */
+    [[nodiscard]] QString profileNameFor(QString const& profileId) const;
+
+    /**
+     * @brief Load a profile selected by stable id from the tray submenu.
+     *
+     * Currently the in-memory cache only tracks the *active* profile, so this
+     * slot is a no-op when @p profileId matches the active id and emits
+     * loadFailed() otherwise. Issue #24 ships the submenu wiring; the full
+     * id\ \:path index is tracked separately as a follow-up to the profile
+     * library work.
+     */
+    Q_INVOKABLE void loadProfileById(QString const& profileId);
+
 signals:
     /**
      * @signal profileChanged
@@ -88,6 +115,14 @@ signals:
      * @param path Path that was just written.
      */
     void profileSaved(QString path);
+
+    /**
+     * @signal profilesChanged
+     * @brief Emitted when the *list* of known profiles changes (added,
+     *        removed, renamed). Distinct from profileChanged() which only
+     *        fires when the *active* profile is swapped.
+     */
+    void profilesChanged();
 
 private:
     ajazz::core::Profile m_profile{};

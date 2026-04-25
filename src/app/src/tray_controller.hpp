@@ -11,6 +11,9 @@
 
 #include <QObject>
 #include <QPointer>
+#include <QString>
+
+class QAction;
 
 class QQmlApplicationEngine;
 class QSystemTrayIcon;
@@ -19,6 +22,7 @@ class QMenu;
 namespace ajazz::app {
 
 class BrandingService;
+class ProfileController;
 
 /**
  * @brief Owns the tray icon and surfaces the "start minimized" preference.
@@ -42,10 +46,15 @@ public:
     /**
      * @brief Construct the controller without yet creating the tray icon.
      *
-     * @param branding Provides the icon URL and tooltip product name. Must
-     *                 outlive this object.
+     * @param branding Provides the icon URL and tooltip product name.
+     *                 Must outlive this object.
+     * @param profiles Optional ProfileController used to populate the
+     *                 "Switch profile" submenu (#24). May be nullptr; the
+     *                 submenu is hidden when not supplied.
      */
-    explicit TrayController(BrandingService* branding, QObject* parent = nullptr);
+    explicit TrayController(BrandingService* branding,
+                            ProfileController* profiles = nullptr,
+                            QObject* parent = nullptr);
 
     ~TrayController() override;
 
@@ -81,6 +90,16 @@ public:
      */
     Q_INVOKABLE void setDeviceBattery(QString const& deviceName, int percent);
 
+    /**
+     * @brief Toggle the global "paused" state.
+     *
+     * When paused, the tray icon dims and the action engine drops every
+     * incoming event. The tray menu's Pause/Resume entry mirrors the state.
+     */
+    Q_INVOKABLE void setPaused(bool paused);
+
+    [[nodiscard]] bool paused() const noexcept { return paused_; }
+
 signals:
     /// Emitted when @ref startMinimized changes.
     void startMinimizedChanged();
@@ -91,14 +110,27 @@ signals:
     /// Emitted when the user picks "Quit" from the tray menu.
     void quitRequested();
 
+    /// Emitted when the paused state changes.
+    void pausedChanged(bool paused);
+
+    /// Emitted when the user picks a profile from the Switch-profile submenu.
+    void profileSwitchRequested(QString const& profileId);
+
 private:
-    /// Build the tray context menu (Show / Hide / Quit).
+    /// Build the tray context menu (Show / Pause / Switch / Quit).
     void buildMenu();
 
+    /// Refresh the Switch-profile submenu after ProfileController changes.
+    void rebuildProfileSubmenu();
+
     BrandingService* branding_;
+    ProfileController* profiles_;
     QPointer<QSystemTrayIcon> tray_;
     QPointer<QMenu> menu_;
+    QPointer<QMenu> profileMenu_;
+    QPointer<QAction> pauseAction_;
     bool startMinimized_;
+    bool paused_{false};
     QString batteryTooltip_; ///< Last battery summary sent via setDeviceBattery().
 };
 

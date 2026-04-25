@@ -1,6 +1,6 @@
 # Threading and synchronization
 
-This page documents which threads exist in AJAZZ Control Center, what they own, and how they communicate. The model is intentionally minimal: one Qt main thread, one I/O thread per open device, one Python interpreter, and a lock-free event bus that bridges them.
+This page documents which threads exist in AJAZZ Control Center, what they own, and how they communicate. The model is intentionally minimal: one Qt main thread, one I/O thread per open device, one Python interpreter, and a snapshot-based event bus that bridges them.
 
 ## Thread inventory
 
@@ -84,10 +84,11 @@ The host catches exceptions at the boundary, logs them, and surfaces a non-block
 
 ## Event bus
 
-`EventBus<T>` is a tiny publish/subscribe utility (`src/core/include/ajazz/core/event_bus.hpp`):
+`EventBus` is a tiny publish/subscribe utility (`src/core/include/ajazz/core/event_bus.hpp`):
 
-- Subscribers register with a `std::function<void(T const&)>` and receive a token to unsubscribe.
-- `publish()` snapshots the subscriber vector under a `std::shared_mutex` (read lock), releases the lock, then invokes the snapshot. This means a subscriber can `subscribe()` / `unsubscribe()` from inside a callback without deadlocking.
+- Subscribers register a `Handler = std::function<void(DeviceId const&, DeviceEvent const&)>` and receive a `Subscription` token to unsubscribe.
+- `publish()` takes a `std::lock_guard<std::mutex>` to copy the handler map into a local snapshot, releases the lock, then invokes each handler outside the critical section. This means a subscriber can `subscribe()` / `unsubscribe()` from inside a callback without deadlocking.
+- The single mutex is preferred over `std::shared_mutex` here because subscriptions are rare relative to publishes and the snapshot is small; the simpler primitive is easier to reason about. If profiling later shows lock contention on the publish path, switching to `std::shared_mutex` is a drop-in change.
 - The bus does not promise FIFO ordering across publishers — only within a single publisher's call sequence.
 
 ## Timing-sensitive paths

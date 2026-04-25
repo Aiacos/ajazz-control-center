@@ -101,7 +101,7 @@ This is a deliberate alpha-stage choice: we want users to be able to run shell c
 Until then:
 
 - Only install plugins you trust. Read the source.
-- The host shows a "third-party plugin" warning chip in the UI for any plugin not signed by the project.
+- Plugin signing and a "third-party plugin" warning chip in the UI are tracked under [issue #6 (sandbox + permissions)](https://github.com/Aiacos/ajazz-control-center/issues/6) and are deferred until the permission manifest design lands. The current build does not display such a warning.
 
 ## Example: hello-world plugin
 

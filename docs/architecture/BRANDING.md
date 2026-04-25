@@ -73,6 +73,18 @@ class BrandingService : public QObject {
 
 QML reads from `branding.accent`, `branding.bgSidebar`, etc. — no hard-coded hex anywhere in the QML files.
 
+## Theme singleton (`Theme.qml`)
+
+UI code does **not** consume `branding.*` properties directly. Instead it imports the QML singleton `Theme` (`src/app/qml/Theme.qml`, registered as a `QML_SINGLETON` since commit `fe8d2cc`). `Theme` re-publishes the live values from `BrandingService` plus a small set of design tokens shared by every screen:
+
+- Color tokens: `Theme.bgBase`, `Theme.fgPrimary`, `Theme.fgMuted`, `Theme.accent`, `Theme.tile`, `Theme.borderSubtle`.
+- Spacing scale: `Theme.spacingSm`, `Theme.spacingMd`, `Theme.spacingLg`, `Theme.spacingXl`.
+- Type scale: `Theme.fontXs`, `Theme.fontSm`, `Theme.fontMd`, `Theme.fontLg`, `Theme.fontXl`.
+
+Using the singleton instead of `branding.accent` everywhere keeps QML files independent from the controller graph (handy for designer-mode QML previews) and gives us a single place to add theme variants (light / high-contrast). Light theme is selected via `themeService.setMode("light")`; the singleton swaps the underlying palette in place and every binding re-evaluates automatically.
+
+Greps for hard-coded hex literals in `src/app/qml/**/*.qml` should return zero matches; the pre-commit hook flags regressions.
+
 ## Runtime overrides
 
 Even on a vanilla build, the user can override colors at runtime via:

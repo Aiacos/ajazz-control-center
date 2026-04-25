@@ -19,6 +19,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Cross-platform `NotificationService` (Linux notify-send back-end ships) (closes #36).
 - In-app changelog and privacy viewer; embedded `CHANGELOG.md` and `docs/PRIVACY.md` (closes #37).
 - `docs/schemas/property_inspector.schema.json` + generic `PropertyInspector.qml` renderer (closes #39).
+- Tray menu now exposes Pause/Resume, a per-profile *Switch profile* submenu and Quit, with a live update when the profile library changes (closes #24).
+
 - Initial project scaffolding: CMake presets, Qt 6 / QML skeleton UI, C++20 core interfaces.
 - Modular device framework with abstract `IDevice`, `ITransport`, `IProtocol` interfaces.
 - Python plugin host built on pybind11 with `ajazz` runtime module.
@@ -29,5 +31,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - udev rules template for Linux device permissions.
 - `.editorconfig`, `clang-format`, `clang-tidy`, `ruff` and `black` configurations.
 - Contributor workflow: `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, issue and PR templates.
+
+### Changed
+
+- Architecture documentation refreshed to match the shipped code: clarified the snapshot-based `EventBus` synchronisation, documented the controller-layer exception bridge to QML toasts, removed the unsigned-plugin warning chip claim (deferred to #6) and added a section on the `Theme.qml` singleton (closes #44).
 
 [Unreleased]: https://github.com/Aiacos/ajazz-control-center/compare/HEAD...HEAD
