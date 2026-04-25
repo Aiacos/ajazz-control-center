@@ -9,9 +9,19 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  # USB / HID access via libhidapi. Plugdev is preferred on the host; inside
-  # Flatpak the permission is mediated by `--device=all`.
-  - --device=all
+  # USB / HID access via libhidapi. Restrict to USB devices only — never grant
+  # `--device=all` which would expose webcams, audio, and other unrelated
+  # device classes (SEC-006).
+  - --device=usb
+  # AJAZZ HID devices live under /dev/hidraw*; expose only that namespace.
+  - --filesystem=/dev/hidraw0:rw
+  - --filesystem=/dev/hidraw1:rw
+  - --filesystem=/dev/hidraw2:rw
+  - --filesystem=/dev/hidraw3:rw
+  - --filesystem=/dev/hidraw4:rw
+  - --filesystem=/dev/hidraw5:rw
+  - --filesystem=/dev/hidraw6:rw
+  - --filesystem=/dev/hidraw7:rw
   - --filesystem=xdg-config/ajazz-control-center:create
   - --filesystem=xdg-data/ajazz-control-center:create
 

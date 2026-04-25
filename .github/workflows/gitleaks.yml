@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Scans the repository for committed secrets using gitleaks.
+name: Secret scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '23 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@83373cf2f8c4db6e24b41c1a9b086bb9619e9cd3 # v2.3.7
+        env:
+          # GITLEAKS_LICENSE is required for organisation accounts; for personal
+          # accounts the action runs without it. Set if you need org-level
+          # reporting.
+          GITLEAKS_NOTIFY_USER_LIST: '@Aiacos'

@@ -47,7 +47,10 @@ if(AJAZZ_BUILD_PYTHON_HOST)
     if(NOT pybind11_FOUND)
         include(FetchContent)
         FetchContent_Declare(
-            pybind11 GIT_REPOSITORY https://github.com/pybind/pybind11.git GIT_TAG v2.13.6
+            pybind11
+            GIT_REPOSITORY https://github.com/pybind/pybind11.git
+            GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4 # v2.13.6
+            GIT_SHALLOW OFF
         )
         FetchContent_MakeAvailable(pybind11)
     endif()
@@ -56,7 +59,10 @@ endif()
 # hidapi — vendored via FetchContent for reproducibility
 include(FetchContent)
 FetchContent_Declare(
-    hidapi GIT_REPOSITORY https://github.com/libusb/hidapi.git GIT_TAG hidapi-0.14.0
+    hidapi
+    GIT_REPOSITORY https://github.com/libusb/hidapi.git
+    GIT_TAG 73d292a8f4d18f7fb532b9829b9a26ca8d864419 # hidapi-0.14.0
+    GIT_SHALLOW OFF
 )
 set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
 set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")

@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Reviews dependency changes on pull requests for known vulnerabilities and
+# license compatibility.
+name: Dependency Review
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@3b139cfc5fae8b618d3eae3675e383bb1769c019 # v4.5.0
+        with:
+          fail-on-severity: high
+          # GPL-3.0 project: only allow GPL-compatible licenses.
+          allow-licenses: >-
+            MIT, BSD-2-Clause, BSD-3-Clause, BSD-3-Clause-Clear,
+            Apache-2.0, MPL-2.0,
+            LGPL-2.0-or-later, LGPL-2.1-or-later, LGPL-3.0-or-later,
+            GPL-2.0-or-later, GPL-3.0-or-later,
+            ISC, Unlicense, CC0-1.0, Zlib, BSL-1.0, Python-2.0
+          comment-summary-in-pr: on-failure

@@ -22,8 +22,7 @@ jobs:
     name: Sync docs/wiki → GitHub Wiki
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
       - name: Check wiki availability
         id: check
         env:
@@ -37,6 +36,6 @@ jobs:
 
       - name: Push wiki
         if: steps.check.outputs.has_wiki == 'true'
-        uses: Andrew-Chen-Wang/github-wiki-action@v4
+        uses: Andrew-Chen-Wang/github-wiki-action@50650fccf3a10f741995523cf9708c53cec8912a  # v4.4.0
         with:
           path: docs/wiki

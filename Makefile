@@ -30,7 +30,7 @@ BIN_RELEASE       := $(BUILD_DIR_RELEASE)/src/app/ajazz-control-center
 JOBS ?= $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
 .PHONY: default help bootstrap build release configure run test package \
-        install uninstall clean format lint lint-all lint-fix precommit \
+        install uninstall clean format lint tidy lint-all lint-fix precommit \
         wiki udev doctor docs docs-check
 
 default: build
@@ -90,6 +90,10 @@ format: ## Auto-format every C++ source file (clang-format)
 
 lint: configure ## Run clang-tidy across the tree
 	@cmake --build --preset dev --target clang-tidy
+
+tidy: configure ## Run clang-tidy on staged/changed files only
+	@git diff --cached --name-only --diff-filter=AM | grep -E '\.(cpp|hpp|cc|h)$$' | \
+	    xargs -r bash scripts/run-clang-tidy.sh
 
 lint-all: ## Run EVERY linter via pre-commit (clang-format, ruff, yamllint, shellcheck, …)
 	@command -v pre-commit >/dev/null || pip install --user pre-commit
