@@ -69,6 +69,8 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     reload();
 }
 
+PluginCatalogModel::~PluginCatalogModel() = default;
+
 int PluginCatalogModel::rowCount(QModelIndex const& parent) const {
     if (parent.isValid()) {
         return 0;

@@ -126,6 +126,11 @@ public:
     };
 
     explicit PluginCatalogModel(QObject* parent = nullptr);
+    /// Out-of-line destructor: the @c unique_ptr<StreamdockCatalogFetcher>
+    /// member needs the fetcher's full type at the point of destruction,
+    /// and the header only forward-declares it to keep the include graph
+    /// shallow (the network stack is a heavy include).
+    ~PluginCatalogModel() override;
 
     [[nodiscard]] int rowCount(QModelIndex const& parent = {}) const override;
     [[nodiscard]] QVariant data(QModelIndex const& index, int role) const override;
