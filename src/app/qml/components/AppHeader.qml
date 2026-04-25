@@ -20,6 +20,10 @@ Rectangle {
     /// Emitted when the user clicks the "minimize to tray" button.
     signal minimizeRequested()
 
+    /// Emitted when the user clicks the "Plugin Store" button. Main.qml
+    /// listens for this and opens the Plugin Store drawer / page.
+    signal pluginStoreRequested()
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingLg
@@ -76,6 +80,36 @@ Rectangle {
             Accessible.role: Accessible.EditableText
             Accessible.name: qsTr("Search")
             Accessible.description: qsTr("Filter the device list by name")
+        }
+
+        // Plugin Store button — opens the catalogue browser. Placed to the
+        // left of the minimize button so it sits next to the search field
+        // and is the most visible non-search header action.
+        ToolButton {
+            id: pluginsBtn
+            text: qsTr("Plugins")
+            font.pixelSize: Theme.fontMd
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Open the plugin store")
+            onClicked: root.pluginStoreRequested()
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Plugin Store")
+            Accessible.description: qsTr("Browse and install plugins")
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: pluginsBtn.hovered ? Theme.bgRowHover : "transparent"
+                border.width: pluginsBtn.activeFocus ? Theme.focusRingWidth : 0
+                border.color: Theme.accent
+            }
+            contentItem: Text {
+                text: pluginsBtn.text
+                color: Theme.fgPrimary
+                font: pluginsBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: Theme.spacingSm
+                rightPadding: Theme.spacingSm
+            }
         }
 
         // Minimize-to-tray button.

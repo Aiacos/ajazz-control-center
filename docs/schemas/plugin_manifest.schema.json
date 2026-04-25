@@ -381,16 +381,22 @@
         "Compatibility": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Hints for the OpenDeck / Stream Deck compatibility shim.",
+          "description": "Hints for the OpenDeck / Stream Deck / AJAZZ Streamdock compatibility shim.",
           "properties": {
             "Mode": {
               "type": "string",
-              "enum": ["native", "opendeck", "streamdeck"],
-              "default": "native"
+              "enum": ["native", "opendeck", "streamdeck", "streamdock"],
+              "default": "native",
+              "description": "Wire-protocol dialect the plugin expects. 'native' speaks the Ajazz JSON RPC directly; 'opendeck' and 'streamdeck' load existing OpenDeck / Elgato plugins through their respective compatibility shims; 'streamdock' loads plugins published on the official AJAZZ Streamdock store, which uses an Elgato SDK-2 superset with AJAZZ-specific extensions for hardware-accelerated dial widgets and per-key haptics."
             },
             "OpenDeckBinaryName": {
               "type": "string",
               "description": "When Mode=opendeck, names the precompiled binary picked from CodePaths or CodePathLin."
+            },
+            "StreamdockProductId": {
+              "type": "string",
+              "description": "When Mode=streamdock, the upstream product identifier on the AJAZZ Streamdock store. Used by the catalogue mirror to resolve update channels and signed bundle URLs.",
+              "pattern": "^[A-Za-z0-9_.-]+$"
             }
           }
         }

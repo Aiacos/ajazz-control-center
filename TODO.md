@@ -165,25 +165,37 @@ ______________________________________________________________________
   persistence). ≈ 5-7 days.
 - [ ] **Property Inspector embedding** (Qt WebEngine for HTML PI, with
   bridged messages to the plugin process). ≈ 3-5 days.
-- [ ] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
-  Material-styled, virtualized grid, live search/filter, install /
-  update / disable per-plugin). ≈ 7-10 days.
+- [x] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
+  Material-styled, virtualized `GridView`, live search/filter, install /
+  uninstall / enable-toggle per-plugin, side-sheet details pane). Mounted
+  in a right-edge modal `Drawer` opened from a new “Plugins” button in
+  `AppHeader`. Source-switcher tabs scope the catalogue to All /
+  Installed / AJAZZ Streamdock / Community; an info banner on the
+  Streamdock tab clarifies the upstream origin. Backed by the
+  `PluginCatalogModel` C++ list model exposed as the `pluginCatalog` QML
+  context property. Networked catalogue fetch + Sigstore verification
+  still mocked — next milestone.
 - [ ] **Catalog backend** (registry, ratings, version pins, Sigstore
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
 - [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
   - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
-- [ ] **AJAZZ Streamdock store integration**: surface plugins published
-  on the official AJAZZ Streamdock store inside our Plugin Store UI as a
-  first-class "Streamdock Store" tab. Reverse-engineer the Streamdock
-  desktop app's catalogue endpoint (URL, auth, JSON shape), build a
-  cached mirror that translates Streamdock manifests into our schema,
-  expose verified / signed metadata where available, and let users
-  one-click install Streamdock plugins through the same lifecycle
-  manager (compatibility mode `streamdock`, sibling of `streamdeck` and
-  `opendeck`). Includes a settings toggle to opt out of the upstream
-  catalogue for offline / air-gapped builds. ≈ 1-2 weeks once the
-  endpoint is documented; depends on **Plugin lifecycle manager** and
-  **Plugin Store UI**.
+- [x] **AJAZZ Streamdock store integration — schema + UI scaffolding**:
+  manifest schema now exposes `Ajazz.Compatibility.Mode = "streamdock"`
+  alongside `streamdeck` / `opendeck`, plus an opaque
+  `StreamdockProductId` for catalogue-mirror lookups. The Plugin Store
+  UI surfaces upstream entries under a first-class “AJAZZ Streamdock”
+  tab with a dedicated info banner; `PluginCatalogModel` rows carry a
+  `source` field (`local` / `community` / `streamdock`) used by the tab
+  filter, and the side-sheet details pane labels the source as “AJAZZ
+  Streamdock store” for those rows.
+- [ ] **AJAZZ Streamdock store — live catalogue fetch**: reverse-engineer
+  the Streamdock desktop app's catalogue endpoint (URL, auth, JSON
+  shape), build a cached mirror that translates Streamdock manifests
+  into our schema, expose verified / signed metadata where available,
+  and let users one-click install Streamdock plugins through the same
+  lifecycle manager. Includes a settings toggle to opt out of the
+  upstream catalogue for offline / air-gapped builds. ≈ 1-2 weeks once
+  the endpoint is documented; depends on **Plugin lifecycle manager**.
 
 **Total realistic estimate**: 6-10 weeks of focused engineering for a
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel

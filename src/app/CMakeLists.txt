@@ -3,6 +3,7 @@ qt_add_executable(
     src/main.cpp
     src/application.cpp
     src/device_model.cpp
+    src/plugin_catalog_model.cpp
     src/profile_controller.cpp
     src/branding_service.cpp
     src/tray_controller.cpp
@@ -109,6 +110,7 @@ qt_add_qml_module(
               qml/EncoderPanel.qml
               qml/MousePanel.qml
               qml/Inspector.qml
+              qml/PluginStore.qml
               qml/PropertyInspector.qml
               qml/Settings.qml
               qml/components/AppHeader.qml

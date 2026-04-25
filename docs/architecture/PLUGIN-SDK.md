@@ -198,9 +198,15 @@ emulates a foreign protocol when speaking to the plugin:
 | `native`     | Full vocabulary including `ajazz/*` extensions. Default for new plugins.    |
 | `opendeck`   | OpenDeck-flavoured event names (`openContextMenu`, `getContextSettings` …). |
 | `streamdeck` | Strict Stream Deck SDK-2 vocabulary; `ajazz/*` events are filtered out.     |
+| `streamdock` | AJAZZ Streamdock dialect: SDK-2 superset with the `streamdock/*` namespace for hardware dial widgets and per-key haptics; `ajazz/*` extensions are translated to their Streamdock equivalents on the wire. |
 
 This lets us host the long tail of existing plugins **without** forcing
-either ecosystem to converge on AJAZZ-specific event names.
+either ecosystem to converge on AJAZZ-specific event names. The
+`streamdock` mode is the bridge to the official AJAZZ Streamdock plugin
+store: catalogue entries surfaced under the “Streamdock” tab in the
+in-app Plugin Store carry `Ajazz.Compatibility.Mode = "streamdock"` and
+an opaque `StreamdockProductId` resolved by the catalogue mirror to the
+upstream signed bundle URL.
 
 ## Sandboxing
 

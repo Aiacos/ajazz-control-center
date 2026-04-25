@@ -77,6 +77,7 @@ ApplicationWindow {
         AppHeader {
             Layout.fillWidth: true
             onMinimizeRequested: root.hide()
+            onPluginStoreRequested: pluginStoreDrawer.open()
         }
 
         RowLayout {
@@ -116,4 +117,33 @@ ApplicationWindow {
     }
 
     Toast { id: toast }
+
+    // ----------------------------------------------------------------------
+    // Plugin Store drawer.
+    //
+    // The Plugin Store is a Page that renders the catalogue exposed by the
+    // C++-side PluginCatalogModel. We mount it inside a modal Drawer
+    // anchored to the right edge so the user can browse / install plugins
+    // without losing the device list and editor state in the background.
+    // The drawer width clamps to 75 % of the window so the grid still has
+    // room for at least three tile columns on a 1280 px-wide layout.
+    // ----------------------------------------------------------------------
+    Drawer {
+        id: pluginStoreDrawer
+        edge: Qt.RightEdge
+        modal: true
+        dragMargin: 0 // disable edge-drag — only the header button opens it.
+        width: Math.min(960, Math.max(720, root.width * 0.75))
+        height: root.height
+
+        background: Rectangle {
+            color: Theme.bgBase
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        PluginStore {
+            anchors.fill: parent
+        }
+    }
 }

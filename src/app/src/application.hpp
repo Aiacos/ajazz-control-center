@@ -14,6 +14,7 @@
 #include "autostart_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
+#include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
 #include "theme_service.hpp"
 #include "tray_controller.hpp"
@@ -89,7 +90,8 @@ private:
     std::unique_ptr<DeviceModel> m_deviceModel;             ///< List model of registered devices.
     std::unique_ptr<ProfileController> m_profileController; ///< Profile load/save controller.
     std::unique_ptr<TrayController> m_trayController;       ///< System tray icon + menu.
-    std::unique_ptr<core::HotplugMonitor> m_hotplug;        ///< USB arrival/removal watcher.
+    std::unique_ptr<PluginCatalogModel> m_pluginCatalog; ///< Plugin Store catalogue (mock for now).
+    std::unique_ptr<core::HotplugMonitor> m_hotplug;     ///< USB arrival/removal watcher.
 };
 
 } // namespace ajazz::app
