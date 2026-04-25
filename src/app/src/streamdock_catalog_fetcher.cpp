@@ -74,13 +74,13 @@ QString slugify(QString const& s) {
 }
 
 /// First paragraph of a multi-line description, trimmed to @p maxLen characters.
-QString firstParagraph(QString const& body, int maxLen = 240) {
+QString firstParagraph(QString const& body, qsizetype maxLen = 240) {
     QString trimmed = body.trimmed();
-    int const para = trimmed.indexOf(QStringLiteral("\n\n"));
+    qsizetype const para = trimmed.indexOf(QStringLiteral("\n\n"));
     if (para > 0) {
         trimmed.truncate(para);
     } else {
-        int const nl = trimmed.indexOf(QLatin1Char('\n'));
+        qsizetype const nl = trimmed.indexOf(QLatin1Char('\n'));
         if (nl > 0) {
             trimmed.truncate(nl);
         }
