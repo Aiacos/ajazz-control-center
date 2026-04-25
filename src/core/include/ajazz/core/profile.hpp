@@ -136,9 +136,17 @@ struct ProfilePage {
  * the active one based on applicationHints or explicit user selection.
  */
 struct Profile {
-    std::string id;                                  ///< Stable UUIDv4 identifier.
-    std::string name;                                ///< User-visible profile name.
-    std::string deviceCodename;                      ///< Target device, e.g. "akp153".
+    std::string id;   ///< Stable UUIDv4 identifier.
+    std::string name; ///< User-visible profile name.
+    /**
+     * @brief Target device codename, e.g. "akp153".
+     *
+     * Serialised to the JSON wire-key `"device"` per
+     * `docs/protocols/PROFILE_SCHEMA.md`. The C++ identifier and the JSON key
+     * intentionally differ: the wire format is fixed by the schema, the
+     * field name is local C++ naming.
+     */
+    std::string deviceCodename;
     std::unordered_map<std::uint16_t, Binding> keys; ///< Key index → binding (root page).
     std::unordered_map<std::uint16_t, EncoderBinding> encoders; ///< Encoder index → binding.
     std::unordered_map<std::string, Binding> mouseButtons;      ///< Button name → binding.
