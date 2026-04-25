@@ -3,6 +3,10 @@
 extend-ignore-identifiers-re = [
     # Hex constants and 4-byte magic literals.
     "[0-9a-fA-F]{6,}",
+    # Image-format plurals: typos otherwise rewrites "PNGs" → "ONGs"
+    # because it locks onto "NGs" as a known misspelling. We tell it to
+    # leave the whole token alone instead.
+    "^[A-Z]{2,5}s$",
 ]
 
 [default.extend-words]
@@ -25,11 +29,6 @@ invokable = "invokable"
 # Lift-off distance command abbreviation used in the AJ mouse protocol.
 Lod = "Lod"
 kCmdLod = "kCmdLod"
-# Image format plurals — typos otherwise rewrites "PNGs" → "ONGs".
-PNGs = "PNGs"
-JPGs = "JPGs"
-SVGs = "SVGs"
-ICOs = "ICOs"
 # Plugin SDK / supply-chain vocabulary used in the architecture docs.
 Sigstore = "Sigstore"
 sigstore = "sigstore"

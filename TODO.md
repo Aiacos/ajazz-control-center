@@ -141,13 +141,22 @@ ______________________________________________________________________
 > User-requested in this session. **Not autonomous-feasible** end-to-end;
 > document and break down so the work can be parallelized.
 
-- [ ] **Manifest schema** (`docs/schemas/plugin_manifest.schema.json`):
-  JSON Schema describing `id`, `name`, `version`, `sdk`, `actions[]`,
-  `propertyInspector`, capabilities, signing fields. ≈ 1-2 days.
-- [ ] **Architecture doc** (`docs/architecture/PLUGIN-SDK.md`): WS
-  protocol, plugin lifecycle (will-appear / will-disappear / set-state),
-  property-inspector embedding via Qt WebEngine, sandboxing strategy,
-  OpenDeck / Stream Deck compat layer. ≈ 1-2 days.
+- [x] **Manifest schema** (`docs/schemas/plugin_manifest.schema.json`):
+  JSON Schema Draft 2020-12 describing `UUID`, `Name`, `Version`,
+  `SDKVersion`, `Actions[]`, `PropertyInspectorPath`, `OS`, `Software`,
+  `CodePath` / `CodePathLin` / `CodePaths` (OpenDeck-compatible) plus
+  the `Ajazz` namespace (`Sandbox`, `Permissions`, `Signing`,
+  `Compatibility`, `SupportedDevices`). Hooked into pre-commit via
+  check-jsonschema so every committed `manifest.json` is validated
+  automatically.
+- [x] **Architecture doc** (`docs/architecture/PLUGIN-SDK.md`):
+  language-agnostic out-of-process SDK; WebSocket JSON protocol that is
+  a strict superset of the Stream Deck SDK-2 wire format and accepts
+  OpenDeck plugins unchanged; lifecycle (discovery → negotiation →
+  spawn → register → steady-state → shutdown); per-OS sandbox
+  strategy (bwrap + seccomp / sandbox-exec / AppContainer /
+  flatpak-spawn); permission model; Sigstore-based signing; Plugin
+  Store catalogue shape; CLI workflow (`acc plugin scaffold/run/pack/lint`).
 - [ ] **Plugin process spawner** (sandboxed sub-processes, stdio or
   Unix-socket transport). ≈ 3-4 days.
 - [ ] **WebSocket protocol bridge** (Stream Deck-compatible JSON event

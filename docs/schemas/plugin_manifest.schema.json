@@ -1,0 +1,400 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aiacos.dev/schemas/ajazz-control-center/plugin_manifest.schema.json",
+  "title": "AJAZZ Control Center plugin manifest",
+  "description": "Manifest format for AJAZZ Control Center plugins. Designed to be a strict superset of the public fields of the Elgato Stream Deck plugin manifest (https://schemas.elgato.com/streamdeck/plugins/manifest.json) and OpenDeck's CodePathLin / CodePaths extensions, so existing plugins can be loaded with at most a thin compatibility shim. AJAZZ-specific fields live under the `Ajazz` namespace and are optional for SDK-2 compatibility.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "UUID",
+    "Name",
+    "Version",
+    "Author",
+    "Description",
+    "Icon",
+    "CodePath",
+    "Actions",
+    "OS",
+    "SDKVersion",
+    "Software"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "format": "uri",
+      "description": "URI of the JSON Schema this manifest validates against."
+    },
+    "UUID": {
+      "type": "string",
+      "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$",
+      "minLength": 3,
+      "maxLength": 256,
+      "description": "Reverse-DNS unique identifier (e.g. com.aiacos.spotify-now-playing). Lowercase ASCII alphanumerics, hyphens, periods only."
+    },
+    "Name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "description": "Human-readable name shown in the Plugin Store and the action list."
+    },
+    "Version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?(-[0-9A-Za-z.-]+)?$",
+      "description": "Semantic version (a.b.c[.d][-pre]). Stream-Deck-style four-segment versions are also accepted."
+    },
+    "Author": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "description": "Plugin author or organisation."
+    },
+    "Description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1024,
+      "description": "One-line summary shown in the store grid."
+    },
+    "Category": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Optional grouping label in the action list (e.g. \"Streaming\", \"System\")."
+    },
+    "CategoryIcon": {
+      "type": "string",
+      "description": "Path to the category icon (extension omitted, monochrome white-on-transparent PNG/SVG)."
+    },
+    "Icon": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Path (extension omitted) to the plugin icon. PNG/SVG; 28x28 + 56x56 (@2x)."
+    },
+    "URL": {
+      "type": "string",
+      "format": "uri",
+      "description": "Marketing / homepage URL (clickable in the store details pane)."
+    },
+    "SupportURL": {
+      "type": "string",
+      "format": "uri",
+      "description": "Issue tracker or support page URL."
+    },
+    "CodePath": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Default plugin entry point (relative to the manifest directory). Used when no platform-specific override matches."
+    },
+    "CodePathMac": {
+      "type": "string",
+      "description": "macOS-specific entry point. Stream Deck SDK compat field."
+    },
+    "CodePathWin": {
+      "type": "string",
+      "description": "Windows-specific entry point. Stream Deck SDK compat field."
+    },
+    "CodePathLin": {
+      "type": "string",
+      "description": "Linux-specific entry point. OpenDeck extension; preferred over CodePath on Linux."
+    },
+    "CodePaths": {
+      "type": "object",
+      "description": "OpenDeck extension: per-Rust-target binary paths (e.g. {\"x86_64-unknown-linux-gnu\": \"bin/plugin\"}). Keys MUST be valid Rust target triples; the loader picks the entry whose triple matches the host.",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "PropertyInspectorPath": {
+      "type": "string",
+      "pattern": "^[^/].*\\.(htm|html)$",
+      "description": "Optional default Property Inspector page (HTML/HTM). Path is relative to the plugin root, no leading slash."
+    },
+    "DefaultWindowSize": {
+      "type": "array",
+      "items": { "type": "integer", "minimum": 100, "maximum": 4096 },
+      "minItems": 2,
+      "maxItems": 2,
+      "description": "Suggested Property Inspector size in CSS pixels [width, height]."
+    },
+    "Nodejs": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Optional Node.js runtime preferences (Stream Deck SDK compat).",
+      "properties": {
+        "Version": {
+          "type": "string",
+          "enum": ["20", "22", "24"]
+        },
+        "Debug": { "type": "string" },
+        "GenerateProfilerOutput": { "type": "boolean" }
+      },
+      "required": ["Version"]
+    },
+    "OS": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["Platform", "MinimumVersion"],
+        "properties": {
+          "Platform": {
+            "type": "string",
+            "enum": ["mac", "windows", "linux"]
+          },
+          "MinimumVersion": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Minimum supported OS version (e.g. \"13\" for macOS 13, \"10\" for Win10, \"22.04\" for Ubuntu 22.04)."
+          }
+        }
+      }
+    },
+    "SDKVersion": {
+      "type": "integer",
+      "enum": [2, 3],
+      "description": "Stream Deck SDK protocol version this plugin targets. AJAZZ Control Center implements SDK 2 today; SDK 3 reserved."
+    },
+    "Software": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["MinimumVersion"],
+      "properties": {
+        "MinimumVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "description": "Minimum AJAZZ Control Center version this plugin requires (e.g. \"1.2\")."
+        }
+      }
+    },
+    "ApplicationsToMonitor": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "OS-specific lists of executables / bundle ids whose foreground state the plugin observes (Stream Deck SDK compat).",
+      "properties": {
+        "windows": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "mac": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "linux": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "Profiles": {
+      "type": "array",
+      "description": "Pre-defined profiles bundled with the plugin (auto-installed on first activation).",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["Name", "DeviceType"],
+        "properties": {
+          "Name": { "type": "string", "minLength": 1 },
+          "DeviceType": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 99,
+            "description": "Stream Deck DeviceType id (0..13) or AJAZZ-specific id (14..99). See docs/architecture/PLUGIN-SDK.md."
+          },
+          "AutoInstall": { "type": "boolean" },
+          "DontAutoSwitchWhenInstalled": { "type": "boolean" },
+          "Readonly": { "type": "boolean" }
+        }
+      }
+    },
+    "Actions": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Actions (button behaviours) exposed by this plugin.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["UUID", "Name", "Icon", "States"],
+        "properties": {
+          "UUID": {
+            "type": "string",
+            "pattern": "^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$",
+            "description": "Reverse-DNS id, must start with the plugin UUID (e.g. com.aiacos.spotify.play)."
+          },
+          "Name": { "type": "string", "minLength": 1, "maxLength": 64 },
+          "Tooltip": { "type": "string", "maxLength": 256 },
+          "Icon": { "type": "string", "minLength": 1 },
+          "Controllers": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "uniqueItems": true,
+            "items": { "type": "string", "enum": ["Keypad", "Encoder"] },
+            "description": "Hardware affordances supported by the action. Default: [\"Keypad\"]."
+          },
+          "States": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["Image"],
+              "properties": {
+                "Image": { "type": "string", "minLength": 1 },
+                "MultiActionImage": { "type": "string" },
+                "Name": { "type": "string" },
+                "Title": { "type": "string" },
+                "ShowTitle": { "type": "boolean" },
+                "TitleColor": {
+                  "type": "string",
+                  "pattern": "^#[0-9A-Fa-f]{6}$"
+                },
+                "TitleAlignment": {
+                  "type": "string",
+                  "enum": ["top", "middle", "bottom"]
+                },
+                "FontFamily": { "type": "string" },
+                "FontSize": { "type": "integer", "minimum": 6, "maximum": 96 },
+                "FontStyle": {
+                  "type": "string",
+                  "enum": ["", "Regular", "Bold", "Italic", "Bold Italic"]
+                },
+                "FontUnderline": { "type": "boolean" }
+              }
+            }
+          },
+          "Encoder": {
+            "type": "object",
+            "additionalProperties": false,
+            "description": "Encoder-specific metadata (touchscreen layout, trigger labels).",
+            "properties": {
+              "Icon": { "type": "string" },
+              "background": { "type": "string" },
+              "layout": {
+                "type": "string",
+                "description": "Pre-defined layout id ($A0/$A1/$B1/$B2/$C1/$X1) or relative path to a custom layout JSON."
+              },
+              "StackColor": {
+                "type": "string",
+                "pattern": "^#[0-9A-Fa-f]{6}$"
+              },
+              "TriggerDescription": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "Push": { "type": "string" },
+                  "Rotate": { "type": "string" },
+                  "Touch": { "type": "string" },
+                  "LongTouch": { "type": "string" }
+                }
+              }
+            }
+          },
+          "PropertyInspectorPath": {
+            "type": "string",
+            "pattern": "^[^/].*\\.(htm|html)$"
+          },
+          "SupportedInMultiActions": { "type": "boolean" },
+          "SupportedInKeyLogicActions": { "type": "boolean" },
+          "VisibleInActionsList": { "type": "boolean" },
+          "DisableAutomaticStates": { "type": "boolean" },
+          "DisableCaching": { "type": "boolean" },
+          "UserTitleEnabled": { "type": "boolean" },
+          "SupportURL": { "type": "string", "format": "uri" }
+        }
+      }
+    },
+    "Ajazz": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "AJAZZ Control Center extensions (optional). Plugins targeting Stream Deck only do not need this block.",
+      "properties": {
+        "MinimumAccVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+(\\.[0-9]+)?$",
+          "description": "Minimum ajazz-control-center version (overrides Software.MinimumVersion when present)."
+        },
+        "SupportedDevices": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z0-9_]+$",
+            "description": "Device codename (e.g. akp03, akp153, akp05, ak980pro, ak200)."
+          },
+          "description": "Restricts the plugin to a subset of supported AJAZZ devices. Empty / missing = all devices."
+        },
+        "Sandbox": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Sandboxing preferences (advisory until per-OS containers are wired in).",
+          "properties": {
+            "Network": { "type": "boolean", "default": false },
+            "FilesystemReadPaths": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "FilesystemWritePaths": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
+        "Permissions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "media-control",
+              "system-power",
+              "shell-exec",
+              "clipboard-read",
+              "clipboard-write",
+              "notifications",
+              "screen-capture",
+              "input-simulation",
+              "obs-websocket",
+              "spotify",
+              "discord-rpc"
+            ]
+          },
+          "description": "Coarse permissions the plugin requests. UI surfaces these at install time so the user can review them."
+        },
+        "Signing": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Sigstore / cosign attestation metadata for the published bundle.",
+          "properties": {
+            "CosignBundle": { "type": "string", "format": "uri" },
+            "CertificateIdentity": { "type": "string", "format": "uri" },
+            "CertificateOIDCIssuer": { "type": "string", "format": "uri" },
+            "RekorURL": {
+              "type": "string",
+              "format": "uri",
+              "default": "https://rekor.sigstore.dev"
+            }
+          }
+        },
+        "Compatibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "Hints for the OpenDeck / Stream Deck compatibility shim.",
+          "properties": {
+            "Mode": {
+              "type": "string",
+              "enum": ["native", "opendeck", "streamdeck"],
+              "default": "native"
+            },
+            "OpenDeckBinaryName": {
+              "type": "string",
+              "description": "When Mode=opendeck, names the precompiled binary picked from CodePaths or CodePathLin."
+            }
+          }
+        }
+      }
+    }
+  }
+}

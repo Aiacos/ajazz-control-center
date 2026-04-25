@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="../../resources/icons/hicolor/app-256.png" alt="AJAZZ Control Center icon" width="128" height="128">
+</p>
+
 # AJAZZ Control Center Wiki
 
 Welcome to the **AJAZZ Control Center** wiki — the community home for
