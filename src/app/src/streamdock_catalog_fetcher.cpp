@@ -492,8 +492,8 @@ void StreamdockCatalogFetcher::refresh() {
     // Reset accumulated state and start at page 1.
     m_accumulated.clear();
     m_inFlightTotalPages = 0;
-    if (!m_name) {
-        m_name = new QNetworkAccessManager{this};
+    if (!m_netAccessManager) {
+        m_netAccessManager = new QNetworkAccessManager{this};
     }
     if (m_state != State::Loading) {
         m_state = State::Loading;
@@ -524,7 +524,8 @@ void StreamdockCatalogFetcher::fetchPage(int pageNum) {
         {QStringLiteral("productType"), QString::fromLatin1(kProductTypePlugin)},
         {QStringLiteral("tenantId"), QString::fromLatin1(kTenantId)},
     };
-    auto* const reply = m_name->post(req, QJsonDocument{body}.toJson(QJsonDocument::Compact));
+    auto* const reply =
+        m_netAccessManager->post(req, QJsonDocument{body}.toJson(QJsonDocument::Compact));
     QObject::connect(
         reply, &QNetworkReply::finished, this, [this, reply]() { onPageFinished(reply); });
 }

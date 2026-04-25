@@ -192,7 +192,7 @@ private:
     /// Emit @ref snapshotReady and update state accordingly.
     void emitSnapshot(Snapshot snapshot);
 
-    QNetworkAccessManager* m_name = nullptr;         ///< Lazily created on first refresh.
+    QNetworkAccessManager* m_netAccessManager = nullptr; ///< Lazily created on first refresh.
     QString m_cacheDirOverride;                     ///< Empty = use QStandardPaths::CacheLocation.
     QString m_catalogUrlOverride;                   ///< Empty = use env / default.
     State m_state = State::Idle;                    ///< Last-known fetch state.
