@@ -192,11 +192,15 @@ ______________________________________________________________________
   - [x] **M3** — `PIBridge` QObject exposing the Stream Deck SDK-2
     `\$SD` API surface via `QWebChannel` (registered as `"$SD"` on the
     page's channel). Method bodies are logging stubs.
-  - [ ] **M4** — settings persistence for `setSettings` / `getSettings`
+  - [x] **M4** — settings persistence for `setSettings` / `getSettings`
     / `setGlobalSettings` / `getGlobalSettings` to per-context JSON
     files under `QStandardPaths::AppDataLocation/plugins/<plugin>/`.
     Atomic writes via `QSaveFile`, path-traversal validation on uuid
-    components, 1 MiB size cap.
+    components, 1 MiB size cap. Per-context settings land at
+    `settings/<contextUuid>.json`; plugin-wide at `global.json`. Getter
+    methods stay async (return-via-signal contract preserved). All
+    M4-side code is gated by `AJAZZ_HAVE_WEBENGINE` and lives in
+    `src/app/src/pi_bridge.cpp`.
   - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
     over the plugin-host WebSocket. Depends on **Plugin process spawner**
     - **WebSocket protocol bridge** below.
