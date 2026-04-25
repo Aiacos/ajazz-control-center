@@ -1,0 +1,2 @@
+# AKP153 - key index 0xff (out of range > KeyCount=15). Must reject.
+00 00 00 00 00 00 00 00 00 ff 00 00 00 00 00 00

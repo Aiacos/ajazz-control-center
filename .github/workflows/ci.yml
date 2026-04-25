@@ -137,3 +137,65 @@ jobs:
         with:
           name: coverage
           path: coverage.info
+
+  # ---------------------------------------------------------------------------
+  # Sanitizer matrix — Linux only (closes #41).
+  # ASan + UBSan run together (cheap, catches the most defects). TSan runs in
+  # its own job because the instrumentation is incompatible with ASan and the
+  # GIL of the embedded Python interpreter currently prevents running TSan with
+  # the full app, so we restrict the suite to the C++ unit and integration
+  # tests where we exercise the EventBus concurrency invariants.
+  # ---------------------------------------------------------------------------
+  sanitizers:
+    name: Sanitizers · ${{ matrix.flavour }}
+    runs-on: ubuntu-24.04
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavour: ASan+UBSan
+            cmake_flags: -DAJAZZ_ENABLE_SANITIZERS=ON
+            asan_options: detect_leaks=1:strict_string_checks=1:check_initialization_order=1
+            ubsan_options: print_stacktrace=1:halt_on_error=1
+            tsan_options: ""
+          - flavour: TSan
+            cmake_flags: -DAJAZZ_ENABLE_TSAN=ON
+            asan_options: ""
+            ubsan_options: ""
+            tsan_options: halt_on_error=1:second_deadlock_stack=1
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+              build-essential cmake ninja-build pkg-config \
+              libudev-dev libusb-1.0-0-dev libhidapi-dev \
+              libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
+              libxcb-cursor-dev libxkbcommon-x11-dev \
+              python3-dev python3-pip
+      - uses: jurplel/install-qt-action@12aa0336e1e410b3c6dff5e0722547f7a37e8c60  # v4.2.1
+        with:
+          version: 6.7.3
+          cache: true
+          modules: qtshadertools
+
+      - name: Configure (Debug + sanitizer)
+        run: |
+          cmake -S . -B build-san -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DAJAZZ_ENABLE_WERROR=OFF \
+            -DAJAZZ_BUILD_APP=OFF \
+            -DAJAZZ_BUILD_PYTHON_HOST=OFF \
+            ${{ matrix.cmake_flags }}
+
+      - name: Build
+        run: cmake --build build-san --target ajazz_unit_tests ajazz_integration_tests
+
+      - name: Run unit + integration tests
+        env:
+          ASAN_OPTIONS: ${{ matrix.asan_options }}
+          UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
+          TSAN_OPTIONS: ${{ matrix.tsan_options }}
+        run: ctest --test-dir build-san --output-on-failure

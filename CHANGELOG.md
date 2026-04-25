@@ -20,6 +20,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - In-app changelog and privacy viewer; embedded `CHANGELOG.md` and `docs/PRIVACY.md` (closes #37).
 - `docs/schemas/property_inspector.schema.json` + generic `PropertyInspector.qml` renderer (closes #39).
 - Tray menu now exposes Pause/Resume, a per-profile *Switch profile* submenu and Quit, with a live update when the profile library changes (closes #24).
+- HID capture fixtures live under `tests/integration/fixtures/<device>/`; new header-only `hex_loader.hpp` parses them and `test_capture_replay.cpp` covers happy-path + malformed (truncated, oversize index, no-key marker) frames (closes #40).
+- ASan/UBSan + TSan CI matrix on Linux (`Sanitizers · …` jobs in `ci.yml`); concurrent publish/subscribe and re-entrant subscribe/unsubscribe tests for `EventBus` (closes #41).
 
 - Initial project scaffolding: CMake presets, Qt 6 / QML skeleton UI, C++20 core interfaces.
 - Modular device framework with abstract `IDevice`, `ITransport`, `IProtocol` interfaces.

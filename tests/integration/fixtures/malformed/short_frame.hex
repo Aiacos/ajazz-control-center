@@ -1,0 +1,2 @@
+# Truncated frame (8 bytes; AKP153 requires >=16). Must reject.
+00 00 00 00 00 00 00 00

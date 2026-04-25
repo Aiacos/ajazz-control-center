@@ -29,6 +29,7 @@ option(AJAZZ_BUILD_TESTS "Build unit and integration tests" ON)
 option(AJAZZ_BUILD_PYTHON_HOST "Build embedded Python plugin host" ON)
 option(AJAZZ_ENABLE_WERROR "Treat warnings as errors" ON)
 option(AJAZZ_ENABLE_SANITIZERS "Enable ASan/UBSan in Debug builds" OFF)
+option(AJAZZ_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASan)" OFF)
 option(AJAZZ_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
