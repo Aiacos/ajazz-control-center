@@ -208,6 +208,99 @@ in-app Plugin Store carry `Ajazz.Compatibility.Mode = "streamdock"` and
 an opaque `StreamdockProductId` resolved by the catalogue mirror to the
 upstream signed bundle URL.
 
+### Upstream Streamdock Space catalogue
+
+The AJAZZ Streamdock store is a Mirabox-operated catalogue at
+`https://space.key123.vip` (the “Space” platform). Its plugin index is
+exposed via a JSON-over-HTTP RPC; `acc` mirrors the relevant subset
+rather than embedding any vendor SDK or scraping HTML.
+
+| Concern        | Value                                                          |
+| -------------- | -------------------------------------------------------------- |
+| Endpoint       | `POST https://space.key123.vip/interface/user/productInfo/list` |
+| Content-Type   | `application/json`                                             |
+| Body (plugins) | `{"pageNum": <n>, "pageSize": 50, "productType": "1", "tenantId": "10000000"}` |
+| Auth           | None — anonymous read-only.                                    |
+| Pagination     | `pageNum` is 1-based. Stop when `pageNum >= data.totalPage`.   |
+| Other types    | `productType=2` icon packs, `5` profiles, `12` animated bg.    |
+
+We only mirror `productType=1` ("plugins") into the Plugin Store; icon
+packs, profiles and animated backgrounds are out of scope for the
+in-app catalogue today (they ship through a different lifecycle).
+
+Response shape (plugin record, only the fields `acc` consumes):
+
+```json
+{
+  "id": "178366994578965",
+  "name": "Spotify Integration",
+  "author": "MiraBox",
+  "version": "2.0.260421",
+  "overview": "Spotify integration and live feedback…",
+  "headUrl": "https://cdn1.key123.vip/.../Spotify.png",
+  "size": 1364396.0,
+  "download": "https://cdn1.key123.vip/.../com.mirabox.streamdock.spotify.sdPlugin",
+  "types":   [{"id": "6", "nameen": "Music"}],
+  "devices": [{"id": "196", "deviceUuid": "293", "name": "…"}],
+  "mac": 1, "win": 1
+}
+```
+
+The mirror translates each record to the in-app `CatalogEntry` shape:
+
+| `CatalogEntry` field    | Source                                                          |
+| ----------------------- | --------------------------------------------------------------- |
+| `uuid`                  | `"com.streamdock." + slug(name) + "." + id` (deterministic).    |
+| `name` / `version`      | `name` / `version`.                                             |
+| `author`                | `author`, defaulted to `"AJAZZ Streamdock"` when blank.         |
+| `description`           | first paragraph of `overview`, trimmed to 240 chars.            |
+| `iconUrl`               | `headUrl` (HTTPS only — `http://` rows are dropped).            |
+| `category`              | `types[0].nameen`, falling back to `"Streaming"`.               |
+| `tags`                  | every `types[*].nameen`, lower-cased.                           |
+| `devices`               | mapped through the `Streamdock device-id → AKP codename` table. |
+| `compatibility`         | constant `"streamdock"`.                                        |
+| `sizeBytes`             | `humanise(size)` (e.g. `"1.3 MB"`).                             |
+| `verified`              | `false` until we wire upstream signature verification.          |
+| `source`                | constant `"streamdock"`.                                        |
+| `streamdockProductId`   | `id` (as a string).                                             |
+
+The device-id table is curated in `streamdock_catalog_fetcher.cpp` and
+only exposes the AJAZZ devices `acc` actually drives (AKP153 / AKP153E /
+AKP815 / AKP03 / AK980-PRO). Records that don't list at least one
+supported device are dropped from the mirror.
+
+#### Caching and offline fallback
+
+Network access is **not** required to render the AJAZZ Streamdock tab.
+The model resolves its rows in three layers, each strictly more recent
+than the previous:
+
+1. **Live fetch** — `QNetworkAccessManager` POSTs the paged list
+   request with a 10 s timeout per page. Successful pages are
+   accumulated until `totalPage` is exhausted, then the whole snapshot
+   is written atomically (`*.tmp` → `rename`) to
+   `<XDG_CACHE_HOME>/ajazz-control-center/streamdock-catalog.json`.
+2. **Cached mirror** — on startup (and on any network failure) the
+   model parses the on-disk mirror written by the previous successful
+   fetch. The cache is considered fresh forever; freshness is
+   communicated to the user via the timestamp surfaced in the QML
+   banner ("updated 3 min ago" vs "offline — cached 4 days ago").
+3. **Offline fixture** — when neither the network nor the disk cache
+   is available (first launch on an air-gapped box, or a poisoned
+   cache that fails JSON validation) the model loads a small, signed
+   fixture compiled into the binary at
+   `qrc:/qt/qml/AjazzControlCenter/streamdock-fallback.json`. The
+   fixture exists only to ensure the AJAZZ Streamdock tab is never
+   empty in dev / CI / air-gapped builds.
+
+The state surfaced to QML (`streamdockState` on `PluginCatalogModel`)
+is one of `loading`, `online`, `cached` or `offline`, and drives the
+banner text on the AJAZZ Streamdock tab. The catalogue URL is
+overridable through the `ACC_STREAMDOCK_CATALOG_URL` environment
+variable for testing (e.g. pointing at a private mirror in CI), and the
+entire fetch is a no-op when `ACC_STREAMDOCK_CATALOG_URL=disabled` is
+set (offline-only builds).
+
 ## Sandboxing
 
 Every third-party plugin runs as a separate OS process. The launcher

@@ -13,6 +13,10 @@ ______________________________________________________________________
 
 ## ✅ Recently shipped (this development cycle)
 
+- AJAZZ Streamdock store — live catalogue fetch with cached on-disk
+  mirror and bundled offline fallback (`StreamdockCatalogFetcher`,
+  three-layer resolution, live UI status pill). See "Plugin SDK + Store"
+  below for the full description.
 - AJAZZ AK980 PRO support (vendor `0x0c45`, codename `ak980pro`) — `469e599`
 - Single-instance gate + show-existing on relaunch — `f7c4847`
 - Default-visible main window (was tray-only on first launch) — `09c104a`
@@ -238,14 +242,23 @@ ______________________________________________________________________
   `source` field (`local` / `community` / `streamdock`) used by the tab
   filter, and the side-sheet details pane labels the source as “AJAZZ
   Streamdock store” for those rows.
-- [ ] **AJAZZ Streamdock store — live catalogue fetch**: reverse-engineer
-  the Streamdock desktop app's catalogue endpoint (URL, auth, JSON
-  shape), build a cached mirror that translates Streamdock manifests
-  into our schema, expose verified / signed metadata where available,
-  and let users one-click install Streamdock plugins through the same
-  lifecycle manager. Includes a settings toggle to opt out of the
-  upstream catalogue for offline / air-gapped builds. ≈ 1-2 weeks once
-  the endpoint is documented; depends on **Plugin lifecycle manager**.
+- [x] **AJAZZ Streamdock store — live catalogue fetch**: shipped. New
+  `StreamdockCatalogFetcher` (`src/app/src/streamdock_catalog_fetcher.{hpp,cpp}`)
+  POSTs to `https://space.key123.vip/interface/user/productInfo/list`
+  page-by-page, accumulates plugin records, translates upstream
+  `deviceUuid`s (293/293E/N3/N4/D92…) to AKP codenames via a curated
+  table, and writes an atomic `QSaveFile` mirror to
+  `<XDG_CACHE_HOME>/ajazz-control-center/streamdock-catalog.json`. Three
+  resolution layers (live → cached → bundled `streamdock-fallback.json`)
+  ensure the AJAZZ Streamdock tab is never empty. The fetcher is wired
+  into `PluginCatalogModel` and surfaces `streamdockState`
+  (`loading`/`online`/`cached`/`offline`) + `streamdockFetchedAtUnixMs`
+  to QML, which renders a live status pill on the tab banner with a
+  rolling relative-time label. Endpoint is overridable via
+  `ACC_STREAMDOCK_CATALOG_URL=` (set to `disabled` to skip the network
+  fetch entirely on air-gapped builds). One-click install through the
+  shared lifecycle manager still depends on **Plugin lifecycle
+  manager**.
 
 **Total realistic estimate**: 6-10 weeks of focused engineering for a
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
