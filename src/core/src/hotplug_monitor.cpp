@@ -4,12 +4,14 @@
  * @brief Cross-platform implementation of @ref ajazz::core::HotplugMonitor.
  *
  * One translation unit guarded by per-OS `#ifdef` blocks. Each OS provides:
- *   1. A `runImpl(stop_token, callback)` function that pumps events.
+ *   1. A `runImpl(stop, callback)` function that pumps events.
  *   2. A way to wake the pump for graceful shutdown.
  *
- * The shared @ref Impl owns a `std::jthread`. Stopping the thread relies on
- * the per-OS wake mechanism (eventfd on Linux, PostMessage on Windows,
- * CFRunLoopStop on macOS) to break out of any blocking poll.
+ * The shared @ref Impl owns a `std::thread`. Stopping the thread relies on
+ * the per-OS wake mechanism (eventfd on Linux, PostThreadMessage on Windows,
+ * CFRunLoopStop on macOS) to break out of any blocking poll. We deliberately
+ * avoid `std::jthread` because Apple Clang did not ship `<stop_token>` until
+ * macOS 13.3 / Xcode 14.3 and we still target macOS 12 runners on CI.
  */
 #include "ajazz/core/hotplug_monitor.hpp"
 
@@ -40,7 +42,8 @@ namespace ajazz::core {
 struct HotplugMonitor::Impl {
     Callback cb;
     std::atomic<bool> running{false};
-    std::jthread worker;
+    std::atomic<bool> stopFlag{false};
+    std::thread worker;
 
 #if defined(__linux__)
     int wakeFd{-1}; ///< eventfd used to interrupt poll() on stop()
@@ -63,7 +66,7 @@ namespace {
  * events. The kernel is the event source; userspace events from networkd or
  * elogind are deliberately ignored.
  */
-void runLinux(std::stop_token st, HotplugMonitor::Callback const& cb, int wakeFd) {
+void runLinux(std::atomic<bool> const& stop, HotplugMonitor::Callback const& cb, int wakeFd) {
     udev* ctx = udev_new();
     if (!ctx) {
         AJAZZ_LOG_WARN("hotplug", "udev_new failed; hotplug disabled");
@@ -84,7 +87,7 @@ void runLinux(std::stop_token st, HotplugMonitor::Callback const& cb, int wakeFd
         {wakeFd, POLLIN, 0},
     };
 
-    while (!st.stop_requested()) {
+    while (!stop.load(std::memory_order_acquire)) {
         int const rc = ::poll(fds, 2, -1);
         if (rc < 0) {
             break; // EINTR or fatal
@@ -92,7 +95,7 @@ void runLinux(std::stop_token st, HotplugMonitor::Callback const& cb, int wakeFd
         if (fds[1].revents & POLLIN) {
             std::uint64_t drain = 0;
             ssize_t n = ::read(wakeFd, &drain, sizeof(drain));
-            (void)n; // intentionally ignored — eventfd semantics
+            (void)n;
             break;
         }
         if (!(fds[0].revents & POLLIN)) {
@@ -133,13 +136,15 @@ LPCWSTR const kWndClass = L"AjazzHotplugMonitor";
 
 /// Parse "USB#VID_0300&PID_1001#..." into vid/pid.
 bool parseVidPid(WCHAR const* devName, std::uint16_t& vid, std::uint16_t& pid) {
-    if (!devName)
+    if (!devName) {
         return false;
+    }
     std::wstring s = devName;
     auto const v = s.find(L"VID_");
     auto const p = s.find(L"PID_");
-    if (v == std::wstring::npos || p == std::wstring::npos)
+    if (v == std::wstring::npos || p == std::wstring::npos) {
         return false;
+    }
     vid = static_cast<std::uint16_t>(std::wcstoul(s.c_str() + v + 4, nullptr, 16));
     pid = static_cast<std::uint16_t>(std::wcstoul(s.c_str() + p + 4, nullptr, 16));
     return true;
@@ -164,7 +169,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(h, msg, wp, lp);
 }
 
-void runWindows(std::stop_token st, HotplugMonitor::Callback const& cb, HWND& outHwnd) {
+void runWindows(std::atomic<bool> const& stop, HotplugMonitor::Callback const& cb, HWND& outHwnd) {
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = &wndProc;
@@ -191,7 +196,7 @@ void runWindows(std::stop_token st, HotplugMonitor::Callback const& cb, HWND& ou
     outHwnd = hwnd;
 
     MSG msg;
-    while (!st.stop_requested() && GetMessageW(&msg, nullptr, 0, 0) > 0) {
+    while (!stop.load(std::memory_order_acquire) && GetMessageW(&msg, nullptr, 0, 0) > 0) {
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
@@ -221,7 +226,8 @@ void iokitCb(void* refcon, io_iterator_t it, HotplugAction action) {
                                                            CFSTR(kUSBProductID),
                                                            kCFAllocatorDefault,
                                                            kIORegistryIterateRecursively);
-        SInt32 vid = 0, pid = 0;
+        SInt32 vid = 0;
+        SInt32 pid = 0;
         if (vidRef) {
             CFNumberGetValue(static_cast<CFNumberRef>(vidRef), kCFNumberSInt32Type, &vid);
             CFRelease(vidRef);
@@ -239,8 +245,15 @@ void iokitCb(void* refcon, io_iterator_t it, HotplugAction action) {
     }
 }
 
-void runMacos(std::stop_token st, HotplugMonitor::Callback const& cb, CFRunLoopRef& outLoop) {
+void runMacos(std::atomic<bool> const& stop,
+              HotplugMonitor::Callback const& cb,
+              CFRunLoopRef& outLoop) {
+    // kIOMasterPortDefault was deprecated on macOS 12; use kIOMainPortDefault when available.
+#if defined(MAC_OS_VERSION_12_0) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_12_0
+    auto port = IONotificationPortCreate(kIOMainPortDefault);
+#else
     auto port = IONotificationPortCreate(kIOMasterPortDefault);
+#endif
     if (!port) {
         AJAZZ_LOG_WARN("hotplug", "IONotificationPortCreate failed; hotplug disabled");
         return;
@@ -248,7 +261,8 @@ void runMacos(std::stop_token st, HotplugMonitor::Callback const& cb, CFRunLoopR
     outLoop = CFRunLoopGetCurrent();
     CFRunLoopAddSource(outLoop, IONotificationPortGetRunLoopSource(port), kCFRunLoopDefaultMode);
 
-    io_iterator_t addedIter = 0, removedIter = 0;
+    io_iterator_t addedIter = 0;
+    io_iterator_t removedIter = 0;
     auto matching = IOServiceMatching(kIOUSBDeviceClassName);
     CFRetain(matching); // We register the dict twice (added + removed).
 
@@ -272,14 +286,16 @@ void runMacos(std::stop_token st, HotplugMonitor::Callback const& cb, CFRunLoopR
         &removedIter);
     iokitCb(cbPtr, removedIter, HotplugAction::Removed);
 
-    while (!st.stop_requested()) {
+    while (!stop.load(std::memory_order_acquire)) {
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0, false);
     }
 
-    if (addedIter)
+    if (addedIter) {
         IOObjectRelease(addedIter);
-    if (removedIter)
+    }
+    if (removedIter) {
         IOObjectRelease(removedIter);
+    }
     IONotificationPortDestroy(port);
 }
 
@@ -307,6 +323,7 @@ bool HotplugMonitor::start() {
     if (p_->running.exchange(true)) {
         return true;
     }
+    p_->stopFlag.store(false);
 
 #if defined(__linux__)
     p_->wakeFd = ::eventfd(0, EFD_CLOEXEC | EFD_NONBLOCK);
@@ -315,24 +332,21 @@ bool HotplugMonitor::start() {
         return false;
     }
     int wake = p_->wakeFd;
-    auto const& cb = p_->cb;
-    p_->worker = std::jthread([wake, &cb](std::stop_token st) { runLinux(st, cb, wake); });
+    Impl* impl = p_.get();
+    p_->worker = std::thread([impl, wake] { runLinux(impl->stopFlag, impl->cb, wake); });
     return true;
 
 #elif defined(_WIN32)
-    auto const& cb = p_->cb;
-    HWND* outHwnd = &p_->hidden;
-    DWORD* outTid = &p_->threadId;
-    p_->worker = std::jthread([&cb, outHwnd, outTid](std::stop_token st) {
-        *outTid = GetCurrentThreadId();
-        runWindows(st, cb, *outHwnd);
+    Impl* impl = p_.get();
+    p_->worker = std::thread([impl] {
+        impl->threadId = GetCurrentThreadId();
+        runWindows(impl->stopFlag, impl->cb, impl->hidden);
     });
     return true;
 
 #elif defined(__APPLE__)
-    auto const& cb = p_->cb;
-    CFRunLoopRef* outLoop = &p_->runLoop;
-    p_->worker = std::jthread([&cb, outLoop](std::stop_token st) { runMacos(st, cb, *outLoop); });
+    Impl* impl = p_.get();
+    p_->worker = std::thread([impl] { runMacos(impl->stopFlag, impl->cb, impl->runLoop); });
     return true;
 
 #else
@@ -346,9 +360,9 @@ void HotplugMonitor::stop() {
     if (!p_->running.exchange(false)) {
         return;
     }
-    if (p_->worker.joinable()) {
-        p_->worker.request_stop();
+    p_->stopFlag.store(true, std::memory_order_release);
 
+    if (p_->worker.joinable()) {
 #if defined(__linux__)
         if (p_->wakeFd >= 0) {
             std::uint64_t one = 1;

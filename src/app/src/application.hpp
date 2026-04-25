@@ -24,6 +24,7 @@ class QQmlApplicationEngine;
 
 namespace ajazz::core {
 class HotplugMonitor;
+struct HotplugEvent;
 } // namespace ajazz::core
 
 namespace ajazz::app {
@@ -78,7 +79,7 @@ public:
 
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
-    void onHotplug(class core::HotplugEvent const& ev);
+    void onHotplug(core::HotplugEvent const& ev);
 
     std::unique_ptr<BrandingService> m_branding;            ///< Theme + product strings.
     std::unique_ptr<DeviceModel> m_deviceModel;             ///< List model of registered devices.
