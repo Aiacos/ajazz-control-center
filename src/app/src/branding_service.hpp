@@ -86,14 +86,14 @@ public:
      * embedded resource `:/changelog/CHANGELOG.md`; if the resource is not
      * available a short fallback string is returned.
      */
-    Q_INVOKABLE QString changelogText() const;
+    [[nodiscard]] Q_INVOKABLE QString changelogText() const;
 
     /**
      * @brief Return the bundled PRIVACY.md as plain Markdown.
      *
      * Used by the "Privacy" link in About / Settings.
      */
-    Q_INVOKABLE QString privacyText() const;
+    [[nodiscard]] Q_INVOKABLE QString privacyText() const;
 
 signals:
     /// Emitted whenever any color property changes.

@@ -43,6 +43,7 @@ namespace ajazz::app {
  */
 class PropertyInspectorController : public QObject {
     Q_OBJECT
+    Q_DISABLE_COPY_MOVE(PropertyInspectorController)
 
     /// True iff the build linked Qt WebEngine and the controller can host
     /// HTML PI pages. QML uses this to swap between the WebEngine renderer

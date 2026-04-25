@@ -5,10 +5,15 @@
  */
 #include "app_icon.hpp"
 
+#include <QIcon>
 #include <QImage>
 #include <QPainter>
 #include <QPixmap>
+#include <QString>
 #include <QSvgRenderer>
+#include <Qt>
+
+#include <array>
 
 namespace ajazz::app {
 
@@ -35,7 +40,7 @@ QIcon makeAppIcon(QString const& svgResourcePath, QString const& fallbackResourc
     // returns the matching pixmap without scaling, which is the only way to
     // keep crisp edges at the small tray sizes where bilinear downscaling of
     // a single 256 px raster turns the artwork into a blurry smudge.
-    static constexpr int kSizes[] = {16, 22, 24, 32, 48, 64, 128, 256, 512};
+    static constexpr std::array<int, 9> Sizes = {16, 22, 24, 32, 48, 64, 128, 256, 512};
 
     QSvgRenderer renderer;
     if (!renderer.load(svgResourcePath) && !fallbackResourcePath.isEmpty()) {
@@ -46,7 +51,7 @@ QIcon makeAppIcon(QString const& svgResourcePath, QString const& fallbackResourc
     }
 
     QIcon icon;
-    for (int sz : kSizes) {
+    for (int const sz : Sizes) {
         icon.addPixmap(renderAt(renderer, sz));
     }
     return icon;

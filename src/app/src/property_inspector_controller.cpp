@@ -18,8 +18,10 @@ PropertyInspectorController::PropertyInspectorController(QObject* parent) : QObj
 
 PropertyInspectorController::~PropertyInspectorController() = default;
 
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static) — must be a
+// non-static member because it backs the @c webEngineAvailable Q_PROPERTY.
 bool PropertyInspectorController::webEngineAvailable() const noexcept {
-#if defined(AJAZZ_HAVE_WEBENGINE)
+#ifdef AJAZZ_HAVE_WEBENGINE
     return true;
 #else
     return false;
