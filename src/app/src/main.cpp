@@ -12,6 +12,7 @@
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_bundle.hpp"
 #include "ajazz/core/profile_io.hpp"
+#include "app_icon.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
 #include "single_instance_guard.hpp"
@@ -46,30 +47,31 @@ int main(int argc, char* argv[]) {
     QApplication::setApplicationName(AJAZZ_PRODUCT_NAME);
     QApplication::setApplicationDisplayName(AJAZZ_PRODUCT_NAME);
     QApplication::setApplicationVersion("0.1.0");
-    QApplication::setDesktopFileName(AJAZZ_APP_ID);
+    // setDesktopFileName must match the actual basename of the installed
+    // .desktop file, *not* the reverse-DNS app id. Linux distros install us
+    // as `share/applications/ajazz-control-center.desktop` (see
+    // resources/linux/ajazz-control-center.desktop and the CMake install
+    // rule), so xdg-desktop-portal and Wayland tray hosts (Quickshell, KWin)
+    // can resolve the app's metadata. Passing the reverse-DNS id here makes
+    // every portal call fail with `App info not found` and silently strips
+    // the SNI tray icon.
+    QApplication::setDesktopFileName(QStringLiteral("ajazz-control-center"));
     // Keep running when the last window is closed (tray-only mode).
     QApplication::setQuitOnLastWindowClosed(false);
 
     QApplication app(argc, argv);
     // Window icon shown in the taskbar, alt-tab list and X11 _NET_WM_ICON.
-    // The QtSvg image plugin renders this at every size the OS asks for, so a
-    // single SVG is enough for crisp 16/24/32/48/64/128/256 px raster previews.
-    // macOS picks the bundle icon from app.icns instead and Windows uses the
-    // .rc-embedded app.ico for the .exe; this call covers Linux/X11/Wayland
-    // and serves as a runtime fallback on the other platforms.
-    //
-    // We prefer the branded variant (resources/branding/app.svg, the same
-    // artwork shipped in the README, the desktop entry, the tray and the
-    // installer). The legacy generic mark at icons/app.svg is kept only as a
-    // last-resort fallback for custom AJAZZ_BRAND_DIR builds that opt out of
-    // shipping the branded icon.
-    {
-        QIcon windowIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/branding/app.svg"));
-        if (windowIcon.isNull()) {
-            windowIcon = QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg"));
-        }
-        QApplication::setWindowIcon(windowIcon);
-    }
+    // Window icon resolution mirrors the tray (see tray_controller.cpp): the
+    // theme name "ajazz-control-center" tells xdg / Wayland compositors and
+    // taskbars to look up the system-installed icon, while the multi-size
+    // QIcon rasterized from the embedded SVG (same artwork as the README
+    // hero) is the embedded fallback for hosts that draw raw pixmaps. macOS
+    // picks the bundle icon from app.icns and Windows uses the .rc-embedded
+    // app.ico; this call covers Linux/X11/Wayland.
+    QApplication::setWindowIcon(QIcon::fromTheme(
+        QStringLiteral("ajazz-control-center"),
+        ajazz::app::makeAppIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/branding/app.svg"),
+                                QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg"))));
 
     // QtQuick Controls 2 style: "Material" gives a Material Design 3 look that
     // honors light/dark via the Material.theme attached property in Main.qml.
