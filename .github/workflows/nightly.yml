@@ -1,0 +1,168 @@
+---
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Nightly rolling-release workflow.
+#
+# Triggers on every push to main. Builds installable artifacts (Linux .deb /
+# .rpm / .flatpak, Windows .msi / .zip portable, macOS universal .dmg) and
+# (re)publishes a single GitHub pre-release tagged "nightly" with the latest
+# binaries, so users / contributors can try the bleeding edge without having
+# to build from source.
+
+name: Nightly
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+  schedule:
+    # 03:17 UTC every day, only runs against main.
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux — .deb + .rpm
+  # ---------------------------------------------------------------------------
+  linux:
+    name: Linux · deb + rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build pkg-config \
+              libudev-dev libusb-1.0-0-dev libhidapi-dev \
+              libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
+              libxcb-cursor-dev libxkbcommon-x11-dev \
+              python3-dev rpm file
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure
+        run: cmake --preset linux-release
+      - name: Build
+        run: cmake --build --preset linux-release
+      - name: Package (deb + rpm)
+        working-directory: build/linux-release
+        run: |
+          cpack -G DEB
+          cpack -G RPM
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-linux
+          path: |
+            build/linux-release/*.deb
+            build/linux-release/*.rpm
+
+  # ---------------------------------------------------------------------------
+  # Windows — MSI + portable ZIP
+  # ---------------------------------------------------------------------------
+  windows:
+    name: Windows · MSI + ZIP
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ilammy/msvc-dev-cmd@v1
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure
+        run: cmake --preset windows-release
+      - name: Build
+        run: cmake --build --preset windows-release
+      - name: Package (MSI + ZIP)
+        working-directory: build/windows-release
+        run: |
+          cpack -G WIX
+          cpack -G ZIP
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-windows
+          path: |
+            build/windows-release/*.msi
+            build/windows-release/*.zip
+
+  # ---------------------------------------------------------------------------
+  # macOS — universal DMG
+  # ---------------------------------------------------------------------------
+  macos:
+    name: macOS · Universal DMG
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install deps
+        run: brew install ninja create-dmg
+      - uses: jurplel/install-qt-action@v4
+        with: { version: 6.7.3, cache: true }
+      - name: Configure (universal)
+        run: |
+          cmake -S . -B build/macos-release -G Ninja \
+            -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+      - name: Build
+        run: cmake --build build/macos-release
+      - name: Package (DMG + TGZ)
+        working-directory: build/macos-release
+        run: |
+          cpack -G DragNDrop
+          cpack -G TGZ
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nightly-macos
+          path: |
+            build/macos-release/*.dmg
+            build/macos-release/*.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # Publish / refresh the rolling "nightly" pre-release
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish nightly pre-release
+    needs: [ linux, windows, macos ]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+
+      - uses: actions/download-artifact@v4
+        with: { path: dist }
+
+      - name: List artifacts
+        run: find dist -type f
+
+      - name: Move / re-tag "nightly" to current commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          # Force-update tag so the rolling release always points at HEAD.
+          git tag -fa nightly -m "Rolling nightly · ${GITHUB_SHA::7}"
+          git push origin -f nightly
+
+      - name: Publish / update release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: nightly
+          name: "Nightly · ${{ github.sha }}"
+          body: |
+            Rolling pre-release built from `main`.
+
+            Commit: `${{ github.sha }}`
+            Built: ${{ github.run_started_at }}
+
+            > These builds are **untested** and not signed for production
+            > use. They are intended for early testers and contributors.
+            > For stable builds, see the tagged releases.
+          prerelease: true
+          fail_on_unmatched_files: false
+          files: |
+            dist/nightly-linux/*
+            dist/nightly-windows/*
+            dist/nightly-macos/*

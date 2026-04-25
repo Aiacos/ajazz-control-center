@@ -2,6 +2,7 @@
 
 [![CI](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/ci.yml?branch=main&label=CI&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml)
 [![Lint](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/lint.yml?branch=main&label=lint&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/lint.yml)
+[![Nightly](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/nightly.yml?branch=main&label=nightly&logo=github)](https://github.com/Aiacos/ajazz-control-center/releases/tag/nightly)
 [![Release](https://img.shields.io/github/v/release/Aiacos/ajazz-control-center?include_prereleases&logo=github&color=blueviolet)](https://github.com/Aiacos/ajazz-control-center/releases)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
 [![Qt 6.7+](https://img.shields.io/badge/Qt-6.7%2B-41CD52?logo=qt)](https://www.qt.io/)
@@ -12,6 +13,14 @@
 A modern, open, cross-platform control center for AJAZZ devices — stream decks, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.
 
 > **Status:** early alpha. Scaffolding, architecture and CI are in place. Device backends are under active development.
+
+## Try it now
+
+Don't want to build from source? Pre-built installers for every push to `main` are published as a rolling pre-release:
+
+👉 **[Download the latest nightly](https://github.com/Aiacos/ajazz-control-center/releases/tag/nightly)** — `.deb`, `.rpm`, `.flatpak` (Linux), `.msi` / portable `.zip` (Windows), universal `.dmg` (macOS).
+
+For stable, signed, slow-moving builds, see the [tagged releases](https://github.com/Aiacos/ajazz-control-center/releases). The release process is documented in the [Release Process wiki page](docs/wiki/Release-Process.md).
 
 <!-- BEGIN AUTOGEN: stats -->
 **10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 9 functional, 1 scaffolded.

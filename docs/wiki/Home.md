@@ -19,6 +19,7 @@ and is not affiliated with, endorsed by, or supported by AJAZZ.
 - [FAQ](FAQ)
 - [Plugin Development](Plugin-Development)
 - [Quick Start](Quick-Start)
+- [Release Process](Release-Process)
 - [Reverse Engineering](Reverse-Engineering)
 - [Supported Devices](Supported-Devices)
 - [Troubleshooting](Troubleshooting)

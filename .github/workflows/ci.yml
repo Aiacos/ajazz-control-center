@@ -131,8 +131,11 @@ jobs:
 
       - name: Generate report
         run: |
-          lcov --capture --directory build-cov --output-file coverage.info
-          lcov --remove coverage.info '/usr/*' '*/_deps/*' --output-file coverage.info
+          lcov --capture --directory build-cov --output-file coverage.info \
+            --ignore-errors mismatch,negative,source,unused
+          lcov --remove coverage.info '/usr/*' '*/_deps/*' '*/tests/*' \
+            --output-file coverage.info \
+            --ignore-errors unused
           lcov --list coverage.info
 
       - uses: actions/upload-artifact@v4
