@@ -35,7 +35,11 @@ namespace {
  *
  * @note Not copyable or movable; always held via TransportPtr.
  */
-class HidTransport final : public ITransport {
+// Note: not marked `final` because @ref makeHidTransport derives a tiny
+// `GuardedHidTransport` decorator that adds the hidapi global ref-count
+// release in its destructor. The class is otherwise leaf-like (no virtual
+// hooks beyond the ITransport contract).
+class HidTransport : public ITransport {
 public:
     /**
      * @brief Construct a closed transport for the given USB device.

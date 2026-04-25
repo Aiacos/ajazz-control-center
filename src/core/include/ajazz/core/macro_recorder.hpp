@@ -21,12 +21,15 @@
  */
 #pragma once
 
+#include "ajazz/core/action_engine.hpp"
 #include "ajazz/core/profile.hpp"
 
 #include <chrono>
+#include <cstdint>
 #include <functional>
 #include <memory>
 #include <string>
+#include <vector>
 
 namespace ajazz::core {
 
