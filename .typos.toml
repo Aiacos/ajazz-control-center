@@ -25,6 +25,27 @@ invokable = "invokable"
 # Lift-off distance command abbreviation used in the AJ mouse protocol.
 Lod = "Lod"
 kCmdLod = "kCmdLod"
+# Image format plurals — typos otherwise rewrites "PNGs" → "ONGs".
+PNGs = "PNGs"
+JPGs = "JPGs"
+SVGs = "SVGs"
+ICOs = "ICOs"
+# Plugin SDK / supply-chain vocabulary used in the architecture docs.
+Sigstore = "Sigstore"
+sigstore = "sigstore"
+Fulcio   = "Fulcio"
+Rekor    = "Rekor"
+bwrap    = "bwrap"
+bubblewrap = "bubblewrap"
+OpenDeck = "OpenDeck"
+opendeck = "opendeck"
+streamdeck = "streamdeck"
+StreamDeck = "StreamDeck"
+seccomp  = "seccomp"
+AppContainer = "AppContainer"
+WebView2 = "WebView2"
+WKWebView = "WKWebView"
+QtWebEngine = "QtWebEngine"
 
 [files]
 extend-exclude = [
