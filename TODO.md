@@ -41,6 +41,22 @@ ______________________________________________________________________
   `share/icons/hicolor/<size>x<size>/apps/`.
 - [ ] **README + wiki screenshots** of the Material UI in light and dark
   mode (replace stale Fusion screenshots).
+- [ ] **Hicolor PNG install rule** — `src/app/CMakeLists.txt` currently
+  installs only `resources/icons/app.svg` (the *legacy* generic mark) at
+  `/usr/share/icons/hicolor/scalable/apps/ajazz-control-center.svg`.
+  After the tray-fix work (`5514ce2`) the runtime icon is the branded
+  `resources/branding/app.svg`, but the desktop-installed copy is
+  stale. Update the install rule to install **`resources/branding/app.svg`**
+  as the scalable variant and add `install(FILES …)` rules for each
+  size in `resources/icons/hicolor/app-{16,24,32,48,64,128,256,512}.png`
+  to the matching `share/icons/hicolor/<n>x<n>/apps/` directory. Also
+  fixes the tray-host icon-name lookup for `.rpm` /
+  `.deb` consumers (currently they see the legacy artwork).
+- [ ] **Logger `CapturingSink` test fixture** — A5 (`e53883e`) shipped
+  the pluggable `LogSink` API but did not add a test that exercises a
+  capturing implementation. Add one under `tests/unit/test_logger.cpp`:
+  install a sink, fire a few `AJAZZ_LOG_INFO` calls, assert the captured
+  records (level / module / message). 30-minute task.
 
 ### User actions (out-of-code, one-time)
 
@@ -166,8 +182,32 @@ ______________________________________________________________________
   router, plugin → app and app → plugin). ≈ 5-7 days.
 - [ ] **Plugin lifecycle manager** (install / load / unload / state
   persistence). ≈ 5-7 days.
-- [ ] **Property Inspector embedding** (Qt WebEngine for HTML PI, with
-  bridged messages to the plugin process). ≈ 3-5 days.
+- **Property Inspector embedding** (Qt WebEngine for HTML PI, with
+  bridged messages to the plugin process) — five-step roadmap:
+  - [x] **M1** — controller stub + CMake gating (`AJAZZ_BUILD_PROPERTY_INSPECTOR`).
+  - [x] **M2** — Qt WebEngine surface, per-plugin `QWebEngineProfile`
+    isolation, conservative `QWebEngineSettings` baseline,
+    `QtWebEngineQuick::initialize()` in main.cpp, `PIWebView.qml`
+    behind a Loader switcher.
+  - [x] **M3** — `PIBridge` QObject exposing the Stream Deck SDK-2
+    `\$SD` API surface via `QWebChannel` (registered as `"$SD"` on the
+    page's channel). Method bodies are logging stubs.
+  - [ ] **M4** — settings persistence for `setSettings` / `getSettings`
+    / `setGlobalSettings` / `getGlobalSettings` to per-context JSON
+    files under `QStandardPaths::AppDataLocation/plugins/<plugin>/`.
+    Atomic writes via `QSaveFile`, path-traversal validation on uuid
+    components, 1 MiB size cap.
+  - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
+    over the plugin-host WebSocket. Depends on **Plugin process spawner**
+    - **WebSocket protocol bridge** below.
+- [ ] **Property Inspector security hardening pass** — alongside M5:
+  install a `QWebEngineUrlRequestInterceptor` on the per-plugin profile
+  scoped to the PI directory; build the CDN allowlist (Phase 1:
+  `cdn.jsdelivr.net`, `unpkg.com` over https only); wire
+  `\$SD.openUrl(url)` through `QDesktopServices::openUrl` after
+  allowlist validation + a per-plugin first-call confirmation prompt.
+  Also: ship a minimal test PI HTML page in `resources/dev/pi/` so the
+  bridge can be exercised without a live plugin host.
 - [x] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
   Material-styled, virtualized `GridView`, live search/filter, install /
   uninstall / enable-toggle per-plugin, side-sheet details pane). Mounted
