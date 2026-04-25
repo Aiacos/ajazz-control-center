@@ -14,8 +14,11 @@
 
 #include "ajazz/core/device.hpp"
 
+#include <cstdint>
 #include <memory>
 #include <mutex>
+#include <set>
+#include <utility>
 #include <vector>
 
 namespace ajazz::core {
@@ -57,6 +60,21 @@ public:
      * @return Copy of the descriptor list at the time of the call.
      */
     [[nodiscard]] std::vector<DeviceDescriptor> enumerate() const;
+
+    /**
+     * @brief Return the set of (vendorId, productId) pairs currently visible
+     *        to hidapi (i.e. plugged in *and* user-readable).
+     *
+     * Walks `hid_enumerate(0, 0)` once. On Linux the result reflects the
+     * /dev/hidraw* nodes the calling user can open (uaccess ACL); on Windows
+     * and macOS it reflects every device the OS has enumerated. This is the
+     * source of truth for the UI's online/offline indicator.
+     *
+     * @note Cheap (≈ms on a typical desktop) but not free; cache the result
+     *       and only call it from refresh() / hot-plug paths.
+     */
+    [[nodiscard]] std::set<std::pair<std::uint16_t, std::uint16_t>>
+    enumerateConnectedHidKeys() const;
 
     /**
      * @brief Instantiate the backend for a given device ID.

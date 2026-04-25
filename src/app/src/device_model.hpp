@@ -17,6 +17,9 @@
 #include <QString>
 #include <QVariantMap>
 
+#include <cstdint>
+#include <set>
+#include <utility>
 #include <vector>
 
 namespace ajazz::app {
@@ -94,7 +97,14 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantMap capabilitiesFor(QString const& codename) const;
 
 private:
+    /// Refresh m_connected by walking hid_enumerate(); cheap (≈ms) on Linux.
+    void refreshLiveEnumeration();
+
     std::vector<core::DeviceDescriptor> m_rows; ///< Snapshot of registered descriptors.
+
+    /// Set of (vendorId, productId) pairs currently visible to hidapi.
+    /// Populated by refresh() at startup and on every hot-plug event.
+    std::set<std::pair<std::uint16_t, std::uint16_t>> m_connected;
 };
 
 } // namespace ajazz::app

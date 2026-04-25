@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <hidapi.h>
+
 namespace ajazz::core {
 
 DeviceRegistry& DeviceRegistry::instance() {
@@ -49,6 +51,22 @@ std::vector<DeviceDescriptor> DeviceRegistry::enumerate() const {
         out.push_back(entry.descriptor);
     }
     return out;
+}
+
+std::set<std::pair<std::uint16_t, std::uint16_t>>
+DeviceRegistry::enumerateConnectedHidKeys() const {
+    // hidapi calls hid_init() transparently on first use; the call is
+    // idempotent and reference-counted, so it costs nothing on repeat
+    // invocations from refresh()/hot-plug paths.
+    std::set<std::pair<std::uint16_t, std::uint16_t>> keys;
+    if (hid_device_info* head = ::hid_enumerate(0, 0)) {
+        for (auto const* p = head; p != nullptr; p = p->next) {
+            keys.emplace(static_cast<std::uint16_t>(p->vendor_id),
+                         static_cast<std::uint16_t>(p->product_id));
+        }
+        ::hid_free_enumeration(head);
+    }
+    return keys;
 }
 
 DevicePtr DeviceRegistry::open(DeviceId const& id) const {

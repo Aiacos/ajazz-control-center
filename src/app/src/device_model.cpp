@@ -3,15 +3,15 @@
  * @file device_model.cpp
  * @brief DeviceModel QAbstractListModel implementation.
  *
- * refresh() calls DeviceRegistry::enumerate() and wraps the result in a
- * beginResetModel()/endResetModel() pair so QML views rebuild cleanly.
- *
- * @note ConnectedRole currently returns false for all rows; live USB
- *       enumeration via hid_enumerate() is planned for a future milestone.
+ * refresh() calls DeviceRegistry::enumerate() to rebuild the static catalog
+ * and hid_enumerate() to discover currently-plugged devices, wraps the
+ * result in a beginResetModel()/endResetModel() pair so QML views rebuild
+ * cleanly. ConnectedRole reflects the live presence of each (vid, pid).
  */
 #include "device_model.hpp"
 
 #include "ajazz/core/device_registry.hpp"
+#include "ajazz/core/logger.hpp"
 
 #include <algorithm>
 
@@ -39,8 +39,13 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.vendorId;
     case PidRole:
         return d.productId;
-    case ConnectedRole:
-        return false; // TODO: live enumeration via hid_enumerate
+    case ConnectedRole: {
+        // Live HID presence test: a registry row is "connected" iff hidapi's
+        // last enumeration saw a device with the same (vendorId, productId).
+        // Refreshed by refresh() at startup and on every hot-plug event.
+        auto const key = std::make_pair(d.vendorId, d.productId);
+        return m_connected.find(key) != m_connected.end();
+    }
     case KeyCountRole:
         return static_cast<int>(d.keyCount);
     case GridColumnsRole:
@@ -78,7 +83,27 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
 void DeviceModel::refresh() {
     beginResetModel();
     m_rows = core::DeviceRegistry::instance().enumerate();
+    refreshLiveEnumeration();
     endResetModel();
+}
+
+void DeviceModel::refreshLiveEnumeration() {
+    // The actual hidapi call lives in core/DeviceRegistry so the app target
+    // does not need to link hidapi directly. On Linux the result reflects the
+    // /dev/hidraw* nodes the calling user can open (uaccess ACL); on Windows
+    // and macOS it reflects every device the OS has enumerated.
+    m_connected = core::DeviceRegistry::instance().enumerateConnectedHidKeys();
+    int matching = 0;
+    for (auto const& d : m_rows) {
+        if (m_connected.count(std::make_pair(d.vendorId, d.productId)) > 0) {
+            ++matching;
+        }
+    }
+    AJAZZ_LOG_INFO("device-model",
+                   "live enumeration: {} hid device(s) total, {} of {} supported model(s) online",
+                   static_cast<int>(m_connected.size()),
+                   matching,
+                   static_cast<int>(m_rows.size()));
 }
 
 QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
