@@ -1,0 +1,26 @@
+{
+  "code_audit": {
+    "path": "/home/user/workspace/ajazz-control-center/docs/analysis/code-audit.md",
+    "findings_total": 31,
+    "severity_counts": {"Critical": 0, "High": 6, "Medium": 19, "Low": 6, "Info": 0}
+  },
+  "security_audit": {
+    "path": "/home/user/workspace/ajazz-control-center/docs/analysis/security-audit.md",
+    "findings_total": 22,
+    "severity_counts": {"Critical": 1, "High": 8, "Medium": 11, "Low": 2, "Info": 0}
+  },
+  "top_critical_high": [
+    "SEC-003 Critical: unsandboxed in-process Python plugins run with host permissions.",
+    "SEC-001 High: Linux hotplug uses std::stoul on untrusted udev sysattrs without error handling.",
+    "COD-002 High: HotplugMonitor callback assignment races with worker-thread callback reads.",
+    "COD-003 High: HidTransport stats are mutated/read without synchronization across I/O paths.",
+    "SEC-014 High: release workflow publishes unsigned artifacts without checksums, attestation, or provenance."
+  ],
+  "p0_prs": [
+    "Harden HotplugMonitor parsing and callback synchronization.",
+    "Remove unsafe plugin import paths and add a temporary unsigned-plugin gate/warning before full sandboxing.",
+    "Reject oversized image/macro/mouse payloads and validate protocol length fields.",
+    "Make clang-tidy and sanitizer CI gating by fixing the missing dev preset and removing || true.",
+    "Add release checksums/signing/provenance for stable and nightly artifacts."
+  ]
+}
