@@ -18,6 +18,9 @@
 #include "ajazz/core/logger.hpp"
 
 #include <atomic>
+#include <charconv>
+#include <mutex>
+#include <string_view>
 #include <thread>
 
 #if defined(__linux__)
@@ -40,6 +43,10 @@
 namespace ajazz::core {
 
 struct HotplugMonitor::Impl {
+    /// Mutex guarding @ref cb. The callback may be replaced from the GUI
+    /// thread via setCallback() while the worker thread is mid-dispatch on a
+    /// previous value, so all reads must take a snapshot under this mutex.
+    mutable std::mutex cbMu;
     Callback cb;
     std::atomic<bool> running{false};
     std::atomic<bool> stopFlag{false};
@@ -53,6 +60,20 @@ struct HotplugMonitor::Impl {
 #elif defined(__APPLE__)
     CFRunLoopRef runLoop{nullptr}; ///< worker's run loop, owned by the worker
 #endif
+
+    /**
+     * @brief Return a copy of the current callback, taken under the mutex.
+     *
+     * Returning a copy (instead of a reference) lets the caller release
+     * @ref cbMu before invoking the callback. This avoids holding the lock
+     * across user code — the callback may itself call back into
+     * HotplugMonitor (e.g. setCallback during shutdown) which would
+     * otherwise deadlock.
+     */
+    Callback snapshotCallback() const {
+        std::lock_guard lock(cbMu);
+        return cb;
+    }
 };
 
 namespace {
@@ -60,13 +81,72 @@ namespace {
 #if defined(__linux__)
 
 /**
+ * @brief Parse a NUL-terminated hex string into a 16-bit integer.
+ *
+ * Uses @c std::from_chars instead of @c std::stoul to avoid throwing on
+ * malformed sysattr values — udev sometimes hands us empty or whitespace-only
+ * strings during early-boot enumeration. On any failure (empty, invalid hex,
+ * value > 0xFFFF) we leave @p out untouched and return false.
+ *
+ * @param str   Pointer returned by udev_device_get_sysattr_value(); may be
+ *              null. Must not contain a leading "0x".
+ * @param out   Receives the parsed value on success.
+ * @return true if the entire string parsed cleanly into a 16-bit value.
+ */
+bool parseHex16(char const* str, std::uint16_t& out) noexcept {
+    if (!str || !*str) {
+        return false;
+    }
+    std::string_view sv{str};
+    std::uint32_t tmp = 0;
+    auto const* first = sv.data();
+    auto const* last = first + sv.size();
+    auto const res = std::from_chars(first, last, tmp, 16);
+    if (res.ec != std::errc{} || res.ptr != last || tmp > 0xFFFFu) {
+        return false;
+    }
+    out = static_cast<std::uint16_t>(tmp);
+    return true;
+}
+
+/**
+ * @brief RAII guard that calls @c udev_device_unref on scope exit.
+ *
+ * Manual unref()s are easy to miss on early-return / exception paths; this
+ * guard centralizes the cleanup so the udev_monitor_receive_device() handle
+ * is always released exactly once.
+ */
+class UdevDeviceGuard {
+public:
+    explicit UdevDeviceGuard(udev_device* d) noexcept : d_(d) {}
+    ~UdevDeviceGuard() {
+        if (d_) {
+            udev_device_unref(d_);
+        }
+    }
+    UdevDeviceGuard(UdevDeviceGuard const&) = delete;
+    UdevDeviceGuard& operator=(UdevDeviceGuard const&) = delete;
+    UdevDeviceGuard(UdevDeviceGuard&&) = delete;
+    UdevDeviceGuard& operator=(UdevDeviceGuard&&) = delete;
+    [[nodiscard]] udev_device* get() const noexcept { return d_; }
+    explicit operator bool() const noexcept { return d_ != nullptr; }
+
+private:
+    udev_device* d_;
+};
+
+/**
  * @brief Linux event loop: poll a udev_monitor + a wake eventfd until stop.
  *
  * Filters on subsystem "usb" so we only see device-level (not interface-level)
  * events. The kernel is the event source; userspace events from networkd or
  * elogind are deliberately ignored.
+ *
+ * The callback is loaded via @ref HotplugMonitor::Impl::snapshotCallback for
+ * every event so a setCallback() call during shutdown cannot race with a
+ * dispatch in flight.
  */
-void runLinux(std::atomic<bool> const& stop, HotplugMonitor::Callback const& cb, int wakeFd) {
+void runLinux(std::atomic<bool> const& stop, HotplugMonitor::Impl& impl, int wakeFd) {
     udev* ctx = udev_new();
     if (!ctx) {
         AJAZZ_LOG_WARN("hotplug", "udev_new failed; hotplug disabled");
@@ -101,28 +181,29 @@ void runLinux(std::atomic<bool> const& stop, HotplugMonitor::Callback const& cb,
         if (!(fds[0].revents & POLLIN)) {
             continue;
         }
-        udev_device* dev = udev_monitor_receive_device(mon);
+        UdevDeviceGuard dev(udev_monitor_receive_device(mon));
         if (!dev) {
             continue;
         }
-        char const* action = udev_device_get_action(dev);
-        char const* vidStr = udev_device_get_sysattr_value(dev, "idVendor");
-        char const* pidStr = udev_device_get_sysattr_value(dev, "idProduct");
-        if (action && vidStr && pidStr) {
-            HotplugEvent ev;
-            ev.action =
-                (std::string{action} == "add") ? HotplugAction::Arrived : HotplugAction::Removed;
-            ev.vid = static_cast<std::uint16_t>(std::stoul(vidStr, nullptr, 16));
-            ev.pid = static_cast<std::uint16_t>(std::stoul(pidStr, nullptr, 16));
-            char const* serial = udev_device_get_sysattr_value(dev, "serial");
-            if (serial) {
-                ev.serial = serial;
-            }
-            if (cb) {
-                cb(ev);
-            }
+        char const* action = udev_device_get_action(dev.get());
+        char const* vidStr = udev_device_get_sysattr_value(dev.get(), "idVendor");
+        char const* pidStr = udev_device_get_sysattr_value(dev.get(), "idProduct");
+        if (!action || !vidStr || !pidStr) {
+            continue;
         }
-        udev_device_unref(dev);
+        HotplugEvent ev;
+        ev.action =
+            (std::string_view{action} == "add") ? HotplugAction::Arrived : HotplugAction::Removed;
+        if (!parseHex16(vidStr, ev.vid) || !parseHex16(pidStr, ev.pid)) {
+            continue;
+        }
+        char const* serial = udev_device_get_sysattr_value(dev.get(), "serial");
+        if (serial) {
+            ev.serial = serial;
+        }
+        if (auto cb = impl.snapshotCallback()) {
+            cb(ev);
+        }
     }
 
     udev_monitor_unref(mon);
@@ -336,7 +417,7 @@ bool HotplugMonitor::start() {
     }
     int wake = p_->wakeFd;
     Impl* impl = p_.get();
-    p_->worker = std::thread([impl, wake] { runLinux(impl->stopFlag, impl->cb, wake); });
+    p_->worker = std::thread([impl, wake] { runLinux(impl->stopFlag, *impl, wake); });
     return true;
 
 #elif defined(_WIN32)

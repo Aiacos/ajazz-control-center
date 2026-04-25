@@ -93,8 +93,17 @@ public:
     /// True between a successful @ref start and a subsequent @ref stop.
     [[nodiscard]] bool isRunning() const noexcept;
 
-private:
+    /**
+     * @brief Opaque platform state owned by the monitor.
+     *
+     * Forward-declared as public so the per-OS event-loop helpers in the
+     * .cpp file can take @c Impl& parameters and call @c snapshotCallback()
+     * without being friend-listed individually. The full definition lives
+     * in hotplug_monitor.cpp.
+     */
     struct Impl;
+
+private:
     std::unique_ptr<Impl> p_;
 };
 
