@@ -26,10 +26,13 @@ TrayController::TrayController(BrandingService* branding,
                                QObject* parent)
     : QObject(parent), branding_(branding), profiles_(profiles) {
     QSettings settings;
-    // Default: start minimized to tray. Power users can flip this to false in
-    // Settings → Startup, or via QSettings directly. Boolean is persisted so
-    // the next launch honors the user's choice.
-    startMinimized_ = settings.value("Window/StartMinimized", true).toBool();
+    // Default: show the main window on launch. Starting minimized-to-tray by
+    // default makes the app invisible on desktops without a working tray
+    // (e.g. GNOME/Wayland without the AppIndicator extension). Power users
+    // who actually want the tray-only behavior can flip this in Settings →
+    // Startup; the autostart hook also passes --minimized explicitly so login
+    // launches still hide the window when that's enabled.
+    startMinimized_ = settings.value("Window/StartMinimized", false).toBool();
 }
 
 TrayController::~TrayController() = default;
