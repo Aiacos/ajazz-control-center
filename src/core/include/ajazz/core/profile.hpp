@@ -62,9 +62,9 @@ enum class ActionKind : std::uint8_t {
  */
 struct Action {
     ActionKind kind{ActionKind::Plugin}; ///< Step kind; selects the interpreter.
-    std::string id;                      ///< Plugin id when kind == Plugin.
-    std::string settingsJson;            ///< Free-form JSON blob.
-    std::string label;                   ///< User-visible label shown in the UI.
+    std::string id{};                    ///< Plugin id when kind == Plugin.
+    std::string settingsJson{};          ///< Free-form JSON blob.
+    std::string label{};                 ///< User-visible label shown in the UI.
     std::uint32_t delayMs{0};            ///< Inter-step delay (Sleep + post-step pause).
 };
 
