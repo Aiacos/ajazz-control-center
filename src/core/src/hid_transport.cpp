@@ -155,25 +155,26 @@ private:
         out.reserve(in.size());
         std::size_t i = 0;
         while (i < in.size()) {
-            auto b0 = static_cast<unsigned char>(in[i]);
+            const auto b0 = static_cast<unsigned char>(in[i]);
+            // Read a UTF-8 continuation byte (offset k from i) as the lower
+            // 6 payload bits, returning std::uint32_t to keep the surrounding
+            // bit-shifts unsigned and free of -Wsign-conversion noise.
+            const auto cont = [&](std::size_t k) -> std::uint32_t {
+                return static_cast<unsigned char>(in[i + k]) & 0x3FU;
+            };
             std::uint32_t cp = 0xFFFD;
             std::size_t step = 1;
             if (b0 < 0x80) {
                 cp = b0;
             } else if ((b0 & 0xE0) == 0xC0 && i + 1 < in.size()) {
-                cp = static_cast<std::uint32_t>(((b0 & 0x1FU) << 6) |
-                                                (static_cast<unsigned char>(in[i + 1]) & 0x3FU));
+                cp = (static_cast<std::uint32_t>(b0 & 0x1FU) << 6) | cont(1);
                 step = 2;
             } else if ((b0 & 0xF0) == 0xE0 && i + 2 < in.size()) {
-                cp = static_cast<std::uint32_t>(
-                    ((b0 & 0x0FU) << 12) | ((static_cast<unsigned char>(in[i + 1]) & 0x3FU) << 6) |
-                    (static_cast<unsigned char>(in[i + 2]) & 0x3FU));
+                cp = (static_cast<std::uint32_t>(b0 & 0x0FU) << 12) | (cont(1) << 6) | cont(2);
                 step = 3;
             } else if ((b0 & 0xF8) == 0xF0 && i + 3 < in.size()) {
-                cp = static_cast<std::uint32_t>(
-                    ((b0 & 0x07U) << 18) | ((static_cast<unsigned char>(in[i + 1]) & 0x3FU) << 12) |
-                    ((static_cast<unsigned char>(in[i + 2]) & 0x3FU) << 6) |
-                    (static_cast<unsigned char>(in[i + 3]) & 0x3FU));
+                cp = (static_cast<std::uint32_t>(b0 & 0x07U) << 18) | (cont(1) << 12) |
+                     (cont(2) << 6) | cont(3);
                 step = 4;
             }
             if constexpr (sizeof(wchar_t) >= 4) {
