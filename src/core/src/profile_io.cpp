@@ -163,18 +163,27 @@ void writeAndSyncFile(std::filesystem::path const& path, std::string const& data
 void atomicRename(std::filesystem::path const& src, std::filesystem::path const& dst) {
 #if defined(_WIN32)
     DWORD lastError = 0;
-    // Up to ~2.5 s of total wait under heavy contention. Concurrent writers from many threads
-    // can stack the AV/indexer holds well past 250 ms.
-    constexpr int kMaxAttempts = 12;
+    // Heavy contention from many threads (or AV/indexer) can stack handle holds for tens of
+    // seconds under load. We grant up to ~15 s of total wait with jittered exponential backoff,
+    // which empirically clears even the worst Catch2 stress test (8 threads * 32 iters).
+    constexpr int kMaxAttempts = 60;
     auto const srcW = src.wstring();
     auto const dstW = dst.wstring();
+    // Tiny LCG seeded per-call from ticks for jitter without pulling in <random>.
+    DWORD rngState = GetTickCount() ^ static_cast<DWORD>(::GetCurrentThreadId());
+    auto nextJitter = [&rngState]() -> DWORD {
+        rngState = rngState * 1664525u + 1013904223u;
+        return rngState % 8u; // 0..7 ms of jitter
+    };
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         // Strategy:
         //  1) If the destination already exists, prefer ReplaceFileW — it is purpose-built for
         //     atomic-replace-with-backup, holds an internal handle long enough to dodge most
         //     AV/indexer races, and preserves NTFS metadata (ACLs, owner, timestamps).
-        //  2) Otherwise, MoveFileExW with REPLACE_EXISTING | WRITE_THROUGH is the cheapest
-        //     correct primitive (single rename when nothing exists at the target).
+        //  2) Otherwise (or if ReplaceFileW reports ERROR_FILE_NOT_FOUND because another writer
+        //     just rotated the destination away), fall through to MoveFileExW with
+        //     REPLACE_EXISTING | WRITE_THROUGH — the cheapest correct primitive when no target
+        //     is currently present.
         BOOL ok = FALSE;
         DWORD const dstAttrs = GetFileAttributesW(dstW.c_str());
         bool const dstExists = (dstAttrs != INVALID_FILE_ATTRIBUTES);
@@ -188,6 +197,16 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
                               REPLACEFILE_WRITE_THROUGH | REPLACEFILE_IGNORE_MERGE_ERRORS,
                               nullptr,
                               nullptr);
+            if (!ok) {
+                DWORD const replaceErr = GetLastError();
+                // Race: dst disappeared between GetFileAttributesW and ReplaceFileW.
+                // Retry the same attempt with MoveFileExW so we don't burn a full backoff slot.
+                if (replaceErr == ERROR_FILE_NOT_FOUND || replaceErr == ERROR_PATH_NOT_FOUND) {
+                    ok = MoveFileExW(srcW.c_str(),
+                                     dstW.c_str(),
+                                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
+                }
+            }
         } else {
             ok = MoveFileExW(
                 srcW.c_str(), dstW.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH);
@@ -196,14 +215,20 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
             return;
         }
         lastError = GetLastError();
-        // Only retry on transient sharing/permission errors.
+        // Only retry on transient sharing/permission errors. ERROR_FILE_NOT_FOUND is also
+        // transient under concurrent rename storms (the predecessor was rotated away after
+        // GetFileAttributesW reported it).
         if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION &&
-            lastError != ERROR_LOCK_VIOLATION && lastError != ERROR_USER_MAPPED_FILE) {
+            lastError != ERROR_LOCK_VIOLATION && lastError != ERROR_USER_MAPPED_FILE &&
+            lastError != ERROR_FILE_NOT_FOUND && lastError != ERROR_PATH_NOT_FOUND) {
             break;
         }
-        // Exponential backoff capped at 250 ms per attempt.
-        DWORD const sleepMs = static_cast<DWORD>(4 << attempt);
-        Sleep(sleepMs > 250 ? 250 : sleepMs);
+        // Exponential backoff capped at 250 ms per attempt, plus a small random jitter to
+        // de-synchronise concurrent retriers.
+        DWORD const baseMs =
+            static_cast<DWORD>(2u << (attempt < 8 ? static_cast<DWORD>(attempt) : 7u));
+        DWORD const sleepMs = (baseMs > 250u ? 250u : baseMs) + nextJitter();
+        Sleep(sleepMs);
     }
     throw ProfileIoError{"profile_io: rename " + src.string() + " -> " + dst.string() +
                          " failed (Win32 error " + std::to_string(lastError) + ")"};
