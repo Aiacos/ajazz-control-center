@@ -103,6 +103,9 @@
         { "name": "windows-debug",   "configurePreset": "windows-debug",   "output": { "outputOnFailure": true } },
         { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
         { "name": "macos-debug",     "configurePreset": "macos-debug",     "output": { "outputOnFailure": true } },
-        { "name": "macos-release",   "configurePreset": "macos-release",   "output": { "outputOnFailure": true } }
+        { "name": "macos-release",   "configurePreset": "macos-release",   "output": { "outputOnFailure": true } },
+        { "name": "dev",             "configurePreset": "dev",             "output": { "outputOnFailure": true } },
+        { "name": "release",         "configurePreset": "release",         "output": { "outputOnFailure": true } },
+        { "name": "coverage",        "configurePreset": "coverage",        "output": { "outputOnFailure": true } }
     ]
 }
