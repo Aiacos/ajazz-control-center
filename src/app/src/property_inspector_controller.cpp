@@ -30,8 +30,11 @@
 #include <QString>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
+#include "pi_bridge.hpp"
+
 #include <QHash>
 #include <QUrl>
+#include <QWebChannel>
 #include <QWebEnginePage>
 #include <QWebEngineProfile>
 #include <QWebEngineSettings>
@@ -66,6 +69,15 @@ namespace ajazz::app {
 struct PropertyInspectorController::WebEngineImpl {
     QHash<QString, QWebEngineProfile*> profilesByPluginUuid;
     QWebEnginePage* activePage = nullptr;
+
+    /// QWebChannel installed on @c activePage. Re-created per page so each
+    /// PI sees a fresh @c "$SD" object with no leftover JS handlers from
+    /// the previously-loaded inspector.
+    QWebChannel* channel = nullptr;
+
+    /// `$SD` object exposed to the page's JS. Owned by @c activePage so
+    /// it dies with the page.
+    PIBridge* bridge = nullptr;
 };
 #else
 /// Empty PIMPL on builds without Qt WebEngine. The unique_ptr stays
@@ -138,9 +150,8 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
 
     auto* page = new QWebEnginePage(profile, this);
 
-    // Security baseline (M2). Tighter scoping (URL request interceptor
-    // bound to the PI directory, CDN allowlist) lands in M3 alongside
-    // the QWebChannel bridge.
+    // Security baseline (M2). Tighter scoping — URL request interceptor
+    // bound to the PI directory, CDN allowlist — lands alongside M5.
     auto* settings = page->settings();
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, false);
@@ -151,9 +162,21 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     settings->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, false);
     settings->setAttribute(QWebEngineSettings::ScreenCaptureEnabled, false);
 
+    // M3 — QWebChannel bridge. The PI HTML must `<script src="qrc:///
+    // qtwebchannel/qwebchannel.js">` and instantiate
+    // `new QWebChannel(qt.webChannelTransport, ...)` to receive the `$SD`
+    // object. We register the bridge BEFORE `page->load(url)` so the
+    // channel is ready by the time the page's JS runs.
+    auto* bridge = new PIBridge(this, pluginUuid, actionUuid, contextUuid, page);
+    auto* channel = new QWebChannel(page);
+    channel->registerObject(QStringLiteral("$SD"), bridge);
+    page->setWebChannel(channel);
+
     page->load(QUrl::fromLocalFile(htmlAbsPath));
 
     webEngine_->activePage = page;
+    webEngine_->channel = channel;
+    webEngine_->bridge = bridge;
     emit activePageChanged();
 
     if (!hasHtmlInspector_) {
@@ -178,7 +201,13 @@ void PropertyInspectorController::closeInspector() {
 #ifdef AJAZZ_HAVE_WEBENGINE
     if (webEngine_ && webEngine_->activePage) {
         auto* page = webEngine_->activePage;
+        // The channel + bridge are parented to the page, so they die with
+        // it via Qt's parent-child ownership; we just need to clear our
+        // own pointers so the next loadInspector call doesn't see stale
+        // references.
         webEngine_->activePage = nullptr;
+        webEngine_->channel = nullptr;
+        webEngine_->bridge = nullptr;
         page->deleteLater();
         emit activePageChanged();
     }

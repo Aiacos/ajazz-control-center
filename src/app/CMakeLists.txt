@@ -11,14 +11,18 @@ option(AJAZZ_BUILD_PROPERTY_INSPECTOR "Embed plugin Property Inspector HTML page
        ON
 )
 if(AJAZZ_BUILD_PROPERTY_INSPECTOR)
-    find_package(Qt6 QUIET COMPONENTS WebEngineQuick)
-    if(Qt6WebEngineQuick_FOUND)
+    # WebChannel is the JS↔C++ bridge for `$SD` (M3); WebEngineQuick is the rendering surface (M2).
+    # Both must be present for the HTML PI path to activate. Either missing → graceful fallback to
+    # the native renderer.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuick WebChannel)
+    if(Qt6WebEngineQuick_FOUND AND Qt6WebChannel_FOUND)
         set(AJAZZ_HAVE_WEBENGINE TRUE)
-        message(STATUS "Qt6::WebEngineQuick found — Property Inspector enabled")
+        message(STATUS "Qt6::WebEngineQuick + Qt6::WebChannel found — Property Inspector enabled")
     else()
         set(AJAZZ_HAVE_WEBENGINE FALSE)
-        message(WARNING "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt6::WebEngineQuick "
-                        "not found. Falling back to native inspector placeholder."
+        message(
+            WARNING "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt WebEngineQuick or "
+                    "WebChannel was not found. Falling back to the native inspector placeholder."
         )
     endif()
 else()
@@ -39,6 +43,7 @@ qt_add_executable(
     src/single_instance_guard.cpp
     src/app_icon.cpp
     src/property_inspector_controller.cpp
+    src/pi_bridge.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
@@ -180,7 +185,7 @@ target_link_libraries(
 )
 
 if(AJAZZ_HAVE_WEBENGINE)
-    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick)
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannel)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
     # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
     # present. Adding it to the QML module list unconditionally would fail QML compilation on
