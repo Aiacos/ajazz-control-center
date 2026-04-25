@@ -105,6 +105,16 @@ devices:
     protocol_doc: docs/protocols/keyboard/proprietary.md
     notes: "Clean-room backend; RGB zones, keymap and macro upload wired."
 
+  - codename: ak980pro
+    family: keyboard
+    name: "AJAZZ AK980 PRO"
+    vid: "0x0c45"
+    pid: "0x8009"
+    status: scaffolded
+    capabilities: [rgb, macros, layers]
+    protocol_doc: docs/protocols/keyboard/proprietary.md
+    notes: "Microdia-chipset wireless mech; enumerated, routed through the proprietary backend. Protocol mapping in progress — captures welcome (#issue)."
+
   # ----- Mice --------------------------------------------------------------
   - codename: aj159
     family: mouse

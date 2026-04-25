@@ -37,3 +37,9 @@ KERNEL=="hidraw*",    ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
 # ---------------------------------------------------------------------------
 SUBSYSTEM=="usb",     ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
+
+# ---------------------------------------------------------------------------
+# AJAZZ AK980 PRO and other Microdia-chipset AK keyboards (vendor 0x0c45)
+# ---------------------------------------------------------------------------
+SUBSYSTEM=="usb",     ATTRS{idVendor}=="0c45", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="0c45", MODE="0660", TAG+="uaccess"

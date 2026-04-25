@@ -23,7 +23,7 @@ Don't want to build from source? Pre-built installers for every push to `main` a
 For stable, signed, slow-moving builds, see the [tagged releases](https://github.com/Aiacos/ajazz-control-center/releases). The release process is documented in the [Release Process wiki page](docs/wiki/Release-Process.md).
 
 <!-- BEGIN AUTOGEN: stats -->
-**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 9 functional, 1 scaffolded.
+**11 devices** across 3 keyboard, 4 mouse, 4 streamdeck — 9 functional, 2 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 ---
@@ -63,6 +63,7 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 |--------|-----|--------|----------|-------|
 | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Any VIA JSON layout is supported. |
 | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Clean-room backend; RGB zones, keymap and macro upload wired. |
+| [AJAZZ AK980 PRO](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x8009` | 🟡 scaffolded | RGB backlight, Macros, Layers | Microdia-chipset wireless mech; enumerated, routed through the proprietary backend. Protocol mapping in progress — captures welcome (#issue). |
 
 ### Mice
 

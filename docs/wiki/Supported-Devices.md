@@ -7,7 +7,7 @@
 -->
 
 <!-- BEGIN AUTOGEN: stats -->
-**10 devices** across 2 keyboard, 4 mouse, 4 streamdeck — 9 functional, 1 scaffolded.
+**11 devices** across 3 keyboard, 4 mouse, 4 streamdeck — 9 functional, 2 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 Support levels:
@@ -30,6 +30,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | streamdeck | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 15 | 4 | 🟢 functional | display, encoder, touch, macros |
 | keyboard | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | keyboard | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
+| keyboard | [AJAZZ AK980 PRO](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x8009` | — | — | 🟡 scaffolded | rgb, macros, layers |
 | mouse | [AJAZZ AJ159](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51a` | — | — | 🟢 functional | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ199](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51b` | — | — | 🟢 functional | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ339](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51c` | — | — | 🟢 functional | rgb, dpi, firmware |
@@ -54,6 +55,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 |--------|-----|--------|----------|-------|
 | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Any VIA JSON layout is supported. |
 | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | 🟢 functional | RGB backlight, Macros, Layers, Firmware version | Clean-room backend; RGB zones, keymap and macro upload wired. |
+| [AJAZZ AK980 PRO](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x8009` | 🟡 scaffolded | RGB backlight, Macros, Layers | Microdia-chipset wireless mech; enumerated, routed through the proprietary backend. Protocol mapping in progress — captures welcome (#issue). |
 
 ### Mice
 

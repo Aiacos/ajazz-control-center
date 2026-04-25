@@ -40,6 +40,21 @@ void registerAll() {
             .hasRgb = true,
         },
         &makeProprietaryKeyboard);
+
+    // AJAZZ AK980 PRO (Microdia chipset 0x0c45). Confirmed via real-device
+    // lsusb enumeration; protocol mapping is still scaffolded — keys / RGB
+    // are routed through the proprietary backend until a captured trace
+    // either confirms VIA compatibility or motivates a dedicated handler.
+    reg.registerDevice(
+        core::DeviceDescriptor{
+            .vendorId = 0x0c45, // Microdia (chip vendor used by AK980 PRO)
+            .productId = 0x8009,
+            .family = core::DeviceFamily::Keyboard,
+            .model = "AJAZZ AK980 PRO",
+            .codename = "ak980pro",
+            .hasRgb = true,
+        },
+        &makeProprietaryKeyboard);
 }
 
 } // namespace ajazz::keyboard
