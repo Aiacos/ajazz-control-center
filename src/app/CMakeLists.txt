@@ -27,11 +27,17 @@ set_source_files_properties(${ACC_BRAND_APP} PROPERTIES QT_RESOURCE_ALIAS brandi
 set_source_files_properties(${ACC_BRAND_TRAY} PROPERTIES QT_RESOURCE_ALIAS branding/tray.svg)
 set_source_files_properties(${ACC_BRAND_THEME} PROPERTIES QT_RESOURCE_ALIAS branding/theme.json)
 
+# Theme.qml is a `pragma Singleton` — it must be marked with the QT_QML_SINGLETON_TYPE source file
+# property *before* qt_add_qml_module so Qt's QML compiler registers it as a singleton in the
+# AjazzControlCenter module instead of as a regular component.
+set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
     VERSION 1.0
     QML_FILES qml/Main.qml
+              qml/Theme.qml
               qml/DeviceList.qml
               qml/ProfileEditor.qml
               qml/RgbPicker.qml

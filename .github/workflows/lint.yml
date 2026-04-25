@@ -114,18 +114,24 @@ jobs:
 
       - name: Configure
         run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF
-        continue-on-error: true  # Qt may not be fully available; tidy still runs below
 
       - name: Run clang-tidy on every translation unit
         run: |
-          if [ -f build/dev/compile_commands.json ]; then
-            # Parallelise across cores; fail only on errors, not warnings.
-            pip install clang-tidy-sarif
-            find src -name '*.cpp' -print0 | \
-              xargs -0 -P"$(nproc)" -I{} clang-tidy -p build/dev --quiet {} || true
-          else
-            echo "::warning::compile_commands.json missing — skipping clang-tidy"
+          if [ ! -f build/dev/compile_commands.json ]; then
+            echo "::error::compile_commands.json missing — cmake configure failed"
+            exit 1
           fi
+          # Parallelise across cores; tidy returns non-zero on its first error.
+          # Use a shared exit-status file so a failure in any TU fails the job.
+          status_file=$(mktemp)
+          echo 0 > "$status_file"
+          find src -name '*.cpp' -print0 | \
+            xargs -0 -P"$(nproc)" -I{} sh -c \
+              'clang-tidy -p build/dev --quiet "$1" || echo $? > "$2"' \
+              _ {} "$status_file"
+          rc=$(cat "$status_file")
+          rm -f "$status_file"
+          [ "$rc" = 0 ]
 
   # ==========================================================================
   # Documentation linting — no C++ / Qt required, very fast.

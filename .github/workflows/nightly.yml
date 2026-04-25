@@ -136,6 +136,31 @@ jobs:
       - name: List artifacts
         run: find dist -type f
 
+      - name: Generate SHA256 checksums
+        # Allows users to verify they got the exact build from this commit,
+        # even though the "nightly" tag itself is force-moved each run.
+        # Mitigates SEC-015 (force-moving nightly tag obscures provenance).
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \( \
+              -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o \
+              -name '*.zip' -o -name '*.dmg' -o -name '*.tar.gz' \) | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No artifacts found to checksum"; exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS
+          # Embed commit SHA in the checksum file so users can prove which
+          # build they downloaded even after the tag has moved.
+          {
+            echo "# Nightly build · commit ${GITHUB_SHA}"
+            echo "# Run: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+            cat SHA256SUMS
+          } > SHA256SUMS.txt
+          mv SHA256SUMS.txt SHA256SUMS
+          echo "=== SHA256SUMS ==="
+          cat SHA256SUMS
+
       - name: Move / re-tag "nightly" to current commit
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -166,3 +191,4 @@ jobs:
             dist/nightly-linux/*
             dist/nightly-windows/*
             dist/nightly-macos/*
+            dist/SHA256SUMS

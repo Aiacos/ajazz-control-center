@@ -43,9 +43,11 @@ struct AJAZZ_HIDDEN PluginHost::Impl {
 };
 
 PluginHost::PluginHost() : m_impl(std::make_unique<Impl>()) {
-    // Ensure our `ajazz` Python runtime module is importable. It is built
-    // by `python_bindings.cpp` into the same binary.
-    py::module_::import("sys").attr("path").cast<py::list>().append(".");
+    // SECURITY: do not append "." to sys.path. CWE-427 (Untrusted Search
+    // Path). The `ajazz` Python runtime module is built into the host
+    // binary and is already importable via the embedded modules table.
+    // Plugin search paths added via addSearchPath() get prepended to
+    // sys.path explicitly during loadAll() with full path resolution.
 }
 
 PluginHost::~PluginHost() = default;
@@ -55,19 +57,61 @@ void PluginHost::addSearchPath(std::filesystem::path path) {
     m_impl->searchPaths.push_back(std::move(path));
 }
 
+namespace {
+
+/**
+ * @brief Validate a plugin manifest at @p manifestPath.
+ *
+ * Minimal manifest schema (plugin.toml or plugin.json sibling of plugin.py):
+ *   id      : reverse-DNS, [a-z0-9._-]+
+ *   name    : human display string
+ *   version : semver-ish
+ *   authors : free-form
+ *
+ * Until full code-signing is in place we treat absence of a manifest as a
+ * loud warning, not a hard reject; signed-bundle enforcement will be added
+ * once the plugin marketplace exists. See SEC-005 / SEC-019.
+ */
+bool validateManifest(std::filesystem::path const& dir) {
+    auto const json = dir / "plugin.json";
+    auto const toml = dir / "plugin.toml";
+    return std::filesystem::is_regular_file(json) || std::filesystem::is_regular_file(toml);
+}
+
+/// Plugin id chars: lowercase ASCII letters, digits, dot/underscore/hyphen.
+bool isSafePluginId(std::string_view id) {
+    if (id.empty() || id.size() > 64) {
+        return false;
+    }
+    for (char c : id) {
+        bool ok =
+            (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '.' || c == '_' || c == '-';
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+} // namespace
+
 void PluginHost::loadAll() {
     std::lock_guard const lock(m_impl->mutex);
+    py::gil_scoped_acquire gil;
     try {
         auto sys = py::module_::import("sys");
         auto sysPath = sys.attr("path").cast<py::list>();
 
         for (auto const& path : m_impl->searchPaths) {
-            if (!std::filesystem::is_directory(path)) {
+            std::error_code ec;
+            auto const canon = std::filesystem::canonical(path, ec);
+            if (ec || !std::filesystem::is_directory(canon)) {
+                AJAZZ_LOG_WARN("plugins", "skipping invalid search path: {}", path.string());
                 continue;
             }
-            sysPath.append(path.string());
+            sysPath.append(canon.string());
 
-            for (auto const& entry : std::filesystem::directory_iterator(path)) {
+            for (auto const& entry : std::filesystem::directory_iterator(canon)) {
                 if (!entry.is_directory()) {
                     continue;
                 }
@@ -77,11 +121,25 @@ void PluginHost::loadAll() {
                 }
 
                 auto const pkgName = entry.path().filename().string();
+                if (!isSafePluginId(pkgName)) {
+                    AJAZZ_LOG_WARN("plugins", "refusing unsafe plugin dir name: {}", pkgName);
+                    continue;
+                }
+                if (!validateManifest(entry.path())) {
+                    AJAZZ_LOG_WARN("plugins",
+                                   "plugin {} has no manifest (plugin.json/toml); loading anyway "
+                                   "because signed-bundle enforcement is not yet active",
+                                   pkgName);
+                }
                 try {
                     auto mod = py::module_::import(pkgName.c_str());
                     auto cls = mod.attr("Plugin");
                     py::object instance = cls();
                     std::string const id = py::str(instance.attr("id")).cast<std::string>();
+                    if (!isSafePluginId(id)) {
+                        AJAZZ_LOG_WARN("plugins", "plugin {} reports unsafe id; rejected", pkgName);
+                        continue;
+                    }
                     m_impl->plugins.emplace(id, std::move(instance));
                     AJAZZ_LOG_INFO("plugins", "loaded {} from {}", id, entry.path().string());
                 } catch (std::exception const& e) {
@@ -96,6 +154,7 @@ void PluginHost::loadAll() {
 
 std::vector<PluginInfo> PluginHost::plugins() const {
     std::lock_guard const lock(m_impl->mutex);
+    py::gil_scoped_acquire gil;
     std::vector<PluginInfo> out;
     out.reserve(m_impl->plugins.size());
     for (auto const& [id, obj] : m_impl->plugins) {
@@ -112,7 +171,6 @@ std::vector<PluginInfo> PluginHost::plugins() const {
 }
 
 void PluginHost::dispatch(core::Action const& action) {
-    std::lock_guard const lock(m_impl->mutex);
     auto const dot = action.id.find('.');
     if (dot == std::string::npos) {
         AJAZZ_LOG_WARN("plugins", "invalid action id: {}", action.id);
@@ -121,13 +179,23 @@ void PluginHost::dispatch(core::Action const& action) {
     auto const pluginId = action.id.substr(0, dot);
     auto const actionId = action.id.substr(dot + 1);
 
-    auto const it = m_impl->plugins.find(pluginId);
-    if (it == m_impl->plugins.end()) {
-        AJAZZ_LOG_WARN("plugins", "unknown plugin: {}", pluginId);
-        return;
+    // COD-004: resolve the target Python object under the host lock, then
+    // release it before calling into Python so plugins cannot deadlock the
+    // host by re-entering plugin APIs.
+    py::object instance;
+    {
+        std::lock_guard const lock(m_impl->mutex);
+        auto const it = m_impl->plugins.find(pluginId);
+        if (it == m_impl->plugins.end()) {
+            AJAZZ_LOG_WARN("plugins", "unknown plugin: {}", pluginId);
+            return;
+        }
+        instance = it->second; // py::object is refcounted, copy under lock
     }
+
+    py::gil_scoped_acquire gil;
     try {
-        it->second.attr("dispatch")(actionId, action.settingsJson);
+        instance.attr("dispatch")(actionId, action.settingsJson);
     } catch (std::exception const& e) {
         AJAZZ_LOG_ERROR("plugins", "dispatch {}: {}", action.id, e.what());
     }

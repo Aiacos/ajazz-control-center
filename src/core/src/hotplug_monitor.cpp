@@ -158,10 +158,12 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
             HotplugEvent ev;
             ev.action = (wp == DBT_DEVICEARRIVAL) ? HotplugAction::Arrived : HotplugAction::Removed;
             if (parseVidPid(iface->dbcc_name, ev.vid, ev.pid)) {
-                auto* cb = reinterpret_cast<HotplugMonitor::Callback*>(
-                    GetWindowLongPtrW(h, GWLP_USERDATA));
-                if (cb && *cb) {
-                    (*cb)(ev);
+                auto* impl =
+                    reinterpret_cast<HotplugMonitor::Impl*>(GetWindowLongPtrW(h, GWLP_USERDATA));
+                if (impl) {
+                    if (auto cb = impl->snapshotCallback()) {
+                        cb(ev);
+                    }
                 }
             }
         }
@@ -169,7 +171,7 @@ LRESULT CALLBACK wndProc(HWND h, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProcW(h, msg, wp, lp);
 }
 
-void runWindows(std::atomic<bool> const& stop, HotplugMonitor::Callback const& cb, HWND& outHwnd) {
+void runWindows(std::atomic<bool> const& stop, HotplugMonitor::Impl& impl, HWND& outHwnd) {
     WNDCLASSEXW wc{};
     wc.cbSize = sizeof(wc);
     wc.lpfnWndProc = &wndProc;
@@ -183,7 +185,7 @@ void runWindows(std::atomic<bool> const& stop, HotplugMonitor::Callback const& c
         AJAZZ_LOG_WARN("hotplug", "CreateWindowEx failed; hotplug disabled");
         return;
     }
-    SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&cb));
+    SetWindowLongPtrW(hwnd, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(&impl));
 
     DEV_BROADCAST_DEVICEINTERFACE_W filter{};
     filter.dbcc_size = sizeof(filter);
@@ -209,9 +211,9 @@ void runWindows(std::atomic<bool> const& stop, HotplugMonitor::Callback const& c
 
 #elif defined(__APPLE__)
 
-/// Per-IOService callback bound to a HotplugMonitor::Callback via refcon.
+/// Per-IOService callback bound to a HotplugMonitor::Impl via refcon.
 void iokitCb(void* refcon, io_iterator_t it, HotplugAction action) {
-    auto* cb = reinterpret_cast<HotplugMonitor::Callback*>(refcon);
+    auto* impl = reinterpret_cast<HotplugMonitor::Impl*>(refcon);
     io_service_t s;
     while ((s = IOIteratorNext(it))) {
         HotplugEvent ev;
@@ -238,16 +240,16 @@ void iokitCb(void* refcon, io_iterator_t it, HotplugAction action) {
         }
         ev.vid = static_cast<std::uint16_t>(vid);
         ev.pid = static_cast<std::uint16_t>(pid);
-        if (cb && *cb && ev.vid != 0) {
-            (*cb)(ev);
+        if (impl && ev.vid != 0) {
+            if (auto cb = impl->snapshotCallback()) {
+                cb(ev);
+            }
         }
         IOObjectRelease(s);
     }
 }
 
-void runMacos(std::atomic<bool> const& stop,
-              HotplugMonitor::Callback const& cb,
-              CFRunLoopRef& outLoop) {
+void runMacos(std::atomic<bool> const& stop, HotplugMonitor::Impl& impl, CFRunLoopRef& outLoop) {
     // kIOMasterPortDefault was deprecated on macOS 12; use kIOMainPortDefault when available.
 #if defined(MAC_OS_VERSION_12_0) && MAC_OS_X_VERSION_MIN_REQUIRED >= MAC_OS_VERSION_12_0
     auto port = IONotificationPortCreate(kIOMainPortDefault);
@@ -266,25 +268,25 @@ void runMacos(std::atomic<bool> const& stop,
     auto matching = IOServiceMatching(kIOUSBDeviceClassName);
     CFRetain(matching); // We register the dict twice (added + removed).
 
-    auto* cbPtr = const_cast<HotplugMonitor::Callback*>(&cb);
+    void* implPtr = &impl;
 
     IOServiceAddMatchingNotification(
         port,
         kIOFirstMatchNotification,
         matching,
         [](void* r, io_iterator_t it) { iokitCb(r, it, HotplugAction::Arrived); },
-        cbPtr,
+        implPtr,
         &addedIter);
-    iokitCb(cbPtr, addedIter, HotplugAction::Arrived); // drain initial set
+    iokitCb(implPtr, addedIter, HotplugAction::Arrived); // drain initial set
 
     IOServiceAddMatchingNotification(
         port,
         kIOTerminatedNotification,
         matching,
         [](void* r, io_iterator_t it) { iokitCb(r, it, HotplugAction::Removed); },
-        cbPtr,
+        implPtr,
         &removedIter);
-    iokitCb(cbPtr, removedIter, HotplugAction::Removed);
+    iokitCb(implPtr, removedIter, HotplugAction::Removed);
 
     while (!stop.load(std::memory_order_acquire)) {
         CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0, false);
@@ -312,6 +314,7 @@ HotplugMonitor::~HotplugMonitor() {
 }
 
 void HotplugMonitor::setCallback(Callback cb) {
+    std::lock_guard lock(p_->cbMu);
     p_->cb = std::move(cb);
 }
 
@@ -340,13 +343,13 @@ bool HotplugMonitor::start() {
     Impl* impl = p_.get();
     p_->worker = std::thread([impl] {
         impl->threadId = GetCurrentThreadId();
-        runWindows(impl->stopFlag, impl->cb, impl->hidden);
+        runWindows(impl->stopFlag, *impl, impl->hidden);
     });
     return true;
 
 #elif defined(__APPLE__)
     Impl* impl = p_.get();
-    p_->worker = std::thread([impl] { runMacos(impl->stopFlag, impl->cb, impl->runLoop); });
+    p_->worker = std::thread([impl] { runMacos(impl->stopFlag, *impl, impl->runLoop); });
     return true;
 
 #else

@@ -219,6 +219,12 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
         auto const gesture = static_cast<std::uint8_t>(tag & 0x0fu);
         auto const x = static_cast<std::uint16_t>((static_cast<std::uint32_t>(frame[10]) << 8U) |
                                                   static_cast<std::uint32_t>(frame[11]));
+        // SEC-009 / CWE-20: clamp/discard X coordinates that fall outside the
+        // documented 0..639 range. Out-of-range values almost certainly
+        // indicate a malformed frame and should not surface to UI logic.
+        if (x >= akp05::TouchStripRangeX) {
+            return std::nullopt;
+        }
 
         InputEvent ev{};
         ev.value = static_cast<std::int16_t>(x);
@@ -457,6 +463,16 @@ private:
      */
     void sendImage(std::array<std::uint8_t, akp05::PacketSize> const& header,
                    std::span<std::uint8_t const> payload) {
+        // SEC-008 / COD-013 / CWE-190: header length field is 16 bits across
+        // all three image variants (key/main/encoder). Refuse oversized
+        // payloads to prevent firmware desync.
+        if (payload.size() > 0xFFFFu) {
+            AJAZZ_LOG_WARN("akp05",
+                           "sendImage: payload {} bytes exceeds 65535-byte protocol max; "
+                           "refusing",
+                           payload.size());
+            return;
+        }
         (void)m_transport->write(header);
         std::size_t offset = 0;
         while (offset < payload.size()) {

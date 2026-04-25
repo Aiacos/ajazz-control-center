@@ -7,13 +7,14 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AjazzControlCenter
 
 Item {
     GridLayout {
         anchors.centerIn: parent
         columns: 5
-        rowSpacing: 8
-        columnSpacing: 8
+        rowSpacing: Theme.spacingSm
+        columnSpacing: Theme.spacingSm
 
         Repeater {
             model: 15
@@ -21,15 +22,15 @@ Item {
                 required property int index
                 width: 96
                 height: 96
-                radius: 8
-                color: "#2a2a32"
-                border.color: "#3a3a44"
+                radius: Theme.radiusLg
+                color: Theme.tileHover
+                border.color: Theme.borderSubtle
                 border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: parent.index + 1
-                    color: "#aaa"
-                    font.pixelSize: 18
+                    color: Theme.fgFaint
+                    font.pixelSize: Theme.fontLg
                 }
             }
         }

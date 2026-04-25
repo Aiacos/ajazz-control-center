@@ -7,6 +7,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AjazzControlCenter
 
 ApplicationWindow {
     id: root
@@ -17,7 +18,7 @@ ApplicationWindow {
     // system tray. Keep it true so the window can be reopened from the tray.
     visible: true
     title: branding ? branding.productName : qsTr("AJAZZ Control Center")
-    color: branding ? branding.bgBase : "#1a1d24"
+    color: Theme.bgBase
 
     // Surface the tray's "Show window" action.
     Connections {

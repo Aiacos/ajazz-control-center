@@ -74,10 +74,10 @@ public:
         ensureOpen();
         auto const n = ::hid_write(m_handle, data.data(), data.size());
         if (n < 0) {
-            ++m_stats.errors;
+            m_errors.fetch_add(1, std::memory_order_relaxed);
             throw std::runtime_error("hid_write failed");
         }
-        m_stats.bytesSent += static_cast<std::uint64_t>(n);
+        m_bytesSent.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
         return static_cast<std::size_t>(n);
     }
 
@@ -86,10 +86,10 @@ public:
         auto const n =
             ::hid_read_timeout(m_handle, out.data(), out.size(), static_cast<int>(timeout.count()));
         if (n < 0) {
-            ++m_stats.errors;
+            m_errors.fetch_add(1, std::memory_order_relaxed);
             throw std::runtime_error("hid_read_timeout failed");
         }
-        m_stats.bytesReceived += static_cast<std::uint64_t>(n);
+        m_bytesReceived.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
         return static_cast<std::size_t>(n);
     }
 
@@ -97,9 +97,10 @@ public:
         ensureOpen();
         auto const n = ::hid_send_feature_report(m_handle, data.data(), data.size());
         if (n < 0) {
-            ++m_stats.errors;
+            m_errors.fetch_add(1, std::memory_order_relaxed);
             throw std::runtime_error("hid_send_feature_report failed");
         }
+        m_bytesSent.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
         return static_cast<std::size_t>(n);
     }
 
@@ -107,13 +108,20 @@ public:
         ensureOpen();
         auto const n = ::hid_get_feature_report(m_handle, out.data(), out.size());
         if (n < 0) {
-            ++m_stats.errors;
+            m_errors.fetch_add(1, std::memory_order_relaxed);
             throw std::runtime_error("hid_get_feature_report failed");
         }
+        m_bytesReceived.fetch_add(static_cast<std::uint64_t>(n), std::memory_order_relaxed);
         return static_cast<std::size_t>(n);
     }
 
-    [[nodiscard]] TransportStats stats() const noexcept override { return m_stats; }
+    [[nodiscard]] TransportStats stats() const noexcept override {
+        TransportStats s;
+        s.bytesSent = m_bytesSent.load(std::memory_order_relaxed);
+        s.bytesReceived = m_bytesReceived.load(std::memory_order_relaxed);
+        s.errors = m_errors.load(std::memory_order_relaxed);
+        return s;
+    }
 
 private:
     /// Throw if the device handle is null (i.e. not yet opened).
@@ -127,7 +135,10 @@ private:
     std::uint16_t m_pid{0};          ///< USB Product ID.
     std::string m_serial;            ///< Serial number filter; empty = first match.
     ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
-    TransportStats m_stats{};        ///< Cumulative I/O counters.
+    /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
+    std::atomic<std::uint64_t> m_bytesSent{0};
+    std::atomic<std::uint64_t> m_bytesReceived{0};
+    std::atomic<std::uint64_t> m_errors{0};
 };
 
 /// Process-wide hidapi initialisation reference count.

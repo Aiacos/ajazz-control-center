@@ -23,9 +23,11 @@
 #include "ajazz/core/hid_transport.hpp"
 #include "ajazz/mouse/mouse.hpp"
 
+#include <algorithm>
 #include <array>
 #include <mutex>
 #include <numeric>
+#include <stdexcept>
 
 namespace ajazz::mouse {
 
@@ -58,16 +60,24 @@ enum CommandId : std::uint8_t {
  * @param payload  Up to 59 bytes of command-specific data.
  * @return         Fully formed 64-byte report ready for ITransport::writeFeature().
  */
+/// Maximum payload bytes that fit between the header (4 bytes) and trailing
+/// checksum byte. Reports larger than this are rejected to keep the advertised
+/// length byte and the bytes actually written in lockstep (SEC-007 / CWE-131).
+constexpr std::size_t kMaxPayload = kReportSize - 5;
+
 std::array<std::uint8_t, kReportSize>
 makeEnvelope(std::uint8_t cmd, std::uint8_t sub, std::span<std::uint8_t const> payload) {
+    if (payload.size() > kMaxPayload) {
+        throw std::invalid_argument("aj_series: payload exceeds 59 bytes");
+    }
     std::array<std::uint8_t, kReportSize> pkt{};
     pkt[0] = 0x05;
     pkt[1] = cmd;
     pkt[2] = sub;
+    // Length byte is the count we actually copied below; never the caller's
+    // raw .size() if it could be larger than the body.
     pkt[3] = static_cast<std::uint8_t>(payload.size());
-    for (std::size_t i = 0; i < payload.size() && i < kReportSize - 5; ++i) {
-        pkt[4 + i] = payload[i];
-    }
+    std::copy(payload.begin(), payload.end(), pkt.begin() + 4);
     pkt[kReportSize - 1] = static_cast<std::uint8_t>(
         std::accumulate(pkt.begin() + 1, pkt.end() - 1, std::uint32_t{0}) & 0xff);
     return pkt;

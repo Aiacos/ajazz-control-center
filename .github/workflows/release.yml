@@ -134,6 +134,22 @@ jobs:
         with: { path: dist }
       - name: List artifacts
         run: find dist -type f
+      - name: Generate SHA256 checksums
+        # Provides reproducible integrity verification for users.
+        # Mitigates SEC-014 (release artifacts published unsigned).
+        working-directory: dist
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find . -type f \( \
+              -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o \
+              -name '*.zip' -o -name '*.dmg' -o -name '*.tar.gz' -o \
+              -name '*.flatpak' \) | sort)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No artifacts found to checksum"; exit 1
+          fi
+          sha256sum "${files[@]}" > SHA256SUMS
+          echo "=== SHA256SUMS ==="
+          cat SHA256SUMS
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -145,3 +161,4 @@ jobs:
             dist/windows-packages/*
             dist/macos-packages/*
             dist/*.flatpak
+            dist/SHA256SUMS

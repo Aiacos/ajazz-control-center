@@ -6,10 +6,11 @@
 // user clicks a device row.
 import QtQuick
 import QtQuick.Controls
+import AjazzControlCenter
 
 Rectangle {
     id: root
-    color: "#1e1e23"
+    color: Theme.bgSidebar
 
     /// Emitted when the user clicks a device row; carries the device codename.
     signal deviceSelected(string codename)
@@ -20,8 +21,8 @@ Rectangle {
     ListView {
         id: list
         anchors.fill: parent
-        anchors.margins: 8
-        spacing: 4
+        anchors.margins: Theme.spacingSm
+        spacing: Theme.spacingXs
         delegate: Rectangle {
             required property string model
             required property string codename
@@ -30,8 +31,8 @@ Rectangle {
 
             width: list.width
             height: 56
-            radius: 6
-            color: ma.containsMouse ? "#2c2c34" : "#24242a"
+            radius: Theme.radiusMd
+            color: ma.containsMouse ? Theme.bgRowHover : Theme.tile
 
             Column {
                 anchors.fill: parent
@@ -39,14 +40,14 @@ Rectangle {
                 spacing: 2
                 Text {
                     text: parent.parent.model
-                    color: "#f0f0f0"
-                    font.pixelSize: 14
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.fontMd
                 }
                 Text {
                     text: "%1 · %2".arg(parent.parent.codename)
                                     .arg(parent.parent.connected ? "connected" : "offline")
-                    color: "#888"
-                    font.pixelSize: 11
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontXs
                 }
             }
 

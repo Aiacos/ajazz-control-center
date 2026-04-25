@@ -158,6 +158,12 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
     // and byte 11 signals the button edge (0x01 = down, 0x00 = up).
     if ((tag & 0xf0u) == 0x20u) {
         auto const encIndex = static_cast<std::uint8_t>(tag & 0x0fu);
+        // SEC-010 / CWE-20: the AKP03 has exactly EncoderCount knobs; reject
+        // any tag that decodes to a higher index rather than emitting events
+        // for non-existent encoders.
+        if (encIndex >= akp03::EncoderCount) {
+            return std::nullopt;
+        }
         auto const rot = static_cast<std::int8_t>(frame[10]);
         auto const btn = frame[11];
 
@@ -372,8 +378,17 @@ private:
      * @param png      Raw PNG bytes; must be ≤ 65535 bytes.
      */
     void sendImage(std::uint8_t keyIndex, std::span<std::uint8_t const> png) {
-        auto const header = akp03::buildImageHeader(
-            keyIndex, static_cast<std::uint16_t>(std::min<std::size_t>(png.size(), 0xffff)));
+        // SEC-008 / COD-013 / CWE-190: refuse oversize payload rather than
+        // truncating only the header length.
+        if (png.size() > 0xFFFFu) {
+            AJAZZ_LOG_WARN("akp03",
+                           "sendImage: payload {} bytes exceeds 65535-byte protocol max; "
+                           "refusing",
+                           png.size());
+            return;
+        }
+        auto const header =
+            akp03::buildImageHeader(keyIndex, static_cast<std::uint16_t>(png.size()));
         (void)m_transport->write(header);
 
         std::size_t offset = 0;

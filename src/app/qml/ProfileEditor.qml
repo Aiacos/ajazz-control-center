@@ -7,25 +7,26 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AjazzControlCenter
 
 Rectangle {
     id: root
     /// Codename of the device currently being edited (e.g. "ak820pro").
     /// An empty string shows a placeholder prompt.
     property string codename: ""
-    color: "#14141a"
+    color: Theme.bgBase
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 12
+        anchors.margins: Theme.spacingLg
+        spacing: Theme.spacingMd
 
         Label {
             text: root.codename === ""
                 ? qsTr("Select a device on the left")
                 : qsTr("Editing: %1").arg(root.codename)
-            color: "#e0e0e0"
-            font.pixelSize: 20
+            color: Theme.fgPrimary
+            font.pixelSize: Theme.fontXl
         }
 
         TabBar {

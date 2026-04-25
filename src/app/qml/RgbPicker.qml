@@ -8,28 +8,29 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AjazzControlCenter
 
 Item {
     ColumnLayout {
         anchors.fill: parent
-        spacing: 12
+        spacing: Theme.spacingMd
 
-        Label { text: qsTr("RGB effect"); color: "#ccc" }
+        Label { text: qsTr("RGB effect"); color: Theme.fgFaint }
         ComboBox {
             Layout.fillWidth: true
             model: [ "Static", "Breathing", "Wave", "Reactive", "Cycle", "Custom" ]
         }
 
-        Label { text: qsTr("Brightness"); color: "#ccc" }
+        Label { text: qsTr("Brightness"); color: Theme.fgFaint }
         Slider {
             from: 0; to: 100; value: 80
             Layout.fillWidth: true
         }
 
-        Label { text: qsTr("Color"); color: "#ccc" }
+        Label { text: qsTr("Color"); color: Theme.fgFaint }
         Rectangle {
-            width: 64; height: 64; radius: 6
-            color: "#ff5722"
+            width: 64; height: 64; radius: Theme.radiusMd
+            color: Theme.accent
         }
 
         Item { Layout.fillHeight: true }

@@ -56,6 +56,34 @@
             "displayName": "macOS · Release",
             "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" },
             "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Darwin" }
+        },
+        {
+            "name": "dev",
+            "inherits": "base",
+            "displayName": "Dev · Debug + sanitizers",
+            "description": "OS-agnostic alias used by clang-tidy/sanitizer CI jobs and contributors.",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "AJAZZ_ENABLE_SANITIZERS": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "inherits": "base",
+            "displayName": "Release · RelWithDebInfo",
+            "description": "OS-agnostic release alias.",
+            "cacheVariables": { "CMAKE_BUILD_TYPE": "RelWithDebInfo" }
+        },
+        {
+            "name": "coverage",
+            "inherits": "base",
+            "displayName": "Coverage",
+            "description": "Linux-only gcov/lcov coverage build used by the CI coverage job.",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "AJAZZ_ENABLE_COVERAGE": "ON"
+            },
+            "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Linux" }
         }
     ],
     "buildPresets": [
@@ -64,7 +92,10 @@
         { "name": "windows-debug",   "configurePreset": "windows-debug"   },
         { "name": "windows-release", "configurePreset": "windows-release" },
         { "name": "macos-debug",     "configurePreset": "macos-debug"   },
-        { "name": "macos-release",   "configurePreset": "macos-release" }
+        { "name": "macos-release",   "configurePreset": "macos-release" },
+        { "name": "dev",             "configurePreset": "dev"             },
+        { "name": "release",         "configurePreset": "release"         },
+        { "name": "coverage",        "configurePreset": "coverage"        }
     ],
     "testPresets": [
         { "name": "linux-debug",     "configurePreset": "linux-debug",     "output": { "outputOnFailure": true } },

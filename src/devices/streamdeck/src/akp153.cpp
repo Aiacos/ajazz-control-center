@@ -352,8 +352,18 @@ private:
      *  @param jpeg      Raw JPEG bytes to transmit (≤ 65535 bytes).
      */
     void sendImage(std::uint8_t keyIndex, std::span<std::uint8_t const> jpeg) {
-        auto const header = akp153::buildImageHeader(
-            keyIndex, static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff)));
+        // SEC-008 / COD-013 / CWE-190: header length field is 16 bits.
+        // Refuse oversize payloads instead of truncating the header while
+        // still streaming the full body, which would desync the firmware.
+        if (jpeg.size() > 0xFFFFu) {
+            AJAZZ_LOG_WARN("akp153",
+                           "sendImage: payload {} bytes exceeds 65535-byte protocol max; "
+                           "refusing",
+                           jpeg.size());
+            return;
+        }
+        auto const header =
+            akp153::buildImageHeader(keyIndex, static_cast<std::uint16_t>(jpeg.size()));
         (void)m_transport->write(header);
 
         std::size_t offset = 0;
