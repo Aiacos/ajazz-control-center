@@ -20,6 +20,7 @@
 #include <cstdio>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <utility>
 
 namespace ajazz::core {
@@ -81,16 +82,22 @@ private:
 std::atomic<int> gLevel{static_cast<int>(LogLevel::Info)};
 
 /**
- * @brief Process-wide active sink.
+ * @brief Process-wide active sink + the lock that guards swap vs. read.
  *
- * Initialised lazily so we can install our default StderrSink without
- * relying on order-of-static-initialisation across translation units.
- * Thread-safe against concurrent log() calls because we always swap
- * the @c std::shared_ptr atomically; an in-flight emit() holds its own
- * shared_ptr copy and cannot observe a half-replaced sink.
+ * Cannot use @c std::atomic<std::shared_ptr<LogSink>> here because
+ * libc++ on macOS still requires the inner type be trivially copyable
+ * (and @c std::shared_ptr is not). A small @c std::shared_mutex over a
+ * plain @c std::shared_ptr is portable, lets concurrent log() calls
+ * read the sink under a shared lock, and only blocks them while
+ * setLogSink() is replacing the slot.
  */
-std::atomic<std::shared_ptr<LogSink>>& sinkSlot() noexcept {
-    static std::atomic<std::shared_ptr<LogSink>> slot{std::make_shared<StderrSink>()};
+struct SinkSlot {
+    std::shared_mutex mutex;
+    std::shared_ptr<LogSink> sink;
+};
+
+SinkSlot& sinkSlot() noexcept {
+    static SinkSlot slot{{}, std::make_shared<StderrSink>()};
     return slot;
 }
 
@@ -99,10 +106,12 @@ std::atomic<std::shared_ptr<LogSink>>& sinkSlot() noexcept {
 void setLogSink(std::shared_ptr<LogSink> sink) noexcept {
     if (!sink) {
         // Reset to the default — callers typically use this in a test
-        // tearDown to undo a captureSink installation.
+        // tearDown to undo a capturing-sink installation.
         sink = std::make_shared<StderrSink>();
     }
-    sinkSlot().store(std::move(sink), std::memory_order_release);
+    auto& slot = sinkSlot();
+    std::unique_lock const lock(slot.mutex);
+    slot.sink = std::move(sink);
 }
 
 void setLogLevel(LogLevel level) noexcept {
@@ -117,10 +126,16 @@ void log(LogLevel level, std::string_view module, std::string_view message) noex
     if (static_cast<int>(level) < gLevel.load(std::memory_order_relaxed)) {
         return;
     }
-    // Atomic-load via the slot — this gives us a refcounted handle to the
-    // sink that stays alive for the duration of emit() even if a
-    // concurrent setLogSink() swap happens.
-    auto const sink = sinkSlot().load(std::memory_order_acquire);
+    // Take a shared_ptr copy under shared lock, then release the lock
+    // before calling write(). The copy keeps the sink alive for the
+    // duration of write() even if a concurrent setLogSink() swap
+    // happens immediately after.
+    std::shared_ptr<LogSink> sink;
+    {
+        auto& slot = sinkSlot();
+        std::shared_lock const lock(slot.mutex);
+        sink = slot.sink;
+    }
     if (!sink) {
         return;
     }

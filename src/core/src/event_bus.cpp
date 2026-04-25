@@ -23,9 +23,7 @@
 
 namespace ajazz::core {
 
-EventBus::EventBus() {
-    m_handlers.store(std::make_shared<HandlerVec const>(), std::memory_order_release);
-}
+EventBus::EventBus() : m_handlers(std::make_shared<HandlerVec const>()) {}
 
 template <typename Mutator>
 std::shared_ptr<EventBus::HandlerVec const>
@@ -39,39 +37,43 @@ EventBus::cowCopy(std::shared_ptr<HandlerVec const> const& current, Mutator&& mu
 
 EventBus::Subscription EventBus::subscribe(Handler handler) {
     auto const token = m_nextToken.fetch_add(1, std::memory_order_relaxed);
-    std::lock_guard const lock(m_writeMutex);
-    auto const current = m_handlers.load(std::memory_order_acquire);
+    std::unique_lock const lock(m_handlersMutex);
     auto next =
-        cowCopy(current, [&](HandlerVec& vec) { vec.emplace_back(token, std::move(handler)); });
-    m_handlers.store(std::move(next), std::memory_order_release);
+        cowCopy(m_handlers, [&](HandlerVec& vec) { vec.emplace_back(token, std::move(handler)); });
+    m_handlers = std::move(next);
     return token;
 }
 
 void EventBus::unsubscribe(Subscription token) noexcept {
-    std::lock_guard const lock(m_writeMutex);
-    auto const current = m_handlers.load(std::memory_order_acquire);
+    std::unique_lock const lock(m_handlersMutex);
     // Fast path: if the token isn't present we don't allocate a new
     // vector. Saves an allocation on the (common) case where a caller
     // unsubscribes twice.
-    auto const found = std::any_of(
-        current->begin(), current->end(), [token](auto const& kv) { return kv.first == token; });
+    auto const found = std::any_of(m_handlers->begin(), m_handlers->end(), [token](auto const& kv) {
+        return kv.first == token;
+    });
     if (!found) {
         return;
     }
-    auto next = cowCopy(current, [token](HandlerVec& vec) {
+    auto next = cowCopy(m_handlers, [token](HandlerVec& vec) {
         vec.erase(std::remove_if(vec.begin(),
                                  vec.end(),
                                  [token](auto const& kv) { return kv.first == token; }),
                   vec.end());
     });
-    m_handlers.store(std::move(next), std::memory_order_release);
+    m_handlers = std::move(next);
 }
 
 void EventBus::publish(DeviceId const& id, DeviceEvent const& event) const {
-    // Atomic-load: lock-free; the returned shared_ptr keeps the vector
-    // alive even if a concurrent writer swaps a new one in immediately
-    // after this load.
-    auto const snapshot = m_handlers.load(std::memory_order_acquire);
+    // Take a shared_ptr copy under shared lock, then release the lock
+    // before invoking handlers. The shared_ptr keeps the vector alive
+    // even if a concurrent writer swaps a new one in; handlers may
+    // safely subscribe / unsubscribe during dispatch.
+    std::shared_ptr<HandlerVec const> snapshot;
+    {
+        std::shared_lock const lock(m_handlersMutex);
+        snapshot = m_handlers;
+    }
     if (!snapshot) {
         return;
     }

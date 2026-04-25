@@ -19,6 +19,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <utility>
 #include <vector>
 
@@ -111,19 +112,23 @@ private:
     [[nodiscard]] static std::shared_ptr<HandlerVec const>
     cowCopy(std::shared_ptr<HandlerVec const> const& current, Mutator&& mutator);
 
-    /// Serialises writers (subscribe / unsubscribe) so two concurrent
-    /// writers can't both build their copy from the same `current` and
-    /// race on the atomic store. Readers (publish) do not take this
-    /// mutex.
-    mutable std::mutex m_writeMutex;
+    /// Reader/writer lock guarding @c m_handlers. Readers (publish) take
+    /// shared ownership; writers (subscribe / unsubscribe) take exclusive
+    /// ownership. Chosen over @c std::atomic<std::shared_ptr<...>>
+    /// because libc++ on macOS still requires @c is_trivially_copyable
+    /// for the atomic specialisation, which @c std::shared_ptr is not.
+    /// The shared-mutex path is portable, gives near-lock-free read
+    /// throughput on contention-free workloads, and never blocks
+    /// concurrent readers.
+    mutable std::shared_mutex m_handlersMutex;
 
-    /// Atomic shared_ptr to the current immutable subscriber list.
-    /// Replaced on every subscribe / unsubscribe.
-    std::atomic<std::shared_ptr<HandlerVec const>> m_handlers;
+    /// Immutable subscriber list. Writers replace it under exclusive
+    /// lock; readers copy the shared_ptr under shared lock and iterate
+    /// the immutable vector after releasing the lock.
+    std::shared_ptr<HandlerVec const> m_handlers;
 
     /// Monotonically increasing token counter. `std::atomic` so it is
-    /// safe to fetch_add without holding `m_writeMutex` if a future
-    /// caller wants to mint a token outside the write path.
+    /// safe to fetch_add without holding @c m_handlersMutex.
     std::atomic<Subscription> m_nextToken{1};
 };
 
