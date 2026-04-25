@@ -11,6 +11,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <string>
@@ -124,6 +125,8 @@ TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurre
     std::vector<std::thread> workers;
     workers.reserve(kThreads);
     std::atomic<int> failures{0};
+    std::mutex sampleMutex;
+    std::string firstError;
     for (int t = 0; t < kThreads; ++t) {
         workers.emplace_back([&, t]() {
             for (int i = 0; i < kIters; ++i) {
@@ -131,6 +134,12 @@ TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurre
                     auto p = sampleProfile();
                     p.name = "T" + std::to_string(t) + "-" + std::to_string(i);
                     ajazz::core::writeProfileToDisk(path, p);
+                } catch (std::exception const& e) {
+                    failures.fetch_add(1, std::memory_order_relaxed);
+                    std::lock_guard<std::mutex> guard{sampleMutex};
+                    if (firstError.empty()) {
+                        firstError = e.what();
+                    }
                 } catch (...) {
                     failures.fetch_add(1, std::memory_order_relaxed);
                 }
@@ -141,6 +150,7 @@ TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurre
         w.join();
     }
 
+    INFO("first error: " << firstError);
     REQUIRE(failures.load() == 0);
 
     std::string const content = slurpFile(path);

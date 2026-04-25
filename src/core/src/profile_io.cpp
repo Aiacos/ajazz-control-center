@@ -215,13 +215,28 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
             return;
         }
         lastError = GetLastError();
-        // Only retry on transient sharing/permission errors. ERROR_FILE_NOT_FOUND is also
-        // transient under concurrent rename storms (the predecessor was rotated away after
-        // GetFileAttributesW reported it).
-        if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION &&
-            lastError != ERROR_LOCK_VIOLATION && lastError != ERROR_USER_MAPPED_FILE &&
-            lastError != ERROR_FILE_NOT_FOUND && lastError != ERROR_PATH_NOT_FOUND) {
+        // Treat any of the well-known transient codes as retryable. Permanent failures
+        // (ERROR_INVALID_NAME, ERROR_DISK_FULL, ERROR_ACCESS_DENIED on the SOURCE because
+        // we don't own it, etc.) bail out immediately to avoid wasting backoff slots.
+        switch (lastError) {
+        case ERROR_ACCESS_DENIED:
+        case ERROR_SHARING_VIOLATION:
+        case ERROR_LOCK_VIOLATION:
+        case ERROR_USER_MAPPED_FILE:
+        case ERROR_FILE_NOT_FOUND:
+        case ERROR_PATH_NOT_FOUND:
+        case ERROR_DIR_NOT_EMPTY:
+        case ERROR_NOT_READY:
+        case ERROR_BUSY:
+        case ERROR_RETRY:
+        case ERROR_UNABLE_TO_REMOVE_REPLACED:
+        case ERROR_UNABLE_TO_MOVE_REPLACEMENT:
+        case ERROR_UNABLE_TO_MOVE_REPLACEMENT_2:
             break;
+        default:
+            // Permanent error — fail fast.
+            throw ProfileIoError{"profile_io: rename " + src.string() + " -> " + dst.string() +
+                                 " failed (Win32 error " + std::to_string(lastError) + ")"};
         }
         // Exponential backoff capped at 250 ms per attempt, plus a small random jitter to
         // de-synchronise concurrent retriers.
