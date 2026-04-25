@@ -65,8 +65,12 @@ struct CatalogEntry {
      * docs/architecture/PLUGIN-SDK.md, section “Compatibility modes”.
      */
     QString source = QStringLiteral("local");
-    /// Upstream product identifier when @ref source = "streamdock".
-    QString streamdockProductId;
+    /// Upstream product identifier when @ref source = "streamdock". Empty
+    /// for first-party / community catalogue rows. The default member
+    /// initializer doubles as a `-Wmissing-field-initializers` suppressor
+    /// so callers can keep the historical positional-initialization style
+    /// without listing every trailing optional field explicitly.
+    QString streamdockProductId = {};
 };
 
 /**
