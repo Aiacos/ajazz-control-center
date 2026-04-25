@@ -172,9 +172,22 @@ ______________________________________________________________________
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
 - [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
   - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
+- [ ] **AJAZZ Streamdock store integration**: surface plugins published
+  on the official AJAZZ Streamdock store inside our Plugin Store UI as a
+  first-class "Streamdock Store" tab. Reverse-engineer the Streamdock
+  desktop app's catalogue endpoint (URL, auth, JSON shape), build a
+  cached mirror that translates Streamdock manifests into our schema,
+  expose verified / signed metadata where available, and let users
+  one-click install Streamdock plugins through the same lifecycle
+  manager (compatibility mode `streamdock`, sibling of `streamdeck` and
+  `opendeck`). Includes a settings toggle to opt out of the upstream
+  catalogue for offline / air-gapped builds. ≈ 1-2 weeks once the
+  endpoint is documented; depends on **Plugin lifecycle manager** and
+  **Plugin Store UI**.
 
 **Total realistic estimate**: 6-10 weeks of focused engineering for a
-v1; backend catalog is parallel work.
+v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
+workstreams.
 
 ### UI polish (incremental)
 

@@ -59,7 +59,40 @@ void TrayController::ensureTray(QQmlApplicationEngine* engine) {
     }
 
     tray_ = new QSystemTrayIcon(this);
-    tray_->setIcon(QIcon(branding_ ? branding_->trayIconUrl().toString() : QString()));
+    // Build the tray QIcon from a resource path, not a "qrc:/..." URL.
+    // QIcon parses paths starting with ':/' as Qt resources but treats the
+    // "qrc:" scheme as an opaque filesystem path, which silently fails and
+    // shows the platform's missing-icon glyph (a 2x2 magenta/black checker on
+    // most Qt-on-Linux desktops). Strip the scheme prefix before constructing
+    // the QIcon so we always hit the embedded resource.
+    //
+    // We render the same branded mark used in the README, the desktop entry
+    // and the window icon: a coloured square miniature of the app icon. The
+    // historical monochrome tray.svg is kept on disk for integrators who want
+    // a strictly themeable tray glyph but is no longer the default.
+    auto qrcToResourcePath = [](const QString& url) {
+        if (url.startsWith(QLatin1String("qrc:/"))) {
+            return QStringLiteral(":") + url.mid(4);
+        }
+        return url;
+    };
+    QIcon trayIcon;
+    if (branding_) {
+        // Prefer the full-colour app mark so the tray matches the README and
+        // the window decoration. Fall back to the dedicated tray asset (and
+        // finally to the legacy generic icon) if the branded variant is empty.
+        trayIcon = QIcon(qrcToResourcePath(branding_->appIconUrl().toString()));
+        if (trayIcon.isNull()) {
+            trayIcon = QIcon(qrcToResourcePath(branding_->trayIconUrl().toString()));
+        }
+    }
+    if (trayIcon.isNull()) {
+        trayIcon = QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/branding/app.svg"));
+    }
+    if (trayIcon.isNull()) {
+        trayIcon = QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg"));
+    }
+    tray_->setIcon(trayIcon);
     tray_->setToolTip(branding_ ? branding_->productName()
                                 : QStringLiteral("AJAZZ Control Center"));
     buildMenu();
