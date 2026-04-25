@@ -1,8 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// HID transport backed by libhidapi. Implemented as a thin RAII wrapper so
-// backend code can stay platform-agnostic.
-//
+/**
+ * @file hid_transport.cpp
+ * @brief libhidapi-backed ITransport implementation.
+ *
+ * HidTransport is a thin RAII wrapper around hid_open/hid_close/hid_write/
+ * hid_read_timeout so that all device backends remain platform-agnostic.
+ * A process-wide reference count (gInitCount) ensures hid_init() is called
+ * exactly once regardless of how many transports are created.
+ */
 #include "ajazz/core/logger.hpp"
 #include "ajazz/core/transport.hpp"
 
@@ -18,8 +23,24 @@
 namespace ajazz::core {
 namespace {
 
+/**
+ * @brief Concrete ITransport implementation backed by libhidapi.
+ *
+ * All I/O is synchronous (non-blocking mode is enabled on open so that
+ * read() with a zero-millisecond timeout returns immediately). The RAII
+ * destructor calls close() so the device handle is always freed.
+ *
+ * @note Not copyable or movable; always held via TransportPtr.
+ */
 class HidTransport final : public ITransport {
 public:
+    /**
+     * @brief Construct a closed transport for the given USB device.
+     *
+     * @param vid    USB Vendor ID.
+     * @param pid    USB Product ID.
+     * @param serial Serial number string; empty means first matching device.
+     */
     HidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial)
         : m_vid(vid), m_pid(pid), m_serial(std::move(serial)) {}
 
@@ -34,6 +55,7 @@ public:
         if (!m_handle) {
             throw std::runtime_error("hid_open failed");
         }
+        // Enable non-blocking mode so zero-timeout reads return immediately.
         ::hid_set_nonblocking(m_handle, 1);
         AJAZZ_LOG_INFO("hid", "opened VID={:04x} PID={:04x}", m_vid, m_pid);
     }
@@ -94,24 +116,36 @@ public:
     [[nodiscard]] TransportStats stats() const noexcept override { return m_stats; }
 
 private:
+    /// Throw if the device handle is null (i.e. not yet opened).
     void ensureOpen() const {
         if (!m_handle) {
             throw std::runtime_error("HidTransport: device is not open");
         }
     }
 
-    std::uint16_t m_vid{0};
-    std::uint16_t m_pid{0};
-    std::string m_serial;
-    ::hid_device* m_handle{nullptr};
-    TransportStats m_stats{};
+    std::uint16_t m_vid{0};          ///< USB Vendor ID.
+    std::uint16_t m_pid{0};          ///< USB Product ID.
+    std::string m_serial;            ///< Serial number filter; empty = first match.
+    ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
+    TransportStats m_stats{};        ///< Cumulative I/O counters.
 };
 
+/// Process-wide hidapi initialisation reference count.
 std::atomic<int> gInitCount{0};
 
 } // namespace
 
-// Factory visible to the rest of the core.
+/**
+ * @brief Instantiate an HID transport, initialising hidapi on first call.
+ *
+ * Uses an atomic reference count (gInitCount) to call hid_init() exactly
+ * once per process lifetime regardless of how many transports are created.
+ *
+ * @param vid    USB Vendor ID.
+ * @param pid    USB Product ID.
+ * @param serial Optional serial number; empty means first matching device.
+ * @return Closed TransportPtr; call open() before I/O.
+ */
 TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial) {
     if (gInitCount.fetch_add(1) == 0) {
         ::hid_init();

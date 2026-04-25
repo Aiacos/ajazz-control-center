@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// AJAZZ AKP05 / AKP05E "Stream Dock Plus"-class backend.
-//
-// 15 keys (85×85 JPEG, reusing the AKP153 image format), 4 endless rotary
-// encoders with tiny LCDs above them, one touch strip and one main LCD.
-//
-// The wire protocol below is a clean-room reconstruction from the notes in
-// docs/protocols/streamdeck/akp05.md; no third-party source is incorporated.
-//
+/** @file akp05.cpp
+ *  @brief AJAZZ AKP05 / AKP05E "Stream Dock Plus"-class device backend.
+ *
+ *  Implements the full wire protocol for the AKP05 family: 15 keys (85×85 JPEG,
+ *  reusing the AKP153 image format), 4 endless rotary encoders each with a
+ *  dedicated 100×100 LCD above it, one capacitive touch strip, and one 800×100
+ *  main LCD panel.
+ *
+ *  The protocol is a clean-room reconstruction from the notes in
+ *  docs/protocols/streamdeck/akp05.md; no third-party source is incorporated.
+ */
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/hid_transport.hpp"
@@ -27,6 +29,19 @@ namespace akp05 {
 // -----------------------------------------------------------------------------
 // Protocol helpers — pure functions, covered by unit tests.
 // -----------------------------------------------------------------------------
+
+/** @brief Construct a zero-initialised 512-byte command packet with the
+ *         standard AKP prefix and the given three-byte ASCII command word.
+ *
+ *  The AKP framing layout is:
+ *  - Bytes 0–2:  "CRT" prefix (0x43 0x52 0x54)
+ *  - Bytes 3–4:  0x00 0x00
+ *  - Bytes 5–7:  @p cmd (three ASCII command bytes)
+ *  - Bytes 8–511: zero-padded payload area (filled by callers)
+ *
+ *  @param cmd  Three-byte ASCII command identifier (e.g. CmdLight, CmdClear).
+ *  @return     A fully initialised command packet ready for payload injection.
+ */
 std::array<std::uint8_t, PacketSize> buildCmdHeader(std::array<std::uint8_t, 3> const& cmd) {
     std::array<std::uint8_t, PacketSize> pkt{};
     pkt[0] = CmdPrefix[0];
@@ -38,12 +53,28 @@ std::array<std::uint8_t, PacketSize> buildCmdHeader(std::array<std::uint8_t, 3> 
     return pkt;
 }
 
+/** @brief Build a backlight brightness command packet.
+ *
+ *  Sets the global brightness of all key LCDs and the main LCD.
+ *  Byte 10 carries the clamped brightness value (0–100).
+ *
+ *  @param percent  Desired brightness in the range 0–100; values above 100
+ *                  are silently clamped to 100.
+ *  @return         Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent) {
     auto pkt = buildCmdHeader(CmdLight);
     pkt[10] = std::min<std::uint8_t>(percent, 100);
     return pkt;
 }
 
+/** @brief Build a "clear all keys" command packet.
+ *
+ *  Instructs the firmware to black-out every key LCD simultaneously.
+ *  Byte 10 = 0x00, byte 11 = 0xFF (broadcast sentinel).
+ *
+ *  @return Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildClearAll() {
     auto pkt = buildCmdHeader(CmdClear);
     pkt[10] = 0x00;
@@ -51,6 +82,14 @@ std::array<std::uint8_t, PacketSize> buildClearAll() {
     return pkt;
 }
 
+/** @brief Build a "clear single key" command packet.
+ *
+ *  Instructs the firmware to black-out one specific key LCD.
+ *  Byte 10 = 0x00, byte 11 = @p keyIndex.
+ *
+ *  @param keyIndex  1-based key index (1..KeyCount).
+ *  @return          Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     auto pkt = buildCmdHeader(CmdClear);
     pkt[10] = 0x00;
@@ -58,6 +97,17 @@ std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     return pkt;
 }
 
+/** @brief Build the header packet for a key-image transfer.
+ *
+ *  The firmware expects one header packet followed immediately by one or more
+ *  512-byte raw JPEG data packets.  The header encodes:
+ *  - Bytes 10–11: big-endian total JPEG byte count
+ *  - Byte 12:     1-based key index
+ *
+ *  @param keyIndex  Destination key index (1..KeyCount).
+ *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
+ *  @return          Ready-to-send 512-byte header packet.
+ */
 std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
                                                          std::uint16_t jpegSize) {
     auto pkt = buildCmdHeader(CmdKeyImage);
@@ -67,6 +117,16 @@ std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
     return pkt;
 }
 
+/** @brief Build the header packet for an encoder-LCD image transfer.
+ *
+ *  Each of the 4 encoders has a small 100×100 JPEG LCD.  The header layout
+ *  mirrors the key-image header but uses CmdEncImage and places the
+ *  encoder index (0-based) at byte 12.
+ *
+ *  @param encoderIndex  0-based encoder index (0..EncoderCount-1).
+ *  @param jpegSize      Total byte length of the JPEG payload (≤ 0xFFFF).
+ *  @return              Ready-to-send 512-byte header packet.
+ */
 std::array<std::uint8_t, PacketSize> buildEncoderImageHeader(std::uint8_t encoderIndex,
                                                              std::uint16_t jpegSize) {
     auto pkt = buildCmdHeader(CmdEncImage);
@@ -76,6 +136,15 @@ std::array<std::uint8_t, PacketSize> buildEncoderImageHeader(std::uint8_t encode
     return pkt;
 }
 
+/** @brief Build the header packet for a main-LCD image transfer.
+ *
+ *  The 800×100 main LCD (bottom of the unit) accepts a full-width JPEG.
+ *  No index byte is needed — the CmdMainImage command targets it implicitly.
+ *  Bytes 10–11 carry the big-endian JPEG size.
+ *
+ *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
+ *  @return          Ready-to-send 512-byte header packet.
+ */
 std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize) {
     auto pkt = buildCmdHeader(CmdMainImage);
     pkt[10] = static_cast<std::uint8_t>((jpegSize >> 8) & 0xffu);
@@ -83,6 +152,22 @@ std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize
     return pkt;
 }
 
+/** @brief Decode one raw HID input report into a structured @ref InputEvent.
+ *
+ *  The AKP05 multiplexes keys, encoders, and touch-strip events over a single
+ *  512-byte HID report.  The tag byte at offset 9 determines the event class:
+ *
+ *  | Tag range    | Class                  | Notes                              |
+ *  |-------------|------------------------|------------------------------------|
+ *  | 1..KeyCount  | Key press/release      | Byte 10 = edge (non-zero = down)   |
+ *  | 0x20..0x2F   | Encoder rotation/press | Byte 10 = signed int8 delta        |
+ *  | 0x30..0x3F   | Touch-strip gesture    | Low nibble = gesture code          |
+ *
+ *  ACK frames (bytes 0–2 == "ACK") are silently discarded.
+ *
+ *  @param frame  Raw HID report bytes (must be at least 16 bytes).
+ *  @return       Decoded event, or @c std::nullopt for ACK / unknown frames.
+ */
 std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) {
     if (frame.size() < 16) {
         return std::nullopt;
@@ -165,9 +250,22 @@ namespace {
 
 using namespace ajazz::core;
 
-// -----------------------------------------------------------------------------
-// Akp05Device: glues the protocol to ITransport and the capability mix-ins.
-// -----------------------------------------------------------------------------
+/** @brief Concrete IDevice implementation for the AJAZZ AKP05 / AKP05E.
+ *
+ *  @class Akp05Device
+ *
+ *  Glues the stateless @c akp05:: protocol helpers to the HID transport layer
+ *  and exposes the full @ref IDisplayCapable and @ref IEncoderCapable mix-in
+ *  interfaces.  All public methods are thread-safe with respect to the event
+ *  callback registration; individual writes to the transport are serialised by
+ *  the caller because Qt's event loop drives @c poll() from a single thread.
+ *
+ *  Hardware capabilities:
+ *  - 15 keys arranged in a 3×5 grid, each with an 85×85 JPEG LCD
+ *  - 4 endless rotary encoders with 100×100 JPEG LCDs
+ *  - One capacitive touch strip (X range 0–639)
+ *  - One 800×100 main LCD panel
+ */
 class Akp05Device final : public IDevice, public IDisplayCapable, public IEncoderCapable {
 public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
@@ -348,6 +446,15 @@ public:
     }
 
 private:
+    /** @brief Transmit an image to any display surface on the device.
+     *
+     *  Sends the pre-built @p header packet first, then streams @p payload
+     *  in 512-byte chunks.  Partial trailing chunks are zero-padded by the
+     *  zero-initialised @c chunk array before each write.
+     *
+     *  @param header   Pre-built command header (key, encoder, or main LCD).
+     *  @param payload  Raw JPEG bytes to transmit.
+     */
     void sendImage(std::array<std::uint8_t, akp05::PacketSize> const& header,
                    std::span<std::uint8_t const> payload) {
         (void)m_transport->write(header);
@@ -361,15 +468,25 @@ private:
         }
     }
 
-    DeviceDescriptor m_descriptor;
-    DeviceId m_id;
-    TransportPtr m_transport;
-    EventCallback m_callback;
-    std::mutex m_mutex;
+    DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.
+    DeviceId m_id;                 ///< HID bus identity (VID, PID, serial string).
+    TransportPtr m_transport;      ///< Underlying HID I/O channel.
+    EventCallback m_callback;      ///< Registered input-event sink (may be null).
+    std::mutex m_mutex;            ///< Guards m_callback for thread-safe registration.
 };
 
 } // namespace
 
+/** @brief Factory function: construct an AKP05 device object.
+ *
+ *  Instantiates an @c Akp05Device with the provided descriptor and HID
+ *  identity.  The transport is opened lazily on the first call to
+ *  @ref IDevice::open().
+ *
+ *  @param d    Static device descriptor (model name, family, codename).
+ *  @param id   HID bus identity used to open the underlying transport.
+ *  @return     Owning pointer to the new device instance.
+ */
 core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_unique<Akp05Device>(d, std::move(id));
 }

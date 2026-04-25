@@ -1,10 +1,36 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/** @file register.cpp
+ *  @brief Device registration for all AJAZZ Stream Dock variants.
+ *
+ *  Calls @ref core::DeviceRegistry::registerDevice() for every known AKP
+ *  device family so that the registry can match USB enumeration results to
+ *  the correct factory function at runtime.
+ *
+ *  @note  VID/PID values for the AKP03 and AKP05 are provisional placeholders
+ *         captured from early hardware samples; update after final capture.
+ */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
 #include "akp153_protocol.hpp"
 
 namespace ajazz::streamdeck {
 
+/** @brief Register all known Stream Dock device descriptors with the global
+ *         @ref core::DeviceRegistry.
+ *
+ *  This function must be called once during application initialisation (before
+ *  USB enumeration begins).  Subsequent calls are safe but redundant — the
+ *  registry silently replaces duplicate VID/PID entries.
+ *
+ *  Registered devices:
+ *  - **AKP153** (VID=akp153::VendorId, PID=0x1001) — international variant
+ *  - **AKP153E** (VID=akp153::VendorId, PID=0x1002) — China market variant
+ *  - **AKP03 / Mirabox N3** (VID=0x0300, PID=0x3001) — provisional IDs
+ *  - **AKP05 / AKP05E** (VID=0x0300, PID=0x5001) — provisional IDs
+ *
+ *  @see core::DeviceRegistry::registerDevice()
+ *  @see makeAkp153(), makeAkp03(), makeAkp05()
+ */
 void registerAll() {
     auto& reg = core::DeviceRegistry::instance();
 

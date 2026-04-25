@@ -1,18 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// AJAZZ AJ-series mouse backend. Command envelope reverse-engineered from
-// the official Windows utility (`ajazz-aj199-official-software` mirrors the
-// wire traffic observable with Wireshark + USBPcap). Full reference lives
-// in docs/protocols/mouse/aj_series.md.
-//
-// Envelope format (feature report, 64 bytes):
-//
-//   byte 0 : report id (0x05)
-//   byte 1 : command id (see CommandId enum)
-//   byte 2 : sub-command
-//   byte 3 : length of payload
-//   byte 4..N : payload
-//   byte 63 : checksum (sum of bytes 1..62 modulo 256)
+/**
+ * @file aj_series.cpp
+ * @brief IDevice backend for AJAZZ AJ-series gaming mice.
+ *
+ * Reverse-engineered from the official Windows utility (Wireshark + USBPcap
+ * captures of @c ajazz-aj199-official-software).  Full byte-level reference
+ * in docs/protocols/mouse/aj_series.md.
+ *
+ * Feature-report envelope (64 bytes):
+ * @code
+ *   byte  0 : report id (0x05)
+ *   byte  1 : command id (CommandId enum)
+ *   byte  2 : sub-command
+ *   byte  3 : payload length
+ *   byte 4…N: payload
+ *   byte 63 : checksum = sum(bytes 1..62) mod 256
+ * @endcode
+ */
 //
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
@@ -31,16 +35,29 @@ using namespace ajazz::core;
 
 constexpr std::size_t kReportSize = 64;
 
+/// Command byte values placed at offset 1 of the 64-byte feature-report envelope.
 enum CommandId : std::uint8_t {
-    kCmdDpi = 0x21,
-    kCmdPollRate = 0x22,
-    kCmdLod = 0x23,
-    kCmdButton = 0x24,
-    kCmdRgb = 0x30,
-    kCmdBattery = 0x40,
-    kCmdCommit = 0x50,
+    kCmdDpi = 0x21,      ///< Configure DPI stages and per-stage indicator colour.
+    kCmdPollRate = 0x22, ///< Set the USB polling rate (Hz).
+    kCmdLod = 0x23,      ///< Set the lift-off distance in tenths of a millimetre.
+    kCmdButton = 0x24,   ///< Bind a button to a HID action.
+    kCmdRgb = 0x30,      ///< Control RGB lighting (static / effect / brightness).
+    kCmdBattery = 0x40,  ///< Query battery level (wireless models only).
+    kCmdCommit = 0x50,   ///< Persist staged configuration to EEPROM.
 };
 
+/**
+ * @brief Build a 64-byte feature-report envelope.
+ *
+ * Fills the standard header (report-id, command, sub-command, length),
+ * copies up to 59 bytes of payload, then appends the checksum at byte 63.
+ * The checksum is the 8-bit sum of bytes 1–62.
+ *
+ * @param cmd      Command id (CommandId enum value).
+ * @param sub      Sub-command discriminator (command-specific meaning).
+ * @param payload  Up to 59 bytes of command-specific data.
+ * @return         Fully formed 64-byte report ready for ITransport::writeFeature().
+ */
 std::array<std::uint8_t, kReportSize>
 makeEnvelope(std::uint8_t cmd, std::uint8_t sub, std::span<std::uint8_t const> payload) {
     std::array<std::uint8_t, kReportSize> pkt{};
@@ -56,6 +73,17 @@ makeEnvelope(std::uint8_t cmd, std::uint8_t sub, std::span<std::uint8_t const> p
     return pkt;
 }
 
+/**
+ * @brief IDevice backend for AJAZZ AJ-series gaming mice.
+ *
+ * Implements IDevice, IMouseCapable, and IRgbCapable using 64-byte HID
+ * feature reports on the configuration interface.  All configuration
+ * commands use writeFeature(); battery reads use writeFeature + readFeature.
+ *
+ * @note The mutex guards only @c m_callback; configuration setters are not
+ *       internally serialised and should be called from a single thread.
+ * @see makeAjSeries()
+ */
 class AjSeriesMouse final : public IDevice, public IMouseCapable, public IRgbCapable {
 public:
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)

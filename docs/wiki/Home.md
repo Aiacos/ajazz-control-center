@@ -16,6 +16,7 @@ and is not affiliated with, endorsed by, or supported by AJAZZ.
 
 <!-- BEGIN AUTOGEN: toc-wiki -->
 - [Building](Building)
+- [Documentation Style](Documentation-Style)
 - [FAQ](FAQ)
 - [Plugin Development](Plugin-Development)
 - [Quick Start](Quick-Start)

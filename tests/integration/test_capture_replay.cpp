@@ -1,15 +1,22 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Capture-replay integration tests run the device backends against a mock
-// ITransport that reads canned USB frames from `tests/integration/fixtures/`.
-// This keeps the test suite hardware-free.
-//
+/**
+ * @file test_capture_replay.cpp
+ * @brief Integration tests that replay canned USB frames through the protocol parsers.
+ *
+ * These tests stand in for hardware access: byte sequences recorded from
+ * physical devices (stored in tests/integration/fixtures/) are fed directly
+ * to the protocol parser functions, keeping the test suite runnable without
+ * attached hardware.
+ *
+ * Currently exercises the AKP153 parser against a captured key-press frame.
+ */
 #include "akp153_protocol.hpp"
 
 #include <array>
 
 #include <catch2/catch_test_macros.hpp>
 
+/// A raw frame captured from a physical AKP153 (key 7 press) must parse to keyIndex == 7.
 TEST_CASE("captured firmware response decodes to a key event", "[integration][akp153]") {
     using namespace ajazz::streamdeck::akp153;
 

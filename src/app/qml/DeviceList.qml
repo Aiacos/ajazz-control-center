@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Sidebar panel showing connected and previously-seen AJAZZ devices.
+// Exposes `model` (alias to the internal ListView model) for the parent to
+// supply a device list model.  Emits `deviceSelected(codename)` when the
+// user clicks a device row.
 import QtQuick
 import QtQuick.Controls
 
 Rectangle {
     id: root
     color: "#1e1e23"
+
+    /// Emitted when the user clicks a device row; carries the device codename.
     signal deviceSelected(string codename)
 
+    /// Alias to the internal ListView model; set by the parent to supply devices.
     property alias model: list.model
 
     ListView {

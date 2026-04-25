@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Encoder configuration tab: displays up to four rotary-encoder dials.
+// Each dial shows its ordinal label and will eventually support binding
+// CW/CCW rotation and press to actions.
+// Exposes no custom signals or properties.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

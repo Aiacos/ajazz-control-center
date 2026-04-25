@@ -1,10 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Profile editor panel shown in the main content area after a device is selected.
+// Hosts a TabBar (Keys / RGB / Encoders / Mouse) and switches between
+// KeyDesigner, RgbPicker, EncoderPanel, and MousePanel via a StackLayout.
+// Exposes `codename` so the parent can drive which device is being edited.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
 Rectangle {
     id: root
+    /// Codename of the device currently being edited (e.g. "ak820pro").
+    /// An empty string shows a placeholder prompt.
     property string codename: ""
     color: "#14141a"
 

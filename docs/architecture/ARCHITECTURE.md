@@ -1,18 +1,31 @@
 # Architecture
 
-AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core library and an embedded Python 3 plugin host. This document describes how the pieces fit together, what lives where, and which invariants the modules guarantee to their callers.
+AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core library and an embedded Python 3 plugin host. This document is the entry-point — it gives a 10-minute overview and links to deeper documents on individual subsystems.
+
+## Documents in this folder
+
+| Topic                              | Document                             |
+| ---------------------------------- | ------------------------------------ |
+| 10-minute high-level overview      | This page                            |
+| Threading and synchronization      | [THREADING.md](THREADING.md)         |
+| Hot-plug + auto-discovery          | [HOTPLUG.md](HOTPLUG.md)             |
+| Plugin system (Python)             | [PLUGIN-SYSTEM.md](PLUGIN-SYSTEM.md) |
+| Protocol layering and capabilities | [PROTOCOLS.md](PROTOCOLS.md)         |
+| Branding / white-labeling          | [BRANDING.md](BRANDING.md)           |
+| Per-device wire protocols          | [`../protocols/`](../protocols/)     |
 
 ## Layered view
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
 │                          Qt 6 / QML UI                               │
-│   DeviceList · ProfileEditor · KeyDesigner · RgbPicker · ...         │
+│   DeviceList · ProfileEditor · KeyDesigner · RgbPicker · TrayIcon    │
 └──────────────────────────────────────────────────────────────────────┘
                                   │  Q_PROPERTY / Q_INVOKABLE
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Application Layer (C++)                       │
 │   DeviceModel · ProfileController · ActionDispatcher · PluginHost    │
+│   HotplugMonitor · BrandingService · TrayController                  │
 └──────────────────────────────────────────────────────────────────────┘
             │                          │                │
 ┌───────────────────────┐  ┌───────────────────────┐  ┌──────────────────┐
@@ -38,29 +51,15 @@ AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core librar
 | `ajazz::plugins`    | `src/plugins`            | `core`, pybind11  | `PluginHost`, `ajazz` runtime module                                      |
 | `ajazz::app`        | `src/app`                | all of the above  | Qt/QML entry point                                                        |
 
-Modules talk to each other exclusively through the headers in `src/core/include/ajazz/core/`. No device backend includes headers from another; no UI code reaches into protocol internals; no plugin sees raw transports.
+Modules communicate exclusively through the headers in `src/core/include/ajazz/core/`. No device backend includes headers from another; no UI code reaches into protocol internals; no plugin sees raw transports.
 
 ## Capability-based device model
 
-Each concrete backend implements `IDevice` and opts into any subset of the capability interfaces in `capabilities.hpp`:
+Each concrete backend implements `IDevice` and opts into any subset of the capability interfaces in `capabilities.hpp`. The full catalog and contracts are documented in [PROTOCOLS.md](PROTOCOLS.md).
 
-- `IDisplayCapable` — per-key LCDs and main screens.
-- `IRgbCapable` — single-zone, multi-zone or per-LED RGB.
-- `IEncoderCapable` — endless rotary encoders with optional screens.
-- `IKeyRemappable` — QMK/VIA-style remapping plus macros.
-- `IMouseCapable` — DPI stages, polling, lift-off, button bindings, battery.
-- `IFirmwareCapable` — version query and update.
+The UI and Python SDK discover capabilities at runtime via `dynamic_cast`. This lets a backend selectively grow — e.g. AKP05 initially implements `IDisplayCapable` + `IEncoderCapable` and later adds `IRgbCapable` without touching the UI.
 
-The UI and Python SDK discover capabilities at runtime via `dynamic_cast`. This lets one backend selectively grow — e.g. AKP05 initially implements `IDisplayCapable` + `IEncoderCapable` and adds `IRgbCapable` later without touching the UI.
-
-## Threading model
-
-- The **main thread** runs the Qt event loop and the QML UI. It never blocks on I/O.
-- Each open device owns a **reader thread** started by `IDevice::open()`. It pumps HID input reports and emits `DeviceEvent`s through `EventCallback`. Callbacks must be cheap; they are forwarded to the main thread via `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`.
-- The **plugin host** holds the GIL while dispatching actions. Long-running Python work must spawn a Python thread or use `asyncio` — the host does not offload automatically.
-- The **event bus** snapshots its subscriber list under a short lock and releases it before dispatch, so subscribers can (un)subscribe during handling without deadlocking.
-
-## Data flow
+## Data flow at a glance
 
 ### Input: key press → action
 
@@ -79,26 +78,16 @@ hidapi → HidTransport::read
 ```
 QML → ProfileController::setKeyImage
     → DeviceController::device()->setKeyImage(...)
-    → <Backend>::sendImage (jpeg encode, chunk, hidapi write)
+    → <Backend>::sendImage (encode, chunk, hidapi write)
 ```
 
 ## Profile engine
 
-Profiles are JSON documents (schema in `docs/protocols/../PROFILE_SCHEMA.md`) that map physical controls to action chains. Key design points:
+Profiles are JSON documents (schema in `docs/protocols/PROFILE_SCHEMA.md`) that map physical controls to action chains. Key design points:
 
 - **Triggering** — per-application hints automatically switch the active profile when the OS focus changes.
 - **Stacking** — temporary profiles can be pushed/popped for modal interactions (e.g. scene-switcher overlay).
 - **Portability** — profiles are device-family agnostic at the schema level; device-specific fields live in typed sub-objects so profiles authored for one device can be partially reused on another.
-
-## Python plugin host
-
-- The interpreter is started once at app startup and lives for the process's lifetime.
-- The host exposes the `ajazz` runtime module (written in C++ with pybind11) — plugins import it to get access to `Plugin`, `action`, and eventually `Device`, `RGB`, etc.
-- Plugin directories scanned at startup:
-  - Linux: `~/.config/ajazz-control-center/plugins`
-  - Windows: `%APPDATA%\ajazz-control-center\plugins`
-  - macOS: `~/Library/Application Support/ajazz-control-center/plugins`
-- Plugin crashes are caught at the host boundary and surfaced in the UI, not propagated into the event loop.
 
 ## Error handling conventions
 
@@ -112,3 +101,4 @@ Profiles are JSON documents (schema in `docs/protocols/../PROFILE_SCHEMA.md`) th
 - **Clean-room protocol modules** keep reverse-engineered knowledge isolated and well-documented.
 - **Embedded Python** gives power users scripting parity with the Stream Deck SDK without tying the core to a JS runtime.
 - **Three-OS CI matrix from day one** avoids the "works on my Linux" drift common in hardware tooling.
+- **Hot-plug + tray-first** UX mirrors what users expect from a "set it and forget it" device companion.

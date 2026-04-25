@@ -1,0 +1,11 @@
+{
+  "$schema": "https://github.com/Aiacos/ajazz-control-center/blob/main/docs/architecture/BRANDING.md",
+  "_comment": "Default upstream theme. Override at runtime via QSettings 'Branding/ThemeOverride' or at build time via -DAJAZZ_BRAND_DIR=/path/to/dir.",
+  "accent":     "#41CD52",
+  "accent2":    "#0A82FA",
+  "bgBase":     "#14141a",
+  "bgSidebar":  "#1e1e23",
+  "bgRowHover": "#2c2c34",
+  "fgPrimary":  "#f0f0f0",
+  "fgMuted":    "#888888"
+}

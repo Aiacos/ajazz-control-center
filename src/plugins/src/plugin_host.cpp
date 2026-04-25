@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file plugin_host.cpp
+ * @brief Implementation of PluginHost — the embedded Python plugin manager.
+ *
+ * Uses pybind11's scoped_interpreter to embed CPython.  Each plugin directory
+ * that contains a @c plugin.py is imported as a Python package; the module
+ * must expose a @c Plugin class whose @c id attribute is used as the key.
+ */
 #include "ajazz/plugins/plugin_host.hpp"
 
 #include "ajazz/core/logger.hpp"
@@ -20,11 +28,18 @@ namespace ajazz::plugins {
 #define AJAZZ_HIDDEN
 #endif
 
+/**
+ * @brief Private implementation data for PluginHost (pimpl idiom).
+ *
+ * Isolates pybind11 headers from public API consumers and sidesteps
+ * visibility attribute mismatches on GCC/Linux.
+ */
 struct AJAZZ_HIDDEN PluginHost::Impl {
-    py::scoped_interpreter guard{};
-    std::vector<std::filesystem::path> searchPaths;
-    std::unordered_map<std::string, py::object> plugins; // id -> instance
-    std::mutex mutex;
+    py::scoped_interpreter guard{};                 ///< Owns the CPython interpreter lifetime.
+    std::vector<std::filesystem::path> searchPaths; ///< Directories scanned by loadAll().
+    std::unordered_map<std::string, py::object>
+        plugins;      ///< Loaded plugin instances keyed by plugin id.
+    std::mutex mutex; ///< Guards searchPaths and plugins.
 };
 
 PluginHost::PluginHost() : m_impl(std::make_unique<Impl>()) {

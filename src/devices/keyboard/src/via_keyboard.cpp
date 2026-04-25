@@ -1,20 +1,24 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// VIA-protocol keyboard backend (AJAZZ AK820 Pro and friends).
-//
-// Command reference (derived from the public VIA firmware, revisited in
-// docs/protocols/keyboard/via.md):
-//
-//   0x01 id_get_protocol_version
-//   0x02 id_get_keyboard_value
-//   0x03 id_set_keyboard_value
-//   0x04 id_dynamic_keymap_get_keycode
-//   0x05 id_dynamic_keymap_set_keycode
-//   0x07 id_dynamic_keymap_reset
-//   0x08 id_custom_set_value          (lighting / RGB)
-//   0x09 id_custom_get_value
-//   0x0A id_custom_save
-//   0x0D id_dynamic_keymap_macro_set_buffer
+/**
+ * @file via_keyboard.cpp
+ * @brief IDevice backend for VIA-compatible AJAZZ keyboards (AK820 Pro, AK870, …).
+ *
+ * Implements the open VIA raw-HID protocol.  Command byte summary (full
+ * reference in docs/protocols/keyboard/via.md):
+ *
+ * | Command | Meaning                          |
+ * |---------|----------------------------------|
+ * | 0x01    | id_get_protocol_version          |
+ * | 0x02    | id_get_keyboard_value            |
+ * | 0x03    | id_set_keyboard_value            |
+ * | 0x04    | id_dynamic_keymap_get_keycode    |
+ * | 0x05    | id_dynamic_keymap_set_keycode    |
+ * | 0x07    | id_dynamic_keymap_reset          |
+ * | 0x08    | id_custom_set_value (RGB)        |
+ * | 0x09    | id_custom_get_value              |
+ * | 0x0A    | id_custom_save                   |
+ * | 0x0D    | id_dynamic_keymap_macro_set_buffer|
+ */
 //
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
@@ -33,6 +37,17 @@ using namespace ajazz::core;
 
 constexpr std::size_t kReportSize = 32;
 
+/**
+ * @brief IDevice backend for VIA-compatible AJAZZ keyboards.
+ *
+ * Implements IDevice, IKeyRemappable, IRgbCapable, and IFirmwareCapable
+ * on top of the public VIA raw-HID protocol.  Report size is 32 bytes
+ * (VIA standard).
+ *
+ * @note Firmware update is not supported over the VIA raw-HID path; the
+ *       bootloader requires a separate DFU interface not yet implemented.
+ * @see makeViaKeyboard()
+ */
 class ViaKeyboard final : public IDevice,
                           public IKeyRemappable,
                           public IRgbCapable,

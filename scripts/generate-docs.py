@@ -58,27 +58,47 @@ BLOCK_RE = re.compile(
 # ---------------------------------------------------------------------------
 @dataclass
 class Data:
+    """In-memory representation of ``docs/_data/devices.yaml``.
+
+    Attributes:
+        raw: The raw dict loaded by ``yaml.safe_load``.  Consumers should
+            prefer the typed properties below rather than accessing ``raw``
+            directly.
+    """
+
     raw: dict[str, Any]
 
     @classmethod
     def load(cls, path: Path = DATA) -> Data:
+        """Load and parse the devices YAML data file.
+
+        Args:
+            path: Path to the YAML file; defaults to ``docs/_data/devices.yaml``.
+
+        Returns:
+            A ``Data`` instance wrapping the parsed content.
+        """
         with path.open(encoding="utf-8") as fh:
             return cls(yaml.safe_load(fh))
 
     @property
     def devices(self) -> list[dict[str, Any]]:
+        """List of device entries from the YAML ``devices`` key."""
         return self.raw.get("devices", [])
 
     @property
     def statuses(self) -> dict[str, dict[str, str]]:
+        """Status definitions keyed by status code (e.g. ``"working"``)."""
         return self.raw.get("statuses", {})
 
     @property
     def capabilities(self) -> dict[str, str]:
+        """Capability id → human-readable label mapping."""
         return self.raw.get("capabilities", {})
 
     @property
     def platforms(self) -> list[dict[str, str]]:
+        """List of platform entries (name, build, install, notes)."""
         return self.raw.get("platforms", [])
 
 
@@ -86,11 +106,30 @@ class Data:
 # Block renderers — each returns the inner markdown (without the HTML markers)
 # ---------------------------------------------------------------------------
 def _status_badge(status: str, statuses: dict[str, dict[str, str]]) -> str:
+    """Format a status code as an emoji + label badge string.
+
+    Args:
+        status: Status code key (e.g. ``"working"``).
+        statuses: Status definitions dict from ``Data.statuses``.
+
+    Returns:
+        A string like ``"✅ Working"``; falls back to ``"❔ <status>"`` for
+        unknown codes.
+    """
     s = statuses.get(status, {})
     return f"{s.get('emoji', '❔')} {s.get('label', status)}"
 
 
 def render_devices_table(d: Data) -> str:
+    """Render the full device support matrix as a Markdown table.
+
+    Args:
+        d: Loaded device data.
+
+    Returns:
+        A Markdown string (including leading newline) suitable for injection
+        into a ``<!-- BEGIN AUTOGEN: devices-table -->`` block.
+    """
     hdr = "| Family | Device | VID:PID | Keys | Encoders | Status | Capabilities |\n"
     hdr += "|--------|--------|---------|:----:|:--------:|--------|--------------|\n"
     rows: list[str] = []
@@ -115,6 +154,17 @@ def render_devices_table(d: Data) -> str:
 
 
 def render_devices_by_family(d: Data) -> str:
+    """Render per-family device tables as Markdown.
+
+    Iterates over stream decks, keyboards, and mice in that order,
+    emitting a ``### <Family>`` heading and table for each non-empty family.
+
+    Args:
+        d: Loaded device data.
+
+    Returns:
+        A Markdown string for the ``devices-by-family`` AUTOGEN block.
+    """
     out: list[str] = [""]
     families: dict[str, list[dict[str, Any]]] = {}
     for dev in d.devices:
@@ -145,6 +195,14 @@ def render_devices_by_family(d: Data) -> str:
 
 
 def render_platform_matrix(d: Data) -> str:
+    """Render the OS/platform support matrix as a Markdown table.
+
+    Args:
+        d: Loaded device data.
+
+    Returns:
+        A Markdown string for the ``platform-matrix`` AUTOGEN block.
+    """
     hdr = "| Platform | Build | Install | Notes |\n"
     hdr += "|----------|-------|---------|-------|\n"
     rows = [f"| {p['name']} | {p['build']} | {p['install']} | {p['notes']} |" for p in d.platforms]
@@ -152,11 +210,28 @@ def render_platform_matrix(d: Data) -> str:
 
 
 def render_legend(d: Data) -> str:
+    """Render the status legend as an inline dot-separated list.
+
+    Args:
+        d: Loaded device data.
+
+    Returns:
+        A Markdown string for the ``legend`` AUTOGEN block.
+    """
     parts = [f"{s['emoji']} **{s['label']}** — {s['description']}" for s in d.statuses.values()]
     return "\n" + " · ".join(parts) + "\n"
 
 
 def render_stats(d: Data) -> str:
+    """Render a one-line device count summary.
+
+    Args:
+        d: Loaded device data.
+
+    Returns:
+        A Markdown string like ``"**N devices** across ..."`` for the
+        ``stats`` AUTOGEN block.
+    """
     by_family: dict[str, int] = {}
     by_status: dict[str, int] = {}
     for dev in d.devices:
@@ -171,7 +246,17 @@ def render_stats(d: Data) -> str:
 
 
 def render_toc_wiki(_: Data) -> str:
-    """List every wiki page except the Home itself."""
+    """Render an auto-generated table of contents for the wiki.
+
+    Lists every ``*.md`` file under ``docs/wiki/`` (excluding ``Home.md``)
+    as Markdown list items with human-readable link text.
+
+    Args:
+        _: Unused; present for signature compatibility with other renderers.
+
+    Returns:
+        A Markdown string for the ``toc-wiki`` AUTOGEN block.
+    """
     wiki_dir = ROOT / "docs" / "wiki"
     pages = sorted(p.name for p in wiki_dir.glob("*.md") if p.name != "Home.md")
     lines = [
@@ -196,7 +281,21 @@ RENDERERS = {
 # Core in-place rewrite
 # ---------------------------------------------------------------------------
 def rewrite_file(path: Path, data: Data) -> tuple[str, str]:
-    """Return (original, updated) text for a single file."""
+    """Rewrite all AUTOGEN blocks in a single file.
+
+    Finds every ``<!-- BEGIN AUTOGEN: name --> ... <!-- END AUTOGEN: name -->``
+    pair and replaces the body with the output of the matching renderer.
+    Unrecognised block names emit a GitHub Actions warning and are left
+    unchanged.
+
+    Args:
+        path: Target Markdown file to rewrite.
+        data: Parsed device YAML data passed to each renderer.
+
+    Returns:
+        A ``(original, updated)`` tuple of the file's text.  If the file does
+        not exist both strings are empty.
+    """
     if not path.exists():
         return "", ""
     original = path.read_text(encoding="utf-8")
@@ -218,6 +317,14 @@ def rewrite_file(path: Path, data: Data) -> tuple[str, str]:
 # CLI
 # ---------------------------------------------------------------------------
 def main(argv: list[str] | None = None) -> int:
+    """Entry point: parse arguments and rewrite (or check) all target files.
+
+    Args:
+        argv: Argument list; defaults to ``sys.argv[1:]`` when ``None``.
+
+    Returns:
+        Exit code: 0 on success, 1 if ``--check`` detects out-of-date blocks.
+    """
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument(
         "--check",

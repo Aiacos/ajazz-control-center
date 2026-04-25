@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/** @file akp153.cpp
+ *  @brief AJAZZ AKP153 / AKP153E "Stream Dock"-class device backend.
+ *
+ *  Implements the full wire protocol for the AKP153 family: 15 keys arranged
+ *  in a 3×5 grid, each with an 85×85 JPEG LCD.  Two USB Product IDs exist:
+ *  0x1001 (international / Mirabox HSV293S) and 0x1002 (China / AKP153E).
+ *  Both share the identical protocol.
+ *
+ *  The protocol is a clean-room reconstruction from the notes in
+ *  docs/protocols/streamdeck/akp153.md; no third-party source is incorporated.
+ */
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/hid_transport.hpp"
@@ -21,11 +32,32 @@ using namespace ajazz::streamdeck::akp153;
 // -----------------------------------------------------------------------------
 // Protocol helpers
 // -----------------------------------------------------------------------------
+
+/** @brief Allocate a zero-initialised 512-byte packet.
+ *
+ *  Convenience factory used by @ref buildCmdHeader() so that all protocol
+ *  builder functions start from a clean slate without repeating the
+ *  zero-fill logic.
+ *
+ *  @return Zero-filled 512-byte packet array.
+ */
 std::array<std::uint8_t, PacketSize> emptyPacket() noexcept {
     std::array<std::uint8_t, PacketSize> pkt{};
     return pkt;
 }
 
+/** @brief Construct a 512-byte command packet with the AKP prefix and a
+ *         three-byte ASCII command word.
+ *
+ *  Byte layout produced:
+ *  - Bytes 0–2:  "CRT" prefix (0x43 0x52 0x54)
+ *  - Bytes 3–4:  0x00 0x00
+ *  - Bytes 5–7:  @p cmd (three ASCII command bytes)
+ *  - Bytes 8–511: zero-padded payload area (filled by callers)
+ *
+ *  @param cmd  Three-byte ASCII command identifier (e.g. CmdLight, CmdBat).
+ *  @return     Fully initialised command packet.
+ */
 std::array<std::uint8_t, PacketSize> buildCmdHeader(std::array<std::uint8_t, 3> const& cmd) {
     auto pkt = emptyPacket();
     pkt[0] = CmdPrefix[0];
@@ -43,12 +75,28 @@ std::array<std::uint8_t, PacketSize> buildCmdHeader(std::array<std::uint8_t, 3> 
 
 namespace akp153 {
 
+/** @brief Build a backlight brightness command packet.
+ *
+ *  Controls the global brightness of all 15 key LCDs.
+ *  Byte 10 carries the clamped brightness value (0–100).
+ *
+ *  @param percent  Desired brightness in the range 0–100; values above 100
+ *                  are silently clamped to 100.
+ *  @return         Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent) {
     auto pkt = buildCmdHeader(CmdLight);
     pkt[10] = std::min<std::uint8_t>(percent, 100);
     return pkt;
 }
 
+/** @brief Build a "clear all keys" command packet.
+ *
+ *  Instructs the firmware to black-out every key LCD simultaneously.
+ *  Byte 10 = 0x00, byte 11 = 0xFF (broadcast sentinel).
+ *
+ *  @return Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildClearAll() {
     auto pkt = buildCmdHeader(CmdClear);
     pkt[10] = 0x00;
@@ -56,6 +104,14 @@ std::array<std::uint8_t, PacketSize> buildClearAll() {
     return pkt;
 }
 
+/** @brief Build a "clear single key" command packet.
+ *
+ *  Instructs the firmware to black-out one specific key LCD.
+ *  Byte 10 = 0x00, byte 11 = @p keyIndex.
+ *
+ *  @param keyIndex  1-based key index (1..KeyCount).
+ *  @return          Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     auto pkt = buildCmdHeader(CmdClear);
     pkt[10] = 0x00;
@@ -63,6 +119,14 @@ std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     return pkt;
 }
 
+/** @brief Build a "show device logo" command packet.
+ *
+ *  Triggers the firmware to display the built-in AJAZZ logo on all key
+ *  LCDs.  The magic byte pair 0x44/0x43 at offsets 10–11 is a firmware
+ *  constant ("DC") observed during protocol capture.
+ *
+ *  @return Ready-to-send 512-byte packet.
+ */
 std::array<std::uint8_t, PacketSize> buildShowLogo() {
     auto pkt = buildCmdHeader(CmdClear);
     pkt[10] = 0x44;
@@ -70,6 +134,17 @@ std::array<std::uint8_t, PacketSize> buildShowLogo() {
     return pkt;
 }
 
+/** @brief Build the header packet for a key-image transfer.
+ *
+ *  The firmware expects one header packet followed immediately by one or more
+ *  512-byte raw JPEG data packets.  The header encodes:
+ *  - Bytes 10–11: big-endian total JPEG byte count
+ *  - Byte 12:     1-based key index
+ *
+ *  @param keyIndex  Destination key index (1..KeyCount).
+ *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
+ *  @return          Ready-to-send 512-byte header packet.
+ */
 std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
                                                       std::uint16_t jpegSize) {
     auto pkt = buildCmdHeader(CmdBat);
@@ -80,6 +155,20 @@ std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
     return pkt;
 }
 
+/** @brief Decode one raw HID input report into a structured @ref KeyEvent.
+ *
+ *  The AKP153 encodes key events in a 512-byte HID report.  The tag byte at
+ *  offset 9 carries the 1-based key index (1..KeyCount); values of 0 or above
+ *  KeyCount are rejected.  ACK frames (bytes 0–2 == "ACK" = 0x41 0x43 0x4B)
+ *  are silently discarded.
+ *
+ *  @note  The device emits a single "released" style report per transition;
+ *         press/release state is maintained by the higher-level polling loop.
+ *         This function always returns @c pressed = @c true for valid reports.
+ *
+ *  @param frame  Raw HID report bytes (must be at least 16 bytes).
+ *  @return       Decoded key event, or @c std::nullopt for ACK / invalid frames.
+ */
 std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame) {
     if (frame.size() < 16) {
         return std::nullopt;
@@ -106,9 +195,22 @@ std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame) {
 
 namespace {
 
-// -----------------------------------------------------------------------------
-// Akp153Device: glues the protocol helpers to ITransport + capability mix-ins.
-// -----------------------------------------------------------------------------
+/** @brief Concrete IDevice implementation for the AJAZZ AKP153 / AKP153E.
+ *
+ *  @class Akp153Device
+ *
+ *  Glues the stateless @c akp153:: protocol helpers to the HID transport layer
+ *  and exposes the @ref IDisplayCapable and @ref IFirmwareCapable mix-in
+ *  interfaces.  The AKP153 does not have a main display or rotary encoders.
+ *
+ *  Hardware capabilities:
+ *  - 15 keys arranged in a 3×5 grid, each with an 85×85 JPEG LCD
+ *  - Two USB PIDs: 0x1001 (international) and 0x1002 (China / AKP153E)
+ *  - No encoder, no touch strip, no main LCD
+ *
+ *  @note  Firmware update support is defined in the interface but not yet
+ *         implemented; @c beginFirmwareUpdate() throws unconditionally.
+ */
 class Akp153Device final : public IDevice, public IDisplayCapable, public IFirmwareCapable {
 public:
     Akp153Device(DeviceDescriptor descriptor, DeviceId id)
@@ -239,6 +341,16 @@ public:
     [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
 
 private:
+    /** @brief Transmit a JPEG image to a single key LCD.
+     *
+     *  Sends the pre-built image header packet (carrying the key index and
+     *  big-endian JPEG size) and then streams the JPEG payload in 512-byte
+     *  chunks.  Partial trailing chunks are zero-padded automatically by the
+     *  zero-initialised @c chunk array.
+     *
+     *  @param keyIndex  1-based destination key index (1..KeyCount).
+     *  @param jpeg      Raw JPEG bytes to transmit (≤ 65535 bytes).
+     */
     void sendImage(std::uint8_t keyIndex, std::span<std::uint8_t const> jpeg) {
         auto const header = akp153::buildImageHeader(
             keyIndex, static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff)));
@@ -254,16 +366,27 @@ private:
         }
     }
 
-    DeviceDescriptor m_descriptor;
-    DeviceId m_id;
-    TransportPtr m_transport;
+    DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.
+    DeviceId m_id;                 ///< HID bus identity (VID, PID, serial string).
+    TransportPtr m_transport;      ///< Underlying HID I/O channel.
     FirmwareInfo m_firmware{.version = "unknown", .buildDate = {}, .bootloaderAvailable = false};
-    EventCallback m_callback;
-    std::mutex m_mutex;
+    ///< Cached firmware metadata; version remains "unknown" until queried.
+    EventCallback m_callback; ///< Registered input-event sink (may be null).
+    std::mutex m_mutex;       ///< Guards m_callback for thread-safe registration.
 };
 
 } // namespace
 
+/** @brief Factory function: construct an AKP153 device object.
+ *
+ *  Instantiates an @c Akp153Device with the provided descriptor and HID
+ *  identity.  Suitable for both the 0x1001 (international) and 0x1002
+ *  (China / AKP153E) product IDs — the protocol is identical.
+ *
+ *  @param d    Static device descriptor (model name, family, codename).
+ *  @param id   HID bus identity used to open the underlying transport.
+ *  @return     Owning pointer to the new device instance.
+ */
 core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_unique<Akp153Device>(d, std::move(id));
 }

@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file logger.cpp
+ * @brief Logger implementation: atomic level filter + stderr sink.
+ *
+ * gLevel is an atomic int so setLogLevel() and the filter in log() are
+ * always race-free. gMutex serialises fprintf() calls so log lines from
+ * multiple threads do not interleave.
+ */
 #include "ajazz/core/logger.hpp"
 
 #include <atomic>
@@ -9,9 +17,20 @@
 namespace ajazz::core {
 namespace {
 
+/// Active minimum log level; relaxed-order atomic for cheap reads.
 std::atomic<int> gLevel{static_cast<int>(LogLevel::Info)};
+/// Serialises stderr writes across threads.
 std::mutex gMutex;
 
+/**
+ * @brief Map a LogLevel to its fixed-width 5-character ASCII label.
+ *
+ * The trailing space on "INFO" and "WARN" ensures that all labels
+ * occupy the same column width in the output.
+ *
+ * @param level Log severity.
+ * @return String view into a string literal; always valid.
+ */
 constexpr std::string_view levelName(LogLevel level) noexcept {
     switch (level) {
     case LogLevel::Trace:

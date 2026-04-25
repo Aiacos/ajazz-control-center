@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file test_device_registry.cpp
+ * @brief Integration test for the DeviceRegistry across all three device families.
+ *
+ * Registers StreamDeck, keyboard, and mouse backends then verifies that the
+ * registry holds at least the expected minimum number of descriptors per
+ * family, confirming that each registerAll() call populates the global table.
+ */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
 #include "ajazz/mouse/mouse.hpp"
@@ -6,6 +14,8 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+/// DeviceRegistry::enumerate() must return descriptors for StreamDeck, keyboard, and mouse
+/// families.
 TEST_CASE("device registry enumerates all three families", "[registry]") {
     ajazz::streamdeck::registerAll();
     ajazz::keyboard::registerAll();

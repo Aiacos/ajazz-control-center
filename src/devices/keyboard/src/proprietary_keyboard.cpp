@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Backend for AJAZZ keyboards shipping with the closed-source Windows tool
-// (AK680, AK510 and similar "gaming" models). The wire protocol is a
-// clean-room reconstruction from USB captures; see
-// docs/protocols/keyboard/proprietary.md for the authoritative byte-level
-// reference. No vendor firmware, driver or SDK code is reused.
+/**
+ * @file proprietary_keyboard.cpp
+ * @brief IDevice backend for AJAZZ proprietary-protocol keyboards.
+ *
+ * Covers the AK680, AK510, and similar "gaming" keyboards that ship with the
+ * closed-source Windows configuration tool.  The wire protocol is a clean-room
+ * reconstruction from USB captures; see
+ * docs/protocols/keyboard/proprietary.md for the authoritative byte-level
+ * reference.  No vendor firmware, driver, or SDK code is reused.
+ *
+ * The file is split into two parts:
+ * -# Pure protocol helpers (namespace proprietary) — stateless, unit-testable.
+ * -# ProprietaryKeyboard class — the IDevice implementation that owns the
+ *    HID transport and routes I/O to those helpers.
+ */
 //
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
@@ -28,11 +37,28 @@ namespace proprietary {
 
 // -----------------------------------------------------------------------------
 // Pure protocol helpers — every command below is verifiable in isolation.
+// Implementations live here; declarations and contracts in proprietary_protocol.hpp.
 // -----------------------------------------------------------------------------
+
+/**
+ * @brief Build the firmware-version query report (CmdGetFirmwareVersion).
+ * @return 64-byte report with command 0x01 and all payload bytes zeroed.
+ */
 std::array<std::uint8_t, ReportSize> buildGetFirmwareVersion() {
     return makeReport(CmdGetFirmwareVersion);
 }
 
+/**
+ * @brief Build a set-keycode report (CmdSetKeycode, 0x05).
+ *
+ * Payload layout: layer(2) row(3) col(4) keycode-hi(5) keycode-lo(6).
+ * The keycode is encoded big-endian.
+ *
+ * @param layer    Layer index (0-based).
+ * @param row      Key-matrix row.
+ * @param col      Key-matrix column.
+ * @param keycode  HID usage code.
+ */
 std::array<std::uint8_t, ReportSize>
 buildSetKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col, std::uint16_t keycode) {
     auto pkt = makeReport(CmdSetKeycode);
@@ -44,6 +70,16 @@ buildSetKeycode(std::uint8_t layer, std::uint8_t row, std::uint8_t col, std::uin
     return pkt;
 }
 
+/**
+ * @brief Build a static RGB report (CmdSetRgbStatic, 0x08).
+ *
+ * Payload layout: zone(2) R(3) G(4) B(5).
+ *
+ * @param zone  Zone id (ZoneKeys / ZoneSides / ZoneLogo).
+ * @param r     Red component 0–255.
+ * @param g     Green component 0–255.
+ * @param b     Blue component 0–255.
+ */
 std::array<std::uint8_t, ReportSize>
 buildSetRgbStatic(std::uint8_t zone, std::uint8_t r, std::uint8_t g, std::uint8_t b) {
     auto pkt = makeReport(CmdSetRgbStatic);
@@ -54,6 +90,15 @@ buildSetRgbStatic(std::uint8_t zone, std::uint8_t r, std::uint8_t g, std::uint8_
     return pkt;
 }
 
+/**
+ * @brief Build an RGB animation report (CmdSetRgbEffect, 0x09).
+ *
+ * Payload layout: zone(2) effect-id(3) speed(4).
+ *
+ * @param zone      Zone id.
+ * @param effectId  Firmware animation preset index.
+ * @param speed     Animation speed 0–255.
+ */
 std::array<std::uint8_t, ReportSize>
 buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed) {
     auto pkt = makeReport(CmdSetRgbEffect);
@@ -63,22 +108,44 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed) 
     return pkt;
 }
 
+/**
+ * @brief Build a brightness report (CmdSetRgbBrightness, 0x0b).
+ *
+ * @param percent  Global brightness 0–100; clamped before encoding.
+ */
 std::array<std::uint8_t, ReportSize> buildSetRgbBrightness(std::uint8_t percent) {
     auto pkt = makeReport(CmdSetRgbBrightness);
     pkt[2] = std::min<std::uint8_t>(percent, 100);
     return pkt;
 }
 
+/**
+ * @brief Build a layer-switch report (CmdSetLayer, 0x0c).
+ *
+ * @param layer  Target layer index; clamped to MaxLayers–1 (3) if out of range.
+ */
 std::array<std::uint8_t, ReportSize> buildSetLayer(std::uint8_t layer) {
     auto pkt = makeReport(CmdSetLayer);
     pkt[2] = std::min<std::uint8_t>(layer, static_cast<std::uint8_t>(MaxLayers - 1));
     return pkt;
 }
 
+/**
+ * @brief Build an EEPROM commit report (CmdCommitEeprom, 0x0e).
+ *
+ * Instructs the firmware to persist any staged configuration changes.
+ * Must be issued after all key-remap or macro upload reports.
+ */
 std::array<std::uint8_t, ReportSize> buildCommitEeprom() {
     return makeReport(CmdCommitEeprom);
 }
 
+/**
+ * @brief Return the LED count for a given zone id.
+ *
+ * @param zone  Zone id constant (ZoneKeys, ZoneSides, or ZoneLogo).
+ * @return      LED count, or 0 for an unrecognised zone.
+ */
 std::uint16_t ledCountForZone(std::uint8_t zone) {
     switch (zone) {
     case ZoneKeys:
@@ -92,6 +159,12 @@ std::uint16_t ledCountForZone(std::uint8_t zone) {
     }
 }
 
+/**
+ * @brief Translate a zone name string to its numeric id.
+ *
+ * @param name  One of @c "keys", @c "sides", or @c "logo" (case-sensitive).
+ * @return      Numeric zone id, or @c 0xFF if the name is not recognised.
+ */
 std::uint8_t zoneIdFromName(std::string_view name) {
     if (name == "keys") {
         return ZoneKeys;
@@ -112,6 +185,17 @@ namespace {
 using namespace ajazz::core;
 using namespace ajazz::keyboard::proprietary;
 
+/**
+ * @brief IDevice backend for proprietary-protocol AJAZZ keyboards.
+ *
+ * Implements IDevice, IKeyRemappable, IRgbCapable, and IFirmwareCapable
+ * using the reverse-engineered HID command set documented in
+ * docs/protocols/keyboard/proprietary.md.
+ *
+ * @note Thread-safe for concurrent onEvent() / poll() calls; a single
+ *       mutex guards the event callback.
+ * @see makeProprietaryKeyboard()
+ */
 class ProprietaryKeyboard final : public IDevice,
                                   public IKeyRemappable,
                                   public IRgbCapable,

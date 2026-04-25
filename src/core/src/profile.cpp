@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Minimal hand-rolled JSON writer/reader for profiles. The goal here is to
-// avoid a heavyweight JSON dependency in the core library; the app layer
-// can swap this for Qt's QJsonDocument transparently by overriding these
-// two free functions at link time.
-//
+/**
+ * @file profile.cpp
+ * @brief Minimal hand-rolled JSON writer for the core profile schema.
+ *
+ * The goal is to avoid a heavyweight JSON dependency in the core library;
+ * the app layer can transparently override profileToJson() / profileFromJson()
+ * at link time with an implementation backed by Qt's QJsonDocument.
+ *
+ * Only ASCII-safe strings are supported. Unicode in user labels should be
+ * validated upstream before being stored in a Profile.
+ */
 #include "ajazz/core/profile.hpp"
 
 #include <sstream>
@@ -14,11 +19,26 @@ namespace ajazz::core {
 
 namespace {
 
+/**
+ * @brief Write an Rgb value as a JSON array `[r,g,b]`.
+ *
+ * @param out Destination stream.
+ * @param c   Color to serialise.
+ */
 [[maybe_unused]] void writeRgb(std::ostringstream& out, Rgb const& c) {
     out << "[" << static_cast<int>(c.r) << "," << static_cast<int>(c.g) << ","
         << static_cast<int>(c.b) << "]";
 }
 
+/**
+ * @brief Write a JSON-escaped quoted string.
+ *
+ * Handles the minimal set of escape sequences required by RFC 8259:
+ * double-quote, backslash, newline, carriage-return, and horizontal tab.
+ *
+ * @param out Destination stream.
+ * @param s   Input string; must be ASCII or UTF-8.
+ */
 void escape(std::ostringstream& out, std::string_view s) {
     out << '"';
     for (char const ch : s) {
@@ -46,6 +66,14 @@ void escape(std::ostringstream& out, std::string_view s) {
     out << '"';
 }
 
+/**
+ * @brief Serialise a single Action to JSON object notation.
+ *
+ * Output: `{"id":<str>,"settings":<str>,"label":<str>}`
+ *
+ * @param out Destination stream.
+ * @param a   Action to serialise.
+ */
 void writeAction(std::ostringstream& out, Action const& a) {
     out << "{";
     out << "\"id\":";
@@ -59,6 +87,14 @@ void writeAction(std::ostringstream& out, Action const& a) {
     out << "}";
 }
 
+/**
+ * @brief Serialise a Binding (onPress/onRelease/onLongPress chains).
+ *
+ * Output: `{"onPress":[...],"onRelease":[...],"onLongPress":[...]}`
+ *
+ * @param out Destination stream.
+ * @param b   Binding to serialise.
+ */
 void writeBinding(std::ostringstream& out, Binding const& b) {
     auto writeChain = [&](std::string_view key, std::vector<Action> const& actions) {
         out << "\"" << key << "\":[";

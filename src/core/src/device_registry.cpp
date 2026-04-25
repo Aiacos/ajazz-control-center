@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file device_registry.cpp
+ * @brief DeviceRegistry singleton implementation.
+ *
+ * Provides a process-wide thread-safe map from USB VID/PID pairs to device
+ * backend factories. Duplicate registrations on the same (VID, PID) pair
+ * are silently dropped after emitting a warning.
+ */
 #include "ajazz/core/device_registry.hpp"
 
 #include "ajazz/core/logger.hpp"

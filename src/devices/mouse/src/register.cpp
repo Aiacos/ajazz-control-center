@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file register.cpp
+ * @brief Populates the global DeviceRegistry with known AJAZZ mouse VID/PID pairs.
+ *
+ * All listed models share the AJ-series backend (makeAjSeries()).  The table
+ * is the authoritative source of VID/PID mappings for mouse devices.
+ */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/mouse/mouse.hpp"
 

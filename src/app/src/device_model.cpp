@@ -1,4 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file device_model.cpp
+ * @brief DeviceModel QAbstractListModel implementation.
+ *
+ * refresh() calls DeviceRegistry::enumerate() and wraps the result in a
+ * beginResetModel()/endResetModel() pair so QML views rebuild cleanly.
+ *
+ * @note ConnectedRole currently returns false for all rows; live USB
+ *       enumeration via hid_enumerate() is planned for a future milestone.
+ */
 #include "device_model.hpp"
 
 #include "ajazz/core/device_registry.hpp"

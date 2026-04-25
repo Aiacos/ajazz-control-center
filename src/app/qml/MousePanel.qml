@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Mouse configuration tab: exposes DPI stage configuration (up to six stages
+// with individual DPI values), USB polling rate selection, and lift-off
+// distance adjustment.
+// Exposes no custom signals or properties; backend wiring is pending.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts

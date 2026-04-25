@@ -1,4 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file register.cpp
+ * @brief Populates the global DeviceRegistry with known keyboard VID/PID pairs.
+ *
+ * Contains representative static entries for the VIA and proprietary families.
+ * The full list is extended at runtime from
+ * @c resources/device-db/keyboards.json once the device database ships.
+ */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
 

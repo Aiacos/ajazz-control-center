@@ -1,8 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file test_profile_serialization.cpp
+ * @brief Unit tests for Profile JSON serialisation (profileToJson).
+ *
+ * Verifies that profileToJson() encodes required fields — UUID, name, device
+ * codename, key bindings, and application hints — into the output JSON.
+ */
 #include "ajazz/core/profile.hpp"
 
 #include <catch2/catch_test_macros.hpp>
 
+/// profileToJson() must include name, device codename, action id, and application hint strings.
 TEST_CASE("profile round-trips required fields", "[profile]") {
     using namespace ajazz::core;
 

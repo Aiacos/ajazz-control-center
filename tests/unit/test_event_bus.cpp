@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file test_event_bus.cpp
+ * @brief Unit tests for the EventBus publish/subscribe mechanism.
+ *
+ * Verifies fan-out delivery to multiple subscribers and that unsubscribing
+ * via the returned token stops further delivery without affecting other
+ * active subscribers.
+ */
 #include "ajazz/core/event_bus.hpp"
 
 #include <atomic>
 
 #include <catch2/catch_test_macros.hpp>
 
+/// Each publish() call must invoke every currently-subscribed callback once.
 TEST_CASE("event bus delivers to every subscriber", "[eventbus]") {
     ajazz::core::EventBus bus;
 
@@ -22,6 +31,7 @@ TEST_CASE("event bus delivers to every subscriber", "[eventbus]") {
     REQUIRE(bCount == 5);
 }
 
+/// After unsubscribe(token), subsequent publish() calls must not invoke that callback.
 TEST_CASE("unsubscribing stops delivery", "[eventbus]") {
     ajazz::core::EventBus bus;
 

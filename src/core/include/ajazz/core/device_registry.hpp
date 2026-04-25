@@ -1,4 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file device_registry.hpp
+ * @brief Global registry that maps USB VID/PID pairs to device backends.
+ *
+ * Backend modules call registerDevice() (typically from a registerAll()
+ * bootstrap function invoked in main()) to advertise the models they
+ * support. The application layer then calls enumerate() and open() to
+ * discover and instantiate connected devices.
+ *
+ * @see IDevice, DeviceFactory
+ */
 #pragma once
 
 #include "ajazz/core/device.hpp"
@@ -9,21 +20,54 @@
 
 namespace ajazz::core {
 
-/// Thread-safe registry of known device descriptors and factories.
-/// Backend modules register themselves at static initialization or via
-/// explicit bootstrap calls from main().
+/**
+ * @brief Thread-safe singleton registry of device descriptors and factories.
+ *
+ * Backend modules register themselves at startup via registerDevice().
+ * All public methods are safe to call from multiple threads concurrently.
+ *
+ * @note The singleton is initialised lazily on first call to instance().
+ * @see IDevice, DeviceFactory
+ */
 class DeviceRegistry {
 public:
+    /**
+     * @brief Return the process-wide singleton instance.
+     * @return Reference to the global DeviceRegistry.
+     */
     static DeviceRegistry& instance();
 
-    /// Register a supported device model. Idempotent on (vid, pid).
+    /**
+     * @brief Register a device model and its factory.
+     *
+     * Silently skips duplicate registrations (same VID+PID). Logs a
+     * warning if a duplicate is detected.
+     *
+     * @param descriptor Static descriptor for the device model.
+     * @param factory    Factory function that creates a backend instance.
+     */
     void registerDevice(DeviceDescriptor descriptor, DeviceFactory factory);
 
-    /// Enumerate currently plugged devices that match any registered descriptor.
+    /**
+     * @brief Return all registered device descriptors.
+     *
+     * Does not perform any USB enumeration; returns the full list of
+     * descriptors that have been registered, connected or not.
+     *
+     * @return Copy of the descriptor list at the time of the call.
+     */
     [[nodiscard]] std::vector<DeviceDescriptor> enumerate() const;
 
-    /// Open a device by id. Returns nullptr if no matching backend is found
-    /// or the device cannot be opened.
+    /**
+     * @brief Instantiate the backend for a given device ID.
+     *
+     * Looks up the factory by (vendorId, productId) and delegates
+     * construction to it. The returned device is not yet open.
+     *
+     * @param id Runtime identifier of the device to open.
+     * @return Newly constructed DevicePtr, or nullptr if no matching
+     *         backend is registered.
+     */
     [[nodiscard]] DevicePtr open(DeviceId const& id) const;
 
     DeviceRegistry(DeviceRegistry const&) = delete;
@@ -34,13 +78,14 @@ public:
 private:
     DeviceRegistry() = default;
 
+    /// Internal pairing of a descriptor with its backend factory.
     struct Entry {
-        DeviceDescriptor descriptor;
-        DeviceFactory factory;
+        DeviceDescriptor descriptor; ///< Static device information.
+        DeviceFactory factory;       ///< Factory used to instantiate the backend.
     };
 
-    mutable std::mutex m_mutex;
-    std::vector<Entry> m_entries;
+    mutable std::mutex m_mutex;   ///< Guards m_entries for thread-safe access.
+    std::vector<Entry> m_entries; ///< Registered backends, ordered by insertion.
 };
 
 } // namespace ajazz::core

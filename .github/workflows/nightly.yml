@@ -155,7 +155,7 @@ jobs:
             Rolling pre-release built from `main`.
 
             Commit: `${{ github.sha }}`
-            Built: ${{ github.run_started_at }}
+            Run: <https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}>
 
             > These builds are **untested** and not signed for production
             > use. They are intended for early testers and contributors.

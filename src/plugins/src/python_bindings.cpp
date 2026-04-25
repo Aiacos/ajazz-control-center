@@ -1,7 +1,17 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// `ajazz` Python runtime module exposed inside the embedded interpreter.
-// Plugin code imports it with `from ajazz import Plugin, action`.
+/**
+ * @file python_bindings.cpp
+ * @brief Defines the @c ajazz Python runtime module for the embedded interpreter.
+ *
+ * This translation unit is linked into the host binary and registers the
+ * @c ajazz module via @c PYBIND11_EMBEDDED_MODULE so that plugin code can
+ * write @c from @c ajazz @c import @c Plugin, @c action without any
+ * separate shared library.
+ *
+ * Exported symbols:
+ * - @c ajazz.Rgb          — three-component RGB colour struct.
+ * - @c ajazz.DeviceFamily — enum mirroring ajazz::core::DeviceFamily.
+ */
 //
 #include "ajazz/core/capabilities.hpp"
 

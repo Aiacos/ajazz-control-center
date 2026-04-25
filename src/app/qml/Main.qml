@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Main application window for AJAZZ Control Center.
+// Hosts a DeviceList sidebar on the left and a StackLayout content area
+// on the right that switches to ProfileEditor when a device is selected.
+// Emits no signals itself; child DeviceList emits deviceSelected(codename).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -7,8 +12,22 @@ ApplicationWindow {
     id: root
     width: 1280
     height: 800
+    // Visible by default — main.cpp may hide() the window when
+    // tray.startMinimized && tray.trayAvailable so the app launches into the
+    // system tray. Keep it true so the window can be reopened from the tray.
     visible: true
-    title: qsTr("AJAZZ Control Center")
+    title: branding ? branding.productName : qsTr("AJAZZ Control Center")
+    color: branding ? branding.bgBase : "#1a1d24"
+
+    // Surface the tray's "Show window" action.
+    Connections {
+        target: tray
+        function onShowWindowRequested() {
+            root.show();
+            root.raise();
+            root.requestActivate();
+        }
+    }
 
     RowLayout {
         anchors.fill: parent
