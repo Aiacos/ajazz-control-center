@@ -180,6 +180,16 @@ repos:
         files: '^(docs/_data/.*\.ya?ml|src/devices/.*|scripts/generate-docs\.py|README\.md|docs/wiki/.*\.md)$'
         additional_dependencies: [pyyaml]
 
+      # Catch the class of bug where adding a configurePreset without the
+      # matching buildPreset/testPreset breaks `make test` and CI for new
+      # contributors. See scripts/validate_presets.py for details.
+      - id: validate-cmake-presets
+        name: Validate CMakePresets.json matrix completeness
+        entry: python3 scripts/validate_presets.py
+        language: python
+        pass_filenames: false
+        files: '^CMakePresets\.json$'
+
   # --------------------------------------------------------------------------
   # Commitlint — enforce Conventional Commits on the commit message.
   # --------------------------------------------------------------------------
