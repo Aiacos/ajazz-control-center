@@ -109,6 +109,7 @@ jobs:
             cmake ninja-build g++ pkg-config \
             python3-dev python3-pip \
             libudev-dev libsystemd-dev \
+            libusb-1.0-0-dev libhidapi-dev \
             libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
             libxcb-cursor-dev libxkbcommon-x11-dev \
             clang-tidy-18
