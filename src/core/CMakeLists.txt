@@ -7,6 +7,7 @@ add_library(
     src/profile_io.cpp
     src/profile_bundle.cpp
     src/action_engine.cpp
+    src/executor.cpp
     src/macro_recorder.cpp
     src/notification_service.cpp
     src/logger.cpp

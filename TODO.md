@@ -104,12 +104,15 @@ ______________________________________________________________________
   `Application`. Keeps the singleton as a transition shim so device
   backends keep compiling. **Why**: per-test isolation, no hidden global
   state. Touches every backend `register*.cpp`.
-- [ ] **A2 — ActionEngine threading model**: `ActionEngine::run()`
-  currently calls `std::this_thread::sleep_for` on the calling thread
-  (typically the HID poll thread or the Qt main thread). Introduce an
-  explicit executor (QThreadPool task or dedicated worker queue) and
-  drop the default in-place sleep. **Why**: Sleep actions must not
-  block HID polling or freeze the UI.
+- [x] **A2 — ActionEngine threading model** ✅ shipped. `ActionEngine`
+  now accepts a pluggable `core::Executor`; on `Sleep` (and on any
+  non-zero post-step `delayMs`) it defers the chain continuation via
+  `executor->scheduleAfter(delay, ...)` instead of calling
+  `std::this_thread::sleep_for` on the caller. Default is `BlockingExecutor`
+  (legacy semantics, kept for tests and headless callers); the GUI app
+  ships `QtExecutor` (backed by `QTimer::singleShot`) so the HID poll
+  thread / Qt main thread is freed immediately. Existing 3 ActionEngine
+  tests still pass; 3 new tests cover the executor abstraction.
 - [x] **A3 — EventBus per-event allocation** ✅ shipped. `event_bus.cpp`
   now holds the subscribers in a `std::atomic<std::shared_ptr<vector<…> const>>`
   swapped via copy-on-write on subscribe / unsubscribe; `publish()` is

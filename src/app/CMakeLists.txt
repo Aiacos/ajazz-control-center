@@ -44,6 +44,7 @@ qt_add_executable(
     src/app_icon.cpp
     src/property_inspector_controller.cpp
     src/pi_bridge.cpp
+    src/qt_executor.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy

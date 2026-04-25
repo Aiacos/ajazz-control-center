@@ -8,33 +8,26 @@
  *   - #28 folders — push/pop ProfilePage on navigation stack.
  *   - #29 encoder dispatch — engine consumes EncoderBinding chains the same
  *     way it consumes Binding chains; `run()` is shape-agnostic.
+ *
+ * A2 (threading): Sleep steps and non-zero `delayMs` post-step waits are
+ * deferred via the injected @ref Executor. The engine never calls
+ * `std::this_thread::sleep_for` itself; the legacy in-place sleep lives
+ * inside @ref BlockingExecutor and only happens when no async executor is
+ * injected.
  */
 #include "ajazz/core/action_engine.hpp"
 
 #include "ajazz/core/logger.hpp"
 
 #include <chrono>
-#include <thread>
+#include <memory>
 #include <utility>
 
 namespace ajazz::core {
 
-namespace {
-
-/// Fallback sleep helper used when no executor is supplied.
-void defaultSleep(std::chrono::milliseconds duration) {
-    if (duration.count() > 0) {
-        std::this_thread::sleep_for(duration);
-    }
-}
-
-} // namespace
-
-ActionEngine::ActionEngine(ActionExecutors executors) noexcept : executors_{std::move(executors)} {
-    if (!executors_.sleep) {
-        executors_.sleep = &defaultSleep;
-    }
-}
+ActionEngine::ActionEngine(ActionExecutors executors, std::shared_ptr<Executor> executor) noexcept
+    : executors_{std::move(executors)},
+      executor_{executor ? std::move(executor) : defaultExecutor()} {}
 
 void ActionEngine::setProfile(Profile profile) {
     profile_ = std::move(profile);
@@ -47,17 +40,39 @@ std::string ActionEngine::currentPageId() const {
 }
 
 void ActionEngine::run(ActionChain const& chain) {
-    for (auto const& step : chain) {
+    if (chain.empty()) {
+        return;
+    }
+    // Capture the chain in a shared_ptr so the continuation that the
+    // executor runs on a worker thread cannot outlive the chain storage.
+    auto owned = std::make_shared<ActionChain const>(chain);
+    runFrom(owned, 0);
+}
+
+void ActionEngine::runFrom(std::shared_ptr<ActionChain const> const& chain, std::size_t index) {
+    auto const& steps = *chain;
+    for (std::size_t i = index; i < steps.size(); ++i) {
+        auto const& step = steps[i];
+
         switch (step.kind) {
         case ActionKind::Plugin:
             if (executors_.plugin) {
                 executors_.plugin(step.id, step.settingsJson);
             }
             break;
-        case ActionKind::Sleep:
-            executors_.sleep(std::chrono::milliseconds{step.delayMs});
-            // Sleep already consumed the delay — don't double-sleep below.
-            continue;
+        case ActionKind::Sleep: {
+            // Telemetry / test hook — the *real* delay happens in the executor.
+            if (executors_.sleep) {
+                executors_.sleep(std::chrono::milliseconds{step.delayMs});
+            }
+            // Defer the rest of the chain through the executor so the
+            // calling thread (HID poll / Qt main) is not blocked.
+            std::shared_ptr<ActionChain const> chainCopy = chain;
+            std::size_t const next = i + 1;
+            executor_->scheduleAfter(std::chrono::milliseconds{step.delayMs},
+                                     [this, chainCopy, next]() { runFrom(chainCopy, next); });
+            return;
+        }
         case ActionKind::KeyPress:
             if (executors_.keyPress) {
                 executors_.keyPress(step.settingsJson);
@@ -84,8 +99,17 @@ void ActionEngine::run(ActionChain const& chain) {
             return;
         }
 
-        if (step.delayMs > 0) {
-            executors_.sleep(std::chrono::milliseconds{step.delayMs});
+        if (step.delayMs > 0 && step.kind != ActionKind::Sleep) {
+            // Post-step delay: same deferral story as Sleep so the calling
+            // thread is never blocked.
+            if (executors_.sleep) {
+                executors_.sleep(std::chrono::milliseconds{step.delayMs});
+            }
+            std::shared_ptr<ActionChain const> chainCopy = chain;
+            std::size_t const next = i + 1;
+            executor_->scheduleAfter(std::chrono::milliseconds{step.delayMs},
+                                     [this, chainCopy, next]() { runFrom(chainCopy, next); });
+            return;
         }
     }
 }
