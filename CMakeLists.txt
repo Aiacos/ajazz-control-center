@@ -120,6 +120,19 @@ set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "AJAZZ Control Center contributors")
 set(CPACK_PACKAGE_CONTACT "https://github.com/Aiacos/ajazz-control-center")
 set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "${PROJECT_DESCRIPTION}")
+# Multi-line long description used by `rpm -qpi`, dpkg, AppStream tools, etc. CPack falls back to a
+# placeholder ("DESCRIPTION ===") when this is unset.
+set(CPACK_PACKAGE_DESCRIPTION
+    "AJAZZ Control Center is a cross-platform desktop application for AJAZZ\n"
+    "and Mirabox HID devices: stream-deck-style key panels (AKP153 / AKP153E\n"
+    "/ AKP03 / AKP05), VIA-compatible keyboards (AK-series), and AJ-line\n"
+    "mice. It provides a Qt-based GUI for binding keys, encoders and mouse\n"
+    "buttons to multi-step action chains (key macros, URLs, plugin actions),\n"
+    "managing folder pages, importing / exporting profile bundles, and a\n"
+    "system-tray quick-switcher. The udev rule shipped with this package\n"
+    "grants user-level device access via TAG+=\"uaccess\" — no group\n"
+    "membership and no logout required."
+)
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
 set(CPACK_RESOURCE_FILE_README "${CMAKE_SOURCE_DIR}/README.md")
 set(CPACK_STRIP_FILES TRUE)
@@ -144,7 +157,10 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
     set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/postinst.sh")
     set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/postrm.sh")
-    # Don't let RPM claim /usr/lib/udev/rules.d — distros already own it.
+    # Don't let RPM claim /usr/lib/udev/rules.d — distros already own it. Also drop hidapi's
+    # pkg-config files: hidapi is FetchContent'd and statically linked into ajazz_core, so its dev
+    # metadata leaks into the binary package by accident. Excluding from the RPM filelist removes
+    # them from the cpio archive entirely.
     set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
         "/usr/lib/udev"
         "/usr/lib/udev/rules.d"
@@ -154,6 +170,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         "/usr/share/icons/hicolor"
         "/usr/share/icons/hicolor/scalable"
         "/usr/share/icons/hicolor/scalable/apps"
+        "/usr/lib64/pkgconfig"
+        "/usr/lib64/pkgconfig/hidapi-hidraw.pc"
+        "/usr/lib64/pkgconfig/hidapi-libusb.pc"
     )
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(CPACK_GENERATOR "WIX;ZIP")
