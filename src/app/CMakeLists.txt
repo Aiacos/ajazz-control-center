@@ -167,11 +167,17 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     set(_ajazz_qmlcache_generated_sources "")
     foreach(qml_file IN LISTS _ajazz_qml_files)
         get_filename_component(_qml_stem "${qml_file}" NAME_WE)
+        get_filename_component(_qml_subdir "${qml_file}" DIRECTORY)
+        if(_qml_subdir)
+            set(_qml_subdir "${_qml_subdir}/")
+        endif()
+        # Flat layout (Qt < 6.5)
         list(APPEND _ajazz_qmlcache_generated_sources
              "${_ajazz_qmlcache_root}/${_qml_stem}_qml.cpp"
         )
+        # Per-target subdir layout, preserving the QML source subdirectory
         list(APPEND _ajazz_qmlcache_generated_sources
-             "${_ajazz_qmlcache_target_dir}/${_qml_stem}_qml.cpp"
+             "${_ajazz_qmlcache_target_dir}/${_qml_subdir}${_qml_stem}_qml.cpp"
         )
     endforeach()
     if(_ajazz_qmlcache_generated_sources)

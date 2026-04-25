@@ -60,12 +60,16 @@ TEST_CASE("writeProfileToDisk + readProfileFromDisk round-trip", "[profile_io]")
     REQUIRE(std::filesystem::exists(path));
 
     // The file must be a complete, parseable profile JSON.
-    std::ifstream in{path};
-    std::string content{(std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()};
+    std::string content;
+    {
+        std::ifstream in{path};
+        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    } // close handle before remove_all (Windows holds an exclusive lock otherwise)
     REQUIRE(ajazz::core::validateProfileJson(content).empty());
     REQUIRE(content.find("Test Profile") != std::string::npos);
 
-    std::filesystem::remove_all(dir);
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
 
 TEST_CASE("writeProfileToDisk does not leave a partial file on rename", "[profile_io]") {
@@ -85,8 +89,11 @@ TEST_CASE("writeProfileToDisk does not leave a partial file on rename", "[profil
         ajazz::core::writeProfileToDisk(path, p);
     }
 
-    std::ifstream in{path};
-    std::string content{(std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()};
+    std::string content;
+    {
+        std::ifstream in{path};
+        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    } // close handle before iterating / remove_all (Windows)
     REQUIRE(content.find("NEW") != std::string::npos);
     REQUIRE(content.find("OLD") == std::string::npos);
 
@@ -99,7 +106,8 @@ TEST_CASE("writeProfileToDisk does not leave a partial file on rename", "[profil
     }
     REQUIRE(leftover == 0);
 
-    std::filesystem::remove_all(dir);
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
 
 TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurrency]") {
@@ -131,9 +139,13 @@ TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurre
 
     REQUIRE(failures.load() == 0);
 
-    std::ifstream in{path};
-    std::string content{(std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()};
+    std::string content;
+    {
+        std::ifstream in{path};
+        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    } // close handle before remove_all (Windows)
     REQUIRE(ajazz::core::validateProfileJson(content).empty());
 
-    std::filesystem::remove_all(dir);
+    std::error_code ec;
+    std::filesystem::remove_all(dir, ec);
 }
