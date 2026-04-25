@@ -88,9 +88,114 @@ make udev
 
 ## Packaging
 
-See [`docs/guides/BUILDING.md`](https://github.com/Aiacos/ajazz-control-center/blob/main/docs/guides/BUILDING.md)
-for `.deb`, `.rpm`, Flatpak, `.msi` and `.dmg` recipes, or just push a
-tag and GitHub Actions will build all of them.
+The official release artifacts are built by GitHub Actions when you
+push a `vX.Y.Z` tag — see [Release Process](Release-Process.md). You
+can also produce the same artifacts locally for QA preview, behind a
+corporate firewall, or to test changes without waiting for CI.
+
+The Makefile target `make package` invokes the `release` preset and
+runs every CPack generator configured for the current OS. If you only
+want one format, drive `cpack` directly after the release build:
+
+### Fedora / RHEL / openSUSE — `.rpm`
+
+```bash
+cmake --preset linux-release
+cmake --build --preset linux-release --parallel "$(nproc)"
+( cd build/linux-release && cpack -G RPM )
+# Output: build/linux-release/ajazz-control-center-<version>-Linux.rpm
+```
+
+Inspect the package before installing:
+
+```bash
+RPM=build/linux-release/ajazz-control-center-*-Linux.rpm
+rpm -qpi $RPM        # name, version, license, summary
+rpm -qpl $RPM        # list of installed files
+rpm -qpR $RPM        # required dependencies
+```
+
+Install **via the CLI**, not gnome-software / dnfdragora:
+
+```bash
+sudo dnf install ./build/linux-release/ajazz-control-center-*-Linux.rpm
+```
+
+> **"Failed to obtain authentication" error?** That comes from PackageKit
+> (the GUI software-center back-end). Locally-built unsigned RPMs go
+> through PolicyKit, which requires an interactive polkit agent — not
+> always available over SSH or in tiling WMs without one running.
+> Install with plain `sudo dnf install` instead, which uses your shell
+> credentials and bypasses PackageKit entirely.
+
+### Debian / Ubuntu — `.deb`
+
+```bash
+cmake --preset linux-release
+cmake --build --preset linux-release --parallel "$(nproc)"
+( cd build/linux-release && cpack -G DEB )
+sudo apt install ./build/linux-release/ajazz-control-center-*-Linux.deb
+```
+
+### Linux — Flatpak bundle
+
+The Flatpak manifest at
+`packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml` builds
+independently of CMake/CPack and is the path used by the Flathub
+distribution. Local build:
+
+```bash
+flatpak install --user flathub org.kde.Sdk//6.7 org.kde.Platform//6.7
+flatpak-builder --user --install --force-clean build-flatpak \
+    packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
+flatpak run io.github.Aiacos.AjazzControlCenter
+```
+
+### Windows — `.msi`
+
+From the *Developer PowerShell for VS 2022*, with Qt 6.7+ on
+`CMAKE_PREFIX_PATH`:
+
+```powershell
+cmake --preset windows-release
+cmake --build --preset windows-release
+cd build/windows-release
+cpack -G WIX            # produces ajazz-control-center-<version>-win64.msi
+cpack -G ZIP            # also a portable zip
+```
+
+The MSI installer is unsigned; SmartScreen will warn the first time it
+runs. Code signing tracking lives in the
+[Release Process](Release-Process.md#signing--notarization) page.
+
+### macOS — universal `.dmg`
+
+```bash
+cmake -S . -B build/macos-release -G Ninja \
+    -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+    -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+cmake --build build/macos-release
+( cd build/macos-release && cpack -G DragNDrop )
+# Output: build/macos-release/AJAZZ Control Center-<version>-Darwin.dmg
+```
+
+The `CMAKE_OSX_ARCHITECTURES="arm64;x86_64"` flag produces a universal
+binary that runs natively on both Apple Silicon and Intel Macs. Like
+Windows, the DMG is unsigned by default; Gatekeeper will warn until the
+project obtains an Apple Developer ID.
+
+### Quick reference
+
+| OS              | Generator    | Output extension | Install                                    |
+| --------------- | ------------ | ---------------- | ------------------------------------------ |
+| Fedora / RHEL   | `RPM`        | `.rpm`           | `sudo dnf install ./pkg.rpm`               |
+| Debian / Ubuntu | `DEB`        | `.deb`           | `sudo apt install ./pkg.deb`               |
+| Linux (any)     | flatpak-builder | `.flatpak`    | `flatpak install --user pkg.flatpak`       |
+| Windows         | `WIX`        | `.msi`           | Double-click, or `msiexec /i pkg.msi`      |
+| macOS           | `DragNDrop`  | `.dmg`           | Open, drag the `.app` into `/Applications` |
+
+For the CI pipeline that builds all of these from a single tag push,
+see the [Release Process](Release-Process.md) page.
 
 ## IDE setup
 

@@ -47,6 +47,11 @@ Each channel produces installable packages for all supported platforms:
 You can also trigger the workflow manually from the Actions tab via the
 "Run workflow" button (`workflow_dispatch`).
 
+> **Building installable artifacts locally?** See
+> [Building from Source → Packaging](Building.md#packaging) for the
+> Fedora `.rpm` / Debian `.deb` / Flatpak / Windows `.msi` / macOS
+> universal `.dmg` recipes that mirror what this CI workflow runs.
+
 ## Nightly builds
 
 Every push to `main` triggers `nightly.yml`, which:
