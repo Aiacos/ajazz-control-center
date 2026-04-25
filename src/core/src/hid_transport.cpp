@@ -161,16 +161,19 @@ private:
             if (b0 < 0x80) {
                 cp = b0;
             } else if ((b0 & 0xE0) == 0xC0 && i + 1 < in.size()) {
-                cp = ((b0 & 0x1F) << 6) | (static_cast<unsigned char>(in[i + 1]) & 0x3F);
+                cp = static_cast<std::uint32_t>(((b0 & 0x1FU) << 6) |
+                                                (static_cast<unsigned char>(in[i + 1]) & 0x3FU));
                 step = 2;
             } else if ((b0 & 0xF0) == 0xE0 && i + 2 < in.size()) {
-                cp = ((b0 & 0x0F) << 12) | ((static_cast<unsigned char>(in[i + 1]) & 0x3F) << 6) |
-                     (static_cast<unsigned char>(in[i + 2]) & 0x3F);
+                cp = static_cast<std::uint32_t>(
+                    ((b0 & 0x0FU) << 12) | ((static_cast<unsigned char>(in[i + 1]) & 0x3FU) << 6) |
+                    (static_cast<unsigned char>(in[i + 2]) & 0x3FU));
                 step = 3;
             } else if ((b0 & 0xF8) == 0xF0 && i + 3 < in.size()) {
-                cp = ((b0 & 0x07) << 18) | ((static_cast<unsigned char>(in[i + 1]) & 0x3F) << 12) |
-                     ((static_cast<unsigned char>(in[i + 2]) & 0x3F) << 6) |
-                     (static_cast<unsigned char>(in[i + 3]) & 0x3F);
+                cp = static_cast<std::uint32_t>(
+                    ((b0 & 0x07U) << 18) | ((static_cast<unsigned char>(in[i + 1]) & 0x3FU) << 12) |
+                    ((static_cast<unsigned char>(in[i + 2]) & 0x3FU) << 6) |
+                    (static_cast<unsigned char>(in[i + 3]) & 0x3FU));
                 step = 4;
             }
             if constexpr (sizeof(wchar_t) >= 4) {

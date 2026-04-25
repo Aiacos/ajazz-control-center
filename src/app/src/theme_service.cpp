@@ -75,7 +75,7 @@ void ThemeService::applyMode(Mode mode) {
         resolved = hints->colorScheme() == Qt::ColorScheme::Light ? Mode::Light : Mode::Dark;
     }
     auto const path =
-        (resolved == Mode::Light) ? QStringLiteral(kLightPath) : QStringLiteral(kDarkPath);
+        (resolved == Mode::Light) ? QString::fromUtf8(kLightPath) : QString::fromUtf8(kDarkPath);
     (void)branding_->loadThemeFile(path);
 }
 

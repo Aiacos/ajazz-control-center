@@ -19,7 +19,10 @@ permissions:
 jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
-    runs-on: ubuntu-22.04
+    # ubuntu-24.04 ships gcc-13/libstdc++-13 which has full <format>
+    # support; the project source uses std::format unconditionally via
+    # ajazz/core/logger.hpp so older runners cannot compile it.
+    runs-on: ubuntu-24.04
     timeout-minutes: 60
     strategy:
       fail-fast: false
