@@ -88,7 +88,11 @@ void syncFile(std::ostream& stream, std::filesystem::path const& path) {
 void atomicRename(std::filesystem::path const& src, std::filesystem::path const& dst) {
 #if defined(_WIN32)
     DWORD lastError = 0;
-    constexpr int kMaxAttempts = 8;
+    // Up to ~2.5 s of total wait under heavy contention. Concurrent writers from many threads
+    // can stack the AV/indexer holds well past 250 ms; the previous 8-attempt budget could still
+    // miss a small window. We bump to 12 attempts with a base sleep of 4 ms (capped) so the worst
+    // case is ~4 ms * 2^11 = ~8 s but in practice the file frees up well before then.
+    constexpr int kMaxAttempts = 12;
     for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
         if (MoveFileExW(src.wstring().c_str(),
                         dst.wstring().c_str(),
@@ -100,7 +104,9 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
         if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION) {
             break;
         }
-        Sleep(static_cast<DWORD>(2 << attempt));
+        // Exponential backoff capped at 250 ms per attempt.
+        DWORD const sleepMs = static_cast<DWORD>(4 << attempt);
+        Sleep(sleepMs > 250 ? 250 : sleepMs);
     }
     throw ProfileIoError{"profile_io: rename " + src.string() + " -> " + dst.string() +
                          " failed (Win32 error " + std::to_string(lastError) + ")"};

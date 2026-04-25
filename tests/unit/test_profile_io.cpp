@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <fstream>
 #include <random>
+#include <sstream>
+#include <string>
 #include <thread>
 #include <vector>
 
@@ -26,6 +28,16 @@ std::filesystem::path scratchDir(std::string_view tag) {
         ("ajazz-profile-io-" + std::string{tag} + "-" + std::to_string(std::random_device{}()));
     std::filesystem::create_directories(base);
     return base;
+}
+
+/// Read an entire text file into a string. Uses a local scope so the underlying
+/// std::ifstream is closed before the caller may delete the file (Windows holds an
+/// exclusive lock on open handles).
+std::string slurpFile(std::filesystem::path const& path) {
+    std::ifstream in{path, std::ios::binary};
+    std::ostringstream ss;
+    ss << in.rdbuf();
+    return ss.str();
 }
 
 ajazz::core::Profile sampleProfile() {
@@ -60,11 +72,7 @@ TEST_CASE("writeProfileToDisk + readProfileFromDisk round-trip", "[profile_io]")
     REQUIRE(std::filesystem::exists(path));
 
     // The file must be a complete, parseable profile JSON.
-    std::string content;
-    {
-        std::ifstream in{path};
-        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    } // close handle before remove_all (Windows holds an exclusive lock otherwise)
+    std::string const content = slurpFile(path);
     REQUIRE(ajazz::core::validateProfileJson(content).empty());
     REQUIRE(content.find("Test Profile") != std::string::npos);
 
@@ -89,11 +97,7 @@ TEST_CASE("writeProfileToDisk does not leave a partial file on rename", "[profil
         ajazz::core::writeProfileToDisk(path, p);
     }
 
-    std::string content;
-    {
-        std::ifstream in{path};
-        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    } // close handle before iterating / remove_all (Windows)
+    std::string const content = slurpFile(path);
     REQUIRE(content.find("NEW") != std::string::npos);
     REQUIRE(content.find("OLD") == std::string::npos);
 
@@ -139,11 +143,7 @@ TEST_CASE("concurrent writers always leave a valid file", "[profile_io][concurre
 
     REQUIRE(failures.load() == 0);
 
-    std::string content;
-    {
-        std::ifstream in{path};
-        content.assign((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-    } // close handle before remove_all (Windows)
+    std::string const content = slurpFile(path);
     REQUIRE(ajazz::core::validateProfileJson(content).empty());
 
     std::error_code ec;
