@@ -155,6 +155,24 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
     set(CPACK_RPM_PACKAGE_URL "${PROJECT_HOMEPAGE_URL}")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
+    # CPack's RPM generator ignores CPACK_PACKAGE_DESCRIPTION; the per-generator variable is
+    # required to populate the spec %description block. Build the prose with string(APPEND) so each
+    # source line stays under cmake-lint's 100-column ceiling without splitting the runtime value.
+    set(CPACK_RPM_PACKAGE_DESCRIPTION "")
+    string(
+        APPEND
+        CPACK_RPM_PACKAGE_DESCRIPTION
+        "AJAZZ Control Center is a cross-platform desktop application for AJAZZ and Mirabox HID "
+        "devices: stream-deck-style key panels (AKP153 / AKP153E / AKP03 / AKP05), "
+        "VIA-compatible and Microdia-chipset keyboards (AK820 Pro, AK980 PRO, AK series), "
+        "and AJ-line mice. It provides a Qt-based GUI for binding keys, encoders and mouse "
+        "buttons to multi-step action chains (key macros, URLs, plugin actions), managing "
+        "folder pages, importing / exporting profile bundles, and a system-tray "
+        "quick-switcher. The udev rule shipped with this package grants user-level device "
+        "access via TAG+=uaccess — no group membership and no logout required."
+    )
+    # Mirror it for DEB so dpkg-deb / apt show the same long description.
+    set(CPACK_DEBIAN_PACKAGE_DESCRIPTION "${CPACK_RPM_PACKAGE_DESCRIPTION}")
     set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/postinst.sh")
     set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_SOURCE_DIR}/packaging/linux/postrm.sh")
     # Don't let RPM claim /usr/lib/udev/rules.d — distros already own it. Also drop hidapi's
