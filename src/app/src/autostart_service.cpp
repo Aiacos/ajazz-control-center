@@ -27,12 +27,12 @@ namespace ajazz::app {
 
 namespace {
 
+#if defined(Q_OS_LINUX)
 /// Fully-qualified name of the OS-level autostart entry.
 [[nodiscard]] QString autostartEntryName() {
     return QStringLiteral(AJAZZ_APP_ID);
 }
 
-#if defined(Q_OS_LINUX)
 [[nodiscard]] QString xdgAutostartPath() {
     QDir const dir(QStandardPaths::writableLocation(QStandardPaths::ConfigLocation) +
                    QStringLiteral("/autostart"));

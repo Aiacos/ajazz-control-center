@@ -79,15 +79,31 @@ void syncFile(std::ostream& stream, std::filesystem::path const& path) {
 
 /**
  * @brief Cross-platform atomic rename. Replaces an existing destination.
+ *
+ * On Windows, MoveFileExW can transiently return ERROR_ACCESS_DENIED /
+ * ERROR_SHARING_VIOLATION when another process (antivirus, indexer) or another
+ * thread is briefly holding a handle to the destination. We retry with
+ * exponential backoff for up to ~250 ms before propagating the failure.
  */
 void atomicRename(std::filesystem::path const& src, std::filesystem::path const& dst) {
 #if defined(_WIN32)
-    if (!MoveFileExW(src.wstring().c_str(),
-                     dst.wstring().c_str(),
-                     MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
-        throw ProfileIoError{"profile_io: rename " + src.string() + " -> " + dst.string() +
-                             " failed"};
+    DWORD lastError = 0;
+    constexpr int kMaxAttempts = 8;
+    for (int attempt = 0; attempt < kMaxAttempts; ++attempt) {
+        if (MoveFileExW(src.wstring().c_str(),
+                        dst.wstring().c_str(),
+                        MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) {
+            return;
+        }
+        lastError = GetLastError();
+        // Only retry on transient sharing/permission errors.
+        if (lastError != ERROR_ACCESS_DENIED && lastError != ERROR_SHARING_VIOLATION) {
+            break;
+        }
+        Sleep(static_cast<DWORD>(2 << attempt));
     }
+    throw ProfileIoError{"profile_io: rename " + src.string() + " -> " + dst.string() +
+                         " failed (Win32 error " + std::to_string(lastError) + ")"};
 #else
     if (::rename(src.string().c_str(), dst.string().c_str()) != 0) {
         std::error_code ec{errno, std::generic_category()};
@@ -101,7 +117,7 @@ void atomicRename(std::filesystem::path const& src, std::filesystem::path const&
  * @brief Tiny string scanner — finds key tokens in a JSON document.
  *
  * Not a full parser; just enough to confirm the document looks like a
- * profile (presence of "id", "name", "deviceCodename"). The full parse
+ * profile (presence of "id", "name", "device"). The full parse
  * happens at the app layer with QJsonDocument.
  */
 bool containsKey(std::string_view json, std::string_view key) {
@@ -122,7 +138,9 @@ std::string validateProfileJson(std::string_view json) {
     if (start == std::string_view::npos || json[start] != '{') {
         return "profile JSON does not start with an object";
     }
-    static constexpr char const* kRequired[] = {"id", "name", "deviceCodename"};
+    // Required keys per docs/protocols/PROFILE_SCHEMA.md.
+    // Note: the JSON wire-key for Profile::deviceCodename is "device" (per schema).
+    static constexpr char const* kRequired[] = {"id", "name", "device"};
     for (auto const* key : kRequired) {
         if (!containsKey(json, key)) {
             std::string msg{"profile JSON is missing required key \""};

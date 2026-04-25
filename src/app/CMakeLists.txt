@@ -138,7 +138,9 @@ endif()
 # qsizetype->int reductions inside Main_qml.cpp etc.). We don't own those sources, so relax
 # warning-as-error for the entire qmlcache directory.
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
-    set(_ajazz_qmlcache_dir ${CMAKE_CURRENT_BINARY_DIR}/.rcc/qmlcache)
+    set(_ajazz_qmlcache_root ${CMAKE_CURRENT_BINARY_DIR}/.rcc/qmlcache)
+    # qmlcachegen for Qt 6.5+ emits per-target subdirectory: <root>/<target>_qml/<stem>_qml.cpp.
+    set(_ajazz_qmlcache_target_dir ${_ajazz_qmlcache_root}/ajazz-control-center_qml)
     set(_ajazz_qmlcache_relax_flags "")
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=null-dereference)
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-null-dereference)
@@ -146,20 +148,27 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-conversion)
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=sign-conversion)
     list(APPEND _ajazz_qmlcache_relax_flags -Wno-sign-conversion)
-    # Loader (always present)
+    list(APPEND _ajazz_qmlcache_relax_flags -Wno-error=shorten-64-to-32)
+    list(APPEND _ajazz_qmlcache_relax_flags -Wno-shorten-64-to-32)
+    # Loader is emitted at the qmlcache root.
     set_source_files_properties(
-        ${_ajazz_qmlcache_dir}/ajazz-control-center_qmlcache_loader.cpp
+        ${_ajazz_qmlcache_root}/ajazz-control-center_qmlcache_loader.cpp
         PROPERTIES COMPILE_OPTIONS "${_ajazz_qmlcache_relax_flags}" GENERATED TRUE
     )
-    # Per-QML compiled sources: enumerate from the QML module file list and map *.qml -> *_qml.cpp.
-    # qmlcachegen names files as <stem>_qml.cpp under .rcc/qmlcache/.
+    # Per-QML compiled sources: enumerate from QML files and map *.qml -> *_qml.cpp. Both the legacy
+    # flat layout and the per-target subdir layout are covered.
     file(GLOB_RECURSE _ajazz_qml_files RELATIVE ${CMAKE_CURRENT_SOURCE_DIR}/qml
          ${CMAKE_CURRENT_SOURCE_DIR}/qml/*.qml
     )
     set(_ajazz_qmlcache_generated_sources "")
     foreach(qml_file IN LISTS _ajazz_qml_files)
         get_filename_component(_qml_stem "${qml_file}" NAME_WE)
-        list(APPEND _ajazz_qmlcache_generated_sources "${_ajazz_qmlcache_dir}/${_qml_stem}_qml.cpp")
+        list(APPEND _ajazz_qmlcache_generated_sources
+             "${_ajazz_qmlcache_root}/${_qml_stem}_qml.cpp"
+        )
+        list(APPEND _ajazz_qmlcache_generated_sources
+             "${_ajazz_qmlcache_target_dir}/${_qml_stem}_qml.cpp"
+        )
     endforeach()
     if(_ajazz_qmlcache_generated_sources)
         set_source_files_properties(
