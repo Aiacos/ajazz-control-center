@@ -17,6 +17,7 @@
 // ProfileController.
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Controls.Material
 import QtQuick.Layouts
 import AjazzControlCenter
 import "components"
@@ -30,6 +31,20 @@ ApplicationWindow {
     visible: true
     title: branding ? branding.productName : qsTr("AJAZZ Control Center")
     color: Theme.bgBase
+
+    // Material Design theme: bind to ThemeService so user preference and
+    // OS color-scheme propagate down the Controls 2 hierarchy automatically.
+    // Material.System (Qt 6.5+) follows the OS preference when the user has
+    // selected "auto"; explicit Light/Dark override regardless of OS.
+    Material.theme: themeService.mode === "light"
+        ? Material.Light
+        : themeService.mode === "dark"
+            ? Material.Dark
+            : Material.System
+    // Pull the accent and primary tones from the branding palette so a custom
+    // theme.json keeps the Material chrome on-brand.
+    Material.accent: Theme.accent
+    Material.primary: Theme.accent2
 
     // Surface the tray's "Show window" action.
     Connections {

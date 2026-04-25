@@ -50,7 +50,11 @@ int main(int argc, char* argv[]) {
     QApplication::setQuitOnLastWindowClosed(false);
 
     QApplication app(argc, argv);
-    QQuickStyle::setStyle("Fusion");
+    // QtQuick Controls 2 style: "Material" gives a Material Design 3 look that
+    // honors light/dark via the Material.theme attached property in Main.qml.
+    // Setting the style here (before the QML engine is created) is mandatory;
+    // changing it after engine.load() has no effect.
+    QQuickStyle::setStyle(QStringLiteral("Material"));
 
     // ------------------------------------------------------------------
     // CLI flags. Closes #32 (--export-profile / --import-profile) and
