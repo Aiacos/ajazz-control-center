@@ -14,6 +14,7 @@
 #include "ajazz/core/profile_io.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
+#include "single_instance_guard.hpp"
 #include "tray_controller.hpp"
 
 #include <QApplication>
@@ -106,6 +107,21 @@ int main(int argc, char* argv[]) {
     }
     bool const forceMinimized = parser.isSet(minimizedOpt);
 
+    // Single-instance gate. If another GUI is already running, ask it to
+    // show its window and exit silently — this is what the user expects when
+    // they double-click the .desktop entry, the tray icon, or the autostart
+    // hook fires while a manual launch is already up.
+    auto const socketName = ajazz::app::SingleInstanceGuard::defaultSocketName();
+    if (ajazz::app::SingleInstanceGuard::tryActivateExisting(socketName)) {
+        return 0;
+    }
+    ajazz::app::SingleInstanceGuard instanceGuard(socketName);
+    if (!instanceGuard.isPrimary()) {
+        // Couldn't take ownership and couldn't connect either — degraded
+        // environment (e.g. /tmp full or sandbox without abstract sockets).
+        // Fall through and run; worst case the user gets two windows.
+    }
+
     ajazz::app::Application controller;
     controller.bootstrap();
 
@@ -119,17 +135,34 @@ int main(int argc, char* argv[]) {
     // Start tray + hot-plug *after* QML is loaded; the tray needs a window.
     controller.startBackgroundServices(engine);
 
-    // Honor the "start minimized to tray" preference: hide the root window
-    // unless the tray is unavailable (in which case showing the window is the
-    // only way the user can interact with the app).
+    // Helper used both at startup (when the user explicitly asked for
+    // --minimized) and when a secondary launch knocks on our socket.
+    auto const showAllWindows = [&engine]() {
+        for (QObject* obj : engine.rootObjects()) {
+            if (auto* win = qobject_cast<QWindow*>(obj)) {
+                win->show();
+                win->raise();
+                win->requestActivate();
+            }
+        }
+    };
+
+    // Honor the "start minimized to tray" preference only when explicitly
+    // requested via --minimized (autostart hook). Manual launches always show
+    // the window — relying solely on a tray icon makes the app invisible on
+    // GNOME/Wayland without an AppIndicator extension.
     auto* tray = controller.trayController();
-    if (tray && (forceMinimized || tray->startMinimized()) && tray->trayAvailable()) {
+    if (tray && forceMinimized && tray->trayAvailable()) {
         for (QObject* obj : engine.rootObjects()) {
             if (auto* win = qobject_cast<QWindow*>(obj)) {
                 win->hide();
             }
         }
     }
+
+    // Re-raise on subsequent launches (single-instance contract).
+    QObject::connect(
+        &instanceGuard, &ajazz::app::SingleInstanceGuard::showRequested, &app, showAllWindows);
 
     return app.exec();
 }

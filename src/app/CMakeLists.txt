@@ -8,6 +8,7 @@ qt_add_executable(
     src/tray_controller.cpp
     src/theme_service.cpp
     src/autostart_service.cpp
+    src/single_instance_guard.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
