@@ -60,3 +60,4 @@ modules:
           /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
       - install -Dm644 resources/icons/app.svg
           /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg
+      - for s in 16 24 32 48 64 128 256 512; do install -Dm644 resources/icons/hicolor/app-${s}.png /app/share/icons/hicolor/${s}x${s}/apps/io.github.Aiacos.AjazzControlCenter.png; done

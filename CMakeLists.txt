@@ -110,6 +110,26 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
         RENAME io.github.Aiacos.AjazzControlCenter.svg
         COMPONENT icon
     )
+    # Multi-size PNG fallbacks for environments where the SVG renderer is not available (older GTK
+    # launchers, KDE icon thumbnails, GNOME tray).
+    foreach(
+        icon_size
+        16
+        24
+        32
+        48
+        64
+        128
+        256
+        512
+    )
+        install(
+            FILES resources/icons/hicolor/app-${icon_size}.png
+            DESTINATION share/icons/hicolor/${icon_size}x${icon_size}/apps
+            RENAME io.github.Aiacos.AjazzControlCenter.png
+            COMPONENT icon
+        )
+    endforeach()
 endif()
 
 # -----------------------------------------------------------------------------

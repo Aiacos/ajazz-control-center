@@ -20,6 +20,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QWindow>
@@ -50,6 +51,14 @@ int main(int argc, char* argv[]) {
     QApplication::setQuitOnLastWindowClosed(false);
 
     QApplication app(argc, argv);
+    // Window icon shown in the taskbar, alt-tab list and X11 _NET_WM_ICON.
+    // The QtSvg image plugin renders this at every size the OS asks for, so a
+    // single SVG is enough for crisp 16/24/32/48/64/128/256 px raster previews.
+    // macOS picks the bundle icon from app.icns instead and Windows uses the
+    // .rc-embedded app.ico for the .exe; this call covers Linux/X11/Wayland
+    // and serves as a runtime fallback on the other platforms.
+    QApplication::setWindowIcon(QIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg")));
+
     // QtQuick Controls 2 style: "Material" gives a Material Design 3 look that
     // honors light/dark via the Material.theme attached property in Main.qml.
     // Setting the style here (before the QML engine is created) is mandatory;

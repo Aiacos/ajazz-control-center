@@ -34,8 +34,11 @@ ______________________________________________________________________
   rendered with PreserveAspectFit at 32 px height; the redundant text label
   is hidden when the image loads. Tray and app icons stay placeholder until
   a square variant exists.
-- [ ] **`app.ico` regenerate** for Windows installer once a square brand
-  asset is available; today `resources/icons/app.ico` is a placeholder.
+- [x] **`app.ico` + `app.icns` + multi-size hicolor ONGs** generated from
+  `resources/branding/app.svg`. Windows `.exe` now embeds the icon via a
+  generated `.rc` file; macOS bundle picks up `app.icns` via
+  `MACOSX_BUNDLE_ICON_FILE`; Linux installs PNG + scalable variants under
+  `share/icons/hicolor/<size>x<size>/apps/`.
 - [ ] **README + wiki screenshots** of the Material UI in light and dark
   mode (replace stale Fusion screenshots).
 

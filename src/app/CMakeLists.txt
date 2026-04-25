@@ -16,6 +16,38 @@ qt_add_executable(
 set(ACC_APP_ICON ${CMAKE_SOURCE_DIR}/resources/icons/app.svg)
 set_source_files_properties(${ACC_APP_ICON} PROPERTIES QT_RESOURCE_ALIAS icons/app.svg)
 
+# Per-platform desktop / file-explorer icons. The Qt SVG resource above renders the runtime UI icon;
+# these files are picked up by the OS shell to label .app bundles, .exe windows and the Linux
+# desktop entry.
+if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    set(ACC_BUNDLE_ICON ${CMAKE_SOURCE_DIR}/resources/icons/app.icns)
+    if(EXISTS "${ACC_BUNDLE_ICON}")
+        set_source_files_properties(${ACC_BUNDLE_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION Resources)
+        target_sources(ajazz-control-center PRIVATE ${ACC_BUNDLE_ICON})
+        set_target_properties(
+            ajazz-control-center
+            PROPERTIES MACOSX_BUNDLE TRUE
+                       MACOSX_BUNDLE_ICON_FILE app.icns
+                       MACOSX_BUNDLE_BUNDLE_NAME "AJAZZ Control Center"
+                       MACOSX_BUNDLE_GUI_IDENTIFIER io.github.Aiacos.AjazzControlCenter
+                       MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
+                       MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+        )
+    endif()
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(ACC_WIN_ICON ${CMAKE_SOURCE_DIR}/resources/icons/app.ico)
+    if(EXISTS "${ACC_WIN_ICON}")
+        # Generate a tiny .rc file so the produced .exe carries the icon (visible in Explorer,
+        # taskbar, and the WiX-installed Start Menu shortcut).
+        set(ACC_WIN_RC ${CMAKE_CURRENT_BINARY_DIR}/ajazz-control-center.rc)
+        file(WRITE ${ACC_WIN_RC} "// Auto-generated. Do not edit.\n"
+                                 "IDI_ICON1 ICON DISCARDABLE \"${ACC_WIN_ICON}\"\n"
+        )
+        target_sources(ajazz-control-center PRIVATE ${ACC_WIN_RC})
+        set_target_properties(ajazz-control-center PROPERTIES WIN32_EXECUTABLE TRUE)
+    endif()
+endif()
+
 # ----------------------------------------------------------------------------
 # Branding asset selection: pick AJAZZ_BRAND_DIR/{app.svg,tray.svg,theme.json} when the cache var is
 # set, otherwise fall back to resources/branding which ships the upstream identity. Each file is

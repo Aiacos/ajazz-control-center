@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  AJAZZ Control Center system tray icon.
-  Monochromatic, designed to render correctly against light and dark
-  taskbars/menubars. The shape echoes the 3x3 macropad grid used by the
-  app icon so the brand stays recognisable at 16-22 px.
+  Light variant of the tray icon (white squares) used on dark taskbars.
+  PNG fallbacks for Windows are rendered from this file.
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 22 22" width="22" height="22">
-  <g fill="currentColor">
+  <g fill="#ffffff">
     <rect x="2"  y="2"  width="5" height="5" rx="1"/>
     <rect x="8.5" y="2"  width="5" height="5" rx="1"/>
     <rect x="15" y="2"  width="5" height="5" rx="1"/>
