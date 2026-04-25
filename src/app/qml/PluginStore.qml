@@ -164,13 +164,88 @@ Page {
         // Surfaced only on the Streamdock tab; explains where the catalogue
         // is sourced from and that installs go through the same sandboxed
         // lifecycle as native plugins. Fixes the recurring user question
-        // "are these plugins coming from outside the app?".
+        // "are these plugins coming from outside the app?". The lower row
+        // is a live status pill bound to PluginCatalogModel.streamdockState
+        // / streamdockFetchedAtUnixMs so the user can tell at a glance
+        // whether the rows are fresh, cached, or the bundled fallback.
         Frame {
+            id: streamdockBanner
             visible: root.activeTab === 2
             Layout.fillWidth: true
+
+            // Cache the fetch timestamp delta so the relative-time text
+            // updates every minute without binding directly to a Timer
+            // tick on every frame.
+            property int relativeAgeTick: 0
+            Timer {
+                interval: 30000
+                running: streamdockBanner.visible
+                repeat: true
+                onTriggered: streamdockBanner.relativeAgeTick++
+            }
+
+            // Translate a unix-ms timestamp into a short human delta
+            // ("just now", "3 min ago", "2 days ago"). Returns the empty
+            // string for unknown timestamps so callers can elide the
+            // suffix entirely.
+            function relativeAge(unixMs) {
+                if (!unixMs || unixMs <= 0) {
+                    return "";
+                }
+                streamdockBanner.relativeAgeTick;  // depend on the tick
+                var deltaSec = Math.max(0, Math.floor((Date.now() - unixMs) / 1000));
+                if (deltaSec < 45) {
+                    return qsTr("just now");
+                }
+                if (deltaSec < 3600) {
+                    return qsTr("%1 min ago").arg(Math.round(deltaSec / 60));
+                }
+                if (deltaSec < 86400) {
+                    return qsTr("%1 h ago").arg(Math.round(deltaSec / 3600));
+                }
+                return qsTr("%1 days ago").arg(Math.round(deltaSec / 86400));
+            }
+
+            readonly property string streamdockState:
+                pluginCatalog ? pluginCatalog.streamdockState : "loading"
+            readonly property color statusColor: {
+                switch (streamdockBanner.streamdockState) {
+                case "online":  return Theme.accent;
+                case "cached":  return Theme.accent2;
+                case "offline": return Theme.fgMuted;
+                default:        return Theme.accent2;  // loading
+                }
+            }
+            readonly property string statusGlyph: {
+                switch (streamdockBanner.streamdockState) {
+                case "online":  return "●";  // ●
+                case "cached":  return "◐";  // ◐
+                case "offline": return "○";  // ○
+                default:        return "◔";  // ◔ (loading)
+                }
+            }
+            readonly property string statusLine: {
+                var ts = pluginCatalog ? pluginCatalog.streamdockFetchedAtUnixMs : 0;
+                var rel = streamdockBanner.relativeAge(ts);
+                switch (streamdockBanner.streamdockState) {
+                case "online":
+                    return rel.length > 0
+                        ? qsTr("Live catalogue · updated %1").arg(rel)
+                        : qsTr("Live catalogue");
+                case "cached":
+                    return rel.length > 0
+                        ? qsTr("Showing cached catalogue · last refreshed %1").arg(rel)
+                        : qsTr("Showing cached catalogue");
+                case "offline":
+                    return qsTr("Offline — using bundled snapshot");
+                default:
+                    return qsTr("Fetching latest plugins from space.key123.vip…");
+                }
+            }
+
             background: Rectangle {
                 color: Theme.tile
-                border.color: Theme.accent2
+                border.color: streamdockBanner.statusColor
                 border.width: 1
                 radius: Theme.radiusMd
             }
@@ -192,6 +267,25 @@ Page {
                     color: Theme.fgMuted
                     font.pixelSize: Theme.fontSm
                     wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingXs
+                    Label {
+                        text: streamdockBanner.statusGlyph
+                        color: streamdockBanner.statusColor
+                        font.pixelSize: Theme.fontMd
+                        font.bold: true
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: streamdockBanner.statusLine
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.fontSm
+                        wrapMode: Text.WordWrap
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: text
+                    }
                 }
             }
         }

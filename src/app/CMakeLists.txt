@@ -4,6 +4,7 @@ qt_add_executable(
     src/application.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
+    src/streamdock_catalog_fetcher.cpp
     src/profile_controller.cpp
     src/branding_service.cpp
     src/tray_controller.cpp
@@ -97,6 +98,15 @@ set(ACC_DOC_PRIVACY ${CMAKE_SOURCE_DIR}/docs/PRIVACY.md)
 set_source_files_properties(${ACC_DOC_CHANGELOG} PROPERTIES QT_RESOURCE_ALIAS CHANGELOG.md)
 set_source_files_properties(${ACC_DOC_PRIVACY} PROPERTIES QT_RESOURCE_ALIAS PRIVACY.md)
 
+# Bundled offline fixture for the AJAZZ Streamdock catalogue tab. Loaded by
+# StreamdockCatalogFetcher::loadBundledFallback() when neither the upstream catalogue nor the
+# on-disk mirror is available (first launch on an air-gapped host, CI smoke runs, etc.). Stable QRC
+# alias keeps the C++ side decoupled from CMake source paths.
+set(ACC_STREAMDOCK_FALLBACK ${CMAKE_SOURCE_DIR}/resources/streamdock-fallback.json)
+set_source_files_properties(
+    ${ACC_STREAMDOCK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS streamdock-fallback.json
+)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
@@ -131,6 +141,7 @@ qt_add_qml_module(
               ${ACC_BRAND_LOGO}
               ${ACC_DOC_CHANGELOG}
               ${ACC_DOC_PRIVACY}
+              ${ACC_STREAMDOCK_FALLBACK}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)
@@ -143,6 +154,7 @@ target_link_libraries(
             ajazz::sanitizers
             Qt6::Core
             Qt6::Gui
+            Qt6::Network
             Qt6::Widgets
             Qt6::Quick
             Qt6::QuickControls2

@@ -24,15 +24,19 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QDateTime>
 #include <QHash>
 #include <QString>
 #include <QStringList>
 #include <QUrl>
 #include <QVariantMap>
 
+#include <memory>
 #include <vector>
 
 namespace ajazz::app {
+
+class StreamdockCatalogFetcher;
 
 /// Single catalogue entry shown by the Plugin Store grid.
 ///
@@ -95,6 +99,10 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_OBJECT
     Q_PROPERTY(int count READ rowCountSimple NOTIFY countChanged)
     Q_PROPERTY(int installedCount READ installedCount NOTIFY installedCountChanged)
+    Q_PROPERTY(QString streamdockState READ streamdockState NOTIFY streamdockStateChanged)
+    Q_PROPERTY(qint64 streamdockFetchedAtUnixMs READ streamdockFetchedAtUnixMs NOTIFY
+                   streamdockStateChanged)
+    Q_PROPERTY(int streamdockCount READ streamdockCount NOTIFY countChanged)
 
 public:
     /// Custom data roles available to QML delegates.
@@ -129,11 +137,34 @@ public:
     /**
      * @brief Re-populate the model from the current source.
      *
-     * Today this re-applies the built-in mock fixture so the QML page
-     * has something to render in dev builds. Once the signed catalogue
-     * fetch lands this will trigger a network refresh.
+     * Re-applies the built-in mock fixture for the first-party /
+     * community rows and triggers the live Streamdock catalogue
+     * refresh. The Streamdock rows are merged into the model whenever
+     * the @ref StreamdockCatalogFetcher emits a fresh snapshot, so the
+     * grid updates in place once the network round-trip returns.
      */
     Q_INVOKABLE void reload();
+
+    /**
+     * @brief Origin of the currently visible Streamdock rows.
+     *
+     * One of: `"loading"`, `"online"`, `"cached"`, `"offline"`. Drives
+     * the AJAZZ Streamdock tab info banner.
+     */
+    [[nodiscard]] QString streamdockState() const;
+
+    /**
+     * @brief Unix-ms timestamp of the last successful Streamdock snapshot.
+     *
+     * Zero when no snapshot has loaded yet (e.g. the bundled fallback).
+     * The QML banner formats this as a relative time ("updated 3 min ago").
+     */
+    [[nodiscard]] qint64 streamdockFetchedAtUnixMs() const noexcept {
+        return m_streamdockFetchedAtUnixMs;
+    }
+
+    /// Number of Streamdock rows currently in the model.
+    [[nodiscard]] int streamdockCount() const;
 
     /**
      * @brief Mark a plugin as installed and enabled.
@@ -168,6 +199,8 @@ signals:
     void countChanged();
     /// Emitted whenever an install / uninstall flips a row's state.
     void installedCountChanged();
+    /// Emitted whenever @ref streamdockState changes.
+    void streamdockStateChanged();
 
 private:
     /// Per-row install bookkeeping kept outside @ref CatalogEntry so the
@@ -182,11 +215,26 @@ private:
     /// signed catalogue index defined in docs/architecture/PLUGIN-SDK.md.
     static std::vector<CatalogEntry> mockFixture();
 
+    /// Replace the Streamdock-sourced rows with @p rows, emitting the
+    /// minimal `dataChanged` / model reset surface required.
+    void replaceStreamdockRows(std::vector<CatalogEntry> rows);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
+
+    /// Owns the upstream HTTP fetch + on-disk cache. Created lazily so
+    /// unit tests that exercise just the install bookkeeping don't need
+    /// the network stack.
+    std::unique_ptr<StreamdockCatalogFetcher> m_streamdockFetcher;
+
+    /// Cached state surfaced via @ref streamdockState().
+    QString m_streamdockStateString = QStringLiteral("loading");
+
+    /// Last-known timestamp of the Streamdock snapshot.
+    qint64 m_streamdockFetchedAtUnixMs = 0;
 };
 
 } // namespace ajazz::app

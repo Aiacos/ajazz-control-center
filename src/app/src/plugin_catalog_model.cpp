@@ -9,6 +9,8 @@
  */
 #include "plugin_catalog_model.hpp"
 
+#include "streamdock_catalog_fetcher.hpp"
+
 #include <QMetaEnum>
 #include <QtGlobal>
 
@@ -16,10 +18,54 @@
 
 namespace ajazz::app {
 
-PluginCatalogModel::PluginCatalogModel(QObject* parent) : QAbstractListModel(parent) {
+namespace {
+
+/// Map a fetcher state enum to the lower-case string surfaced via QML.
+QString stateToString(StreamdockCatalogFetcher::State s) {
+    switch (s) {
+    case StreamdockCatalogFetcher::State::Idle:
+    case StreamdockCatalogFetcher::State::Loading:
+        return QStringLiteral("loading");
+    case StreamdockCatalogFetcher::State::Online:
+        return QStringLiteral("online");
+    case StreamdockCatalogFetcher::State::Cached:
+        return QStringLiteral("cached");
+    case StreamdockCatalogFetcher::State::Offline:
+        return QStringLiteral("offline");
+    }
+    return QStringLiteral("loading");
+}
+
+} // namespace
+
+PluginCatalogModel::PluginCatalogModel(QObject* parent)
+    : QAbstractListModel(parent),
+      m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)) {
+    // Wire the upstream fetcher: each successful snapshot replaces the
+    // streamdock-sourced rows in place. Local / community rows are
+    // unaffected so install state survives a network refresh.
+    QObject::connect(m_streamdockFetcher.get(),
+                     &StreamdockCatalogFetcher::snapshotReady,
+                     this,
+                     [this](StreamdockCatalogFetcher::Snapshot snapshot) {
+                         m_streamdockFetchedAtUnixMs = snapshot.fetchedAtUnixMs;
+                         replaceStreamdockRows(std::move(snapshot.rows));
+                     });
+    QObject::connect(m_streamdockFetcher.get(),
+                     &StreamdockCatalogFetcher::stateChanged,
+                     this,
+                     [this](StreamdockCatalogFetcher::State s) {
+                         QString const updated = stateToString(s);
+                         if (updated != m_streamdockStateString) {
+                             m_streamdockStateString = updated;
+                             emit streamdockStateChanged();
+                         }
+                     });
+
     // Populate with the mock fixture so the QML grid has rows in dev
-    // builds. Real catalogue fetch lands behind the same reload() entry
-    // point, so the UI is unaffected.
+    // builds. The Streamdock rows are merged in asynchronously by the
+    // fetcher — first from the on-disk cache (or bundled fallback) and
+    // then from the upstream HTTP catalogue once it returns.
     reload();
 }
 
@@ -124,6 +170,61 @@ void PluginCatalogModel::reload() {
     endResetModel();
     emit countChanged();
     emit installedCountChanged();
+
+    // Kick the live upstream Streamdock catalogue: the fetcher emits the
+    // cached / fallback snapshot synchronously and then the HTTP fetch
+    // result asynchronously, both via @ref replaceStreamdockRows.
+    if (m_streamdockFetcher) {
+        m_streamdockFetcher->refresh();
+    }
+}
+
+QString PluginCatalogModel::streamdockState() const {
+    return m_streamdockStateString;
+}
+
+int PluginCatalogModel::streamdockCount() const {
+    int n = 0;
+    for (auto const& row : m_rows) {
+        if (row.source == QStringLiteral("streamdock")) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+void PluginCatalogModel::replaceStreamdockRows(std::vector<CatalogEntry> rows) {
+    // Strategy: drop every existing streamdock row, append the new ones,
+    // then preserve install state by UUID. We use a full reset rather
+    // than fine-grained dataChanged because the upstream order can shift
+    // arbitrarily between fetches; QML's GridView re-renders the visible
+    // delegates only, so the cost is negligible.
+    beginResetModel();
+    std::vector<CatalogEntry> kept;
+    kept.reserve(m_rows.size() + rows.size());
+    for (auto& row : m_rows) {
+        if (row.source != QStringLiteral("streamdock")) {
+            kept.push_back(std::move(row));
+        }
+    }
+    for (auto& row : rows) {
+        kept.push_back(std::move(row));
+    }
+    m_rows = std::move(kept);
+
+    // Reconcile the install map against the new row set so the side-map
+    // never grows unbounded across refreshes.
+    QHash<QString, InstallState> reconciled;
+    reconciled.reserve(static_cast<int>(m_rows.size()));
+    for (auto const& row : m_rows) {
+        if (auto const it = m_install.find(row.uuid); it != m_install.end()) {
+            reconciled.insert(row.uuid, *it);
+        }
+    }
+    m_install = std::move(reconciled);
+    endResetModel();
+    emit countChanged();
+    emit installedCountChanged();
 }
 
 namespace {
@@ -217,15 +318,16 @@ QVariantMap PluginCatalogModel::entryFor(QString const& uuid) const {
 }
 
 std::vector<CatalogEntry> PluginCatalogModel::mockFixture() {
-    // Hand-curated fixture covering every compatibility mode (native,
-    // opendeck, streamdeck, streamdock) across all three Plugin Store
-    // sources (local, community, streamdock) and a representative spread
-    // of categories / device classes. The shape matches the signed
-    // catalogue index documented in docs/architecture/PLUGIN-SDK.md
-    // (section "Plugin Store") so the QML page is exercised against
-    // realistic data.
+    // Hand-curated fixture covering the local + community catalogue
+    // sources used by the "All" / "Installed" / "Community" tabs of the
+    // Plugin Store. The AJAZZ Streamdock tab is filled in by
+    // @ref StreamdockCatalogFetcher — either from the live upstream
+    // catalogue, the on-disk mirror, or the bundled offline fallback
+    // — so this fixture intentionally does not list any streamdock rows
+    // (they would otherwise be replaced on the very next snapshot, with
+    // a momentary flicker).
     std::vector<CatalogEntry> rows;
-    rows.reserve(11);
+    rows.reserve(8);
 
     rows.push_back({
         /*uuid*/ QStringLiteral("com.aiacos.spotify-now-playing"),
@@ -342,66 +444,6 @@ std::vector<CatalogEntry> PluginCatalogModel::mockFixture() {
         QStringLiteral("native"),
         QStringLiteral("210 KB"),
         true,
-    });
-
-    // ----------------------------------------------------------------------
-    // AJAZZ Streamdock store mirror (compatibility=streamdock, source=streamdock).
-    // These rows demonstrate the upstream catalogue surfaced under the
-    // "AJAZZ Streamdock" tab of the Plugin Store. UUIDs follow the
-    // `com.streamdock.*` reverse-DNS convention used by the official
-    // Streamdock store; each entry carries an opaque StreamdockProductId
-    // that the catalogue mirror resolves to a signed bundle URL.
-    // ----------------------------------------------------------------------
-    rows.push_back({
-        QStringLiteral("com.streamdock.dial.audio-mixer"),
-        QStringLiteral("Audio Mixer Dial"),
-        QStringLiteral("2.4.1"),
-        QStringLiteral("AJAZZ Streamdock"),
-        QStringLiteral("Per-app volume mixer driving the AKP815 hardware dials, "
-                       "with haptic detents at 0/50/100 \u0025."),
-        QUrl(QStringLiteral("qrc:/qt/qml/AjazzControlCenter/icons/app.svg")),
-        QStringLiteral("Audio"),
-        {QStringLiteral("audio"), QStringLiteral("dial"), QStringLiteral("haptics")},
-        {QStringLiteral("akp815")},
-        QStringLiteral("streamdock"),
-        QStringLiteral("4.6 MB"),
-        /*verified*/ true,
-        /*source*/ QStringLiteral("streamdock"),
-        /*streamdockProductId*/ QStringLiteral("sd-audio-mixer"),
-    });
-    rows.push_back({
-        QStringLiteral("com.streamdock.stream.scene-switcher"),
-        QStringLiteral("Streamdock Scene Switcher"),
-        QStringLiteral("1.7.3"),
-        QStringLiteral("AJAZZ Streamdock"),
-        QStringLiteral("One-tap OBS / Twitch scene switching with animated tile "
-                       "transitions; first-party Streamdock plugin."),
-        QUrl(QStringLiteral("qrc:/qt/qml/AjazzControlCenter/icons/app.svg")),
-        QStringLiteral("Streaming"),
-        {QStringLiteral("obs"), QStringLiteral("twitch"), QStringLiteral("streaming")},
-        {QStringLiteral("akp153"), QStringLiteral("akp153e"), QStringLiteral("akp815")},
-        QStringLiteral("streamdock"),
-        QStringLiteral("5.1 MB"),
-        /*verified*/ true,
-        /*source*/ QStringLiteral("streamdock"),
-        /*streamdockProductId*/ QStringLiteral("sd-scene-switcher"),
-    });
-    rows.push_back({
-        QStringLiteral("com.streamdock.gaming.elite-dangerous"),
-        QStringLiteral("Elite Dangerous HUD"),
-        QStringLiteral("0.8.2"),
-        QStringLiteral("AJAZZ Streamdock"),
-        QStringLiteral("Live ship status, fuel and cargo readouts streamed from "
-                       "Elite Dangerous to the AKP153 keys."),
-        QUrl(QStringLiteral("qrc:/qt/qml/AjazzControlCenter/icons/app.svg")),
-        QStringLiteral("Gaming"),
-        {QStringLiteral("gaming"), QStringLiteral("hud"), QStringLiteral("telemetry")},
-        {QStringLiteral("akp153"), QStringLiteral("akp153e")},
-        QStringLiteral("streamdock"),
-        QStringLiteral("2.9 MB"),
-        /*verified*/ false,
-        /*source*/ QStringLiteral("streamdock"),
-        /*streamdockProductId*/ QStringLiteral("sd-elite-dangerous"),
     });
 
     return rows;
