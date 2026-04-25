@@ -94,11 +94,12 @@ ______________________________________________________________________
   explicit executor (QThreadPool task or dedicated worker queue) and
   drop the default in-place sleep. **Why**: Sleep actions must not
   block HID polling or freeze the UI.
-- [ ] **A3 — EventBus per-event allocation**: `event_bus.cpp:27-36`
-  deep-copies `unordered_map<token, Handler>` on every `publish()`.
-  Replace with `shared_ptr<const vector<…>>` swapped on subscribe /
-  unsubscribe; readers atomic-load and iterate lock-free. **Why**:
-  high-rate encoders (AKP05) generate >100 events/s.
+- [x] **A3 — EventBus per-event allocation** ✅ shipped. `event_bus.cpp`
+  now holds the subscribers in a `std::atomic<std::shared_ptr<vector<…> const>>`
+  swapped via copy-on-write on subscribe / unsubscribe; `publish()` is
+  lock-free (atomic-load + iterate immutable snapshot). Writers
+  serialise on a write-only mutex; readers don't take a mutex.
+  Existing 4/4 EventBus tests still pass under TSan.
 - [ ] **A4 — PluginHost out-of-process**: pybind11's
   `scoped_interpreter` runs CPython in-process; a segfault in any
   C-extension imported by a plugin (numpy, opencv, mido) crashes the
