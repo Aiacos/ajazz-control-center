@@ -42,9 +42,46 @@ namespace {
     return dir.filePath(autostartEntryName() + QStringLiteral(".desktop"));
 }
 
+/**
+ * @brief Quote a string for a Desktop Entry Spec `Exec=` value.
+ *
+ * Per Desktop Entry Specification §1.5: arguments containing reserved
+ * characters (space, tab, double-quote, backslash, dollar, backtick, etc.)
+ * must be enclosed in double quotes; inside the quotes, backslash, double
+ * quote, dollar sign and backtick must each be backslash-escaped.
+ *
+ * Without this, an installation path containing a space (e.g.
+ * `/opt/AJAZZ Control Center/bin/ajazz`) splits at the space and the
+ * launcher tries to run `/opt/AJAZZ` with the rest as arguments — and
+ * paths containing `;` or shell metacharacters could be parsed as
+ * subsequent commands.
+ */
+[[nodiscard]] QString quoteForDesktopExec(QString const& s) {
+    QString out;
+    out.reserve(s.size() + 2);
+    out.append(QLatin1Char('"'));
+    for (QChar const c : s) {
+        if (c == QLatin1Char('"') || c == QLatin1Char('\\') || c == QLatin1Char('$') ||
+            c == QLatin1Char('`')) {
+            out.append(QLatin1Char('\\'));
+        }
+        out.append(c);
+    }
+    out.append(QLatin1Char('"'));
+    return out;
+}
+
 [[nodiscard]] QString desktopEntryContents(bool startMinimised) {
-    QString const exec = QCoreApplication::applicationFilePath() +
-                         (startMinimised ? QStringLiteral(" --minimized") : QString{});
+    QString const path = QCoreApplication::applicationFilePath();
+    if (path.contains(QLatin1Char('\n')) || path.contains(QLatin1Char('\r'))) {
+        // A newline in the binary path would corrupt the .desktop file
+        // structure (newlines are key/value separators). Refuse to write a
+        // malformed entry; the caller turns autostart off.
+        AJAZZ_LOG_ERROR("autostart", "binary path contains a newline; refusing to write .desktop");
+        return {};
+    }
+    QString const exec =
+        quoteForDesktopExec(path) + (startMinimised ? QStringLiteral(" --minimized") : QString{});
     return QStringLiteral("[Desktop Entry]\n"
                           "Type=Application\n"
                           "Name=%1\n"
