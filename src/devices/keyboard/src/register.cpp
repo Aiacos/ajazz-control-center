@@ -24,6 +24,7 @@ void registerAll() {
             .family = core::DeviceFamily::Keyboard,
             .model = "AJAZZ AK820 Pro (VIA)",
             .codename = "ak820pro",
+            .hasRgb = true,
         },
         &makeViaKeyboard);
 
@@ -36,6 +37,7 @@ void registerAll() {
             .family = core::DeviceFamily::Keyboard,
             .model = "AJAZZ AK (proprietary)",
             .codename = "ak-proprietary",
+            .hasRgb = true,
         },
         &makeProprietaryKeyboard);
 }

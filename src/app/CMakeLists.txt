@@ -1,7 +1,12 @@
 qt_add_executable(
     ajazz-control-center
-    src/main.cpp src/application.cpp src/device_model.cpp src/profile_controller.cpp
-    src/branding_service.cpp src/tray_controller.cpp
+    src/main.cpp
+    src/application.cpp
+    src/device_model.cpp
+    src/profile_controller.cpp
+    src/branding_service.cpp
+    src/tray_controller.cpp
+    src/theme_service.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
@@ -32,6 +37,14 @@ set_source_files_properties(${ACC_BRAND_THEME} PROPERTIES QT_RESOURCE_ALIAS bran
 # AjazzControlCenter module instead of as a regular component.
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
+# Optional light theme override — packaged so BrandingService can load it from
+# qrc:/qt/qml/AjazzControlCenter/branding/theme-light.json when the user picks Settings → Appearance
+# → Light.
+set(ACC_BRAND_THEME_LIGHT ${CMAKE_SOURCE_DIR}/resources/branding/theme-light.json)
+set_source_files_properties(
+    ${ACC_BRAND_THEME_LIGHT} PROPERTIES QT_RESOURCE_ALIAS branding/theme-light.json
+)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
@@ -44,7 +57,19 @@ qt_add_qml_module(
               qml/KeyDesigner.qml
               qml/EncoderPanel.qml
               qml/MousePanel.qml
+              qml/Inspector.qml
+              qml/components/AppHeader.qml
+              qml/components/Card.qml
+              qml/components/DeviceRow.qml
+              qml/components/EmptyState.qml
+              qml/components/EncoderCard.qml
+              qml/components/KeyCell.qml
+              qml/components/PageHeader.qml
+              qml/components/PrimaryButton.qml
+              qml/components/SecondaryButton.qml
+              qml/components/Toast.qml
     RESOURCES ${ACC_APP_ICON} ${ACC_BRAND_APP} ${ACC_BRAND_TRAY} ${ACC_BRAND_THEME}
+              ${ACC_BRAND_THEME_LIGHT}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

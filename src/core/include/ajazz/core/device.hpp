@@ -46,7 +46,8 @@ enum class DeviceFamily : std::uint8_t {
  * @brief Static descriptor of a supported device model.
  *
  * Registered with DeviceRegistry at startup. The UI uses codename to load
- * device-specific QML layouts and icon assets.
+ * device-specific QML layouts and icon assets, and reads the capability
+ * fields below to size grids and toggle tabs without hard-coded constants.
  */
 struct DeviceDescriptor {
     std::uint16_t vendorId{0};                  ///< USB Vendor ID.
@@ -54,6 +55,18 @@ struct DeviceDescriptor {
     DeviceFamily family{DeviceFamily::Unknown}; ///< Product category.
     std::string model;                          ///< Human-readable model name, e.g. "AJAZZ AKP153".
     std::string codename;                       ///< Short machine identifier, e.g. "akp153".
+
+    // ---- Capability hints (UI sizing) -----------------------------------
+    // These are static layout hints used by the QML UI to avoid magic
+    // constants like `model: 15`. They should match the values reported by
+    // the runtime IDevice/ICapability interfaces of the same backend.
+
+    std::uint16_t keyCount{0};      ///< Number of LCD/macro keys (0 if N/A).
+    std::uint16_t gridColumns{0};   ///< Preferred grid column count for the keys (0 if N/A).
+    std::uint16_t encoderCount{0};  ///< Number of rotary encoders (0 if N/A).
+    std::uint16_t dpiStageCount{0}; ///< Number of DPI stages (mice; 0 if N/A).
+    bool hasRgb{false};             ///< True if the device exposes RGB lighting.
+    bool hasTouchStrip{false};      ///< True if the device exposes a touch strip.
 };
 
 /**

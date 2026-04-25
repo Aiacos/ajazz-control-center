@@ -1,0 +1,11 @@
+{
+  "$schema": "https://github.com/Aiacos/ajazz-control-center/blob/main/docs/architecture/BRANDING.md",
+  "_comment": "Light theme override (F-24). Loaded when Settings -> Appearance -> Light is selected, or at build time via -DAJAZZ_BRAND_DIR=/path/with/theme.json. WCAG 2.1 AA: fgMuted #4a4a55 on bgBase #f4f4f8 = 8.8:1; on bgSidebar #ebebef = 7.8:1.",
+  "accent":     "#2e7d32",
+  "accent2":    "#1565c0",
+  "bgBase":     "#f4f4f8",
+  "bgSidebar":  "#ebebef",
+  "bgRowHover": "#dedee5",
+  "fgPrimary":  "#14141a",
+  "fgMuted":    "#4a4a55"
+}

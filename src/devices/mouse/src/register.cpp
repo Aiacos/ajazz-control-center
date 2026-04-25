@@ -34,6 +34,9 @@ void registerAll() {
                 .family = core::DeviceFamily::Mouse,
                 .model = m.model,
                 .codename = m.codename,
+                // AJ-series mice expose 6 DPI stages with per-stage RGB.
+                .dpiStageCount = 6,
+                .hasRgb = true,
             },
             &makeAjSeries);
     }

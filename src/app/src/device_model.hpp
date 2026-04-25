@@ -14,6 +14,8 @@
 #include "ajazz/core/device.hpp"
 
 #include <QAbstractListModel>
+#include <QString>
+#include <QVariantMap>
 
 #include <vector>
 
@@ -42,6 +44,12 @@ public:
         VidRole,                      ///< USB Vendor ID as integer.
         PidRole,                      ///< USB Product ID as integer.
         ConnectedRole,                ///< True when the device is currently plugged in.
+        KeyCountRole,                 ///< Number of LCD/macro keys exposed by the device.
+        GridColumnsRole,              ///< Preferred grid column count for the key matrix.
+        EncoderCountRole,             ///< Number of rotary encoders.
+        DpiStageCountRole,            ///< Number of DPI stages (mice).
+        HasRgbRole,                   ///< True when the device exposes RGB lighting.
+        HasTouchStripRole,            ///< True when the device exposes a touch strip.
     };
 
     explicit DeviceModel(QObject* parent = nullptr);
@@ -72,6 +80,18 @@ public:
      * @invokable Available from QML as `deviceModel.refresh()`.
      */
     Q_INVOKABLE void refresh();
+
+    /**
+     * @brief Look up the descriptor for a codename and return its fields as a
+     *        QVariantMap so QML can data-drive grid sizes and tab visibility
+     *        without hard-coded constants.
+     * @param codename Backend codename (e.g. "akp153", "akp03").
+     * @return Map with keys: model, codename, family, keyCount, gridColumns,
+     *         encoderCount, dpiStageCount, hasRgb, hasTouchStrip. Empty when
+     *         the codename is not registered.
+     * @invokable Callable from QML as `deviceModel.capabilitiesFor(codename)`.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantMap capabilitiesFor(QString const& codename) const;
 
 private:
     std::vector<core::DeviceDescriptor> m_rows; ///< Snapshot of registered descriptors.

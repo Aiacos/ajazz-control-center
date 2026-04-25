@@ -42,9 +42,10 @@ QtObject {
     /// Primary foreground (titles, headings).
     readonly property color fgPrimary:  branding ? branding.fgPrimary  : "#f0f0f0"
     /// Muted foreground (secondary labels, captions).
-    readonly property color fgMuted:    branding ? branding.fgMuted    : "#888888"
-    /// Tertiary foreground for de-emphasized helper text.
-    readonly property color fgFaint:    "#aaaaaa"
+    /// WCAG 2.1 AA: "#aaaaaa" on "#1e1e23" sidebar = 7.5:1; on "#14141a" base = 9.0:1.
+    readonly property color fgMuted:    branding ? branding.fgMuted    : "#aaaaaa"
+    /// Tertiary foreground for de-emphasized helper text — ≥4.5:1 on dark surfaces.
+    readonly property color fgFaint:    "#bdbdbd"
 
     /// Brand accent (primary CTAs, focus rings, key indicators).
     readonly property color accent:     branding ? branding.accent     : "#41CD52"
@@ -77,9 +78,16 @@ QtObject {
 
     // ---- Typography scale --------------------------------------------------
 
-    readonly property int fontXs:  11
-    readonly property int fontSm:  12
+    // F-03: bumped fontXs from 11→12 to keep contrast ≥ 4.5:1 at small sizes.
+    readonly property int fontXs:  12
+    readonly property int fontSm:  13
     readonly property int fontMd:  14
     readonly property int fontLg:  18
     readonly property int fontXl:  20
+
+    // ---- Focus / accessibility --------------------------------------------
+    /// Focus ring width (px) for keyboard navigation — see F-04 in ui-review.
+    readonly property int focusRingWidth: 2
+    /// Minimum interactive target size (px) — GUIDELINES says ≥44×44.
+    readonly property int minTouchTarget: 44
 }

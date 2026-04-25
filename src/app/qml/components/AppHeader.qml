@@ -1,0 +1,94 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// AppHeader.qml — top application bar (F-20).
+//
+// Hosts the product mark, an optional profile picker, a search field, and a
+// "minimize to tray" button. Designed to span the full width of the window;
+// the parent ApplicationWindow places it as the first child of a ColumnLayout
+// so it stays sticky at the top.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import AjazzControlCenter
+
+Rectangle {
+    id: root
+    color: Theme.bgSidebar
+    border.width: 0
+    height: 56
+
+    /// Emitted when the user clicks the "minimize to tray" button.
+    signal minimizeRequested()
+
+    RowLayout {
+        anchors.fill: parent
+        anchors.leftMargin: Theme.spacingLg
+        anchors.rightMargin: Theme.spacingLg
+        spacing: Theme.spacingLg
+
+        // Product mark — shows the configured product name (branding.productName).
+        Text {
+            text: branding ? branding.productName : qsTr("AJAZZ Control Center")
+            color: Theme.fgPrimary
+            font.pixelSize: Theme.fontLg
+            font.bold: true
+            Accessible.role: Accessible.StaticText
+            Accessible.name: text
+        }
+
+        Item { Layout.fillWidth: true }
+
+        // Search box (no functional binding yet; surfaces a placeholder).
+        TextField {
+            id: search
+            Layout.preferredWidth: 240
+            placeholderText: qsTr("Search devices, actions…")
+            color: Theme.fgPrimary
+            placeholderTextColor: Theme.fgMuted
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: Theme.tile
+                border.width: search.activeFocus ? Theme.focusRingWidth : 1
+                border.color: search.activeFocus ? Theme.accent : Theme.borderSubtle
+            }
+            Accessible.role: Accessible.EditableText
+            Accessible.name: qsTr("Search")
+            Accessible.description: qsTr("Filter the device list by name")
+        }
+
+        // Minimize-to-tray button.
+        ToolButton {
+            id: minBtn
+            text: "—"
+            font.pixelSize: Theme.fontLg
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Minimize to tray")
+            onClicked: root.minimizeRequested()
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Minimize to tray")
+            Accessible.description: qsTr("Hide the window; the application keeps running in the system tray")
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: minBtn.hovered ? Theme.bgRowHover : "transparent"
+                border.width: minBtn.activeFocus ? Theme.focusRingWidth : 0
+                border.color: Theme.accent
+            }
+            contentItem: Text {
+                text: minBtn.text
+                color: Theme.fgPrimary
+                font: minBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+            }
+        }
+    }
+
+    // Bottom hairline separator.
+    Rectangle {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        height: 1
+        color: Theme.borderSubtle
+    }
+}

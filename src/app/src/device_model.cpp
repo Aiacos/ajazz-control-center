@@ -13,6 +13,8 @@
 
 #include "ajazz/core/device_registry.hpp"
 
+#include <algorithm>
+
 namespace ajazz::app {
 
 DeviceModel::DeviceModel(QObject* parent) : QAbstractListModel(parent) {}
@@ -39,6 +41,18 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.productId;
     case ConnectedRole:
         return false; // TODO: live enumeration via hid_enumerate
+    case KeyCountRole:
+        return static_cast<int>(d.keyCount);
+    case GridColumnsRole:
+        return static_cast<int>(d.gridColumns);
+    case EncoderCountRole:
+        return static_cast<int>(d.encoderCount);
+    case DpiStageCountRole:
+        return static_cast<int>(d.dpiStageCount);
+    case HasRgbRole:
+        return d.hasRgb;
+    case HasTouchStripRole:
+        return d.hasTouchStrip;
     default:
         return {};
     }
@@ -52,6 +66,12 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
         {VidRole, "vid"},
         {PidRole, "pid"},
         {ConnectedRole, "connected"},
+        {KeyCountRole, "keyCount"},
+        {GridColumnsRole, "gridColumns"},
+        {EncoderCountRole, "encoderCount"},
+        {DpiStageCountRole, "dpiStageCount"},
+        {HasRgbRole, "hasRgb"},
+        {HasTouchStripRole, "hasTouchStrip"},
     };
 }
 
@@ -59,6 +79,27 @@ void DeviceModel::refresh() {
     beginResetModel();
     m_rows = core::DeviceRegistry::instance().enumerate();
     endResetModel();
+}
+
+QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
+    auto const target = codename.toStdString();
+    auto it = std::find_if(m_rows.begin(), m_rows.end(), [&](core::DeviceDescriptor const& d) {
+        return d.codename == target;
+    });
+    if (it == m_rows.end()) {
+        return {};
+    }
+    QVariantMap m;
+    m.insert(QStringLiteral("model"), QString::fromStdString(it->model));
+    m.insert(QStringLiteral("codename"), QString::fromStdString(it->codename));
+    m.insert(QStringLiteral("family"), static_cast<int>(it->family));
+    m.insert(QStringLiteral("keyCount"), static_cast<int>(it->keyCount));
+    m.insert(QStringLiteral("gridColumns"), static_cast<int>(it->gridColumns));
+    m.insert(QStringLiteral("encoderCount"), static_cast<int>(it->encoderCount));
+    m.insert(QStringLiteral("dpiStageCount"), static_cast<int>(it->dpiStageCount));
+    m.insert(QStringLiteral("hasRgb"), it->hasRgb);
+    m.insert(QStringLiteral("hasTouchStrip"), it->hasTouchStrip);
+    return m;
 }
 
 } // namespace ajazz::app

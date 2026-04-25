@@ -14,6 +14,7 @@
 #include "branding_service.hpp"
 #include "device_model.hpp"
 #include "profile_controller.hpp"
+#include "theme_service.hpp"
 #include "tray_controller.hpp"
 
 #include <QObject>
@@ -82,6 +83,7 @@ private:
     void onHotplug(core::HotplugEvent const& ev);
 
     std::unique_ptr<BrandingService> m_branding;            ///< Theme + product strings.
+    std::unique_ptr<ThemeService> m_themeService;           ///< Light / dark / auto switcher.
     std::unique_ptr<DeviceModel> m_deviceModel;             ///< List model of registered devices.
     std::unique_ptr<ProfileController> m_profileController; ///< Profile load/save controller.
     std::unique_ptr<TrayController> m_trayController;       ///< System tray icon + menu.
