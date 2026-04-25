@@ -1,0 +1,196 @@
+# TODO
+
+Living checklist of open work for **AJAZZ Control Center**, organized by
+expected effort. Items reference concrete files / commits / sessions where
+they originated. Closed items move to `CHANGELOG.md`.
+
+For the official release flow see [`docs/wiki/Release-Process.md`](docs/wiki/Release-Process.md).
+For the audit findings that produced many of these entries see commit
+history of `feat(app): live HID enumeration ...` (`af92ff2`) and the
+preceding security/architecture review pass.
+
+______________________________________________________________________
+
+## ✅ Recently shipped (this development cycle)
+
+- AJAZZ AK980 PRO support (vendor `0x0c45`, codename `ak980pro`) — `469e599`
+- Single-instance gate + show-existing on relaunch — `f7c4847`
+- Default-visible main window (was tray-only on first launch) — `09c104a`
+- Live HID enumeration for `ConnectedRole` — `af92ff2`
+- Material Design style + theme/accent bound to `ThemeService` — `6072265`
+- RPM polish: `.pc` exclude + populated `Description` — `9faf1f9`, `c4c9609`
+- CI/CD bulletproofing: concurrency, timeouts, checkout v5, wiki resilience,
+  gitleaks PR auth, dep-review tolerance — `87ed454` … `136a25e`, `bc8b8e6`
+- Local packaging recipes (Fedora / Debian / Flatpak / Win / macOS) — `9a94ae4`
+- AJAZZ wordmark vendored as `resources/branding/ajazz-logo.png` — `3f78afb`
+
+______________________________________________________________________
+
+## 🚧 Open work
+
+### Quick wins (≤ 1 hour each)
+
+- [ ] **Wire AJAZZ banner into AppHeader.qml** — banner is in
+  `resources/branding/ajazz-logo.png` but not yet visible in the UI. Add an
+  `Image { source: "qrc:/qt/qml/AjazzControlCenter/branding/ajazz-logo.png" }`
+  to the header strip. Tray and app icons stay placeholder until a square
+  variant exists.
+- [ ] **`app.ico` regenerate** for Windows installer once a square brand
+  asset is available; today `resources/icons/app.ico` is a placeholder.
+- [ ] **README + wiki screenshots** of the Material UI in light and dark
+  mode (replace stale Fusion screenshots).
+
+### User actions (out-of-code, one-time)
+
+- [ ] **Enable GitHub Wiki**: visit
+  `https://github.com/Aiacos/ajazz-control-center/wiki/_new` and save any
+  page once. After that, every push to `main` syncs `docs/wiki/`
+  automatically (the workflow already handles the chicken-and-egg case
+  gracefully — it just won't actually mirror anything until you click save
+  the first time).
+- [ ] **Enable Dependency Graph**: Settings → Code security & analysis →
+  Dependency graph → Enable. Then `dependency-review.yml` becomes
+  effective on dependabot PRs (it currently has `continue-on-error: true`
+  while the prereq is disabled).
+- [ ] **AK 980 ACL — physical replug**: `setfacl` workaround was applied
+  this session, but is reset at the next boot. After replugging the
+  AK 980 PRO once, systemd-logind picks up the `TAG+="uaccess"` from the
+  new udev rule and grants the ACL persistently.
+
+### Medium-effort fixes (1–4 hours)
+
+- [ ] **Square brand asset** for tray / app icon. The wordmark in
+  `resources/branding/ajazz-logo.png` is a 3:1 banner; a centered crop
+  produces mostly whitespace and looks worse than the current
+  geometric placeholder. Either ask AJAZZ for a square logo or design a
+  custom monogram inspired by the wordmark.
+- [ ] **`make test` Windows fixture for `concurrent writers`**: still
+  flaky on `windows-2022` despite the retry-budget bump in `210232d`
+  (rare but seen ~1/100). Investigate whether MoveFileExW on Windows
+  Server 2022 + GitHub-runner antivirus has a hard ceiling we can't
+  retry past, and either tune more or switch to ReplaceFileW.
+- [ ] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
+  drop the three `SUBSYSTEM=="usb"` lines so only `KERNEL=="hidraw*"`
+  grants `uaccess`. **Risk**: untested whether hidapi's libusb backend
+  fallback is ever hit in practice on Linux. Validate with each backend
+  before removing.
+
+### Architecture refactors (multi-day, milestone-level)
+
+> Findings from the architectural review pass earlier in the session.
+> Each one is a self-contained milestone; pick by current pain.
+
+- [ ] **A1 — DeviceRegistry singleton → DI**: replace
+  `DeviceRegistry::instance()` with constructor-injected ownership in
+  `Application`. Keeps the singleton as a transition shim so device
+  backends keep compiling. **Why**: per-test isolation, no hidden global
+  state. Touches every backend `register*.cpp`.
+- [ ] **A2 — ActionEngine threading model**: `ActionEngine::run()`
+  currently calls `std::this_thread::sleep_for` on the calling thread
+  (typically the HID poll thread or the Qt main thread). Introduce an
+  explicit executor (QThreadPool task or dedicated worker queue) and
+  drop the default in-place sleep. **Why**: Sleep actions must not
+  block HID polling or freeze the UI.
+- [ ] **A3 — EventBus per-event allocation**: `event_bus.cpp:27-36`
+  deep-copies `unordered_map<token, Handler>` on every `publish()`.
+  Replace with `shared_ptr<const vector<…>>` swapped on subscribe /
+  unsubscribe; readers atomic-load and iterate lock-free. **Why**:
+  high-rate encoders (AKP05) generate >100 events/s.
+- [ ] **A4 — PluginHost out-of-process**: pybind11's
+  `scoped_interpreter` runs CPython in-process; a segfault in any
+  C-extension imported by a plugin (numpy, opencv, mido) crashes the
+  whole app. Move the host out-of-process via subprocess + Unix socket
+  (or seccomp-bpf sandbox if staying in-process). **Why**: bake
+  isolation in *before* exposing user-installable plugins; retrofitting
+  is 10× more expensive.
+- [ ] **A5 — Logger global → injectable sink**: `core::log()` is a free
+  function with a global `std::atomic<LogLevel>`. Introduce a `LogSink`
+  interface and `setLogSink(unique_ptr<LogSink>)`; keep the macros
+  unchanged so call sites don't touch. **Why**: per-test log capture,
+  routing to journald / syslog without TU patches.
+- [ ] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
+
+### Security hardening
+
+- [ ] **S2 — Plugin module name shadowing** (HIGH,
+  `src/plugins/src/plugin_host.cpp:146`): a malicious plugin directory
+  basename like `os` / `subprocess` shadows stdlib for any later import
+  in the host. Fix: `importlib.util.spec_from_file_location` under a
+  dedicated `ajazz_plugins.<id>` namespace, OR blocklist
+  `sys.stdlib_module_names`.
+- [ ] **S3 — `sys.path` accumulation** (MED,
+  `src/plugins/src/plugin_host.cpp:113-123`): repeated `loadAll()` calls
+  append paths without dedup. Wrap each load in a RAII guard that
+  prepends + removes.
+- [ ] **S4 — Profile-IO TOCTOU / symlink follow / parent-dir fsync**
+  (MED, `src/core/src/profile_io.cpp:155-191`): the atomic-rename path
+  doesn't use `O_NOFOLLOW` and never fsyncs the parent directory. Move
+  to `openat(O_DIRECTORY|O_NOFOLLOW)` + `renameat` + parent fsync.
+- [ ] **S6 — `syncFile` reopen** (LOW,
+  `src/core/src/profile_io.cpp:63-78`): fsyncs a freshly-reopened RO
+  fd; doesn't guarantee the original ofstream's stdio buffer reached
+  the kernel. Drop the reopen and fsync the original fd via `dup`, or
+  switch the whole write path to POSIX `::open`.
+- [ ] **S7 — Substring-only profile validator** (LOW, intentional —
+  `src/core/src/profile_io.cpp:123-153`): the in-tree `containsKey`
+  scanner is documented as a tiny shim; replace with the Qt-side
+  `QJsonDocument` parser when the app-layer reader lands. Tracking
+  bug only — no behavior change needed yet.
+
+### Plugin SDK + Store (multi-week, milestone-level)
+
+> User-requested in this session. **Not autonomous-feasible** end-to-end;
+> document and break down so the work can be parallelized.
+
+- [ ] **Manifest schema** (`docs/schemas/plugin_manifest.schema.json`):
+  JSON Schema describing `id`, `name`, `version`, `sdk`, `actions[]`,
+  `propertyInspector`, capabilities, signing fields. ≈ 1-2 days.
+- [ ] **Architecture doc** (`docs/architecture/PLUGIN-SDK.md`): WS
+  protocol, plugin lifecycle (will-appear / will-disappear / set-state),
+  property-inspector embedding via Qt WebEngine, sandboxing strategy,
+  OpenDeck / Stream Deck compat layer. ≈ 1-2 days.
+- [ ] **Plugin process spawner** (sandboxed sub-processes, stdio or
+  Unix-socket transport). ≈ 3-4 days.
+- [ ] **WebSocket protocol bridge** (Stream Deck-compatible JSON event
+  router, plugin → app and app → plugin). ≈ 5-7 days.
+- [ ] **Plugin lifecycle manager** (install / load / unload / state
+  persistence). ≈ 5-7 days.
+- [ ] **Property Inspector embedding** (Qt WebEngine for HTML PI, with
+  bridged messages to the plugin process). ≈ 3-5 days.
+- [ ] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
+  Material-styled, virtualized grid, live search/filter, install /
+  update / disable per-plugin). ≈ 7-10 days.
+- [ ] **Catalog backend** (registry, ratings, version pins, Sigstore
+  signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
+- [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
+  - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
+
+**Total realistic estimate**: 6-10 weeks of focused engineering for a
+v1; backend catalog is parallel work.
+
+### UI polish (incremental)
+
+- [ ] **Material 3 expressive theming** beyond the basic style switch:
+  custom typography ramp, elevation tokens, motion specs (entrance /
+  exit transitions), elevated buttons with proper ripples.
+- [ ] **Empty state polish** for `DeviceList` when zero devices online
+  (illustration + onboarding hint).
+- [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
+  Snackbar pattern.
+- [ ] **Settings page** (`src/app/qml/Settings.qml`): expose
+  `themeService.mode` (auto/light/dark), `tray.startMinimized`,
+  `autostart.launchOnLogin` in a Material `SwitchDelegate` list.
+  Currently these are toggleable only via QSettings directly.
+
+______________________________________________________________________
+
+## Iceboxed (ideas, no commitment)
+
+- Code signing for macOS / Windows release artifacts (needs publisher
+  cert, see `docs/wiki/Release-Process.md#signing--notarization`).
+- Sigstore signing of release artifacts (cosign keyless attestation).
+- Telemetry (opt-in) for crash reports / anonymized device-mix stats.
+- HID protocol fuzzer using the existing `tests/integration/fixtures/`
+  as a corpus seed (libfuzzer + ASan, would catch regressions in
+  AKP153/AKP05 frame parsers).
+- AppImage build path alongside Flatpak (broader Linux distro reach).
