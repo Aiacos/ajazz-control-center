@@ -5,7 +5,7 @@
 set(_ajazz_plugins_sources)
 if(NOT WIN32)
     list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host.cpp
-         src/linux_bwrap_sandbox.cpp
+         src/linux_bwrap_sandbox.cpp src/macos_sandbox_exec_sandbox.cpp
     )
 endif()
 

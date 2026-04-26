@@ -215,7 +215,8 @@ ______________________________________________________________________
   Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
-  (Linux) + 3e (legacy backend retired) shipped this cycle. POSIX `OutOfProcessPluginHost`
+  (Linux) + 3c (macOS) + 3e (legacy backend retired) shipped this
+  cycle. POSIX `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
   to it over line-delimited JSON on a pair of pipes. The child
@@ -293,11 +294,28 @@ ______________________________________________________________________
   `AJAZZ_BUILD_PYTHON_HOST` survives as a thin gate over the
   plugins subsystem so existing CI matrices (`-D…=OFF`) keep working.
 
-  Slice 3c (next): macOS `sandbox-exec` policy generator + the
-  ports per the same `Sandbox` interface.
+  Slice 3c (this cycle): macOS counterpart of slice 3b. New
+  `MacosSandboxExecSandbox` (`macos_sandbox_exec_sandbox.{hpp,cpp}`)
+  wraps the OOP child in `/usr/bin/sandbox-exec -p '<profile>'` with
+  the same default-deny posture: `(version 1) (deny default)` plus
+  the minimum allow rules CPython needs to start (process-fork,
+  process-exec\*, signal target self, sysctl-read, file-read\*,
+  file-write\* under `/private/var/folders` + `/tmp`, narrow
+  bootstrap-server `mach-lookup`). Permission-driven relaxations
+  parallel the Linux ones: any of
+  `obs-websocket`/`spotify`/`discord-rpc` adds `(allow network*)`;
+  any of `notifications`/`media-control`/`system-power` adds the
+  broad `(allow mach-lookup)` so the child can reach
+  `com.apple.usernotificationsd` / MediaRemote / IOPower mach
+  services. Fall-back: passthrough if `/usr/bin/sandbox-exec` is
+  missing (Linux dev boxes, stripped systems). 6 unit tests pin the
+  policy text + argv shape; the policy generator is exercised on
+  Linux runners via a `/bin/sh` shim. End-to-end runtime test is
+  pending a macOS CI runner — same posture as bwrap on Linux until
+  the matrix expands.
 
-  Slice 3d: Windows port (`_spawnvp` + anonymous pipes via
-  `CreatePipe`/`CreateProcess`) + AppContainer + restricted token.
+  Slice 3d (next): Windows port (`_spawnvp` + anonymous pipes via
+  `_pipe`) + AppContainer + restricted token.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
