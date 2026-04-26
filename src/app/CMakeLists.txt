@@ -298,7 +298,34 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
             DESTINATION share/applications
     )
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/99-ajazz.rules DESTINATION lib/udev/rules.d)
-    install(FILES ${CMAKE_SOURCE_DIR}/resources/icons/app.svg
+
+    # ----------------------------------------------------------------------
+    # hicolor icon theme entries.
+    #
+    # We ship the brand-aligned SVG (resources/branding/app.svg, the same artwork embedded in the
+    # README) as the scalable theme icon, AND a full ladder of pre-rasterised PNG fallbacks so file
+    # managers, tray implementations and X11 / Wayland status bars that ignore SVGs (or rasterise
+    # them poorly at very small sizes) still pick up the brand mark. The scalable SVG plus the eight
+    # raster sizes mirror what makeAppIcon() pre-renders at runtime so QIcon::fromTheme("ajazz-
+    # control-center") returns crisp pixmaps regardless of the size Qt asks for.
+    # ----------------------------------------------------------------------
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/branding/app.svg
             DESTINATION share/icons/hicolor/scalable/apps RENAME ajazz-control-center.svg
     )
+    foreach(
+        sz
+        16
+        22
+        24
+        32
+        48
+        64
+        128
+        256
+        512
+    )
+        install(FILES ${CMAKE_SOURCE_DIR}/resources/icons/hicolor/app-${sz}.png
+                DESTINATION share/icons/hicolor/${sz}x${sz}/apps RENAME ajazz-control-center.png
+        )
+    endforeach()
 endif()

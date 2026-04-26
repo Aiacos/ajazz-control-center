@@ -61,23 +61,55 @@ void TrayController::ensureTray(QQmlApplicationEngine* engine) {
 
     tray_ = new QSystemTrayIcon(this);
     // Build the tray QIcon. Two halves matter for Wayland status bars (niri +
-    // Quickshell, KDE Plasma, Sway, etc.):
-    //   1. IconName — most SNI tray hosts honor only `IconName` from
-    //      org.kde.StatusNotifierItem, looking it up in the user's icon
-    //      theme; raw `IconPixmap` data is silently dropped. We construct
-    //      the icon via QIcon::fromTheme("ajazz-control-center") so the SNI
-    //      property is populated; the system-installed
-    //      /usr/share/icons/hicolor/.../ajazz-control-center.svg is what the
-    //      host actually paints.
-    //   2. IconPixmap fallback — for hosts that DO honor pixmap data (some
-    //      X11 trays, GNOME Shell with the AppIndicator extension), we
-    //      rasterize the same SVG used as the README hero at the standard
-    //      Qt sizes (16/22/24/32/48/64/128/256/512). Embedded in the QIcon
-    //      so even hosts without our installed theme entry render something.
-    QIcon const fallback =
+    // Quickshell, KDE Plasma, Sway, etc.) and for X11 / GNOME / GTK trays:
+    //
+    //   1. IconPixmap (always) — we rasterise the same SVG used as the README
+    //      hero (resources/branding/app.svg) at every standard Qt size
+    //      (16/22/24/32/48/64/128/256/512) and embed those pixmaps in the
+    //      QIcon. This is what hosts that honour pixmap data — most X11
+    //      trays, GNOME Shell with AppIndicator, KDE on X11 — actually
+    //      paint, and it is also the only data path Qt needs when the
+    //      icon-theme cache on disk is stale or missing.
+    //
+    //   2. IconName (best-effort) — SNI tray hosts on Wayland (KDE Plasma,
+    //      Sway+waybar, niri+Quickshell, …) honour `IconName` from
+    //      org.kde.StatusNotifierItem and look the icon up in the user's
+    //      icon theme. We assign QIcon::name() so Qt populates that DBus
+    //      property; the system-installed
+    //      /usr/share/icons/hicolor/<size>/apps/ajazz-control-center.png
+    //      and …/scalable/apps/ajazz-control-center.svg (also installed
+    //      from resources/branding/app.svg — see Linux install rules in
+    //      src/app/CMakeLists.txt) are then what the host paints.
+    //
+    // Earlier revisions of this file shipped `resources/icons/app.svg` (a
+    // generic 3×3 macropad-grid placeholder) as the system-installed
+    // hicolor scalable icon. With `fromTheme("ajazz-control-center",
+    // …)`, any user with a stale install of that placeholder ended up
+    // seeing the placeholder in the tray instead of the brand mark. The
+    // canonical fix — done in the same commit as this comment — is the
+    // Linux install pipeline now publishing `resources/branding/app.svg`
+    // under share/icons/hicolor/scalable/apps and a full PNG ladder under
+    // share/icons/hicolor/<size>/apps. The legacy generic resources/icons
+    // /app.svg has additionally been replaced by a copy of the branded
+    // SVG so even paths that still reference the old asset render the
+    // brand mark.
+    QIcon const embedded =
         makeAppIcon(QStringLiteral(":/qt/qml/AjazzControlCenter/branding/app.svg"),
                     QStringLiteral(":/qt/qml/AjazzControlCenter/icons/app.svg"));
-    tray_->setIcon(QIcon::fromTheme(QStringLiteral("ajazz-control-center"), fallback));
+    // Hand the embedded pixmaps as the QIcon::fromTheme fallback so SNI
+    // tray hosts that honour `IconName` find a name in the system theme
+    // when the application is installed (Linux install rules ship the
+    // brand-aligned PNG ladder under share/icons/hicolor/<size>/apps/
+    // ajazz-control-center.png plus a scalable SVG sourced from
+    // resources/branding/app.svg — see src/app/CMakeLists.txt) and still
+    // render the embedded brand pixmaps in dev / unpackaged builds.
+    //
+    // Hosts that honour `IconPixmap` (most X11 trays, KDE on X11, GNOME
+    // Shell with the AppIndicator extension) always paint the embedded
+    // ladder regardless of theme lookup outcome, so the icon never
+    // collapses to the platform missing-icon glyph.
+    QIcon const icon = QIcon::fromTheme(QStringLiteral("ajazz-control-center"), embedded);
+    tray_->setIcon(icon);
     tray_->setToolTip(branding_ ? branding_->productName()
                                 : QStringLiteral("AJAZZ Control Center"));
     buildMenu();
