@@ -116,7 +116,167 @@ was rebuilt `2024-02-01` (matching the Last-Modified on the DMG).
 Confirms the build is recent enough to assume a modern Qt 6 plug-
 point set is available in the vendor app.
 
-### Open questions surfaced by this finding
+### Finding 3 — Windows build is Qt 5 (not Qt 6 like the macOS build)
+
+> **Capture id**: `static-2026-04-26-streamdock-win-001`. Method:
+> `curl` of `Stream-Dock-AJAZZ-Installer_Windows_global.exe` (sha256
+> `005d18fbea74e393560431f167c12737b380687d544f0a48a25e73abda0354b5`,
+> 121 620 400 bytes, Last-Modified `2024-01-29`) into ephemeral
+> `/tmp/`, `rz-bin -I/-l/-i/-S` static metadata extraction, no
+> instructions disassembled, then deletion. Tool: `rizin 0.7.4`
+> (Fedora `dnf install -y rizin`, removed at session end).
+
+The Windows installer is an **Advanced Installer** (Caphyon)
+bootstrap (`dbg_file: C:\JobRelease\win\Release\stubs\x86\ExternalUi.pdb`,
+GUID `CBF9B5150C964A1592535FCF30CB7B941`) wrapping an embedded MSI.
+The bootstrap is i386 PE32, signed (cert chain not verified
+yet). Outer DLL imports include `msi.dll`, `wininet.dll`,
+`gdiplus.dll` — standard for an MSI bootstrap, no application logic.
+
+The MSI's internal asset table (visible via `strings` on the
+bootstrap, since Advanced Installer concatenates the cabinet
+file-list into a sequence in the .rsrc section) reveals:
+
+- **Qt is Qt 5, not Qt 6**: bundles `Qt5WinExtras.dll, Qt5Core.dll, Qt5Gui.dll, Qt5Widgets.dll, Qt5Network.dll, Qt5Qml.dll, Qt5Quick.dll, Qt5QuickWidgets.dll, Qt5QmlModels.dll, Qt5Svg.dll, Qt5Multimedia.dll, Qt5MultimediaWidgets.dll, Qt5SerialPort.dll, Qt5WebChannel.dll, Qt5WebEngineCore.dll, Qt5WebEngineWidgets.dll, Qt5WebSockets.dll, Qt5Xml.dll, Qt5PrintSupport.dll, Qt5Positioning.dll`. **`Qt5WinExtras.dll` is the smoking gun** —
+  this module does not exist in Qt 6, so the Windows build is firmly
+  on Qt 5.x. Implication: the vendor app is mid-migration from
+  Qt 5 → Qt 6, with macOS already on Qt 6 (Finding 1) and Windows
+  still on Qt 5. Our open-source stack is structurally more modern
+  than the vendor's Windows build today.
+
+- **The Stream Dock app is multi-process**:
+
+  - `StreamDockAJAZZ.exe` — main UI app.
+  - `QtWebEngineProcess.exe` — Qt WebEngine helper (standard).
+  - `SystemMonitor.exe` — separate process for the system-monitor
+    widgets (CPU / GPU / RAM tile data sources).
+  - `FirmwareUpgradeTool.exe` — **firmware update is a SEPARATE
+    EXECUTABLE**, not in-process. Strongly supports the hypothesis
+    in Finding 1 that firmware update reboots the device into a
+    USB-CDC bootloader and a dedicated tool (linked against
+    `Qt5SerialPort.dll`) drives the flash sequence.
+  - `ScreenCaptureTool.exe` — separate process for the
+    `screen-capture` action type. May feed image data back into the
+    main app via IPC (likely shared memory + WebSocket).
+  - `SplashScreen.exe` — splash on launch.
+
+- **Native libraries bundled** (selected — full inventory is the
+  Advanced Installer file table inside the MSI):
+
+  - `libusb1.0.dll` — vendor uses **libusb** for device I/O (same
+    transport family our `hidapi` ultimately falls back to on
+    Linux). Suggests they bypass HID-level abstraction for some
+    operations, likely raw bulk transfers for image upload.
+  - `OpenHardwareMonitorLib.dll` — feeds the
+    `cpuTemperatureIndex.html` widget via the SystemMonitor.exe
+    sub-process. We don't have this; if we want CPU/GPU widgets
+    we likely need an equivalent abstraction (or use lm-sensors /
+    Get-CimInstance / IOKit equivalents per OS).
+  - `opencv_core4.dll, opencv_imgproc4.dll, opencv_highgui4.dll, opencv_imgcodecs4.dll, opencv_videoio4.dll` — **OpenCV 4** is
+    bundled. Used for image processing (tile thumbnails, screen-
+    capture region cropping / scaling, possibly real-time camera
+    preview as a tile background). New gap; we use Qt's `QImage`
+    today which is cheaper but less capable.
+  - `libwebp.dll, libsharpyuv.dll, libwebpdecoder.dll` — WebP
+    codec. Tiles can be authored as WebP, not just JPEG / PNG.
+  - `libcrypto1_1x64.dll, libssl1_1x64.dll` — OpenSSL 1.1.x. Older
+    Qt 5 default; we are on Qt 6 + system OpenSSL 3.x.
+  - `D3Dcompiler_47.dll, libGLESv2.dll, libEGL.dll, opengl32sw.dll`
+    — Qt Quick rendering on Windows uses ANGLE's GLES backend.
+    Standard Qt-on-Windows pattern.
+
+- **Action types — full vendor catalogue** (counted from the
+  `btn_*.png/jpg` thumbnails embedded in the MSI):
+
+  - `btn_back.png` — back to parent folder (we have this).
+  - `btn_launch.jpg` — launch application (we have this).
+  - `btn_custom_folder.png` — open folder (we have this).
+  - `btn_custom_open_website.jpg` — open URL (we have this).
+  - `btn_custom_trigger_hotkey.jpg` — keyboard hotkey (we have
+    this via `KeyPress` action).
+  - `btn_goToPage.png` — navigate to a specific profile page (we
+    have folders, but not arbitrary page jumps).
+  - `btn_media_eject.jpg` — eject media (new).
+  - `btn_mouse_event.jpg` — synthesise mouse events (new).
+  - `btn_password.png` — store / type a password (new).
+  - `btn_play.png` — play sound (new — corroborates the
+    QtMultimedia dependency).
+  - `btn_switchProfile.jpg` — switch active profile (new — we
+    have a single active profile model today).
+  - `btn_text.png` — type literal text (new).
+  - `btn_youtube_post_message.png` — YouTube live-chat integration
+    (new and OEM-specific; low priority for parity).
+  - `btn_duration.png` — countdown timer tile (new).
+  - `calculatorAction.png` — calculator pop-up (new).
+  - `browserBackAction.png` — browser-back hotkey (new).
+  - `micAction.png` — microphone mute / unmute (new — useful for
+    streamers).
+
+- **Profile bundle format** — visible filenames `Favorite.streamDockProfile`
+  and `WINDOWS.streamDockProfile` confirm the vendor bundle
+  extension is `.streamDockProfile`. We use `.ajazzprofile` — the
+  formats are not interchangeable today; opt-in import / export
+  to `.streamDockProfile` is a parity item if we want
+  cross-vendor profile portability.
+
+- **Property Inspector HTML pages**: 11 numbered `index.html_*`
+  files in the asset table, strongly suggesting one PI HTML page
+  per built-in action type, exactly the embedding pattern our
+  M1-M4 work supports. Confirms PI architecture compatibility.
+
+- **Localisation**: `.json` per locale (ar / de / …) + `.pak`
+  Chromium locale bundles for the WebEngine subprocess.
+  Implementation note: our localisation strategy will need to
+  cover the same locales when we ship plugin compat.
+
+### Finding 4 — keyboard / mouse driver wrappers are a Delphi-style
+
+toolchain
+
+> **Capture ids**: `static-2026-04-26-aj199-001` (mouse driver,
+> sha256 `0c8b3a0c4d31922cb0fb9daa14af58211a2939a2afc8113b041de3ecbdc7852c`,
+> 2 334 568 bytes, mtime `2023-12-06`) and
+> `static-2026-04-26-ak820max-001` (keyboard driver, sha256
+> `d40fdeddce9d7f95c377578304cc9946da568004d764e39e8757a601c291cdd6`,
+> 18 106 793 bytes, mtime `2024-11-20`).
+
+Both AJ199 and AK820 Max RGB installers share a near-identical
+PE structure:
+
+| Property           | AJ199 Setup                                                                                   | AK820 Max RGB Installer                   |
+| ------------------ | --------------------------------------------------------------------------------------------- | ----------------------------------------- |
+| Class              | PE32, i386, Windows GUI                                                                       | PE32, i386, Windows GUI                   |
+| Base address       | 0x00400000                                                                                    | 0x00400000                                |
+| Calling convention | cdecl                                                                                         | cdecl                                     |
+| Compiler / runtime | C (Borland-style; linker date 2009-08-15)                                                     | C (Borland-style; linker date 2018-06-14) |
+| DLL imports        | `oleaut32, advapi32, user32, kernel32, comctl32` (5 libs)                                     | identical 5 libs                          |
+| First imports      | `SysFreeString, SysReAllocStringLen, SysAllocStringLen` (Variant / BSTR APIs)                 | identical                                 |
+| Signed             | false                                                                                         | false                                     |
+| URLs in strings    | only `http://schemas.microsoft.com/SMI/2005/WindowsSettings` (Windows manifest XML namespace) | identical                                 |
+
+The **5-DLL profile + Variant-API-first imports + i386 + cdecl +
+unsigned** is the canonical fingerprint of a **Delphi-compiled
+installer wrapper** (Borland C++ Builder 6 / Delphi 7 era). Both
+binaries are built with the same toolchain. The "linker date
+2009/2018" is not a real build date — it is an artefact of the
+toolchain's stub timestamp, recently re-stamped at minimum.
+
+Implication: these are **installer wrappers, not the actual
+device-talking driver**. The real driver tool is embedded as a
+resource and extracted at install time. Without unpacking the
+resource (which crosses into vendor authorial content), this
+recon ends here. To go further, a Windows VM is needed:
+
+1. Run the installer in a sandboxed VM, observe what files it
+   drops to `C:\Program Files\AJAZZ\` (or similar).
+1. Static-analyse the dropped tools — their PE imports will
+   show whether they use `hid.dll` (Windows HID API),
+   `setupapi.dll`, `winusb.dll` (libusb-equivalent native), or a
+   custom kernel driver `.sys`.
+1. Capture USB transfers under `tshark + USBPcap` while the
+   driver tool is running.
+
+### Open questions surfaced by these findings
 
 - The bundle has a `Contents/PlugIns/` directory at the top level —
   standard `QPluginLoader` location. Are the per-device backends
