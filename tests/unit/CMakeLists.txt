@@ -15,6 +15,11 @@ add_executable(
     # need to factor it out of the app target.
     test_streamdock_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/streamdock_catalog_fetcher.cpp
+    # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
+    # link the source directly into this test binary without dragging the
+    # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
+    test_pi_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
 )
 
 # Set the AUTOMOC flag for the fetcher TU we pull in from the app target — StreamdockCatalogFetcher

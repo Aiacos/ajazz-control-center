@@ -299,14 +299,25 @@ ______________________________________________________________________
   - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
     over the plugin-host WebSocket. Depends on **Plugin process spawner**
     - **WebSocket protocol bridge** below.
-- [ ] **Property Inspector security hardening pass** — alongside M5:
-  install a `QWebEngineUrlRequestInterceptor` on the per-plugin profile
-  scoped to the PI directory; build the CDN allowlist (Phase 1:
-  `cdn.jsdelivr.net`, `unpkg.com` over https only); wire
-  `\$SD.openUrl(url)` through `QDesktopServices::openUrl` after
-  allowlist validation + a per-plugin first-call confirmation prompt.
-  Also: ship a minimal test PI HTML page in `resources/dev/pi/` so the
-  bridge can be exercised without a live plugin host.
+- [x] **Property Inspector security hardening pass** — shipped. New
+  `PIUrlRequestInterceptor` (`src/app/src/pi_url_request_interceptor.{hpp,cpp}`)
+  is installed on every per-plugin `QWebEngineProfile` at the moment
+  `loadInspector` constructs the profile, scoped to the PI directory
+  (parent of `htmlAbsPath`); the allow/deny policy lives in pure C++ at
+  `src/app/src/pi_url_policy.{hpp,cpp}` so it is unit-testable without
+  booting QtWebEngine. The decision tree allows file:// only inside the
+  PI dir (with traversal blocked via cleaned-path comparison), https://
+  only to the Phase 1 CDN allowlist (`cdn.jsdelivr.net`, `unpkg.com` —
+  pinned in a `static constexpr std::array` so it is grep-able), qrc /
+  blob / data for Qt-internals, and rejects http:// + every other scheme
+  with a logged `AJAZZ_LOG_WARN("plugin-pi", ...)`. `\$SD.openUrl(url)`
+  is now wired through `QDesktopServices::openUrl` after an https-only
+  validation (rejects `javascript:`, `file:`, `mailto:`, `http:`); the
+  per-plugin first-call confirmation prompt is flagged with
+  `// TODO(pi-prompt)` for the next pass. Manual smoke test page at
+  `resources/dev/pi/index.html`. 12 unit tests under
+  `tests/unit/test_pi_bridge.cpp` cover the load policy + the openUrl
+  policy. M5 plugin-host wiring remains the next milestone.
 - [x] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
   Material-styled, virtualized `GridView`, live search/filter, install /
   uninstall / enable-toggle per-plugin, side-sheet details pane). Mounted

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<!--
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  Developer aid: a minimal Property Inspector page that exercises the
+  $SD JS bridge end-to-end without needing a live plugin host. Not shipped
+  to end users, not branded, not designed — its only job is to make the
+  bridge testable manually.
+
+  Manual smoke test:
+
+    1. Run a debug build of ajazz-control-center.
+    2. From a debugger / a temporary patch, call:
+         propertyInspectorController->loadInspector(
+             QStringLiteral("dev.pi.smoketest"),
+             QStringLiteral("/abs/path/to/repo/resources/dev/pi/index.html"),
+             QStringLiteral("dev.pi.smoketest.action.test"),
+             QStringLiteral("dev-context-1234"));
+    3. Open the inspector pane; this page will load. The "log line" buttons
+       call the corresponding $SD method; "[host status]" reflects whether
+       the QWebChannel handshake completed.
+    4. Watch the host log for `pi-bridge` lines confirming the calls landed.
+
+  Allowed by the URL request interceptor because:
+   - this file is at file://<piDir>/index.html and the controller scopes
+     the interceptor to <piDir>;
+   - qrc:///qtwebchannel/qwebchannel.js is a Qt-internal scheme;
+   - no http:// / https:// resources are requested.
+
+  If you add a CDN script for testing, use https://cdn.jsdelivr.net/...
+  or https://unpkg.com/... — the only two hosts the Phase 1 allowlist
+  recognises (see kPiHttpsCdnAllowlist in src/app/src/pi_url_policy.hpp).
+-->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>PI Bridge smoke test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; padding: 16px; max-width: 720px; }
+    h1 { font-size: 1.1rem; margin: 0 0 12px; }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+    button { padding: 6px 12px; }
+    pre { background: #f4f4f6; padding: 8px; border-radius: 4px;
+          max-height: 240px; overflow: auto; font-size: 12px; }
+    .ok { color: #1a7f37; }
+    .pending { color: #b58900; }
+    .fail { color: #cf222e; }
+  </style>
+</head>
+<body>
+  <h1>Property Inspector bridge smoke test</h1>
+  <p>Host status: <span id="status" class="pending">[connecting…]</span></p>
+
+  <div class="row">
+    <button id="btn-set-settings">setSettings({foo: "bar"})</button>
+    <button id="btn-get-settings">getSettings</button>
+    <button id="btn-set-global">setGlobalSettings({n: 42})</button>
+    <button id="btn-get-global">getGlobalSettings</button>
+  </div>
+  <div class="row">
+    <button id="btn-send-plugin">sendToPlugin({hello: "world"})</button>
+    <button id="btn-set-title">setTitle("Hello", ctx, 0)</button>
+    <button id="btn-set-image">setImage(base64-png, ctx, 0)</button>
+  </div>
+  <div class="row">
+    <button id="btn-open-allowed">openUrl https://cdn.jsdelivr.net (allowed)</button>
+    <button id="btn-open-http">openUrl http://example.com (blocked)</button>
+    <button id="btn-open-js">openUrl javascript:alert(1) (blocked)</button>
+    <button id="btn-log">logMessage("hello from PI")</button>
+  </div>
+
+  <h2 style="font-size: 1rem;">Event log</h2>
+  <pre id="log"></pre>
+
+  <script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+  <script>
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const append = (line) => {
+      const ts = new Date().toISOString().slice(11, 23);
+      logEl.textContent += `[${ts}] ${line}\n`;
+      logEl.scrollTop = logEl.scrollHeight;
+    };
+
+    // The $SD bridge is registered by PropertyInspectorController via
+    // QWebChannel under that exact name. We resolve it before wiring any
+    // button handlers so a click before "[ready]" is a no-op rather than
+    // a TypeError.
+    let SD = null;
+
+    new QWebChannel(qt.webChannelTransport, (channel) => {
+      SD = channel.objects.$SD;
+      statusEl.textContent = '[ready]';
+      statusEl.className = 'ok';
+      append('QWebChannel ready; $SD object resolved.');
+
+      // Stream Deck SDK-2 contract: the host emits `connected` when the
+      // bridge is ready, with action info / app info envelopes. We wire
+      // the listener even though M3 stubs out the emitter — this is the
+      // shape PIs expect and the test page doubles as documentation of
+      // that shape.
+      if (SD.connected) {
+        SD.connected.connect((actionInfo, appInfo) => {
+          append(`connected actionInfo=${actionInfo} appInfo=${appInfo}`);
+        });
+      }
+      if (SD.didReceiveSettings) {
+        SD.didReceiveSettings.connect((json) => {
+          append(`didReceiveSettings ${json}`);
+        });
+      }
+      if (SD.didReceiveGlobalSettings) {
+        SD.didReceiveGlobalSettings.connect((json) => {
+          append(`didReceiveGlobalSettings ${json}`);
+        });
+      }
+      if (SD.sendToPropertyInspector) {
+        SD.sendToPropertyInspector.connect((json) => {
+          append(`sendToPropertyInspector ${json}`);
+        });
+      }
+    });
+
+    const guarded = (fn) => () => {
+      if (!SD) { append('** $SD not ready yet'); return; }
+      try { fn(); } catch (e) { append(`** error: ${e}`); }
+    };
+
+    document.getElementById('btn-set-settings').onclick = guarded(() => {
+      SD.setSettings(JSON.stringify({ foo: 'bar', n: Date.now() }));
+      append('setSettings sent');
+    });
+    document.getElementById('btn-get-settings').onclick = guarded(() => {
+      SD.getSettings();
+      append('getSettings sent (await didReceiveSettings)');
+    });
+    document.getElementById('btn-set-global').onclick = guarded(() => {
+      SD.setGlobalSettings(JSON.stringify({ n: 42 }));
+      append('setGlobalSettings sent');
+    });
+    document.getElementById('btn-get-global').onclick = guarded(() => {
+      SD.getGlobalSettings();
+      append('getGlobalSettings sent (await didReceiveGlobalSettings)');
+    });
+    document.getElementById('btn-send-plugin').onclick = guarded(() => {
+      SD.sendToPlugin(JSON.stringify({ hello: 'world' }));
+      append('sendToPlugin sent');
+    });
+    document.getElementById('btn-set-title').onclick = guarded(() => {
+      SD.setTitle('Hello', 'dev-context-1234', 0);
+      append('setTitle sent');
+    });
+    document.getElementById('btn-set-image').onclick = guarded(() => {
+      // 1×1 transparent PNG — small enough to keep the log readable.
+      const onePxPng = 'data:image/png;base64,' +
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkAAIAAAoAAv/lxKUAAAAASUVORK5CYII=';
+      SD.setImage(onePxPng, 'dev-context-1234', 0);
+      append('setImage sent');
+    });
+    document.getElementById('btn-open-allowed').onclick = guarded(() => {
+      SD.openUrl('https://cdn.jsdelivr.net/npm/lodash@4.17.21/package.json');
+      append('openUrl(https://cdn.jsdelivr.net/...) sent — should open browser');
+    });
+    document.getElementById('btn-open-http').onclick = guarded(() => {
+      SD.openUrl('http://example.com/');
+      append('openUrl(http://...) sent — host should refuse');
+    });
+    document.getElementById('btn-open-js').onclick = guarded(() => {
+      SD.openUrl('javascript:alert(1)');
+      append('openUrl(javascript:...) sent — host should refuse');
+    });
+    document.getElementById('btn-log').onclick = guarded(() => {
+      SD.logMessage('hello from PI smoke test ' + new Date().toISOString());
+      append('logMessage sent');
+    });
+  </script>
+</body>
+</html>

@@ -45,6 +45,7 @@ qt_add_executable(
     src/app_icon.cpp
     src/property_inspector_controller.cpp
     src/pi_bridge.cpp
+    src/pi_url_policy.cpp
     src/qt_executor.cpp
 )
 
@@ -204,6 +205,9 @@ if(AJAZZ_HAVE_WEBENGINE)
     # present. Adding it to the QML module list unconditionally would fail QML compilation on
     # minimal Qt installs, so we attach it via qt_target_qml_sources only on the WebEngine path.
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/PIWebView.qml)
+    # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
+    # inside it), so it only compiles when WebEngine is present.
+    target_sources(ajazz-control-center PRIVATE src/pi_url_request_interceptor.cpp)
 endif()
 
 # ----------------------------------------------------------------------------

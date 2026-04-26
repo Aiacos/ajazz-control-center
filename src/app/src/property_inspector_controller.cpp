@@ -31,7 +31,9 @@
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include "pi_bridge.hpp"
+#include "pi_url_request_interceptor.hpp"
 
+#include <QFileInfo>
 #include <QHash>
 #include <QUrl>
 #include <QWebChannel>
@@ -68,6 +70,14 @@ namespace ajazz::app {
  */
 struct PropertyInspectorController::WebEngineImpl {
     QHash<QString, QWebEngineProfile*> profilesByPluginUuid;
+
+    /// One URL request interceptor per profile, parented to the profile
+    /// (so it dies with the profile). Same key as @c profilesByPluginUuid.
+    /// We keep a parallel map so the controller can call @c setPiDir()
+    /// when a subsequent loadInspector for the same plugin lands a PI in
+    /// a different bundle subdirectory.
+    QHash<QString, PIUrlRequestInterceptor*> interceptorsByPluginUuid;
+
     QWebEnginePage* activePage = nullptr;
 
     /// QWebChannel installed on @c activePage. Re-created per page so each
@@ -131,12 +141,29 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     // UUID as the storage key isolates each plugin's cookies / cache /
     // localStorage and lets the host wipe them when the plugin uninstalls.
     auto*& profile = webEngine_->profilesByPluginUuid[pluginUuid];
+    bool freshProfile = false;
     if (profile == nullptr) {
         // Off-the-record == no on-disk persistence. M4 will switch this
         // to a named profile rooted at QStandardPaths::CacheLocation /
         // plugins/<uuid>/ once the persistence layer lands.
         profile = new QWebEngineProfile(pluginUuid, this);
         profile->setHttpUserAgent(QStringLiteral("AjazzControlCenter PropertyInspector/1.0"));
+        freshProfile = true;
+    }
+
+    // URL request interceptor — security baseline. Scoped to the parent
+    // directory of the PI HTML file so any file:// resource under the same
+    // bundle dir is allowed; anything else (file:// elsewhere, http://,
+    // unallow-listed https://, exotic schemes) is blocked at the network
+    // layer before Chrome can even fetch it. See `pi_url_policy.hpp` for
+    // the full decision tree and the CDN allowlist.
+    QString const piDir = QFileInfo{htmlAbsPath}.absolutePath();
+    auto*& interceptor = webEngine_->interceptorsByPluginUuid[pluginUuid];
+    if (freshProfile || interceptor == nullptr) {
+        interceptor = new PIUrlRequestInterceptor(pluginUuid, piDir, profile);
+        profile->setUrlRequestInterceptor(interceptor);
+    } else {
+        interceptor->setPiDir(piDir);
     }
 
     // Tear down the previous page (if any) before creating a new one so
@@ -150,8 +177,11 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
 
     auto* page = new QWebEnginePage(profile, this);
 
-    // Security baseline (M2). Tighter scoping — URL request interceptor
-    // bound to the PI directory, CDN allowlist — lands alongside M5.
+    // Security baseline (M2 + security-hardening pass). Conservative
+    // QWebEngineSettings flags here; the URL request interceptor wired to
+    // the per-plugin profile above (`PIUrlRequestInterceptor`) bounds
+    // file:// to the PI directory and gates https:// against the CDN
+    // allowlist.
     auto* settings = page->settings();
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
     settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, false);

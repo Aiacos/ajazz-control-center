@@ -24,9 +24,11 @@
 #include "pi_bridge.hpp"
 
 #include "ajazz/core/logger.hpp"
+#include "pi_url_policy.hpp"
 #include "property_inspector_controller.hpp"
 
 #include <QByteArray>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -34,6 +36,7 @@
 #include <QJsonParseError>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QUrl>
 
 #include <utility>
 
@@ -352,16 +355,64 @@ void PIBridge::setImage(QString const& imageData, QString const& context, int ta
 }
 
 void PIBridge::openUrl(QString const& url) {
-    AJAZZ_LOG_INFO("pi-bridge", "openUrl (deferred to security pass): {}", url.toStdString());
-    // Deliberately not invoking QDesktopServices::openUrl yet — landing it
-    // unguarded would let any plugin shell out to the user's browser
-    // unprompted. The security pass alongside M5 adds a host-side
-    // allowlist check + a per-plugin confirmation prompt the first time
-    // a PI calls openUrl().
+    // Audit log: every plugin-initiated browser open is recorded at INFO
+    // with the plugin UUID + URL so a security review can attribute spam.
+    AJAZZ_LOG_INFO(
+        "pi-bridge", "openUrl: plugin={} url='{}'", pluginUuid_.toStdString(), url.toStdString());
+
+    UrlDecision const decision = isOpenUrlAllowed(url);
+    if (decision != UrlDecision::Allow) {
+        char const* reason = "unknown";
+        switch (decision) {
+        case UrlDecision::DenyHttpRejected:
+            reason = "http-rejected";
+            break;
+        case UrlDecision::DenySchemeBlocked:
+            reason = "scheme-blocked";
+            break;
+        case UrlDecision::DenyMalformed:
+            reason = "malformed";
+            break;
+        case UrlDecision::DenyFileOutsidePiDir:
+        case UrlDecision::DenyHttpsNotAllowlist:
+        case UrlDecision::Allow:
+            // openUrl uses isOpenUrlAllowed which only emits the three
+            // deny variants above; the others would indicate a logic bug.
+            reason = "policy-mismatch";
+            break;
+        }
+        AJAZZ_LOG_WARN("pi-bridge",
+                       "openUrl: refused plugin={} url='{}' reason={}",
+                       pluginUuid_.toStdString(),
+                       url.toStdString(),
+                       reason);
+        return;
+    }
+
+    // TODO(pi-prompt): the next step in the security TODO is a per-plugin
+    // first-call confirmation prompt before handing the URL to the user's
+    // browser. Today we trust the https-only check + the audit log; once
+    // the prompt UI lands, this is where it slots in (await user OK before
+    // the QDesktopServices::openUrl call, remember per-plugin choice).
+    QUrl const parsed{url, QUrl::StrictMode};
+    if (!QDesktopServices::openUrl(parsed)) {
+        AJAZZ_LOG_WARN("pi-bridge",
+                       "openUrl: QDesktopServices declined plugin={} url='{}'",
+                       pluginUuid_.toStdString(),
+                       url.toStdString());
+    }
 }
 
 void PIBridge::logMessage(QString const& message) {
-    AJAZZ_LOG_INFO("pi-bridge[{}]", "{}", contextUuid_.toStdString(), message.toStdString());
+    // Plugin-authored log line. Routed through the PI bridge module name so
+    // ops can grep for plugin-side noise; the plugin UUID + context UUID
+    // are part of the formatted message so multiple plugins don't get
+    // confused in shared logs.
+    AJAZZ_LOG_INFO("pi-bridge",
+                   "plugin-log plugin={} context={}: {}",
+                   pluginUuid_.toStdString(),
+                   contextUuid_.toStdString(),
+                   message.toStdString());
 }
 
 } // namespace ajazz::app
