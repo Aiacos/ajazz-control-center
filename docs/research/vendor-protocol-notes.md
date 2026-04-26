@@ -33,10 +33,108 @@ captures of the AJAZZ first-party desktop apps. **Read
 [`docs/research/README.md`](README.md) before contributing** — there
 are hard clean-room and capture-vaulting rules.
 
-> **Status — 2026-04-26**: scaffold only. No captures landed yet.
-> The methodology section is canonical; sections per device family
-> below are placeholders that recon engineers should fill as they
-> close captures.
+> **Status — 2026-04-26**: scaffold + first static-analysis finding
+> on the Stream Dock AJAZZ Mac bundle (see "Vendor app architecture"
+> below). No USB / WebSocket runtime captures yet. The methodology
+> section is canonical; per-device-family sections remain
+> placeholders until those runtime captures land.
+
+## Vendor app architecture — Qt 6 (static-analysis finding)
+
+> **Capture id**: `static-2026-04-26-streamdock-mac-001`. Method:
+> downloaded the `Stream Dock-AJAZZ-Installer_Mac_global.dmg`
+> (sha256 `5e543caa98218187c7022516fda272ea05ef1f3a36b2e82ecefe045b7feeaef9`,
+> md5 `dcbd35d954547369c6e6e530eef88dd3`, 282 152 918 bytes,
+> Last-Modified `2024-02-01`) into ephemeral `/tmp/` storage on the
+> Linux recon host, listed the DMG's top-level bundle layout with
+> `7zz l`, recorded the framework names visible in the listing,
+> hashed the source file, then deleted both the DMG and its working
+> copy. **No application binaries were extracted, run, or
+> decompiled** — only filesystem-level packaging metadata was read.
+
+### Finding 1 — the Stream Dock app is a Qt 6 application
+
+The macOS bundle layout shows 25 Qt frameworks under
+`Stream Dock AJAZZ.app/Contents/Frameworks/`:
+
+```
+QtConcurrent QtCore QtCore5Compat QtDBus QtGui QtMultimedia
+QtMultimediaWidgets QtNetwork QtOpenGL QtPdf QtPositioning
+QtPrintSupport QtQml QtQmlModels QtQuick QtQuickWidgets
+QtSerialPort QtSvg QtVirtualKeyboard QtWebChannel QtWebEngineCore
+QtWebEngineWidgets QtWebSockets QtWidgets QtXml
+```
+
+This is an architectural confirmation, not a guess. Implications
+for our parity strategy:
+
+1. **Same toolkit family**: AJAZZ Control Center's Qt 6 / QML stack
+   is structurally aligned with the vendor's. We are not wrapping
+   a foreign technology, we are building an open-source
+   alternative on the same toolkit. The two implementations should
+   converge naturally on plug-points like `QWebChannel` for
+   Property Inspectors.
+1. **`QtWebChannel` + `QtWebEngineCore` + `QtWebEngineWidgets`**
+   confirm the vendor app embeds HTML Property Inspector pages
+   over the **exact same `$SD` / `QWebChannel` mechanism** we just
+   shipped in `pi_bridge.cpp` (M1–M4). A plugin's PI HTML page
+   that targets the vendor app should run in our embedding
+   unmodified, modulo the host-side method surface.
+1. **`QtWebSockets`** — the plugin host wire protocol is over a
+   `QWebSocketServer` (or client; either direction). This validates
+   the design in `docs/architecture/PLUGIN-SDK.md` ("line-delimited
+   JSON over WebSocket" is the right abstraction; the underlying
+   transport is what the vendor uses).
+1. **`QtSerialPort`** — surprise dependency. Possible roles:
+   firmware-update flow that reboots a device into USB-CDC
+   bootloader mode (common pattern for STM32 / ESP32-class MCUs
+   that AJAZZ uses), or non-HID device subclasses. Our codebase
+   does NOT link `QtSerialPort` today; this is a parity gap. Track
+   when the firmware-update recon (`vendor-techniques.md` § 2)
+   captures a CDC handoff.
+1. **`QtMultimedia` + `QtMultimediaWidgets`** — audio/video. Likely
+   used for "play sound" actions, audio-level mapping (the AKP153
+   user-manual mentions "map audio levels per button"), or video
+   thumbnail previews in the action-picker UI. We have neither;
+   this is a feature gap.
+1. **`QtPdf`** — PDF rendering. Lower priority but could be: in-
+   app help / changelog, or PDF export of profiles. Confirm
+   purpose via runtime capture before duplicating.
+1. **`QtVirtualKeyboard`** — embedded-grade soft keyboard. Probably
+   bundled by `macdeployqt` defaults rather than actively used,
+   but worth confirming.
+1. **`QtCore5Compat`** — the codebase migrated from Qt 5 to Qt 6
+   without dropping its Qt 5 idioms. Tells us nothing about
+   protocol design but explains some style choices the recon may
+   surface later.
+
+### Finding 2 — bundle build dates suggest Qt 6.4.x / 6.5.x
+
+Most framework binaries inside the bundle carry `mtime 2023-03-11` to `2023-03-12`, which lines up with the Qt 6.4.2
+(2023-01) → 6.5.0 (2023-04) release window. The app shell itself
+was rebuilt `2024-02-01` (matching the Last-Modified on the DMG).
+Confirms the build is recent enough to assume a modern Qt 6 plug-
+point set is available in the vendor app.
+
+### Open questions surfaced by this finding
+
+- The bundle has a `Contents/PlugIns/` directory at the top level —
+  standard `QPluginLoader` location. Are the per-device backends
+  (AKP153, AKP03, AKP05, …) shipped as Qt plugins inside this
+  folder? If yes, their file names alone (without internals) will
+  enumerate the device-family coverage at the binary layer. **Do
+  NOT extract** the plugin internals; only enumerate the file names
+  in a future capture.
+- Mass of `Resources/` and `Frameworks/` is ~580 MB for a 282 MB
+  installer → roughly 2× compression. Worth comparing against the
+  Mirabox-branded build size (when its URL is recovered) to see
+  whether the AJAZZ rebrand is a visual skin or a separate fork.
+- The Windows installer (`PE32 executable for MS Windows 5.00 (GUI), Intel i386, 9 sections`, 32-bit) is **not** an NSIS or
+  InnoSetup wrapper (`7zz l` cannot list it). Probably a custom
+  installer compiled from MFC or similar — common for Chinese OEM
+  driver shipping. Out of scope for this recon pass; needs an
+  expanded analysis on a disposable Windows VM, with the explicit
+  cleanup recorded per the methodology table above.
 
 ## Methodology
 

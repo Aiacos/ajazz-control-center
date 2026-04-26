@@ -86,6 +86,27 @@ re-typed vendor source.
 | Battery level + charging status                        | ✅                          | ❌ missing                                               | —                                                 |
 | Firmware update                                        | ✅                          | ❌ missing                                               | —                                                 |
 
+## Vendor-app Qt module dependencies (architectural parity)
+
+Surfaced by the static-analysis pass on the Stream Dock AJAZZ Mac
+bundle (`static-2026-04-26-streamdock-mac-001` in
+[`vendor-protocol-notes.md`](vendor-protocol-notes.md)). Each row
+is a Qt module the vendor links that we either also link, or do
+NOT link — making the row a parity gap.
+
+| Qt module                                                                                         | Vendor links | We link                              | Implication                                                                                                                                                             |
+| ------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `QtCore`, `QtGui`, `QtWidgets`, `QtNetwork`, `QtQml`, `QtQuick`, `QtSvg`, `QtConcurrent`, `QtXml` | ✅           | ✅                                   | Aligned — same baseline.                                                                                                                                                |
+| `QtWebEngineCore`, `QtWebEngineWidgets`, `QtWebChannel`                                           | ✅           | ✅ (gated by `AJAZZ_HAVE_WEBENGINE`) | The vendor uses the same Property Inspector embedding mechanism we ship in M1-M4. PI HTML pages should run in our embedding modulo the host-side method surface.        |
+| `QtWebSockets`                                                                                    | ✅           | ❌ — pending plugin host wire        | Validates the design in `docs/architecture/PLUGIN-SDK.md`. Wire up alongside the Plugin process spawner / WebSocket bridge milestones in TODO.md.                       |
+| `QtSerialPort`                                                                                    | ✅           | ❌                                   | New gap. Most likely a USB-CDC bootloader handoff for firmware update. Track as a recon target for the firmware-update flow (`vendor-techniques.md` § 2).               |
+| `QtMultimedia`, `QtMultimediaWidgets`                                                             | ✅           | ❌                                   | New gap. Likely "play sound" actions and / or audio-level mapping (the AKP153 manual mentions per-button audio levels). Feeds the action-engine action-kind backlog.    |
+| `QtPdf`                                                                                           | ✅           | ❌                                   | Lower priority. Possibly in-app help / changelog rendering or PDF profile export. Confirm via runtime capture before duplicating.                                       |
+| `QtVirtualKeyboard`                                                                               | ✅           | ❌                                   | Probably bundled by `macdeployqt` defaults, not actively used. Confirm by searching the vendor app's Resources for QML on-screen keyboard usage in a future recon pass. |
+| `QtPrintSupport`                                                                                  | ✅           | ❌                                   | Probably print-to-paper export of profile sheets. Niche feature, not blocking.                                                                                          |
+| `QtCore5Compat`                                                                                   | ✅           | ❌                                   | Indicates the vendor codebase migrated from Qt 5 → Qt 6 without dropping the compat module. No protocol implication; we are Qt-6-native and should stay there.          |
+| `QtPositioning`, `QtOpenGL`, `QtDBus`, `QtQmlModels`, `QtQuickWidgets`                            | ✅           | ⚪ partial / framework-default       | Likely auto-bundled by `macdeployqt` rather than actively used. No action needed.                                                                                       |
+
 ## Cross-cutting infrastructure
 
 | Capability                                       | Vendor (claimed)                                          | Our status                                                                                                                        | Tracking                                             |
