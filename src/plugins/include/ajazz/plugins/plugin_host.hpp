@@ -15,27 +15,15 @@
  */
 #pragma once
 
-#include "ajazz/core/profile.hpp"
+#include "ajazz/plugins/i_plugin_host.hpp" // PluginInfo + IPluginHost
 
+#include <cstddef>
 #include <filesystem>
 #include <memory>
-#include <string>
+#include <string_view>
 #include <vector>
 
 namespace ajazz::plugins {
-
-/**
- * @brief Metadata snapshot for a loaded plugin.
- *
- * All fields are read from the plugin object's Python attributes at load time.
- */
-struct PluginInfo {
-    std::string id;      ///< Reverse-domain plugin identifier, e.g. @c "com.example.obs".
-    std::string name;    ///< Human-readable display name.
-    std::string version; ///< Semantic version string (e.g. @c "1.2.0").
-    std::string authors; ///< Author list (free-form string).
-    std::vector<std::string> actionIds; ///< Action ids exposed by the plugin.
-};
 
 /**
  * @brief Host that manages the embedded Python interpreter and loaded plugins.
@@ -43,11 +31,15 @@ struct PluginInfo {
  * Only one PluginHost may exist per process (pybind11 restriction: a single
  * scoped_interpreter per process).  The host is non-copyable and non-movable.
  *
+ * Implements @ref IPluginHost (audit finding A4 slice 2.5) so callers can
+ * be written against the abstraction and switch to
+ * @ref OutOfProcessPluginHost without code changes once slice 3 lands.
+ *
  * @note All public methods acquire an internal mutex; they may be called from
  *       any thread, but avoid calling dispatch() from a high-frequency path
  *       as it blocks on Python execution.
  */
-class PluginHost {
+class PluginHost final : public IPluginHost {
 public:
     /**
      * @brief Construct the host and start the embedded Python interpreter.
@@ -58,28 +50,28 @@ public:
     PluginHost();
 
     /// Destroy the host and shut down the interpreter.
-    ~PluginHost();
+    ~PluginHost() override;
 
-    PluginHost(PluginHost const&) = delete;
-    PluginHost& operator=(PluginHost const&) = delete;
-    PluginHost(PluginHost&&) = delete;
-    PluginHost& operator=(PluginHost&&) = delete;
+    void addSearchPath(std::filesystem::path const& path) override;
 
-    /// Add a directory to scan for plugin packages. Each sub-directory
-    /// containing `plugin.py` is loaded as a package.
-    void addSearchPath(std::filesystem::path path);
+    /// Discover and load all plugins found on the search paths. Returns
+    /// the count of plugins newly loaded by this call (excludes those
+    /// already loaded by a previous call); already-loaded plugins are
+    /// updated in place via the host's `insert_or_assign` semantics.
+    std::size_t loadAll() override;
 
-    /// Discover and load all plugins found on the search paths. Safe to
-    /// call more than once; already-loaded plugins are skipped.
-    void loadAll();
-
-    /// List currently loaded plugins.
-    [[nodiscard]] std::vector<PluginInfo> plugins() const;
+    /// List currently loaded plugins. Non-const to satisfy
+    /// @ref IPluginHost (the OOP backend roundtrips to fetch live).
+    [[nodiscard]] std::vector<PluginInfo> plugins() override;
 
     /// Dispatch an action to the owning plugin. Blocks until the plugin
     /// returns (plugins should keep their handlers short and delegate
-    /// long work to Python threads).
-    void dispatch(core::Action const& action);
+    /// long work to Python threads). Returns `false` on a soft failure
+    /// (unknown plugin id, unknown action id, handler raised), `true`
+    /// on success; throws @c std::runtime_error only on hard failures.
+    bool dispatch(std::string_view pluginId,
+                  std::string_view actionId,
+                  std::string_view settingsJson) override;
 
 private:
     struct Impl;

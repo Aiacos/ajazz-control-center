@@ -76,7 +76,7 @@ TEST_CASE("OOP plugin host: spawn -> list -> shutdown round-trip", "[plugins][oo
     REQUIRE(host.isAlive());
     REQUIRE(host.childPid() > 0);
 
-    auto const inventory = host.listPlugins();
+    auto const inventory = host.plugins();
     REQUIRE(inventory.empty()); // slice 1: child never loads any plugin
 
     // Destructor sends `shutdown`, waits for clean exit. We let scope
@@ -103,7 +103,7 @@ TEST_CASE("OOP plugin host: crash in child does not crash host", "[plugins][oop]
     // not crash the process. This is the actual safety claim — pre-A4
     // a segfault in pybind11's interpreter would have brought the
     // whole AJAZZ Control Center process down.
-    REQUIRE_THROWS_AS(host.listPlugins(), std::runtime_error);
+    REQUIRE_THROWS_AS(host.plugins(), std::runtime_error);
 }
 
 TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover the hello example",
@@ -127,7 +127,7 @@ TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover t
     // be present in the inventory, not exclusivity.
     REQUIRE(loadedNow >= 1);
 
-    auto const inventory = host.listPlugins();
+    auto const inventory = host.plugins();
     auto const hello =
         std::find_if(inventory.begin(), inventory.end(), [](ajazz::plugins::PluginInfo const& p) {
             return p.id == "com.example.hello";
@@ -172,6 +172,31 @@ TEST_CASE("OOP plugin host: bad child script path is rejected at construction", 
     cfg.readyTimeout = std::chrono::milliseconds{1500}; // bound the wait
 
     REQUIRE_THROWS_AS(ajazz::plugins::OutOfProcessPluginHost{cfg}, std::runtime_error);
+}
+
+TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost pointer",
+          "[plugins][oop][interface][!mayfail]") {
+    if (!python3Available()) {
+        SKIP("python3 not on PATH; skipping IPluginHost contract test");
+    }
+
+    // Audit finding A4 slice 2.5: both PluginHost (legacy in-process)
+    // and OutOfProcessPluginHost implement IPluginHost. We can only
+    // exercise the OOP backend in this test binary (the in-process
+    // backend pulls pybind11 + Python3 link deps that ajazz_unit_tests
+    // intentionally avoids), but driving the OOP host through a base-
+    // class pointer proves the contract is honoured by virtual
+    // dispatch — a method I forgot to mark `override` would simply
+    // break this test.
+    ajazz::plugins::OutOfProcessPluginHost concrete{makeConfig()};
+    ajazz::plugins::IPluginHost& host = concrete;
+
+    REQUIRE_NOTHROW(host.addSearchPath(repoRoot() / "python" / "ajazz_plugins" / "examples"));
+    REQUIRE(host.loadAll() >= 1);
+    auto const inventory = host.plugins();
+    REQUIRE_FALSE(inventory.empty());
+    REQUIRE(host.dispatch("com.example.hello", "say-hi", "{}"));
+    REQUIRE_FALSE(host.dispatch("does.not.exist", "noop", "{}"));
 }
 
 #endif // !_WIN32

@@ -214,7 +214,7 @@ ______________________________________________________________________
   serialise on a write-only mutex; readers don't take a mutex.
   Existing 4/4 EventBus tests still pass under TSan.
 
-- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 shipped this
+- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 shipped this
   cycle. POSIX `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
@@ -233,11 +233,21 @@ ______________________________________________________________________
   object per line (no nested arrays), so the host's mini-parser
   stays adequate without an extra JSON dep.
 
-  Slice 2.5 (follow-up): introduce an `IPluginHost` interface and
-  retrofit both `PluginHost` (legacy, in-process) and
-  `OutOfProcessPluginHost` to implement it; migrate any future
-  callers (currently zero) to the interface so the in-process host
-  can be deleted in slice 3.
+  Slice 2.5 (this cycle): the `IPluginHost` abstract base in
+  `src/plugins/include/ajazz/plugins/i_plugin_host.hpp` is now the
+  shared contract — `addSearchPath`, `loadAll`, `plugins`, `dispatch`
+  with the richer signatures (counts, `bool` returns) — and both
+  `PluginHost` (`final : public IPluginHost`) and
+  `OutOfProcessPluginHost` (`final : public IPluginHost`)
+  implement it via virtual dispatch. The in-process `PluginHost`'s
+  `dispatch` was migrated from `(core::Action const&)` to the
+  unified `(plugin_id, action_id, settings_json)` shape — it returns
+  `bool` now too. A new test case
+  (`OOP plugin host: drives the full lifecycle through an IPluginHost pointer`)
+  exercises the OOP backend through an `IPluginHost&` reference and
+  proves virtual dispatch works end-to-end. Future callers can hold
+  a `std::unique_ptr<IPluginHost>` slot and switch backends with no
+  source-level changes.
 
   Slice 3 (security PR): Windows port (`_spawnvp` + anonymous
   pipes) and per-OS sandboxing — `bwrap --unshare-all --bind-ro` on

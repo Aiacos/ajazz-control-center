@@ -21,7 +21,7 @@
  *
  * Each line is a single-line JSON object terminated by a newline.
  * Slice 2 adds `add_search_path`, `load_all` and `dispatch`. Until
- * then `listPlugins()` returns an empty vector — the foundation does
+ * then `plugins()` returns an empty vector — the foundation does
  * NOT load any plugin code; its sole job is to prove the IPC channel
  * works and crashes are isolated.
  *
@@ -471,7 +471,7 @@ int OutOfProcessPluginHost::childPid() const noexcept {
     return m_impl ? m_impl->pid : -1;
 }
 
-std::vector<PluginInfo> OutOfProcessPluginHost::listPlugins() {
+std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
     if (!m_impl) {
         throw std::runtime_error("OutOfProcessPluginHost: moved-from instance");
     }

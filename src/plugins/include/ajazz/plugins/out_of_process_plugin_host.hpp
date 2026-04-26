@@ -37,12 +37,14 @@
 
 #ifndef _WIN32
 
-#include "ajazz/plugins/plugin_host.hpp"
+#include "ajazz/plugins/i_plugin_host.hpp"
 
 #include <chrono>
+#include <cstddef>
 #include <filesystem>
 #include <memory>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ajazz::plugins {
@@ -94,7 +96,7 @@ struct OutOfProcessHostConfig {
  * internal mutex and may be called concurrently, but they serialise
  * on the IPC channel — calls do not pipeline.
  */
-class OutOfProcessPluginHost {
+class OutOfProcessPluginHost final : public IPluginHost {
 public:
     /// Spawn the child and run the ready handshake. Throws
     /// `std::runtime_error` if the child fails to spawn, dies before
@@ -105,12 +107,7 @@ public:
     /// Send `shutdown` to the child, wait up to
     /// `config.shutdownTimeout` for clean exit, then SIGKILL if still
     /// alive. Always succeeds (best-effort cleanup).
-    ~OutOfProcessPluginHost();
-
-    OutOfProcessPluginHost(OutOfProcessPluginHost const&) = delete;
-    OutOfProcessPluginHost& operator=(OutOfProcessPluginHost const&) = delete;
-    OutOfProcessPluginHost(OutOfProcessPluginHost&&) = delete;
-    OutOfProcessPluginHost& operator=(OutOfProcessPluginHost&&) = delete;
+    ~OutOfProcessPluginHost() override;
 
     /// True if the child process is still running. False after a
     /// `shutdown` round-trip, or if the child crashed / exited on its
@@ -129,14 +126,14 @@ public:
     /// first @ref loadAll call.
     ///
     /// Throws `std::runtime_error` if the child has died or the IPC
-    /// times out.
-    [[nodiscard]] std::vector<PluginInfo> listPlugins();
+    /// times out. Implements @ref IPluginHost::plugins.
+    [[nodiscard]] std::vector<PluginInfo> plugins() override;
 
     /// Add a directory the child will scan on the next @ref loadAll.
     /// The path is resolved on the child side via
     /// `pathlib.Path.resolve()`, so symlinks / `..` segments are
     /// flattened before any import happens. Idempotent.
-    void addSearchPath(std::filesystem::path const& path);
+    void addSearchPath(std::filesystem::path const& path) override;
 
     /// Trigger a fresh import sweep in the child. The child re-scans
     /// every search path added via @ref addSearchPath, imports each
@@ -147,8 +144,8 @@ public:
     ///
     /// Returns the count of plugins successfully loaded by this call
     /// (does not include those already loaded from a previous call).
-    /// The full inventory is available via @ref listPlugins.
-    std::size_t loadAll();
+    /// The full inventory is available via @ref plugins.
+    std::size_t loadAll() override;
 
     /// Dispatch an action to the owning plugin. Mirrors
     /// @ref PluginHost::dispatch but the call runs in the child
@@ -161,13 +158,14 @@ public:
     /// or action id is unknown to the child. Throws
     /// `std::runtime_error` only on hard IPC failures (child died,
     /// pipe broken).
-    bool
-    dispatch(std::string_view pluginId, std::string_view actionId, std::string_view settingsJson);
+    bool dispatch(std::string_view pluginId,
+                  std::string_view actionId,
+                  std::string_view settingsJson) override;
 
     /// Trigger a deliberate crash inside the child. **Test-only entry
     /// point**: shipped in slice 1 to prove the crash-isolation
     /// claim — calling this kills the child but the host remains
-    /// usable (the next `listPlugins()` returns an error, instead
+    /// usable (the next `plugins()` returns an error, instead
     /// of the whole AJAZZ Control Center process going down).
     ///
     /// Returns `true` if the child has been observed dead after the

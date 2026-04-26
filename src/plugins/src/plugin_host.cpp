@@ -54,9 +54,9 @@ PluginHost::PluginHost() : m_impl(std::make_unique<Impl>()) {
 
 PluginHost::~PluginHost() = default;
 
-void PluginHost::addSearchPath(std::filesystem::path path) {
+void PluginHost::addSearchPath(std::filesystem::path const& path) {
     std::lock_guard const lock(m_impl->mutex);
-    m_impl->searchPaths.push_back(std::move(path));
+    m_impl->searchPaths.push_back(path);
 }
 
 namespace {
@@ -121,7 +121,7 @@ bool shadowsStdlib(std::string_view name) {
 
 } // namespace
 
-void PluginHost::loadAll() {
+std::size_t PluginHost::loadAll() {
     // Mutex hygiene (COD-004/005): hold the host mutex only for state copies.
     // The Python interpreter and the filesystem are slow and can call back
     // into PluginHost (plugins are users of the same library), so we must
@@ -212,14 +212,22 @@ void PluginHost::loadAll() {
     }
 
     // Register all newly loaded plugins under the lock. This is fast:
-    // it's only py::object refcount bumps, no Python execution.
+    // it's only py::object refcount bumps, no Python execution. The
+    // count of *newly loaded* plugins is what we report — replacing
+    // an already-loaded plugin (insert_or_assign on a present key) is
+    // not a new load.
     std::lock_guard const lock(m_impl->mutex);
+    std::size_t newlyLoaded = 0;
     for (auto& [id, instance] : loaded) {
-        m_impl->plugins.insert_or_assign(id, std::move(instance));
+        auto const [_, inserted] = m_impl->plugins.insert_or_assign(id, std::move(instance));
+        if (inserted) {
+            ++newlyLoaded;
+        }
     }
+    return newlyLoaded;
 }
 
-std::vector<PluginInfo> PluginHost::plugins() const {
+std::vector<PluginInfo> PluginHost::plugins() {
     // Snapshot the registered py::objects under both the host lock AND the
     // GIL: copying py::object increments a Python refcount, which requires
     // the GIL. We then drop the host lock and continue under the GIL only
@@ -249,35 +257,31 @@ std::vector<PluginInfo> PluginHost::plugins() const {
     return out;
 }
 
-void PluginHost::dispatch(core::Action const& action) {
-    auto const dot = action.id.find('.');
-    if (dot == std::string::npos) {
-        AJAZZ_LOG_WARN("plugins", "invalid action id: {}", action.id);
-        return;
-    }
-    auto const pluginId = action.id.substr(0, dot);
-    auto const actionId = action.id.substr(dot + 1);
-
+bool PluginHost::dispatch(std::string_view pluginId,
+                          std::string_view actionId,
+                          std::string_view settingsJson) {
     // COD-004: resolve the target Python object under the host lock, then
     // release it before calling into Python so plugins cannot deadlock the
     // host by re-entering plugin APIs.
     py::object instance;
     {
         std::lock_guard const lock(m_impl->mutex);
-        auto const it = m_impl->plugins.find(pluginId);
+        auto const it = m_impl->plugins.find(std::string{pluginId});
         if (it == m_impl->plugins.end()) {
             AJAZZ_LOG_WARN("plugins", "unknown plugin: {}", pluginId);
-            return;
+            return false;
         }
         instance = it->second; // py::object is refcounted, copy under lock
     }
 
     py::gil_scoped_acquire gil;
     try {
-        instance.attr("dispatch")(actionId, action.settingsJson);
+        instance.attr("dispatch")(std::string{actionId}, std::string{settingsJson});
     } catch (std::exception const& e) {
-        AJAZZ_LOG_ERROR("plugins", "dispatch {}: {}", action.id, e.what());
+        AJAZZ_LOG_ERROR("plugins", "dispatch {}.{}: {}", pluginId, actionId, e.what());
+        return false;
     }
+    return true;
 }
 
 } // namespace ajazz::plugins
