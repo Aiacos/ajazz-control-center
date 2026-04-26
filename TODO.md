@@ -214,8 +214,8 @@ ______________________________________________________________________
   serialise on a write-only mutex; readers don't take a mutex.
   Existing 4/4 EventBus tests still pass under TSan.
 
-- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a shipped
-  this cycle. POSIX `OutOfProcessPluginHost`
+- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
+  (Linux) shipped this cycle. POSIX `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
   to it over line-delimited JSON on a pair of pipes. The child
@@ -261,11 +261,29 @@ ______________________________________________________________________
   `["notifications"]`. No enforcement yet — slice 3b adds the
   per-OS sandbox that consumes this list.
 
-  Slice 3b (security PR): Windows port (`_spawnvp` + anonymous
-  pipes) and per-OS sandboxing — `bwrap --unshare-all --bind-ro` on
-  Linux, `sandbox-exec` on macOS, AppContainer + restricted token
-  on Windows — driven by the `permissions` list from slice 3a, plus
-  removal of the in-process `PluginHost` once every caller has migrated.
+  Slice 3b — Linux (this cycle): `Sandbox` ABC at
+  `src/plugins/include/ajazz/plugins/sandbox.hpp` plus
+  `LinuxBwrapSandbox` (`linux_bwrap_sandbox.{hpp,cpp}`) wrap the
+  child invocation in `bwrap(1)` with a default-deny profile —
+  `--ro-bind / /` + `--tmpfs /tmp` + fresh `--proc`/`--dev` + the
+  full unshare set (pid/ipc/uts/cgroup-try/net) +
+  `--die-with-parent`/`--new-session`. Permission-driven
+  relaxations: granting any of `obs-websocket`/`spotify`/`discord-rpc`
+  drops `--unshare-net`; granting any of
+  `notifications`/`media-control`/`system-power` bind-mounts the
+  user session DBus socket (`$XDG_RUNTIME_DIR/bus`) when present.
+  `OutOfProcessHostConfig` grew a `unique_ptr<Sandbox> sandbox`
+  field (null defaults to `NoOpSandbox`, preserving prior
+  behaviour). Falls back to passthrough when `bwrap` is missing
+  from `PATH` so minimal containers / non-bubblewrap distros stay
+  functional. 5 unit tests + 1 end-to-end "spawn through
+  LinuxBwrapSandbox round-trips" cover the decoration logic and
+  prove the actual sandboxed child completes ready / load_all /
+  dispatch under the most-restrictive profile.
+
+  Slice 3c (next): macOS `sandbox-exec` profile + Windows
+  `_spawnvp` port + AppContainer / restricted token + removal of
+  the in-process `PluginHost` once every caller has migrated.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`

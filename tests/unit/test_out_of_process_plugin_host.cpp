@@ -24,10 +24,12 @@
  */
 #ifndef _WIN32
 
+#include "ajazz/plugins/linux_bwrap_sandbox.hpp"
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
 
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -113,7 +115,7 @@ TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover t
     }
 
     auto cfg = makeConfig();
-    ajazz::plugins::OutOfProcessPluginHost host{cfg};
+    ajazz::plugins::OutOfProcessPluginHost host{std::move(cfg)};
     REQUIRE(host.isAlive());
 
     auto const examples = repoRoot() / "python" / "ajazz_plugins" / "examples";
@@ -177,7 +179,7 @@ TEST_CASE("OOP plugin host: bad child script path is rejected at construction", 
     cfg.childScript = "/nonexistent/path/to/_host_child.py";
     cfg.readyTimeout = std::chrono::milliseconds{1500}; // bound the wait
 
-    REQUIRE_THROWS_AS(ajazz::plugins::OutOfProcessPluginHost{cfg}, std::runtime_error);
+    REQUIRE_THROWS_AS(ajazz::plugins::OutOfProcessPluginHost{std::move(cfg)}, std::runtime_error);
 }
 
 TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost pointer",
@@ -203,6 +205,55 @@ TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost poi
     REQUIRE_FALSE(inventory.empty());
     REQUIRE(host.dispatch("com.example.hello", "say-hi", "{}"));
     REQUIRE_FALSE(host.dispatch("does.not.exist", "noop", "{}"));
+}
+
+namespace {
+
+bool bwrapAvailable() {
+    return std::system("command -v bwrap >/dev/null 2>&1") == 0;
+}
+
+} // namespace
+
+TEST_CASE("OOP plugin host: spawn through LinuxBwrapSandbox round-trips end-to-end",
+          "[plugins][oop][sandbox][!mayfail]") {
+    if (!python3Available()) {
+        SKIP("python3 not on PATH; skipping bwrap-sandboxed spawn test");
+    }
+    if (!bwrapAvailable()) {
+        SKIP("bwrap not on PATH; skipping LinuxBwrapSandbox integration test");
+    }
+
+    // Slice 3b: prove the bwrap-decorated spawn works end-to-end.
+    // The default profile (empty permissions) is most-restrictive —
+    // network unshared, namespaces fresh, /tmp tmpfs — and the child
+    // still completes the ready handshake, the load_all sweep, and a
+    // successful dispatch under those constraints. If a future bwrap
+    // flag breaks the child's ability to read /usr/bin/python3 or the
+    // PYTHONPATH directories the test catches it immediately.
+    auto cfg = makeConfig();
+    cfg.sandbox = std::make_unique<ajazz::plugins::LinuxBwrapSandbox>(std::set<std::string>{});
+
+    ajazz::plugins::OutOfProcessPluginHost host{std::move(cfg)};
+    REQUIRE(host.isAlive());
+    REQUIRE(host.childPid() > 0);
+
+    REQUIRE_NOTHROW(host.addSearchPath(repoRoot() / "python" / "ajazz_plugins" / "examples"));
+    REQUIRE(host.loadAll() >= 1);
+    auto const inventory = host.plugins();
+    auto const hello =
+        std::find_if(inventory.begin(), inventory.end(), [](ajazz::plugins::PluginInfo const& p) {
+            return p.id == "com.example.hello";
+        });
+    REQUIRE(hello != inventory.end());
+    // Slice 3a permissions plumb through the sandboxed child too.
+    REQUIRE(hello->permissions.size() == 1);
+    REQUIRE(hello->permissions.at(0) == "notifications");
+
+    // Dispatch still works under the sandbox — `say-hi` only calls
+    // `ctx.notify`, which prints to stderr (the child's redirected
+    // stdout); the IPC contract is honoured even without a desktop.
+    REQUIRE(host.dispatch("com.example.hello", "say-hi", "{}"));
 }
 
 #endif // !_WIN32

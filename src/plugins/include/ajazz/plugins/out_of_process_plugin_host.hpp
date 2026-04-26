@@ -38,6 +38,7 @@
 #ifndef _WIN32
 
 #include "ajazz/plugins/i_plugin_host.hpp"
+#include "ajazz/plugins/sandbox.hpp"
 
 #include <chrono>
 #include <cstddef>
@@ -82,6 +83,15 @@ struct OutOfProcessHostConfig {
     /// `shutdown` op. Defaults to 2 s; if the child has not exited
     /// by then, `shutdown()` sends SIGKILL.
     std::chrono::milliseconds shutdownTimeout{2000};
+
+    /// Optional sandbox decorator (audit finding A4 — slice 3b).
+    /// When non-null the host invokes
+    /// `sandbox->decorate(pythonExecutable, childScript)` and execs the
+    /// returned `(executable, args)` pair instead of plain
+    /// `python3 _host_child.py`. A null pointer is equivalent to
+    /// @ref NoOpSandbox — the slice-1/2/2.5/3a behaviour callers see
+    /// today. Ownership transfers to the host on construction.
+    std::unique_ptr<Sandbox> sandbox;
 };
 
 /**

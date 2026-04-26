@@ -39,12 +39,14 @@
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
 
 #include "ajazz/core/logger.hpp"
+#include "ajazz/plugins/sandbox.hpp"
 
 #include <cerrno>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -391,6 +393,18 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         throw std::runtime_error("OutOfProcessPluginHost: childScript must be set in the config");
     }
 
+    // Slice 3b: compute the decorated spawn pre-fork. A null sandbox in
+    // the config means "no isolation" — we synthesise a NoOpSandbox so
+    // the child branch below is uniform regardless of which backend
+    // the caller chose. The decoration runs in the parent so it can
+    // freely allocate; the child just consumes the resulting argv.
+    NoOpSandbox const noOp;
+    Sandbox const& sandbox = m_impl->config.sandbox
+                                 ? static_cast<Sandbox const&>(*m_impl->config.sandbox)
+                                 : static_cast<Sandbox const&>(noOp);
+    DecoratedSpawn const spawn =
+        sandbox.decorate(m_impl->config.pythonExecutable, m_impl->config.childScript);
+
     int hostToChild[2] = {-1, -1};
     int childToHost[2] = {-1, -1};
     if (::pipe(hostToChild) != 0 || ::pipe(childToHost) != 0) {
@@ -441,10 +455,19 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         // every print() the child makes.
         ::setenv("PYTHONUNBUFFERED", "1", 1);
 
-        std::string const scriptStr = m_impl->config.childScript.string();
-        char const* exe = m_impl->config.pythonExecutable.c_str();
-        char* args[] = {const_cast<char*>(exe), const_cast<char*>(scriptStr.c_str()), nullptr};
-        ::execvp(exe, args);
+        // Build the argv from the decorated spawn. `spawn.args` is a
+        // vector<string> living in the child's heap (a copy-on-write
+        // duplicate of the parent's after fork); the c_str() pointers
+        // stay valid until execvp succeeds or we _Exit. const_cast is
+        // safe because POSIX requires execvp to treat argv as
+        // read-only even though the API signature is `char* const[]`.
+        std::vector<char*> argv;
+        argv.reserve(spawn.args.size() + 1);
+        for (auto const& arg : spawn.args) {
+            argv.push_back(const_cast<char*>(arg.c_str()));
+        }
+        argv.push_back(nullptr);
+        ::execvp(spawn.executable.c_str(), argv.data());
         // execvp failed; drop a one-line JSON error and exit so the
         // host's read loop sees something specific.
         std::fprintf(stdout,

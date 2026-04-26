@@ -27,8 +27,10 @@ add_executable(
 # slice-1 implementation is POSIX-only.
 if(NOT WIN32)
     target_sources(
-        ajazz_unit_tests PRIVATE test_out_of_process_plugin_host.cpp
-                                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host.cpp
+        ajazz_unit_tests
+        PRIVATE test_out_of_process_plugin_host.cpp test_linux_bwrap_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/linux_bwrap_sandbox.cpp
     )
     target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
 endif()

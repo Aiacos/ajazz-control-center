@@ -1,6 +1,8 @@
 set(_ajazz_plugins_sources src/plugin_host.cpp src/python_bindings.cpp)
 if(NOT WIN32)
-    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host.cpp)
+    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host.cpp
+         src/linux_bwrap_sandbox.cpp
+    )
 endif()
 add_library(ajazz_plugins STATIC ${_ajazz_plugins_sources})
 add_library(ajazz::plugins ALIAS ajazz_plugins)
