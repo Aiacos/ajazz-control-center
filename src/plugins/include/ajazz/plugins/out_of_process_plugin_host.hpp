@@ -28,14 +28,13 @@
  * concrete @ref IPluginHost on Linux/macOS today; the Windows port
  * (slice 3d, `_spawnvp` + AppContainer) is the next backend to land.
  *
- * @note POSIX-only in slice 1. Windows port goes through `_spawnvp` +
- *       anonymous pipes and lives in a follow-up PR; the header guards
- *       on `#ifndef _WIN32` so the rest of the build keeps working on
- *       Windows during the slice 1 → slice 2 window.
+ * @note Slice 1 / 2 / 3a / 3b were POSIX-only. Slice 3d adds the
+ *       Windows port via `CreatePipe` + `CreateProcessW` + the
+ *       `PeekNamedPipe` polling pattern; the header is now
+ *       platform-agnostic — only the @c Impl struct in the cpp
+ *       file changes per OS.
  */
 #pragma once
-
-#ifndef _WIN32
 
 #include "ajazz/plugins/i_plugin_host.hpp"
 #include "ajazz/plugins/sandbox.hpp"
@@ -187,5 +186,3 @@ private:
 };
 
 } // namespace ajazz::plugins
-
-#endif // !_WIN32

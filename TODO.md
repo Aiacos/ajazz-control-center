@@ -215,8 +215,9 @@ ______________________________________________________________________
   Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
-  (Linux) + 3c (macOS) + 3e (legacy backend retired) shipped this
-  cycle. POSIX `OutOfProcessPluginHost`
+  (Linux) + 3c (macOS) + 3d (Windows port, untested-pending-runner) +
+  3e (legacy backend retired) shipped this cycle. POSIX
+  `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
   to it over line-delimited JSON on a pair of pipes. The child
@@ -314,8 +315,26 @@ ______________________________________________________________________
   pending a macOS CI runner — same posture as bwrap on Linux until
   the matrix expands.
 
-  Slice 3d (next): Windows port (`_spawnvp` + anonymous pipes via
-  `_pipe`) + AppContainer + restricted token.
+  Slice 3d (this cycle, untested-pending-Windows-runner):
+  `out_of_process_plugin_host_win32.cpp` mirrors the POSIX backend
+  using `_spawnvp(_P_NOWAIT, ...)` for the spawn and `_pipe` for the
+  IPC channel. `PeekNamedPipe` provides the timeout-read semantics
+  `poll(2)` gives on POSIX. The wire-protocol helpers (jsonEscape,
+  buildOp, parsers) were extracted into `src/plugins/src/wire_protocol.hpp`
+  so both backends share the exact same encoding logic — fewer
+  divergence opportunities. Windows compiles this file via the
+  CMake gate (`if(WIN32)`) and Linux compiles the POSIX file; the
+  public header is now platform-agnostic. **Cannot run E2E tests on
+  Windows from this dev environment**; runtime verification waits
+  for a Windows CI runner.
+
+  Slice 3d-ii (next, security PR): `WindowsAppContainerSandbox`.
+  Windows AppContainer + restricted token are configured at
+  `CreateProcessW` time via `STARTUPINFOEX::lpAttributeList`,
+  not via a wrapper executable, so the existing
+  `Sandbox::decorate(argv)` interface needs a side-channel — likely
+  a second virtual method like `applyToProcessAttributes(...)` that
+  is a no-op on Linux/macOS and the active path on Windows.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
