@@ -123,14 +123,46 @@ public:
     /// has been reaped.
     [[nodiscard]] int childPid() const noexcept;
 
-    /// Ask the child for its plugin inventory. Returns an empty vector
-    /// in slice 1 (because `load_all` is not implemented yet). In
-    /// slice 2 this returns one entry per loaded plugin, mirroring
-    /// the in-process @ref PluginHost::plugins().
+    /// Ask the child for its plugin inventory — one entry per
+    /// successfully imported plugin. Mirrors @ref PluginHost::plugins()
+    /// for the in-process host. Returns an empty vector before the
+    /// first @ref loadAll call.
     ///
     /// Throws `std::runtime_error` if the child has died or the IPC
     /// times out.
     [[nodiscard]] std::vector<PluginInfo> listPlugins();
+
+    /// Add a directory the child will scan on the next @ref loadAll.
+    /// The path is resolved on the child side via
+    /// `pathlib.Path.resolve()`, so symlinks / `..` segments are
+    /// flattened before any import happens. Idempotent.
+    void addSearchPath(std::filesystem::path const& path);
+
+    /// Trigger a fresh import sweep in the child. The child re-scans
+    /// every search path added via @ref addSearchPath, imports each
+    /// `plugin.py` it finds and instantiates the `Plugin` class. A
+    /// failed import (syntax error, missing dependency) is reported
+    /// per plugin but does NOT abort the sweep — partial coverage is
+    /// preferable to a single bad plugin breaking everything.
+    ///
+    /// Returns the count of plugins successfully loaded by this call
+    /// (does not include those already loaded from a previous call).
+    /// The full inventory is available via @ref listPlugins.
+    std::size_t loadAll();
+
+    /// Dispatch an action to the owning plugin. Mirrors
+    /// @ref PluginHost::dispatch but the call runs in the child
+    /// process — a Python exception in the handler is caught child-
+    /// side and surfaced to the host as a `dispatch_error`.
+    /// `actionId` is the part AFTER the `<plugin>.` prefix
+    /// (the host splits the wire-format `plugin.action` for us).
+    ///
+    /// Returns `true` on a successful dispatch, `false` if the plugin
+    /// or action id is unknown to the child. Throws
+    /// `std::runtime_error` only on hard IPC failures (child died,
+    /// pipe broken).
+    bool
+    dispatch(std::string_view pluginId, std::string_view actionId, std::string_view settingsJson);
 
     /// Trigger a deliberate crash inside the child. **Test-only entry
     /// point**: shipped in slice 1 to prove the crash-isolation

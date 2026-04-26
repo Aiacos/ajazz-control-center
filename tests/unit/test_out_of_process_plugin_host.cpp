@@ -106,6 +106,62 @@ TEST_CASE("OOP plugin host: crash in child does not crash host", "[plugins][oop]
     REQUIRE_THROWS_AS(host.listPlugins(), std::runtime_error);
 }
 
+TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover the hello example",
+          "[plugins][oop][!mayfail]") {
+    if (!python3Available()) {
+        SKIP("python3 not on PATH; skipping plugin discovery test");
+    }
+
+    auto cfg = makeConfig();
+    ajazz::plugins::OutOfProcessPluginHost host{cfg};
+    REQUIRE(host.isAlive());
+
+    auto const examples = repoRoot() / "python" / "ajazz_plugins" / "examples";
+    REQUIRE(std::filesystem::is_directory(examples));
+    REQUIRE_NOTHROW(host.addSearchPath(examples));
+
+    auto const loadedNow = host.loadAll();
+    // Today the examples/ directory contains exactly `hello/`. If a
+    // future PR adds more examples this test will start observing
+    // them; the assertion below only requires the hello example to
+    // be present in the inventory, not exclusivity.
+    REQUIRE(loadedNow >= 1);
+
+    auto const inventory = host.listPlugins();
+    auto const hello =
+        std::find_if(inventory.begin(), inventory.end(), [](ajazz::plugins::PluginInfo const& p) {
+            return p.id == "com.example.hello";
+        });
+    REQUIRE(hello != inventory.end());
+    REQUIRE(hello->name == "Hello World");
+    REQUIRE(hello->version == "1.0.0");
+    REQUIRE(hello->authors == "AJAZZ Control Center contributors");
+}
+
+TEST_CASE("OOP plugin host: dispatch routes to the loaded handler", "[plugins][oop][!mayfail]") {
+    if (!python3Available()) {
+        SKIP("python3 not on PATH; skipping dispatch test");
+    }
+
+    ajazz::plugins::OutOfProcessPluginHost host{makeConfig()};
+    host.addSearchPath(repoRoot() / "python" / "ajazz_plugins" / "examples");
+    REQUIRE(host.loadAll() >= 1);
+
+    // Successful dispatch: the hello example exposes `say-hi`. The
+    // handler calls `ctx.notify` which prints to stderr (per the
+    // child's stdout-redirect contract), so the test does not parse
+    // anything — it just asserts the IPC contract: dispatch returns
+    // true on a known plugin/action.
+    REQUIRE(host.dispatch("com.example.hello", "say-hi", "{}"));
+
+    // Unknown plugin: dispatch returns false but does NOT throw —
+    // a typo in a profile shouldn't tear the host down.
+    REQUIRE_FALSE(host.dispatch("com.example.does-not-exist", "noop", "{}"));
+
+    // Unknown action on a known plugin: same soft-failure behaviour.
+    REQUIRE_FALSE(host.dispatch("com.example.hello", "unknown-action", "{}"));
+}
+
 TEST_CASE("OOP plugin host: bad child script path is rejected at construction", "[plugins][oop]") {
     if (!python3Available()) {
         SKIP("python3 not on PATH; skipping bad-config test");

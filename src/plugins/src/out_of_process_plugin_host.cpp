@@ -104,13 +104,25 @@ std::string jsonEscape(std::string_view value) {
     return out;
 }
 
-/// Build a flat JSON object from `{op:"<name>"}` plus any extra
-/// string-valued fields. Slice 1 only needs string-valued fields;
-/// slice 2 will likely grow to handle paths and numbers.
-std::string buildOp(std::string_view opName) {
+/// Build a flat JSON object `{"op":"<name>"}`, optionally with extra
+/// string-valued fields. Each field becomes `,"<key>":"<jsonEscape value>"`
+/// in declaration order. Numbers and arrays are not supported because
+/// nothing in the slice-2 wire protocol needs them; if that changes,
+/// extend here rather than reaching for nlohmann::json.
+std::string
+buildOp(std::string_view opName,
+        std::initializer_list<std::pair<std::string_view, std::string_view>> fields = {}) {
     std::string out{"{\"op\":\""};
     out += jsonEscape(opName);
-    out += "\"}";
+    out += "\"";
+    for (auto const& [key, value] : fields) {
+        out += ",\"";
+        out += jsonEscape(key);
+        out += "\":\"";
+        out += jsonEscape(value);
+        out += "\"";
+    }
+    out += "}";
     return out;
 }
 
@@ -468,21 +480,146 @@ std::vector<PluginInfo> OutOfProcessPluginHost::listPlugins() {
         throw std::runtime_error("plugin-host child is not alive");
     }
     m_impl->writeLine(buildOp("list_plugins"));
+
+    // Multi-line response: zero or more `{"event":"plugin",…}` lines
+    // followed by exactly one `{"event":"plugins_complete",…}` line.
+    // Keeps each line a flat JSON object so the host's mini-parser
+    // covers the whole protocol without an array-aware JSON dep.
+    std::vector<PluginInfo> out;
+    while (true) {
+        auto const result =
+            readLine(m_impl->readFd, m_impl->readCarry, std::chrono::milliseconds{2000});
+        if (!result.ok) {
+            m_impl->aliveCached = false;
+            throw std::runtime_error(result.eof ? "plugin-host child died during list_plugins"
+                                                : "plugin-host child timed out on list_plugins");
+        }
+        auto const event = findStringField(result.line, "event");
+        if (event == "plugin") {
+            PluginInfo info;
+            info.id = findStringField(result.line, "id");
+            info.name = findStringField(result.line, "name");
+            info.version = findStringField(result.line, "version");
+            info.authors = findStringField(result.line, "authors");
+            out.push_back(std::move(info));
+            continue;
+        }
+        if (event == "plugins_complete") {
+            return out;
+        }
+        throw std::runtime_error("plugin-host: unexpected event in response to list_plugins: " +
+                                 result.line);
+    }
+}
+
+void OutOfProcessPluginHost::addSearchPath(std::filesystem::path const& path) {
+    if (!m_impl) {
+        throw std::runtime_error("OutOfProcessPluginHost: moved-from instance");
+    }
+    std::lock_guard const lock(m_impl->mutex);
+    if (!m_impl->aliveCached) {
+        throw std::runtime_error("plugin-host child is not alive");
+    }
+    m_impl->writeLine(buildOp("add_search_path", {{"path", path.string()}}));
     auto const result =
         readLine(m_impl->readFd, m_impl->readCarry, std::chrono::milliseconds{2000});
     if (!result.ok) {
         m_impl->aliveCached = false;
-        throw std::runtime_error(result.eof ? "plugin-host child died during list_plugins"
-                                            : "plugin-host child timed out on list_plugins");
+        throw std::runtime_error(result.eof ? "plugin-host child died during add_search_path"
+                                            : "plugin-host child timed out on add_search_path");
     }
     auto const event = findStringField(result.line, "event");
-    if (event != "plugins") {
-        throw std::runtime_error("plugin-host: unexpected event in response to list_plugins: " +
+    if (event != "path_added") {
+        throw std::runtime_error("plugin-host: unexpected event in response to add_search_path: " +
                                  result.line);
     }
-    // Slice 1 expectation: an empty `plugins` array. Slice 2 will
-    // parse `plugins[]` properly and populate the vector.
-    return {};
+}
+
+std::size_t OutOfProcessPluginHost::loadAll() {
+    if (!m_impl) {
+        throw std::runtime_error("OutOfProcessPluginHost: moved-from instance");
+    }
+    std::lock_guard const lock(m_impl->mutex);
+    if (!m_impl->aliveCached) {
+        throw std::runtime_error("plugin-host child is not alive");
+    }
+    m_impl->writeLine(buildOp("load_all"));
+
+    // Multi-line response. Per-plugin events:
+    //   `plugin_loaded`  — successful import; carry id/name/version.
+    //   `plugin_error`   — import failed; we log warning, do not abort.
+    // Terminator:
+    //   `load_complete`  — count of plugins newly loaded.
+    // Loading per plugin can take 100s of ms (especially on a cold
+    // CPython start with imports of numpy / opencv etc.); the per-
+    // line timeout reflects that — Python's `import` of pandas is
+    // the historical 95th percentile.
+    std::size_t loadedCount = 0;
+    while (true) {
+        auto const result =
+            readLine(m_impl->readFd, m_impl->readCarry, std::chrono::milliseconds{15000});
+        if (!result.ok) {
+            m_impl->aliveCached = false;
+            throw std::runtime_error(result.eof ? "plugin-host child died during load_all"
+                                                : "plugin-host child timed out on load_all");
+        }
+        auto const event = findStringField(result.line, "event");
+        if (event == "plugin_loaded") {
+            ++loadedCount;
+            continue;
+        }
+        if (event == "plugin_error") {
+            // The child has already logged this on its own stderr
+            // (which the host inherits). We surface it as a host log
+            // too so plugin authors see the same failure indication
+            // whether or not the child's stderr goes anywhere.
+            auto const id = findStringField(result.line, "id");
+            auto const message = findStringField(result.line, "message");
+            AJAZZ_LOG_WARN("plugin-host", "child failed to load {}: {}", id, message);
+            continue;
+        }
+        if (event == "load_complete") {
+            return loadedCount;
+        }
+        throw std::runtime_error("plugin-host: unexpected event in response to load_all: " +
+                                 result.line);
+    }
+}
+
+bool OutOfProcessPluginHost::dispatch(std::string_view pluginId,
+                                      std::string_view actionId,
+                                      std::string_view settingsJson) {
+    if (!m_impl) {
+        throw std::runtime_error("OutOfProcessPluginHost: moved-from instance");
+    }
+    std::lock_guard const lock(m_impl->mutex);
+    if (!m_impl->aliveCached) {
+        throw std::runtime_error("plugin-host child is not alive");
+    }
+    m_impl->writeLine(buildOp(
+        "dispatch",
+        {{"plugin_id", pluginId}, {"action_id", actionId}, {"settings_json", settingsJson}}));
+    auto const result =
+        readLine(m_impl->readFd, m_impl->readCarry, std::chrono::milliseconds{5000});
+    if (!result.ok) {
+        m_impl->aliveCached = false;
+        throw std::runtime_error(result.eof ? "plugin-host child died during dispatch"
+                                            : "plugin-host child timed out on dispatch");
+    }
+    auto const event = findStringField(result.line, "event");
+    if (event == "dispatched") {
+        return true;
+    }
+    if (event == "dispatch_error") {
+        // Plugin-side failure (unknown id or handler exception). The
+        // child catches the Python exception so dispatch_error is a
+        // soft failure: log and report `false` to the caller.
+        auto const message = findStringField(result.line, "message");
+        AJAZZ_LOG_WARN("plugin-host", "dispatch {}.{} failed: {}", pluginId, actionId, message);
+        return false;
+    }
+    throw std::runtime_error("plugin-host: unexpected event in response to dispatch: " +
+                             result.line);
 }
 
 bool OutOfProcessPluginHost::crashChildForTest() {

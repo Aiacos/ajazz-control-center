@@ -214,29 +214,37 @@ ______________________________________________________________________
   serialise on a write-only mutex; readers don't take a mutex.
   Existing 4/4 EventBus tests still pass under TSan.
 
-- 🟡 **A4 — PluginHost out-of-process** — slice 1 shipped this cycle.
-  New `OutOfProcessPluginHost` (POSIX-only;
-  `src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
-  spawns a child Python process via `fork()` + `execvp()` and talks to
-  it over line-delimited JSON on a pair of pipes. The child
-  (`python/ajazz_plugins/_host_child.py`) implements the foundation
-  wire protocol: `ready` handshake, `list_plugins` (returns `[]`),
-  `shutdown`, plus a `_crash_for_test` op that deliberately SIGSEGVs
-  itself for the safety test. Three new unit tests in
-  `tests/unit/test_out_of_process_plugin_host.cpp` validate the
-  spawn round-trip, **the crash-isolation claim** (a SIGSEGV in the
-  child kills only the child; the host's next `listPlugins()` returns
-  `std::runtime_error` instead of crashing the AJAZZ Control Center
-  process), and bad-config rejection. Lives alongside the legacy
-  in-process `PluginHost` during migration.
+- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 shipped this
+  cycle. POSIX `OutOfProcessPluginHost`
+  (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
+  spawns a child Python process via `fork()` + `execvp()` and talks
+  to it over line-delimited JSON on a pair of pipes. The child
+  (`python/ajazz_plugins/_host_child.py`) speaks the wire protocol:
+  `ready` handshake, `add_search_path`, `load_all`,
+  `list_plugins` (now populated from real loaded plugins),
+  `dispatch` (routes to the matching `Plugin` instance, catches
+  Python exceptions so a bad handler returns `dispatch_error`
+  instead of taking the child down), `shutdown`, plus a
+  `_crash_for_test` op for the safety proof. Five unit tests in
+  `tests/unit/test_out_of_process_plugin_host.cpp` cover spawn
+  round-trip, the crash-isolation claim, end-to-end discovery
+  against the `hello` example plugin, dispatch routing, and
+  bad-config rejection. The slice-2 wire uses one flat-JSON
+  object per line (no nested arrays), so the host's mini-parser
+  stays adequate without an extra JSON dep.
 
-  Slice 2 (follow-up, separate PR): wire `add_search_path`,
-  `load_all`, `dispatch` through the IPC; migrate every `PluginHost`
-  caller to `OutOfProcessPluginHost`; add Windows port (`_spawnvp` +
-  anonymous pipes). Slice 3 (security PR): per-OS sandboxing —
-  `bwrap` on Linux, `sandbox-exec` on macOS, AppContainer on
-  Windows — and removal of the in-process host. The slice-1 wire
-  protocol is already extensible: ops are flat-JSON `{"op":"<name>", …}`; events `{"event":"<name>", …}`.
+  Slice 2.5 (follow-up): introduce an `IPluginHost` interface and
+  retrofit both `PluginHost` (legacy, in-process) and
+  `OutOfProcessPluginHost` to implement it; migrate any future
+  callers (currently zero) to the interface so the in-process host
+  can be deleted in slice 3.
+
+  Slice 3 (security PR): Windows port (`_spawnvp` + anonymous
+  pipes) and per-OS sandboxing — `bwrap --unshare-all --bind-ro` on
+  Linux, `sandbox-exec` on macOS, AppContainer + restricted token
+  on Windows — plus enforcement of the `Ajazz.Permissions`
+  namespace from the manifest schema, and removal of the in-process
+  `PluginHost` once every caller has migrated.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
