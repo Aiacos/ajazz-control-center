@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_out_of_process_plugin_host.cpp
- * @brief Unit tests for the slice-1 @ref OutOfProcessPluginHost.
+ * @brief Unit tests for @ref OutOfProcessPluginHost (slices 1 → 3b).
  *
  * The point of these tests is to PROVE the safety claim that motivates
  * audit finding A4: a crash in plugin code MUST NOT take the host
@@ -188,14 +188,13 @@ TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost poi
         SKIP("python3 not on PATH; skipping IPluginHost contract test");
     }
 
-    // Audit finding A4 slice 2.5: both PluginHost (legacy in-process)
-    // and OutOfProcessPluginHost implement IPluginHost. We can only
-    // exercise the OOP backend in this test binary (the in-process
-    // backend pulls pybind11 + Python3 link deps that ajazz_unit_tests
-    // intentionally avoids), but driving the OOP host through a base-
-    // class pointer proves the contract is honoured by virtual
-    // dispatch — a method I forgot to mark `override` would simply
-    // break this test.
+    // Audit finding A4 slice 2.5 introduced IPluginHost as the shared
+    // contract; slice 3e retired the legacy in-process PluginHost so
+    // OutOfProcessPluginHost is the only concrete implementation today.
+    // Driving it through a base-class pointer still proves the contract
+    // is honoured by virtual dispatch — a method missing `override`
+    // would break this test, and a future macOS/Windows backend will
+    // satisfy the same assertions.
     ajazz::plugins::OutOfProcessPluginHost concrete{makeConfig()};
     ajazz::plugins::IPluginHost& host = concrete;
 

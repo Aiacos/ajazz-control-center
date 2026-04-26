@@ -215,7 +215,7 @@ ______________________________________________________________________
   Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
-  (Linux) shipped this cycle. POSIX `OutOfProcessPluginHost`
+  (Linux) + 3e (legacy backend retired) shipped this cycle. POSIX `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
   to it over line-delimited JSON on a pair of pipes. The child
@@ -281,9 +281,23 @@ ______________________________________________________________________
   prove the actual sandboxed child completes ready / load_all /
   dispatch under the most-restrictive profile.
 
-  Slice 3c (next): macOS `sandbox-exec` profile + Windows
-  `_spawnvp` port + AppContainer / restricted token + removal of
-  the in-process `PluginHost` once every caller has migrated.
+  Slice 3e (this cycle): retired the legacy in-process pybind11
+  `PluginHost`. The `ajazz_plugins` library is now Qt-free,
+  pybind11-free, and Python-compile-time-dep-free; the OOP child
+  invokes the system `python3` via execvp at runtime. Deleted
+  `plugin_host.{hpp,cpp}` and `python_bindings.cpp` (the embedded
+  `ajazz` Python module — its Rgb/DeviceFamily types will be
+  re-exposed as plain Python in `ajazz_plugins/__init__.py` if a
+  plugin ever needs them). Top-level CMake dropped the
+  `find_package(Python3)` + `find_package(pybind11)` block;
+  `AJAZZ_BUILD_PYTHON_HOST` survives as a thin gate over the
+  plugins subsystem so existing CI matrices (`-D…=OFF`) keep working.
+
+  Slice 3c (next): macOS `sandbox-exec` policy generator + the
+  ports per the same `Sandbox` interface.
+
+  Slice 3d: Windows port (`_spawnvp` + anonymous pipes via
+  `CreatePipe`/`CreateProcess`) + AppContainer + restricted token.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`

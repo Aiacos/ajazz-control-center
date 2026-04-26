@@ -26,7 +26,12 @@ endif()
 # -----------------------------------------------------------------------------
 option(AJAZZ_BUILD_APP "Build the Qt desktop application" ON)
 option(AJAZZ_BUILD_TESTS "Build unit and integration tests" ON)
-option(AJAZZ_BUILD_PYTHON_HOST "Build embedded Python plugin host" ON)
+# AJAZZ_BUILD_PYTHON_HOST historically gated an embedded pybind11 interpreter. Slice 3e of audit
+# finding A4 retired that backend; the option now simply gates the (lightweight)
+# OutOfProcessPluginHost subsystem so existing CI matrices (`-DAJAZZ_BUILD_PYTHON_HOST=OFF`) keep
+# working without changes. Building the OOP host has no Python compile-time dep — `python3` is
+# invoked at runtime via `execvp`.
+option(AJAZZ_BUILD_PYTHON_HOST "Build the out-of-process plugin host subsystem" ON)
 option(AJAZZ_ENABLE_WERROR "Treat warnings as errors" ON)
 option(AJAZZ_ENABLE_SANITIZERS "Enable ASan/UBSan in Debug builds" OFF)
 option(AJAZZ_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASan)" OFF)
@@ -41,21 +46,6 @@ include(Sanitizers)
 # -----------------------------------------------------------------------------
 find_package(Qt6 6.7 COMPONENTS Core Network Quick QuickControls2 Widgets Svg REQUIRED)
 qt_standard_project_setup(REQUIRES 6.7)
-
-if(AJAZZ_BUILD_PYTHON_HOST)
-    find_package(Python3 3.11 COMPONENTS Interpreter Development REQUIRED)
-    find_package(pybind11 2.12 QUIET)
-    if(NOT pybind11_FOUND)
-        include(FetchContent)
-        FetchContent_Declare(
-            pybind11
-            GIT_REPOSITORY https://github.com/pybind/pybind11.git
-            GIT_TAG a2e59f0e7065404b44dfe92a28aca47ba1378dc4 # v2.13.6
-            GIT_SHALLOW OFF
-        )
-        FetchContent_MakeAvailable(pybind11)
-    endif()
-endif()
 
 # hidapi — vendored via FetchContent for reproducibility
 include(FetchContent)

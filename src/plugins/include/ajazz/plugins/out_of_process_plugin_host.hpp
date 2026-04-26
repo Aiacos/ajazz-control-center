@@ -18,15 +18,15 @@
  *   * implement graceful `shutdown` with timeout + SIGKILL fallback,
  *   * surface child crash / exit as an error from the in-flight call.
  *
- * Slice 2 (follow-up PR) adds `add_search_path`, `load_all` and
- * `dispatch`, then migrates @ref ajazz::plugins::PluginHost callers to
- * this class. Slice 3 adds OS-specific sandboxing (`bwrap` on Linux,
- * `sandbox-exec` on macOS, AppContainer on Windows).
+ * Slice 2 added `add_search_path`, `load_all` and `dispatch`. Slice
+ * 3 added OS-specific sandboxing (`bwrap` on Linux today; macOS
+ * `sandbox-exec` and Windows AppContainer follow). Slice 3e retired
+ * the legacy in-process backend.
  *
- * This class lives alongside the legacy in-process @ref PluginHost
- * during the migration. Both implement the same external contract; once
- * `OutOfProcessPluginHost` covers every use site, the in-process host
- * is deleted.
+ * Slice 3e of audit finding A4 retired the in-process pybind11-embedded
+ * @c PluginHost backend. @ref OutOfProcessPluginHost is the only
+ * concrete @ref IPluginHost on Linux/macOS today; the Windows port
+ * (slice 3d, `_spawnvp` + AppContainer) is the next backend to land.
  *
  * @note POSIX-only in slice 1. Windows port goes through `_spawnvp` +
  *       anonymous pipes and lives in a follow-up PR; the header guards
@@ -97,9 +97,9 @@ struct OutOfProcessHostConfig {
 /**
  * @brief Subprocess-isolated plugin host.
  *
- * Same external contract as @ref PluginHost, but every plugin call
- * runs in a child process. The class is non-copyable and non-movable;
- * the destructor sends SIGKILL if the child is still running.
+ * Implements @ref IPluginHost; every plugin call runs in a child
+ * process. The class is non-copyable and non-movable; the destructor
+ * sends SIGKILL if the child is still running.
  *
  * Thread-safety: the constructor and destructor are NOT thread-safe
  * with each other (typical RAII contract). The other methods take an
@@ -131,9 +131,8 @@ public:
     [[nodiscard]] int childPid() const noexcept;
 
     /// Ask the child for its plugin inventory — one entry per
-    /// successfully imported plugin. Mirrors @ref PluginHost::plugins()
-    /// for the in-process host. Returns an empty vector before the
-    /// first @ref loadAll call.
+    /// successfully imported plugin. Returns an empty vector before
+    /// the first @ref loadAll call.
     ///
     /// Throws `std::runtime_error` if the child has died or the IPC
     /// times out. Implements @ref IPluginHost::plugins.
@@ -157,10 +156,9 @@ public:
     /// The full inventory is available via @ref plugins.
     std::size_t loadAll() override;
 
-    /// Dispatch an action to the owning plugin. Mirrors
-    /// @ref PluginHost::dispatch but the call runs in the child
-    /// process — a Python exception in the handler is caught child-
-    /// side and surfaced to the host as a `dispatch_error`.
+    /// Dispatch an action to the owning plugin. The call runs in the
+    /// child process — a Python exception in the handler is caught
+    /// child-side and surfaced to the host as a `dispatch_error`.
     /// `actionId` is the part AFTER the `<plugin>.` prefix
     /// (the host splits the wire-format `plugin.action` for us).
     ///

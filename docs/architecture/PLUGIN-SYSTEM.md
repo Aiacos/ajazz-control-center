@@ -1,14 +1,19 @@
 # Plugin system
 
-AJAZZ Control Center embeds a CPython 3.11+ interpreter and exposes its core APIs through a `pybind11`-built native module called `ajazz`. Plugins are ordinary Python packages that import that module, register actions and handlers, and live in a per-user directory the host scans at startup.
+AJAZZ Control Center spawns plugins in an isolated child process running the system `python3` interpreter. The host (C++) and the child (Python) talk over a pair of pipes using a line-delimited JSON wire protocol. Plugins are ordinary Python packages discovered in a per-user directory the host scans at startup.
 
 ## Why Python?
 
 - Stream Deck-style "click → run macro" UX really wants scripting parity with the official SDK.
 - Bundling Lua / JS / WASM would mean shipping a second runtime; CPython is already required for tooling and maps 1-to-1 to user expectations.
-- pybind11 lets us expose the same C++ types we use internally, with zero serialization overhead.
 
-The trade-off — a heavier installer (≈30 MB embedded interpreter) — is acceptable for a desktop companion app. Embedded mode is configured at build time via `AJAZZ_BUILD_PYTHON_HOST=ON` and can be disabled for minimal builds.
+## Why out-of-process?
+
+The original design embedded CPython via pybind11; audit finding A4 retired that backend in favour of a subprocess host (`OutOfProcessPluginHost`):
+
+- A segfault inside any C extension a plugin imports (numpy, opencv, mido, …) used to take the whole host process down. Crash isolation is now real — the kernel kills only the child and the next op on the dead host returns a clean exception instead of a SIGSEGV.
+- The child runs under an OS-level sandbox (`bwrap` on Linux today; `sandbox-exec` on macOS and AppContainer on Windows follow). Granting `obs-websocket`/`spotify`/`discord-rpc` keeps network reachable; granting `notifications`/`media-control`/`system-power` bind-mounts the user session DBus socket. By default a plugin runs in a fresh PID/IPC/UTS namespace with no network, no `~/.ssh/`, no shared memory.
+- The host binary no longer carries the ≈30 MB embedded interpreter — plugin support is now a pure subprocess concern, and the `ajazz_plugins` library has zero Python compile-time deps.
 
 ## Lifecycle
 
@@ -16,24 +21,24 @@ The trade-off — a heavier installer (≈30 MB embedded interpreter) — is acc
 QGuiApplication startup
    │
    ▼
-PluginHost::Impl::initInterpreter()         ← Py_InitializeEx, pybind11 init
+OutOfProcessPluginHost ctor
+   │  fork() + execvp() bwrap → python3 _host_child.py
+   ▼
+{"event":"ready", "pid":..., "python":"3.x.y"}        ← handshake on stdout pipe
    │
    ▼
-PluginHost::scanPluginDirs()                ← see "Discovery" below
+host.addSearchPath(...) for each user plugin dir       ← see "Discovery" below
+host.loadAll()                                          ← child imports every plugin.py
    │
    ▼
-for each plugin/ dir:
-    importlib.import_module("plugin")        ← imports plugin.py
-    plugin.register(host: ajazz.Host)        ← user-defined entry-point
-   │
-   ▼
-QGuiApplication::exec()                     ← normal event loop
+host.dispatch(plugin_id, action_id, settings_json)     ← per-binding key press
    ⋮
    ▼
-PluginHost destructor                       ← Py_FinalizeEx
+~OutOfProcessPluginHost
+   │  send {"op":"shutdown"}, wait, SIGKILL fallback
 ```
 
-If `register()` raises, the host catches the exception, logs it, surfaces a non-blocking notification, and skips the offending plugin. The rest of the app keeps running.
+If a plugin's import raises (syntax error, missing dependency), the child reports a `plugin_error` event and the host logs it but continues — partial coverage is preferable to a single bad plugin breaking everything. If a handler raises during `dispatch`, the child catches the exception and emits `dispatch_error`; the host returns `false` to the caller. A child crash (SIGSEGV in a C extension, etc.) is observed by the host as EOF on the read pipe — `isAlive()` flips to false and the next op throws `std::runtime_error`. A single bad plugin can never take the AJAZZ Control Center UI down.
 
 ## Discovery
 
@@ -83,39 +88,59 @@ The `ajazz.Device` proxy mirrors `ajazz::core::IDevice` plus its capability mix-
 
 ## Action dispatch
 
-When the user binds a key to action id `"obs.toggle_mute"` in the UI:
+When the user binds a key to action id `"com.example.obs.toggle_mute"` in the UI:
 
-1. `ProfileEngine` records `{ device: akp03, key: 2 → action: "obs.toggle_mute" }` in the profile JSON.
-1. On a matching `KeyPressed` event, `PluginHost::dispatch("obs.toggle_mute", ctx)` is called from the main thread.
-1. The host acquires the GIL, looks up the handler, calls it.
-1. Any exception is caught at the boundary; the user sees an in-app notification, not a crash.
+1. `ProfileEngine` records `{ device: akp03, key: 2 → action: "com.example.obs.toggle_mute" }` in the profile JSON.
+1. On a matching `KeyPressed` event, the host calls `IPluginHost::dispatch(plugin_id, action_id, settings_json)`.
+1. The host serialises a `{"op":"dispatch", ...}` line over the IPC pipe; the child receives it, looks up the handler in its registry, and calls it.
+1. The child catches any handler exception, emits `dispatch_error` on the IPC pipe, and the host logs it. The user sees an in-app notification, not a crash.
 
-Handler latency is bounded by the worst-case path documented in [THREADING.md](THREADING.md#timing-sensitive-paths). If your action does network I/O, spawn a `threading.Thread` from the handler — the host does *not* offload automatically, by design (it would break perceived ordering).
+Handler latency is bounded by the worst-case path documented in [THREADING.md](THREADING.md#timing-sensitive-paths) plus one IPC round-trip (sub-millisecond on a warm child). If your action does network I/O, spawn a `threading.Thread` from the handler — the host does *not* offload automatically, by design (it would break perceived ordering).
 
 ## Sandbox / security
 
-Plugins run **in the host's address space with the host's permissions**. There is no sandbox.
+The OOP host wraps the child in a per-OS sandbox (`bwrap` on Linux today; `sandbox-exec` on macOS and AppContainer on Windows in slices 3c / 3d). Default profile is most-restrictive: fresh PID/IPC/UTS/cgroup namespaces, network unreachable, host filesystem read-only mounted, writable tmpfs at `/tmp`, `--die-with-parent` so a host crash reaps the child.
 
-This is a deliberate alpha-stage choice: we want users to be able to run shell commands, talk to OBS, hit a REST API, etc. without fighting capability gates. A future major version will likely add a per-plugin permission manifest (see [#permissions](https://github.com/Aiacos/ajazz-control-center/issues)).
+Each plugin declares the coarse capabilities it needs through its Python class:
 
-Until then:
+```python
+class MyPlugin(Plugin):
+    permissions = ["obs-websocket", "notifications"]
+```
 
-- Only install plugins you trust. Read the source.
-- Plugin signing and a "third-party plugin" warning chip in the UI are tracked under [issue #6 (sandbox + permissions)](https://github.com/Aiacos/ajazz-control-center/issues/6) and are deferred until the permission manifest design lands. The current build does not display such a warning.
+Permission strings come from the `Ajazz.Permissions` enum in [`docs/schemas/plugin_manifest.schema.json`](../schemas/plugin_manifest.schema.json) and are mapped to sandbox relaxations:
+
+- `obs-websocket`, `spotify`, `discord-rpc` → drop `--unshare-net`.
+- `notifications`, `media-control`, `system-power` → bind-mount the user session DBus socket.
+
+The granted set passed to `LinuxBwrapSandbox` is the union of every loaded plugin's declared permissions. The user reviews this list at install time.
+
+Plugin signing (Sigstore / cosign) and a "third-party plugin" warning chip in the UI are tracked under [issue #6 (sandbox + permissions)](https://github.com/Aiacos/ajazz-control-center/issues/6).
 
 ## Example: hello-world plugin
 
 ```python
 # ~/.config/ajazz-control-center/plugins/hello/plugin.py
-"""Minimal AJAZZ plugin — logs every key press to stdout."""
+"""Minimal AJAZZ plugin — pops a notification on key press."""
 
-import ajazz
+from typing import ClassVar
 
-def register(host: ajazz.Host) -> None:
-    """Plugin entry-point — host calls this once at startup."""
-    @ajazz.action("hello.print", label="Say hello", icon="wave.png")
-    def hello(ctx: ajazz.ActionContext) -> None:
-        print(f"Hello from key {ctx.key_index} on {ctx.device.codename}!")
+from ajazz_plugins import ActionContext, Plugin, action
+
+
+class Hello(Plugin):
+    id = "com.example.hello"
+    name = "Hello World"
+    version = "1.0.0"
+    authors = "Your Name"
+    permissions: ClassVar[list[str]] = ["notifications"]
+
+    @action(id="say-hi", label="Say hi")
+    def say_hi(self, ctx: ActionContext) -> None:
+        ctx.notify("Hello from Python!")
+
+
+Plugin = Hello  # required by the plugin loader
 ```
 
-After dropping the file in the plugins folder, the action `Say hello` becomes available in the **Keys** tab of the UI for any compatible device.
+After dropping the file in `~/.config/ajazz-control-center/plugins/hello/`, the action `Say hi` becomes available in the **Keys** tab of the UI for any compatible device.

@@ -12,7 +12,7 @@ This page is a condensed walkthrough.
 | Ninja         | 1.11                           | Default generator                                          |
 | C++ compiler  | GCC 13 / Clang 17 / MSVC 19.39 | C++20                                                      |
 | Qt            | 6.7                            | `Core`, `Gui`, `Qml`, `Quick`, `QuickControls2`, `Widgets` |
-| Python        | 3.11                           | headers + dev libs; embedded via pybind11                  |
+| Python        | 3.11 (runtime only)            | system `python3` invoked by the OOP plugin host at runtime |
 | libusb/hidapi | bundled via FetchContent       | no system install needed                                   |
 
 ### Distro-specific packages

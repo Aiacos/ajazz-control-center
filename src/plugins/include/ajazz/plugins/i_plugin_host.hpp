@@ -1,29 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file i_plugin_host.hpp
- * @brief Common interface for the in-process and out-of-process plugin hosts.
+ * @brief Common interface for plugin host backends.
  *
- * Audit finding A4 — slice 2.5. The legacy
- * @ref ajazz::plugins::PluginHost (pybind11-embedded interpreter) and
- * the new @ref ajazz::plugins::OutOfProcessPluginHost (subprocess +
- * line-delimited JSON IPC) both implement this interface so the rest
- * of the codebase can be written against the abstraction. When slice 3
- * removes the in-process implementation, no caller has to change.
+ * Audit finding A4 — slice 2.5 introduced the abstraction; slice 3e
+ * retired the legacy in-process pybind11 backend. Today the only
+ * concrete implementation is @ref ajazz::plugins::OutOfProcessPluginHost
+ * (POSIX subprocess + line-delimited JSON IPC, sandboxed via
+ * @ref Sandbox); the slice-3c macOS port and slice-3d Windows port
+ * will land behind the same interface so callers don't have to change.
  *
- * The interface deliberately picks the **richer** of the two existing
- * surfaces — `loadAll` returns a count rather than `void`, `dispatch`
- * returns `bool` so a soft failure (unknown plugin/action, handler
- * raised) can be observed without exceptions, and the action's
- * `plugin.action` id is split by the caller (the dispatch entry point
- * takes the two halves separately). Hard failures (child died on the
- * OOP path, interpreter init failed on the in-process path) are
- * reported via `std::runtime_error`.
+ * The interface signatures encode the slice-3a/3b functional contract:
+ * `loadAll` returns a count, `dispatch` returns `bool` so a soft
+ * failure (unknown plugin/action, handler raised) can be observed
+ * without exceptions, and the action's `plugin.action` id is split by
+ * the caller (the dispatch entry point takes the two halves separately).
+ * Hard failures (child died, IPC pipe broken) are reported via
+ * `std::runtime_error`.
  *
- * Construction is **not** part of the interface — different hosts need
- * different ctor arguments (a config struct for the OOP one, no args
- * for the in-process one). Callers wanting host abstraction at
- * construction time should use a factory function or a
- * `std::unique_ptr<IPluginHost>` slot they assign at app boot.
+ * Construction is **not** part of the interface — different host
+ * backends need different ctor arguments (a config struct for the OOP
+ * one). Callers wanting backend abstraction at construction time
+ * should use a factory function or a `std::unique_ptr<IPluginHost>`
+ * slot they assign at app boot.
  */
 #pragma once
 
@@ -65,16 +64,17 @@ struct PluginInfo {
 /**
  * @brief Common contract implemented by every plugin host backend.
  *
- * Backends today: @ref PluginHost (legacy, pybind11 in-process),
- * @ref OutOfProcessPluginHost (POSIX subprocess + IPC).
+ * Backend today: @ref OutOfProcessPluginHost (POSIX subprocess + IPC,
+ * sandboxed via @ref Sandbox). Slice-3c (macOS) and slice-3d
+ * (Windows) will add per-OS backends behind the same interface.
  *
  * Thread-safety: every method takes the implementation's internal
  * mutex; calls may come from any thread but they serialise through
  * the host (subprocess IPC pipelines are sequential by design).
  *
- * Lifetime: implementations destroy the underlying interpreter or
- * subprocess in their destructor; no separate `shutdown()` call is
- * exposed. Construct, use, let scope expire.
+ * Lifetime: implementations destroy the underlying subprocess in
+ * their destructor; no separate `shutdown()` call is exposed.
+ * Construct, use, let scope expire.
  */
 class IPluginHost {
 public:
@@ -117,9 +117,7 @@ public:
      * affect the returned vector.
      *
      * @note Non-const because the OOP backend roundtrips to its
-     *       child to fetch the live inventory; the in-process
-     *       backend is logically `const` but mirrors the signature
-     *       so the interface is uniform.
+     *       child to fetch the live inventory.
      */
     [[nodiscard]] virtual std::vector<PluginInfo> plugins() = 0;
 
@@ -131,8 +129,7 @@ public:
      * (unknown plugin id, unknown action id, handler raised an
      * exception) return `false`; the host logs the cause and the
      * caller decides whether to surface it. Hard failures (subprocess
-     * died on the OOP backend, interpreter teardown on the in-process
-     * backend) throw `std::runtime_error`.
+     * died, IPC pipe broken) throw `std::runtime_error`.
      *
      * @param pluginId    Plugin manifest id (the part before the dot).
      * @param actionId    Action id within that plugin (the part after the dot).
