@@ -432,6 +432,31 @@ ______________________________________________________________________
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
 - [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
   - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
+- [ ] **OpenDeck store integration — first-class tab** (user request,
+  2026-04-26). Today the store UI surfaces OpenDeck only through the
+  manifest `Ajazz.Compatibility.Mode = "opendeck"` field plus a couple
+  of demo entries in `plugin_catalog_model.cpp`; there is no dedicated
+  catalogue fetcher for the upstream OpenDeck plugin registry
+  (https://github.com/nekename/OpenDeck or the user's preferred
+  upstream source). Mirror the slice-of-work the AJAZZ Streamdock
+  store already shipped: schema bit (`source: "opendeck"` already
+  exists in the row model), TabBar entry in `PluginStore.qml`, a new
+  `OpenDeckCatalogFetcher` (`src/app/src/opendeck_catalog_fetcher.{hpp,cpp}`)
+  with cache + bundled fallback under `<XDG_CACHE_HOME>/ajazz-control-center/opendeck-catalog.json`,
+  status-pill banner that shows live/cached/offline, a curated upstream
+  endpoint resolved at fetch time, and the same overridability through
+  `ACC_OPENDECK_CATALOG_URL=`. Implementation pattern is essentially a
+  copy of `streamdock_catalog_fetcher.cpp` with a different schema
+  shape — read the actual OpenDeck registry response format before
+  starting; OpenDeck's manifests differ from Streamdock's. ≈ 2-3 days
+  of focused work once the upstream registry response shape is mapped.
+- [ ] **AJAZZ Streamdock as the default Plugin Store tab** (user
+  request, 2026-04-26). `src/app/qml/PluginStore.qml` currently
+  initialises `property int activeTab: 0` ("All"); switch the
+  default to `2` ("AJAZZ Streamdock") so first-time users land on
+  the AJAZZ-curated catalogue rather than a noisy mixed list.
+  Trivial change (1 line + a comment); make sure the QSettings-
+  persisted last-active-tab still wins on reopen. ≈ 30 min.
 - [x] **AJAZZ Streamdock store integration — schema + UI scaffolding**:
   manifest schema now exposes `Ajazz.Compatibility.Mode = "streamdock"`
   alongside `streamdeck` / `opendeck`, plus an opaque
