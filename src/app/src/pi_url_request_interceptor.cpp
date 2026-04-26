@@ -2,7 +2,15 @@
 /**
  * @file pi_url_request_interceptor.cpp
  * @brief Implementation of @ref ajazz::app::PIUrlRequestInterceptor.
+ *
+ * Wrapped in `#ifdef AJAZZ_HAVE_WEBENGINE` so the file is safe to
+ * compile on builds without Qt WebEngine (the CI lint job runs
+ * clang-tidy across every `.cpp` under `src/`, including the
+ * WebEngine-gated ones — the macro guard is what makes the
+ * un-configured runs no-op out cleanly).
  */
+#ifdef AJAZZ_HAVE_WEBENGINE
+
 #include "pi_url_request_interceptor.hpp"
 
 #include "ajazz/core/logger.hpp"
@@ -65,3 +73,5 @@ void PIUrlRequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo& info) {
 }
 
 } // namespace ajazz::app
+
+#endif // AJAZZ_HAVE_WEBENGINE

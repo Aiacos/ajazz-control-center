@@ -13,11 +13,16 @@
  *
  * Compiled only when @c AJAZZ_HAVE_WEBENGINE is defined; the host CMake
  * gate guarantees the QtWebEngineCore symbols this header pulls in are
- * available.
+ * available. The @c #ifdef wrapper below is what makes the header safe
+ * to include unconditionally from `find src -name '*.cpp'` clang-tidy
+ * runs on environments where QtWebEngine is not installed (CI lint
+ * job): when the macro is undefined, the file expands to nothing.
  *
  * @see docs/architecture/PLUGIN-SDK.md for the security model.
  */
 #pragma once
+
+#ifdef AJAZZ_HAVE_WEBENGINE
 
 #include <QObject>
 #include <QString>
@@ -58,3 +63,5 @@ private:
 };
 
 } // namespace ajazz::app
+
+#endif // AJAZZ_HAVE_WEBENGINE
