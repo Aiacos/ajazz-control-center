@@ -16,6 +16,14 @@
 
 <p align="center">A modern, open, cross-platform control center for AJAZZ devices — stream decks, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.</p>
 
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-light.png">
+    <img alt="AJAZZ Control Center main window" src="docs/screenshots/main-dark.png" width="900">
+  </picture>
+</p>
+
 > **Status:** early alpha. Scaffolding, architecture and CI are in place. Device backends are under active development.
 
 ## Try it now

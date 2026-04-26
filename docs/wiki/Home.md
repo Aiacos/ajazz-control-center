@@ -16,6 +16,24 @@ and is not affiliated with, endorsed by, or supported by AJAZZ.
 **11 devices** across 3 keyboard, 4 mouse, 4 streamdeck — 9 functional, 2 scaffolded.
 <!-- END AUTOGEN: stats -->
 
+## Screenshots
+
+Material Design QML UI with a `ThemeService`-backed light / dark switch
+(Settings → Appearance). Both modes are first-class — pick whichever
+matches your desktop.
+
+<p align="center">
+  <img alt="AJAZZ Control Center — dark mode" src="../screenshots/main-dark.png" width="900">
+  <br>
+  <em>Dark mode (default — `Appearance/Mode = auto` resolves to dark on dark desktops)</em>
+</p>
+
+<p align="center">
+  <img alt="AJAZZ Control Center — light mode" src="../screenshots/main-light.png" width="900">
+  <br>
+  <em>Light mode (Settings → Appearance → Light)</em>
+</p>
+
 ## Quick links
 
 <!-- BEGIN AUTOGEN: toc-wiki -->

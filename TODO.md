@@ -43,8 +43,13 @@ ______________________________________________________________________
   generated `.rc` file; macOS bundle picks up `app.icns` via
   `MACOSX_BUNDLE_ICON_FILE`; Linux installs PNG + scalable variants under
   `share/icons/hicolor/<size>x<size>/apps/`.
-- [ ] **README + wiki screenshots** of the Material UI in light and dark
-  mode (replace stale Fusion screenshots).
+- [x] **README + wiki screenshots** of the Material UI in light and dark
+  mode — done in this cycle. Captured via `niri msg action screenshot-window` against the running app with `Appearance/Mode = light` / `dark` preset in `~/.config/Aiacos/AjazzControlCenter.conf`,
+  saved at `docs/screenshots/main-{dark,light}.png` (full HiDPI 3792 ×
+  2061 each, ~170 KB). README hero block uses a `<picture>` with
+  `prefers-color-scheme` so the GitHub README adapts to the visitor's
+  theme automatically; `docs/wiki/Home.md` shows both side by side
+  under a new `## Screenshots` section.
 - [x] **Hicolor PNG install rule** — done in `2486662`. The Linux install
   block in `src/app/CMakeLists.txt` now publishes the brand-aligned SVG
   (sourced from `resources/branding/app.svg`) under
@@ -329,6 +334,20 @@ workstreams.
   (illustration + onboarding hint).
 - [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
   Snackbar pattern.
+- [ ] **Light-theme `DeviceList` tile contrast** — surfaced by the
+  README screenshots in this cycle (`docs/screenshots/main-light.png`).
+  When `Appearance/Mode = light` resolves a near-white `bgSidebar`
+  (`#ebebef`), the device cards in the sidebar render almost-black on
+  near-white instead of the expected light-on-light row hover. The
+  delegate in `src/app/qml/DeviceList.qml` is likely binding to a
+  hardcoded dark fill (or to a Material attached property that does
+  not follow `themeService.mode`) instead of the light-theme
+  `Theme.bgRowHover` / `Theme.bgBase`. WCAG ratios in
+  `resources/branding/theme-light.json` are calibrated assuming the
+  card uses `bgRowHover #dedee5` on `bgSidebar #ebebef`; the actual
+  rendering proves that's not what's bound. Fix by tracing the device-
+  card background binding back to `Theme.qml` and verifying the colors
+  swap on every theme transition.
 - [x] **Settings page** (`src/app/qml/Settings.qml`) — done. Material-styled
   page exposes `themeService.mode`, `autostart.launchOnLogin`, and
   `autostart.startMinimised` / `tray.startMinimized` via RadioButton +
