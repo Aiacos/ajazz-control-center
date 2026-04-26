@@ -23,11 +23,13 @@ Slice 2 wire protocol (this version):
     {"event": "ready", "pid": <int>, "python": "<version>"}     (handshake on startup)
     {"event": "path_added"}                                     (ack of add_search_path)
     {"event": "plugin_loaded", "id": "...", "name": "...",
-                                "version": "...", "authors": "..."}
+                                "version": "...", "authors": "...",
+                                "permissions": ["..."]}
     {"event": "plugin_error", "id": "...", "message": "..."}
     {"event": "load_complete", "count": <int>}
     {"event": "plugin", "id": "...", "name": "...",
-                         "version": "...", "authors": "..."}
+                         "version": "...", "authors": "...",
+                         "permissions": ["..."]}
     {"event": "plugins_complete", "count": <int>}
     {"event": "dispatched", "plugin_id": "...", "action_id": "..."}
     {"event": "dispatch_error", "plugin_id": "...", "action_id": "...",
@@ -89,6 +91,20 @@ def _emit(event: dict[str, object]) -> None:
 _search_paths: list[Path] = []
 _plugins: dict[str, Any] = {}  # plugin_id -> Plugin instance
 _added_to_sys_path: set[str] = set()
+
+
+def _instance_permissions(instance: object) -> list[str]:
+    """Read the Plugin instance's `permissions` attribute, defensively.
+
+    Plugin authors are expected to set ``permissions: list[str] = [...]``
+    on their subclass (per ``Ajazz.Permissions`` in the manifest schema).
+    Anything that is not a list-of-strings collapses to ``[]`` so a
+    malformed plugin cannot crash the inventory event encoder.
+    """
+    raw = getattr(instance, "permissions", None)
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, str)]
 
 
 def _ready() -> None:
@@ -209,6 +225,7 @@ def _load_all() -> None:
                         "name": str(getattr(instance, "name", pid)),
                         "version": str(getattr(instance, "version", "")),
                         "authors": str(getattr(instance, "authors", "")),
+                        "permissions": _instance_permissions(instance),
                     }
                 )
                 loaded_now += 1
@@ -227,6 +244,7 @@ def _list_plugins() -> None:
                 "name": str(getattr(instance, "name", pid)),
                 "version": str(getattr(instance, "version", "")),
                 "authors": str(getattr(instance, "authors", "")),
+                "permissions": _instance_permissions(instance),
             }
         )
     _emit({"event": "plugins_complete", "count": len(_plugins)})

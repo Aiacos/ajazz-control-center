@@ -136,6 +136,12 @@ TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover t
     REQUIRE(hello->name == "Hello World");
     REQUIRE(hello->version == "1.0.0");
     REQUIRE(hello->authors == "AJAZZ Control Center contributors");
+
+    // Slice 3a: the plugin declares `permissions = ["notifications"]`
+    // because every action calls `ctx.notify`. The wire protocol must
+    // surface the array verbatim — the UI reads it at install time.
+    REQUIRE(hello->permissions.size() == 1);
+    REQUIRE(hello->permissions.at(0) == "notifications");
 }
 
 TEST_CASE("OOP plugin host: dispatch routes to the loaded handler", "[plugins][oop][!mayfail]") {

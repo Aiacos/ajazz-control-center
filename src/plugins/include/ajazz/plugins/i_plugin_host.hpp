@@ -50,6 +50,16 @@ struct PluginInfo {
     std::string version; ///< Semantic version string (e.g. @c "1.2.0").
     std::string authors; ///< Author list (free-form string).
     std::vector<std::string> actionIds; ///< Action ids exposed by the plugin.
+
+    /// Coarse permissions the plugin requests, declared as a class
+    /// attribute on the Python @c Plugin subclass and validated against
+    /// the @c Ajazz.Permissions enum in
+    /// @c docs/schemas/plugin_manifest.schema.json (e.g. @c "notifications",
+    /// @c "shell-exec", @c "clipboard-read"). Slice 3a is read-only —
+    /// permissions are surfaced for UI install-time review and for
+    /// future sandbox enforcement; nothing in slice 3a actually gates
+    /// behaviour on this list.
+    std::vector<std::string> permissions;
 };
 
 /**

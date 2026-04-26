@@ -126,22 +126,12 @@ buildOp(std::string_view opName,
     return out;
 }
 
-/// Find `"key":"<value>"` in a JSON line. Returns the decoded value or
-/// empty string if not found / value is not a string. Tolerates simple
-/// escapes (`\"`, `\\`); does NOT decode `\uXXXX`. Adequate for the
-/// keys we actually read on the host side (`event`, `python`).
-std::string findStringField(std::string_view line, std::string_view key) {
-    std::string needle{"\""};
-    needle += key;
-    needle += "\":";
-    auto const pos = line.find(needle);
-    if (pos == std::string_view::npos) {
-        return {};
-    }
-    auto i = pos + needle.size();
-    while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) {
-        ++i;
-    }
+/// Decode the body of a JSON-string-literal starting at @p i (i.e.
+/// @p line[i] is the opening `"` already). Returns the decoded value
+/// and updates @p i to point past the closing `"`. Tolerates simple
+/// escapes (`\"`, `\\`, `\n`, `\r`, `\t`, `\b`, `\f`); does NOT decode
+/// `\uXXXX`. Returns empty string if the literal is malformed.
+std::string decodeQuotedString(std::string_view line, std::size_t& i) {
     if (i >= line.size() || line[i] != '"') {
         return {};
     }
@@ -166,6 +156,12 @@ std::string findStringField(std::string_view line, std::string_view key) {
             case 't':
                 value.push_back('\t');
                 break;
+            case 'b':
+                value.push_back('\b');
+                break;
+            case 'f':
+                value.push_back('\f');
+                break;
             default:
                 value.push_back(next);
                 break;
@@ -176,7 +172,67 @@ std::string findStringField(std::string_view line, std::string_view key) {
             ++i;
         }
     }
+    if (i < line.size() && line[i] == '"') {
+        ++i; // past closing quote
+    }
     return value;
+}
+
+/// Locate `"<key>":` in @p line, advance @p i past optional whitespace,
+/// and return the index where the value starts. Returns
+/// `std::string_view::npos` if the key is not present in the line.
+std::size_t locateFieldValue(std::string_view line, std::string_view key) {
+    std::string needle{"\""};
+    needle += key;
+    needle += "\":";
+    auto const pos = line.find(needle);
+    if (pos == std::string_view::npos) {
+        return std::string_view::npos;
+    }
+    auto i = pos + needle.size();
+    while (i < line.size() && (line[i] == ' ' || line[i] == '\t')) {
+        ++i;
+    }
+    return i;
+}
+
+/// Find `"key":"<value>"` in a JSON line. Returns the decoded value or
+/// empty string if not found / value is not a string. Tolerates simple
+/// escapes (`\"`, `\\`); does NOT decode `\uXXXX`. Adequate for the
+/// keys we actually read on the host side (`event`, `python`).
+std::string findStringField(std::string_view line, std::string_view key) {
+    auto i = locateFieldValue(line, key);
+    if (i == std::string_view::npos || i >= line.size() || line[i] != '"') {
+        return {};
+    }
+    return decodeQuotedString(line, i);
+}
+
+/// Find `"key":["a","b",...]` in a JSON line. Returns the decoded
+/// list or an empty vector if the key is missing / value is not an
+/// array of strings. Strict on shape (the wire format only emits
+/// flat string arrays for permissions today) and tolerant of inner
+/// whitespace.
+std::vector<std::string> findStringArrayField(std::string_view line, std::string_view key) {
+    std::vector<std::string> out;
+    auto i = locateFieldValue(line, key);
+    if (i == std::string_view::npos || i >= line.size() || line[i] != '[') {
+        return out;
+    }
+    ++i; // past opening bracket
+    while (i < line.size()) {
+        while (i < line.size() && (line[i] == ' ' || line[i] == '\t' || line[i] == ',')) {
+            ++i;
+        }
+        if (i >= line.size() || line[i] == ']') {
+            break;
+        }
+        if (line[i] != '"') {
+            break; // non-string element — wire contract violated, abort
+        }
+        out.push_back(decodeQuotedString(line, i));
+    }
+    return out;
 }
 
 /// `read(2)` until newline OR child closes / timeout fires. Returns
@@ -501,6 +557,7 @@ std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
             info.name = findStringField(result.line, "name");
             info.version = findStringField(result.line, "version");
             info.authors = findStringField(result.line, "authors");
+            info.permissions = findStringArrayField(result.line, "permissions");
             out.push_back(std::move(info));
             continue;
         }

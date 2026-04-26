@@ -214,8 +214,8 @@ ______________________________________________________________________
   serialise on a write-only mutex; readers don't take a mutex.
   Existing 4/4 EventBus tests still pass under TSan.
 
-- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 shipped this
-  cycle. POSIX `OutOfProcessPluginHost`
+- 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a shipped
+  this cycle. POSIX `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
   to it over line-delimited JSON on a pair of pipes. The child
@@ -249,12 +249,23 @@ ______________________________________________________________________
   a `std::unique_ptr<IPluginHost>` slot and switch backends with no
   source-level changes.
 
-  Slice 3 (security PR): Windows port (`_spawnvp` + anonymous
+  Slice 3a (this cycle): foundation for permission-based sandboxing.
+  `PluginInfo` now carries a `permissions: vector<string>` field that
+  both backends populate from the Plugin subclass's
+  `permissions: ClassVar[list[str]]` attribute (validated against the
+  `Ajazz.Permissions` enum in
+  `docs/schemas/plugin_manifest.schema.json`). The OOP wire protocol
+  emits the array verbatim in `plugin_loaded` / `plugin` events; a new
+  `findStringArrayField` host-side parser handles string arrays
+  without an extra JSON dep. The hello example declares
+  `["notifications"]`. No enforcement yet — slice 3b adds the
+  per-OS sandbox that consumes this list.
+
+  Slice 3b (security PR): Windows port (`_spawnvp` + anonymous
   pipes) and per-OS sandboxing — `bwrap --unshare-all --bind-ro` on
   Linux, `sandbox-exec` on macOS, AppContainer + restricted token
-  on Windows — plus enforcement of the `Ajazz.Permissions`
-  namespace from the manifest schema, and removal of the in-process
-  `PluginHost` once every caller has migrated.
+  on Windows — driven by the `permissions` list from slice 3a, plus
+  removal of the in-process `PluginHost` once every caller has migrated.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`

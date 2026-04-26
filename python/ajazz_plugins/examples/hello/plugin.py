@@ -9,6 +9,8 @@ The plugin exposes two actions:
 - ``counter`` — increments a persistent per-binding counter and reports it.
 """
 
+from typing import ClassVar
+
 from ajazz_plugins import ActionContext, Plugin, action
 
 
@@ -19,6 +21,10 @@ class Hello(Plugin):
     name = "Hello World"
     version = "1.0.0"
     authors = "AJAZZ Control Center contributors"
+    # Both actions call ctx.notify(), which would surface a desktop
+    # notification under the production host — declare it so the user
+    # sees it during install-time review.
+    permissions: ClassVar[list[str]] = ["notifications"]
 
     @action(id="say-hi", label="Say hi")
     def say_hi(self, ctx: ActionContext) -> None:

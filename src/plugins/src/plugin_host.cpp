@@ -252,6 +252,26 @@ std::vector<PluginInfo> PluginHost::plugins() {
             py::hasattr(obj, "version") ? py::str(obj.attr("version")).cast<std::string>() : "";
         info.authors =
             py::hasattr(obj, "authors") ? py::str(obj.attr("authors")).cast<std::string>() : "";
+        // SDK contract: `permissions` is a list[str] class attribute on
+        // every Plugin subclass; defensively reject non-list / non-string
+        // entries so a malformed plugin cannot inject garbage into the
+        // inventory the UI surfaces at install time.
+        if (py::hasattr(obj, "permissions")) {
+            try {
+                auto permsObj = obj.attr("permissions");
+                if (py::isinstance<py::list>(permsObj) || py::isinstance<py::tuple>(permsObj)) {
+                    for (auto const& item : permsObj) {
+                        if (py::isinstance<py::str>(item)) {
+                            info.permissions.push_back(py::str(item).cast<std::string>());
+                        }
+                    }
+                }
+            } catch (py::error_already_set const&) {
+                // Plugin's `permissions` accessor raised — treat as no
+                // declared permissions; the plugin will fall back to
+                // the most-restrictive sandbox profile.
+            }
+        }
         out.push_back(std::move(info));
     }
     return out;

@@ -12,7 +12,7 @@ import inspect
 import json
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, ClassVar
 
 __all__ = ["ActionContext", "Plugin", "action"]
 
@@ -96,12 +96,26 @@ class Plugin:
         name: Human-readable plugin name shown in the UI.
         version: Semantic version string (e.g. ``"1.0.0"``).
         authors: Author list (free-form string).
+        permissions: Coarse permissions the plugin requests; surfaced to
+            the user at install time and (in a follow-up slice) enforced
+            by the per-OS sandbox. Each entry must come from the
+            ``Ajazz.Permissions`` enum in
+            ``docs/schemas/plugin_manifest.schema.json`` (e.g.
+            ``"notifications"``, ``"shell-exec"``, ``"clipboard-read"``).
+            Default empty: a plugin that declares nothing gets the
+            most-restrictive sandbox profile.
     """
 
     id: str = ""
     name: str = ""
     version: str = "0.0.0"
     authors: str = ""
+    # ClassVar makes the read-only-metadata intent explicit and stops
+    # `self.permissions.append(...)` from silently mutating the
+    # class-level list shared across instances. Plugin authors should
+    # rebind the attribute (`permissions = ["foo", "bar"]`) at the
+    # subclass level rather than mutating it.
+    permissions: ClassVar[list[str]] = []
 
     def actions(self) -> dict[str, Callable[..., Any]]:
         """Discover all ``@action``-decorated methods bound to this instance.
