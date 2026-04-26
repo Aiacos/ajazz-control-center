@@ -28,7 +28,12 @@ Application::Application(QObject* parent)
     : QObject(parent), m_branding(std::make_unique<BrandingService>(this)),
       m_themeService(std::make_unique<ThemeService>(m_branding.get(), this)),
       m_autostart(std::make_unique<AutostartService>(this)),
-      m_deviceModel(std::make_unique<DeviceModel>(this)),
+      // Audit finding A1: the DeviceModel reads from this Application's
+      // owned registry (`m_deviceRegistry`), not from a process-wide
+      // singleton. The registry is declared first in the header so it
+      // is constructed before — and destroyed after — the model that
+      // holds a reference to it.
+      m_deviceModel(std::make_unique<DeviceModel>(m_deviceRegistry, this)),
       m_profileController(std::make_unique<ProfileController>(this)),
       m_trayController(
           std::make_unique<TrayController>(m_branding.get(), m_profileController.get(), this)),
@@ -58,9 +63,11 @@ Application::~Application() {
 void Application::bootstrap() {
     core::setLogLevel(core::LogLevel::Info);
 
-    streamdeck::registerAll();
-    keyboard::registerAll();
-    mouse::registerAll();
+    // Audit finding A1: pass the owned registry into every backend
+    // bootstrap rather than relying on the deprecated `instance()` shim.
+    streamdeck::registerAll(m_deviceRegistry);
+    keyboard::registerAll(m_deviceRegistry);
+    mouse::registerAll(m_deviceRegistry);
 
     m_deviceModel->refresh();
     AJAZZ_LOG_INFO("app",

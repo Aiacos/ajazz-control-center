@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file device_registry.hpp
- * @brief Global registry that maps USB VID/PID pairs to device backends.
+ * @brief Registry that maps USB VID/PID pairs to device backends.
  *
- * Backend modules call registerDevice() (typically from a registerAll()
- * bootstrap function invoked in main()) to advertise the models they
- * support. The application layer then calls enumerate() and open() to
- * discover and instantiate connected devices.
+ * Backend modules call registerDevice() (typically from a registerAll(registry)
+ * bootstrap function invoked from Application::bootstrap()) to advertise the
+ * models they support. The application layer then calls enumerate() and open()
+ * to discover and instantiate connected devices.
+ *
+ * @note Audit finding A1 — the previous Meyers-singleton `instance()` was
+ *       replaced with constructor-injected ownership so each Application
+ *       (and each unit test) owns its own registry. A `[[deprecated]]`
+ *       shim remains so any not-yet-migrated caller keeps compiling against
+ *       a process-wide fallback registry; new code MUST take a
+ *       `DeviceRegistry&` parameter explicitly.
  *
  * @see IDevice, DeviceFactory
  */
@@ -24,21 +31,36 @@
 namespace ajazz::core {
 
 /**
- * @brief Thread-safe singleton registry of device descriptors and factories.
+ * @brief Thread-safe registry of device descriptors and factories.
  *
  * Backend modules register themselves at startup via registerDevice().
  * All public methods are safe to call from multiple threads concurrently.
  *
- * @note The singleton is initialised lazily on first call to instance().
+ * The registry is now ownership-injected: `Application` holds one as a
+ * data member and threads it through every `registerAll(DeviceRegistry&)`
+ * call. Tests construct their own local instances.
+ *
  * @see IDevice, DeviceFactory
  */
 class DeviceRegistry {
 public:
+    DeviceRegistry() = default;
+
     /**
-     * @brief Return the process-wide singleton instance.
-     * @return Reference to the global DeviceRegistry.
+     * @brief Process-wide transition shim used by code that has not yet
+     *        been migrated to constructor injection.
+     *
+     * @deprecated Audit finding A1 — replace every call site with an
+     *             injected `DeviceRegistry&` parameter. The shim only
+     *             exists so device backends keep compiling during the
+     *             multi-PR migration; it returns a private function-local
+     *             static instance that is shared across translation units.
+     *
+     * @return Reference to the legacy fallback registry.
      */
-    static DeviceRegistry& instance();
+    [[deprecated("Use constructor injection — pass DeviceRegistry& explicitly. "
+                 "This singleton is a transition shim (audit finding A1).")]] static DeviceRegistry&
+    instance();
 
     /**
      * @brief Register a device model and its factory.
@@ -94,8 +116,6 @@ public:
     DeviceRegistry& operator=(DeviceRegistry&&) = delete;
 
 private:
-    DeviceRegistry() = default;
-
     /// Internal pairing of a descriptor with its backend factory.
     struct Entry {
         DeviceDescriptor descriptor; ///< Static device information.

@@ -17,16 +17,24 @@
 
 #include <memory>
 
+namespace ajazz::core {
+class DeviceRegistry;
+}
+
 namespace ajazz::streamdeck {
 
 /**
- * @brief Register all stream deck backends with the global DeviceRegistry.
+ * @brief Register all stream deck backends with the given DeviceRegistry.
  *
- * Must be called once from main() (or from the test harness) before any
- * device enumeration or open() call. Calling it more than once is safe;
- * DeviceRegistry silently skips duplicate VID/PID registrations.
+ * Must be called once from `Application::bootstrap()` (or from the test
+ * harness) before any device enumeration or open() call. Calling it more
+ * than once is safe; DeviceRegistry silently skips duplicate VID/PID
+ * registrations.
+ *
+ * @param registry Registry to populate (audit finding A1 replaced the
+ *        implicit singleton lookup with constructor injection).
  */
-void registerAll();
+void registerAll(core::DeviceRegistry& registry);
 
 /**
  * @brief Factory for the AJAZZ AKP153 / Mirabox HSV293S backend.

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file register.cpp
- * @brief Populates the global DeviceRegistry with known keyboard VID/PID pairs.
+ * @brief Populates the caller-owned DeviceRegistry with known keyboard VID/PID pairs.
  *
  * Contains representative static entries for the VIA and proprietary families.
  * The full list is extended at runtime from
@@ -12,8 +12,8 @@
 
 namespace ajazz::keyboard {
 
-void registerAll() {
-    auto& reg = core::DeviceRegistry::instance();
+void registerAll(core::DeviceRegistry& registry) {
+    auto& reg = registry;
 
     // Representative VIA-compatible entry (AK820 Pro). Real VID/PID pairs
     // are populated from `resources/device-db/keyboards.json` at runtime.

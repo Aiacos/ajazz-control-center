@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "ajazz/core/device_registry.hpp"
 #include "autostart_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
@@ -81,9 +82,19 @@ public:
     /// Accessor used by main.cpp to honor the start-minimized preference.
     [[nodiscard]] TrayController* trayController() const noexcept { return m_trayController.get(); }
 
+    /// Owned device registry; injected into the DeviceModel and into every
+    /// `registerAll(DeviceRegistry&)` backend bootstrap. Audit finding A1
+    /// replaced the previous Meyers-singleton with this owned instance.
+    [[nodiscard]] core::DeviceRegistry& deviceRegistry() noexcept { return m_deviceRegistry; }
+
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
     void onHotplug(core::HotplugEvent const& ev);
+
+    /// Audit finding A1 — registry is constructor-owned, not a singleton.
+    /// Declared first so members further down (DeviceModel) can hold a
+    /// reference to it that is guaranteed to outlive them.
+    core::DeviceRegistry m_deviceRegistry;
 
     std::unique_ptr<BrandingService> m_branding;            ///< Theme + product strings.
     std::unique_ptr<ThemeService> m_themeService;           ///< Light / dark / auto switcher.

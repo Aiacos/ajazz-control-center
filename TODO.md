@@ -164,11 +164,16 @@ ______________________________________________________________________
 > Findings from the architectural review pass earlier in the session.
 > Each one is a self-contained milestone; pick by current pain.
 
-- [ ] **A1 — DeviceRegistry singleton → DI**: replace
-  `DeviceRegistry::instance()` with constructor-injected ownership in
-  `Application`. Keeps the singleton as a transition shim so device
-  backends keep compiling. **Why**: per-test isolation, no hidden global
-  state. Touches every backend `register*.cpp`.
+- [x] **A1 — DeviceRegistry singleton → DI** ✅ shipped. `Application`
+  now owns a `core::DeviceRegistry m_deviceRegistry` member and threads
+  it through `streamdeck::registerAll(reg)` / `keyboard::registerAll(reg)`
+  / `mouse::registerAll(reg)` plus the `DeviceModel(registry, parent)`
+  constructor. The Meyers-singleton `DeviceRegistry::instance()` is kept
+  as a `[[deprecated]]` transition shim (audit-finding label baked into
+  the attribute) so any future backend that still needs it keeps
+  compiling. `tests/unit/test_device_registry.cpp` builds its own local
+  registries and gains an isolation case proving two instances don't
+  share state.
 - [x] **A2 — ActionEngine threading model** ✅ shipped. `ActionEngine`
   now accepts a pluggable `core::Executor`; on `Sleep` (and on any
   non-zero post-step `delayMs`) it defers the chain continuation via

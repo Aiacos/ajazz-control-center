@@ -15,8 +15,8 @@
 
 namespace ajazz::streamdeck {
 
-/** @brief Register all known Stream Dock device descriptors with the global
- *         @ref core::DeviceRegistry.
+/** @brief Register all known Stream Dock device descriptors with the
+ *         caller-owned @ref core::DeviceRegistry.
  *
  *  This function must be called once during application initialisation (before
  *  USB enumeration begins).  Subsequent calls are safe but redundant — the
@@ -28,11 +28,14 @@ namespace ajazz::streamdeck {
  *  - **AKP03 / Mirabox N3** (VID=0x0300, PID=0x3001) — provisional IDs
  *  - **AKP05 / AKP05E** (VID=0x0300, PID=0x5001) — provisional IDs
  *
+ *  @param registry Registry to populate (audit finding A1 replaced the
+ *         implicit singleton lookup with constructor injection).
+ *
  *  @see core::DeviceRegistry::registerDevice()
  *  @see makeAkp153(), makeAkp03(), makeAkp05()
  */
-void registerAll() {
-    auto& reg = core::DeviceRegistry::instance();
+void registerAll(core::DeviceRegistry& registry) {
+    auto& reg = registry;
 
     // AKP153 (international) — 15 LCD keys (5×3), no encoder.
     reg.registerDevice(

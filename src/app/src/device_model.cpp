@@ -17,7 +17,8 @@
 
 namespace ajazz::app {
 
-DeviceModel::DeviceModel(QObject* parent) : QAbstractListModel(parent) {}
+DeviceModel::DeviceModel(core::DeviceRegistry& registry, QObject* parent)
+    : QAbstractListModel(parent), m_registry(registry) {}
 
 int DeviceModel::rowCount(QModelIndex const& parent) const {
     return parent.isValid() ? 0 : static_cast<int>(m_rows.size());
@@ -82,7 +83,7 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
 
 void DeviceModel::refresh() {
     beginResetModel();
-    m_rows = core::DeviceRegistry::instance().enumerate();
+    m_rows = m_registry.enumerate();
     refreshLiveEnumeration();
     endResetModel();
 }
@@ -92,7 +93,7 @@ void DeviceModel::refreshLiveEnumeration() {
     // does not need to link hidapi directly. On Linux the result reflects the
     // /dev/hidraw* nodes the calling user can open (uaccess ACL); on Windows
     // and macOS it reflects every device the OS has enumerated.
-    m_connected = core::DeviceRegistry::instance().enumerateConnectedHidKeys();
+    m_connected = m_registry.enumerateConnectedHidKeys();
     int matching = 0;
     for (auto const& d : m_rows) {
         if (m_connected.count(std::make_pair(d.vendorId, d.productId)) > 0) {

@@ -10,15 +10,22 @@
 
 #include "ajazz/core/device.hpp"
 
+namespace ajazz::core {
+class DeviceRegistry;
+}
+
 namespace ajazz::mouse {
 
 /**
- * @brief Register all supported mouse devices with the global DeviceRegistry.
+ * @brief Register all supported mouse devices with the given DeviceRegistry.
  *
  * Inserts VID/PID descriptors for every known AJ-series model.
  * Safe to call multiple times.
+ *
+ * @param registry Registry to populate (audit finding A1 replaced the
+ *        implicit singleton lookup with constructor injection).
  */
-void registerAll();
+void registerAll(core::DeviceRegistry& registry);
 
 /**
  * @brief Create an AJ-series gaming mouse backend.

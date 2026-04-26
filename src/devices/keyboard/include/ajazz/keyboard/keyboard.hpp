@@ -5,22 +5,30 @@
  *
  * The two supported keyboard protocol families — VIA (open standard) and the
  * proprietary AJAZZ gaming protocol — each have a dedicated factory.  Call
- * registerAll() once at start-up to populate the global DeviceRegistry with
- * every known VID/PID pair.
+ * registerAll(registry) once at start-up to populate the application's
+ * DeviceRegistry with every known VID/PID pair.
  */
 #pragma once
 
 #include "ajazz/core/device.hpp"
 
+namespace ajazz::core {
+class DeviceRegistry;
+}
+
 namespace ajazz::keyboard {
 
 /**
- * @brief Register all supported keyboard backends with the global DeviceRegistry.
+ * @brief Register all supported keyboard backends with the given DeviceRegistry.
  *
  * Inserts descriptors for both VIA-compatible and proprietary AJAZZ keyboards.
  * Safe to call multiple times — the registry skips already-registered entries.
+ *
+ * @param registry Registry to populate. Owned by the caller (typically
+ *        `ajazz::app::Application`); audit finding A1 replaced the implicit
+ *        singleton lookup with constructor injection.
  */
-void registerAll();
+void registerAll(core::DeviceRegistry& registry);
 
 /**
  * @brief Create a VIA-compatible keyboard backend.

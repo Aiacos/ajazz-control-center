@@ -5,7 +5,13 @@
  *
  * Registers StreamDeck, keyboard, and mouse backends then verifies that the
  * registry holds at least the expected minimum number of descriptors per
- * family, confirming that each registerAll() call populates the global table.
+ * family, confirming that each registerAll() call populates the table.
+ *
+ * Audit finding A1: each test now constructs its own local
+ * `DeviceRegistry` so cases never share global state — running the suite
+ * twice in the same process can no longer trip the duplicate-PID warning
+ * path, and parallel cases (e.g. under `ctest -j`) can no longer race on a
+ * shared mutex.
  */
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
@@ -17,11 +23,12 @@
 /// DeviceRegistry::enumerate() must return descriptors for StreamDeck, keyboard, and mouse
 /// families.
 TEST_CASE("device registry enumerates all three families", "[registry]") {
-    ajazz::streamdeck::registerAll();
-    ajazz::keyboard::registerAll();
-    ajazz::mouse::registerAll();
+    ajazz::core::DeviceRegistry registry;
+    ajazz::streamdeck::registerAll(registry);
+    ajazz::keyboard::registerAll(registry);
+    ajazz::mouse::registerAll(registry);
 
-    auto const descriptors = ajazz::core::DeviceRegistry::instance().enumerate();
+    auto const descriptors = registry.enumerate();
     REQUIRE(descriptors.size() >= 7);
 
     int deckCount = 0, kbdCount = 0, mouseCount = 0;
@@ -43,4 +50,13 @@ TEST_CASE("device registry enumerates all three families", "[registry]") {
     REQUIRE(deckCount >= 3);
     REQUIRE(kbdCount >= 2);
     REQUIRE(mouseCount >= 4);
+}
+
+/// Two locally-owned registries must not share state — audit finding A1.
+TEST_CASE("device registry instances are independent", "[registry][isolation]") {
+    ajazz::core::DeviceRegistry a;
+    ajazz::core::DeviceRegistry b;
+    ajazz::keyboard::registerAll(a);
+    REQUIRE(!a.enumerate().empty());
+    REQUIRE(b.enumerate().empty());
 }

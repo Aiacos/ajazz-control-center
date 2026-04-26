@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file device_registry.cpp
- * @brief DeviceRegistry singleton implementation.
+ * @brief DeviceRegistry implementation.
  *
- * Provides a process-wide thread-safe map from USB VID/PID pairs to device
- * backend factories. Duplicate registrations on the same (VID, PID) pair
- * are silently dropped after emitting a warning.
+ * Provides a thread-safe map from USB VID/PID pairs to device backend
+ * factories. Duplicate registrations on the same (VID, PID) pair are
+ * silently dropped after emitting a warning.
+ *
+ * Audit finding A1: ownership now lives in `Application`. The legacy
+ * `instance()` Meyers singleton is kept as a `[[deprecated]]` shim that
+ * returns a process-wide fallback registry — call sites must be migrated
+ * to constructor injection.
  */
 #include "ajazz/core/device_registry.hpp"
 
@@ -17,10 +22,20 @@
 
 namespace ajazz::core {
 
+// The shim is itself marked deprecated, so its own definition would trip
+// -Wdeprecated-declarations on compilers that warn on definitions. Suppress
+// locally; this is the only translation unit that should still touch it.
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+#endif
 DeviceRegistry& DeviceRegistry::instance() {
     static DeviceRegistry sInstance;
     return sInstance;
 }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 void DeviceRegistry::registerDevice(DeviceDescriptor descriptor, DeviceFactory factory) {
     std::lock_guard const lock(m_mutex);

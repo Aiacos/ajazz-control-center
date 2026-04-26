@@ -22,6 +22,10 @@
 #include <utility>
 #include <vector>
 
+namespace ajazz::core {
+class DeviceRegistry;
+}
+
 namespace ajazz::app {
 
 /**
@@ -55,7 +59,16 @@ public:
         HasTouchStripRole,            ///< True when the device exposes a touch strip.
     };
 
-    explicit DeviceModel(QObject* parent = nullptr);
+    /**
+     * @brief Construct a DeviceModel bound to a specific DeviceRegistry.
+     *
+     * @param registry Registry to read descriptors / live HID keys from.
+     *        Must outlive this DeviceModel. In production this is the
+     *        registry owned by `ajazz::app::Application`; tests can pass
+     *        a local instance for isolation (audit finding A1).
+     * @param parent QObject parent for memory management.
+     */
+    explicit DeviceModel(core::DeviceRegistry& registry, QObject* parent = nullptr);
 
     /**
      * @brief Return the number of rows (registered devices).
@@ -99,6 +112,10 @@ public:
 private:
     /// Refresh m_connected by walking hid_enumerate(); cheap (≈ms) on Linux.
     void refreshLiveEnumeration();
+
+    /// Injected registry — non-owning reference; lifetime guaranteed by
+    /// `ajazz::app::Application`, which owns both us and the registry.
+    core::DeviceRegistry& m_registry;
 
     std::vector<core::DeviceDescriptor> m_rows; ///< Snapshot of registered descriptors.
 
