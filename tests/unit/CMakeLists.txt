@@ -21,6 +21,17 @@ add_executable(
     test_pi_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
 )
+# Out-of-process plugin host (audit finding A4 — slice 1). The class itself is Qt-free and
+# pybind11-free, so we link the source directly into this test binary instead of pulling the whole
+# `ajazz_plugins` library (which would drag pybind11 and Python3 in). Skipped on Windows: the
+# slice-1 implementation is POSIX-only.
+if(NOT WIN32)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_out_of_process_plugin_host.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host.cpp
+    )
+    target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
+endif()
 
 # Set the AUTOMOC flag for the fetcher TU we pull in from the app target — StreamdockCatalogFetcher
 # is a Q_OBJECT so it needs moc to run.

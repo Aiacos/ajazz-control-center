@@ -196,6 +196,7 @@ ______________________________________________________________________
   compiling. `tests/unit/test_device_registry.cpp` builds its own local
   registries and gains an isolation case proving two instances don't
   share state.
+
 - [x] **A2 — ActionEngine threading model** ✅ shipped. `ActionEngine`
   now accepts a pluggable `core::Executor`; on `Sleep` (and on any
   non-zero post-step `delayMs`) it defers the chain continuation via
@@ -205,19 +206,38 @@ ______________________________________________________________________
   ships `QtExecutor` (backed by `QTimer::singleShot`) so the HID poll
   thread / Qt main thread is freed immediately. Existing 3 ActionEngine
   tests still pass; 3 new tests cover the executor abstraction.
+
 - [x] **A3 — EventBus per-event allocation** ✅ shipped. `event_bus.cpp`
   now holds the subscribers in a `std::atomic<std::shared_ptr<vector<…> const>>`
   swapped via copy-on-write on subscribe / unsubscribe; `publish()` is
   lock-free (atomic-load + iterate immutable snapshot). Writers
   serialise on a write-only mutex; readers don't take a mutex.
   Existing 4/4 EventBus tests still pass under TSan.
-- [ ] **A4 — PluginHost out-of-process**: pybind11's
-  `scoped_interpreter` runs CPython in-process; a segfault in any
-  C-extension imported by a plugin (numpy, opencv, mido) crashes the
-  whole app. Move the host out-of-process via subprocess + Unix socket
-  (or seccomp-bpf sandbox if staying in-process). **Why**: bake
-  isolation in *before* exposing user-installable plugins; retrofitting
-  is 10× more expensive.
+
+- 🟡 **A4 — PluginHost out-of-process** — slice 1 shipped this cycle.
+  New `OutOfProcessPluginHost` (POSIX-only;
+  `src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
+  spawns a child Python process via `fork()` + `execvp()` and talks to
+  it over line-delimited JSON on a pair of pipes. The child
+  (`python/ajazz_plugins/_host_child.py`) implements the foundation
+  wire protocol: `ready` handshake, `list_plugins` (returns `[]`),
+  `shutdown`, plus a `_crash_for_test` op that deliberately SIGSEGVs
+  itself for the safety test. Three new unit tests in
+  `tests/unit/test_out_of_process_plugin_host.cpp` validate the
+  spawn round-trip, **the crash-isolation claim** (a SIGSEGV in the
+  child kills only the child; the host's next `listPlugins()` returns
+  `std::runtime_error` instead of crashing the AJAZZ Control Center
+  process), and bad-config rejection. Lives alongside the legacy
+  in-process `PluginHost` during migration.
+
+  Slice 2 (follow-up, separate PR): wire `add_search_path`,
+  `load_all`, `dispatch` through the IPC; migrate every `PluginHost`
+  caller to `OutOfProcessPluginHost`; add Windows port (`_spawnvp` +
+  anonymous pipes). Slice 3 (security PR): per-OS sandboxing —
+  `bwrap` on Linux, `sandbox-exec` on macOS, AppContainer on
+  Windows — and removal of the in-process host. The slice-1 wire
+  protocol is already extensible: ops are flat-JSON `{"op":"<name>", …}`; events `{"event":"<name>", …}`.
+
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
   reproduces the legacy formatting. `setLogSink(shared_ptr<LogSink>)`
@@ -225,6 +245,7 @@ ______________________________________________________________________
   (slot is `std::atomic<std::shared_ptr<LogSink>>`). All AJAZZ_LOG\_\*
   macros unchanged; call sites untouched. Tests can now install a
   capturing sink and assert on what subsystems logged.
+
 - [ ] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
 
 ### Security hardening
