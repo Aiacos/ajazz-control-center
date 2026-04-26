@@ -483,15 +483,16 @@ ______________________________________________________________________
   `https://space.key123.vip/interface/user/productInfo/list`,
   confirmed via web search to be the official AJAZZ Streamdock
   plugin store) rather than the noisy union under "All".
-- [ ] **QSettings-backed Plugin Store tab persistence** (followup
-  to the default-tab change above). The current implementation
-  resets `activeTab` to the AJAZZ default on every app launch —
-  the user has to re-pick "Community" or "Installed" each session
-  if they prefer those views. Wire `PluginStore.qml`'s `activeTab`
-  through a `Settings { property alias activeTab: root.activeTab }`
-  block so the user's choice survives across restarts (the AJAZZ
-  default still applies on first run because QSettings is empty
-  then). ≈ 20 min, mostly testing the persistence handshake.
+- [x] **QSettings-backed Plugin Store tab persistence** — done.
+  `src/app/qml/PluginStore.qml` now imports `QtCore` and wires
+  `activeTab` through a `Settings { category: "PluginStore"; property alias activeTab: root.activeTab }` block. The AJAZZ
+  Streamdock default (index 2) still applies on the very first
+  launch (when QSettings has no stored value yet); subsequent
+  launches restore whatever tab the user last selected. Stored
+  under `[PluginStore]/activeTab` in the existing
+  `Aiacos/AjazzControlCenter.conf` — the `category` keeps it
+  scoped so future page-specific persistence (search query, sort
+  order, etc.) can co-exist without key collisions.
 - [x] **AJAZZ Streamdock store integration — schema + UI scaffolding**:
   manifest schema now exposes `Ajazz.Compatibility.Mode = "streamdock"`
   alongside `streamdeck` / `opendeck`, plus an opaque

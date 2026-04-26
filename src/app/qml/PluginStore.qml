@@ -42,6 +42,7 @@
 //     swap this for a `QSortFilterProxyModel` exposed from C++; that swap
 //     is transparent to the QML page since both shapes implement the same
 //     role names.
+import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -60,11 +61,23 @@ Page {
     /// Default lands on AJAZZ Streamdock (index 2): the live catalogue mirror
     /// of `https://space.key123.vip/interface/user/productInfo/list` is the
     /// curated, vendor-blessed source — first-time users should see those
-    /// entries, not the noisy union of every source under "All". This is
-    /// not persisted across app restarts today; QSettings-backed
-    /// last-active-tab is filed separately in TODO.md and reverts to this
-    /// default on every relaunch.
+    /// entries, not the noisy union of every source under "All". The
+    /// user's last-active choice is persisted via the `Settings` block
+    /// below so subsequent app launches restore it; the AJAZZ default
+    /// only applies on the very first launch (when QSettings has no
+    /// stored value yet).
     property int activeTab: 2
+
+    /// Persist the user's tab choice across app restarts. The alias
+    /// makes Settings read the stored value at component creation
+    /// (overriding the QML default if present) and write back on every
+    /// change. The `category` keeps the key under
+    /// `Aiacos/AjazzControlCenter.conf [PluginStore] activeTab=...`
+    /// so future page-scoped persistence can co-exist without clashes.
+    Settings {
+        category: "PluginStore"
+        property alias activeTab: root.activeTab
+    }
 
     /// Lower-cased search query; matched against name/description/tags.
     property string query: ""
