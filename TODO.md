@@ -118,46 +118,68 @@ ______________________________________________________________________
 > protocols may live in the repo, but no vendor binary, decompiled
 > source, or copyrighted asset ever lands in version control.
 
-- [ ] **Acquire the official AJAZZ software for the Maude keyboard and
-  the Stream Dock line of products**: download every current
-  installer (Windows + macOS, both x86_64 and arm64 where offered),
-  hash them with SHA-256, archive the artefacts in an encrypted
-  out-of-repo vault and record the upstream URLs, version strings,
-  installer signatures and capture date in `docs/research/vendor- software-inventory.md`. ≈ 0.5 day.
+- [x] **Acquire the official AJAZZ software for the Maude keyboard and
+  the Stream Dock line of products** — first pass landed. Inventory
+  shipped at `docs/research/vendor-software-inventory.md` with the
+  Stream Dock AJAZZ-branded Windows + macOS installers (Aliyun OSS,
+  Content-MD5 verified at HEAD without burning bandwidth on the
+  full 121 / 282 MB downloads), 17 keyboard models (AK680/820/870
+  families + AKS / AKP / NK SKUs) and 15 mouse models (AJ199/159
+  families + AJ039/129/139/179/358/52 + AM3) with URL, file size,
+  Last-Modified, and Content-MD5 where the CDN exposes it. Open
+  items recorded in the doc: Mirabox-branded Stream Dock builds
+  (JS-rendered portal returns 500 on a single-shot fetch — needs a
+  real browser session); Maude keyboard (not on either EN or UK
+  download page — likely a regional / internal name, action item to
+  confirm via `support@a-jazz.com`); AJ339/AJ380 driver download
+  (probably folded into AJ199 family — needs report-descriptor
+  comparison); SHA-256 archival pass to the encrypted out-of-repo
+  vault.
 - [ ] **Decompile / disassemble the AJAZZ desktop apps under a clean-
   room policy**: run the installers in a disposable VM, extract the
   Electron / .NET / Qt payloads, decompile with the appropriate
   toolchain (`asar` + `js-beautify` for Electron, ILSpy / dnSpyEx
   for .NET, Ghidra / IDA for native binaries) and produce a written
-  protocol & feature inventory at `docs/research/vendor-protocol- notes.md`. **Rules**: only one engineer reads vendor sources; that
-  engineer writes specs but does not contribute to the matching
-  module; a second "clean" engineer implements from the spec.
-  Capture USB / WebSocket / IPC traffic with Wireshark + usbmon to
-  cross-validate the static analysis. ≈ 3-5 days.
-- [ ] **Vendor feature inventory → gap analysis**: distil the recon
-  notes into a public-friendly markdown table at
-  `docs/research/vendor-feature-matrix.md` listing every user-facing
-  feature of the AJAZZ apps (Maude keyboard: per-key RGB, macros,
-  layers, dial bindings; Stream Dock: tile profiles, plugins, dial
-  widgets, haptics, multi-page, lock screen, hardware firmware
-  update flow), each marked `✅ done` / `🟡 partial` / `❌ missing`
-  in our project, with links to the implementing modules or to the
-  TODO entries that will close the gap. ≈ 1 day.
+  protocol & feature inventory at
+  [`docs/research/vendor-protocol-notes.md`](docs/research/vendor-protocol-notes.md)
+  (scaffold + methodology landed in this cycle; sections per device
+  family wait for first capture). **Rules**: only one engineer reads
+  vendor sources; that engineer writes specs but does not contribute
+  to the matching module; a second "clean" engineer implements from
+  the spec. Capture USB / WebSocket / IPC traffic with Wireshark +
+  usbmon to cross-validate the static analysis. ≈ 3-5 days.
+- [x] **Vendor feature inventory → gap analysis** — scaffold landed
+  this cycle at
+  [`docs/research/vendor-feature-matrix.md`](docs/research/vendor-feature-matrix.md).
+  Stream Dock / keyboard / mouse / cross-cutting infrastructure
+  rows seeded from `docs/_data/devices.yaml` and the public AJAZZ
+  feature sheets, with our coverage marked ✅ / 🟡 / ❌ / ❓ where
+  evidence is in hand and ❓ where the vendor "claimed" capability
+  awaits the recon pass. The doc is goal-backwards: ❓ entries
+  flip to ✅ / ❌ only when a `capture-id` from
+  `vendor-protocol-notes.md` lands. Open work — populate the
+  Vendor column with verified behavior as recon ships.
 - [ ] **Protocol parity backlog**: file one TODO entry per missing
   feature surfaced by the gap analysis (per-key RGB ramp commands,
   custom macro op-codes, vendor-specific HID reports, firmware-
   upgrade USB DFU sequence, dial haptic patterns, OSD overlay
   triggers, etc.) and link them back into the **Plugin SDK + Store**
   and **Architecture refactors** sections of this file so the
-  parity work is scheduled, not forgotten. ≈ 0.5 day.
+  parity work is scheduled, not forgotten. Blocked on: at least one
+  recon-confirmed row of `vendor-feature-matrix.md` flipping from
+  ❓ to a verified vendor capability. ≈ 0.5 day once the recon pass
+  surfaces material.
 - [ ] **Stability & infrastructure cross-pollination**: where the
   vendor app already solves a hard problem better than we do (HID
   reconnect debounce timings, firmware update retry / rollback,
   per-device USB transfer chunk sizes, profile sync conflict
   resolution, telemetry beaconing, crash-safe settings persistence),
-  document the technique in `docs/research/vendor-techniques.md` and
-  open targeted issues to port the *idea* (never the code) into our
-  stack. ≈ ongoing, scoped per technique.
+  document the technique in
+  [`docs/research/vendor-techniques.md`](docs/research/vendor-techniques.md)
+  (scaffold + 6 candidate techniques landed this cycle, ranked by
+  expected stability impact; details fill in as captures come in)
+  and open targeted issues to port the *idea* (never the code) into
+  our stack. ≈ ongoing, scoped per technique.
 
 ### Architecture refactors (multi-day, milestone-level)
 

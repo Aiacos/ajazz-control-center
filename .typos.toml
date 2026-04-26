@@ -19,6 +19,11 @@ udev     = "udev"
 libudev  = "libudev"
 QMK      = "QMK"
 VIA      = "VIA"
+# AJAZZ keyboard SKU prefix (AKS068, AKS075, …) — typos otherwise rewrites
+# the literal "AKS" to "ASK" thinking it's an English word.
+AKS      = "AKS"
+AKS068   = "AKS068"
+AKS075   = "AKS075"
 pybind   = "pybind"
 Aiacos   = "Aiacos"
 Argentieri = "Argentieri"
