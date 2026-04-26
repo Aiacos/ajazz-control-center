@@ -469,13 +469,22 @@ ______________________________________________________________________
   shape — read the actual OpenDeck registry response format before
   starting; OpenDeck's manifests differ from Streamdock's. ≈ 2-3 days
   of focused work once the upstream registry response shape is mapped.
-- [ ] **AJAZZ Streamdock as the default Plugin Store tab** (user
-  request, 2026-04-26). `src/app/qml/PluginStore.qml` currently
-  initialises `property int activeTab: 0` ("All"); switch the
-  default to `2` ("AJAZZ Streamdock") so first-time users land on
-  the AJAZZ-curated catalogue rather than a noisy mixed list.
-  Trivial change (1 line + a comment); make sure the QSettings-
-  persisted last-active-tab still wins on reopen. ≈ 30 min.
+- [x] **AJAZZ Streamdock as the default Plugin Store tab** (user
+  request, 2026-04-26). Done — `src/app/qml/PluginStore.qml`
+  initialises `property int activeTab: 2` so first-time users land
+  on the AJAZZ-curated catalogue (live mirror of
+  `https://space.key123.vip/interface/user/productInfo/list`,
+  confirmed via web search to be the official AJAZZ Streamdock
+  plugin store) rather than the noisy union under "All".
+- [ ] **QSettings-backed Plugin Store tab persistence** (followup
+  to the default-tab change above). The current implementation
+  resets `activeTab` to the AJAZZ default on every app launch —
+  the user has to re-pick "Community" or "Installed" each session
+  if they prefer those views. Wire `PluginStore.qml`'s `activeTab`
+  through a `Settings { property alias activeTab: root.activeTab }`
+  block so the user's choice survives across restarts (the AJAZZ
+  default still applies on first run because QSettings is empty
+  then). ≈ 20 min, mostly testing the persistence handshake.
 - [x] **AJAZZ Streamdock store integration — schema + UI scaffolding**:
   manifest schema now exposes `Ajazz.Compatibility.Mode = "streamdock"`
   alongside `streamdeck` / `opendeck`, plus an opaque

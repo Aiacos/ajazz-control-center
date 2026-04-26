@@ -51,8 +51,16 @@ Page {
     background: Rectangle { color: Theme.bgBase }
 
     /// Index into `tabs.contentChildren` mirroring the active source filter:
-    ///   0 = All, 1 = Installed, 2 = Streamdock, 3 = Community.
-    property int activeTab: 0
+    ///   0 = All, 1 = Installed, 2 = AJAZZ Streamdock, 3 = Community.
+    ///
+    /// Default lands on AJAZZ Streamdock (index 2): the live catalogue mirror
+    /// of `https://space.key123.vip/interface/user/productInfo/list` is the
+    /// curated, vendor-blessed source — first-time users should see those
+    /// entries, not the noisy union of every source under "All". This is
+    /// not persisted across app restarts today; QSettings-backed
+    /// last-active-tab is filed separately in TODO.md and reverts to this
+    /// default on every relaunch.
+    property int activeTab: 2
 
     /// Lower-cased search query; matched against name/description/tags.
     property string query: ""
