@@ -5,14 +5,18 @@
 // The page surfaces the catalogue exposed by the C++-side
 // PluginCatalogModel (registered as the `pluginCatalog` QML context property
 // by Application::exposeToQml) and lets the user install, enable / disable
-// or uninstall a plugin. Catalogue entries come from three different
+// or uninstall a plugin. Catalogue entries come from four different
 // upstream sources, each backed by a tab in the source switcher:
 //
-//   * "All"             — every catalogue row regardless of source.
-//   * "Installed"       — only rows the user has already installed.
+//   * "All"              — every catalogue row regardless of source.
+//   * "Installed"        — only rows the user has already installed.
 //   * "AJAZZ Streamdock" — first-class mirror of the official Streamdock
-//                          plugin store (compatibility=streamdock).
-//   * "Community"       — community-maintained third-party plugins.
+//                          plugin store at space.key123.vip (the AJAZZ-curated
+//                          catalogue; compatibility=streamdock). Default tab.
+//   * "OpenDeck"         — mirror of the archived Elgato Stream Deck plugin
+//                          store at plugins.amankhanna.me (community-
+//                          maintained; compatibility=opendeck).
+//   * "Community"        — community-maintained third-party plugins.
 //
 // Layout:
 //
@@ -51,7 +55,7 @@ Page {
     background: Rectangle { color: Theme.bgBase }
 
     /// Index into `tabs.contentChildren` mirroring the active source filter:
-    ///   0 = All, 1 = Installed, 2 = AJAZZ Streamdock, 3 = Community.
+    ///   0 = All, 1 = Installed, 2 = AJAZZ Streamdock, 3 = OpenDeck, 4 = Community.
     ///
     /// Default lands on AJAZZ Streamdock (index 2): the live catalogue mirror
     /// of `https://space.key123.vip/interface/user/productInfo/list` is the
@@ -89,7 +93,8 @@ Page {
         switch (root.activeTab) {
         case 1: if (!installed) return false; break;
         case 2: if (source !== "streamdock") return false; break;
-        case 3: if (source !== "community") return false; break;
+        case 3: if (source !== "opendeck") return false; break;
+        case 4: if (source !== "community") return false; break;
         default: break;
         }
         // Search filter — case-insensitive substring across name, summary
@@ -147,6 +152,7 @@ Page {
                 TabButton { text: qsTr("All"); width: implicitWidth }
                 TabButton { text: qsTr("Installed"); width: implicitWidth }
                 TabButton { text: qsTr("AJAZZ Streamdock"); width: implicitWidth }
+                TabButton { text: qsTr("OpenDeck"); width: implicitWidth }
                 TabButton { text: qsTr("Community"); width: implicitWidth }
             }
 
@@ -288,6 +294,129 @@ Page {
                     Label {
                         Layout.fillWidth: true
                         text: streamdockBanner.statusLine
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.fontSm
+                        wrapMode: Text.WordWrap
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: text
+                    }
+                }
+            }
+        }
+
+        // -- OpenDeck tab info banner -----------------------------------
+        // Surfaced only on the OpenDeck tab. Same shape as the Streamdock
+        // banner above but bound to PluginCatalogModel.opendeckState /
+        // opendeckFetchedAtUnixMs so the user can tell at a glance
+        // whether the rows are fresh, cached, or the bundled fallback.
+        // The wording explicitly attributes the upstream so the user
+        // knows these plugins come from the archived Elgato App Store
+        // mirror, not from AJAZZ themselves.
+        Frame {
+            id: opendeckBanner
+            visible: root.activeTab === 3
+            Layout.fillWidth: true
+
+            property int relativeAgeTick: 0
+            Timer {
+                interval: 30000
+                running: opendeckBanner.visible
+                repeat: true
+                onTriggered: opendeckBanner.relativeAgeTick++
+            }
+
+            function relativeAge(unixMs) {
+                if (!unixMs || unixMs <= 0) {
+                    return "";
+                }
+                opendeckBanner.relativeAgeTick;  // depend on the tick
+                var deltaSec = Math.max(0, Math.floor((Date.now() - unixMs) / 1000));
+                if (deltaSec < 45) {
+                    return qsTr("just now");
+                }
+                if (deltaSec < 3600) {
+                    return qsTr("%1 min ago").arg(Math.round(deltaSec / 60));
+                }
+                if (deltaSec < 86400) {
+                    return qsTr("%1 h ago").arg(Math.round(deltaSec / 3600));
+                }
+                return qsTr("%1 days ago").arg(Math.round(deltaSec / 86400));
+            }
+
+            readonly property string opendeckState:
+                pluginCatalog ? pluginCatalog.opendeckState : "loading"
+            readonly property color statusColor: {
+                switch (opendeckBanner.opendeckState) {
+                case "online":  return Theme.accent;
+                case "cached":  return Theme.accent2;
+                case "offline": return Theme.fgMuted;
+                default:        return Theme.accent2;
+                }
+            }
+            readonly property string statusGlyph: {
+                switch (opendeckBanner.opendeckState) {
+                case "online":  return "●";
+                case "cached":  return "◐";
+                case "offline": return "○";
+                default:        return "◔";
+                }
+            }
+            readonly property string statusLine: {
+                var ts = pluginCatalog ? pluginCatalog.opendeckFetchedAtUnixMs : 0;
+                var rel = opendeckBanner.relativeAge(ts);
+                switch (opendeckBanner.opendeckState) {
+                case "online":
+                    return rel.length > 0
+                        ? qsTr("Live catalogue · updated %1").arg(rel)
+                        : qsTr("Live catalogue");
+                case "cached":
+                    return rel.length > 0
+                        ? qsTr("Showing cached catalogue · last refreshed %1").arg(rel)
+                        : qsTr("Showing cached catalogue");
+                case "offline":
+                    return qsTr("Offline — using bundled snapshot");
+                default:
+                    return qsTr("Fetching latest plugins from plugins.amankhanna.me…");
+                }
+            }
+
+            background: Rectangle {
+                color: Theme.tile
+                border.color: opendeckBanner.statusColor
+                border.width: 1
+                radius: Theme.radiusMd
+            }
+            ColumnLayout {
+                anchors.fill: parent
+                spacing: Theme.spacingXs
+                Label {
+                    text: qsTr("OpenDeck plugin store")
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.fontMd
+                    font.bold: true
+                }
+                Label {
+                    Layout.fillWidth: true
+                    text: qsTr("Plugins on this tab come from the OpenDeck community "
+                             + "mirror of the archived Elgato Stream Deck plugin store. "
+                             + "They run through the Stream Deck SDK 2 compatibility shim "
+                             + "and the same sandbox as native plugins.")
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    wrapMode: Text.WordWrap
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingXs
+                    Label {
+                        text: opendeckBanner.statusGlyph
+                        color: opendeckBanner.statusColor
+                        font.pixelSize: Theme.fontMd
+                        font.bold: true
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: opendeckBanner.statusLine
                         color: Theme.fgMuted
                         font.pixelSize: Theme.fontSm
                         wrapMode: Text.WordWrap

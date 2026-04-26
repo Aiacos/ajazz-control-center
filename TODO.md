@@ -451,24 +451,31 @@ ______________________________________________________________________
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
 - [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
   - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
-- [ ] **OpenDeck store integration — first-class tab** (user request,
-  2026-04-26). Today the store UI surfaces OpenDeck only through the
-  manifest `Ajazz.Compatibility.Mode = "opendeck"` field plus a couple
-  of demo entries in `plugin_catalog_model.cpp`; there is no dedicated
-  catalogue fetcher for the upstream OpenDeck plugin registry
-  (https://github.com/nekename/OpenDeck or the user's preferred
-  upstream source). Mirror the slice-of-work the AJAZZ Streamdock
-  store already shipped: schema bit (`source: "opendeck"` already
-  exists in the row model), TabBar entry in `PluginStore.qml`, a new
-  `OpenDeckCatalogFetcher` (`src/app/src/opendeck_catalog_fetcher.{hpp,cpp}`)
-  with cache + bundled fallback under `<XDG_CACHE_HOME>/ajazz-control-center/opendeck-catalog.json`,
-  status-pill banner that shows live/cached/offline, a curated upstream
-  endpoint resolved at fetch time, and the same overridability through
-  `ACC_OPENDECK_CATALOG_URL=`. Implementation pattern is essentially a
-  copy of `streamdock_catalog_fetcher.cpp` with a different schema
-  shape — read the actual OpenDeck registry response format before
-  starting; OpenDeck's manifests differ from Streamdock's. ≈ 2-3 days
-  of focused work once the upstream registry response shape is mapped.
+- [x] **OpenDeck store integration — first-class tab** (user request,
+  2026-04-26). Done. New `OpenDeckCatalogFetcher`
+  (`src/app/src/opendeck_catalog_fetcher.{hpp,cpp}`) GETs
+  `https://plugins.amankhanna.me/catalogue.json` (the OpenDeck
+  community mirror of the archived Elgato Stream Deck App Store —
+  per the OpenDeck Wiki "0. Elgato Marketplace" page), parses the
+  flat JSON array of plugin entries, translates each to a
+  `CatalogEntry` with `source = "opendeck"` and
+  `compatibility = "opendeck"`. Same three-layer (live → cache →
+  bundled fallback) resolution as the Streamdock fetcher, atomic
+  `QSaveFile` mirror at
+  `<XDG_CACHE_HOME>/ajazz-control-center/opendeck-catalog.json`,
+  endpoint overridable via `ACC_OPENDECK_CATALOG_URL=` (set to
+  `disabled` to skip live fetch on air-gapped builds). Plumbed
+  through `PluginCatalogModel` with parallel `replaceOpendeckRows`
+  plus three new Q_PROPERTY entries (`opendeckState`,
+  `opendeckFetchedAtUnixMs`, `opendeckCount`) and a matching
+  `opendeckStateChanged` signal. New "OpenDeck" tab in
+  `PluginStore.qml` (index 3,
+  between Streamdock and Community) with its own status-pill banner
+  attributing the upstream and explaining the SDK-2 compat shim.
+  `resources/opendeck-fallback.json` ships 3 representative entries
+  so the tab is never empty in dev / CI / air-gapped builds.
+  One-click install through the shared lifecycle manager still
+  depends on the **Plugin lifecycle manager** milestone.
 - [x] **AJAZZ Streamdock as the default Plugin Store tab** (user
   request, 2026-04-26). Done — `src/app/qml/PluginStore.qml`
   initialises `property int activeTab: 2` so first-time users land

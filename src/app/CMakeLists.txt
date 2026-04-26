@@ -36,6 +36,7 @@ qt_add_executable(
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     src/streamdock_catalog_fetcher.cpp
+    src/opendeck_catalog_fetcher.cpp
     src/profile_controller.cpp
     src/branding_service.cpp
     src/tray_controller.cpp
@@ -143,6 +144,14 @@ set_source_files_properties(
     ${ACC_STREAMDOCK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS streamdock-fallback.json
 )
 
+# Bundled offline fixture for the OpenDeck catalogue tab. Same pattern as the Streamdock one above
+# but for OpenDeckCatalogFetcher::loadBundledFallback() — keeps the OpenDeck tab non-empty when
+# `https://plugins.amankhanna.me/catalogue.json` is unreachable and no cache exists yet.
+set(ACC_OPENDECK_FALLBACK ${CMAKE_SOURCE_DIR}/resources/opendeck-fallback.json)
+set_source_files_properties(
+    ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
+)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
@@ -179,6 +188,7 @@ qt_add_qml_module(
               ${ACC_DOC_CHANGELOG}
               ${ACC_DOC_PRIVACY}
               ${ACC_STREAMDOCK_FALLBACK}
+              ${ACC_OPENDECK_FALLBACK}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

@@ -37,6 +37,7 @@
 namespace ajazz::app {
 
 class StreamdockCatalogFetcher;
+class OpenDeckCatalogFetcher;
 
 /// Single catalogue entry shown by the Plugin Store grid.
 ///
@@ -103,6 +104,10 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_PROPERTY(qint64 streamdockFetchedAtUnixMs READ streamdockFetchedAtUnixMs NOTIFY
                    streamdockStateChanged)
     Q_PROPERTY(int streamdockCount READ streamdockCount NOTIFY countChanged)
+    Q_PROPERTY(QString opendeckState READ opendeckState NOTIFY opendeckStateChanged)
+    Q_PROPERTY(
+        qint64 opendeckFetchedAtUnixMs READ opendeckFetchedAtUnixMs NOTIFY opendeckStateChanged)
+    Q_PROPERTY(int opendeckCount READ opendeckCount NOTIFY countChanged)
 
 public:
     /// Custom data roles available to QML delegates.
@@ -171,6 +176,20 @@ public:
     /// Number of Streamdock rows currently in the model.
     [[nodiscard]] int streamdockCount() const;
 
+    /// Origin of the currently visible OpenDeck rows. One of
+    /// `"loading"`, `"online"`, `"cached"`, `"offline"`. Drives the
+    /// OpenDeck tab info banner.
+    [[nodiscard]] QString opendeckState() const;
+
+    /// Unix-ms timestamp of the last successful OpenDeck snapshot.
+    /// Zero when no snapshot has loaded yet (bundled fallback).
+    [[nodiscard]] qint64 opendeckFetchedAtUnixMs() const noexcept {
+        return m_opendeckFetchedAtUnixMs;
+    }
+
+    /// Number of OpenDeck rows currently in the model.
+    [[nodiscard]] int opendeckCount() const;
+
     /**
      * @brief Mark a plugin as installed and enabled.
      * @param uuid Catalogue UUID; no-op if the row does not exist.
@@ -206,6 +225,8 @@ signals:
     void installedCountChanged();
     /// Emitted whenever @ref streamdockState changes.
     void streamdockStateChanged();
+    /// Emitted whenever @ref opendeckState changes.
+    void opendeckStateChanged();
 
 private:
     /// Per-row install bookkeeping kept outside @ref CatalogEntry so the
@@ -224,6 +245,10 @@ private:
     /// minimal `dataChanged` / model reset surface required.
     void replaceStreamdockRows(std::vector<CatalogEntry> rows);
 
+    /// Replace the OpenDeck-sourced rows with @p rows. Mirrors
+    /// @ref replaceStreamdockRows with `source == "opendeck"`.
+    void replaceOpendeckRows(std::vector<CatalogEntry> rows);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 
@@ -240,6 +265,11 @@ private:
 
     /// Last-known timestamp of the Streamdock snapshot.
     qint64 m_streamdockFetchedAtUnixMs = 0;
+
+    /// OpenDeck mirror — same lifetime / lazy-creation contract.
+    std::unique_ptr<OpenDeckCatalogFetcher> m_opendeckFetcher;
+    QString m_opendeckStateString = QStringLiteral("loading");
+    qint64 m_opendeckFetchedAtUnixMs = 0;
 };
 
 } // namespace ajazz::app

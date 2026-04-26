@@ -9,6 +9,7 @@
  */
 #include "plugin_catalog_model.hpp"
 
+#include "opendeck_catalog_fetcher.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
 #include <QMetaEnum>
@@ -36,11 +37,32 @@ QString stateToString(StreamdockCatalogFetcher::State s) {
     return QStringLiteral("loading");
 }
 
+/// Mirror of @ref stateToString for the OpenDeck fetcher's enum. The
+/// two enums are intentionally type-distinct (one per fetcher) so the
+/// type system catches accidental cross-wiring; the lower-case strings
+/// they emit to QML are the same vocabulary so a single banner
+/// component can render either source.
+QString stateToString(OpenDeckCatalogFetcher::State s) {
+    switch (s) {
+    case OpenDeckCatalogFetcher::State::Idle:
+    case OpenDeckCatalogFetcher::State::Loading:
+        return QStringLiteral("loading");
+    case OpenDeckCatalogFetcher::State::Online:
+        return QStringLiteral("online");
+    case OpenDeckCatalogFetcher::State::Cached:
+        return QStringLiteral("cached");
+    case OpenDeckCatalogFetcher::State::Offline:
+        return QStringLiteral("offline");
+    }
+    return QStringLiteral("loading");
+}
+
 } // namespace
 
 PluginCatalogModel::PluginCatalogModel(QObject* parent)
     : QAbstractListModel(parent),
-      m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)) {
+      m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)),
+      m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)) {
     // Wire the upstream fetcher: each successful snapshot replaces the
     // streamdock-sourced rows in place. Local / community rows are
     // unaffected so install state survives a network refresh.
@@ -62,10 +84,30 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                          }
                      });
 
+    // OpenDeck mirror — same wiring shape as the Streamdock fetcher.
+    QObject::connect(m_opendeckFetcher.get(),
+                     &OpenDeckCatalogFetcher::snapshotReady,
+                     this,
+                     [this](OpenDeckCatalogFetcher::Snapshot snapshot) {
+                         m_opendeckFetchedAtUnixMs = snapshot.fetchedAtUnixMs;
+                         replaceOpendeckRows(std::move(snapshot.rows));
+                     });
+    QObject::connect(m_opendeckFetcher.get(),
+                     &OpenDeckCatalogFetcher::stateChanged,
+                     this,
+                     [this](OpenDeckCatalogFetcher::State s) {
+                         QString const updated = stateToString(s);
+                         if (updated != m_opendeckStateString) {
+                             m_opendeckStateString = updated;
+                             emit opendeckStateChanged();
+                         }
+                     });
+
     // Populate with the mock fixture so the QML grid has rows in dev
-    // builds. The Streamdock rows are merged in asynchronously by the
-    // fetcher — first from the on-disk cache (or bundled fallback) and
-    // then from the upstream HTTP catalogue once it returns.
+    // builds. The Streamdock + OpenDeck rows are merged in
+    // asynchronously by their respective fetchers — first from the
+    // on-disk cache (or bundled fallback) and then from the upstream
+    // HTTP catalogue once each returns.
     reload();
 }
 
@@ -173,11 +215,15 @@ void PluginCatalogModel::reload() {
     emit countChanged();
     emit installedCountChanged();
 
-    // Kick the live upstream Streamdock catalogue: the fetcher emits the
-    // cached / fallback snapshot synchronously and then the HTTP fetch
-    // result asynchronously, both via @ref replaceStreamdockRows.
+    // Kick the live upstream Streamdock + OpenDeck catalogues: each
+    // fetcher emits the cached / fallback snapshot synchronously and
+    // then the HTTP fetch result asynchronously, both via the
+    // matching `replace*Rows` slot.
     if (m_streamdockFetcher) {
         m_streamdockFetcher->refresh();
+    }
+    if (m_opendeckFetcher) {
+        m_opendeckFetcher->refresh();
     }
 }
 
@@ -189,6 +235,20 @@ int PluginCatalogModel::streamdockCount() const {
     int n = 0;
     for (auto const& row : m_rows) {
         if (row.source == QStringLiteral("streamdock")) {
+            ++n;
+        }
+    }
+    return n;
+}
+
+QString PluginCatalogModel::opendeckState() const {
+    return m_opendeckStateString;
+}
+
+int PluginCatalogModel::opendeckCount() const {
+    int n = 0;
+    for (auto const& row : m_rows) {
+        if (row.source == QStringLiteral("opendeck")) {
             ++n;
         }
     }
@@ -216,6 +276,36 @@ void PluginCatalogModel::replaceStreamdockRows(std::vector<CatalogEntry> rows) {
 
     // Reconcile the install map against the new row set so the side-map
     // never grows unbounded across refreshes.
+    QHash<QString, InstallState> reconciled;
+    reconciled.reserve(static_cast<int>(m_rows.size()));
+    for (auto const& row : m_rows) {
+        if (auto const it = m_install.find(row.uuid); it != m_install.end()) {
+            reconciled.insert(row.uuid, *it);
+        }
+    }
+    m_install = std::move(reconciled);
+    endResetModel();
+    emit countChanged();
+    emit installedCountChanged();
+}
+
+void PluginCatalogModel::replaceOpendeckRows(std::vector<CatalogEntry> rows) {
+    // Same strategy as replaceStreamdockRows but scoped to source =
+    // "opendeck". The two fetchers run independently and never collide
+    // because their rows live in disjoint partitions of m_rows.
+    beginResetModel();
+    std::vector<CatalogEntry> kept;
+    kept.reserve(m_rows.size() + rows.size());
+    for (auto& row : m_rows) {
+        if (row.source != QStringLiteral("opendeck")) {
+            kept.push_back(std::move(row));
+        }
+    }
+    for (auto& row : rows) {
+        kept.push_back(std::move(row));
+    }
+    m_rows = std::move(kept);
+
     QHash<QString, InstallState> reconciled;
     reconciled.reserve(static_cast<int>(m_rows.size()));
     for (auto const& row : m_rows) {

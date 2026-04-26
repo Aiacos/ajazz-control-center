@@ -1,0 +1,41 @@
+{
+    "schemaVersion": 1,
+    "fetchedAtUnixMs": 0,
+    "sourceUrl": "qrc:/qt/qml/AjazzControlCenter/opendeck-fallback.json",
+    "_comment": "Bundled offline fixture for the OpenDeck Plugin Store tab. Loaded by OpenDeckCatalogFetcher when neither the upstream catalogue (https://plugins.amankhanna.me/catalogue.json) nor the on-disk cache mirror is available. Curated to cover the most common Stream Deck SDK plugin categories (audio, streaming, productivity) so the tab is never empty. Real entries are pulled live; these placeholders keep dev / CI / air-gapped builds from rendering an empty grid.",
+    "rows": [
+        {
+            "uuid": "com.barraider.soundpad",
+            "name": "Soundpad Integration",
+            "version": "1.6",
+            "author": "BarRaider",
+            "description": "Stream Deck plugin from https://barraider.github.io/.",
+            "iconUrl": "qrc:/qt/qml/AjazzControlCenter/icons/app.svg",
+            "compatibility": "opendeck",
+            "tags": ["stream-deck", "opendeck", "audio"],
+            "source": "opendeck"
+        },
+        {
+            "uuid": "com.elgato.streamdeck.obs",
+            "name": "OBS Studio",
+            "version": "5.6.0",
+            "author": "Elgato",
+            "description": "Stream Deck plugin from https://www.elgato.com.",
+            "iconUrl": "qrc:/qt/qml/AjazzControlCenter/icons/app.svg",
+            "compatibility": "opendeck",
+            "tags": ["stream-deck", "opendeck", "streaming"],
+            "source": "opendeck"
+        },
+        {
+            "uuid": "com.elgato.streamdeck.system",
+            "name": "System",
+            "version": "1.7.1",
+            "author": "Elgato",
+            "description": "Stream Deck plugin from https://www.elgato.com.",
+            "iconUrl": "qrc:/qt/qml/AjazzControlCenter/icons/app.svg",
+            "compatibility": "opendeck",
+            "tags": ["stream-deck", "opendeck", "system"],
+            "source": "opendeck"
+        }
+    ]
+}
