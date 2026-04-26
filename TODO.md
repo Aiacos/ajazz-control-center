@@ -98,6 +98,60 @@ ______________________________________________________________________
   fallback is ever hit in practice on Linux. Validate with each backend
   before removing.
 
+### Reverse-engineering & vendor parity (multi-day, research)
+
+> Strategic recon track: the goal is to land at full feature-parity
+> with the AJAZZ first-party desktop apps so users have no reason to
+> keep the proprietary stack installed alongside ours, and we ship a
+> more stable infrastructure on top of what they have already shipped
+> and battle-tested. Findings feed every downstream milestone (Plugin
+> SDK + Store, Stream Deck / Streamdock compat layers, the live
+> Streamdock catalogue fetcher, lifecycle manager, device protocol
+> coverage). All work is **clean-room**: notes, captures and decoded
+> protocols may live in the repo, but no vendor binary, decompiled
+> source, or copyrighted asset ever lands in version control.
+
+- [ ] **Acquire the official AJAZZ software for the Maude keyboard and
+  the Stream Dock line of products**: download every current
+  installer (Windows + macOS, both x86_64 and arm64 where offered),
+  hash them with SHA-256, archive the artefacts in an encrypted
+  out-of-repo vault and record the upstream URLs, version strings,
+  installer signatures and capture date in `docs/research/vendor- software-inventory.md`. ≈ 0.5 day.
+- [ ] **Decompile / disassemble the AJAZZ desktop apps under a clean-
+  room policy**: run the installers in a disposable VM, extract the
+  Electron / .NET / Qt payloads, decompile with the appropriate
+  toolchain (`asar` + `js-beautify` for Electron, ILSpy / dnSpyEx
+  for .NET, Ghidra / IDA for native binaries) and produce a written
+  protocol & feature inventory at `docs/research/vendor-protocol- notes.md`. **Rules**: only one engineer reads vendor sources; that
+  engineer writes specs but does not contribute to the matching
+  module; a second "clean" engineer implements from the spec.
+  Capture USB / WebSocket / IPC traffic with Wireshark + usbmon to
+  cross-validate the static analysis. ≈ 3-5 days.
+- [ ] **Vendor feature inventory → gap analysis**: distil the recon
+  notes into a public-friendly markdown table at
+  `docs/research/vendor-feature-matrix.md` listing every user-facing
+  feature of the AJAZZ apps (Maude keyboard: per-key RGB, macros,
+  layers, dial bindings; Stream Dock: tile profiles, plugins, dial
+  widgets, haptics, multi-page, lock screen, hardware firmware
+  update flow), each marked `✅ done` / `🟡 partial` / `❌ missing`
+  in our project, with links to the implementing modules or to the
+  TODO entries that will close the gap. ≈ 1 day.
+- [ ] **Protocol parity backlog**: file one TODO entry per missing
+  feature surfaced by the gap analysis (per-key RGB ramp commands,
+  custom macro op-codes, vendor-specific HID reports, firmware-
+  upgrade USB DFU sequence, dial haptic patterns, OSD overlay
+  triggers, etc.) and link them back into the **Plugin SDK + Store**
+  and **Architecture refactors** sections of this file so the
+  parity work is scheduled, not forgotten. ≈ 0.5 day.
+- [ ] **Stability & infrastructure cross-pollination**: where the
+  vendor app already solves a hard problem better than we do (HID
+  reconnect debounce timings, firmware update retry / rollback,
+  per-device USB transfer chunk sizes, profile sync conflict
+  resolution, telemetry beaconing, crash-safe settings persistence),
+  document the technique in `docs/research/vendor-techniques.md` and
+  open targeted issues to port the *idea* (never the code) into our
+  stack. ≈ ongoing, scoped per technique.
+
 ### Architecture refactors (multi-day, milestone-level)
 
 > Findings from the architectural review pass earlier in the session.
