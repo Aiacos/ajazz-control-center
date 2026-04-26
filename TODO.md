@@ -45,22 +45,24 @@ ______________________________________________________________________
   `share/icons/hicolor/<size>x<size>/apps/`.
 - [ ] **README + wiki screenshots** of the Material UI in light and dark
   mode (replace stale Fusion screenshots).
-- [ ] **Hicolor PNG install rule** — `src/app/CMakeLists.txt` currently
-  installs only `resources/icons/app.svg` (the *legacy* generic mark) at
-  `/usr/share/icons/hicolor/scalable/apps/ajazz-control-center.svg`.
-  After the tray-fix work (`5514ce2`) the runtime icon is the branded
-  `resources/branding/app.svg`, but the desktop-installed copy is
-  stale. Update the install rule to install **`resources/branding/app.svg`**
-  as the scalable variant and add `install(FILES …)` rules for each
-  size in `resources/icons/hicolor/app-{16,24,32,48,64,128,256,512}.png`
-  to the matching `share/icons/hicolor/<n>x<n>/apps/` directory. Also
-  fixes the tray-host icon-name lookup for `.rpm` /
-  `.deb` consumers (currently they see the legacy artwork).
-- [ ] **Logger `CapturingSink` test fixture** — A5 (`e53883e`) shipped
-  the pluggable `LogSink` API but did not add a test that exercises a
-  capturing implementation. Add one under `tests/unit/test_logger.cpp`:
-  install a sink, fire a few `AJAZZ_LOG_INFO` calls, assert the captured
-  records (level / module / message). 30-minute task.
+- [x] **Hicolor PNG install rule** — done in `2486662`. The Linux install
+  block in `src/app/CMakeLists.txt` now publishes the brand-aligned SVG
+  (sourced from `resources/branding/app.svg`) under
+  `share/icons/hicolor/scalable/apps/ajazz-control-center.svg` and a full
+  pre-rasterised PNG ladder under `share/icons/hicolor/<sz>/apps/` for
+  every size `makeAppIcon()` consumes (16/22/24/32/48/64/128/256/512). The
+  legacy 3x3 macropad-grid placeholder at `resources/icons/app.svg` was
+  also replaced with a verbatim copy of `resources/branding/app.svg` so
+  every fallback path renders the brand mark.
+- [x] **Logger `CapturingSink` test fixture** — done in this cycle.
+  `tests/unit/test_logger.cpp` ships a reusable `CapturingSink` (records
+  every accepted call with level/module/message under an internal mutex
+  for thread-safety with the `LogSink::write` contract) and a `ScopedSink`
+  RAII helper that installs the sink + restores the previous level on
+  destruction. Two new cases pin the contract: `[logger][sink] captures accepted records` exercises both the macro path and the std::format
+  substitution at `LogLevel::Trace`; `[logger][sink] respects level filter` verifies that records below the active filter never reach
+  `write()` (the filter is enforced in `log()` itself, not delegated to
+  the sink).
 
 ### User actions (out-of-code, one-time)
 
