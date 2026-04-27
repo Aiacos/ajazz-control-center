@@ -1,9 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Pure-Python half of the AJAZZ Control Center plugin SDK.
 
-The host process loads this package into its embedded interpreter and exposes
-it as ``ajazz``. The ``Plugin`` base class and ``action`` decorator defined
-here are the *only* public surface plugins should rely on.
+The host spawns a child Python process via ``execvp`` and the child imports
+this package as ``ajazz_plugins`` from a search path on its ``sys.path``.
+The ``Plugin`` base class and ``action`` decorator defined here are the
+*only* public surface plugins should rely on.
 """
 
 from __future__ import annotations

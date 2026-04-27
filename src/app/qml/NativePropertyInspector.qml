@@ -7,7 +7,7 @@
 //
 // Reads a JS object that conforms to docs/schemas/property_inspector.schema.json
 // and renders a list of QtQuick.Controls inputs. Whenever the user edits any
-// field the component emits `settingsChanged(json)` carrying a JSON string
+// field the component emits `settingsJsonChanged(json)` carrying a JSON string
 // ready to be stored in `Action.settingsJson`.
 //
 // This is the unconditional fallback path: it ships in every build, has no
@@ -28,7 +28,7 @@ import AjazzControlCenter
  * @property schema    Plain JS object matching property_inspector.schema.json.
  * @property settings  JS object holding the current values; bidirectional.
  *
- * Emits `settingsChanged(string json)` after every edit so the caller can
+ * Emits `settingsJsonChanged(string json)` after every edit so the caller can
  * persist the change.
  */
 ColumnLayout {
@@ -40,8 +40,12 @@ ColumnLayout {
     /// Current values keyed by field id.
     property var settings: ({})
 
-    /// Emitted with a JSON string of `settings` after every edit.
-    signal settingsChanged(string json)
+    /// Emitted with a JSON string of `settings` after every edit. Named
+    /// *settingsJsonChanged* (not just *settingsChanged*) because the
+    /// `property var settings` declaration above auto-generates a
+    /// `settingsChanged()` signal — sharing the name would cause a
+    /// `[duplicated-name]` qmllint warning at build time.
+    signal settingsJsonChanged(string json)
 
     spacing: Theme.spacingSm
 
@@ -84,7 +88,7 @@ ColumnLayout {
             // Push a new value back into `settings` and notify listeners.
             function commit(value) {
                 root.settings[row.modelData.id] = value
-                root.settingsChanged(JSON.stringify(root.settings))
+                root.settingsJsonChanged(JSON.stringify(root.settings))
             }
 
             Text {

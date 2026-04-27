@@ -8,9 +8,11 @@ Welcome to the **AJAZZ Control Center** wiki — the community home for
 cross-platform configuration of AJAZZ stream decks, keyboards and mice on
 Linux, Windows and macOS.
 
-AJAZZ Control Center (`acc`) is a Qt 6 / C++20 desktop application with an
-embedded Python plugin runtime. It is an independent, clean-room project
-and is not affiliated with, endorsed by, or supported by AJAZZ.
+AJAZZ Control Center (`acc`) is a Qt 6 / C++20 desktop application with
+an out-of-process Python plugin runtime (the host spawns a sandboxed
+child process per plugin session — bwrap on Linux, sandbox-exec on
+macOS). It is an independent, clean-room project and is not affiliated
+with, endorsed by, or supported by AJAZZ.
 
 <!-- BEGIN AUTOGEN: stats -->
 **11 devices** across 3 keyboard, 4 mouse, 4 streamdeck — 9 functional, 2 scaffolded.

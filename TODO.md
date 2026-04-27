@@ -32,6 +32,54 @@ ______________________________________________________________________
 
 ## 🚧 Open work
 
+### Quality bar (always-on standard)
+
+- [ ] **Zero warnings, every build, every linter** — high-professionalism
+  baseline set 2026-04-27. The intent is that `cmake --build` and every
+  configured linter (`qmllint-qt6`, `clang-tidy`, `ruff`, `mdformat`,
+  `cmake-lint`, `typos`) produce **no warnings** on a clean tree.
+  Current status:
+
+  - **C++ / make**: ✅ zero warnings (`-Werror` is on; if the C++ ever
+    regresses CI fails)
+  - **clang-tidy**: ✅ runs at pre-push, catches modernize / readability
+    / cppcoreguidelines lints before they reach `main`
+  - **ruff / ruff-format / mdformat / typos / cmake-lint**: ✅ zero
+    warnings (pre-commit hooks block any regression)
+  - **qmllint-qt6**: 🟡 ~50 warnings remaining, all in two categories
+    that are documented limitations of the static analyser (qmllint
+    does not see the C++ side that injects context properties via
+    `setContextProperty`):
+    - `[unqualified]` for every reference to `branding`,
+      `themeService`, `tray`, `profileController`, `deviceModel`,
+      `pluginCatalog`, `propertyInspectorController`, `autostart`,
+      `pluginCatalog`, `pluginsBtn` — these all resolve at runtime
+      via Qt's context-property mechanism. Two ways to silence:
+      (a) emit a `.qmltypes` manifest declaring each context property
+      and pass it to qmllint via a per-target qmldir, or
+      (b) move every context property to a singleton QML wrapper
+      file that qmllint can statically resolve.
+    - `[missing-property] page` in `PIWebView.qml` — the
+      `propertyInspectorController` exposes the active QWebEnginePage
+      via a `Q_DECLARE_OPAQUE_POINTER`-typed property; qmllint cannot
+      see classes hidden behind a forward-decl + Q_DECLARE_OPAQUE_POINTER.
+      Lower-priority — the binding
+      works at runtime.
+  - **Real bugs flagged by qmllint**: ✅ all fixed in commit history
+    (`[duplicated-name]` for `settingsChanged` collision in
+    `NativePropertyInspector` / `PropertyInspector`, eight unused
+    `import QtQuick.Controls` lines).
+
+  Action items to flip qmllint to fully clean:
+
+  - File a separate TODO entry under "Medium-effort fixes" for the
+    qmltypes-emission approach (option (a) above) — needs a CMake
+    addition (`qt_add_qml_module`'s `OUTPUT_DIRECTORY` + qmltypes
+    generation).
+  - In the meantime, `qmllint-qt6` can be added to the pre-commit
+    stages with a baseline file so any *new* warnings break the
+    build, even though the existing ~50 are temporarily allowed.
+
 ### Quick wins (≤ 1 hour each)
 
 - [x] **Wire AJAZZ banner into AppHeader.qml** — done. The wordmark image is

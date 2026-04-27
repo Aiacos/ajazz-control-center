@@ -40,8 +40,11 @@ ColumnLayout {
 
     /// Emitted whenever any field commits a new value, with the full
     /// settings dictionary serialised as JSON. The caller (Inspector.qml)
-    /// persists this to `Action.settingsJson`.
-    signal settingsChanged(string json)
+    /// persists this to `Action.settingsJson`. Named *settingsJsonChanged*
+    /// (not just *settingsChanged*) because the `property var settings`
+    /// declaration auto-generates a `settingsChanged()` notify signal —
+    /// sharing the name causes a `[duplicated-name]` qmllint warning.
+    signal settingsJsonChanged(string json)
 
     // ---- Renderer selection ---------------------------------------------
 
@@ -71,7 +74,7 @@ ColumnLayout {
         NativePropertyInspector {
             schema: root.schema
             settings: root.settings
-            onSettingsChanged: function(json) { root.settingsChanged(json) }
+            onSettingsJsonChanged: function(json) { root.settingsJsonChanged(json) }
         }
     }
 
