@@ -15,6 +15,12 @@ add_executable(
     # need to factor it out of the app target.
     test_streamdock_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/streamdock_catalog_fetcher.cpp
+    # OpenDeck catalogue fetcher: parallel coverage to the Streamdock suite.
+    # The OpenDeck wire shape is a flat JSON array (not the Streamdock
+    # `data.list` envelope), so the parser tests exercise a genuinely
+    # different path.
+    test_opendeck_catalog_fetcher.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_catalog_fetcher.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
@@ -51,14 +57,22 @@ endif()
 # is a Q_OBJECT so it needs moc to run.
 set_target_properties(ajazz_unit_tests PROPERTIES AUTOMOC ON)
 
-# Embed the bundled offline fixture under the same QRC path the runtime binary uses
-# (`qrc:/qt/qml/AjazzControlCenter/streamdock-fallback.json`), so loadBundledFallback() finds it
-# during the cache / fallback tests.
+# Embed the bundled offline fixtures under the same QRC paths the runtime binary uses
+# (`qrc:/qt/qml/AjazzControlCenter/streamdock-fallback.json` and `opendeck-fallback.json`), so
+# loadBundledFallback() finds them during the cache / fallback tests.
 set(_acc_fallback ${CMAKE_SOURCE_DIR}/resources/streamdock-fallback.json)
 set_source_files_properties(${_acc_fallback} PROPERTIES QT_RESOURCE_ALIAS streamdock-fallback.json)
 qt_add_resources(
     ajazz_unit_tests "streamdock_fallback_test_resource" PREFIX "/qt/qml/AjazzControlCenter" FILES
     ${_acc_fallback}
+)
+set(_acc_opendeck_fallback ${CMAKE_SOURCE_DIR}/resources/opendeck-fallback.json)
+set_source_files_properties(
+    ${_acc_opendeck_fallback} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
+)
+qt_add_resources(
+    ajazz_unit_tests "opendeck_fallback_test_resource" PREFIX "/qt/qml/AjazzControlCenter" FILES
+    ${_acc_opendeck_fallback}
 )
 
 target_link_libraries(
