@@ -603,9 +603,32 @@ workstreams.
 
 ### UI polish (incremental)
 
-- [ ] **Material 3 expressive theming** beyond the basic style switch:
-  custom typography ramp, elevation tokens, motion specs (entrance /
-  exit transitions), elevated buttons with proper ripples.
+- 🟡 **Material 3 expressive theming** beyond the basic style switch.
+  Foundation slice landed this cycle:
+
+  - Theme.qml grew an M3 typography ramp (`typeHeadlineLarge` /
+    `Medium`, `typeTitleLarge` / `Medium` / `Small`, `typeBodyLarge` /
+    `Medium` / `Small`, `typeLabelLarge` / `Medium` / `Small`) — each a
+    `{ pixelSize, weight, letterSpacing }` bag mirroring the M3 type-
+    scale tokens.
+  - Motion tokens (`durationShort`/`Medium`/`Long` ≈ 150/280/500 ms,
+    `easingStandard`/`Decelerate`/`Accelerate` mapped to the closest
+    QtQuick easing curves).
+  - Elevation tokens (`elevation0..3` `{ offsetY, blur, opacity }` bags
+    plus `elevationOf(level)` and `elevationShadowColor`) driving M3-
+    spec drop shadows via `QtQuick.Effects.MultiEffect.layer.effect`.
+  - `components/Toast.qml` rewritten as an M3 Snackbar — width clamped
+    to 344-672 px, optional trailing action button, motion-token-bound
+    animations, elevation-3 shadow.
+  - `components/Card.qml` exposes an opt-in `elevation: int` (default
+    0 preserves the prior flat look; 1-2 lifts).
+
+  Still open: M3 expressive *full kit* — large numerals, font-weight-
+  motion (variable axis), responsive container queries, surface-tinted
+  primary palette, ripple effects on `PrimaryButton` /
+  `SecondaryButton`. Pick by visible win when the typography pass
+  reaches a page-by-page audit.
+
 - [x] **Empty state polish** for `DeviceList` when zero devices online
   — done. `src/app/qml/DeviceList.qml` now hides the empty `ListView`
   and renders the existing `components/EmptyState.qml` centered in the
@@ -616,8 +639,17 @@ workstreams.
   clip on narrow windows. Illustration is the existing typography-
   only treatment from the EmptyState component; richer artwork
   belongs to a future Material 3 polish pass.
-- [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
-  Snackbar pattern.
+
+- [x] **Toast notifications upgrade** to the Material 3 Snackbar
+  pattern — done in this cycle. `components/Toast.qml` is now M3-spec:
+  geometry width clamped 344-672 px (vs. the previous 480-cap), height
+  switches between 48 (text-only) and 56 (with action), corner radius
+  on `Theme.radiusMd`, drop shadow at elevation 3 via
+  `MultiEffect.layer.effect`, motion bound to the new Theme tokens
+  (`durationMedium` + `easingStandard`). API gained an optional
+  trailing action button: `toast.show(message, variant, "Undo", cb)`.
+  Existing 6 call-sites in `Main.qml` keep working unchanged.
+
 - [x] **Light-theme `DeviceList` tile contrast** — fixed in this cycle.
   Root cause was *not* the `DeviceList`/`DeviceRow` binding (it already
   read from `Theme.tile`), but `Theme.tile` itself: it (and
@@ -640,6 +672,7 @@ workstreams.
   property that reads a `branding.*` color. Visual regression check
   against `docs/screenshots/main-light.png` waits for the next
   screenshots refresh; build + test (105/105) green.
+
 - [x] **Settings page** (`src/app/qml/SettingsPage.qml`) — page +
   entry-point both shipped. Material-styled page exposes
   `themeService.mode`, `autostart.launchOnLogin`, and

@@ -107,6 +107,130 @@ QtObject {
     readonly property int fontLg:  18
     readonly property int fontXl:  20
 
+    // ---- Material 3 typography ramp ---------------------------------------
+    // The legacy `fontXs/Sm/Md/Lg/Xl` aliases above stay in place so existing
+    // consumers keep working; new code (and gradual migrations) can adopt the
+    // M3-named roles below. M3 ramp ref:
+    //   https://m3.material.io/styles/typography/type-scale-tokens
+    //
+    // We expose `pixelSize`, `weight` and `letterSpacing` for each role; the
+    // density-aware `lineHeight` is intentionally elided — Qt's Text element
+    // handles line height via `lineHeightMode + lineHeight` and most call
+    // sites benefit from the QtQuick default.
+    //
+    // Subset is task-scaled to a desktop control-center: skipping the
+    // five `display*` roles (used only for very large hero numerals) and
+    // capping `headline*` at the medium tier. Add the missing tiers if a
+    // future page needs them.
+
+    /// Headline Large — top of a primary page (32 px / 400 weight).
+    readonly property var typeHeadlineLarge:
+        ({ pixelSize: 32, weight: Font.Normal,   letterSpacing: 0     })
+    /// Headline Medium — empty-state hero, dialog heading (28 px / 400).
+    readonly property var typeHeadlineMedium:
+        ({ pixelSize: 28, weight: Font.Normal,   letterSpacing: 0     })
+    /// Title Large — section heading (22 px / 400).
+    readonly property var typeTitleLarge:
+        ({ pixelSize: 22, weight: Font.Normal,   letterSpacing: 0     })
+    /// Title Medium — card title, sub-section heading (16 px / 500).
+    readonly property var typeTitleMedium:
+        ({ pixelSize: 16, weight: Font.Medium,   letterSpacing: 0.15  })
+    /// Title Small — list-row title, encoder label (14 px / 500).
+    readonly property var typeTitleSmall:
+        ({ pixelSize: 14, weight: Font.Medium,   letterSpacing: 0.1   })
+    /// Body Large — primary read-text (16 px / 400).
+    readonly property var typeBodyLarge:
+        ({ pixelSize: 16, weight: Font.Normal,   letterSpacing: 0.5   })
+    /// Body Medium — default body copy (14 px / 400).
+    readonly property var typeBodyMedium:
+        ({ pixelSize: 14, weight: Font.Normal,   letterSpacing: 0.25  })
+    /// Body Small — captions, helper text (12 px / 400).
+    readonly property var typeBodySmall:
+        ({ pixelSize: 12, weight: Font.Normal,   letterSpacing: 0.4   })
+    /// Label Large — button text, prominent labels (14 px / 500).
+    readonly property var typeLabelLarge:
+        ({ pixelSize: 14, weight: Font.Medium,   letterSpacing: 0.1   })
+    /// Label Medium — chip text, dense labels (12 px / 500).
+    readonly property var typeLabelMedium:
+        ({ pixelSize: 12, weight: Font.Medium,   letterSpacing: 0.5   })
+    /// Label Small — counters, badges (11 px / 500).
+    readonly property var typeLabelSmall:
+        ({ pixelSize: 11, weight: Font.Medium,   letterSpacing: 0.5   })
+
+    // ---- Motion tokens -----------------------------------------------------
+    // Material 3 motion durations (subset of the 16-token spec, scaled to the
+    // few cadences this app actually animates: hover + focus, transient
+    // surfaces like Snackbar, modal sheets / drawers).
+    //
+    //   short  ≈ 100-200 ms — hover, ripple, micro-interactions
+    //   medium ≈ 250-400 ms — surface enter/exit, tab switch
+    //   long   ≈ 500-700 ms — modal sheet/drawer slide, large surface change
+    //
+    // Easings: M3 specifies cubic-bezier curves that we approximate with the
+    // closest QtQuick `Easing.Type` (Out*** for decelerate-to-rest, In***
+    // for accelerate-from-rest, InOut*** for symmetric). Bind via
+    //
+    //     NumberAnimation { duration: Theme.durationMedium; easing.type: Theme.easingStandard }
+
+    /// Short motion — hover, focus, button press feedback.
+    readonly property int durationShort:  150
+    /// Medium motion — surface enter/exit, tab content swap, snackbar.
+    readonly property int durationMedium: 280
+    /// Long motion — drawer open, modal sheet, large layout reflow.
+    readonly property int durationLong:   500
+
+    /// Standard easing — surface enter/exit at rest. Closest M3 match.
+    readonly property int easingStandard:   Easing.OutCubic
+    /// Decelerate easing — element entering its resting state.
+    readonly property int easingDecelerate: Easing.OutQuint
+    /// Accelerate easing — element leaving the screen.
+    readonly property int easingAccelerate: Easing.InCubic
+
+    // ---- Elevation tokens --------------------------------------------------
+    // Material 3 levels 0-3 expressed as a `QtQuick.Effects.MultiEffect`-
+    // friendly bag: vertical offset (px), blur radius (0..1, the MultiEffect
+    // scale), shadow opacity (0..1). MultiEffect supports one shadow per
+    // pass; the values below pick a single-shadow tuning that approximates
+    // each level's combined key + ambient shadow.
+    //
+    // Wire from any surface:
+    //
+    //     Rectangle { id: card; ... }
+    //     MultiEffect {
+    //         source: card
+    //         anchors.fill: card
+    //         shadowEnabled: true
+    //         shadowVerticalOffset: Theme.elevation1.offsetY
+    //         shadowBlur: Theme.elevation1.blur
+    //         shadowColor: Theme.elevationShadowColor
+    //         shadowOpacity: Theme.elevation1.opacity
+    //     }
+    //
+    // Designers think in `level: 0..3` integers; `elevationOf(level)`
+    // resolves to the right token bag so call-sites can stay terse.
+
+    /// Shadow color — black at theme-appropriate intensity. The opacity
+    /// in the elevation bag scales this further per level.
+    readonly property color elevationShadowColor: "#000000"
+
+    /// Level 0 — flat (no shadow). Mostly here so `elevationOf(0)` works.
+    readonly property var elevation0: ({ offsetY: 0, blur: 0,    opacity: 0    })
+    /// Level 1 — at-rest cards, list rows, tray-like surfaces.
+    readonly property var elevation1: ({ offsetY: 1, blur: 0.10, opacity: 0.18 })
+    /// Level 2 — hover state for level-1 surfaces, FAB at rest.
+    readonly property var elevation2: ({ offsetY: 2, blur: 0.18, opacity: 0.22 })
+    /// Level 3 — Snackbar, dropdown menu, picked-up card.
+    readonly property var elevation3: ({ offsetY: 4, blur: 0.30, opacity: 0.28 })
+
+    /// Resolve an elevation level to its token bag. Out-of-range levels
+    /// (negative, > 3) clamp to the closest valid one.
+    function elevationOf(level) {
+        if (level <= 0) return elevation0
+        if (level === 1) return elevation1
+        if (level === 2) return elevation2
+        return elevation3
+    }
+
     // ---- Focus / accessibility --------------------------------------------
     /// Focus ring width (px) for keyboard navigation — see F-04 in ui-review.
     readonly property int focusRingWidth: 2
