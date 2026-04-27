@@ -8,7 +8,6 @@
 // Each row is a DeviceRow component (QtQuick.Controls ItemDelegate) so it is
 // keyboard-focusable, hover-highlighted and exposes Accessible roles.
 import QtQuick
-import QtQuick.Controls
 import AjazzControlCenter
 import "components"
 

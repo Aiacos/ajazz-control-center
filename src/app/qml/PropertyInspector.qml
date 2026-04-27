@@ -23,7 +23,6 @@
 // the wrapper so existing callers (Inspector.qml) keep working unchanged.
 
 import QtQuick 6
-import QtQuick.Controls 6
 import QtQuick.Layouts 6
 import AjazzControlCenter
 

@@ -10,7 +10,6 @@
 //
 // Variants: "success" (accent), "error" (red), "info" (accent2).
 import QtQuick
-import QtQuick.Controls
 import AjazzControlCenter
 
 Rectangle {

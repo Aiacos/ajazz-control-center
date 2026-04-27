@@ -9,7 +9,6 @@
 // Emits:
 //   * `encoderActivated(int index)` — user activated a dial.
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import AjazzControlCenter
 import "components"

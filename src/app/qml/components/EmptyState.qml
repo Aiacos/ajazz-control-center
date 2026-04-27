@@ -3,7 +3,6 @@
 // EmptyState.qml — large centered placeholder shown when a panel has no
 // content yet (e.g. no device selected, no profiles imported).
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import AjazzControlCenter
 

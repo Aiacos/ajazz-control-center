@@ -34,7 +34,6 @@
 // surface.
 
 import QtQuick 6
-import QtQuick.Controls 6
 import QtWebEngine
 import AjazzControlCenter
 

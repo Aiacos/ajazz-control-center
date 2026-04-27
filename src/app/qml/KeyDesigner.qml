@@ -11,7 +11,6 @@
 //   * `keyActivated(int index)` — user clicked / activated a key.
 //   * `keySelected(int index)`  — user moved focus to a key.
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import AjazzControlCenter
 import "components"

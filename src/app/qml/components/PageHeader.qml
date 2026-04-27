@@ -2,7 +2,6 @@
 //
 // PageHeader.qml — title + optional subtitle row used at the top of pages.
 import QtQuick
-import QtQuick.Controls
 import QtQuick.Layouts
 import AjazzControlCenter
 
