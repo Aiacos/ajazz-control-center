@@ -9,10 +9,10 @@
  * @c QNetworkAccessManager so they can run in the same lightweight
  * `ajazz_unit_tests` binary as the other unit suites.
  */
+#include "qt_app_fixture.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
 #include <QByteArray>
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -25,20 +25,9 @@
 
 using ajazz::app::CatalogEntry;
 using ajazz::app::StreamdockCatalogFetcher;
+using ajazz::tests::qtApp;
 
 namespace {
-
-/// Boot a single QCoreApplication for the suite — Qt resource loading and
-/// QStandardPaths require an event loop to be configured. Catch2 invokes
-/// every TEST_CASE inside `main()`, so a function-local static is enough.
-QCoreApplication& qtApp() {
-    static int argc = 0;
-    static char* argv[] = {nullptr};
-    static QCoreApplication app{argc, argv};
-    QCoreApplication::setApplicationName(QStringLiteral("ajazz-control-center-tests"));
-    QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
-    return app;
-}
 
 /// Look up a row by UUID; returns @c nullptr when absent.
 CatalogEntry const* findByUuid(std::vector<CatalogEntry> const& rows, QString const& uuid) {

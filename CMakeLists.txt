@@ -44,7 +44,18 @@ include(Sanitizers)
 # -----------------------------------------------------------------------------
 # Dependencies
 # -----------------------------------------------------------------------------
-find_package(Qt6 6.7 COMPONENTS Core Network Quick QuickControls2 Widgets Svg REQUIRED)
+find_package(
+    Qt6 6.7
+    COMPONENTS Core
+               Gui
+               Network
+               Quick
+               QuickControls2
+               Test
+               Widgets
+               Svg
+    REQUIRED
+)
 qt_standard_project_setup(REQUIRES 6.7)
 
 # hidapi — vendored via FetchContent for reproducibility

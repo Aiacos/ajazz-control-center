@@ -12,9 +12,9 @@
  * `ajazz_unit_tests` binary alongside everything else.
  */
 #include "opendeck_catalog_fetcher.hpp"
+#include "qt_app_fixture.hpp"
 
 #include <QByteArray>
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -27,23 +27,9 @@
 
 using ajazz::app::CatalogEntry;
 using ajazz::app::OpenDeckCatalogFetcher;
+using ajazz::tests::qtApp;
 
 namespace {
-
-/// Boot a single QCoreApplication for the suite. Defensive against the
-/// streamdock test (its own qtApp() also instantiates one); whichever
-/// runs first wins, the other reuses the singleton via
-/// QCoreApplication::instance().
-QCoreApplication& qtApp() {
-    if (QCoreApplication::instance() == nullptr) {
-        static int argc = 0;
-        static char* argv[] = {nullptr};
-        static QCoreApplication app{argc, argv};
-    }
-    QCoreApplication::setApplicationName(QStringLiteral("ajazz-control-center-tests"));
-    QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
-    return *QCoreApplication::instance();
-}
 
 CatalogEntry const* findByUuid(std::vector<CatalogEntry> const& rows, QString const& uuid) {
     auto const it = std::find_if(

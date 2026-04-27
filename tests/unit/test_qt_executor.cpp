@@ -11,9 +11,9 @@
  * fires. The legacy `BlockingExecutor` semantics stay covered by
  * `test_action_engine.cpp`.
  */
+#include "qt_app_fixture.hpp"
 #include "qt_executor.hpp"
 
-#include <QCoreApplication>
 #include <QDeadlineTimer>
 #include <QElapsedTimer>
 #include <QObject>
@@ -25,21 +25,9 @@
 #include <catch2/catch_test_macros.hpp>
 
 using ajazz::app::QtExecutor;
+using ajazz::tests::qtApp;
 
 namespace {
-
-/// Defensive against the streamdock / opendeck tests sharing the
-/// suite — only the first qtApp() call constructs.
-QCoreApplication& qtApp() {
-    if (QCoreApplication::instance() == nullptr) {
-        static int argc = 0;
-        static char* argv[] = {nullptr};
-        static QCoreApplication app{argc, argv};
-    }
-    QCoreApplication::setApplicationName(QStringLiteral("ajazz-control-center-tests"));
-    QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
-    return *QCoreApplication::instance();
-}
 
 /// Pump the event loop until @p predicate is true OR @p budget elapses.
 /// Returns the predicate's final value. Beats fixed `sleep` calls — the

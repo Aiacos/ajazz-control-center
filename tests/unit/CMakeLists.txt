@@ -26,6 +26,16 @@ add_executable(
     # Q_OBJECT in the header so AUTOMOC has to scan it.
     test_qt_executor.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/qt_executor.cpp
+    # BrandingService: the QML `branding` context property's contract.
+    # Default palette + theme-file override semantics; isolated from
+    # the developer's real QSettings via test mode in qt_app_fixture.
+    test_branding_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/branding_service.cpp
+    # ThemeService: the QML `themeService` context property's contract.
+    # Mode parsing, persistence, modeChanged signal semantics. Layered
+    # on top of BrandingService (already in this list).
+    test_theme_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/theme_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
@@ -89,7 +99,9 @@ target_link_libraries(
             ajazz::warnings
             Catch2::Catch2WithMain
             Qt6::Core
+            Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
+            Qt6::Test # QSignalSpy
 )
 
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
