@@ -533,20 +533,28 @@ workstreams.
   (illustration + onboarding hint).
 - [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
   Snackbar pattern.
-- [ ] **Light-theme `DeviceList` tile contrast** — surfaced by the
-  README screenshots in this cycle (`docs/screenshots/main-light.png`).
-  When `Appearance/Mode = light` resolves a near-white `bgSidebar`
-  (`#ebebef`), the device cards in the sidebar render almost-black on
-  near-white instead of the expected light-on-light row hover. The
-  delegate in `src/app/qml/DeviceList.qml` is likely binding to a
-  hardcoded dark fill (or to a Material attached property that does
-  not follow `themeService.mode`) instead of the light-theme
-  `Theme.bgRowHover` / `Theme.bgBase`. WCAG ratios in
-  `resources/branding/theme-light.json` are calibrated assuming the
-  card uses `bgRowHover #dedee5` on `bgSidebar #ebebef`; the actual
-  rendering proves that's not what's bound. Fix by tracing the device-
-  card background binding back to `Theme.qml` and verifying the colors
-  swap on every theme transition.
+- [x] **Light-theme `DeviceList` tile contrast** — fixed in this cycle.
+  Root cause was *not* the `DeviceList`/`DeviceRow` binding (it already
+  read from `Theme.tile`), but `Theme.tile` itself: it (and
+  `Theme.tileHover`/`Theme.borderSubtle`) was a hardcoded dark literal
+  (`#24242a` / `#2a2a32` / `#3a3a44`) that ignored the active branding
+  palette. Every tile/card/border across the app (DeviceRow, KeyCell,
+  EncoderCard, AppHeader search field, Card.qml, PluginStore tiles,
+  Settings page, etc.) painted dark over a light `bgSidebar` when light
+  theme was selected.
+  Fix: derive these tokens from the branding palette via
+  `Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, α))`
+  with α=0.03/0.06/0.13. The tint is polarity-agnostic — `fgPrimary` is
+  near-white in dark mode (lightens `bgSidebar`) and near-black in light
+  mode (darkens `bgSidebar`), so elevation always points the right way.
+  α factors were chosen by working backward from the prior dark
+  literals so the dark-theme look is preserved within < 1 %/channel.
+  No QML call-site changes; no `BrandingService` contract changes;
+  no `themeService.mode` plumbing — the `themeChanged` signal already
+  re-emits when the user switches modes and Qt re-evaluates every
+  property that reads a `branding.*` color. Visual regression check
+  against `docs/screenshots/main-light.png` waits for the next
+  screenshots refresh; build + test (105/105) green.
 - [x] **Settings page** (`src/app/qml/Settings.qml`) — done. Material-styled
   page exposes `themeService.mode`, `autostart.launchOnLogin`, and
   `autostart.startMinimised` / `tray.startMinimized` via RadioButton +

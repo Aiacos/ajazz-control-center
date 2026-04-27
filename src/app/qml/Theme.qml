@@ -53,15 +53,28 @@ QtObject {
     readonly property color accent2:    branding ? branding.accent2    : "#0A82FA"
 
     // ---- Derived semantic tokens -------------------------------------------
-    // These are not part of the branding contract; they are computed locally
-    // so the look stays consistent regardless of which accent ships.
+    // These are not part of the branding contract; they are derived from
+    // `bgSidebar` + `fgPrimary` so they follow theme polarity automatically:
+    // dark themes get lightened (fgPrimary is near-white), light themes get
+    // darkened (fgPrimary is near-black). The α factors below were chosen so
+    // the dark-theme hex output matches the previous hardcoded literals
+    // (#24242a / #2a2a32 / #3a3a44) within < 1% per channel.
+    //
+    // Why: pre-2026-04 these were hardcoded dark literals, which painted
+    // every card/tile/border dark even when the user picked the light theme
+    // (visible as black device-list rows on a near-white sidebar — see
+    // `docs/screenshots/main-light.png` from the screenshots cycle).
 
-    /// Idle tile / card surface used by KeyDesigner, EncoderPanel, MousePanel.
-    readonly property color tile:        "#24242a"
-    /// Hovered tile surface — slightly lighter than `tile`.
-    readonly property color tileHover:   "#2a2a32"
+    /// Idle tile / card surface used by KeyDesigner, EncoderPanel, MousePanel,
+    /// DeviceRow, AppHeader search field, PluginStore tiles, Settings page.
+    readonly property color tile:
+        Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.03))
+    /// Hovered tile surface — slightly more elevated than `tile`.
+    readonly property color tileHover:
+        Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.06))
     /// Subtle border for tiles, separators, divider lines.
-    readonly property color borderSubtle: "#3a3a44"
+    readonly property color borderSubtle:
+        Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.13))
 
     // ---- Spacing / radius scale -------------------------------------------
     // Lightweight 4-point scale, matches what the QML tree already uses.
