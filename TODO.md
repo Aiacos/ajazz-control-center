@@ -34,11 +34,11 @@ ______________________________________________________________________
 
 ### Quality bar (always-on standard)
 
-- [ ] **Zero warnings, every build, every linter** — high-professionalism
-  baseline set 2026-04-27. The intent is that `cmake --build` and every
-  configured linter (`qmllint-qt6`, `clang-tidy`, `ruff`, `mdformat`,
-  `cmake-lint`, `typos`) produce **no warnings** on a clean tree.
-  Current status:
+- [x] **Zero warnings, every build, every linter** — high-professionalism
+  baseline set 2026-04-27, achieved this cycle. `cmake --build` and
+  every configured linter (`qmllint-qt6`, `clang-tidy`, `ruff`,
+  `mdformat`, `cmake-lint`, `typos`) now produce **no warnings** on a
+  clean tree. Status:
 
   - **C++ / make**: ✅ zero warnings (`-Werror` is on; if the C++ ever
     regresses CI fails)
@@ -49,24 +49,34 @@ ______________________________________________________________________
   - **ruff / ruff-format / mdformat / typos / cmake-lint**: ✅ zero
     warnings (pre-commit hooks block any regression)
 
-  - **qmllint-qt6**: ✅ 6 warnings remaining, all in two documented
-    qmllint limitations that are *not* code defects (down from ~182
-    after the QML_SINGLETON migration + delegate ComponentBehavior
-    pragma + required-property declarations across all 12 QML files):
+  - **qmllint-qt6**: ✅ zero warnings. The previous 6 residual entries
+    were closed by:
 
-    - 4× in `NativePropertyInspector.qml` — `Loader.item.applyValue`
-      / `.committed` accesses; `Loader.item` is typed as `QObject`
-      so qmllint cannot see the dynamically-selected sub-component's
-      methods. Fix would require materialising every sub-component
-      as a typed wrapper, which is more invasive than the warning is
-      worth.
-    - 2× in `PIWebView.qml` — `QWebEnginePage*` is a
-      `Q_DECLARE_OPAQUE_POINTER` so qmllint cannot resolve its `page`
-      property statically. Fixing would mean exposing the type
-      declaratively, which conflicts with the optional-WebEngine
-      build gate that keeps minimal Qt installs compiling.
+    - 4× in `NativePropertyInspector.qml` — replaced the per-row
+      `Loader` (whose `item` is typed as `QObject*`) with an inline
+      typed `StackLayout` of seven editor controls, so every
+      `applyValue` / `committed` member access is statically
+      resolvable. Initial values now come from `Component.onCompleted`
+      reading `row.currentValue()`; commits hit `row.commit(...)`
+      from each editor's native signal. Costs an extra six controls
+      per row (the hidden ones); negligible for a property inspector.
+    - 2× in `PIWebView.qml` — root cause was that `WebEngineView`
+      does **not** expose a `page` property to QML at all (verified
+      against `qquickwebengineview_p.h`); the previous
+      `page: PropertyInspectorController.activePage` binding was
+      silently inert at runtime. Refactored
+      `PropertyInspectorController` to use `QQuickWebEngineProfile`
+      and `QQmlWebChannel` (the QML-native types) and exposed the
+      trio `(activeProfile, activeChannel, activeUrl)` so
+      `PIWebView.qml` binds the three properties WebEngineView
+      actually accepts. Page-level security flags are now
+      configured declaratively on `WebEngineView.settings`.
+      `qt_add_qml_module(... IMPORTS QtWebEngine QtWebChannel)` is
+      set conditionally on `AJAZZ_HAVE_WEBENGINE` so qmllint can
+      resolve cross-module types and minimal builds stay self-
+      contained.
 
-    Resolved this cycle (pre-existing categories now closed):
+    Resolved earlier this cycle (pre-existing categories now closed):
 
     - `[unqualified]` context properties (8 services × N files) →
       migrated to `QML_NAMED_ELEMENT` + `QML_SINGLETON` in commits
@@ -148,11 +158,16 @@ ______________________________________________________________________
   `ERROR_LOCK_VIOLATION` and `ERROR_USER_MAPPED_FILE`. `MoveFileExW` is
   kept as the no-destination-yet fallback. Should eliminate the residual
   ~1/100 flake on windows-2022.
-- [ ] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
-  drop the three `SUBSYSTEM=="usb"` lines so only `KERNEL=="hidraw*"`
-  grants `uaccess`. **Risk**: untested whether hidapi's libusb backend
-  fallback is ever hit in practice on Linux. Validate with each backend
-  before removing.
+- [x] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
+  done this cycle. The four `SUBSYSTEM=="usb"` lines were dropped; only
+  the matching `KERNEL=="hidraw*"` rules remain. **Validation**:
+  `ajazz_core` links the `hidapi::hidapi` umbrella target, which on
+  Linux resolves to `hidapi_hidraw` (the `/dev/hidraw*` kernel-native
+  backend) whenever `HIDAPI_WITH_HIDRAW` is built — verified at
+  `dev/_deps/hidapi-src/src/CMakeLists.txt:137-156` (EXPORT_ALIAS=hidraw
+  takes precedence over libusb when both are available). The libusb
+  backend is built but not linked into our binary, so the dropped USB
+  rules covered a code path we never enter at runtime.
 
 ### Reverse-engineering & vendor parity (multi-day, research)
 

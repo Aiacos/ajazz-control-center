@@ -16,6 +16,19 @@
 // an HTML PI page provided by a plugin). The HTML path lives in
 // `PIWebView.qml` and is only compiled into the QML module when Qt
 // WebEngine was found at configure time (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`).
+//
+// Editor materialisation:
+//   The earlier revision used a per-row `Loader` whose `item` was typed
+//   as `QObject*`. Calls to `item.applyValue()` / `item.committed.connect`
+//   tripped `[unqualified]` qmllint warnings because the dynamically-
+//   selected sub-component's interface is not visible at static-analysis
+//   time. This file now inlines all seven typed editors inside a
+//   `StackLayout` whose `currentIndex` is driven by the field type. Each
+//   editor is a typed control (TextField, SpinBox, ...) so every member
+//   access is statically resolvable. The seven controls are constructed
+//   per row but only one is laid out and visible — the cost is minor for
+//   a property inspector and the win is zero qmllint warnings without a
+//   single skip directive (see TODO.md "Quality bar").
 
 pragma ComponentBehavior: Bound
 import QtQuick 6
@@ -49,6 +62,19 @@ ColumnLayout {
     signal settingsJsonChanged(string json)
 
     spacing: Theme.spacingSm
+
+    // StackLayout child indices — keep in sync with the editor order
+    // declared in the delegate below. The lookup lives at the file scope
+    // so the delegate's `currentIndex` binding stays a pure expression.
+    readonly property var _typeIndex: ({
+        "text":     0,
+        "textarea": 1,
+        "number":   2,
+        "boolean":  3,
+        "select":   4,
+        "color":    5,
+        "section":  6
+    })
 
     Text {
         text: root.schema.title || ""
@@ -100,25 +126,87 @@ ColumnLayout {
                 visible: row.modelData.type !== "section"
             }
 
-            Loader {
+            // Typed editor stack. `currentIndex` selects exactly one child
+            // to lay out and show; the others are constructed (so they
+            // can run their `Component.onCompleted` initial-value hook
+            // without surprises) but receive no layout space and are
+            // invisible. All member accesses below are typed (TextField.text,
+            // SpinBox.value, …) so qmllint resolves them statically.
+            StackLayout {
                 Layout.fillWidth: true
-                sourceComponent: {
-                    switch (row.modelData.type) {
-                        case "text":      return textField
-                        case "textarea":  return textArea
-                        case "number":    return spinBox
-                        case "boolean":   return checkBox
-                        case "select":    return comboBox
-                        case "color":     return colorField
-                        case "section":   return sectionHeader
-                        default:          return textField
-                    }
+                currentIndex: {
+                    const t = row.modelData ? row.modelData.type : ""
+                    const idx = root._typeIndex[t]
+                    return idx === undefined ? 0 : idx
                 }
 
-                onLoaded: {
-                    // Bridge the loaded item with the current value/commit pair.
-                    if (item.applyValue) item.applyValue(row.currentValue())
-                    if (item.committed) item.committed.connect(row.commit)
+                // 0 — text
+                TextField {
+                    placeholderText: "value"
+                    Component.onCompleted: {
+                        const v = row.currentValue()
+                        text = v === undefined ? "" : String(v)
+                    }
+                    onEditingFinished: row.commit(text)
+                }
+
+                // 1 — textarea
+                TextArea {
+                    wrapMode: TextArea.Wrap
+                    Component.onCompleted: {
+                        const v = row.currentValue()
+                        text = v === undefined ? "" : String(v)
+                    }
+                    onEditingFinished: row.commit(text)
+                }
+
+                // 2 — number
+                SpinBox {
+                    from: -10000
+                    to: 10000
+                    Component.onCompleted: {
+                        const v = Number(row.currentValue())
+                        value = isFinite(v) ? v : 0
+                    }
+                    onValueModified: row.commit(value)
+                }
+
+                // 3 — boolean
+                CheckBox {
+                    Component.onCompleted: checked = !!row.currentValue()
+                    onToggled: row.commit(checked)
+                }
+
+                // 4 — select
+                ComboBox {
+                    id: combo
+                    textRole: "label"
+                    valueRole: "value"
+                    model: row.modelData && row.modelData.options ? row.modelData.options : []
+                    Component.onCompleted: {
+                        const v = row.currentValue()
+                        const idx = combo.indexOfValue(v)
+                        if (idx !== -1) {
+                            combo.currentIndex = idx
+                        }
+                    }
+                    onActivated: row.commit(combo.currentValue)
+                }
+
+                // 5 — color (free-form hex for now; a colour picker can replace this later)
+                TextField {
+                    placeholderText: "#rrggbb"
+                    Component.onCompleted: {
+                        const v = row.currentValue()
+                        text = v === undefined ? "" : String(v)
+                    }
+                    onEditingFinished: row.commit(text)
+                }
+
+                // 6 — section divider (no value, no commit)
+                Rectangle {
+                    Layout.preferredHeight: 1
+                    color: Theme.borderSubtle
                 }
             }
 
@@ -130,83 +218,6 @@ ColumnLayout {
                 visible: text.length > 0
                 Layout.fillWidth: true
             }
-        }
-    }
-
-    // ---------------------------------------------------------------- //
-    // Per-type sub-components. Each declares applyValue() + committed() //
-    // so the outer Loader.onLoaded bridge can wire them generically.    //
-    // ---------------------------------------------------------------- //
-    Component {
-        id: textField
-        TextField {
-            placeholderText: "value"
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
-        }
-    }
-
-    Component {
-        id: textArea
-        TextArea {
-            wrapMode: TextArea.Wrap
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
-        }
-    }
-
-    Component {
-        id: spinBox
-        SpinBox {
-            from: -10000
-            to: 10000
-            signal committed(var value)
-            function applyValue(v) { value = Number(v) || 0 }
-            onValueModified: committed(value)
-        }
-    }
-
-    Component {
-        id: checkBox
-        CheckBox {
-            signal committed(var value)
-            function applyValue(v) { checked = !!v }
-            onToggled: committed(checked)
-        }
-    }
-
-    Component {
-        id: comboBox
-        ComboBox {
-            id: combo
-            textRole: "label"
-            valueRole: "value"
-            signal committed(var value)
-            function applyValue(v) {
-                const idx = combo.indexOfValue(v)
-                if (idx !== -1) combo.currentIndex = idx
-            }
-            onActivated: committed(combo.currentValue)
-        }
-    }
-
-    Component {
-        id: colorField
-        TextField {
-            placeholderText: "#rrggbb"
-            signal committed(var value)
-            function applyValue(v) { text = v === undefined ? "" : String(v) }
-            onEditingFinished: committed(text)
-        }
-    }
-
-    Component {
-        id: sectionHeader
-        Rectangle {
-            height: 1
-            color: Theme.borderSubtle
         }
     }
 }

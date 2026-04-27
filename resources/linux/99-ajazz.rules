@@ -19,27 +19,33 @@
 # Linux packages (deb/rpm/flatpak) do this automatically in their
 # post-install step; you only need to run the commands above if you are
 # building from source.
+#
+# Backend scope: AJAZZ Control Center links the `hidapi::hidapi` umbrella
+# target which, on Linux, resolves to `hidapi_hidraw` — the kernel-native
+# `/dev/hidraw*` backend. The libusb backend is not used by our binary.
+# Only the `KERNEL=="hidraw*"` matchers are therefore needed; we
+# deliberately do NOT publish `SUBSYSTEM=="usb"` rules so our policy
+# stays scoped to the device class we actually open.
+#   Reference: hidapi-0.14.0 src/CMakeLists.txt sets
+#   EXPORT_ALIAS=hidraw whenever HIDAPI_WITH_HIDRAW is built, which is
+#   the default on Linux (audit finding S8, 2026-04-27).
 
 # ---------------------------------------------------------------------------
 # Stream decks (Mirabox HSV293S family, AKP153 / AKP153E / AKP03 / AKP05)
 # ---------------------------------------------------------------------------
-SUBSYSTEM=="usb",     ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
 # VIA-compatible AJAZZ keyboards (SONiX vendor prefix 0x3151)
 # ---------------------------------------------------------------------------
-SUBSYSTEM=="usb",     ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
 # AJAZZ AJ-series mice (AJ159 / AJ199 / AJ339 / AJ380)
 # ---------------------------------------------------------------------------
-SUBSYSTEM=="usb",     ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
 # AJAZZ AK980 PRO and other Microdia-chipset AK keyboards (vendor 0x0c45)
 # ---------------------------------------------------------------------------
-SUBSYSTEM=="usb",     ATTRS{idVendor}=="0c45", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="0c45", MODE="0660", TAG+="uaccess"

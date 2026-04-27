@@ -11,18 +11,22 @@ option(AJAZZ_BUILD_PROPERTY_INSPECTOR "Embed plugin Property Inspector HTML page
        ON
 )
 if(AJAZZ_BUILD_PROPERTY_INSPECTOR)
-    # WebChannel is the JS↔C++ bridge for `$SD` (M3); WebEngineQuick is the rendering surface (M2).
-    # Both must be present for the HTML PI path to activate. Either missing → graceful fallback to
-    # the native renderer.
-    find_package(Qt6 QUIET COMPONENTS WebEngineQuick WebChannel)
-    if(Qt6WebEngineQuick_FOUND AND Qt6WebChannel_FOUND)
+    # WebChannelQuick is the QML-friendly JS↔C++ bridge for `$SD` (M3) — it provides
+    # `QQmlWebChannel`, the only type `WebEngineView.webChannel` accepts. WebEngineQuick is the
+    # rendering surface (M2). Both must be present for the HTML PI path to activate. Either missing
+    # → graceful fallback to the native renderer.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuick WebChannelQuick)
+    if(Qt6WebEngineQuick_FOUND AND Qt6WebChannelQuick_FOUND)
         set(AJAZZ_HAVE_WEBENGINE TRUE)
-        message(STATUS "Qt6::WebEngineQuick + Qt6::WebChannel found — Property Inspector enabled")
+        message(
+            STATUS "Qt6::WebEngineQuick + Qt6::WebChannelQuick found — Property Inspector enabled"
+        )
     else()
         set(AJAZZ_HAVE_WEBENGINE FALSE)
         message(
-            WARNING "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt WebEngineQuick or "
-                    "WebChannel was not found. Falling back to the native inspector placeholder."
+            WARNING
+                "AJAZZ_BUILD_PROPERTY_INSPECTOR=ON but Qt WebEngineQuick or "
+                "WebChannelQuick was not found. Falling back to the native inspector placeholder."
         )
     endif()
 else()
@@ -152,13 +156,25 @@ set_source_files_properties(
     ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
 )
 
+# Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
+# `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
+# only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
+# our generated qmldir. The list is empty on minimal builds (so the WebEngine modules don't need to
+# exist on the target system) and populated on the full PI build.
+set(_acc_qml_imports "")
+if(AJAZZ_HAVE_WEBENGINE)
+    list(APPEND _acc_qml_imports QtWebEngine QtWebChannel)
+endif()
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
     VERSION 1.0
-    # C++ types declared with QML_NAMED_ELEMENT + QML_SINGLETON are picked up via the SOURCES list.
-    # Migrating from setContextProperty to QML singletons so qmllint can statically resolve them —
-    # see TODO.md → Quality bar.
+            IMPORTS
+            ${_acc_qml_imports}
+            # C++ types declared with QML_NAMED_ELEMENT + QML_SINGLETON are picked up via the
+            # SOURCES list. Migrating from setContextProperty to QML singletons so qmllint can
+            # statically resolve them — see TODO.md → Quality bar.
     SOURCES src/branding_service.cpp
             src/branding_service.hpp
             src/theme_service.cpp
@@ -228,7 +244,7 @@ target_link_libraries(
 )
 
 if(AJAZZ_HAVE_WEBENGINE)
-    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannel)
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannelQuick)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
     # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
     # present. Adding it to the QML module list unconditionally would fail QML compilation on

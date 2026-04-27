@@ -101,6 +101,7 @@ target_link_libraries(
             Qt6::Core
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
+            Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration
             Qt6::Test # QSignalSpy
 )
 

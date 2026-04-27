@@ -4,19 +4,22 @@
  * @brief Implementation of @ref ajazz::app::PropertyInspectorController.
  *
  * Two compilation modes, controlled by the @c AJAZZ_HAVE_WEBENGINE macro
- * (set by CMake when @c find_package(Qt6 ... WebEngineQuick) succeeds):
+ * (set by CMake when @c find_package(Qt6 ... WebEngineQuick WebChannelQuick)
+ * succeeds):
  *
- *   * **WebEngine present (M2 path)** — @ref loadInspector creates a
- *     @c QWebEngineProfile scoped to the plugin UUID and a
- *     @c QWebEnginePage that loads the plugin's HTML PI from the file:
- *     scheme. The QML side picks up the page via the @c activePage
- *     Q_PROPERTY. M3 layers the @c QWebChannel `\$SD` bridge on top;
- *     M4 adds settings persistence; M5 connects the bridge to the
- *     plugin host's WebSocket router.
+ *   * **WebEngine present** — @ref loadInspector creates a
+ *     @c QQuickWebEngineProfile scoped to the plugin UUID, attaches a
+ *     URL-request interceptor, builds a fresh @c QQmlWebChannel with
+ *     the @c \$SD bridge registered as @c \"$SD\", and exposes the
+ *     trio @c (activeProfile, activeChannel, activeUrl) via
+ *     Q_PROPERTY. @c PIWebView.qml binds those onto a single
+ *     @c WebEngineView, which then constructs and displays the page
+ *     itself (Qt-recommended: @c WebEngineView does not expose @c page
+ *     to QML — see TODO history).
  *
  *   * **WebEngine absent (M1 stub fallback)** — every method is a no-op
- *     that logs the request, @c activePage always returns nullptr,
- *     and QML stays on the schema-driven @c NativePropertyInspector.
+ *     that logs the request, the active properties always read nullptr /
+ *     empty, and QML stays on the schema-driven @c NativePropertyInspector.
  *     This keeps minimal Qt installs and headless CI green.
  *
  * The two paths share the same header surface so QML bindings and
@@ -36,11 +39,9 @@
 
 #include <QFileInfo>
 #include <QHash>
-#include <QUrl>
-#include <QWebChannel>
-#include <QWebEnginePage>
-#include <QWebEngineProfile>
-#include <QWebEngineSettings>
+#include <QQmlEngine>
+#include <QtWebChannelQuick/QQmlWebChannel>
+#include <QtWebEngineQuick/QQuickWebEngineProfile>
 
 #include <utility>
 #endif
@@ -75,22 +76,25 @@ void PropertyInspectorController::registerInstance(PropertyInspectorController* 
  * header) so the header doesn't need to include Qt WebEngine and stays
  * compilable on builds without the dep. The struct holds:
  *
- *   * @c profilesByPluginUuid — one isolated @c QWebEngineProfile per
- *     plugin UUID so two plugins never share cookies / storage / cache.
- *     Profiles are created lazily and parented to the controller, so
- *     they're cleaned up automatically when the controller dies.
+ *   * @c profilesByPluginUuid — one isolated @c QQuickWebEngineProfile
+ *     per plugin UUID so two plugins never share cookies / storage /
+ *     cache. Profiles are created lazily and parented to the controller,
+ *     so they're cleaned up automatically when the controller dies.
  *
- *   * @c activePage — the @c QWebEnginePage currently driving the
- *     `PIWebView`. Owned by the controller; replaced (and the previous
- *     one deleted) on every @ref loadInspector call so we never leak
- *     pages across plugin selections.
+ *   * @c interceptorsByPluginUuid — parallel map of URL interceptors,
+ *     parented to their owning profile so they share its lifetime.
+ *
+ *   * @c activeProfile / @c activeChannel — the per-inspector handles
+ *     bound by QML. The channel is re-created on every @ref loadInspector
+ *     call so each PI sees a fresh @c \"$SD\" object with no leftover JS
+ *     handlers from the previously-loaded inspector.
  *
  * @note `QHash` over `unordered_map` because the keys are `QString`
  *       (the manifest UUID) and we want `qHash` to do the right thing
  *       without a custom hasher.
  */
 struct PropertyInspectorController::WebEngineImpl {
-    QHash<QString, QWebEngineProfile*> profilesByPluginUuid;
+    QHash<QString, QQuickWebEngineProfile*> profilesByPluginUuid;
 
     /// One URL request interceptor per profile, parented to the profile
     /// (so it dies with the profile). Same key as @c profilesByPluginUuid.
@@ -99,16 +103,18 @@ struct PropertyInspectorController::WebEngineImpl {
     /// a different bundle subdirectory.
     QHash<QString, PIUrlRequestInterceptor*> interceptorsByPluginUuid;
 
-    QWebEnginePage* activePage = nullptr;
+    /// Profile currently bound to QML. Borrowed from
+    /// @c profilesByPluginUuid; never owned twice.
+    QQuickWebEngineProfile* activeProfile = nullptr;
 
-    /// QWebChannel installed on @c activePage. Re-created per page so each
-    /// PI sees a fresh @c "$SD" object with no leftover JS handlers from
-    /// the previously-loaded inspector.
-    QWebChannel* channel = nullptr;
+    /// Web channel scoped to the current inspector. Owned by the
+    /// controller; re-created on every @ref loadInspector call so the
+    /// previous PI's JS handlers don't leak into the next PI.
+    QQmlWebChannel* activeChannel = nullptr;
 
-    /// `$SD` object exposed to the page's JS. Owned by @c activePage so
-    /// it dies with the page.
-    PIBridge* bridge = nullptr;
+    /// `$SD` bridge registered on @c activeChannel. Parented to the
+    /// channel so it dies with the channel.
+    PIBridge* activeBridge = nullptr;
 };
 #else
 /// Empty PIMPL on builds without Qt WebEngine. The unique_ptr stays
@@ -134,9 +140,17 @@ bool PropertyInspectorController::webEngineAvailable() const noexcept {
 #endif
 }
 
-QWebEnginePage* PropertyInspectorController::activePage() const noexcept {
+QQuickWebEngineProfile* PropertyInspectorController::activeProfile() const noexcept {
 #ifdef AJAZZ_HAVE_WEBENGINE
-    return webEngine_ ? webEngine_->activePage : nullptr;
+    return webEngine_ ? webEngine_->activeProfile : nullptr;
+#else
+    return nullptr;
+#endif
+}
+
+QQmlWebChannel* PropertyInspectorController::activeChannel() const noexcept {
+#ifdef AJAZZ_HAVE_WEBENGINE
+    return webEngine_ ? webEngine_->activeChannel : nullptr;
 #else
     return nullptr;
 #endif
@@ -164,10 +178,11 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     auto*& profile = webEngine_->profilesByPluginUuid[pluginUuid];
     bool freshProfile = false;
     if (profile == nullptr) {
-        // Off-the-record == no on-disk persistence. M4 will switch this
-        // to a named profile rooted at QStandardPaths::CacheLocation /
-        // plugins/<uuid>/ once the persistence layer lands.
-        profile = new QWebEngineProfile(pluginUuid, this);
+        // QQuickWebEngineProfile defaults to an off-the-record (in-memory)
+        // profile when no storageName is set, which is exactly what we
+        // want for M2/M3. M4 will rename + persist when settings storage
+        // lands.
+        profile = new QQuickWebEngineProfile(this);
         profile->setHttpUserAgent(QStringLiteral("AjazzControlCenter PropertyInspector/1.0"));
         freshProfile = true;
     }
@@ -187,48 +202,25 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
         interceptor->setPiDir(piDir);
     }
 
-    // Tear down the previous page (if any) before creating a new one so
-    // we never leak. The page is parented to the controller, so even if
-    // a future change forgets to delete explicitly, the controller's
-    // destruction frees it.
-    if (auto* prev = webEngine_->activePage) {
-        webEngine_->activePage = nullptr;
+    // Tear down the previous channel + bridge (if any) before creating a
+    // new pair so the next PI sees a fresh `$SD` and we never leak. Both
+    // are parented to the controller / channel so deleteLater() cascades
+    // safely.
+    if (auto* prev = webEngine_->activeChannel) {
+        webEngine_->activeChannel = nullptr;
+        webEngine_->activeBridge = nullptr;
         prev->deleteLater();
     }
 
-    auto* page = new QWebEnginePage(profile, this);
-
-    // Security baseline (M2 + security-hardening pass). Conservative
-    // QWebEngineSettings flags here; the URL request interceptor wired to
-    // the per-plugin profile above (`PIUrlRequestInterceptor`) bounds
-    // file:// to the PI directory and gates https:// against the CDN
-    // allowlist.
-    auto* settings = page->settings();
-    settings->setAttribute(QWebEngineSettings::LocalContentCanAccessRemoteUrls, false);
-    settings->setAttribute(QWebEngineSettings::LocalContentCanAccessFileUrls, false);
-    settings->setAttribute(QWebEngineSettings::JavascriptCanOpenWindows, false);
-    settings->setAttribute(QWebEngineSettings::JavascriptCanAccessClipboard, false);
-    settings->setAttribute(QWebEngineSettings::AllowRunningInsecureContent, false);
-    settings->setAttribute(QWebEngineSettings::PluginsEnabled, false);
-    settings->setAttribute(QWebEngineSettings::FullScreenSupportEnabled, false);
-    settings->setAttribute(QWebEngineSettings::ScreenCaptureEnabled, false);
-
-    // M3 — QWebChannel bridge. The PI HTML must `<script src="qrc:///
-    // qtwebchannel/qwebchannel.js">` and instantiate
-    // `new QWebChannel(qt.webChannelTransport, ...)` to receive the `$SD`
-    // object. We register the bridge BEFORE `page->load(url)` so the
-    // channel is ready by the time the page's JS runs.
-    auto* bridge = new PIBridge(this, pluginUuid, actionUuid, contextUuid, page);
-    auto* channel = new QWebChannel(page);
+    auto* channel = new QQmlWebChannel(this);
+    auto* bridge = new PIBridge(this, pluginUuid, actionUuid, contextUuid, channel);
     channel->registerObject(QStringLiteral("$SD"), bridge);
-    page->setWebChannel(channel);
 
-    page->load(QUrl::fromLocalFile(htmlAbsPath));
-
-    webEngine_->activePage = page;
-    webEngine_->channel = channel;
-    webEngine_->bridge = bridge;
-    emit activePageChanged();
+    webEngine_->activeProfile = profile;
+    webEngine_->activeChannel = channel;
+    webEngine_->activeBridge = bridge;
+    activeUrl_ = QUrl::fromLocalFile(htmlAbsPath);
+    emit activeInspectorChanged();
 
     if (!hasHtmlInspector_) {
         hasHtmlInspector_ = true;
@@ -250,17 +242,14 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
 
 void PropertyInspectorController::closeInspector() {
 #ifdef AJAZZ_HAVE_WEBENGINE
-    if (webEngine_ && webEngine_->activePage) {
-        auto* page = webEngine_->activePage;
-        // The channel + bridge are parented to the page, so they die with
-        // it via Qt's parent-child ownership; we just need to clear our
-        // own pointers so the next loadInspector call doesn't see stale
-        // references.
-        webEngine_->activePage = nullptr;
-        webEngine_->channel = nullptr;
-        webEngine_->bridge = nullptr;
-        page->deleteLater();
-        emit activePageChanged();
+    if (webEngine_ && webEngine_->activeChannel != nullptr) {
+        auto* channel = webEngine_->activeChannel;
+        webEngine_->activeProfile = nullptr;
+        webEngine_->activeChannel = nullptr;
+        webEngine_->activeBridge = nullptr;
+        channel->deleteLater();
+        activeUrl_.clear();
+        emit activeInspectorChanged();
     }
 #endif
     if (hasHtmlInspector_) {
