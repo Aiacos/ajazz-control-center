@@ -51,6 +51,10 @@ QtObject {
     readonly property color accent:     branding ? branding.accent     : "#41CD52"
     /// Secondary accent (hover/pressed states, links, info badges).
     readonly property color accent2:    branding ? branding.accent2    : "#0A82FA"
+    /// Error accent (destructive states, error toasts, validation
+    /// failures). Not part of the branding contract — the same
+    /// medium-red works on both light and dark surfaces.
+    readonly property color errorAccent: "#e34c4c"
 
     // ---- Derived semantic tokens -------------------------------------------
     // These are not part of the branding contract; they are derived from

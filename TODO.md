@@ -71,16 +71,15 @@ ______________________________________________________________________
 
 ### User actions (out-of-code, one-time)
 
-- [ ] **Enable GitHub Wiki**: visit
-  `https://github.com/Aiacos/ajazz-control-center/wiki/_new` and save any
-  page once. After that, every push to `main` syncs `docs/wiki/`
-  automatically (the workflow already handles the chicken-and-egg case
-  gracefully — it just won't actually mirror anything until you click save
-  the first time).
-- [ ] **Enable Dependency Graph**: Settings → Code security & analysis →
-  Dependency graph → Enable. Then `dependency-review.yml` becomes
-  effective on dependabot PRs (it currently has `continue-on-error: true`
-  while the prereq is disabled).
+- [x] **Enable GitHub Wiki**: done by the maintainer this cycle
+  (initial page saved with placeholder content "VOID" — the
+  `wiki-sync.yml` workflow overwrites every page from `docs/wiki/` on
+  every push to `main`, so the placeholder content is replaced
+  automatically on the next push).
+- [x] **Enable Dependency Graph**: done by the maintainer this cycle.
+  `dependency-review.yml` is now effective on dependabot PRs (the
+  `continue-on-error: true` shim can be removed in a follow-up cleanup
+  commit once a green run confirms the action works).
 - [ ] **AK 980 ACL — physical replug**: `setfacl` workaround was applied
   this session, but is reset at the next boot. After replugging the
   AK 980 PRO once, systemd-logind picks up the `TAG+="uaccess"` from the

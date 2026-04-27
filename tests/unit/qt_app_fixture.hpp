@@ -33,17 +33,30 @@
 
 #include <array>
 
+#ifdef _WIN32
+#include <process.h>
+#define AJAZZ_TEST_GETPID() _getpid()
+#else
+#include <unistd.h>
+#define AJAZZ_TEST_GETPID() ::getpid()
+#endif
+
 namespace ajazz::tests {
 
 /// Boot (or reuse) the suite-wide QCoreApplication. Safe to call from
 /// any TU; the first call wins, the rest reuse the singleton.
 ///
-/// Also enables `QStandardPaths::setTestModeEnabled(true)` so QSettings
-/// and friends route to an isolated per-test directory tree instead of
-/// the user's real `~/.config/Aiacos/...` — the BrandingService and
-/// ThemeService tests would otherwise inherit whatever the developer
-/// has stored locally (e.g. `Branding/ThemeOverride`) and behave
-/// non-deterministically.
+/// `QStandardPaths::setTestModeEnabled(true)` keeps QSettings out of
+/// the developer's real config tree.
+///
+/// The application name is suffixed with the current PID so that
+/// `ctest -j N` (which spawns N parallel binary invocations, one per
+/// `TEST_CASE` after `catch_discover_tests`) gives each process its
+/// own QSettings backing file. Without this, two ThemeService tests
+/// running concurrently would write to the same
+/// `Appearance/Mode` key and one would observe the other's value
+/// after its own `clearThemeSettings()` — a real flake we observed
+/// in the wild after the Toast polish landed.
 inline QCoreApplication& qtApp() {
     if (QCoreApplication::instance() == nullptr) {
         static int argc = 0;
@@ -51,9 +64,12 @@ inline QCoreApplication& qtApp() {
         static QCoreApplication app{argc, argv.data()};
         QStandardPaths::setTestModeEnabled(true);
     }
-    QCoreApplication::setApplicationName(QStringLiteral("ajazz-control-center-tests"));
+    QCoreApplication::setApplicationName(
+        QStringLiteral("ajazz-control-center-tests-%1").arg(AJAZZ_TEST_GETPID()));
     QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
     return *QCoreApplication::instance();
 }
 
 } // namespace ajazz::tests
+
+#undef AJAZZ_TEST_GETPID
