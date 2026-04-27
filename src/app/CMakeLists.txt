@@ -156,6 +156,10 @@ qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
     VERSION 1.0
+    # C++ types declared with QML_NAMED_ELEMENT + QML_SINGLETON are picked up via the SOURCES list.
+    # Migrating from setContextProperty to QML singletons so qmllint can statically resolve them —
+    # see TODO.md → Quality bar.
+    SOURCES src/branding_service.cpp src/branding_service.hpp
     QML_FILES qml/Main.qml
               qml/Theme.qml
               qml/DeviceList.qml

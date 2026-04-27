@@ -76,9 +76,15 @@ void Application::bootstrap() {
 }
 
 void Application::exposeToQml(QQmlApplicationEngine& engine) {
+    // BrandingService is registered as the QML singleton `Branding` via
+    // QML_NAMED_ELEMENT + QML_SINGLETON in branding_service.hpp. Hand the
+    // app-owned instance to its factory before the engine loads any QML.
+    BrandingService::registerInstance(m_branding.get());
+
+    // Other services are still injected as context properties — migration
+    // to QML_SINGLETON is in flight (see TODO.md → Quality bar).
     engine.rootContext()->setContextProperty("deviceModel", m_deviceModel.get());
     engine.rootContext()->setContextProperty("profileController", m_profileController.get());
-    engine.rootContext()->setContextProperty("branding", m_branding.get());
     engine.rootContext()->setContextProperty("themeService", m_themeService.get());
     engine.rootContext()->setContextProperty("autostart", m_autostart.get());
     engine.rootContext()->setContextProperty("tray", m_trayController.get());

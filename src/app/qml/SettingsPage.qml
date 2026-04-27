@@ -164,7 +164,7 @@ Page {
             Label {
                 Layout.fillWidth: true
                 Layout.topMargin: Theme.spacingLg
-                text: branding ? branding.productName : qsTr("AJAZZ Control Center")
+                text: Branding.productName
                 color: Theme.fgMuted
                 font.pixelSize: Theme.fontSm
                 horizontalAlignment: Text.AlignRight

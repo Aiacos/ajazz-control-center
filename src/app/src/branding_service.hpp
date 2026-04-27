@@ -13,7 +13,11 @@
 #include <QColor>
 #include <QObject>
 #include <QString>
+#include <QtQmlIntegration>
 #include <QUrl>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -29,6 +33,8 @@ namespace ajazz::app {
  */
 class BrandingService : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(Branding)
+    QML_SINGLETON
     Q_PROPERTY(QString productName READ productName CONSTANT)
     Q_PROPERTY(QString vendorName READ vendorName CONSTANT)
     Q_PROPERTY(QString appId READ appId CONSTANT)
@@ -94,6 +100,28 @@ public:
      * Used by the "Privacy" link in About / Settings.
      */
     [[nodiscard]] Q_INVOKABLE QString privacyText() const;
+
+    /**
+     * @brief Factory invoked by Qt's QML type system for the
+     *        @c Branding singleton.
+     *
+     * Returns the @ref Application-owned instance previously registered via
+     * @ref registerInstance. CppOwnership is set explicitly so the QML engine
+     * does not delete the object on teardown — Application's @c unique_ptr
+     * remains the sole owner.
+     *
+     * Called once per QML engine; subsequent imports reuse the cached pointer.
+     */
+    static BrandingService* create(QQmlEngine* qml, QJSEngine* js);
+
+    /**
+     * @brief Hand the singleton instance to the QML factory.
+     *
+     * Application calls this with @c m_branding.get() before
+     * @c QQmlApplicationEngine::load. Tests do not call it; the static
+     * pointer stays @c nullptr in test contexts (which never load QML).
+     */
+    static void registerInstance(BrandingService* instance) noexcept;
 
 signals:
     /// Emitted whenever any color property changes.

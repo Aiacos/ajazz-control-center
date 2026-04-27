@@ -29,7 +29,7 @@ ApplicationWindow {
     minimumWidth: 900
     minimumHeight: 600
     visible: true
-    title: branding ? branding.productName : qsTr("AJAZZ Control Center")
+    title: Branding.productName
     color: Theme.bgBase
 
     // Material Design theme: bind to ThemeService so user preference and

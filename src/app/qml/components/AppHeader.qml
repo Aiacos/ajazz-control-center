@@ -50,11 +50,11 @@ Rectangle {
             asynchronous: true
             cache: true
             Accessible.role: Accessible.Graphic
-            Accessible.name: branding ? branding.vendorName + " " + branding.productName : qsTr("AJAZZ Control Center")
+            Accessible.name: Branding.vendorName + " " + Branding.productName
         }
 
         Text {
-            text: branding ? branding.productName : qsTr("AJAZZ Control Center")
+            text: Branding.productName
             color: Theme.fgPrimary
             font.pixelSize: Theme.fontLg
             font.bold: true

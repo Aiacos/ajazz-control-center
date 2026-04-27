@@ -4,7 +4,8 @@
 //
 // All QML files MUST consume colors and spacing from this singleton instead
 // of using hard-coded literals.  The singleton is a thin facade over the
-// `branding` context property (BrandingService) that:
+// `Branding` QML singleton (BrandingService — registered via QML_SINGLETON
+// in branding_service.hpp) that:
 //
 //   * proxies colors that are already part of the branding contract
 //     (accent, accent2, bgBase, bgSidebar, bgRowHover, fgPrimary, fgMuted)
@@ -24,33 +25,37 @@
 // See docs/analysis/ui-review.md (F-01, F-02, F-14, F-15) for context.
 pragma Singleton
 import QtQuick
+import AjazzControlCenter
 
 QtObject {
     id: theme
 
     // ---- Branding-driven base palette --------------------------------------
-    // Each of these falls back to the canonical AJAZZ Control Center palette
-    // (#14141a + #41CD52 accent) when `branding` is not yet initialized.
+    // The Branding singleton is registered before the QML engine loads (see
+    // Application::exposeToQml), so these bindings always resolve. The
+    // BrandingService constructor seeds every field via loadEmbeddedDefaults,
+    // so the canonical AJAZZ palette is the value when no override file is
+    // active.
 
     /// Primary application background — large surfaces, content area.
-    readonly property color bgBase:     branding ? branding.bgBase     : "#14141a"
+    readonly property color bgBase:     Branding.bgBase
     /// Sidebar / navigation rail background.
-    readonly property color bgSidebar:  branding ? branding.bgSidebar  : "#1e1e23"
+    readonly property color bgSidebar:  Branding.bgSidebar
     /// Row hover highlight (sidebar list, table rows).
-    readonly property color bgRowHover: branding ? branding.bgRowHover : "#2c2c34"
+    readonly property color bgRowHover: Branding.bgRowHover
 
     /// Primary foreground (titles, headings).
-    readonly property color fgPrimary:  branding ? branding.fgPrimary  : "#f0f0f0"
+    readonly property color fgPrimary:  Branding.fgPrimary
     /// Muted foreground (secondary labels, captions).
     /// WCAG 2.1 AA: "#aaaaaa" on "#1e1e23" sidebar = 7.5:1; on "#14141a" base = 9.0:1.
-    readonly property color fgMuted:    branding ? branding.fgMuted    : "#aaaaaa"
+    readonly property color fgMuted:    Branding.fgMuted
     /// Tertiary foreground for de-emphasized helper text — ≥4.5:1 on dark surfaces.
     readonly property color fgFaint:    "#bdbdbd"
 
     /// Brand accent (primary CTAs, focus rings, key indicators).
-    readonly property color accent:     branding ? branding.accent     : "#41CD52"
+    readonly property color accent:     Branding.accent
     /// Secondary accent (hover/pressed states, links, info badges).
-    readonly property color accent2:    branding ? branding.accent2    : "#0A82FA"
+    readonly property color accent2:    Branding.accent2
     /// Error accent (destructive states, error toasts, validation
     /// failures). Not part of the branding contract — the same
     /// medium-red works on both light and dark surfaces.

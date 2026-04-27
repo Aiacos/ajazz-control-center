@@ -8,6 +8,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QQmlEngine>
 #include <QSettings>
 
 #ifndef AJAZZ_PRODUCT_NAME
@@ -38,6 +39,12 @@ namespace ajazz::app {
 
 namespace {
 
+/// Pointer set by @ref BrandingService::registerInstance and consumed by the
+/// @ref BrandingService::create QML factory. Stays @c nullptr in test contexts
+/// where Application is not constructed; QML never loads in tests so the
+/// factory is never called.
+BrandingService* s_brandingInstance = nullptr;
+
 /// Parse a hex color string, leaving @p target unchanged on failure.
 void readColor(QJsonObject const& doc, char const* key, QColor& target) {
     auto const v = doc.value(QString::fromUtf8(key));
@@ -50,6 +57,18 @@ void readColor(QJsonObject const& doc, char const* key, QColor& target) {
 }
 
 } // namespace
+
+BrandingService* BrandingService::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_brandingInstance != nullptr,
+               "BrandingService::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_brandingInstance, QQmlEngine::CppOwnership);
+    return s_brandingInstance;
+}
+
+void BrandingService::registerInstance(BrandingService* instance) noexcept {
+    s_brandingInstance = instance;
+}
 
 BrandingService::BrandingService(QObject* parent) : QObject(parent) {
     loadEmbeddedDefaults();
