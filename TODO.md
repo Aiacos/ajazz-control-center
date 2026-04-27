@@ -215,7 +215,8 @@ ______________________________________________________________________
   Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
-  (Linux) + 3c (macOS) + 3d (Windows port, untested-pending-runner) +
+  (Linux) + 3c (macOS) + 3d (Windows port, compiles on CI but not
+  runtime-tested — see slice 3d note below) +
   3e (legacy backend retired) shipped this cycle. POSIX
   `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
@@ -315,7 +316,7 @@ ______________________________________________________________________
   pending a macOS CI runner — same posture as bwrap on Linux until
   the matrix expands.
 
-  Slice 3d (this cycle, untested-pending-Windows-runner):
+  Slice 3d (this cycle, compiles-on-CI / no-runtime-test-yet):
   `out_of_process_plugin_host_win32.cpp` mirrors the POSIX backend
   using `_spawnvp(_P_NOWAIT, ...)` for the spawn and `_pipe` for the
   IPC channel. `PeekNamedPipe` provides the timeout-read semantics
@@ -324,9 +325,14 @@ ______________________________________________________________________
   so both backends share the exact same encoding logic — fewer
   divergence opportunities. Windows compiles this file via the
   CMake gate (`if(WIN32)`) and Linux compiles the POSIX file; the
-  public header is now platform-agnostic. **Cannot run E2E tests on
-  Windows from this dev environment**; runtime verification waits
-  for a Windows CI runner.
+  public header is now platform-agnostic. The
+  `windows-2022` CI runner has been compiling the win32 TU clean since
+  3edb84e (every push to main since includes the slice 3d code), but
+  `tests/unit/test_out_of_process_plugin_host.cpp` is gated behind
+  `if(NOT WIN32)` because it pulls in the Linux bwrap sandbox header.
+  Open follow-up: write a `test_out_of_process_plugin_host_win32.cpp`
+  fixture that drives the Windows backend with `NoOpSandbox` only —
+  no `_pipe`/`_spawnvp` test coverage exists today.
 
   Slice 3d-ii (next, security PR): `WindowsAppContainerSandbox`.
   Windows AppContainer + restricted token are configured at

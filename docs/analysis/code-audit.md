@@ -1,5 +1,17 @@
 # Code quality audit — ajazz-control-center
 
+> **Status as of 2026-04**: this is a point-in-time snapshot. The COD-004 /
+> COD-005 GIL findings and the embedded-Python plugin-host concurrency
+> concerns referenced throughout this document have been retired by the A4
+> out-of-process plugin host refactor (slices 1–3e, see `TODO.md` →
+> *Architecture refactors*): `src/plugins/src/plugin_host.cpp` and the
+> pybind11 GIL surface no longer exist; plugin code now runs in a child
+> process over line-delimited JSON. Other findings (DeviceRegistry DI,
+> ActionEngine threading, EventBus copy-on-write, Logger sink injection,
+> Application destructor drain) have shipped under audit IDs A1–A6.
+> Treat the line-number citations as accurate-at-audit-date; resolve
+> current status via `TODO.md` rather than re-grepping the live tree.
+
 Scope: repository snapshot at `/home/user/workspace/ajazz-control-center`, focused on C++20/Qt6 core, device backends, embedded Python plugin host, QML app, tests, CMake, and GitHub Actions.
 
 ## 1. Executive summary

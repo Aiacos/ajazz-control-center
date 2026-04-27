@@ -1,5 +1,17 @@
 # Security audit — ajazz-control-center
 
+> **Status as of 2026-04**: this is a point-in-time snapshot. Many findings
+> below — particularly all SEC-\* items in the *Plugin loading* category and
+> the embedded-Python execution boundary — have been mitigated by the A4
+> out-of-process plugin host refactor (slices 1–3e, see `TODO.md` →
+> *Architecture refactors*) and the S2 / S3 / S4 / S6 hardening pass. The
+> in-process pybind11 backend referenced throughout this document
+> (`src/plugins/src/plugin_host.cpp`) has been deleted; the active backend
+> is `OutOfProcessPluginHost` with per-OS sandboxing (bwrap on Linux,
+> sandbox-exec on macOS, AppContainer port pending). Treat the line-number
+> citations as accurate-at-audit-date; resolve current status via
+> `TODO.md` rather than re-grepping the live tree.
+
 Scope: repository snapshot at `/home/user/workspace/ajazz-control-center`, focusing on host/device trust boundaries, parser hardening, plugin execution, release engineering, and dependency/CI posture.
 
 ## 1. Threat model
