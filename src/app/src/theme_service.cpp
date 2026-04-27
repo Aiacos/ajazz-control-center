@@ -8,12 +8,17 @@
 #include "branding_service.hpp"
 
 #include <QGuiApplication>
+#include <QQmlEngine>
 #include <QSettings>
 #include <QStyleHints>
 
 namespace ajazz::app {
 
 namespace {
+
+/// Pointer set by ThemeService::registerInstance, consumed by ::create.
+ThemeService* s_themeServiceInstance = nullptr;
+
 constexpr auto kSettingsKey = "Appearance/Mode";
 constexpr auto kDarkPath = ":/qt/qml/AjazzControlCenter/branding/theme.json";
 constexpr auto kLightPath = ":/qt/qml/AjazzControlCenter/branding/theme-light.json";
@@ -40,6 +45,18 @@ QString modeToString(ThemeService::Mode mode) {
     }
 }
 } // namespace
+
+ThemeService* ThemeService::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_themeServiceInstance != nullptr,
+               "ThemeService::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_themeServiceInstance, QQmlEngine::CppOwnership);
+    return s_themeServiceInstance;
+}
+
+void ThemeService::registerInstance(ThemeService* instance) noexcept {
+    s_themeServiceInstance = instance;
+}
 
 ThemeService::ThemeService(BrandingService* branding, QObject* parent)
     : QObject(parent), branding_(branding) {

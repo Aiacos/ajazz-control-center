@@ -13,11 +13,31 @@
 #include "streamdock_catalog_fetcher.hpp"
 
 #include <QMetaEnum>
+#include <QQmlEngine>
 #include <QtGlobal>
 
 #include <algorithm>
 
 namespace ajazz::app {
+
+namespace {
+
+/// Pointer set by PluginCatalogModel::registerInstance, consumed by ::create.
+PluginCatalogModel* s_pluginCatalogInstance = nullptr;
+
+} // namespace
+
+PluginCatalogModel* PluginCatalogModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_pluginCatalogInstance != nullptr,
+               "PluginCatalogModel::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_pluginCatalogInstance, QQmlEngine::CppOwnership);
+    return s_pluginCatalogInstance;
+}
+
+void PluginCatalogModel::registerInstance(PluginCatalogModel* instance) noexcept {
+    s_pluginCatalogInstance = instance;
+}
 
 namespace {
 

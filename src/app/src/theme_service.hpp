@@ -17,6 +17,10 @@
 
 #include <QObject>
 #include <QString>
+#include <QtQmlIntegration>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -33,6 +37,8 @@ class BrandingService;
  */
 class ThemeService : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(ThemeService)
+    QML_SINGLETON
     Q_PROPERTY(QString mode READ mode WRITE setMode NOTIFY modeChanged)
 
 public:
@@ -53,6 +59,14 @@ public:
 
     /// Set the mode by string ("auto" / "light" / "dark"). Persists to QSettings.
     void setMode(QString const& mode);
+
+    /// QML singleton factory. Returns the @ref Application-owned instance
+    /// previously handed in via @ref registerInstance with CppOwnership.
+    static ThemeService* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory. Application calls
+    /// this with @c m_themeService.get() before the engine loads QML.
+    static void registerInstance(ThemeService* instance) noexcept;
 
 signals:
     /// Emitted after a successful mode change.

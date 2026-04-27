@@ -60,9 +60,8 @@ ColumnLayout {
         // schema-driven native renderer takes over. The check is cheap and
         // the bindings re-evaluate when the controller emits change signals.
         sourceComponent: {
-            if (typeof propertyInspectorController !== "undefined"
-                    && propertyInspectorController.webEngineAvailable
-                    && propertyInspectorController.hasHtmlInspector) {
+            if (PropertyInspectorController.webEngineAvailable
+                    && PropertyInspectorController.hasHtmlInspector) {
                 return htmlComponent
             }
             return nativeComponent

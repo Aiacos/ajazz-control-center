@@ -3,7 +3,7 @@
 // PluginStore.qml — Plugin Store browse page for AJAZZ Control Center.
 //
 // The page surfaces the catalogue exposed by the C++-side
-// PluginCatalogModel (registered as the `pluginCatalog` QML context property
+// PluginCatalogModel (registered as the `PluginCatalog` QML context property
 // by Application::exposeToQml) and lets the user install, enable / disable
 // or uninstall a plugin. Catalogue entries come from four different
 // upstream sources, each backed by a tab in the source switcher:
@@ -85,14 +85,14 @@ Page {
     /// UUID of the plugin currently shown in the details pane, or "".
     property string selectedUuid: ""
 
-    /// Bumped after every mutation on `pluginCatalog` so any binding that
+    /// Bumped after every mutation on `PluginCatalog` so any binding that
     /// reads `entryFor()` (e.g. the side-sheet metadata pane) is forced to
     /// re-resolve. We need this because `entryFor()` returns a plain
     /// QVariantMap with no per-key change-notification.
     property int catalogRevision: 0
 
     Connections {
-        target: pluginCatalog
+        target: PluginCatalog
         function onInstalledCountChanged() { root.catalogRevision += 1; }
         function onCountChanged()         { root.catalogRevision += 1; }
     }
@@ -135,10 +135,10 @@ Page {
         PageHeader {
             Layout.fillWidth: true
             title: qsTr("Plugin Store")
-            subtitle: pluginCatalog
+            subtitle: PluginCatalog
                 ? qsTr("%1 plugins available · %2 installed")
-                    .arg(pluginCatalog.count)
-                    .arg(pluginCatalog.installedCount)
+                    .arg(PluginCatalog.count)
+                    .arg(PluginCatalog.installedCount)
                 : qsTr("Plugin catalogue unavailable")
         }
 
@@ -234,7 +234,7 @@ Page {
             }
 
             readonly property string streamdockState:
-                pluginCatalog ? pluginCatalog.streamdockState : "loading"
+                PluginCatalog ? PluginCatalog.streamdockState : "loading"
             readonly property color statusColor: {
                 switch (streamdockBanner.streamdockState) {
                 case "online":  return Theme.accent;
@@ -252,7 +252,7 @@ Page {
                 }
             }
             readonly property string statusLine: {
-                var ts = pluginCatalog ? pluginCatalog.streamdockFetchedAtUnixMs : 0;
+                var ts = PluginCatalog ? PluginCatalog.streamdockFetchedAtUnixMs : 0;
                 var rel = streamdockBanner.relativeAge(ts);
                 switch (streamdockBanner.streamdockState) {
                 case "online":
@@ -357,7 +357,7 @@ Page {
             }
 
             readonly property string opendeckState:
-                pluginCatalog ? pluginCatalog.opendeckState : "loading"
+                PluginCatalog ? PluginCatalog.opendeckState : "loading"
             readonly property color statusColor: {
                 switch (opendeckBanner.opendeckState) {
                 case "online":  return Theme.accent;
@@ -375,7 +375,7 @@ Page {
                 }
             }
             readonly property string statusLine: {
-                var ts = pluginCatalog ? pluginCatalog.opendeckFetchedAtUnixMs : 0;
+                var ts = PluginCatalog ? PluginCatalog.opendeckFetchedAtUnixMs : 0;
                 var rel = opendeckBanner.relativeAge(ts);
                 switch (opendeckBanner.opendeckState) {
                 case "online":
@@ -485,7 +485,7 @@ Page {
                 cellHeight: 212
                 cacheBuffer: cellHeight * 2
 
-                model: pluginCatalog
+                model: PluginCatalog
                 delegate: pluginTile
 
                 ScrollBar.vertical: ScrollBar {
@@ -649,11 +649,11 @@ Page {
                         Material.foreground: model.installed ? Theme.fgMuted : "white"
                         Material.background: model.installed ? "transparent" : Theme.accent
                         onClicked: {
-                            if (!pluginCatalog) return;
+                            if (!PluginCatalog) return;
                             if (model.installed) {
-                                pluginCatalog.uninstall(model.uuid);
+                                PluginCatalog.uninstall(model.uuid);
                             } else {
-                                pluginCatalog.install(model.uuid);
+                                PluginCatalog.install(model.uuid);
                             }
                         }
                         Accessible.role: Accessible.Button
@@ -694,8 +694,8 @@ Page {
         readonly property var entry: {
             // eslint-disable-next-line no-unused-expressions
             root.catalogRevision; // dependency: force re-eval on mutations.
-            return pluginCatalog && root.selectedUuid.length > 0
-                ? pluginCatalog.entryFor(root.selectedUuid)
+            return PluginCatalog && root.selectedUuid.length > 0
+                ? PluginCatalog.entryFor(root.selectedUuid)
                 : ({});
         }
 
@@ -831,8 +831,8 @@ Page {
                     visible: details.entry.installed === true
                     checked: details.entry.enabled === true
                     onToggled: {
-                        if (pluginCatalog) {
-                            pluginCatalog.toggleEnabled(root.selectedUuid);
+                        if (PluginCatalog) {
+                            PluginCatalog.toggleEnabled(root.selectedUuid);
                             // Bump the revision so the side-sheet re-binds.
                             root.catalogRevision += 1;
                         }
@@ -846,11 +846,11 @@ Page {
                         : Theme.accent
                     Material.foreground: "white"
                     onClicked: {
-                        if (!pluginCatalog) return;
+                        if (!PluginCatalog) return;
                         if (details.entry.installed) {
-                            pluginCatalog.uninstall(root.selectedUuid);
+                            PluginCatalog.uninstall(root.selectedUuid);
                         } else {
-                            pluginCatalog.install(root.selectedUuid);
+                            PluginCatalog.install(root.selectedUuid);
                         }
                     }
                 }

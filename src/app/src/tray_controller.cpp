@@ -14,6 +14,7 @@
 #include <QIcon>
 #include <QMenu>
 #include <QQmlApplicationEngine>
+#include <QQmlEngine>
 #include <QSettings>
 #include <QSystemTrayIcon>
 #include <QWindow>
@@ -21,6 +22,25 @@
 #include <algorithm>
 
 namespace ajazz::app {
+
+namespace {
+
+/// Pointer set by TrayController::registerInstance, consumed by ::create.
+TrayController* s_trayInstance = nullptr;
+
+} // namespace
+
+TrayController* TrayController::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_trayInstance != nullptr,
+               "TrayController::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_trayInstance, QQmlEngine::CppOwnership);
+    return s_trayInstance;
+}
+
+void TrayController::registerInstance(TrayController* instance) noexcept {
+    s_trayInstance = instance;
+}
 
 TrayController::TrayController(BrandingService* branding,
                                ProfileController* profiles,

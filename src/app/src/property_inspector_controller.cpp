@@ -27,6 +27,7 @@
 #include "ajazz/core/logger.hpp"
 
 #include <QObject>
+#include <QQmlEngine>
 #include <QString>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
@@ -45,6 +46,26 @@
 #endif
 
 namespace ajazz::app {
+
+namespace {
+
+/// Pointer set by PropertyInspectorController::registerInstance, consumed by ::create.
+PropertyInspectorController* s_propertyInspectorInstance = nullptr;
+
+} // namespace
+
+PropertyInspectorController* PropertyInspectorController::create(QQmlEngine* /*qml*/,
+                                                                 QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_propertyInspectorInstance != nullptr,
+               "PropertyInspectorController::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_propertyInspectorInstance, QQmlEngine::CppOwnership);
+    return s_propertyInspectorInstance;
+}
+
+void PropertyInspectorController::registerInstance(PropertyInspectorController* instance) noexcept {
+    s_propertyInspectorInstance = instance;
+}
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 /**

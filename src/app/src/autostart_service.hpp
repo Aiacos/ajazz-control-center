@@ -19,6 +19,10 @@
 
 #include <QObject>
 #include <QString>
+#include <QtQmlIntegration>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -28,6 +32,8 @@ namespace ajazz::app {
  */
 class AutostartService : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(Autostart)
+    QML_SINGLETON
     Q_PROPERTY(
         bool launchOnLogin READ launchOnLogin WRITE setLaunchOnLogin NOTIFY launchOnLoginChanged)
     Q_PROPERTY(bool startMinimised READ startMinimised WRITE setStartMinimised NOTIFY
@@ -35,6 +41,12 @@ class AutostartService : public QObject {
 
 public:
     explicit AutostartService(QObject* parent = nullptr);
+
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static AutostartService* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(AutostartService* instance) noexcept;
 
     /// @return true if launch-on-login is currently enabled in the OS.
     [[nodiscard]] bool launchOnLogin() const noexcept { return launchOnLogin_; }

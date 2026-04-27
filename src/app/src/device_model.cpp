@@ -13,9 +13,30 @@
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/core/logger.hpp"
 
+#include <QQmlEngine>
+
 #include <algorithm>
 
 namespace ajazz::app {
+
+namespace {
+
+/// Pointer set by DeviceModel::registerInstance, consumed by ::create.
+DeviceModel* s_deviceModelInstance = nullptr;
+
+} // namespace
+
+DeviceModel* DeviceModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_deviceModelInstance != nullptr,
+               "DeviceModel::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_deviceModelInstance, QQmlEngine::CppOwnership);
+    return s_deviceModelInstance;
+}
+
+void DeviceModel::registerInstance(DeviceModel* instance) noexcept {
+    s_deviceModelInstance = instance;
+}
 
 DeviceModel::DeviceModel(core::DeviceRegistry& registry, QObject* parent)
     : QAbstractListModel(parent), m_registry(registry) {}

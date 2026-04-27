@@ -29,8 +29,12 @@
 #include <QObject>
 #include <QString>
 #include <QtCore/qmetatype.h>
+#include <QtQmlIntegration>
 
 #include <memory>
+
+class QJSEngine;
+class QQmlEngine;
 
 // Forward declare QWebEnginePage so the header doesn't need Qt WebEngine
 // (which is optional — see AJAZZ_BUILD_PROPERTY_INSPECTOR in CMake). The
@@ -54,6 +58,8 @@ namespace ajazz::app {
  */
 class PropertyInspectorController : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(PropertyInspectorController)
+    QML_SINGLETON
     Q_DISABLE_COPY_MOVE(PropertyInspectorController)
 
     /// True iff the build linked Qt WebEngine and the controller can host
@@ -71,6 +77,12 @@ class PropertyInspectorController : public QObject {
     Q_PROPERTY(QWebEnginePage* activePage READ activePage NOTIFY activePageChanged)
 
 public:
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static PropertyInspectorController* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(PropertyInspectorController* instance) noexcept;
+
     explicit PropertyInspectorController(QObject* parent = nullptr);
     ~PropertyInspectorController() override;
 

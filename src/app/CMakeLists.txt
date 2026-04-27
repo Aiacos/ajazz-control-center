@@ -159,7 +159,22 @@ qt_add_qml_module(
     # C++ types declared with QML_NAMED_ELEMENT + QML_SINGLETON are picked up via the SOURCES list.
     # Migrating from setContextProperty to QML singletons so qmllint can statically resolve them —
     # see TODO.md → Quality bar.
-    SOURCES src/branding_service.cpp src/branding_service.hpp
+    SOURCES src/branding_service.cpp
+            src/branding_service.hpp
+            src/theme_service.cpp
+            src/theme_service.hpp
+            src/autostart_service.cpp
+            src/autostart_service.hpp
+            src/tray_controller.cpp
+            src/tray_controller.hpp
+            src/device_model.cpp
+            src/device_model.hpp
+            src/profile_controller.cpp
+            src/profile_controller.hpp
+            src/plugin_catalog_model.cpp
+            src/plugin_catalog_model.hpp
+            src/property_inspector_controller.cpp
+            src/property_inspector_controller.hpp
     QML_FILES qml/Main.qml
               qml/Theme.qml
               qml/DeviceList.qml

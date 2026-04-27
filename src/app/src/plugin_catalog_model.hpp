@@ -28,11 +28,15 @@
 #include <QHash>
 #include <QString>
 #include <QStringList>
+#include <QtQmlIntegration>
 #include <QUrl>
 #include <QVariantMap>
 
 #include <memory>
 #include <vector>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -98,6 +102,8 @@ struct CatalogEntry {
  */
 class PluginCatalogModel : public QAbstractListModel {
     Q_OBJECT
+    QML_NAMED_ELEMENT(PluginCatalog)
+    QML_SINGLETON
     Q_PROPERTY(int count READ rowCountSimple NOTIFY countChanged)
     Q_PROPERTY(int installedCount READ installedCount NOTIFY installedCountChanged)
     Q_PROPERTY(QString streamdockState READ streamdockState NOTIFY streamdockStateChanged)
@@ -110,6 +116,12 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_PROPERTY(int opendeckCount READ opendeckCount NOTIFY countChanged)
 
 public:
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static PluginCatalogModel* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(PluginCatalogModel* instance) noexcept;
+
     /// Custom data roles available to QML delegates.
     enum Roles {
         UuidRole = Qt::UserRole + 1, ///< Reverse-DNS plugin id (string, primary key).

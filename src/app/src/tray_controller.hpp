@@ -12,10 +12,13 @@
 #include <QObject>
 #include <QPointer>
 #include <QString>
+#include <QtQmlIntegration>
 
 class QAction;
 
+class QJSEngine;
 class QQmlApplicationEngine;
+class QQmlEngine;
 class QSystemTrayIcon;
 class QMenu;
 
@@ -38,11 +41,19 @@ class ProfileController;
  */
 class TrayController : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(Tray)
+    QML_SINGLETON
     Q_PROPERTY(bool startMinimized READ startMinimized WRITE setStartMinimized NOTIFY
                    startMinimizedChanged)
     Q_PROPERTY(bool trayAvailable READ trayAvailable CONSTANT)
 
 public:
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static TrayController* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(TrayController* instance) noexcept;
+
     /**
      * @brief Construct the controller without yet creating the tray icon.
      *

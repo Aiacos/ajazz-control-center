@@ -76,21 +76,19 @@ void Application::bootstrap() {
 }
 
 void Application::exposeToQml(QQmlApplicationEngine& engine) {
-    // BrandingService is registered as the QML singleton `Branding` via
-    // QML_NAMED_ELEMENT + QML_SINGLETON in branding_service.hpp. Hand the
-    // app-owned instance to its factory before the engine loads any QML.
+    // Services registered as QML singletons via QML_NAMED_ELEMENT + QML_SINGLETON.
+    // Hand the app-owned instances to their factories before the engine loads.
     BrandingService::registerInstance(m_branding.get());
-
-    // Other services are still injected as context properties — migration
-    // to QML_SINGLETON is in flight (see TODO.md → Quality bar).
-    engine.rootContext()->setContextProperty("deviceModel", m_deviceModel.get());
-    engine.rootContext()->setContextProperty("profileController", m_profileController.get());
-    engine.rootContext()->setContextProperty("themeService", m_themeService.get());
-    engine.rootContext()->setContextProperty("autostart", m_autostart.get());
-    engine.rootContext()->setContextProperty("tray", m_trayController.get());
-    engine.rootContext()->setContextProperty("pluginCatalog", m_pluginCatalog.get());
-    engine.rootContext()->setContextProperty("propertyInspectorController",
-                                             m_propertyInspector.get());
+    ThemeService::registerInstance(m_themeService.get());
+    AutostartService::registerInstance(m_autostart.get());
+    TrayController::registerInstance(m_trayController.get());
+    DeviceModel::registerInstance(m_deviceModel.get());
+    ProfileController::registerInstance(m_profileController.get());
+    PluginCatalogModel::registerInstance(m_pluginCatalog.get());
+    PropertyInspectorController::registerInstance(m_propertyInspector.get());
+    // No more setContextProperty calls — every service is now a QML
+    // singleton, statically resolvable by qmllint.
+    Q_UNUSED(engine);
 }
 
 void Application::startBackgroundServices(QQmlApplicationEngine& engine) {

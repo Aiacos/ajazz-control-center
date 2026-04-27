@@ -14,6 +14,7 @@
 #include "ajazz/core/profile_io.hpp"
 
 #include <QFileInfo>
+#include <QQmlEngine>
 #include <QString>
 
 #include <exception>
@@ -21,6 +22,25 @@
 #include <utility>
 
 namespace ajazz::app {
+
+namespace {
+
+/// Pointer set by ProfileController::registerInstance, consumed by ::create.
+ProfileController* s_profileControllerInstance = nullptr;
+
+} // namespace
+
+ProfileController* ProfileController::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_profileControllerInstance != nullptr,
+               "ProfileController::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_profileControllerInstance, QQmlEngine::CppOwnership);
+    return s_profileControllerInstance;
+}
+
+void ProfileController::registerInstance(ProfileController* instance) noexcept {
+    s_profileControllerInstance = instance;
+}
 
 ProfileController::ProfileController(QObject* parent) : QObject(parent) {}
 

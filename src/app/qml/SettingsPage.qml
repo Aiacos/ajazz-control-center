@@ -87,10 +87,10 @@ Page {
                                 required property var modelData
                                 text: modelData.label
                                 ButtonGroup.group: themeGroup
-                                checked: themeService && themeService.mode === modelData.id
+                                checked: ThemeService.mode === modelData.id
                                 onToggled: {
-                                    if (checked && themeService) {
-                                        themeService.mode = modelData.id;
+                                    if (checked) {
+                                        ThemeService.mode = modelData.id;
                                     }
                                 }
                                 Accessible.role: Accessible.RadioButton
@@ -128,9 +128,8 @@ Page {
                     SwitchDelegate {
                         Layout.fillWidth: true
                         text: qsTr("Launch on login")
-                        checked: autostart ? autostart.launchOnLogin : false
-                        enabled: autostart !== null
-                        onToggled: if (autostart) autostart.launchOnLogin = checked
+                        checked: Autostart.launchOnLogin
+                        onToggled: Autostart.launchOnLogin = checked
                         Accessible.role: Accessible.Button
                         Accessible.name: text
                         Accessible.description: qsTr("When enabled, the app starts automatically when you log in to your computer.")
@@ -145,11 +144,11 @@ Page {
                     SwitchDelegate {
                         Layout.fillWidth: true
                         text: qsTr("Start minimised to tray")
-                        checked: autostart ? autostart.startMinimised : false
-                        enabled: (autostart !== null) && (tray !== null) && tray.trayAvailable
+                        checked: Autostart.startMinimised
+                        enabled: Tray.trayAvailable
                         onToggled: {
-                            if (autostart) autostart.startMinimised = checked;
-                            if (tray)      tray.startMinimized   = checked;
+                            Autostart.startMinimised = checked;
+                            Tray.startMinimized = checked;
                         }
                         Accessible.role: Accessible.Button
                         Accessible.name: text

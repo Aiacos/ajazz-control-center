@@ -16,6 +16,10 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QtQmlIntegration>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -32,7 +36,15 @@ namespace ajazz::app {
  */
 class ProfileController : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(ProfileController)
+    QML_SINGLETON
 public:
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static ProfileController* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(ProfileController* instance) noexcept;
+
     explicit ProfileController(QObject* parent = nullptr);
 
     /**

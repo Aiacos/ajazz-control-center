@@ -45,7 +45,7 @@ Item {
         anchors.fill: parent
         backgroundColor: Theme.bgSidebar
         // Bound from C++ — null when no PI is currently active.
-        page: propertyInspectorController.activePage
+        page: PropertyInspectorController.activePage
     }
 
     // Block all mouse-button input to the underlying page surface

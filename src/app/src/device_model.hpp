@@ -15,12 +15,16 @@
 
 #include <QAbstractListModel>
 #include <QString>
+#include <QtQmlIntegration>
 #include <QVariantMap>
 
 #include <cstdint>
 #include <set>
 #include <utility>
 #include <vector>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::core {
 class DeviceRegistry;
@@ -42,7 +46,15 @@ namespace ajazz::app {
  */
 class DeviceModel : public QAbstractListModel {
     Q_OBJECT
+    QML_NAMED_ELEMENT(DeviceModel)
+    QML_SINGLETON
 public:
+    /// QML singleton factory — see BrandingService::create for the pattern.
+    static DeviceModel* create(QQmlEngine* qml, QJSEngine* js);
+
+    /// Hand the singleton instance to the QML factory.
+    static void registerInstance(DeviceModel* instance) noexcept;
+
     /// Custom data roles available to QML delegates.
     enum Roles {
         ModelRole = Qt::UserRole + 1, ///< Human-readable model name ("AJAZZ AKP153").

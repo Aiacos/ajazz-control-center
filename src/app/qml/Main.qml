@@ -36,9 +36,9 @@ ApplicationWindow {
     // OS color-scheme propagate down the Controls 2 hierarchy automatically.
     // Material.System (Qt 6.5+) follows the OS preference when the user has
     // selected "auto"; explicit Light/Dark override regardless of OS.
-    Material.theme: themeService.mode === "light"
+    Material.theme: ThemeService.mode === "light"
         ? Material.Light
-        : themeService.mode === "dark"
+        : ThemeService.mode === "dark"
             ? Material.Dark
             : Material.System
     // Pull the accent and primary tones from the branding palette so a custom
@@ -48,7 +48,7 @@ ApplicationWindow {
 
     // Surface the tray's "Show window" action.
     Connections {
-        target: tray
+        target: Tray
         function onShowWindowRequested() {
             root.show();
             root.raise();
@@ -58,7 +58,7 @@ ApplicationWindow {
 
     // Surface profile-controller IO results as toasts.
     Connections {
-        target: profileController
+        target: ProfileController
         function onProfileSaved(path) {
             toast.show(qsTr("Profile saved"), "success");
         }
@@ -90,10 +90,10 @@ ApplicationWindow {
                 id: sidebar
                 Layout.preferredWidth: root.width < 700 ? 64 : 320
                 Layout.fillHeight: true
-                model: deviceModel
+                model: DeviceModel
                 onDeviceSelected: codename => {
                     editor.codename = codename;
-                    editor.capabilities = deviceModel.capabilitiesFor(codename);
+                    editor.capabilities = DeviceModel.capabilitiesFor(codename);
                 }
             }
 
@@ -101,8 +101,8 @@ ApplicationWindow {
                 id: editor
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                onApplyRequested: profileController.save()
-                onRevertRequested: profileController.load()
+                onApplyRequested: ProfileController.save()
+                onRevertRequested: ProfileController.load()
                 onRestoreDefaultsRequested: toast.show(qsTr("Restore defaults: not implemented yet"), "info")
             }
 

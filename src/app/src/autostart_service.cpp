@@ -12,6 +12,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QFile>
+#include <QQmlEngine>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QTextStream>
@@ -92,7 +93,22 @@ namespace {
 }
 #endif
 
+/// Pointer set by AutostartService::registerInstance, consumed by ::create.
+AutostartService* s_autostartInstance = nullptr;
+
 } // namespace
+
+AutostartService* AutostartService::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
+    Q_ASSERT_X(s_autostartInstance != nullptr,
+               "AutostartService::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(s_autostartInstance, QQmlEngine::CppOwnership);
+    return s_autostartInstance;
+}
+
+void AutostartService::registerInstance(AutostartService* instance) noexcept {
+    s_autostartInstance = instance;
+}
 
 AutostartService::AutostartService(QObject* parent) : QObject(parent) {
     QSettings settings;
