@@ -168,7 +168,7 @@ qt_add_qml_module(
               qml/PluginStore.qml
               qml/PropertyInspector.qml
               qml/NativePropertyInspector.qml
-              qml/Settings.qml
+              qml/SettingsPage.qml
               qml/components/AppHeader.qml
               qml/components/Card.qml
               qml/components/DeviceRow.qml

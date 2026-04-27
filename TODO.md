@@ -344,7 +344,7 @@ ______________________________________________________________________
   macros unchanged; call sites untouched. Tests can now install a
   capturing sink and assert on what subsystems logged.
 
-- [ ] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
+- [x] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
 
 ### Security hardening
 
@@ -555,12 +555,19 @@ workstreams.
   property that reads a `branding.*` color. Visual regression check
   against `docs/screenshots/main-light.png` waits for the next
   screenshots refresh; build + test (105/105) green.
-- [x] **Settings page** (`src/app/qml/Settings.qml`) — done. Material-styled
-  page exposes `themeService.mode`, `autostart.launchOnLogin`, and
+- [x] **Settings page** (`src/app/qml/SettingsPage.qml`) — page +
+  entry-point both shipped. Material-styled page exposes
+  `themeService.mode`, `autostart.launchOnLogin`, and
   `autostart.startMinimised` / `tray.startMinimized` via RadioButton +
-  SwitchDelegate. Component is registered in the QML module; wiring it
-  into the sidebar/StackView is a follow-up (Main.qml is currently a
-  fixed 3-pane layout).
+  SwitchDelegate. AppHeader now hosts a "Settings" ToolButton next to
+  "Plugins" that emits `settingsRequested()`; Main.qml opens a right-edge
+  modal `Drawer` (clamped 360–560 px wide) hosting the page —
+  same pattern as the Plugin Store drawer. The page was renamed from
+  the original `Settings.qml` to `SettingsPage.qml` because
+  `QtCore.Settings` is the QSettings binding type used by PluginStore
+  for tab persistence; sharing the unqualified name caused
+  `[missing-property] category` resolution errors when both modules were
+  imported in the same file.
 
 ______________________________________________________________________
 

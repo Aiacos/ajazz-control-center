@@ -78,6 +78,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             onMinimizeRequested: root.hide()
             onPluginStoreRequested: pluginStoreDrawer.open()
+            onSettingsRequested: settingsDrawer.open()
         }
 
         RowLayout {
@@ -143,6 +144,34 @@ ApplicationWindow {
         }
 
         PluginStore {
+            anchors.fill: parent
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // Settings drawer.
+    //
+    // The Settings page is a single column of switches + a theme picker, so
+    // a narrower drawer (clamped between 360 px and 560 px) is enough.
+    // Same right-edge / modal pattern as the Plugin Store — only one drawer
+    // is open at a time, since Drawer is a popup and Qt forces popups to be
+    // mutually exclusive when both are modal.
+    // ----------------------------------------------------------------------
+    Drawer {
+        id: settingsDrawer
+        edge: Qt.RightEdge
+        modal: true
+        dragMargin: 0
+        width: Math.min(560, Math.max(360, root.width * 0.4))
+        height: root.height
+
+        background: Rectangle {
+            color: Theme.bgBase
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        SettingsPage {
             anchors.fill: parent
         }
     }

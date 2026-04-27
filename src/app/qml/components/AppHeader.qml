@@ -24,6 +24,10 @@ Rectangle {
     /// listens for this and opens the Plugin Store drawer / page.
     signal pluginStoreRequested()
 
+    /// Emitted when the user clicks the "Settings" button. Main.qml listens
+    /// for this and opens the Settings drawer.
+    signal settingsRequested()
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingLg
@@ -105,6 +109,36 @@ Rectangle {
                 text: pluginsBtn.text
                 color: Theme.fgPrimary
                 font: pluginsBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: Theme.spacingSm
+                rightPadding: Theme.spacingSm
+            }
+        }
+
+        // Settings button — opens the Settings drawer with theme / autostart
+        // / tray-startup toggles. Sits between the Plugin Store and the
+        // minimize button so it shares the same right-side action cluster.
+        ToolButton {
+            id: settingsBtn
+            text: qsTr("Settings")
+            font.pixelSize: Theme.fontMd
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Open application settings")
+            onClicked: root.settingsRequested()
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Settings")
+            Accessible.description: qsTr("Open the settings panel")
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: settingsBtn.hovered ? Theme.bgRowHover : "transparent"
+                border.width: settingsBtn.activeFocus ? Theme.focusRingWidth : 0
+                border.color: Theme.accent
+            }
+            contentItem: Text {
+                text: settingsBtn.text
+                color: Theme.fgPrimary
+                font: settingsBtn.font
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 leftPadding: Theme.spacingSm

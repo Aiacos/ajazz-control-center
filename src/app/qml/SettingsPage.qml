@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// Settings.qml — application settings page (theme, tray behaviour, autostart).
+// SettingsPage.qml — application settings page (theme, tray behaviour,
+// autostart). Named *Page* (not just *Settings*) because `QtCore.Settings`
+// is the QSettings binding type — using the same name would cause
+// unqualified-access ambiguity in any file that imports both modules
+// (e.g. PluginStore.qml, which uses `QtCore.Settings` for tab persistence).
 //
 // All state lives in the C++ services exposed as QML context properties:
 //   - themeService.mode (QString: "auto" | "light" | "dark")
