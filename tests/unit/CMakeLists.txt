@@ -21,6 +21,11 @@ add_executable(
     # different path.
     test_opendeck_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_catalog_fetcher.cpp
+    # QtExecutor: pins the A2 audit-finding contract — non-blocking
+    # scheduling, parent-thread dispatch, null-safe, drop-on-destroy.
+    # Q_OBJECT in the header so AUTOMOC has to scan it.
+    test_qt_executor.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/qt_executor.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
