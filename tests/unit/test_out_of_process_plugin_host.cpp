@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_out_of_process_plugin_host.cpp
- * @brief Unit tests for @ref OutOfProcessPluginHost (slices 1 → 3b).
+ * @brief Unit tests for @ref OutOfProcessPluginHost (slices 1 → 3d).
  *
  * The point of these tests is to PROVE the safety claim that motivates
  * audit finding A4: a crash in plugin code MUST NOT take the host
@@ -11,21 +11,31 @@
  *      `ready` handshake, can request `list_plugins` and receive the
  *      empty-array response, and tear-down via the destructor's
  *      `shutdown` flow leaves no zombie.
- *   2. **Crash isolation holds** — a deliberate SIGSEGV inside the
- *      child kills only the child. The host's process is unaffected;
- *      the next operation on the dead host returns an error
- *      (`std::runtime_error`) instead of crashing.
+ *   2. **Crash isolation holds** — a deliberate SIGSEGV (or null-deref
+ *      via ctypes on Windows) inside the child kills only the child.
+ *      The host's process is unaffected; the next operation on the
+ *      dead host returns an error (`std::runtime_error`) instead of
+ *      crashing.
  *   3. **Bad config is rejected at construction** — pointing at a
  *      nonexistent script returns a clean exception, not a hang.
  *
- * Skipped when `python3` is not on `PATH` (rare on dev machines but
- * possible on a stripped CI runner) — the test logs and reports as
- * `SKIPPED` rather than failing.
+ * Skipped when neither `python` nor `python3` is on `PATH` (rare on
+ * dev machines but possible on a stripped CI runner) — the test logs
+ * and reports as `SKIPPED` rather than failing.
+ *
+ * **Slice 3d cross-platform note**: this file used to be wrapped in
+ * `#ifndef _WIN32` because it imported `linux_bwrap_sandbox.hpp`. The
+ * non-sandbox tests are platform-agnostic (they exercise the
+ * `IPluginHost` contract, which both backends now implement), so they
+ * build on all three OSes and prove the win32 backend's contract by
+ * running the same suite. Only the bwrap end-to-end test below is
+ * still gated to non-Windows because of the Linux-only header.
  */
-#ifndef _WIN32
-
-#include "ajazz/plugins/linux_bwrap_sandbox.hpp"
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
+
+#ifndef _WIN32
+#include "ajazz/plugins/linux_bwrap_sandbox.hpp"
+#endif
 
 #include <cstdlib>
 #include <filesystem>
@@ -54,14 +64,37 @@ std::filesystem::path repoRoot() {
     return std::filesystem::current_path(); // fallback — test will fail with a clear error
 }
 
-bool python3Available() {
-    return std::system("command -v python3 >/dev/null 2>&1") == 0;
+/// Resolve the Python interpreter visible on PATH. Prefers `python3`
+/// (POSIX convention) but falls back to `python` (Windows convention,
+/// since `actions/setup-python` puts only `python` on PATH on Windows
+/// runners). Returns an empty string when neither is available.
+std::string findPython() {
+#ifdef _WIN32
+    if (std::system("where python3 >NUL 2>&1") == 0) {
+        return "python3";
+    }
+    if (std::system("where python >NUL 2>&1") == 0) {
+        return "python";
+    }
+#else
+    if (std::system("command -v python3 >/dev/null 2>&1") == 0) {
+        return "python3";
+    }
+    if (std::system("command -v python >/dev/null 2>&1") == 0) {
+        return "python";
+    }
+#endif
+    return {};
+}
+
+bool pythonAvailable() {
+    return !findPython().empty();
 }
 
 ajazz::plugins::OutOfProcessHostConfig makeConfig() {
     auto root = repoRoot();
     ajazz::plugins::OutOfProcessHostConfig cfg;
-    cfg.pythonExecutable = "python3";
+    cfg.pythonExecutable = findPython();
     cfg.childScript = root / "python" / "ajazz_plugins" / "_host_child.py";
     cfg.pythonPath = {root / "python"};
     return cfg;
@@ -70,8 +103,8 @@ ajazz::plugins::OutOfProcessHostConfig makeConfig() {
 } // namespace
 
 TEST_CASE("OOP plugin host: spawn -> list -> shutdown round-trip", "[plugins][oop][!mayfail]") {
-    if (!python3Available()) {
-        SKIP("python3 not on PATH; skipping OutOfProcessPluginHost spawn test");
+    if (!pythonAvailable()) {
+        SKIP("python / python3 not on PATH; skipping OutOfProcessPluginHost spawn test");
     }
 
     ajazz::plugins::OutOfProcessPluginHost host{makeConfig()};
@@ -89,7 +122,7 @@ TEST_CASE("OOP plugin host: spawn -> list -> shutdown round-trip", "[plugins][oo
 }
 
 TEST_CASE("OOP plugin host: crash in child does not crash host", "[plugins][oop][!mayfail]") {
-    if (!python3Available()) {
+    if (!pythonAvailable()) {
         SKIP("python3 not on PATH; skipping crash-isolation test");
     }
 
@@ -110,7 +143,7 @@ TEST_CASE("OOP plugin host: crash in child does not crash host", "[plugins][oop]
 
 TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover the hello example",
           "[plugins][oop][!mayfail]") {
-    if (!python3Available()) {
+    if (!pythonAvailable()) {
         SKIP("python3 not on PATH; skipping plugin discovery test");
     }
 
@@ -147,7 +180,7 @@ TEST_CASE("OOP plugin host: add_search_path + load_all + list_plugins discover t
 }
 
 TEST_CASE("OOP plugin host: dispatch routes to the loaded handler", "[plugins][oop][!mayfail]") {
-    if (!python3Available()) {
+    if (!pythonAvailable()) {
         SKIP("python3 not on PATH; skipping dispatch test");
     }
 
@@ -171,7 +204,7 @@ TEST_CASE("OOP plugin host: dispatch routes to the loaded handler", "[plugins][o
 }
 
 TEST_CASE("OOP plugin host: bad child script path is rejected at construction", "[plugins][oop]") {
-    if (!python3Available()) {
+    if (!pythonAvailable()) {
         SKIP("python3 not on PATH; skipping bad-config test");
     }
 
@@ -184,7 +217,7 @@ TEST_CASE("OOP plugin host: bad child script path is rejected at construction", 
 
 TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost pointer",
           "[plugins][oop][interface][!mayfail]") {
-    if (!python3Available()) {
+    if (!pythonAvailable()) {
         SKIP("python3 not on PATH; skipping IPluginHost contract test");
     }
 
@@ -206,6 +239,14 @@ TEST_CASE("OOP plugin host: drives the full lifecycle through an IPluginHost poi
     REQUIRE_FALSE(host.dispatch("does.not.exist", "noop", "{}"));
 }
 
+// The bwrap-sandboxed end-to-end test imports `linux_bwrap_sandbox.hpp`
+// which is gated to non-Windows (bwrap doesn't exist on Windows; the
+// sandbox falls back to passthrough at runtime, but the test would
+// still need the sandbox class definition to construct one). Other
+// platform-specific sandbox tests (sandbox-exec on macOS, AppContainer
+// once slice 3d-ii lands) live in their own test files.
+#ifndef _WIN32
+
 namespace {
 
 bool bwrapAvailable() {
@@ -216,8 +257,8 @@ bool bwrapAvailable() {
 
 TEST_CASE("OOP plugin host: spawn through LinuxBwrapSandbox round-trips end-to-end",
           "[plugins][oop][sandbox][!mayfail]") {
-    if (!python3Available()) {
-        SKIP("python3 not on PATH; skipping bwrap-sandboxed spawn test");
+    if (!pythonAvailable()) {
+        SKIP("python / python3 not on PATH; skipping bwrap-sandboxed spawn test");
     }
     if (!bwrapAvailable()) {
         SKIP("bwrap not on PATH; skipping LinuxBwrapSandbox integration test");
