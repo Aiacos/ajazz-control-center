@@ -42,6 +42,7 @@
 //     swap this for a `QSortFilterProxyModel` exposed from C++; that swap
 //     is transparent to the QML page since both shapes implement the same
 //     role names.
+pragma ComponentBehavior: Bound
 import QtCore
 import QtQuick
 import QtQuick.Controls
@@ -504,18 +505,35 @@ Page {
 
         Rectangle {
             id: tile
+            // Required model-role declarations let qmllint statically resolve
+            // every `model.foo` access inside this delegate (without these,
+            // every binding triggers an `[unqualified]` warning even with
+            // `pragma ComponentBehavior: Bound`).
+            required property string uuid
+            required property string name
+            required property string version
+            required property string author
+            required property string description
+            required property url iconUrl
+            required property var tags
+            required property string compatibility
+            required property string sizeBytes
+            required property bool verified
+            required property bool installed
+            required property bool enabled
+            required property string source
             // Filtering is applied here so non-matching rows fold to zero
             // height and the GridView reflows; Component recycling keeps
             // this cheap even on catalogues with hundreds of entries.
             readonly property bool matches: root.rowMatches(
-                model.name, model.description, model.tags, model.source, model.installed)
+                tile.name, tile.description, tile.tags, tile.source, tile.installed)
             visible: matches
             width: matches ? grid.cellWidth - Theme.spacingMd : 0
             height: matches ? grid.cellHeight - Theme.spacingMd : 0
             radius: Theme.radiusMd
             color: tileMouse.containsMouse ? Theme.tileHover : Theme.tile
-            border.color: root.selectedUuid === model.uuid ? Theme.accent : Theme.borderSubtle
-            border.width: root.selectedUuid === model.uuid ? Theme.focusRingWidth : 1
+            border.color: root.selectedUuid === tile.uuid ? Theme.accent : Theme.borderSubtle
+            border.width: root.selectedUuid === tile.uuid ? Theme.focusRingWidth : 1
 
             // Bump the visible-count whenever this delegate is shown.
             // Component.onCompleted fires per recycled instance, so we
@@ -531,7 +549,7 @@ Page {
                 id: tileMouse
                 anchors.fill: parent
                 hoverEnabled: true
-                onClicked: root.selectedUuid = model.uuid
+                onClicked: root.selectedUuid = tile.uuid
             }
 
             ColumnLayout {
@@ -545,7 +563,7 @@ Page {
                     spacing: Theme.spacingSm
 
                     Image {
-                        source: model.iconUrl
+                        source: tile.iconUrl
                         sourceSize.width: 80
                         sourceSize.height: 80
                         Layout.preferredWidth: 40
@@ -554,7 +572,7 @@ Page {
                         smooth: true
                         mipmap: true
                         Accessible.role: Accessible.Graphic
-                        Accessible.name: qsTr("%1 icon").arg(model.name)
+                        Accessible.name: qsTr("%1 icon").arg(tile.name)
                     }
 
                     ColumnLayout {
@@ -566,7 +584,7 @@ Page {
                             spacing: Theme.spacingXs
 
                             Label {
-                                text: model.name
+                                text: tile.name
                                 color: Theme.fgPrimary
                                 font.pixelSize: Theme.fontMd
                                 font.bold: true
@@ -575,7 +593,7 @@ Page {
                             }
                             // Verified Sigstore badge — small accent dot.
                             Rectangle {
-                                visible: model.verified
+                                visible: tile.verified
                                 Layout.preferredWidth: 8
                                 Layout.preferredHeight: 8
                                 radius: 4
@@ -586,7 +604,7 @@ Page {
                             }
                         }
                         Label {
-                            text: qsTr("v%1 · %2").arg(model.version).arg(model.author)
+                            text: qsTr("v%1 · %2").arg(tile.version).arg(tile.author)
                             color: Theme.fgMuted
                             font.pixelSize: Theme.fontXs
                             elide: Text.ElideRight
@@ -599,7 +617,7 @@ Page {
                 Label {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    text: model.description
+                    text: tile.description
                     color: Theme.fgFaint
                     font.pixelSize: Theme.fontSm
                     wrapMode: Text.WordWrap
@@ -616,9 +634,9 @@ Page {
                     // can tell native vs. compat-shimmed plugins apart.
                     Rectangle {
                         radius: Theme.radiusSm
-                        color: model.compatibility === "native"
+                        color: tile.compatibility === "native"
                             ? Theme.accent
-                            : model.compatibility === "streamdock"
+                            : tile.compatibility === "streamdock"
                                 ? Theme.accent2
                                 : Theme.borderSubtle
                         Layout.preferredHeight: 18
@@ -626,14 +644,14 @@ Page {
                         Label {
                             id: badge
                             anchors.centerIn: parent
-                            text: model.compatibility
+                            text: tile.compatibility
                             color: Theme.fgPrimary
                             font.pixelSize: Theme.fontXs
                             font.bold: true
                         }
                     }
                     Label {
-                        text: model.sizeBytes
+                        text: tile.sizeBytes
                         color: Theme.fgMuted
                         font.pixelSize: Theme.fontXs
                         Layout.fillWidth: true
@@ -644,22 +662,22 @@ Page {
                     // depending on the current row state. The Material
                     // accent makes it stand out without an explicit icon.
                     Button {
-                        text: model.installed ? qsTr("Installed") : qsTr("Install")
-                        flat: model.installed
-                        Material.foreground: model.installed ? Theme.fgMuted : "white"
-                        Material.background: model.installed ? "transparent" : Theme.accent
+                        text: tile.installed ? qsTr("Installed") : qsTr("Install")
+                        flat: tile.installed
+                        Material.foreground: tile.installed ? Theme.fgMuted : "white"
+                        Material.background: tile.installed ? "transparent" : Theme.accent
                         onClicked: {
                             if (!PluginCatalog) return;
-                            if (model.installed) {
-                                PluginCatalog.uninstall(model.uuid);
+                            if (tile.installed) {
+                                PluginCatalog.uninstall(tile.uuid);
                             } else {
-                                PluginCatalog.install(model.uuid);
+                                PluginCatalog.install(tile.uuid);
                             }
                         }
                         Accessible.role: Accessible.Button
-                        Accessible.name: model.installed
-                            ? qsTr("Uninstall %1").arg(model.name)
-                            : qsTr("Install %1").arg(model.name)
+                        Accessible.name: tile.installed
+                            ? qsTr("Uninstall %1").arg(tile.name)
+                            : qsTr("Install %1").arg(tile.name)
                     }
                 }
             }

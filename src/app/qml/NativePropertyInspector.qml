@@ -17,6 +17,7 @@
 // `PIWebView.qml` and is only compiled into the QML module when Qt
 // WebEngine was found at configure time (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`).
 
+pragma ComponentBehavior: Bound
 import QtQuick 6
 import QtQuick.Controls 6
 import QtQuick.Layouts 6

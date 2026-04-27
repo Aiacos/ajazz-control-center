@@ -7,6 +7,11 @@
 //
 // Each row is a DeviceRow component (QtQuick.Controls ItemDelegate) so it is
 // keyboard-focusable, hover-highlighted and exposes Accessible roles.
+//
+// `pragma ComponentBehavior: Bound` makes IDs from outer components
+// (`root`) statically resolvable inside the delegate, so qmllint can
+// type-check `root.deviceSelected(...)` instead of warning unqualified.
+pragma ComponentBehavior: Bound
 import QtQuick
 import AjazzControlCenter
 import "components"

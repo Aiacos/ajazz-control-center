@@ -22,6 +22,7 @@
 // into the other's lifecycle. The schema/settings forwarders are kept on
 // the wrapper so existing callers (Inspector.qml) keep working unchanged.
 
+pragma ComponentBehavior: Bound
 import QtQuick 6
 import QtQuick.Layouts 6
 import AjazzControlCenter

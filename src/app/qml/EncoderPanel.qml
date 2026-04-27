@@ -8,6 +8,7 @@
 //
 // Emits:
 //   * `encoderActivated(int index)` — user activated a dial.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import AjazzControlCenter

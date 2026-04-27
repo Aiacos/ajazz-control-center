@@ -29,7 +29,9 @@ Item {
 
         Label { text: qsTr("Color"); color: Theme.fgFaint }
         Rectangle {
-            width: 64; height: 64; radius: Theme.radiusMd
+            Layout.preferredWidth: 64
+            Layout.preferredHeight: 64
+            radius: Theme.radiusMd
             color: Theme.accent
         }
 

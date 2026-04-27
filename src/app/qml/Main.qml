@@ -101,8 +101,16 @@ ApplicationWindow {
                 id: editor
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                onApplyRequested: ProfileController.save()
-                onRevertRequested: ProfileController.load()
+                // TODO(profile-buttons): wire Apply / Revert to a real
+                // profile path — `ProfileController.saveProfile(path)` /
+                // `loadProfile(path)` need a default path resolution
+                // (QStandardPaths::AppDataLocation/profile.json) plus a
+                // file dialog for "Save as". Today these buttons toast
+                // "not implemented yet" rather than calling non-existent
+                // no-arg overloads (the previous code did the latter and
+                // silently no-op'd at runtime).
+                onApplyRequested: toast.show(qsTr("Save profile: not implemented yet"), "info")
+                onRevertRequested: toast.show(qsTr("Revert profile: not implemented yet"), "info")
                 onRestoreDefaultsRequested: toast.show(qsTr("Restore defaults: not implemented yet"), "info")
             }
 

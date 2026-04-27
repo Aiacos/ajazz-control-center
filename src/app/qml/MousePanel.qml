@@ -7,6 +7,7 @@
 //   * `dpiStageCount` — number of DPI stages to expose (default 0).
 //
 // Backend wiring is pending; the values are local placeholders.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -35,9 +36,10 @@ Item {
         Repeater {
             model: root.dpiStageCount
             delegate: RowLayout {
+                id: stageRow
                 required property int index
                 Label {
-                    text: qsTr("Stage %1").arg(index + 1)
+                    text: qsTr("Stage %1").arg(stageRow.index + 1)
                     color: Theme.fgMuted
                     font.pixelSize: Theme.fontSm
                 }
@@ -45,9 +47,9 @@ Item {
                     from: 100
                     to: 26000
                     stepSize: 100
-                    value: 800 + index * 400
+                    value: 800 + stageRow.index * 400
                     Accessible.role: Accessible.SpinBox
-                    Accessible.name: qsTr("DPI for stage %1").arg(index + 1)
+                    Accessible.name: qsTr("DPI for stage %1").arg(stageRow.index + 1)
                 }
             }
         }

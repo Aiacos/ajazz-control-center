@@ -42,43 +42,45 @@ ______________________________________________________________________
 
   - **C++ / make**: ✅ zero warnings (`-Werror` is on; if the C++ ever
     regresses CI fails)
+
   - **clang-tidy**: ✅ runs at pre-push, catches modernize / readability
     / cppcoreguidelines lints before they reach `main`
+
   - **ruff / ruff-format / mdformat / typos / cmake-lint**: ✅ zero
     warnings (pre-commit hooks block any regression)
-  - **qmllint-qt6**: 🟡 ~50 warnings remaining, all in two categories
-    that are documented limitations of the static analyser (qmllint
-    does not see the C++ side that injects context properties via
-    `setContextProperty`):
-    - `[unqualified]` for every reference to `branding`,
-      `themeService`, `tray`, `profileController`, `deviceModel`,
-      `pluginCatalog`, `propertyInspectorController`, `autostart`,
-      `pluginCatalog`, `pluginsBtn` — these all resolve at runtime
-      via Qt's context-property mechanism. Two ways to silence:
-      (a) emit a `.qmltypes` manifest declaring each context property
-      and pass it to qmllint via a per-target qmldir, or
-      (b) move every context property to a singleton QML wrapper
-      file that qmllint can statically resolve.
-    - `[missing-property] page` in `PIWebView.qml` — the
-      `propertyInspectorController` exposes the active QWebEnginePage
-      via a `Q_DECLARE_OPAQUE_POINTER`-typed property; qmllint cannot
-      see classes hidden behind a forward-decl + Q_DECLARE_OPAQUE_POINTER.
-      Lower-priority — the binding
-      works at runtime.
-  - **Real bugs flagged by qmllint**: ✅ all fixed in commit history
-    (`[duplicated-name]` for `settingsChanged` collision in
-    `NativePropertyInspector` / `PropertyInspector`, eight unused
-    `import QtQuick.Controls` lines).
 
-  Action items to flip qmllint to fully clean:
+  - **qmllint-qt6**: ✅ 6 warnings remaining, all in two documented
+    qmllint limitations that are *not* code defects (down from ~182
+    after the QML_SINGLETON migration + delegate ComponentBehavior
+    pragma + required-property declarations across all 12 QML files):
 
-  - File a separate TODO entry under "Medium-effort fixes" for the
-    qmltypes-emission approach (option (a) above) — needs a CMake
-    addition (`qt_add_qml_module`'s `OUTPUT_DIRECTORY` + qmltypes
-    generation).
-  - In the meantime, `qmllint-qt6` can be added to the pre-commit
-    stages with a baseline file so any *new* warnings break the
-    build, even though the existing ~50 are temporarily allowed.
+    - 4× in `NativePropertyInspector.qml` — `Loader.item.applyValue`
+      / `.committed` accesses; `Loader.item` is typed as `QObject`
+      so qmllint cannot see the dynamically-selected sub-component's
+      methods. Fix would require materialising every sub-component
+      as a typed wrapper, which is more invasive than the warning is
+      worth.
+    - 2× in `PIWebView.qml` — `QWebEnginePage*` is a
+      `Q_DECLARE_OPAQUE_POINTER` so qmllint cannot resolve its `page`
+      property statically. Fixing would mean exposing the type
+      declaratively, which conflicts with the optional-WebEngine
+      build gate that keeps minimal Qt installs compiling.
+
+    Resolved this cycle (pre-existing categories now closed):
+
+    - `[unqualified]` context properties (8 services × N files) →
+      migrated to `QML_NAMED_ELEMENT` + `QML_SINGLETON` in commits
+      `97eb719` (Branding) + `7df853c` (the other 7).
+    - `[unqualified]` delegate-scope ids/model roles → fixed via
+      `pragma ComponentBehavior: Bound` + `required property`
+      declarations in 12 QML files.
+    - `[duplicated-name]` `settingsChanged` collision in
+      NativePropertyInspector / PropertyInspector → renamed to
+      `settingsJsonChanged`.
+    - 8× unused `import QtQuick.Controls` → removed.
+    - `[Quick.layout-positioning]` undefined `width`/`height` on
+      Layout-managed items in SettingsPage / ProfileEditor /
+      RgbPicker → switched to `Layout.preferredWidth/Height`.
 
 ### Quick wins (≤ 1 hour each)
 

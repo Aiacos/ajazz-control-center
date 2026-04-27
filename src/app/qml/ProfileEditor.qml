@@ -21,6 +21,7 @@
 //   * `applyRequested()`   — user clicked Apply.
 //   * `revertRequested()`  — user clicked Revert.
 //   * `restoreDefaultsRequested()` — user clicked Restore defaults.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -61,7 +62,7 @@ Rectangle {
             title: root.codename === ""
                 ? qsTr("Select a device on the left")
                 : qsTr("Editing: %1").arg(root.codename)
-            subtitle: capabilities && capabilities.model ? capabilities.model : ""
+            subtitle: root.capabilities && root.capabilities.model ? root.capabilities.model : ""
         }
 
         // Empty state when nothing is selected -------------------------------
@@ -132,7 +133,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             visible: root.codename !== ""
-            height: 56
+            Layout.preferredHeight: 56
             color: Theme.bgSidebar
             radius: Theme.radiusMd
 

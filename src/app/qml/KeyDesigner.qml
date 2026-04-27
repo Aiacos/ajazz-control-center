@@ -10,6 +10,7 @@
 // Emits:
 //   * `keyActivated(int index)` — user clicked / activated a key.
 //   * `keySelected(int index)`  — user moved focus to a key.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import AjazzControlCenter

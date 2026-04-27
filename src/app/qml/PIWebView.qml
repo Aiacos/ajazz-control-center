@@ -33,6 +33,7 @@
 // up the JS bridge methods; this file just provides the rendering
 // surface.
 
+pragma ComponentBehavior: Bound
 import QtQuick 6
 import QtWebEngine
 import AjazzControlCenter

@@ -15,6 +15,11 @@
 // The page is a Material-styled scrollable column of switches and a single
 // theme-mode picker. It is intentionally minimal — Settings is a leaf page,
 // not a full preferences modal, so the component count stays small.
+//
+// `pragma ComponentBehavior: Bound` makes the outer `themeGroup` ButtonGroup
+// id resolvable inside the Repeater RadioButton delegate so qmllint can
+// type-check the ButtonGroup.group binding.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -137,7 +142,7 @@ Page {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 1
+                        Layout.preferredHeight: 1
                         color: Theme.borderSubtle
                     }
 
