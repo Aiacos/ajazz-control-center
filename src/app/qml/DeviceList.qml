@@ -30,6 +30,11 @@ Rectangle {
         clip: true
         focus: true
         keyNavigationEnabled: true
+        // Hide the empty list entirely when there are no devices — the
+        // EmptyState below takes over the sidebar real estate. Without
+        // this branch the sidebar looks like the app is broken on first
+        // launch (no devices plugged in yet).
+        visible: count > 0
 
         delegate: DeviceRow {
             // F-08/COD-019: required model roles instead of parent.parent.model.
@@ -45,5 +50,18 @@ Rectangle {
 
             onClicked: root.deviceSelected(codename)
         }
+    }
+
+    // Onboarding hint shown when no devices are connected and not in
+    // the collapsed-icon-only narrow layout (root.width < 200 covers the
+    // 64 px collapsed mode that Main.qml falls into below 700 px window
+    // width — drawing the title at that width clips badly).
+    EmptyState {
+        anchors.centerIn: parent
+        anchors.margins: Theme.spacingLg
+        width: parent.width - Theme.spacingLg * 2
+        visible: list.count === 0 && root.width >= 200
+        title: qsTr("No devices yet")
+        body: qsTr("Plug in an AJAZZ device — keyboard, Stream Dock, or mouse — and it will show up here automatically.")
     }
 }

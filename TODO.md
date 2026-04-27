@@ -542,8 +542,16 @@ workstreams.
 - [ ] **Material 3 expressive theming** beyond the basic style switch:
   custom typography ramp, elevation tokens, motion specs (entrance /
   exit transitions), elevated buttons with proper ripples.
-- [ ] **Empty state polish** for `DeviceList` when zero devices online
-  (illustration + onboarding hint).
+- [x] **Empty state polish** for `DeviceList` when zero devices online
+  — done. `src/app/qml/DeviceList.qml` now hides the empty `ListView`
+  and renders the existing `components/EmptyState.qml` centered in the
+  sidebar with a "No devices yet" title and a one-line onboarding hint
+  ("Plug in an AJAZZ device — keyboard, Stream Dock, or mouse — and it
+  will show up here automatically."). Suppressed in the collapsed
+  64 px icon-only layout (`root.width < 200`) so the title doesn't
+  clip on narrow windows. Illustration is the existing typography-
+  only treatment from the EmptyState component; richer artwork
+  belongs to a future Material 3 polish pass.
 - [ ] **Toast notifications upgrade** to `QtQuick.Controls.Material`'s
   Snackbar pattern.
 - [x] **Light-theme `DeviceList` tile contrast** — fixed in this cycle.
