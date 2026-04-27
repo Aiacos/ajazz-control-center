@@ -215,9 +215,10 @@ ______________________________________________________________________
   Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
-  (Linux) + 3c (macOS) + 3d (Windows port, compiles on CI but not
-  runtime-tested — see slice 3d note below) +
-  3e (legacy backend retired) shipped this cycle. POSIX
+  (Linux) + 3c (macOS) + 3d (Windows port, runtime-validated on CI in
+  this cycle) + 3e (legacy backend retired) shipped this cycle. The
+  remaining ☐ is slice 3d-ii (`WindowsAppContainerSandbox`) — see the
+  bottom of this entry. POSIX
   `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
@@ -316,7 +317,7 @@ ______________________________________________________________________
   pending a macOS CI runner — same posture as bwrap on Linux until
   the matrix expands.
 
-  Slice 3d (this cycle, compiles-on-CI / no-runtime-test-yet):
+  Slice 3d (this cycle, runtime-validated on CI):
   `out_of_process_plugin_host_win32.cpp` mirrors the POSIX backend
   using `_spawnvp(_P_NOWAIT, ...)` for the spawn and `_pipe` for the
   IPC channel. `PeekNamedPipe` provides the timeout-read semantics
@@ -325,14 +326,20 @@ ______________________________________________________________________
   so both backends share the exact same encoding logic — fewer
   divergence opportunities. Windows compiles this file via the
   CMake gate (`if(WIN32)`) and Linux compiles the POSIX file; the
-  public header is now platform-agnostic. The
-  `windows-2022` CI runner has been compiling the win32 TU clean since
-  3edb84e (every push to main since includes the slice 3d code), but
-  `tests/unit/test_out_of_process_plugin_host.cpp` is gated behind
-  `if(NOT WIN32)` because it pulls in the Linux bwrap sandbox header.
-  Open follow-up: write a `test_out_of_process_plugin_host_win32.cpp`
-  fixture that drives the Windows backend with `NoOpSandbox` only —
-  no `_pipe`/`_spawnvp` test coverage exists today.
+  public header is now platform-agnostic. **Validation**: commit
+  `82779d9` removed the `if(NOT WIN32)` gate around
+  `test_out_of_process_plugin_host.cpp` (the Linux-only piece was the
+  bwrap end-to-end test; the rest exercises the `IPluginHost`
+  contract, which is platform-agnostic). The cross-platform fixture
+  uses a `findPython()` helper that picks `python3` (POSIX) or
+  `python` (Windows). The first push after the unblock ran the full
+  6-test OOP suite on `windows-2022`, all green in 4.75 s — proving
+  the win32 backend's `_spawnvp` + `_pipe` + `PeekNamedPipe` flow,
+  the wire protocol, dispatch routing, the crash-isolation claim
+  (`os.kill(self, SIGSEGV)` → `TerminateProcess(handle, 11)` plus
+  the `ctypes.string_at(0)` fallback for an actual access violation),
+  and virtual dispatch through an `IPluginHost&` reference all hold
+  end-to-end on Windows.
 
   Slice 3d-ii (next, security PR): `WindowsAppContainerSandbox`.
   Windows AppContainer + restricted token are configured at
