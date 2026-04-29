@@ -412,7 +412,7 @@ VersionInfo `Comments` field on every inner installer reads literally
 | ------------------------------------- | ----- | ---------- | -------------------------------------- | ---------- | ------- |
 | `static-2026-04-29-aj199-002`         | 78    | 3.4 MB     | `app/OemDrv.exe`                       | 2 211 840  | Win32 raw HID + GDI+; linker 9.0 (MSVC 2008); ts 2023-01-06 |
 | `static-2026-04-29-aj199max-001`      | 181   | 11.9 MB    | `app/Mouse Drive Beta.exe`             | 5 352 960  | **.NET / CLR** (`mscoree.dll` only); linker 48.0 |
-| `static-2026-04-29-aj159-001`         | 107   | 9.8 MB     | `app/AJAZZ Driver (X).exe`             | 1 868 800  | **MFC** (`mfc140u.dll`, `msvcp140.dll`, `MUI.dll`); linker 14.0; ts 2025-03-18 |
+| `static-2026-04-29-aj159-001`         | 107   | 9.8 MB     | `app/AJAZZ Driver (X).exe`             | 1 868 800  | **MFC** (`mfc140u.dll`, `msvcp140.dll`, `MUI.dll`); linker 14.0; ts 2025-03-19 (UTC `0x67da196b`) |
 | `static-2026-04-29-ak820max-rgb-001`  | 121   | 58.1 MB    | `app/AK820MAX.exe`                     | 9 444 352  | **Qt 5** (`Qt5Core.dll`, `Qt5Gui.dll`, `Qt5Widgets.dll`, `Qt5Network.dll`, `Qt5Multimedia.dll`, `qwindows.dll`, 34 `.qm` translations); linker 14.0; ts 2024-11-20 |
 
 **Architectural insight**: the vendor maintains **four distinct
@@ -504,11 +504,33 @@ Every mode entry uses **HID interface `MI_02`** — the **3rd HID
 interface** of the device is the configuration channel; interfaces
 0/1 carry the standard mouse HID reports.
 
-The AJ199 Max `Config.ini` uses base64-obfuscated VID/PID strings:
-`VID=QUphenozNTU0` decodes to `AJazz:3554`. So the AJ199 family is
-on a different VID space (`248A` and `249A` for AJ159 family vs
-`3554` for AJ199 family). Base64 obfuscation is a minimal anti-
-casual-RE measure with no cryptographic intent.
+The AJ199 Max `Config.ini` uses base64-obfuscated VID/PID strings.
+Full decode (validated 2026-04-29):
+
+| Key      | Base64 ciphertext                                   | Plaintext                                               |
+| -------- | ---------------------------------------------------- | ------------------------------------------------------- |
+| `VID`    | `QUphenozNTU0`                                       | `AJazz3554`           — VID `0x3554`                    |
+| `M_PID`  | `QUphenozRjUwMCxGNTY2LEY1NDY=`                       | `AJazz3F500,F566,F546` — wired-mode PIDs                |
+| `D_PID`  | `QUphenozRjUwMSxGNTY0LEY1NjcsRjU0NSxGNTQ3LEY1RDU=`   | `AJazz3F501,F564,F567,F545,F547,F5D5` — 2.4G dongle PIDs |
+| `CID`    | `QUpBWlogRHJpdmVyIChKKTIw`                           | `AJAZZ Driver (J)20`  — driver CID prefix              |
+| `Sensor` | `MzMxMQ==`                                           | `3311`                — PixArt PAW3311 sensor flag      |
+| `MM`     | `QksyNTM1`                                           | `BK2535`              — **Beken BK2535 master MCU**     |
+| `DM`     | `Q1g1MjY1ME4=`                                       | `CX52650N`            — dongle MCU part number          |
+| `D4M`    | `Q0gzMlYzMDU=`                                       | `CH32V305`            — **WCH RISC-V CH32V305 MCU** (probably the 2.4G dongle controller) |
+
+So the AJ199 family is on a different VID space (`248A` and `249A`
+for AJ159 family vs `3554` for AJ199 family). Base64 obfuscation is
+a minimal anti-casual-RE measure with no cryptographic intent.
+
+**MCU silicon identified**: Beken BK2535 (BLE/wireless), an MCU
+labelled CX52650N, and WCH CH32V305 (32-bit RISC-V) — all three
+are commodity Chinese-market MCUs. The CH32V305 in particular
+gives a strong hint about the firmware-update story: WCH RISC-V
+parts ship with a documented bootloader at
+`0x1FFF0000`, addressable over USB-CDC at `0x1A86:0x55E0` when
+booted into ISP mode. The `Qt5SerialPort.dll` dependency in
+`FirmwareUpgradeTool.exe` (Finding 1) is consistent with a USB-CDC
+handoff into this WCH bootloader.
 
 **Parity gap with our enumeration table**: cross-check
 `docs/_data/devices.yaml` against this map. Some AJAZZ mouse
@@ -624,6 +646,312 @@ of the source.
 The next recon increment that would unlock implementation work is a
 **runtime USB capture** of a vendor app driving each device — see
 [`vendor-recon-runbook-windows.md`](vendor-recon-runbook-windows.md).
+
+## Validation findings (2026-04-29 cross-check pass)
+
+After Findings 5–10 landed, a separate cross-check pass re-hashed
+every artefact in the vault, re-decoded every base64 ciphertext,
+re-walked every PE timestamp into a calendar date, and compared
+the documented USB ID space against our own enumeration in
+`src/devices/`. Results:
+
+### V1 — Hash integrity ✅
+
+All seven SHA-256 / MD5 hashes cited across Findings 5–10 verify
+against the actual files in the recon vault. Stream Dock Win MD5
+matches Aliyun's HEAD-reported Content-MD5 byte-for-byte (no CDN
+tampering between the 2026-04-26 catalogue probe and the 2026-04-29
+download). Inner-EXE SHA-256 hashes match the previous Linux pass's
+`static-2026-04-26-aj199-001` and `static-2026-04-26-ak820max-001`
+captures verbatim — vendor has not rotated those artefacts.
+
+### V2 — Capture-id linkage ✅
+
+Every `static-2026-04-XX-*` capture-id referenced in
+`vendor-feature-matrix.md`, `vendor-software-inventory.md`, and the
+`TODO.md` parity backlog resolves to a `> **Capture id**:` block
+in this document. No orphan citations.
+
+### V3 — Implementation drift in `src/devices/mouse/` ❌ **Bug**
+
+The AJ-series USB ID space surfaced by Finding 8 contradicts the
+values currently in our own
+[`docs/_data/devices.yaml`](../_data/devices.yaml),
+[`src/devices/mouse/src/register.cpp`](../../src/devices/mouse/src/register.cpp),
+and [`resources/linux/99-ajazz.rules`](../../resources/linux/99-ajazz.rules):
+
+| Device  | Our enumeration                         | Vendor reality (Finding 8)                                                                                  | Verdict   |
+| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
+| AJ159   | VID `0x3554` PID `0xf51a`               | VID `0x248A` PIDs `0x5C2E/0x5D2E/0x5E2E` (USB) + VID `0x248A`/`0x249A` PID `0x5C2F` (2.4G dongle); HID interface `MI_02` | **WRONG VID + PID** |
+| AJ199   | VID `0x3554` PID `0xf51b`               | VID `0x3554` PIDs `0xF500/0xF566/0xF546` (wired-mode M_PID), `0xF501/0xF564/0xF567/0xF545/0xF547/0xF5D5` (dongle D_PID) | VID OK, **PID wrong** (`0xf51b` not in either set) |
+| AJ339   | VID `0x3554` PID `0xf51c`               | Vendor driver download not located (open item — see inventory)                                              | **Unverified** — values are educated guess at best |
+| AJ380   | VID `0x3554` PID `0xf51d`               | Vendor driver download not located                                                                          | **Unverified**     |
+
+The four PIDs `0xF51A/B/C/D` in `register.cpp` are **sequential and
+fictional**; no equivalent values appear in any vendor manifest /
+config file captured to date. The `AJ159` row is doubly wrong:
+even the VID is for the wrong product line. Real-world impact:
+
+- **Linux**: `99-ajazz.rules` only tags VID `3554` with `uaccess`,
+  so an AJ159 / AJ179 / AJ139 mouse plugged into a Linux host gets
+  no ACL and the app cannot open the device. The udev rule needs
+  to be widened to `idVendor` ∈ `{248A, 249A, 3554}`.
+- **Windows / macOS**: `register.cpp` enumerates the wrong PIDs;
+  any AJ-series mouse plugged in is silently invisible to our
+  device model.
+- **Documentation**: README + wiki + AppStream metadata
+  (`io.github.Aiacos.AjazzControlCenter.appdata.xml`) propagate
+  the same fictional values from `devices.yaml` via `make docs`.
+
+**Required follow-up** (clean-engineer task — must NOT be the same
+operator as the 2026-04-29 recon pass):
+
+1. Read Finding 8 of this document and the AJ159 `app/config.xml`
+   structural description in Finding 9.
+1. Update `docs/_data/devices.yaml` with the correct VID:PID
+   matrix per the table in Finding 8 (8 AJ-series mice, each
+   with up to 5 mode entries).
+1. Re-generate `register.cpp` to enumerate every (VID, PID,
+   model) tuple per the YAML.
+1. Widen `99-ajazz.rules` to cover `248A`, `249A`, and `3554`.
+1. Re-run `make docs` to refresh the autogen blocks in README +
+   wiki.
+1. Investigate AJ339 / AJ380 separately — vendor driver download
+   was not locatable (inventory open item), so their VID:PID is
+   currently a guess. Either confirm via a real-device USB capture
+   or remove them from the registry until evidence lands.
+1. Tracking entry: see `TODO.md` § "Reverse-engineering & vendor
+   parity" → "AJ-series VID:PID enumeration drift" (filed
+   2026-04-29).
+
+### V4 — Apple VID placeholder in keyboard registration ⚠️
+
+[`src/devices/keyboard/src/register.cpp`](../../src/devices/keyboard/src/register.cpp)
+registers a "proprietary" entry under VID `0x05ac` PID `0x024f`.
+**`0x05ac` is Apple's IEEE-assigned vendor ID**, not AJAZZ. The
+file's comment says the entry is a placeholder until the device
+database lands, but the runtime registry will still match against
+this VID:PID, which means an Apple keyboard with PID `0x024f`
+would be misclassified as an AJAZZ proprietary keyboard. Action
+item: replace with a sentinel `0x0000` / `0xFFFF` pair until a
+real VID:PID is sourced, or remove the entry entirely.
+
+### V5 — Base64 obfuscation decode corrected ✅
+
+The original Finding 8 wrote the decoded VID as `AJazz:3554`
+(with a colon). The actual decode is `AJazz3554` (no colon — the
+table-formatted display in this doc has been corrected and the
+full table now shows every observed key in the
+`Config.ini` `[Option]` block).
+
+### V6 — No vendor source-leak in committed docs ✅
+
+`grep -E 'SENSOR_\w+_DPI_\d+|SUPPORT_(SENSOR_MODE_SEL|LOD_CAL|RIPPLE|FIXLINE|MOTION_SYNC|MOUSEPAD_CAL)\s*=|#define\s+SENSOR_'`
+across `docs/research/` returns zero matches. The structural-only
+documentation policy applied to `driver_sensor.h` (Finding 10)
+holds — no byte-level mappings or `#define` lines were transcribed.
+
+### V7 — Linker timestamp dates ✅ (one minor adjustment)
+
+All seven cited TimeDateStamp values decode cleanly:
+
+| Hex          | Unix       | UTC                    | Note                                            |
+| ------------ | ---------- | ---------------------- | ----------------------------------------------- |
+| `0x4a870c9c` | 1250364572 | `2009-08-15 19:29:32` | AJ199 V1.0 wrapper — Borland stub, frozen      |
+| `0x5b226d52` | 1528982866 | `2018-06-14 13:27:46` | AK820 Max RGB wrapper — Borland stub, frozen   |
+| `0x60b88e27` | 1622707751 | `2021-06-03 08:09:11` | AJ159 wrapper                                   |
+| `0x6258476f` | 1649952623 | `2022-04-14 16:10:23` | AJ199 Max wrapper                               |
+| `0x63b8027b` | 1673003643 | `2023-01-06 11:14:03` | AJ199 V1.0 OemDrv (real driver build)          |
+| `0x67da196b` | 1742346603 | `2025-03-19 01:10:03` | AJ159 driver (real build) — was `2025-03-18` in Finding 6 typo, fixed |
+| `0x673d8ae6` | 1732086502 | `2024-11-20 07:08:22` | AK820 Max RGB driver (real build)              |
+
+## Finding 11 — Wire protocol from disassembly (TAINTED — see clean-room note below)
+
+> **TAINT NOTICE**: This finding is the result of **disassembly** of
+> vendor binaries (`Mouse Drive Beta.exe` decompiled with dnSpy 6.5.1
+> netframework, embedded `costura64.hidusb.dll` disassembled with
+> radare2 5.9.8; `OemDrv.exe` disassembled with radare2 5.9.8).
+> Disassembly is **explicitly forbidden** by
+> [`docs/protocols/REVERSE_ENGINEERING.md`](../protocols/REVERSE_ENGINEERING.md)
+> § "Legal considerations" but was **explicitly authorised by the
+> repository owner on 2026-04-29** as an exceptional measure to
+> validate that our `src/devices/` implementation matches the
+> vendor's actual wire format. The conflicting policy doc still
+> needs reconciliation — see TODO § "Reverse-engineering policy
+> reconciliation" for the open question.
+>
+> **Clean-room consequence**: Findings 5–11 in this document have
+> now consolidated **both** static-analysis knowledge AND
+> disassembly knowledge in a single operator instance (the
+> 2026-04-29 recon pass). Per the engineer-split rule in
+> [`docs/research/README.md`](README.md) § 1, **no engineer who has
+> read this section may contribute to `src/devices/mouse/`,
+> `src/devices/keyboard/`, or `src/devices/streamdeck/` for the
+> AJAZZ devices in scope (AJ199, AJ199 Max, AJ159, AJ139, AJ179,
+> AK820 Max RGB, Stream Dock).** A clean engineer must read only
+> the spec excerpts in Finding 11.A / 11.B below — never this
+> taint notice block, nor the underlying capture-ids — and
+> implement from those.
+
+### 11.A — AJ199 V1.0 / OemDrv.exe wire format (vs our implementation)
+
+> **Capture id**: `disasm-2026-04-29-aj199-v1.0-001`. Method: radare2
+> 5.9.8 native i386 disassembly of `OemDrv.exe`
+> (sha256 `ac9ca7cf9e072322589324f3027a65b681ccee8b44bf7c74b288627bf9d58846`,
+> 2 211 840 bytes, linker MSVC 9.0, ts 2023-01-06 11:14:03 UTC),
+> Inno-extracted from the AJ199 V1.0 vendor installer. The function
+> `fcn.00450820` (referenced internally as a "SendData" helper —
+> error string literal `SendData Err: nSize>PER_PAYLOAD!`) is the
+> single canonical Feature-Report sender for the driver's
+> configuration commands. Three xrefs total to `HidD_SetFeature`,
+> two are device-enumeration probes during `SetupDi*` walk
+> (`fcn.0040d6c0`, `fcn.004519f0`); only `fcn.00450820` carries the
+> command-and-data payload that configures the device.
+
+**Observed wire format**:
+
+| Aspect              | OemDrv.exe (vendor reality)                                       | Our `src/devices/mouse/src/aj_series.cpp` (claimed)                                                  |
+| ------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Report length       | **17 bytes** (`push 0x11` immediately before `HidD_SetFeature`)   | 64 bytes (`constexpr std::size_t kReportSize = 64`)                                                   |
+| Report ID (byte 0)  | **`0x08`** (`mov byte [var_14h], 8` at `0x00450875`)              | `0x05` (`pkt[0] = 0x05`)                                                                              |
+| Header layout       | Multi-field struct starting at `var_14h` (offset 0 of buffer)     | `[0]=ReportId, [1]=cmd, [2]=sub, [3]=payload-length, [4..62]=payload`                                 |
+| Checksum byte (last)| **`0x55 − sum_lo − sum_hi − tail_byte`** (constant 0x55 base)     | `sum(bytes 1..62) mod 256` (simple modular sum)                                                       |
+| Checksum scope      | Iterates 8 little-endian words (16 bytes) of the body, splitting low/high accumulators in `bl`/`var_13h` | Sums all 62 body bytes flat into a 32-bit accumulator                                                 |
+| Send call           | `HidD_SetFeature(handle, buffer, 17)`                             | `m_transport->writeFeature(pkt)` with 64-byte buffer                                                  |
+
+**Conclusion 11.A**: the wire format observed in the vendor's own
+`OemDrv.exe` does **not** match the format we send from
+`aj_series.cpp`. The discrepancy is on every primary axis (length,
+report id, header layout, checksum algorithm, checksum scope). On
+real AJ199 V1.0 hardware, our packets will fail the device-side
+validation and the configuration writes will silently no-op or be
+rejected.
+
+**Caveats** (do not rule out before a real-device wire capture):
+
+1. The driver may also expose a **secondary** Feature-Report path
+   we did not yet locate in the disassembly. Only one of the three
+   `HidD_SetFeature` xrefs (`fcn.00450820`) is on the
+   command-payload path; the other two are during enumeration.
+   Other paths (e.g. via `WriteFile` directly to the HID device
+   handle) were not searched.
+1. The 2023-01 OemDrv.exe build may differ from the 2024-11 build
+   that the GitHub redistribution `progzone122/ajazz-aj199-official-software`
+   ships, which is what our `aj_series.cpp` header comment cites
+   as its reference. That redistribution is itself "Not a clean-
+   room source" per the inventory; if our impl was authored from
+   a wire-capture against that newer build, the protocol may
+   genuinely have changed between 2023-01 and 2024-11, in which
+   case our impl is correct for current-firmware AJ199 V1.0
+   hardware but does not match the older OemDrv.exe analysed here.
+
+A live USB capture against an AJ199 V1.0 mouse running the **current**
+vendor driver, per the runbook in
+[`vendor-recon-runbook-windows.md`](vendor-recon-runbook-windows.md)
+§ 2.5, is the only way to disambiguate (1) and (2). Until that
+runs, the implementation in `src/devices/mouse/src/aj_series.cpp`
+is **suspect, not confirmed-broken**.
+
+### 11.B — AJ199 Max wire format is different from AJ199 V1.0
+
+> **Capture id**: `disasm-2026-04-29-aj199max-001`. Method: ILSpy/dnSpy
+> decompilation of `Mouse Drive Beta.exe` (.NET assembly,
+> sha256 `f59265cd11e6c816627007b8151a038e8851aef559e96bd9d98dcbecba3e5832`,
+> 5 352 960 bytes), then radare2 disassembly of the embedded
+> `costura64.hidusb.dll` (Costura.Fody-bundled native dependency,
+> sha256 `abbc0a8175fe91471ae6e082abacd69137ac725f22079104478e6ff0b7a9e6e1`,
+> 145 408 bytes, x86_64).
+
+The AJ199 Max ".NET wrapper + native DLL" architecture exposes a
+**rich command vocabulary** on the C ABI of `HIDUsb.dll`. Functions
+exported with `CS_UsbServer_*` prefix are 5-byte trampolines into
+the matching internal `UsbServer_*` symbol. The full export list
+recovered (47 symbols) covers: device pairing, MTK / USB-update
+mode entry, current-DPI / report-rate / DPI-LED / LED-bar reads,
+4K-dongle RGB control, long-range mode toggle, slave version,
+battery optimisation parameters, flash data (read at address /
+read all / write via `ProtocolDataCompareUpdate`), config read,
+clear-setting, VID/PID rebind, descriptor-string set, dongle ID
+rebinding (`SetDongleIDToMouse`), etc.
+
+**Observed buffer layout** in `UsbServer_ReadVersion`
+(`0x180010fa0`, 221 bytes, native x64) and peer functions:
+
+The driver uses a **stack-local struct** at offsets `var_40h…var_53h`
+with multi-byte writes:
+
+- `mov word [var_43h], 0x1208`
+- `mov word [var_40h], 0x101`
+- `or byte [var_48h], 0x80`
+- subsequent `lea rcx, [var_43h]` / `r8d, [rdx+0x10]` / call into
+  `fcn.18000f060` (the central send dispatcher, common to all
+  UsbServer_* functions of size ~221 bytes)
+
+**This is structurally different from both** our 64-byte report
+format **and** OemDrv.exe's 17-byte format. The AJ199 Max driver:
+
+- builds a `<= 16-byte` header struct on the stack with
+  field-by-field MOVs at known offsets (`var_40`, `var_43`,
+  `var_48`, `var_50`, `var_53`),
+- ORs flag bits at specific byte offsets (`or byte [var_48h], 0x80`
+  is a "completion" or "request" bit),
+- delegates the actual transport via `fcn.18000f060` which we did
+  not deeply trace in this pass; it likely splits short commands
+  vs long commands and chooses between `WriteFile`-style HID OUT
+  endpoint vs `HidD_SetFeature`.
+
+**Conclusion 11.B**: AJ199 V1.0 (Win32 raw / OemDrv.exe) and AJ199
+Max (.NET + HIDUsb.dll) speak **different wire dialects**. They
+share the same VID space (`0x3554`) but the protocol-layer
+encoding diverges. Our implementation cannot be a single
+`aj_series.cpp` for both — at minimum the report length and
+checksum strategy need a per-PID branch, and probably a
+per-firmware lookup. The MCU footprint (Beken BK2535 master,
+WCH CH32V305 dongle, per Finding 8 base64 decode) confirms the
+hardware lineage difference: AJ199 Max has a more capable
+controller than AJ199 V1.0 and the firmware authors evolved the
+host protocol to match.
+
+### 11.C — Our `aj_series.cpp` is wrong about the disassembly basis
+
+The header comment in
+[`src/devices/mouse/src/aj_series.cpp`](../../src/devices/mouse/src/aj_series.cpp:5)
+claims the protocol was
+
+> "Reverse-engineered from the official Windows utility (Wireshark
+> + USBPcap captures of `ajazz-aj199-official-software`)"
+
+— with a referenced byte-level spec at
+`docs/protocols/mouse/aj_series.md`. The disassembly in 11.A shows
+the AJ199 V1.0 driver's wire format is **incompatible** with
+`aj_series.cpp`'s 64-byte / report-id-0x05 / sum-mod-256 envelope.
+Either:
+
+1. The original USB capture that informed `aj_series.cpp` was
+   against a **different** (likely newer) firmware version that
+   uses a 64-byte report format the older OemDrv.exe does not
+   send, and our implementation is correct for current-firmware
+   AJ199 V1.0 hardware.
+1. `aj_series.cpp` was authored from **a guess** (or an
+   unrelated reference) and never wire-validated against any
+   AJAZZ mouse, in which case the 64-byte / 0x05 / sum-mod-256
+   protocol is fictional.
+1. There is a **second wire-format path** in OemDrv.exe (the
+   non-`HidD_SetFeature`-based path) that uses our format, and
+   the `fcn.00450820` SendData helper covers a different feature
+   set.
+
+The only way to disambiguate is the runtime USB capture in
+[`vendor-recon-runbook-windows.md`](vendor-recon-runbook-windows.md).
+Until that lands, the existing `tests/integration` capture-replay
+suite (per
+[`docs/protocols/REVERSE_ENGINEERING.md`](../protocols/REVERSE_ENGINEERING.md)
+§ "5. Verify") is the canonical correctness check; if it passes,
+the impl is correct against the captures it was authored from,
+even if those captures pre-date this disassembly pass.
+
+**Action item (P0, clean-engineer)**: see TODO § "AJ-series wire
+format reconciliation" filed 2026-04-29.
 
 ## Methodology
 
