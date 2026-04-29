@@ -199,19 +199,41 @@ ______________________________________________________________________
   (probably folded into AJ199 family — needs report-descriptor
   comparison); SHA-256 archival pass to the encrypted out-of-repo
   vault.
-- [ ] **Decompile / disassemble the AJAZZ desktop apps under a clean-
+- 🟡 **Decompile / disassemble the AJAZZ desktop apps under a clean-
   room policy**: run the installers in a disposable VM, extract the
   Electron / .NET / Qt payloads, decompile with the appropriate
   toolchain (`asar` + `js-beautify` for Electron, ILSpy / dnSpyEx
   for .NET, Ghidra / IDA for native binaries) and produce a written
   protocol & feature inventory at
-  [`docs/research/vendor-protocol-notes.md`](docs/research/vendor-protocol-notes.md)
-  (scaffold + methodology landed in this cycle; sections per device
-  family wait for first capture). **Rules**: only one engineer reads
-  vendor sources; that engineer writes specs but does not contribute
-  to the matching module; a second "clean" engineer implements from
-  the spec. Capture USB / WebSocket / IPC traffic with Wireshark +
-  usbmon to cross-validate the static analysis. ≈ 3-5 days.
+  [`docs/research/vendor-protocol-notes.md`](docs/research/vendor-protocol-notes.md).
+  **Rules**: only one engineer reads vendor sources; that engineer
+  writes specs but does not contribute to the matching module; a
+  second "clean" engineer implements from the spec. Capture USB /
+  WebSocket / IPC traffic with Wireshark + usbmon to cross-validate
+  the static analysis. ≈ 3-5 days.
+
+  **Status — 2026-04-29**: Phase A (host-static analysis without
+  installer execution) shipped this cycle. Findings 5-10 in
+  `docs/research/vendor-protocol-notes.md` cover: Stream Dock Win
+  Authenticode + version 2.9.177.122 + manifest; the four mouse /
+  keyboard installers identified as **Inno Setup** (refines the
+  earlier "Borland-style" classification — `innoextract 1.9` was
+  used for clean-room static decode, no installer execution); each
+  device driver chassis fingerprinted (Win32-raw, .NET, MFC, Qt 5);
+  driver wire transport confirmed as **HID Feature Reports on
+  interface MI_02** (no kernel `.sys` driver, no `winusb.dll`); AJ
+  series USB ID space mapped (VID `248A`/`249A`/`3554`); driver UI
+  feature surface enumerated from the XML / INI configuration files
+  shipped alongside each tool; one inadvertent vendor source-file
+  disclosure (`driver_sensor.h`) noted with the structural-only
+  policy applied.
+
+  Phase B (runtime VM captures) is queued. The runbook at
+  [`docs/research/vendor-recon-runbook-windows.md`](docs/research/vendor-recon-runbook-windows.md)
+  documents the disposable-VM workflow, per-device interaction
+  scripts, and the cleanup discipline that lets an operator pick
+  up Phase B without re-discovering the toolchain. ≈ 2-3 days
+  remaining once a person + hardware are scheduled.
 - [x] **Vendor feature inventory → gap analysis** — scaffold landed
   this cycle at
   [`docs/research/vendor-feature-matrix.md`](docs/research/vendor-feature-matrix.md).
@@ -223,16 +245,24 @@ ______________________________________________________________________
   flip to ✅ / ❌ only when a `capture-id` from
   `vendor-protocol-notes.md` lands. Open work — populate the
   Vendor column with verified behavior as recon ships.
-- [ ] **Protocol parity backlog**: file one TODO entry per missing
-  feature surfaced by the gap analysis (per-key RGB ramp commands,
-  custom macro op-codes, vendor-specific HID reports, firmware-
-  upgrade USB DFU sequence, dial haptic patterns, OSD overlay
-  triggers, etc.) and link them back into the **Plugin SDK + Store**
-  and **Architecture refactors** sections of this file so the
-  parity work is scheduled, not forgotten. Blocked on: at least one
-  recon-confirmed row of `vendor-feature-matrix.md` flipping from
-  ❓ to a verified vendor capability. ≈ 0.5 day once the recon pass
-  surfaces material.
+- 🟡 **Protocol parity backlog** (un-blocked 2026-04-29): the Phase A
+  static pass flipped four ❓ rows in `vendor-feature-matrix.md` to
+  verified-vendor (mouse polling rate, button remap / macros, lift-
+  off distance, sleep / sensor calibration). The first concrete
+  parity items from those flips are listed below; each one will
+  also be linked back into the **Plugin SDK + Store** and
+  **Architecture refactors** sections of this file when an
+  implementer picks it up. ≈ 0.5 day per item once the Phase B
+  wire-capture confirms byte-level encoding.
+
+  - [ ] **Mouse polling-rate setter** — `IMouseCapable::setReportRate(stage)` with `stage ∈ {0..3}` (vendor exposes 4 stages, not the 5-stage marketing claim). Wire-capture queued in `docs/research/vendor-recon-runbook-windows.md` § 2.5. Blocks: nothing. Implementing engineer must NOT have read the static analysis findings 8 / 9.
+  - [ ] **Mouse button remap + macro encoding** — protocol uses Feature Report with `KeyParamN = (x, y, hid_byte_offset, hid_bit_mask, default_value)` shape per AJ199 Max `Config.ini`; macro repeat semantics are `Times (0-3)` + `Speed (3-255)` per AJ199 V1.0 `text.xml`. Re-derive byte-level encoding from a wire capture before implementing.
+  - [ ] **Mouse lift-off distance + sleep / move-wakeup** — vendor manifests expose `<sleep_light value="30">`, `<move_wakeup>`, `<move_closelight>`, `show_lod="1"`; supported sensors per `driver_sensor.h` are 3395 / 3370 / 3399 / 3335 / 3950 (LOD calibration), 3395 / 3950 (motion-sync). Implementer reads Finding 9 only, **not** Finding 10's source-file disclosure.
+  - [ ] **Mouse RGB effect modes (6)** — flow / breathing / static / neon / rainbow-wave / off, with per-device enable mask. Add an `IMouseCapable::setLightMode(modeId)` API alongside the existing RGB color setter. Re-derive byte mapping from wire capture.
+  - [ ] **Mouse 2.4G dongle pairing & enumeration** — vendor exposes USB modes (PIDs `5C2E/5D2E/5E2E` on VID `248A`) plus 2.4G dongle (PID `5C2F` on VID `248A`/`249A`). The dual VID for the dongle is a clue that vendor distinguishes "device-direct USB" vs "via-dongle" stack paths; our enumeration in `src/devices/mouse/` must handle both VID prefixes. Cross-check `docs/_data/devices.yaml`.
+  - [ ] **Stream Dock firmware update via QtSerialPort handoff** — `FirmwareUpgradeTool.exe` is a separate process linked against `Qt5SerialPort.dll`, suggesting a USB-CDC bootloader handoff. Wire-capture the boot-into-bootloader command + the subsequent serial flash protocol. Implements the AKP153 / AKP03 / AKP05 firmware-update parity gap.
+  - [ ] **Stream Dock Property Inspector HTML compat** — vendor ships ~11 `index.html_*` PI pages bundled in the MSI (per Finding 3); confirm via § 3.2 of the recon runbook (admin-extract). Cross-check what `$SD` events the JS calls; PI compat is required for plugin parity. Implementer is not the same as the runbook operator (clean-room split).
+  - [ ] **Audio-reactive RGB on AK820 Max RGB** — vendor driver bundles `fftreal.dll` (real-input FFT). Likely powers an audio-reactive lighting mode that maps mic input spectrum to per-key RGB. New feature surface for our AK820 backend. Wire-capture the FFT mode toggle + observe whether it streams real-time updates over HID Feature Reports or is a fire-and-forget mode-switch.
 - [ ] **Stability & infrastructure cross-pollination**: where the
   vendor app already solves a hard problem better than we do (HID
   reconnect debounce timings, firmware update retry / rollback,

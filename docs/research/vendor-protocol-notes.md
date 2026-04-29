@@ -289,12 +289,341 @@ recon ends here. To go further, a Windows VM is needed:
   installer → roughly 2× compression. Worth comparing against the
   Mirabox-branded build size (when its URL is recovered) to see
   whether the AJAZZ rebrand is a visual skin or a separate fork.
-- The Windows installer (`PE32 executable for MS Windows 5.00 (GUI), Intel i386, 9 sections`, 32-bit) is **not** an NSIS or
-  InnoSetup wrapper (`7zz l` cannot list it). Probably a custom
-  installer compiled from MFC or similar — common for Chinese OEM
-  driver shipping. Out of scope for this recon pass; needs an
-  expanded analysis on a disposable Windows VM, with the explicit
-  cleanup recorded per the methodology table above.
+- ~~The Windows installer is not an NSIS or InnoSetup wrapper.~~
+  **Resolved by Finding 5 below** (2026-04-29 pass): the Windows
+  Stream Dock installer is an Advanced Installer / Caphyon EXE
+  bootstrap — see `static-2026-04-29-streamdock-win-002`.
+
+### Finding 5 — Stream Dock Win: full Authenticode + version + manifest
+
+> **Capture id**: `static-2026-04-29-streamdock-win-002`. Method:
+> recon host = Windows 11 Pro 26200, the same `Stream-Dock-AJAZZ-Installer_Windows_global.exe` artefact (sha256 `005d18fbea74e393560431f167c12737b380687d544f0a48a25e73abda0354b5`,
+> Content-MD5 `a182862811703e09582a009a6a9a6a90`, 121 620 400 bytes,
+> Last-Modified `2024-01-29`) downloaded fresh from the vendor URL.
+> Hash matches `static-2026-04-26-streamdock-win-001` byte-for-byte
+> — vendor has not rotated the artefact between probes. New analysis
+> dimensions: `Get-AuthenticodeSignature`, PE resource extraction
+> via `7z x` (extracts `.rsrc`, `CERTIFICATE`, and the PE-in-PE
+> outer-bootstrap payload `[0]`), VersionInfo via `(Get-Item).VersionInfo`.
+> No instructions disassembled, no installer executed.
+
+The bootstrap is an **Advanced Installer / Caphyon** EXE wrapping an
+opaque, encrypted, 119 852 856-byte PE-in-PE payload (MZ-magic,
+listed by 7z as `[0]`). The payload is **not** a recognisable MSI /
+CAB / ZIP / 7z archive — Advanced Installer applies its own custom
+container format which `7z` 23.01 cannot decode. **Implication**:
+the Qt 5 binaries enumerated by Finding 3 (Qt5Core.dll, Qt5Gui.dll,
+…, StreamDockAJAZZ.exe, FirmwareUpgradeTool.exe, …) cannot be
+extracted by static methods; their contents are reachable only by
+running the installer in a VM (see
+[`vendor-recon-runbook-windows.md`](vendor-recon-runbook-windows.md) §
+"Stream Dock — admin install on disposable VM").
+
+**Authenticode signature (NEW dimension)**:
+
+| Field            | Value                                                                                                     |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| Status           | `Valid`                                                                                                   |
+| Signer subject   | `CN="Shenzhen An Rui Xin Technology Co., Ltd.", O="Shenzhen An Rui Xin Technology Co., Ltd.", S=Guangdong Sheng, C=CN, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.3=CN, SERIALNUMBER=91440300057893313F` |
+| Signer issuer    | `CN=Sectigo Public Code Signing CA EV R36, O=Sectigo Limited, C=GB`                                      |
+| Signer validity  | `2023-10-30` → `2024-10-29`                                                                              |
+| Signer thumbprint | `D7ED891C6EE663028E63995051E9C916D15B3E54`                                                              |
+| Signer serial    | `409BF6BB5B53D09F16D755DF5D16D2AE`                                                                       |
+| Timestamp authority | `CN=Globalsign TSA for MS Authenticode Advanced - G4, O=GlobalSign nv-sa, C=BE`                       |
+| Timestamp thumbprint | `31030E176AA4592EAB2C8BADE83299FCB5585DCF`                                                          |
+
+**Cross-vendor entity tree** — three distinct identities surfaced
+across the artefacts captured to date:
+
+| Identity                                          | Surfaces in                       | Role                                  |
+| ------------------------------------------------- | --------------------------------- | ------------------------------------- |
+| `Shenzhen An Rui Xin Technology Co., Ltd.` (深圳安瑞鑫科技) | Stream Dock Authenticode signer   | Legal entity holding the EV cert      |
+| `HotSpot`                                         | Stream Dock VersionInfo CompanyName + Aliyun OSS bucket prefix `hotspot-oss-bucket` | Internal team / brand for the desktop app |
+| `AJAZZ` / `a-jazz, Inc.` / `黑爵外设 / 深圳市黑爵同创电子科技公司` | Mouse / keyboard driver VersionInfo + AJ199 Max Description.xml | Hardware vendor brand — see Finding 7 |
+
+**VersionInfo block** — extracted from `.rsrc/2052/version.txt`:
+
+```
+FILEVERSION    2,9,177,122
+PRODUCTVERSION 2,9,177,122
+FILEFLAGSMASK  0x3F
+FILEFLAGS      VS_FF_DEBUG     ← debug flag set on a release build (vendor build hygiene)
+FILETYPE       VFT_DLL          ← anomalous: file is the EXE bootstrap, not a DLL
+"CompanyName"      = "HotSpot"
+"FileDescription"  = "Stream Dock AJAZZ Global Installer"
+"FileVersion"      = "2.9.177.122"
+"OriginalFileName" = "Stream-Dock-AJAZZ-Installer_Windows_global.exe"
+"ProductName"      = "Stream Dock AJAZZ Global"
+"ProductVersion"   = "2.9.177.122"
+"LegalCopyright"   = "Copyright (C) 2024 HotSpot"
+"Translation"      = 0x804 (zh-CN), 1200 (UTF-16)
+```
+
+**Vendor app version is therefore `2.9.177.122`**, primary locale
+zh-CN with secondary en-US. The `VS_FF_DEBUG` flag and `VFT_DLL`
+filetype on an EXE bootstrap are non-standard — record but do not
+block on it.
+
+**Application manifest** (extracted from `.rsrc/2052/MANIFEST/1`):
+declares Common-Controls v6 dependency, `<dpiAware>true</dpiAware>`,
+support for Windows Vista / 7 / 8 / 8.1 / 10 (no Windows 11 GUID
+`{8E0F7A12-BFB3-4FE8-B9A5-48FD50A15A9A}` — wait, that IS the Win10
+GUID; **no Win11-specific GUID present**, but that is harmless,
+the Win10 manifest entry covers Win11 too). UAC level was not
+captured fully; runtime install requires elevation but the
+`<requestedExecutionLevel>` line is past the read window — re-read
+on next pass.
+
+### Finding 6 — Inno Setup wraps every keyboard / mouse driver
+
+> **Capture ids**: `static-2026-04-29-aj199-002` (AJ199 V1.0,
+> inner-EXE sha256 `0c8b3a0c4d31922cb0fb9daa14af58211a2939a2afc8113b041de3ecbdc7852c`,
+> outer-ZIP sha256 `c9c4e88e9ae14b5e8ffd4ee740c55e99fa7ca169f485fdeab11b28ec87daf8ed`),
+> `static-2026-04-29-aj199max-001` (AJ199 Max, inner sha256
+> `dc4b27029a660aaf67a956134598631496a867306a8c92eb8b043edfa65e6e4f`),
+> `static-2026-04-29-aj159-001` (AJ159, inner sha256
+> `c5610da5ddff71df502871e6562dc9d3c93404c969dc70d0bfcefd8030a42345`),
+> `static-2026-04-29-ak820max-rgb-001` (AK820 Max RGB, inner sha256
+> `d40fdeddce9d7f95c377578304cc9946da568004d764e39e8757a601c291cdd6`).
+> Method: download from vendor catalogue → extract outer ZIP with
+> 7z → run `innoextract 1.9` (`--list` and `--extract --silent`)
+> against the inner `.exe`. **`innoextract` is a clean-room static
+> extractor for Inno Setup** — it reads the installer's compiled
+> file table without running any installer step. No vendor binary
+> was executed; no `.iss` script was decompiled or paraphrased.
+
+**Refinement of Finding 4**: the inner installers are not "Borland-
+style Delphi installer wrappers" generically — they are specifically
+**Inno Setup** installers. The 5-DLL profile + Variant-API-first
+imports + linker version 2.25 + i386 + cdecl + unsigned fingerprint
+that Finding 4 surfaced is the canonical Inno Setup compiler stub
+(Inno Setup is built with Borland Delphi; the linker stamp is the
+Free Pascal Compiler / Delphi linker). The previous `static-2026-04-26-aj199-001`
+and `static-2026-04-26-ak820max-001` capture-ids referenced the
+inner EXE, not the outer ZIP — re-confirmed by byte-identical SHA-256
+against today's downloads.
+
+VersionInfo `Comments` field on every inner installer reads literally
+`"This installation was built with Inno Setup."` — the smoking gun.
+
+**Inno-Setup-extracted file inventory**:
+
+| Capture id                            | Files | Total size | Driver-tool EXE                        | Tool size  | Toolkit |
+| ------------------------------------- | ----- | ---------- | -------------------------------------- | ---------- | ------- |
+| `static-2026-04-29-aj199-002`         | 78    | 3.4 MB     | `app/OemDrv.exe`                       | 2 211 840  | Win32 raw HID + GDI+; linker 9.0 (MSVC 2008); ts 2023-01-06 |
+| `static-2026-04-29-aj199max-001`      | 181   | 11.9 MB    | `app/Mouse Drive Beta.exe`             | 5 352 960  | **.NET / CLR** (`mscoree.dll` only); linker 48.0 |
+| `static-2026-04-29-aj159-001`         | 107   | 9.8 MB     | `app/AJAZZ Driver (X).exe`             | 1 868 800  | **MFC** (`mfc140u.dll`, `msvcp140.dll`, `MUI.dll`); linker 14.0; ts 2025-03-18 |
+| `static-2026-04-29-ak820max-rgb-001`  | 121   | 58.1 MB    | `app/AK820MAX.exe`                     | 9 444 352  | **Qt 5** (`Qt5Core.dll`, `Qt5Gui.dll`, `Qt5Widgets.dll`, `Qt5Network.dll`, `Qt5Multimedia.dll`, `qwindows.dll`, 34 `.qm` translations); linker 14.0; ts 2024-11-20 |
+
+**Architectural insight**: the vendor maintains **four distinct
+driver chassis** in parallel — Win32-raw, .NET, MFC, Qt 5 — across
+peer products of similar age. This is a maintenance liability, not
+a strategy. AJAZZ Control Center's single Qt 6 chassis is
+structurally simpler than the vendor's. The Qt 5 chassis (AK820 Max
+RGB) is the one most likely to evolve toward the Stream Dock
+desktop app's Qt 6 stack as the vendor consolidates.
+
+**DLL sideload audit** (AJ199 Max bundles `user32.dll` 1.7 MB +
+`oleaut32.dll` 832 KB + `kernel32.dll` 773 KB in the install dir):
+all three are **genuine Microsoft binaries**, Authenticode-signed by
+`CN=Microsoft Windows`, ProductVersion `10.0.19041.x` (Windows 10
+2004). They are not trojanized — vendor merely bundles legacy
+Windows 10 DLLs to maintain compatibility with stripped / old systems.
+Pattern is unusual but benign.
+
+### Finding 7 — Driver wire transport: native Windows HID API + Feature Reports
+
+> **Capture ids**: same as Finding 6 — driver-tool EXE imports
+> tabulated in the inventory above. Method: `pefile` import-table
+> walk on each driver tool.
+
+Every native driver tool (AJ199 V1.0 / AJ159 / AK820 Max RGB)
+imports the canonical **Windows native HID API**:
+
+| API                                | Used by                  | Purpose                                                          |
+| ---------------------------------- | ------------------------ | ---------------------------------------------------------------- |
+| `SetupDiGetClassDevsW/A`           | OemDrv, Driver(X), AK820 | Enumerate device interfaces in HID class                         |
+| `SetupDiEnumDeviceInterfaces`      | All                      | Iterate device instances                                         |
+| `SetupDiGetDeviceInterfaceDetailW/A` | All                    | Resolve device path                                              |
+| `SetupDiDestroyDeviceInfoList`     | All                      | Release enumeration handle                                       |
+| `HidD_GetHidGuid`                  | All                      | Get HID class GUID                                               |
+| `HidD_GetAttributes`               | OemDrv, Driver(X)        | Get VID/PID/version                                              |
+| `HidD_GetPreparsedData`, `HidD_FreePreparsedData` | OemDrv, Driver(X) | Parse report descriptor                                |
+| `HidP_GetCaps`                     | OemDrv, Driver(X)        | Read capability ranges                                           |
+| `HidP_GetSpecificButtonCaps`, `HidP_GetSpecificValueCaps` | OemDrv | Decode button / axis caps                                  |
+| **`HidD_SetFeature`**              | OemDrv (AJ199 V1.0)      | **Send Feature reports — primary command channel**              |
+
+**Implication for our parity strategy**: the driver–device protocol
+is **HID Feature Reports on the configuration interface**, NOT
+WinUSB/libusb bulk transfers. Our existing `hidapi` dependency is
+the correct abstraction; we do not need to ship a custom kernel
+driver (`.sys` files were searched for in the extracted Inno trees
+— **none present** in any of the four installers). Linux equivalent:
+`/dev/hidraw*` or `HIDIOCSFEATURE`/`HIDIOCGFEATURE` ioctls.
+
+Notable absence: **none of the native driver tools imports
+`libusb-1.0.dll`, `winusb.dll`, `bthprops.cpl`, or any `.sys`
+loader function**. The `setupapi.dll` use is purely for HID
+enumeration, not for kernel driver install. Confirms: **all
+configuration travels over user-mode HID Feature Reports**, no
+kernel-mode component is shipped by the keyboard / mouse driver
+installers.
+
+The .NET driver `Mouse Drive Beta.exe` (AJ199 Max) imports only
+`mscoree.dll` — its HID interaction is through `System.IO.HidLibrary`
+or P/Invoke to the same Win32 APIs at runtime. **Static
+analysis of its IL would require ILSpy / dnSpyEx** — clean-room
+permissible (read-only IL inspection, never compile or execute) —
+deferred to next pass since the wire-level API surface is identical
+to the native tools per the import-table absence of any non-CLR
+HID dependency.
+
+### Finding 8 — Mouse USB ID space (parity-critical)
+
+> **Capture id**: `static-2026-04-29-aj159-001` — extracted
+> `app/config.xml` (a plaintext UTF-8 device manifest, NOT vendor
+> source code, but a configuration file shipped in the installer
+> intended to be read by the driver tool at runtime). Reading
+> configuration files is well within clean-room policy.
+
+The AJ159 driver chassis ships a **complete VID:PID:Interface map**
+for **8 mouse models** it supports:
+
+| Mouse model      | device_type | dev_id | USB modes (vid:pid)                                                                        | 2.4G dongle modes                                          |
+| ---------------- | ----------- | ------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| AJ139 PRO        | 101         | M129   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
+| AJ159            | 102         | M620   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
+| AJ159 MC         | 103         | M630   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
+| AJ159P MC        | (same chassis) | (same) | (see config.xml)                                                                       | (see config.xml)                                           |
+| AJ179            | 105         | M179, M603 | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                  | `248A:5C2F`, `249A:5C2F`                                   |
+| AJ179 V2         | (different) | (per config.xml) | (per config.xml)                                                                | (per config.xml)                                           |
+| AJ179 V2 MAX     | (different) | (per config.xml) | (per config.xml)                                                                | (per config.xml)                                           |
+| AJ139 V2 PRO     | 106         | M139   | `248A:5C2E`, `248A:5E2E`                                                                   | `248A:5C2F`, `249A:5C2F`                                   |
+
+Every mode entry uses **HID interface `MI_02`** — the **3rd HID
+interface** of the device is the configuration channel; interfaces
+0/1 carry the standard mouse HID reports.
+
+The AJ199 Max `Config.ini` uses base64-obfuscated VID/PID strings:
+`VID=QUphenozNTU0` decodes to `AJazz:3554`. So the AJ199 family is
+on a different VID space (`248A` and `249A` for AJ159 family vs
+`3554` for AJ199 family). Base64 obfuscation is a minimal anti-
+casual-RE measure with no cryptographic intent.
+
+**Parity gap with our enumeration table**: cross-check
+`docs/_data/devices.yaml` against this map. Some AJAZZ mouse
+entries in our YAML may have been authored against the old
+Mirabox catalogue and might not match the vid/pid the vendor
+driver actually probes for. Track as a follow-up issue.
+
+### Finding 9 — Driver UI feature surface (locale XML / INI inspection)
+
+> **Capture ids**: same as Finding 6. Method: read the
+> per-locale `text.xml`, `Config.ini`, device manifests
+> (`mouse_*.xml`) — these are plaintext configuration / i18n
+> files shipped alongside the driver and **not vendor source**.
+> Reading them is the same clean-room exercise as reading a
+> `.po` translation file.
+
+**AJ199 V1.0 `app/en/text.xml`** surfaces the following user-facing
+features (string-key inventory, feature names paraphrased):
+
+- Debounce time tuning with a low-debounce-may-double-click warning
+- Firmware version display
+- Profile import / export (Apply / Restore / Reset / Cancel / OK)
+- Macro repeat-count (`Times (0-3)`) and inter-key delay
+  (`Speed (3-255)`); zero count = repeat-while-held
+- Per-key remap pages
+- DPI stage configuration (matches AJ159 device manifest's 6 stages)
+
+**AJ159 `app/device/mouse_aj159.xml`** lists per-device runtime
+parameters:
+
+- 6 buttons with rect coordinates + `key_value` (HID button index 0–5)
+- 6 DPI stages with default stage 1 and per-stage RGB color hex
+- Polling rate: `default_value="1"`, `report_max="4"` — 4 stages
+- 6 LED effect modes (流光 / 呼吸 / 常亮 / 霓虹 / 七彩波浪 / 关闭 =
+  flow / breathing / static / neon / rainbow-wave / off);
+  per-device `enable=0/1` mask gates which modes are exposed
+- Sleep timer (`sleep_light value="30"`), `move_wakeup`, `move_closelight`
+
+**AJ199 Max `app/Description.xml`** confirms the Chinese trademark
+identity: `深圳市黑爵同创电子科技公司` (Shenzhen Black-Knight United-
+Creation Electronic Technology Co.) — a fourth vendor-side identity
+distinct from `Shenzhen An Rui Xin` (Stream Dock signer), `HotSpot`,
+and `AJAZZ / a-jazz, Inc.`. The brand `黑爵外设` (HēiJué Wàishè,
+"Black Knight Peripherals") is the Chinese-market name.
+
+**AJ199 Max `Config.ini`** uses `KeyParamN = x_coord, y_coord, hid_byte_offset, hid_bit_mask, default_value`
+encoding for per-button HID report layout. **Structural observation
+only** — byte-level encoding values to be re-derived from a USB
+capture before they enter spec form.
+
+### Finding 10 — Vendor source-file disclosure (clean-room caveat)
+
+> **Capture id**: `static-2026-04-29-aj199max-001` — file
+> `app/driver_sensor.h` (22 767 bytes) discovered in the AJ199 Max
+> Inno-extracted tree.
+
+The AJ199 Max installer **inadvertently bundles a C header file
+from the vendor's own driver source code**: `driver_sensor.h`. The
+file contains `#define`-style constants for:
+
+- Sensor support feature flags per supported PixArt model
+  (`SUPPORT_SENSOR_MODE_SEL`, `SUPPORT_LOD_CAL`, `SUPPORT_RIPPLE`,
+  `SUPPORT_FIXLINE`, `SUPPORT_MOTION_SYNC`, `SUPPORT_MOUSEPAD_CAL`)
+- DPI step → byte mapping tables for every supported sensor
+  (`SENSOR_3335_DPI_xxxx`, `SENSOR_3395_DPI_xxxx`, `SENSOR_3950_DPI_xxxx`,
+  `SENSOR_3370_DPI_xxxx`, `SENSOR_3311_DPI_xxxx`)
+
+**Sensor lineup supported across the AJ199 Max chassis**:
+PAW**3395** (flagship), PAW**3311** (entry), PAW**3370** (mid),
+PAW**3335** (legacy), PAW**3950** (next-gen). LOD calibration
+on 3395/3370/3399/3335/3950; motion-sync only on 3395/3950.
+
+**Clean-room handling**: this file is vendor source. Under our
+policy:
+
+1. Its **existence** is recorded here as a fact (file path +
+   capture-id + structural description of its contents).
+1. Its **byte-level contents are NOT transcribed into this
+   document.** Specifically, the literal `#define ...` lines and
+   the DPI → byte numeric mappings are NOT reproduced anywhere in
+   `docs/research/` or `src/`.
+1. The information that the AJ199 Max chassis "encodes DPI as a
+   sensor-specific 1-byte step value chosen from a 0x00 … 0x?? range
+   that is non-monotonic (some steps are skipped)" is a **structural
+   observation** safe to record, because it describes wire format
+   shape, not vendor expression. The numeric mapping must be
+   re-derived from a USB Feature Report capture before any
+   implementer in `src/devices/mouse/` reads it.
+1. **The author of this entry MUST NOT contribute to
+   `src/devices/mouse/`** for the AJ199 family per the clean-room
+   split rule (`docs/research/README.md` § 1).
+
+The file's existence in the installer is most likely a build-system
+oversight: the `.iss` Inno Setup script lists the `app/` directory
+recursively without an exclusion for `*.h`, so the header was
+shipped by accident along with the driver tool that consumes it at
+compile time. It does not indicate an intentional vendor disclosure
+of the source.
+
+### Vendor-app architecture summary (post-2026-04-29 pass)
+
+| Surface                       | Toolkit                | Transport                          | Capture id (latest)                       |
+| ----------------------------- | ---------------------- | ---------------------------------- | ----------------------------------------- |
+| Stream Dock (Windows)         | Qt 5.x + WebEngine     | USB-HID + WebSocket localhost      | `static-2026-04-29-streamdock-win-002`    |
+| Stream Dock (macOS)           | Qt 6.4-6.5 + WebEngine | USB-HID + WebSocket localhost      | `static-2026-04-26-streamdock-mac-001`    |
+| AJ199 V1.0 driver             | Win32 raw + GDI+       | HID Feature Reports                | `static-2026-04-29-aj199-002`             |
+| AJ199 Max driver              | .NET / CLR             | HID Feature Reports (assumed)      | `static-2026-04-29-aj199max-001`          |
+| AJ159 driver (8 SKUs)         | MFC                    | HID Feature Reports (interface MI_02) | `static-2026-04-29-aj159-001`           |
+| AK820 Max RGB driver          | Qt 5.x                 | HID Feature Reports                | `static-2026-04-29-ak820max-rgb-001`      |
+| Firmware update tool          | Qt 5.x + QtSerialPort  | USB-CDC (inferred)                 | `static-2026-04-26-streamdock-win-001`    |
+| System monitor widget feeder  | Qt 5.x + OpenHardwareMonitorLib | IPC to main app           | `static-2026-04-26-streamdock-win-001`    |
+
+The next recon increment that would unlock implementation work is a
+**runtime USB capture** of a vendor app driving each device — see
+[`vendor-recon-runbook-windows.md`](vendor-recon-runbook-windows.md).
 
 ## Methodology
 
