@@ -73,6 +73,15 @@ jobs:
     name: Windows · MSI
     runs-on: windows-2022
     timeout-minutes: 60
+    # SEC-020: when secrets.WIN_CERT_BASE64 + WIN_CERT_PASSWORD are present
+    # (Authenticode certificate, base64-encoded .pfx), the build sign the
+    # app .exe before MSI packaging, the .msi after packaging, and a
+    # SmartScreen-friendly EV chain ships in the release. Without those
+    # secrets the steps no-op and the unsigned binary is published, so a
+    # fork without certs still produces an installable artifact.
+    env:
+      WIN_CERT_BASE64: ${{ secrets.WIN_CERT_BASE64 }}
+      WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c  # v1.13.0
@@ -82,11 +91,64 @@ jobs:
         run: cmake --preset windows-release
       - name: Build
         run: cmake --build --preset windows-release
+
+      - name: Import Authenticode certificate
+        if: env.WIN_CERT_BASE64 != ''
+        shell: pwsh
+        run: |
+          $certBytes = [Convert]::FromBase64String($env:WIN_CERT_BASE64)
+          $certPath  = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($certPath, $certBytes)
+          "WIN_CERT_PATH=$certPath" >> $env:GITHUB_ENV
+
+      - name: Code-sign application binary
+        if: env.WIN_CERT_BASE64 != ''
+        shell: pwsh
+        # Sign the .exe before MSI packaging so the installed binary
+        # carries a valid signature (signing only the MSI leaves the
+        # extracted .exe unsigned and triggers SmartScreen on first run).
+        run: |
+          $exe = Get-ChildItem build/windows-release -Recurse -Include *.exe |
+                 Where-Object { $_.Name -like "ajazz*" } |
+                 Select-Object -First 1
+          if (-not $exe) { throw "No ajazz*.exe found to sign" }
+          & signtool sign `
+              /f "$env:WIN_CERT_PATH" `
+              /p "$env:WIN_CERT_PASSWORD" `
+              /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /d "AJAZZ Control Center" `
+              "$($exe.FullName)"
+          & signtool verify /pa /v "$($exe.FullName)"
+
       - name: Package (MSI + ZIP)
         working-directory: build/windows-release
         run: |
           cpack -G WIX
           cpack -G ZIP
+
+      - name: Code-sign MSI
+        if: env.WIN_CERT_BASE64 != ''
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem build/windows-release/*.msi | Select-Object -First 1
+          if (-not $msi) { throw "No MSI found to sign" }
+          & signtool sign `
+              /f "$env:WIN_CERT_PATH" `
+              /p "$env:WIN_CERT_PASSWORD" `
+              /fd SHA256 /td SHA256 `
+              /tr http://timestamp.digicert.com `
+              /d "AJAZZ Control Center" `
+              "$($msi.FullName)"
+          & signtool verify /pa /v "$($msi.FullName)"
+
+      - name: Cleanup certificate
+        if: always() && env.WIN_CERT_BASE64 != ''
+        shell: pwsh
+        # Delete the .pfx even on failure so the runner image (although
+        # ephemeral) never has the key material on disk after the job.
+        run: Remove-Item -ErrorAction SilentlyContinue "$env:WIN_CERT_PATH"
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: windows-packages
@@ -101,12 +163,54 @@ jobs:
     name: macOS · Universal DMG
     runs-on: macos-14
     timeout-minutes: 60
+    # SEC-020: when secrets.APPLE_CERT_BASE64 + APPLE_CERT_PASSWORD are
+    # set, the .app gets codesigned with a Developer ID Application
+    # certificate, the DMG is built around the signed app, then
+    # notarized + stapled via notarytool. APPLE_ID +
+    # APPLE_TEAM_ID + APPLE_APP_SPECIFIC_PASSWORD drive the
+    # notary submission. Without those secrets the steps no-op.
+    env:
+      APPLE_CERT_BASE64: ${{ secrets.APPLE_CERT_BASE64 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - name: Install deps
         run: brew install ninja create-dmg
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version:  6.8.3, cache: true }
+
+      - name: Import Developer ID certificate
+        if: env.APPLE_CERT_BASE64 != ''
+        # Create a fresh keychain so the cert never leaks into the
+        # default macos-runner login.keychain. The keychain is
+        # destroyed on cleanup.
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain-db"
+          KEYCHAIN_PWD=$(uuidgen)
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          echo "$APPLE_CERT_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
+              -k "$KEYCHAIN_PATH" -P "$APPLE_CERT_PASSWORD" \
+              -A -t cert -f pkcs12
+          security set-key-partition-list -S apple-tool:,apple: \
+              -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          # Need word-splitting on the inner $(): user keychain list is
+          # multiple whitespace-separated paths and we want each one
+          # passed as its own argument to -s. shellcheck flags this as
+          # a quoting issue; the unquoted form is correct here.
+          # shellcheck disable=SC2046
+          security list-keychain -d user -s "$KEYCHAIN_PATH" \
+              $(security list-keychain -d user | tr -d ' "')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
       - name: Configure (universal)
         run: |
           cmake -S . -B build/macos-release -G Ninja \
@@ -114,11 +218,54 @@ jobs:
             -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
       - name: Build
         run: cmake --build build/macos-release
+
+      - name: Code-sign .app bundle
+        if: env.APPLE_CERT_BASE64 != ''
+        # `--options runtime` is required by Apple notarization (hardened
+        # runtime). `--deep` recurses into the bundle so all nested
+        # frameworks/dylibs are signed with the same identity.
+        run: |
+          set -euo pipefail
+          APP=$(find build/macos-release -name "AjazzControlCenter.app" -maxdepth 4 | head -1)
+          if [ -z "$APP" ]; then echo "::error::No .app bundle found" >&2; exit 1; fi
+          codesign --force --deep --timestamp --options runtime \
+              --sign "$APPLE_SIGNING_IDENTITY" "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
       - name: Package (DMG + TGZ)
         working-directory: build/macos-release
         run: |
           cpack -G DragNDrop
           cpack -G TGZ
+
+      - name: Notarize + staple DMG
+        if: env.APPLE_CERT_BASE64 != ''
+        # notarytool ships with Xcode 13+ (preinstalled on macos-14).
+        # `--wait` blocks until notarization completes (typically
+        # 1-5 min). On success, `xcrun stapler staple` embeds the
+        # ticket so the DMG installs offline without re-checking with
+        # Apple's notary server.
+        run: |
+          set -euo pipefail
+          DMG=$(find build/macos-release -maxdepth 1 -name '*.dmg' | head -1)
+          if [ -z "$DMG" ]; then echo "::error::No DMG to notarize" >&2; exit 1; fi
+          codesign --force --timestamp --options runtime \
+              --sign "$APPLE_SIGNING_IDENTITY" "$DMG"
+          xcrun notarytool submit "$DMG" \
+              --apple-id "$APPLE_ID" \
+              --team-id "$APPLE_TEAM_ID" \
+              --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+              --wait
+          xcrun stapler staple "$DMG"
+          xcrun stapler validate "$DMG"
+
+      - name: Cleanup keychain
+        if: always() && env.APPLE_CERT_BASE64 != ''
+        run: |
+          if [ -n "${KEYCHAIN_PATH:-}" ] && [ -f "$KEYCHAIN_PATH" ]; then
+            security delete-keychain "$KEYCHAIN_PATH" || true
+          fi
+
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: macos-packages

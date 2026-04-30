@@ -80,11 +80,67 @@ The project follows [Semantic Versioning 2.0.0](https://semver.org).
 
 ## Signing & notarization
 
-Stable releases for macOS and Windows are currently **unsigned**. Users
-will see a Gatekeeper / SmartScreen warning the first time they run the
-app. Code signing is tracked in
-[issue #signing](https://github.com/Aiacos/ajazz-control-center/issues)
-and depends on the project obtaining publisher certificates.
+Stable releases for macOS and Windows ship **signed when the publisher
+certificates are configured as repository secrets**, and unsigned
+otherwise. The signing steps in `.github/workflows/release.yml` are
+gated on `if: env.<SECRET> != ''`, so a fork without the secrets still
+builds an installable artifact (with the standard Gatekeeper /
+SmartScreen warning on first run).
+
+Tracked under SEC-020 (issue
+[#11](https://github.com/Aiacos/ajazz-control-center/issues/11)).
+
+### Required secrets
+
+#### macOS — Developer ID Application + notarization
+
+| Secret                          | Source                                              |
+| ------------------------------- | --------------------------------------------------- |
+| `APPLE_CERT_BASE64`             | `base64 -i DeveloperID.p12` of the exported cert    |
+| `APPLE_CERT_PASSWORD`           | password set on the `.p12` export                   |
+| `APPLE_SIGNING_IDENTITY`        | exact `Developer ID Application: Name (TEAMID)`     |
+| `APPLE_ID`                      | Apple ID email used for notarization                |
+| `APPLE_TEAM_ID`                 | 10-character Team ID from developer.apple.com       |
+| `APPLE_APP_SPECIFIC_PASSWORD`   | app-specific password from appleid.apple.com        |
+
+Pipeline: import cert into a temporary keychain → build → `codesign`
+the `.app` with `--options runtime` (hardened runtime is required by
+notarization) → build the DMG → `codesign` the DMG → submit to
+`notarytool --wait` → `stapler staple` the ticket so the DMG installs
+offline. Keychain is destroyed in a `always()` cleanup step.
+
+#### Windows — Authenticode signature
+
+| Secret                | Source                                   |
+| --------------------- | ---------------------------------------- |
+| `WIN_CERT_BASE64`     | `base64 cert.pfx` of the exported PFX    |
+| `WIN_CERT_PASSWORD`   | password set on the `.pfx` export        |
+
+Pipeline: write the `.pfx` to a runner-temp file → sign the `.exe`
+before MSI packaging (extracted binary stays signed) → build the MSI →
+sign the MSI → verify both signatures → delete the `.pfx`. Use a
+SmartScreen-friendly EV cert if you can; OV certs work but trigger a
+"Unknown Publisher" warning until reputation builds up.
+
+#### Where to get certs
+
+* Apple: <https://developer.apple.com/programs/> ($99/year),
+  download "Developer ID Application" cert, export as `.p12`.
+* Windows: any CA listed at
+  <https://learn.microsoft.com/en-us/windows/security/threat-protection/windows-defender-application-control/> —
+  DigiCert, Sectigo, GlobalSign all sell EV Authenticode certs
+  (~$300-500/year); standard OV ~$100-200/year.
+
+### Verifying signatures locally
+
+```bash
+# macOS — verify the DMG is notarized + signed
+spctl --assess --type install <file>.dmg
+codesign --verify --deep --strict --verbose=2 /Applications/AjazzControlCenter.app
+
+# Windows — PowerShell
+Get-AuthenticodeSignature .\AjazzControlCenter-*.msi | Format-List
+```
 
 ## Verifying release artifacts
 
