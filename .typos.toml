@@ -50,6 +50,13 @@ AppContainer = "AppContainer"
 WebView2 = "WebView2"
 WKWebView = "WKWebView"
 QtWebEngine = "QtWebEngine"
+# Vendor-original typos preserved verbatim as symbol names in
+# docs/research/vendor-protocol-notes.md (Findings 12 + 13). These are
+# how the AJAZZ vendor binaries actually export them, so we cite them
+# as-is even though typos itself flags the misspellings.
+Falsh        = "Falsh"
+ReadFalshData = "ReadFalshData"
+Runing       = "Runing"
 
 [files]
 extend-exclude = [

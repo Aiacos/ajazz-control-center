@@ -962,6 +962,245 @@ even if those captures pre-date this disassembly pass.
 **Action item (P0, clean-engineer)**: see TODO § "AJ-series wire
 format reconciliation" filed 2026-04-29.
 
+## Finding 12 — AJ199 Max command opcode table (TAINTED — disasm-derived)
+
+> **Capture id**: `disasm-2026-04-30-aj199max-002`. Method: radare2
+> 5.9.8 disassembly of `costura64.hidusb.dll` (sha256
+> `abbc0a8175fe91471ae6e082abacd69137ac725f22079104478e6ff0b7a9e6e1`,
+> 145 408 bytes, x86_64) — the embedded native HID transport DLL
+> bundled by Costura.Fody inside `Mouse Drive Beta.exe`. Same TAINT
+> NOTICE as Finding 11 applies: Findings 11–14 cumulate disassembly
+> knowledge; the engineer-split rule applies for any
+> `src/devices/mouse/` work derived from these spec excerpts.
+
+### 12.A — Wire-frame layout
+
+The 47 `UsbServer_*` internal functions in `HIDUsb.dll` all build
+their request frame with the same prologue, and all delegate the
+checksum computation to `fcn.18000f060` — a SIMD `paddb` byte-sum
+over a 16-byte slice of the buffer. The function takes
+`(buf, start, end)` and returns the byte sum modulo 256 in the
+low byte of `r11`. The fixed prologue is:
+
+```
+mov word  [buffer + 0]  = 0x0101                  ; bytes [0]=0x01, [1]=0x01
+                        ;   buffer[0] is the HID report id (0x01)
+                        ;   buffer[1] is the request class id  (0x01 = "request")
+;       buffer[2]       = 0x00 (left untouched / padding)
+mov word  [buffer + 3]  = (cmd_id << 8) | 0x08    ; bytes [3]=0x08, [4]=cmd_id
+                        ;   buffer[3] is a sub-class fixed at 0x08
+                        ;   buffer[4] is the per-command discriminator
+or  byte  [buffer + 8] |= 0x80                    ; flag bit set in every request
+                        ;   probably "expect-response" or "request" marker
+;       buffer[5..18]   = parameter region (zero-initialised; some commands
+                        ;   write here before the checksum step)
+;       buffer[19]      = checksum, computed by fcn.18000f060 over [3..18]
+```
+
+**Frame total**: 20 bytes. **Report ID**: `0x01`. **Checksum
+algorithm**: simple byte-sum modulo 256 over the 16-byte command
+region `buffer[3..18]`, NOT a 0x55-minus form like OemDrv.exe.
+
+### 12.B — Command opcode table (cmd_id at `buffer[4]`)
+
+Every entry below was extracted from the immediate `mov word`
+constant written to `[var_43h]` (= `buffer[3..4]` little-endian)
+in the named `UsbServer_*` function inside `HIDUsb.dll`. The low
+byte of that word is always `0x08`; the high byte is the cmd_id
+listed.
+
+| cmd_id | Command name in vendor SDK    | Argument shape (where determinable)                                                                                                                                                                                    |
+| ------ | ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `0x02` | `SetPCDriverStatus(bool)`     | 1 byte `bool` in parameter region                                                                                                                                                                                      |
+| `0x03` | `ReadOnLine()`                | none — query only                                                                                                                                                                                                      |
+| `0x04` | `ReadBatteryLevel()`          | none — query only                                                                                                                                                                                                      |
+| `0x08` | `ReadFalshData(addr, length)` | flash-read primitive; `addr` (uint32 BE) and `length` go in the parameter region — see `ReadAllFlashData`, `ReadCurrentDPI`, `ReadReportRate`, `ReadDPILed` which are thunks to this op with hard-coded address ranges |
+| `0x09` | `SetClearSetting()`           | none — factory reset                                                                                                                                                                                                   |
+| `0x0B` | `SetVidPid(vid, pid)`         | 2× uint32 (vid, pid)                                                                                                                                                                                                   |
+| `0x0D` | `EnterUsbUpdateMode()`        | none — bootloader handoff                                                                                                                                                                                              |
+| `0x0E` | `ReadConfig()`                | none — read full config blob                                                                                                                                                                                           |
+| `0x0F` | `SetCurrentConfig(int id)`    | 1× int profile id                                                                                                                                                                                                      |
+| `0x12` | `ReadVersion()`               | none                                                                                                                                                                                                                   |
+| `0x14` | `Set4KDongleRGB(struct)`      | RGB struct (the 4K-polling-rate dongle's LED ring)                                                                                                                                                                     |
+| `0x16` | `SetLongRangeMode(bool)`      | 1 byte bool                                                                                                                                                                                                            |
+| `0x1A` | `SetDongleIDToMouse(...)`     | dongle-pairing assignment                                                                                                                                                                                              |
+
+(Above is from disassembling the immediate constants in 13 of the
+47 `UsbServer_*` functions. The remaining 34 are either thunks
+into one of the listed primitives, or further opcodes the
+2026-04-30 pass did not extract — the same extraction method is
+trivially repeatable for the remaining functions when needed.)
+
+### 12.C — Receive-side packet layout
+
+The .NET wrapper's `UserUsbDataReceived` callback in `UsbServer.cs`
+parses inbound packets as:
+
+```c
+struct UsbCommand {
+    uint8_t  ReportId;        // packet[0]
+    uint8_t  id;              // packet[1] (echoes the request class)
+    uint8_t  CommandStatus;   // packet[2] (0 = ok, non-zero = error)
+    uint16_t address;         // packet[3..4]  big-endian
+    // packet[5]              // unused / reserved
+    uint8_t  command[10];     // packet[6..15] — echo of the request command region
+    uint8_t  data[];          // packet[16..]  — variable-length response payload
+};
+```
+
+A response that carries data (e.g. battery level, version string,
+flash read) places its payload at `packet[16+]`, and the host
+correlates the response to its request via the
+`ReportId / id / CommandStatus / address` quartet. **Important**:
+the receive layout is NOT symmetric with the send layout — they
+share the `ReportId / id` byte positions but the request's
+checksum-over-`[3..18]` region maps to the response's
+`address(2) + reserved(1) + command(10) = 13` bytes echo + early
+response data.
+
+## Finding 13 — AK820 Max RGB wire format (witmodSdk.dll abstraction)
+
+> **Capture id**: `disasm-2026-04-30-ak820max-rgb-002`. Method:
+> radare2 5.9.8 disassembly of `witmodSdk.dll`
+> (`extracted/inno/ak820max-rgb/app/witmodSdk.dll`, 308 224 bytes,
+> i386), the custom HID-transport SDK that `AK820MAX.exe` (Qt 5
+> driver) calls via `CWitmodHid_HidWriteBuff` /
+> `CWitmodHid_HidReadBuff` instead of using Windows native
+> `HidD_SetFeature` directly. TAINT NOTICE per Finding 11 applies.
+
+### 13.A — Wire-frame layout
+
+`AK820MAX.exe`'s direct HID API import is just `HidD_GetHidGuid`
+— no `HidD_SetFeature`, no `WriteFile` to a HID handle. All HID
+I/O routes through `witmodSdk.dll`'s 30 `CWitmodHid_*` exports.
+The transport primitive is `CWitmodHid_HidWriteBuff`:
+
+```
+CWitmodHid_HidWriteBuff(int32_t arg_8h, int32_t arg_ch, char *s1)
+{
+    if (g_initialised == 0) return -1;          // gate: must call CWitmodHid_Init first
+    push 0x40                                    ; 64 — buffer size
+    call fcn.1002a626                            ; allocate / lease buffer
+    edi = arg_ch                                 ; input buffer pointer
+    esi = 0x40                                   ; loop count = 64
+    [memcpy 64 bytes from input buffer to internal buffer]
+
+    eax = byte[input_buffer + 1]                 ; cmd_id at offset 1
+    if (eax > 0x90) goto default_case;
+    eax = lookup_table[eax]                      ; 0x100086ec — 145-entry sparse map
+    jmp dispatch_table[eax * 4]                  ; 0x10008634 — switch with 145 cases
+}
+```
+
+**Frame size**: 64 bytes. **Command ID position**: `buffer[1]`.
+**Routing**: 145-case switch table at `0x10008634` keyed by a
+sparse lookup at `0x100086ec` indexed by `cmd_id`. The 145 cases
+each handle the per-command parameter encoding before issuing
+the underlying USB write.
+
+This 64-byte / cmd-at-byte-1 shape is **structurally compatible
+with the 64-byte envelope our existing `src/devices/mouse/src/aj_series.cpp`
+uses** — same length, same command-id-at-byte-1 convention. Note
+that this does NOT mean the per-command opcodes are identical
+between AK820 Max RGB (keyboard) and the AJ-series mice; the
+opcode space is per-product.
+
+### 13.B — `CWitmodHid_*` capability vocabulary (30 exports)
+
+Names confirm the keyboard's feature surface without us needing
+to extract every byte. Categorised:
+
+| Capability                  | Exports                                                                                                                                           |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Init / lifecycle            | `Init`, `OpenPath`, `Close`, `SetNonblocking`                                                                                                     |
+| HID I/O                     | `HidWriteBuff`, `HidReadBuff`                                                                                                                     |
+| Device info                 | `GetHidInfoList`, `GetHidInfoStuMapList`, `GetSupportInfoList`, `GetHidAndFirmwareInfoStu`                                                        |
+| Firmware                    | `FirmwareUpgrade`                                                                                                                                 |
+| Per-key RGB                 | `SetKeyboardColorInfoDataStu`, `SetKeyboardColorInfoDataStuHaveChanged`                                                                           |
+| Side-bar RGB (separate LED) | `SetSideColorInfoDataStu`, `SetSideColorInfoDataStuHaveChanged`                                                                                   |
+| Reactive RGB                | `GetCurrentAutoRippleLightConfig`, `GetCurrentRippleLightColor`, `GetSideCollisionLightRuningConfig`, `keyboardLightColorRuning`, `lightColorMix` |
+| Animation timing            | `highPrecisionTimerInit`, `highPrecisionTimerStart`, `highPrecisionTimerStop`, `highPrecisionTimerRuning`                                         |
+| Keyboard test               | `keyClickedSendXY`                                                                                                                                |
+
+Two `*HaveChanged` variants for both keyboard and side-bar RGB
+suggest the SDK ships a delta-update path: applications batch
+colour changes via `SetKeyboardColorInfoDataStu` and then commit
+with `SetKeyboardColorInfoDataStuHaveChanged` — useful for
+animation frames that shouldn't tear.
+
+### 13.C — Firmware upgrade tool (`UpgradeAppTool.exe`)
+
+The AK820 Max RGB installer ships `UpgradeAppTool.exe` (88 064
+bytes) alongside the main driver. Combined with `witmodSdk.dll`'s
+`CWitmodHid_FirmwareUpgrade` export, this confirms the firmware-
+update flow goes through the same HID transport — NOT a USB-CDC
+bootloader handoff like the Stream Dock app's
+`FirmwareUpgradeTool.exe`, which links `Qt5SerialPort.dll` per
+Finding 1. Different device families use different DFU strategies;
+a future runtime capture should distinguish whether
+`UpgradeAppTool.exe` toggles the keyboard into a separate USB
+endpoint or just streams the firmware blob over the standard
+config interface.
+
+## Finding 14 — Three distinct AJAZZ wire-format dialects (synthesis)
+
+The 2026-04-30 disassembly pass (Findings 11.A, 12, 13) confirms
+the AJAZZ vendor stack speaks at least **three** wire-format
+dialects, generation-stratified by device-firmware vintage. Our
+`src/devices/mouse/src/aj_series.cpp` currently implements one
+shape (64-byte / cmd-at-byte-1 / sum-mod-256) that matches the
+**Witmod** dialect the AK820 Max RGB driver uses, but addresses
+it to AJ199-family mice that may still ship the older OemDrv
+firmware.
+
+| Dialect    | Frame size | Report ID    | Checksum                              | Used by (today)                                                                                                                          |
+| ---------- | ---------- | ------------ | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| **OemDrv** | 17 bytes   | `0x08`       | `0x55 - sum_lo - sum_hi - tail_byte`  | AJ199 V1.0 driver `OemDrv.exe` (Finding 11.A)                                                                                            |
+| **HIDUsb** | 20 bytes   | `0x01`       | `sum(buf[3..18]) & 0xFF` (SIMD paddb) | AJ199 Max driver `Mouse Drive Beta.exe`'s `HIDUsb.dll` (Finding 12)                                                                      |
+| **Witmod** | 64 bytes   | (per device) | (per command — switch table)          | AK820 Max RGB driver `AK820MAX.exe`'s `witmodSdk.dll` (Finding 13)                                                                       |
+| **(ours)** | 64 bytes   | `0x05`       | `sum(buf[1..62]) & 0xFF`              | `src/devices/mouse/src/aj_series.cpp` — claimed source = USB capture of `ajazz-aj199-official-software` redistribution (a 2024-11 build) |
+
+The fourth row's similarity to the third (both 64-byte / cmd-id
+at byte `[1]`) suggests the most plausible read of history is:
+
+- The **OemDrv** dialect is the 2023-vintage AJ199 V1.0 protocol.
+- AJAZZ migrated AJ199 Max to a richer **HIDUsb** dialect in 2024
+  (with the WCH CH32V305 dongle MCU per Finding 8) — different
+  enough from OemDrv that the .NET wrapper carries a
+  `_FirmwareUpgrade`-equivalent path and a CRC-style sum we'd
+  fail to reproduce from `aj_series.cpp`.
+- AK820 Max RGB shipped on the **Witmod** dialect (vendor's
+  custom `witmodSdk.dll`, 64-byte / 145-case dispatch). The
+  `2024-11-20` build date (Finding 6) is contemporaneous with
+  the redistributed AJ199 driver our `aj_series.cpp` was
+  reverse-engineered from, so they may share structural
+  conventions even though they don't share opcodes.
+- Our `aj_series.cpp` 64-byte format is most likely correct for
+  **at least one** AJ-series firmware revision (the one that
+  was wire-captured), but is structurally incompatible with
+  OemDrv and HIDUsb. The right fix is a **per-(VID, PID, fw)
+  dialect dispatch**, not a global rewrite.
+
+**Implementation roadmap** (clean-engineer task — see TODO):
+
+1. Capture USB Feature Report traffic against an AJ199 V1.0
+   running its current vendor driver on Windows. If the on-wire
+   bytes match the 17-byte OemDrv shape, our `aj_series.cpp` is
+   broken for this SKU and a per-PID branch is needed.
+1. Capture against an AJ199 Max + dongle. Expect the 20-byte
+   HIDUsb shape. Add a second per-PID branch.
+1. Capture against an AK820 Max RGB. Expect the 64-byte Witmod
+   shape with 145-case dispatch. The keyboard backend already
+   exists in `src/devices/keyboard/`; cross-check whether it
+   shares any opcodes with the mouse backend.
+1. Once all three captures are in hand, refactor
+   `src/devices/mouse/src/aj_series.cpp` (and
+   `src/devices/keyboard/src/proprietary_keyboard.cpp`) to a
+   per-dialect strategy with explicit `(vid, pid)` → dialect
+   mapping. Spec is here in Findings 11.A / 12 / 13;
+   implementation must be done by an engineer who has read
+   ONLY the structural spec, not this taint notice.
+
 ## Methodology
 
 ### Capture environments
