@@ -366,8 +366,22 @@
         "Signing": {
           "type": "object",
           "additionalProperties": false,
-          "description": "Sigstore / cosign attestation metadata for the published bundle.",
+          "description": "Manifest signing material. Two complementary mechanisms: Ed25519 (in-repo, mandatory for official plugins; the loader verifies this on every load) and Sigstore / cosign (build-time provenance for the bundle archive, optional). The Ed25519 fields cover the signature on the manifest's canonical bytes (manifest with the `Ed25519Signature` field omitted, serialized to UTF-8 JSON with sorted keys and no whitespace). See docs/architecture/PLUGIN-SYSTEM.md for the canonicalisation rules.",
           "properties": {
+            "Ed25519PublicKey": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "minLength": 44,
+              "maxLength": 44,
+              "description": "Publisher's Ed25519 public key (32 bytes, base64-encoded — exactly 44 chars including padding). The host trusts a key only if it appears in the bundled trust roots (resources/trusted_publishers.json) or the user has explicitly accepted it via the unsigned-plugin warning dialog."
+            },
+            "Ed25519Signature": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9+/]+={0,2}$",
+              "minLength": 88,
+              "maxLength": 88,
+              "description": "Detached Ed25519 signature (64 bytes, base64-encoded — exactly 88 chars including padding) over the canonical manifest bytes. Computed by `scripts/sign-plugin-manifest.py`; verified by the host before the plugin is dispatched to the OOP child."
+            },
             "CosignBundle": { "type": "string", "format": "uri" },
             "CertificateIdentity": { "type": "string", "format": "uri" },
             "CertificateOIDCIssuer": { "type": "string", "format": "uri" },

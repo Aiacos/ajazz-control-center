@@ -1,0 +1,13 @@
+{
+  "$schema": "../docs/schemas/trusted_publishers.schema.json",
+  "version": 1,
+  "comment": "Ed25519 public keys (32 bytes, base64) of publishers whose plugin manifests load without a 'self-signed' warning. Updates ship with normal app releases. To add a publisher, append an entry, regenerate the binary resource bundle, and ship a release. To revoke, remove the entry — the next app launch will re-flag previously signed plugins as 'self-signed' until the user re-confirms.",
+  "publishers": [
+    {
+      "key": "REPLACE_WITH_AIACOS_KEY_44_CHARS_BASE64_PLACEHOLDER==",
+      "name": "Aiacos (project)",
+      "url": "https://github.com/Aiacos/ajazz-control-center",
+      "comment": "Placeholder. Replace with the project's official Ed25519 public key once generated. Until then every signed plugin loads as 'self-signed'."
+    }
+  ]
+}
