@@ -7,9 +7,11 @@
 # alongside the existing POSIX implementation. Each platform gets its own TU
 # under a `#ifdef _WIN32` / `#ifndef _WIN32` guard; the public header is
 # platform-agnostic.
-set(_ajazz_plugins_sources)
+set(_ajazz_plugins_sources src/sandbox.cpp)
 if(WIN32)
-    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host_win32.cpp)
+    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host_win32.cpp
+         src/windows_app_container_sandbox.cpp
+    )
 else()
     list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host.cpp
          src/linux_bwrap_sandbox.cpp src/macos_sandbox_exec_sandbox.cpp

@@ -25,9 +25,14 @@
  *     enabled, `notifications` / `media-control` / `system-power`
  *     bind-mount the user session DBus socket.
  *
- * Slice 3b ships @c LinuxBwrapSandbox only. macOS @c sandbox-exec and
- * Windows @c AppContainer follow in slice 3c / 3d, behind the same
- * interface.
+ * Slice 3b shipped @c LinuxBwrapSandbox, slice 3c added
+ * @c MacosSandboxExecSandbox. Slice 3d-ii ships
+ * @c WindowsAppContainerSandbox — AppContainer + a restricted token
+ * configured at `CreateProcessW` time via `STARTUPINFOEX`. Windows
+ * does not use a wrapper executable (unlike `bwrap` / `sandbox-exec`),
+ * so the Sandbox interface gained a second virtual method,
+ * @ref Sandbox::configureProcessAttributes, that is a no-op on POSIX
+ * and the active path on Windows.
  *
  * @par Permission set semantics
  *
@@ -46,10 +51,47 @@
 #pragma once
 
 #include <filesystem>
+#include <memory>
 #include <string>
 #include <vector>
 
 namespace ajazz::plugins {
+
+/**
+ * @brief Opaque side-channel for per-spawn process attributes.
+ *
+ * Most sandboxes (Linux @c bwrap, macOS @c sandbox-exec) implement
+ * isolation by prepending a wrapper executable to the argv; for
+ * those, @ref Sandbox::decorate does all the work and this struct
+ * stays empty. Windows AppContainer is different: the sandbox is
+ * configured at @c CreateProcessW time via
+ * `STARTUPINFOEX::lpAttributeList`, so @ref WindowsAppContainerSandbox
+ * populates platform-specific state here via
+ * @ref Sandbox::configureProcessAttributes, and the win32 host backend
+ * consumes it when it builds the `STARTUPINFOEX`.
+ *
+ * The struct is defined as an opaque pimpl so the header can be
+ * included from POSIX translation units without dragging in
+ * `<windows.h>`. POSIX backends leave @c impl null; the win32 host
+ * consumes the pimpl through a helper function exported from
+ * @c windows_app_container_sandbox.cpp.
+ *
+ * Thread-safety: an instance is owned by the stack frame of the
+ * host constructor; it is not shared across threads.
+ */
+struct ProcessAttributes {
+    /// Opaque per-OS state. Null means "no special attributes"; the
+    /// host backend treats that identically to a default spawn.
+    struct Impl;
+    std::unique_ptr<Impl> impl;
+
+    ProcessAttributes();
+    ~ProcessAttributes();
+    ProcessAttributes(ProcessAttributes const&) = delete;
+    ProcessAttributes& operator=(ProcessAttributes const&) = delete;
+    ProcessAttributes(ProcessAttributes&&) noexcept;
+    ProcessAttributes& operator=(ProcessAttributes&&) noexcept;
+};
 
 /**
  * @brief Decorated spawn produced by @ref Sandbox::decorate.
@@ -119,6 +161,28 @@ public:
      */
     [[nodiscard]] virtual DecoratedSpawn
     decorate(std::string const& pythonExe, std::filesystem::path const& scriptPath) const = 0;
+
+    /**
+     * @brief Configure per-spawn process attributes (Windows-only path).
+     *
+     * On Linux and macOS this is a no-op: @ref decorate already
+     * produced the full argv including the sandbox-wrapper executable,
+     * and there is nothing more to do at spawn time.
+     *
+     * On Windows, AppContainer isolation and restricted-token
+     * configuration happen at @c CreateProcessW via
+     * `STARTUPINFOEX::lpAttributeList` — there is no wrapper
+     * executable. @ref WindowsAppContainerSandbox populates the
+     * @p attributes pimpl with the AppContainer SID, capability SIDs
+     * and restricted-token handle; the win32 host backend consumes
+     * the pimpl when it builds the `STARTUPINFOEX`.
+     *
+     * @param attributes Out-parameter to populate. The default
+     *        implementation leaves it untouched.
+     */
+    virtual void configureProcessAttributes(ProcessAttributes& attributes) const {
+        (void)attributes;
+    }
 };
 
 /**

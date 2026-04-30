@@ -1,0 +1,128 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+/**
+ * @file sandbox.cpp
+ * @brief Out-of-line special members for @ref ProcessAttributes +
+ *        pimpl definition.
+ *
+ * @ref ProcessAttributes uses pimpl so the header (included from
+ * every platform's host backend) can avoid dragging in
+ * `<windows.h>`. The pimpl's @c Impl struct has per-OS payload:
+ *
+ *   - **POSIX**: empty — the full sandbox is expressed as argv
+ *     decoration in @ref LinuxBwrapSandbox / @ref MacosSandboxExecSandbox,
+ *     so there is no per-spawn process-attribute state to carry.
+ *   - **Windows**: owns the AppContainer SID, the capability SID
+ *     array, and the restricted-token HANDLE produced by
+ *     @ref WindowsAppContainerSandbox. The win32 host backend reads
+ *     these via @ref windowsProcessAttributes below.
+ *
+ * Defining @c Impl here (rather than in the per-OS sandbox source)
+ * lets the rule-of-five members live next to the complete type so
+ * `unique_ptr<Impl>::~unique_ptr()` always sees it. The Windows
+ * sandbox mutates @c Impl through @ref windowsProcessAttributesMut
+ * and the host reads it through @ref windowsProcessAttributes; those
+ * helpers are the only public handshake across the pimpl boundary.
+ */
+#include "ajazz/plugins/sandbox.hpp"
+
+#ifdef _WIN32
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <vector>
+
+#include <windows.h>
+#endif
+
+namespace ajazz::plugins {
+
+#ifdef _WIN32
+
+/// Per-spawn Windows process-attribute state. Populated by
+/// @ref WindowsAppContainerSandbox::configureProcessAttributes and
+/// consumed by @c out_of_process_plugin_host_win32.cpp when it builds
+/// the `STARTUPINFOEX` for `CreateProcessW`.
+///
+/// Ownership notes:
+///   - @c appContainerSid and each entry in @c capabilitySids are
+///     allocated with @c AllocateAndInitializeSid and freed with
+///     @c FreeSid in the destructor.
+///   - @c restrictedToken is a kernel handle owned by this struct;
+///     @c CloseHandle is called from the destructor.
+///
+/// All members are null / empty by default ("no AppContainer
+/// configured, no restricted token") so a plain value-initialised
+/// @c ProcessAttributes is indistinguishable from a POSIX one and
+/// the win32 host backend falls back to a plain `CreateProcessW`.
+struct ProcessAttributes::Impl {
+    PSID appContainerSid{nullptr};
+    std::vector<SID_AND_ATTRIBUTES> capabilities;
+    std::vector<PSID> capabilitySids; ///< mirrors @c capabilities for FreeSid
+    HANDLE restrictedToken{nullptr};
+
+    Impl() = default;
+
+    ~Impl() {
+        if (restrictedToken != nullptr) {
+            CloseHandle(restrictedToken);
+            restrictedToken = nullptr;
+        }
+        for (PSID sid : capabilitySids) {
+            if (sid != nullptr) {
+                FreeSid(sid);
+            }
+        }
+        capabilitySids.clear();
+        capabilities.clear();
+        if (appContainerSid != nullptr) {
+            FreeSid(appContainerSid);
+            appContainerSid = nullptr;
+        }
+    }
+
+    Impl(Impl const&) = delete;
+    Impl& operator=(Impl const&) = delete;
+    Impl(Impl&&) = delete;
+    Impl& operator=(Impl&&) = delete;
+};
+
+/// Read-only view on the Windows pimpl. Returns null if the
+/// @ref ProcessAttributes instance carries no win32 state (either
+/// because it was produced by a POSIX sandbox, because the sandbox
+/// fell back to passthrough, or because the struct was default-
+/// constructed without a sandbox). The win32 host backend consults
+/// this when deciding whether to use `STARTUPINFOEX` or a plain
+/// `STARTUPINFO`.
+ProcessAttributes::Impl const* windowsProcessAttributes(ProcessAttributes const& attrs) noexcept {
+    return attrs.impl.get();
+}
+
+/// Mutable accessor, used by @ref WindowsAppContainerSandbox to
+/// lazily install the pimpl during @c configureProcessAttributes.
+/// Creates the @c Impl on first call so most instances stay cheap.
+ProcessAttributes::Impl& windowsProcessAttributesMut(ProcessAttributes& attrs) {
+    if (!attrs.impl) {
+        attrs.impl = std::make_unique<ProcessAttributes::Impl>();
+    }
+    return *attrs.impl;
+}
+
+#else // !_WIN32
+
+// On POSIX there is no platform-specific process-attribute state —
+// the full sandbox is expressed through argv decoration. The @c Impl
+// struct is still defined (empty) so `unique_ptr<Impl>` can destroy
+// it cleanly.
+struct ProcessAttributes::Impl {};
+
+#endif // _WIN32
+
+ProcessAttributes::ProcessAttributes() = default;
+ProcessAttributes::~ProcessAttributes() = default;
+ProcessAttributes::ProcessAttributes(ProcessAttributes&&) noexcept = default;
+ProcessAttributes& ProcessAttributes::operator=(ProcessAttributes&&) noexcept = default;
+
+} // namespace ajazz::plugins

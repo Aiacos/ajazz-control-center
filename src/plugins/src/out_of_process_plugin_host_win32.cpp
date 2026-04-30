@@ -6,21 +6,31 @@
  *
  * Mirrors @ref out_of_process_plugin_host.cpp method-for-method, but
  * substitutes the POSIX `fork()` + `pipe(2)` + `poll(2)` machinery
- * with Windows CRT equivalents:
+ * with Windows Win32 equivalents:
  *
- *   - `_pipe` from @c <io.h> creates anonymous pipes whose ends are
- *     CRT file descriptors. We inherit a redirected stdin/stdout
- *     across the spawn just like the POSIX path.
- *   - `_spawnvp(_P_NOWAIT, ...)` from @c <process.h> spawns the
- *     child without blocking; the return value is a HANDLE-as-intptr
- *     that we use for `WaitForSingleObject`, `TerminateProcess`,
- *     and `GetExitCodeProcess`.
+ *   - `CreatePipe` creates inheritable anonymous pipes. We pass them
+ *     to the child through `STARTUPINFO::hStdInput` / `hStdOutput`
+ *     with `STARTF_USESTDHANDLES` and `bInheritHandles = TRUE`. The
+ *     parent's end of each pipe is set non-inheritable via
+ *     `SetHandleInformation` so closing the parent's end cleanly
+ *     tears the child's end down to EOF.
+ *   - `CreateProcessW` (or `CreateProcessAsUserW` under a restricted
+ *     token) starts the child. When the sandbox populates an
+ *     AppContainer configuration on the opaque `ProcessAttributes`,
+ *     we build a `STARTUPINFOEX` with
+ *     `PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES` and the
+ *     `EXTENDED_STARTUPINFO_PRESENT` creation flag. Without an
+ *     AppContainer we use a plain `STARTUPINFO`.
  *   - `PeekNamedPipe` (from @c <windows.h>, applied to the HANDLE
  *     obtained via `_get_osfhandle(fd)`) gives us the timeout-read
  *     semantics that `poll(2)` provides on POSIX. We don't use
  *     overlapped I/O — pipe-bytes-available polling with a small
  *     sleep is adequate for line-delimited JSON IPC and is far
  *     simpler to reason about than overlapped completion.
+ *   - The parent-end pipe HANDLEs are wrapped in CRT fds via
+ *     `_open_osfhandle` so the readLine / writeLine helpers keep
+ *     using the fd-based `_read` / `_write` calls for symmetry
+ *     with the POSIX backend.
  *
  * @par Testing posture
  *
@@ -36,17 +46,20 @@
  * runner once one is provisioned — at which point any divergences
  * surface immediately.
  *
- * Sandbox status: Windows AppContainer + restricted token are not
- * yet wired in. The `sandbox` field in `OutOfProcessHostConfig` is
- * still consulted (callers can pass a NoOpSandbox or a custom
- * sandbox), but `LinuxBwrapSandbox` and `MacosSandboxExecSandbox`
- * report `hasBwrap()` / `hasSandboxExec()` == false on Windows
- * (their tools don't exist there) and degrade to passthrough.
- * A future slice 3d-ii will introduce `WindowsAppContainerSandbox`
- * with a different shape — AppContainer is configured at
- * `CreateProcessW` time via `STARTUPINFOEX`, not via a wrapper
- * executable, so the current `Sandbox::decorate(argv)` interface
- * will need a side-channel.
+ * Sandbox status: Windows AppContainer + restricted token support
+ * lands in slice 3d-ii alongside this backend. When the
+ * @c OutOfProcessHostConfig::sandbox is a @c WindowsAppContainerSandbox
+ * with @c hasAppContainer() == true we route the spawn through
+ * @c CreateProcessW with a @c STARTUPINFOEX carrying the AppContainer
+ * SID + capability SID array (populated by
+ * @c WindowsAppContainerSandbox::configureProcessAttributes on the
+ * opaque @c ProcessAttributes pimpl), and optionally a restricted
+ * token via @c CreateProcessAsUserW. For @c NoOpSandbox and the
+ * passthrough path (e.g. @c LinuxBwrapSandbox on a Windows machine
+ * where @c bwrap is obviously absent, degrading to passthrough) we
+ * still go through @c CreateProcessW but with a plain @c STARTUPINFO
+ * — no EXTENDED_STARTUPINFO_PRESENT flag, no AppContainer attribute
+ * list — so the cost of the un-sandboxed path is unchanged.
  */
 #ifdef _WIN32
 
@@ -66,8 +79,10 @@
 #include <thread>
 #include <vector>
 
-// Windows headers: <windows.h> brings in HANDLE, PeekNamedPipe, etc.
-// <io.h> + <process.h> + <fcntl.h> for the CRT pipe/spawn surface.
+// Windows headers: <windows.h> brings in HANDLE, PeekNamedPipe,
+// CreateProcessW, STARTUPINFOEX, etc. <io.h> + <fcntl.h> are kept
+// for the CRT fd-based readLine/writeLine path; the spawn itself
+// no longer uses _spawnvp / _pipe.
 // NOMINMAX prevents the legacy macros from clobbering std::min/max.
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -77,10 +92,18 @@
 #endif
 #include <fcntl.h>
 #include <io.h>
-#include <process.h>
 #include <windows.h>
 
 namespace ajazz::plugins {
+
+// Declared in sandbox.cpp. Returns null if the caller's
+// ProcessAttributes carries no win32 state — which is the case for
+// NoOp / passthrough / POSIX sandboxes. Non-null means the host
+// should route the spawn through CreateProcessW with a
+// STARTUPINFOEX that carries the AppContainer SID + capability list.
+extern ProcessAttributes::Impl const*
+windowsProcessAttributes(ProcessAttributes const& attrs) noexcept;
+
 namespace {
 
 using wire::buildOp;
@@ -184,11 +207,92 @@ ReadLineResult readLine(int fd, std::string& carry, std::chrono::milliseconds ti
     }
 }
 
+/// Quote one argv entry for `CreateProcessW`'s single command-line
+/// string, following the `CommandLineToArgvW` round-trip rules
+/// documented in the "Parsing C Command-Line Arguments" MSDN article.
+/// Rules:
+///   * Surround with double quotes only if the string is empty or
+///     contains a space / tab / quote.
+///   * Backslashes NOT followed by a quote are literal.
+///   * Backslashes followed by a quote: each pair becomes one
+///     literal backslash, the trailing run doubles before the
+///     quote.
+/// This is the inverse of the Microsoft C runtime's argv parser,
+/// so `argv[0]` in the child reads exactly what we put in here.
+void appendQuoted(std::wstring& out, std::wstring const& arg) {
+    bool const needsQuotes = arg.empty() || arg.find_first_of(L" \t\"") != std::wstring::npos;
+    if (!needsQuotes) {
+        out.append(arg);
+        return;
+    }
+    out.push_back(L'"');
+    std::size_t backslashes = 0;
+    for (wchar_t c : arg) {
+        if (c == L'\\') {
+            ++backslashes;
+            continue;
+        }
+        if (c == L'"') {
+            // Double every preceding backslash + the quote itself.
+            out.append(backslashes * 2 + 1, L'\\');
+            out.push_back(L'"');
+        } else {
+            // Emit backslashes literally.
+            out.append(backslashes, L'\\');
+            out.push_back(c);
+        }
+        backslashes = 0;
+    }
+    // Trailing backslashes: double them so the closing quote is a
+    // real closing quote (not an escaped one).
+    out.append(backslashes * 2, L'\\');
+    out.push_back(L'"');
+}
+
+/// Build a `CreateProcessW`-compatible command-line from an argv.
+/// The first entry is the executable name (by convention argv[0]),
+/// the rest are the arguments.
+std::wstring buildCommandLine(std::vector<std::string> const& argv) {
+    std::wstring out;
+    for (std::size_t i = 0; i < argv.size(); ++i) {
+        if (i != 0) {
+            out.push_back(L' ');
+        }
+        std::wstring wide;
+        int const size = MultiByteToWideChar(
+            CP_UTF8, 0, argv[i].data(), static_cast<int>(argv[i].size()), nullptr, 0);
+        if (size > 0) {
+            wide.resize(static_cast<std::size_t>(size));
+            MultiByteToWideChar(
+                CP_UTF8, 0, argv[i].data(), static_cast<int>(argv[i].size()), wide.data(), size);
+        }
+        appendQuoted(out, wide);
+    }
+    return out;
+}
+
+/// UTF-8 ⇒ wide for the executable path / env. Factored out so
+/// CreateProcessW can take a typed `wchar_t const*` without a second
+/// MBCS conversion at the call site.
+std::wstring utf8ToWide(std::string const& s) {
+    if (s.empty()) {
+        return {};
+    }
+    int const size =
+        MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+    if (size <= 0) {
+        return {};
+    }
+    std::wstring out(static_cast<std::size_t>(size), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), size);
+    return out;
+}
+
 } // namespace
 
 struct OutOfProcessPluginHost::Impl {
     OutOfProcessHostConfig config;
-    intptr_t processHandle{-1}; ///< _spawnvp return value, used as HANDLE
+    intptr_t processHandle{-1}; ///< HANDLE-as-intptr from CreateProcess
     int writeFd{-1};            ///< parent-end of host->child pipe
     int readFd{-1};             ///< parent-end of child->host pipe
     std::string readCarry;
@@ -272,10 +376,9 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         throw std::runtime_error("OutOfProcessPluginHost: childScript must be set in the config");
     }
 
-    // Compute the decorated spawn pre-fork-equivalent. Same pattern
-    // as the POSIX side: a null sandbox in the config means "no
-    // isolation" — synthesise NoOpSandbox so the spawn path is
-    // uniform.
+    // Compute the decorated spawn. Same pattern as the POSIX side:
+    // a null sandbox in the config means "no isolation" — synthesise
+    // NoOpSandbox so the spawn path is uniform.
     NoOpSandbox const noOp;
     Sandbox const& sandbox = m_impl->config.sandbox
                                  ? static_cast<Sandbox const&>(*m_impl->config.sandbox)
@@ -283,25 +386,60 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
     DecoratedSpawn const spawn =
         sandbox.decorate(m_impl->config.pythonExecutable, m_impl->config.childScript);
 
-    // Two pipes: hostToChild for stdin redirect, childToHost for
-    // stdout. _O_BINARY avoids \r\n translation on stdout — the
-    // wire protocol is one JSON-line-per-`\n` and any `\r` injection
-    // would break framing.
-    int hostToChild[2] = {-1, -1};
-    int childToHost[2] = {-1, -1};
-    if (_pipe(hostToChild, 65536, _O_BINARY) != 0 || _pipe(childToHost, 65536, _O_BINARY) != 0) {
-        if (hostToChild[0] >= 0) {
-            _close(hostToChild[0]);
-        }
-        if (hostToChild[1] >= 0) {
-            _close(hostToChild[1]);
-        }
-        throw std::runtime_error("OutOfProcessPluginHost: _pipe() failed");
+    // Ask the sandbox for any Windows-specific process attributes
+    // (AppContainer SID, capabilities, restricted token). On POSIX
+    // sandboxes and NoOp this leaves the struct empty; the win32
+    // view `windowsProcessAttributes(...)` then returns null and
+    // we take the fast CreateProcessW path without STARTUPINFOEX.
+    ProcessAttributes procAttrs;
+    sandbox.configureProcessAttributes(procAttrs);
+    ProcessAttributes::Impl const* const winAttrs = windowsProcessAttributes(procAttrs);
+
+    // Two pipes with SECURITY_ATTRIBUTES.bInheritHandle = TRUE so
+    // the child inherits the right ends. We CANNOT use _pipe for
+    // this because the CRT pipes are not inheritable by default,
+    // and dup2()-ing them over stdin/stdout only works for
+    // _spawnvp (which inherits the fds, not the handles). Going
+    // through CreatePipe gives us direct HANDLE control.
+    SECURITY_ATTRIBUTES sa{};
+    sa.nLength = sizeof(sa);
+    sa.bInheritHandle = TRUE;
+    sa.lpSecurityDescriptor = nullptr;
+
+    HANDLE childStdinRead = nullptr;
+    HANDLE childStdinWrite = nullptr;
+    HANDLE childStdoutRead = nullptr;
+    HANDLE childStdoutWrite = nullptr;
+
+    if (CreatePipe(&childStdinRead, &childStdinWrite, &sa, 65536) == 0) {
+        throw std::runtime_error("OutOfProcessPluginHost: CreatePipe(stdin) failed");
+    }
+    // The parent's end of stdin must NOT be inherited by the child,
+    // else it keeps the read end alive through the child's own
+    // handle table and our "EOF on close" semantics break.
+    if (SetHandleInformation(childStdinWrite, HANDLE_FLAG_INHERIT, 0) == 0) {
+        CloseHandle(childStdinRead);
+        CloseHandle(childStdinWrite);
+        throw std::runtime_error("OutOfProcessPluginHost: SetHandleInformation(stdin) failed");
+    }
+    if (CreatePipe(&childStdoutRead, &childStdoutWrite, &sa, 65536) == 0) {
+        CloseHandle(childStdinRead);
+        CloseHandle(childStdinWrite);
+        throw std::runtime_error("OutOfProcessPluginHost: CreatePipe(stdout) failed");
+    }
+    if (SetHandleInformation(childStdoutRead, HANDLE_FLAG_INHERIT, 0) == 0) {
+        CloseHandle(childStdinRead);
+        CloseHandle(childStdinWrite);
+        CloseHandle(childStdoutRead);
+        CloseHandle(childStdoutWrite);
+        throw std::runtime_error("OutOfProcessPluginHost: SetHandleInformation(stdout) failed");
     }
 
     // Build PYTHONPATH for the child. Windows uses ';' as the path
-    // separator (different from POSIX's ':'). The PYTHONPATH env
-    // var is read by the child python interpreter at startup.
+    // separator. PYTHONPATH is read by the child python interpreter
+    // at startup. We use the parent's environment (plus the new
+    // PYTHONPATH) so the child inherits PATH etc — CreateProcessW
+    // inherits the parent's env when lpEnvironment is null.
     std::string pythonPath;
     for (auto const& p : m_impl->config.pythonPath) {
         if (!pythonPath.empty()) {
@@ -315,59 +453,160 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
     _putenv_s("PYTHONDONTWRITEBYTECODE", "1");
     _putenv_s("PYTHONUNBUFFERED", "1");
 
-    // Redirect stdin/stdout temporarily so the spawned child
-    // inherits the right ends of the pipes. The parent's stdin/
-    // stdout are restored immediately after _spawnvp returns. This
-    // is racy if the parent is multithreaded, but the host ctor is
-    // documented as not-thread-safe with the dtor (typical RAII
-    // contract) and other threads don't run during construction.
-    int const savedStdin = _dup(_fileno(stdin));
-    int const savedStdout = _dup(_fileno(stdout));
-    if (savedStdin < 0 || savedStdout < 0) {
-        _close(hostToChild[0]);
-        _close(hostToChild[1]);
-        _close(childToHost[0]);
-        _close(childToHost[1]);
-        throw std::runtime_error("OutOfProcessPluginHost: _dup of stdio failed");
+    // Build the wide command line.
+    std::wstring cmdline = buildCommandLine(spawn.args);
+    std::wstring const exePathWide = utf8ToWide(spawn.executable);
+
+    // STARTUPINFO (either plain or extended) wires up the inherited
+    // stdio handles.
+    STARTUPINFOEXW siex{};
+    siex.StartupInfo.cb = sizeof(siex);
+    siex.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
+    siex.StartupInfo.hStdInput = childStdinRead;
+    siex.StartupInfo.hStdOutput = childStdoutWrite;
+    // The child does NOT inherit our stderr — let it go to the
+    // parent's console so AJAZZ_LOG_WARN on the plugin side surfaces
+    // in the terminal that launched the host. Same as POSIX.
+    siex.StartupInfo.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+    // Process creation flags. CREATE_NO_WINDOW keeps the child from
+    // flashing a console window when the host is a GUI app.
+    DWORD creationFlags = CREATE_NO_WINDOW;
+
+    // AppContainer attribute list — only populated if the sandbox
+    // gave us a container SID. Size query first, then Initialize +
+    // Update.
+    std::vector<std::byte> attrListBuf;
+    LPPROC_THREAD_ATTRIBUTE_LIST attrList = nullptr;
+    SECURITY_CAPABILITIES secCaps{};
+
+    if (winAttrs != nullptr && winAttrs->appContainerSid != nullptr) {
+        SIZE_T attrListSize = 0;
+        InitializeProcThreadAttributeList(nullptr, 1, 0, &attrListSize);
+        attrListBuf.resize(attrListSize);
+        attrList = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(attrListBuf.data());
+        if (InitializeProcThreadAttributeList(attrList, 1, 0, &attrListSize) == 0) {
+            CloseHandle(childStdinRead);
+            CloseHandle(childStdinWrite);
+            CloseHandle(childStdoutRead);
+            CloseHandle(childStdoutWrite);
+            throw std::runtime_error(
+                "OutOfProcessPluginHost: InitializeProcThreadAttributeList failed");
+        }
+
+        secCaps.AppContainerSid = winAttrs->appContainerSid;
+        secCaps.CapabilityCount = static_cast<DWORD>(winAttrs->capabilities.size());
+        // Const-cast is safe: UpdateProcThreadAttribute takes PVOID
+        // but does not mutate the capability array.
+        secCaps.Capabilities = winAttrs->capabilities.empty()
+                                   ? nullptr
+                                   : const_cast<PSID_AND_ATTRIBUTES>(winAttrs->capabilities.data());
+
+        if (UpdateProcThreadAttribute(attrList,
+                                      0,
+                                      PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES,
+                                      &secCaps,
+                                      sizeof(secCaps),
+                                      nullptr,
+                                      nullptr) == 0) {
+            DeleteProcThreadAttributeList(attrList);
+            CloseHandle(childStdinRead);
+            CloseHandle(childStdinWrite);
+            CloseHandle(childStdoutRead);
+            CloseHandle(childStdoutWrite);
+            throw std::runtime_error("OutOfProcessPluginHost: UpdateProcThreadAttribute failed");
+        }
+        siex.lpAttributeList = attrList;
+        creationFlags |= EXTENDED_STARTUPINFO_PRESENT;
     }
-    _dup2(hostToChild[0], _fileno(stdin));
-    _dup2(childToHost[1], _fileno(stdout));
 
-    // Build the argv. _spawnvp accepts an array of `const char*`
-    // terminated by NULL.
-    std::vector<char const*> argv;
-    argv.reserve(spawn.args.size() + 1);
-    for (auto const& arg : spawn.args) {
-        argv.push_back(arg.c_str());
-    }
-    argv.push_back(nullptr);
-
-    // _P_NOWAIT spawns asynchronously and returns the process
-    // HANDLE-as-intptr. _P_DETACH is wrong here because we want a
-    // wait-able handle.
-    intptr_t const handle =
-        _spawnvp(_P_NOWAIT, spawn.executable.c_str(), const_cast<char* const*>(argv.data()));
-
-    // Restore parent stdio regardless of spawn outcome.
-    _dup2(savedStdin, _fileno(stdin));
-    _dup2(savedStdout, _fileno(stdout));
-    _close(savedStdin);
-    _close(savedStdout);
-
-    // Close the child-end fds; the child has its own copies
-    // through the dup2'd stdio.
-    _close(hostToChild[0]);
-    _close(childToHost[1]);
-
-    if (handle == -1) {
-        _close(hostToChild[1]);
-        _close(childToHost[0]);
-        throw std::runtime_error("OutOfProcessPluginHost: _spawnvp() failed");
+    PROCESS_INFORMATION pi{};
+    // The restricted-token path uses CreateProcessAsUserW; the
+    // plain path uses CreateProcessW. Both take the same STARTUPINFO
+    // (ex) and return a PROCESS_INFORMATION.
+    BOOL spawnOk = FALSE;
+    if (winAttrs != nullptr && winAttrs->restrictedToken != nullptr) {
+        spawnOk = CreateProcessAsUserW(winAttrs->restrictedToken,
+                                       exePathWide.c_str(),
+                                       cmdline.data(),
+                                       nullptr,
+                                       nullptr,
+                                       TRUE, // bInheritHandles
+                                       creationFlags,
+                                       nullptr, // lpEnvironment = parent's
+                                       nullptr, // lpCurrentDirectory = parent's
+                                       &siex.StartupInfo,
+                                       &pi);
+    } else {
+        spawnOk = CreateProcessW(exePathWide.c_str(),
+                                 cmdline.data(),
+                                 nullptr,
+                                 nullptr,
+                                 TRUE,
+                                 creationFlags,
+                                 nullptr,
+                                 nullptr,
+                                 &siex.StartupInfo,
+                                 &pi);
     }
 
-    m_impl->processHandle = handle;
-    m_impl->writeFd = hostToChild[1];
-    m_impl->readFd = childToHost[0];
+    // Tear down the attribute list regardless of spawn outcome.
+    if (attrList != nullptr) {
+        DeleteProcThreadAttributeList(attrList);
+    }
+
+    // Close the child-end handles in the parent. The child already
+    // inherited them; we only keep our ends.
+    CloseHandle(childStdinRead);
+    CloseHandle(childStdoutWrite);
+
+    if (spawnOk == 0) {
+        DWORD const err = GetLastError();
+        CloseHandle(childStdinWrite);
+        CloseHandle(childStdoutRead);
+        throw std::runtime_error("OutOfProcessPluginHost: CreateProcess failed, GetLastError=" +
+                                 std::to_string(err));
+    }
+
+    // Convert the parent-end HANDLEs to CRT fds so the rest of the
+    // file (readLine / writeLine) keeps using the same fd-based path
+    // as before. _open_osfhandle takes ownership of the HANDLE —
+    // _close will call CloseHandle. We do NOT keep both the HANDLE
+    // and the fd pointing at the same pipe end.
+    int const writeFd = _open_osfhandle(reinterpret_cast<intptr_t>(childStdinWrite), _O_BINARY);
+    // If the first _open_osfhandle succeeded, ownership has
+    // transferred and we must NOT CloseHandle(childStdinWrite) on
+    // cleanup — _close(writeFd) or the fd's destructor will do it.
+    // Track the transfer with a flag so the error path stays clean.
+    bool writeHandleOwned = (writeFd >= 0);
+    int const readFd =
+        _open_osfhandle(reinterpret_cast<intptr_t>(childStdoutRead), _O_BINARY | _O_RDONLY);
+    bool const readHandleOwned = (readFd >= 0);
+    if (writeFd < 0 || readFd < 0) {
+        if (writeHandleOwned) {
+            _close(writeFd); // also closes childStdinWrite
+            writeHandleOwned = false;
+        } else {
+            CloseHandle(childStdinWrite);
+        }
+        if (readHandleOwned) {
+            _close(readFd);
+        } else {
+            CloseHandle(childStdoutRead);
+        }
+        TerminateProcess(pi.hProcess, 1);
+        CloseHandle(pi.hProcess);
+        CloseHandle(pi.hThread);
+        throw std::runtime_error("OutOfProcessPluginHost: _open_osfhandle failed");
+    }
+
+    // The thread handle is not needed — the child's main thread runs
+    // to completion of python3. Only the process handle is kept.
+    CloseHandle(pi.hThread);
+
+    m_impl->processHandle = reinterpret_cast<intptr_t>(pi.hProcess);
+    m_impl->writeFd = writeFd;
+    m_impl->readFd = readFd;
     m_impl->aliveCached = true;
 
     // Read the ready handshake.
@@ -386,9 +625,10 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
     }
     m_impl->pythonVersion = findStringField(result.line, "python");
     AJAZZ_LOG_INFO("plugin-host",
-                   "out-of-process child ready (win32): handle={} python={}",
+                   "out-of-process child ready (win32): handle={} python={} sandbox={}",
                    static_cast<long long>(m_impl->processHandle),
-                   m_impl->pythonVersion);
+                   m_impl->pythonVersion,
+                   winAttrs != nullptr ? "app-container" : "none");
 }
 
 OutOfProcessPluginHost::~OutOfProcessPluginHost() {

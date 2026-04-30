@@ -334,9 +334,10 @@ ______________________________________________________________________
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
   (Linux) + 3c (macOS) + 3d (Windows port, runtime-validated on CI in
-  this cycle) + 3e (legacy backend retired) shipped this cycle. The
-  remaining ☐ is slice 3d-ii (`WindowsAppContainerSandbox`) — see the
-  bottom of this entry. POSIX
+  this cycle) + 3d-ii (Windows AppContainer sandbox) + 3e (legacy
+  backend retired) shipped. The remaining ☐ is the CI end-to-end run
+  of the AppContainer path on a `windows-2022` runner (see "Slice
+  3d-ii" at the bottom of this entry). POSIX
   `OutOfProcessPluginHost`
   (`src/plugins/include/ajazz/plugins/out_of_process_plugin_host.hpp`)
   spawns a child Python process via `fork()` + `execvp()` and talks
@@ -459,13 +460,62 @@ ______________________________________________________________________
   and virtual dispatch through an `IPluginHost&` reference all hold
   end-to-end on Windows.
 
-  Slice 3d-ii (next, security PR): `WindowsAppContainerSandbox`.
-  Windows AppContainer + restricted token are configured at
-  `CreateProcessW` time via `STARTUPINFOEX::lpAttributeList`,
-  not via a wrapper executable, so the existing
-  `Sandbox::decorate(argv)` interface needs a side-channel — likely
-  a second virtual method like `applyToProcessAttributes(...)` that
-  is a no-op on Linux/macOS and the active path on Windows.
+  Slice 3d-ii (this cycle): `WindowsAppContainerSandbox` shipped at
+  `src/plugins/{include/ajazz/plugins,src}/windows_app_container_sandbox.{hpp,cpp}`.
+  AppContainer + restricted token are configured at `CreateProcessW`
+  time via `STARTUPINFOEX::lpAttributeList`, not via a wrapper
+  executable, so the `Sandbox` interface grew a second virtual
+  method, `configureProcessAttributes(ProcessAttributes&)`, that is
+  a no-op on POSIX (bwrap / sandbox-exec already express the full
+  sandbox through argv decoration) and the active path on Windows.
+  `ProcessAttributes` is a pimpl opaque type defined in
+  `src/plugins/src/sandbox.cpp` — the POSIX pimpl is empty, the
+  Windows pimpl owns the `PSID appContainerSid`,
+  `std::vector<SID_AND_ATTRIBUTES> capabilities`,
+  `std::vector<PSID> capabilitySids` (mirror for `FreeSid`) and
+  `HANDLE restrictedToken`; the destructor runs `FreeSid` on every
+  SID and `CloseHandle` on the token, so the sandbox is
+  RAII-clean end-to-end. `WindowsAppContainerSandbox::configureProcessAttributes`
+  calls `DeriveAppContainerSidFromAppContainerName` (via
+  `userenv.dll` delay-loaded with `LoadLibraryW` + `GetProcAddress`
+  so the static link surface stays minimal and the class gracefully
+  degrades to passthrough on Windows builds where AppContainer has
+  been disabled by group policy), allocates capability SIDs via
+  `AllocateAndInitializeSid(SECURITY_APP_PACKAGE_AUTHORITY, SECURITY_CAPABILITY_BASE_RID, rid, ...)`, and produces a
+  restricted token via `CreateRestrictedToken(primary, DISABLE_MAX_PRIVILEGE, ...)` to drop every privilege. Permission
+  mapping mirrors the Linux / macOS rules exactly so plugin authors
+  see one consistent model across OSes: `obs-websocket` / `spotify`
+  / `discord-rpc` grant the `SECURITY_CAPABILITY_INTERNET_CLIENT`
+  capability; `notifications` / `media-control` / `system-power`
+  additionally grant `SECURITY_CAPABILITY_INTERNET_CLIENT_SERVER`
+  so the child can reach the Windows notification broker /
+  MediaRemote / IOPower equivalents. The win32 host backend
+  (`out_of_process_plugin_host_win32.cpp`) was rewritten off
+  `_spawnvp` onto `CreateProcessW` / `CreateProcessAsUserW` with a
+  proper STDIO pipe pair (`CreatePipe` + `SetHandleInformation` to
+  mark the parent-end non-inheritable), and when the sandbox
+  populated the pimpl it now builds a `STARTUPINFOEXW` carrying a
+  `SECURITY_CAPABILITIES` blob via
+  `UpdateProcThreadAttribute(PROC_THREAD_ATTRIBUTE_SECURITY_CAPABILITIES)`
+
+  - the `EXTENDED_STARTUPINFO_PRESENT` creation flag. Parent-end
+    pipe HANDLEs are wrapped in CRT fds via `_open_osfhandle` so the
+    existing `readLine` / `writeLine` code paths keep using the
+    shared POSIX-shaped `_read` / `_write` helpers (only the spawn
+    changed; IPC is unchanged). 5 unit tests in
+    `tests/unit/test_windows_app_container_sandbox.cpp` cover the
+    policy surface (decorate passthrough, default container name,
+    custom container name, permission preservation including
+    "unknown" strings, `configureProcessAttributes` exception-safety)
+    — they run on the `windows-2022` CI slot only. **Pending work**:
+    E2E runtime validation on `windows-2022` (the existing
+    `test_out_of_process_plugin_host.cpp` fixture would need a
+    `SandboxedSpawn` case that constructs a `WindowsAppContainerSandbox`
+    and drives the OOP round-trip through it), and a later narrowing
+    pass that replaces the coarse `internetClientServer` capability
+    with named broker-surface capabilities once we have measurements
+    of which mach-equivalent services each Windows permission
+    actually contacts.
 
 - [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
   abstract base in `ajazz/core/logger.hpp`; default `StderrSink`

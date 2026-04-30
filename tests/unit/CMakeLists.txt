@@ -55,7 +55,10 @@ target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plug
 if(WIN32)
     target_sources(
         ajazz_unit_tests
-        PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
+        PRIVATE test_windows_app_container_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/windows_app_container_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 else()
     target_sources(
@@ -65,6 +68,7 @@ else()
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/linux_bwrap_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/macos_sandbox_exec_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 endif()
 
