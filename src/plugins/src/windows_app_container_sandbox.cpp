@@ -34,6 +34,13 @@
 
 #include "ajazz/core/logger.hpp"
 #include "ajazz/plugins/sandbox.hpp"
+// Brings in the complete @c ProcessAttributes::Impl definition. Required
+// because configureProcessAttributes() below dereferences pimpl members
+// (impl.appContainerSid, impl.capabilitySids, ...). Forward declaration is
+// not enough — the compiler needs the full layout when resolving member
+// access. Including this private header centralises the WIN32-only payload
+// shape and keeps the public sandbox.hpp free of <windows.h>.
+#include "process_attributes_impl_win32.hpp"
 
 #ifndef NOMINMAX
 #define NOMINMAX

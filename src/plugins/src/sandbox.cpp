@@ -26,68 +26,17 @@
 #include "ajazz/plugins/sandbox.hpp"
 
 #ifdef _WIN32
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#ifndef WIN32_LEAN_AND_MEAN
-#define WIN32_LEAN_AND_MEAN
-#endif
-#include <vector>
-
-#include <windows.h>
+// Brings in the complete @c ProcessAttributes::Impl definition required by
+// the helpers below. The header sets NOMINMAX / WIN32_LEAN_AND_MEAN and
+// includes @c <windows.h>; consumers that need to read or mutate the pimpl
+// payload (windows_app_container_sandbox.cpp, out_of_process_plugin_host_win32.cpp)
+// include the same header so all translation units agree on the layout.
+#include "process_attributes_impl_win32.hpp"
 #endif
 
 namespace ajazz::plugins {
 
 #ifdef _WIN32
-
-/// Per-spawn Windows process-attribute state. Populated by
-/// @ref WindowsAppContainerSandbox::configureProcessAttributes and
-/// consumed by @c out_of_process_plugin_host_win32.cpp when it builds
-/// the `STARTUPINFOEX` for `CreateProcessW`.
-///
-/// Ownership notes:
-///   - @c appContainerSid and each entry in @c capabilitySids are
-///     allocated with @c AllocateAndInitializeSid and freed with
-///     @c FreeSid in the destructor.
-///   - @c restrictedToken is a kernel handle owned by this struct;
-///     @c CloseHandle is called from the destructor.
-///
-/// All members are null / empty by default ("no AppContainer
-/// configured, no restricted token") so a plain value-initialised
-/// @c ProcessAttributes is indistinguishable from a POSIX one and
-/// the win32 host backend falls back to a plain `CreateProcessW`.
-struct ProcessAttributes::Impl {
-    PSID appContainerSid{nullptr};
-    std::vector<SID_AND_ATTRIBUTES> capabilities;
-    std::vector<PSID> capabilitySids; ///< mirrors @c capabilities for FreeSid
-    HANDLE restrictedToken{nullptr};
-
-    Impl() = default;
-
-    ~Impl() {
-        if (restrictedToken != nullptr) {
-            CloseHandle(restrictedToken);
-            restrictedToken = nullptr;
-        }
-        for (PSID sid : capabilitySids) {
-            if (sid != nullptr) {
-                FreeSid(sid);
-            }
-        }
-        capabilitySids.clear();
-        capabilities.clear();
-        if (appContainerSid != nullptr) {
-            FreeSid(appContainerSid);
-            appContainerSid = nullptr;
-        }
-    }
-
-    Impl(Impl const&) = delete;
-    Impl& operator=(Impl const&) = delete;
-    Impl(Impl&&) = delete;
-    Impl& operator=(Impl&&) = delete;
-};
 
 /// Read-only view on the Windows pimpl. Returns null if the
 /// @ref ProcessAttributes instance carries no win32 state (either

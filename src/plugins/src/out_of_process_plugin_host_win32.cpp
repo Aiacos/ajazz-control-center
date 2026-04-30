@@ -66,6 +66,11 @@
 #include "ajazz/core/logger.hpp"
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
 #include "ajazz/plugins/sandbox.hpp"
+// Complete @c ProcessAttributes::Impl definition. Needed because the spawn
+// path below reads pimpl members (winAttrs->appContainerSid, capabilities,
+// restrictedToken) when populating STARTUPINFOEX. The forward declaration
+// in sandbox.hpp is insufficient for member access.
+#include "process_attributes_impl_win32.hpp"
 #include "wire_protocol.hpp"
 
 #include <chrono>
