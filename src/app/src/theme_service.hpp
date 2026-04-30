@@ -40,6 +40,7 @@ class ThemeService : public QObject {
     QML_NAMED_ELEMENT(ThemeService)
     QML_SINGLETON
     Q_PROPERTY(QString mode READ mode WRITE setMode NOTIFY modeChanged)
+    Q_PROPERTY(QString effectiveMode READ effectiveMode NOTIFY effectiveModeChanged)
 
 public:
     /// Appearance modes the service can be in.
@@ -57,6 +58,15 @@ public:
     /// Return the current mode as the lowercase string "auto", "light" or "dark".
     [[nodiscard]] QString mode() const noexcept;
 
+    /// Return the resolved theme polarity as "light" or "dark" — never "auto".
+    /// When mode is "auto", resolves via QStyleHints::colorScheme() (Unknown
+    /// maps to Dark, matching applyMode's existing behaviour). Bind QML
+    /// `Material.theme` and any other theme-polarity-driven code to this
+    /// property — it is the single source of truth for "is the UI light or
+    /// dark right now". Auto-fires `effectiveModeChanged` when the OS color
+    /// scheme changes (relevant only in Auto mode).
+    [[nodiscard]] QString effectiveMode() const noexcept;
+
     /// Set the mode by string ("auto" / "light" / "dark"). Persists to QSettings.
     void setMode(QString const& mode);
 
@@ -71,6 +81,10 @@ public:
 signals:
     /// Emitted after a successful mode change.
     void modeChanged();
+    /// Emitted whenever the resolved theme polarity changes — either because
+    /// the user picked a different mode, or (in Auto mode) the OS color
+    /// scheme flipped.
+    void effectiveModeChanged();
 
 private:
     /// Apply the given mode by calling BrandingService::loadThemeFile() with

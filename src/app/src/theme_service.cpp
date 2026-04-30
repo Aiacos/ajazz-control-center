@@ -64,10 +64,35 @@ ThemeService::ThemeService(BrandingService* branding, QObject* parent)
     auto const stored = settings.value(kSettingsKey, QStringLiteral("auto")).toString();
     mode_ = parseMode(stored);
     applyMode(mode_);
+
+    // Track OS color-scheme changes so Auto mode keeps the BrandingService
+    // palette and the QML Material.theme attached property in lockstep with
+    // the rest of the desktop. Connection is unconditional — we filter on
+    // mode_ inside the slot so flipping in/out of Auto behaves correctly.
+    if (auto* hints = QGuiApplication::styleHints()) {
+        QObject::connect(
+            hints, &QStyleHints::colorSchemeChanged, this, [this](Qt::ColorScheme /*scheme*/) {
+                if (mode_ == Mode::Auto) {
+                    applyMode(mode_);
+                    emit effectiveModeChanged();
+                }
+            });
+    }
 }
 
 QString ThemeService::mode() const noexcept {
     return modeToString(mode_);
+}
+
+QString ThemeService::effectiveMode() const noexcept {
+    auto resolved = mode_;
+    if (resolved == Mode::Auto) {
+        auto const* hints = QGuiApplication::styleHints();
+        resolved = (hints != nullptr && hints->colorScheme() == Qt::ColorScheme::Light)
+                       ? Mode::Light
+                       : Mode::Dark;
+    }
+    return modeToString(resolved);
 }
 
 void ThemeService::setMode(QString const& mode) {
@@ -80,6 +105,7 @@ void ThemeService::setMode(QString const& mode) {
     settings.setValue(kSettingsKey, modeToString(mode_));
     applyMode(mode_);
     emit modeChanged();
+    emit effectiveModeChanged();
 }
 
 void ThemeService::applyMode(Mode mode) {

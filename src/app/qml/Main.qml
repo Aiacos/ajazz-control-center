@@ -32,15 +32,22 @@ ApplicationWindow {
     title: Branding.productName
     color: Theme.bgBase
 
-    // Material Design theme: bind to ThemeService so user preference and
-    // OS color-scheme propagate down the Controls 2 hierarchy automatically.
-    // Material.System (Qt 6.5+) follows the OS preference when the user has
-    // selected "auto"; explicit Light/Dark override regardless of OS.
-    Material.theme: ThemeService.mode === "light"
-        ? Material.Light
-        : ThemeService.mode === "dark"
-            ? Material.Dark
-            : Material.System
+    // Material Design theme — bind to ThemeService.effectiveMode (always
+    // resolved to "light" or "dark", never "auto"). This is the single
+    // source of truth for "is the UI light or dark right now"; binding
+    // here AND on each Popup (Drawer) below keeps Material's chrome
+    // (SwitchDelegate / RadioButton text colour, etc.) in lockstep with
+    // BrandingService's palette.
+    //
+    // We deliberately don't use Material.System for the auto branch — on
+    // Wayland-only sessions without an XDG portal Material.System defaults
+    // to Light while ThemeService's auto-resolution defaults to Dark,
+    // producing Light Material chrome on Dark BrandingService surfaces
+    // (black text on dark = invisible). effectiveMode resolves both
+    // sides through the same QStyleHints query so they cannot disagree.
+    readonly property int materialTheme:
+        ThemeService.effectiveMode === "light" ? Material.Light : Material.Dark
+    Material.theme: root.materialTheme
     // Pull the accent and primary tones from the branding palette so a custom
     // theme.json keeps the Material chrome on-brand.
     Material.accent: Theme.accent
@@ -145,6 +152,13 @@ ApplicationWindow {
         width: Math.min(960, Math.max(720, root.width * 0.75))
         height: root.height
 
+        // Material attached props don't propagate from ApplicationWindow to
+        // Popups; bind explicitly so Material.theme inside the drawer matches
+        // ThemeService.effectiveMode (and stays in sync with BrandingService).
+        Material.theme: root.materialTheme
+        Material.accent: Theme.accent
+        Material.primary: Theme.accent2
+
         background: Rectangle {
             color: Theme.surfaceContainer
             border.color: Theme.borderSubtle
@@ -172,6 +186,12 @@ ApplicationWindow {
         dragMargin: 0
         width: Math.min(560, Math.max(360, root.width * 0.4))
         height: root.height
+
+        // See pluginStoreDrawer — Material attached props don't propagate
+        // into Popup scope, so we re-apply the same trio here.
+        Material.theme: root.materialTheme
+        Material.accent: Theme.accent
+        Material.primary: Theme.accent2
 
         background: Rectangle {
             color: Theme.surfaceContainer
