@@ -55,7 +55,20 @@ release: ## Release build (optimized)
 	@cmake --build --preset release --parallel $(JOBS)
 
 run: build ## Build and launch the app
-	@$(BIN)
+	@# Auto-detect Wayland session when neither WAYLAND_DISPLAY nor DISPLAY is set
+	@# in the invoking shell (common when running from a TTY, SSH, or a tool that
+	@# doesn't inherit the niri/sway/hyprland session env). Without this, Qt 6.5+
+	@# falls back to xcb, fails to load it, and aborts with a misleading message
+	@# about xcb-cursor0. Picks the first wayland-* socket in $$XDG_RUNTIME_DIR.
+	@if [ -z "$$WAYLAND_DISPLAY" ] && [ -z "$$DISPLAY" ]; then \
+	    sock=$$(ls "$${XDG_RUNTIME_DIR:-/run/user/$$(id -u)}"/wayland-* 2>/dev/null | grep -v '\.lock$$' | head -1); \
+	    if [ -n "$$sock" ]; then \
+	        echo "→ no display env, auto-detected Wayland socket: $$sock"; \
+	        export WAYLAND_DISPLAY="$$(basename $$sock)"; \
+	        export QT_QPA_PLATFORM=wayland; \
+	    fi; \
+	fi; \
+	exec $(BIN)
 
 test: build ## Run all unit and integration tests
 	@ctest --preset dev --output-on-failure
