@@ -212,6 +212,7 @@ qt_add_qml_module(
               qml/components/KeyCell.qml
               qml/components/PageHeader.qml
               qml/components/PrimaryButton.qml
+              qml/components/Ripple.qml
               qml/components/SecondaryButton.qml
               qml/components/Toast.qml
     RESOURCES ${ACC_APP_ICON}

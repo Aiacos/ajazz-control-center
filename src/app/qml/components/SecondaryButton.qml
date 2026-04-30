@@ -17,10 +17,28 @@ Button {
     rightPadding: Theme.spacingLg
 
     background: Rectangle {
+        id: bg
         radius: Theme.radiusMd
         color: root.hovered ? Theme.bgRowHover : "transparent"
         border.width: root.activeFocus ? Theme.focusRingWidth : 1
         border.color: root.activeFocus ? Theme.accent : Theme.borderSubtle
+
+        Ripple {
+            id: ripple
+            anchors.fill: parent
+            cornerRadius: bg.radius
+            rippleColor: Theme.fgPrimary
+            rippleOpacity: 0.12          // M3 on-surface @ pressed (lower than primary)
+            duration: Theme.durationMedium
+        }
+    }
+
+    Connections {
+        target: root
+        function onPressedChanged() {
+            if (root.pressed)
+                ripple.trigger(ripple.width / 2, ripple.height / 2)
+        }
     }
 
     contentItem: Text {
