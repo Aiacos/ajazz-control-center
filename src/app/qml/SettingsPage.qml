@@ -46,8 +46,9 @@ Page {
             Label {
                 text: qsTr("Appearance")
                 color: Theme.fgPrimary
-                font.pixelSize: Theme.fontLg
-                font.bold: true
+                font.pixelSize: Theme.typeTitleMedium.pixelSize
+                font.weight: Theme.typeTitleMedium.weight
+                font.letterSpacing: Theme.typeTitleMedium.letterSpacing
                 Accessible.role: Accessible.Heading
             }
 
@@ -67,12 +68,16 @@ Page {
                     Label {
                         text: qsTr("Theme mode")
                         color: Theme.fgPrimary
-                        font.pixelSize: Theme.fontMd
+                        font.pixelSize: Theme.typeBodyMedium.pixelSize
+                        font.weight: Theme.typeBodyMedium.weight
+                        font.letterSpacing: Theme.typeBodyMedium.letterSpacing
                     }
                     Label {
                         text: qsTr("Choose between Auto (follow system), Light, or Dark.")
                         color: Theme.fgMuted
-                        font.pixelSize: Theme.fontSm
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        font.weight: Theme.typeBodySmall.weight
+                        font.letterSpacing: Theme.typeBodySmall.letterSpacing
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -112,8 +117,9 @@ Page {
             Label {
                 text: qsTr("Startup")
                 color: Theme.fgPrimary
-                font.pixelSize: Theme.fontLg
-                font.bold: true
+                font.pixelSize: Theme.typeTitleMedium.pixelSize
+                font.weight: Theme.typeTitleMedium.weight
+                font.letterSpacing: Theme.typeTitleMedium.letterSpacing
                 Accessible.role: Accessible.Heading
             }
 
@@ -170,7 +176,9 @@ Page {
                 Layout.topMargin: Theme.spacingLg
                 text: Branding.productName
                 color: Theme.fgMuted
-                font.pixelSize: Theme.fontSm
+                font.pixelSize: Theme.typeBodySmall.pixelSize
+                font.weight: Theme.typeBodySmall.weight
+                font.letterSpacing: Theme.typeBodySmall.letterSpacing
                 horizontalAlignment: Text.AlignRight
             }
         }
