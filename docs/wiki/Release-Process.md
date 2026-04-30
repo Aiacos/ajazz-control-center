@@ -86,6 +86,28 @@ app. Code signing is tracked in
 [issue #signing](https://github.com/Aiacos/ajazz-control-center/issues)
 and depends on the project obtaining publisher certificates.
 
+## Verifying release artifacts
+
+Every release artifact is signed with [Sigstore](https://www.sigstore.dev/)
+build provenance via GitHub Actions OIDC. The attestation links the
+artifact to the exact commit and workflow run that produced it.
+
+Verify with the GitHub CLI:
+
+```bash
+gh attestation verify <artifact> \
+    --owner Aiacos --repo Aiacos/ajazz-control-center
+```
+
+This confirms the artifact was built by our release workflow at the
+tagged commit, with no manual intervention. Failed verification means
+the artifact was not produced by our CI — do not install it.
+
+The attestation is in addition to the `SHA256SUMS` file attached to
+each GitHub release; SHA256SUMS provides integrity (the file you
+downloaded matches), `gh attestation verify` provides provenance
+(the file came from our CI).
+
 ## Hotfix process
 
 For an urgent fix on top of an already-released `vX.Y.Z`:
