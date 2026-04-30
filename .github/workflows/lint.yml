@@ -120,7 +120,7 @@ jobs:
       - name: Install Qt 6.7
         # Project requires Qt >= 6.7 (see top-level CMakeLists.txt); the
         # qt6-* apt packages on ubuntu-24.04 only provide Qt 6.4.
-        uses: jurplel/install-qt-action@12aa0336e1e410b3c6dff5e0722547f7a37e8c60  # v4.2.1
+        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version: 6.7.3, cache: true }
 
       - name: Configure
@@ -174,7 +174,7 @@ jobs:
           pre-commit run mdformat --all-files --color always
 
       - name: Lychee (link checker)
-        uses: lycheeverse/lychee-action@f81112d0d2814ded911bd23e3beaa9dda9093915  # v2.1.0
+        uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0
         with:
           args: --verbose --no-progress --exclude-loopback --exclude-mail .
           fail: false   # Reports broken links as a warning, does not fail CI
