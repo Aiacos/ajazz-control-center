@@ -1201,6 +1201,151 @@ at byte `[1]`) suggests the most plausible read of history is:
    implementation must be done by an engineer who has read
    ONLY the structural spec, not this taint notice.
 
+## Finding 15 — OemDrv.exe send architecture + EEPROM memory map
+
+> **Capture id**: `disasm-2026-04-30-aj199-v1.0-002`. Method:
+> radare2 5.9.8 disassembly of `OemDrv.exe` continued from
+> Finding 11.A — string-table search and follow-up xref tracing
+> to identify the actual configuration-command send path (which
+> Finding 11.A's `fcn.00450820` was a partial picture of). TAINT
+> NOTICE per Finding 11 applies.
+
+### 15.A — Three `HidD_SetFeature` call sites, three roles
+
+The cross-reference walk shows the `OemDrv.exe` SetFeature surface
+has exactly three call sites, each serving a different concern:
+
+| Site                      | Role                                                                                                                                                           |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `fcn.0040d6c0 @ 0x40d956` | Device probe during `SetupDi*` enumeration (writes a 256-byte path / hCmd / hNotify discovery packet — Finding 11.A noted "Dev match OK: hCmd=%x" log string). |
+| `fcn.00450820 @ 0x4508c3` | "Psd_Thread" connection-keepalive packet (per the log strings `"Psd_Thread: bCennect=%d, hCmd=%x"` — note the vendor typo `bCennect` for `bConnect`).          |
+| `fcn.004519f0 @ 0x451a5a` | **The actual configuration-command send path** — the "real" SendFeature, called by 8 distinct command-builder wrappers.                                        |
+
+Finding 11.A originally fingerprinted `fcn.00450820` as the wire
+format for OemDrv. That was correct for the connection-keepalive
+path but missed the broader picture: the configuration commands
+(Set DPI, Set RGB, Set Macro, Set DPI Color, Set DPI Effect,
+profile read/write) flow through `fcn.004519f0` instead.
+
+### 15.B — `fcn.004519f0` wire format (validates Finding 11.A's shape)
+
+The 166-byte function `fcn.004519f0` writes the SetFeature buffer
+with a fixed prologue and dispatches per-command via its 8 caller
+wrappers. The prologue's salient instructions:
+
+```
+mov byte [edi + 0]  = 0x08            ; report id 0x08 — same as fcn.00450820 (Finding 11.A)
+... [callers fill bytes 1..15 with command-specific payload]
+mov byte [edi + 16] = al              ; al = checksum byte (8-bit subtractive form)
+push 0x11                             ; 17 — total length
+call HidD_SetFeature
+```
+
+**This confirms Finding 11.A's structural claim**: OemDrv uses
+**17-byte feature reports with report ID `0x08` and a checksum
+at offset 16**. The two SetFeature paths (`fcn.00450820` and
+`fcn.004519f0`) share the same wire shape; they differ only in
+which command-byte they put at offset 1 and which payload at
+offsets 2..15.
+
+### 15.C — 8 command-family wrappers around `fcn.004519f0`
+
+| Wrapper        | Plausible role (per the call graph + nearby strings)                                      |
+| -------------- | ----------------------------------------------------------------------------------------- |
+| `fcn.00450910` | Likely "GetProfile" path (matches offset region of "GetProfile (0x0C~0x2B)" string xrefs) |
+| `fcn.00450bb0` | Likely "Set DPI master" — corresponds to `fcn.00410ee0` consumer chain                    |
+| `fcn.00450ce0` | Possibly "Set DPI stage" sub-command                                                      |
+| `fcn.00450dc0` | Calls `fcn.004519f0` **twice** (two consecutive sends) — possibly a paired write          |
+| `fcn.00451120` | Possibly RGB write — sits near `EEPROM_To_MainRGB` consumers                              |
+| `fcn.004517e0` | Possibly Macro write                                                                      |
+| `fcn.004518e0` | Possibly Polling-rate write                                                               |
+
+The exact (wrapper → command-id-byte) mapping was NOT extracted
+in this pass; the 8 wrappers are 100-300 bytes each and need
+individual analysis. Spec excerpt for the next clean-engineer
+recon increment: each wrapper takes 1-3 parameter values, fills
+`buffer[1..15]` with `(command_id, sub_command, payload..., 0)`
+left-padded, and calls `fcn.004519f0` for the byte-16 checksum +
+SetFeature. The exact command_id assignments come out of a
+runtime USB capture cheaper than from continued disassembly, so
+we mark this as "SPEC: incomplete pending capture".
+
+### 15.D — On-device EEPROM memory map (recovered from log strings)
+
+The string table of `OemDrv.exe` carries `printf`-style log lines
+from the profile-read code path that name the EEPROM offsets
+explicitly:
+
+| EEPROM offset range | Content                                                                                     |
+| ------------------- | ------------------------------------------------------------------------------------------- |
+| `0x0C — 0x2B`       | DPI stages — 32 bytes total. Per-stage layout `(x, y, mul, crc)` of 4 bytes → **8 stages**. |
+| `0x2C — 0x4B`       | DPI per-stage colors — 32 bytes total → 8 stages × 4 bytes each (RGB + 1 reserved).         |
+| `0x4C — 0x53`       | DPI effect — 8 bytes (mode / speed / brightness / …).                                       |
+
+Source log strings (verbatim, used as-is for the offset facts —
+the strings themselves are vendor literal but the *offsets* they
+expose are protocol facts):
+
+- `"GetProfile (0x0C~0x2B) (DPI)(x y mul crc):"`
+- `"GetProfile (0x2C~0x4B) (DPI Color):"`
+- `"GetProfile (0x4C~0x53) (DPI Effect):"`
+
+**Parity gap surfaced**: the AJ199 V1.0 firmware exposes **8** DPI
+stages, but our `src/devices/mouse/src/aj_series.cpp` declares
+`dpiStageCount = 6`. After the wire-format reconciliation, also
+bump the stage count to 8 (AJ159 device manifest from Finding 9
+§ "AJ159 manifest" had `dpi_count="6"` for that specific SKU; the
+AJ199 V1.0 OemDrv supports 8). The user-facing API should treat
+this as device-specific via the existing `IMouseCapable::dpiStageCount()`.
+
+### 15.E — RGB protocol: dual-zone (Main + Logo)
+
+The string table also surfaces the structure of RGB writes:
+
+```
+EEPROM_To_MainRGB: mode=%x, speed=%x, light=%x, color=%x,%x,%x
+EEPROM_To_LogoRGB: mode=%x, speed=%x, light=%x, color=%x,%x,%x
+```
+
+So the AJ199 V1.0 has **two RGB zones** ("Main" = body + scroll
+wheel ring; "Logo" = front logo) and each zone takes 6 fields:
+`(mode, speed, light, R, G, B)`. The `mode` and `speed` enums
+are enumerated by additional strings `"Unknown Speed"` /
+`"Unknown Bri"` (vendor's "Unknown" typos) — bounded validation
+exists vendor-side, so a recon capture could enumerate the
+valid range by sweeping each input value and observing the log
+output if the operator runs `OemDrv.exe` under a debugger or
+log-attached. (Out of scope for static analysis; flagged for
+the runtime-capture pass.)
+
+Cross-check vs our `IRgbCapable::rgbZones()`:
+`{ "logo", "scroll" }`. The vendor's two zones are "Main" (which
+includes scroll, per the string semantics) and "Logo". Our zone
+names are correct in spirit; the `setRgbStatic` API already
+takes a zone name and the implementation routes `"scroll"` to a
+different zone-id byte than `"logo"`. The naming alignment should
+be revisited after the runtime capture confirms the zone-id
+encoding.
+
+### 15.F — Implications for `aj_series.cpp` reconciliation
+
+This finding refines the dialect roadmap in Finding 14:
+
+- **OemDrv** dialect is now structurally fully specified for the
+  CONFIG path: 17-byte / RID `0x08` / checksum at byte 16. The
+  exact per-command opcodes still need extraction from the 8
+  wrappers OR (cheaper) a runtime USB capture.
+- The `OemDrv` checksum form noted in Finding 11.A
+  (`0x55 - sum_lo - sum_hi - tail`) was extracted from
+  `fcn.00450820`. The same shape applies in `fcn.004519f0`
+  (both share the 17-byte / RID 0x08 envelope) but the exact
+  subtractive constant in `fcn.004519f0` was not re-verified in
+  this pass — re-check during the runtime capture.
+- The 8 DPI stages + dual-zone RGB (Main + Logo) facts are
+  vendor capabilities; the spec note for the implementer is
+  "AJ199 V1.0 supports 8 DPI stages, two RGB zones" — value to
+  re-derive byte-level from a capture.
+
 ## Methodology
 
 ### Capture environments
