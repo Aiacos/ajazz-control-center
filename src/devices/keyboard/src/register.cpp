@@ -28,18 +28,17 @@ void registerAll(core::DeviceRegistry& registry) {
         },
         &makeViaKeyboard);
 
-    // Placeholder for proprietary keyboards — VID/PID refined per model
-    // via the device database.
-    reg.registerDevice(
-        core::DeviceDescriptor{
-            .vendorId = 0x05ac,
-            .productId = 0x024f,
-            .family = core::DeviceFamily::Keyboard,
-            .model = "AJAZZ AK (proprietary)",
-            .codename = "ak-proprietary",
-            .hasRgb = true,
-        },
-        &makeProprietaryKeyboard);
+    // (Removed 2026-04-29) The "AJAZZ AK (proprietary)" placeholder
+    // entry under VID 0x05AC PID 0x024F was deleted: 0x05AC is Apple's
+    // IEEE-assigned vendor ID, not AJAZZ. The intent was a stand-in
+    // until the device database lands, but the live entry would have
+    // misclassified an Apple keyboard with PID 0x024F as an AJAZZ
+    // proprietary keyboard. AK820 / AK820 Pro / AK820 Max coverage
+    // arrives via the VIA entry above (vendor uses SONiX prefix
+    // 0x3151 across the line); per-model entries are added when the
+    // device database wires in the proprietary backend's
+    // model-specific routing logic. Tracking entry: TODO.md →
+    // "Apple VID placeholder in keyboard registration".
 
     // AJAZZ AK980 PRO (Microdia chipset 0x0c45). Confirmed via real-device
     // lsusb enumeration; protocol mapping is still scaffolded — keys / RGB

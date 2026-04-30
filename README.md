@@ -35,7 +35,7 @@ Don't want to build from source? Pre-built installers for every push to `main` a
 For stable, signed, slow-moving builds, see the [tagged releases](https://github.com/Aiacos/ajazz-control-center/releases). The release process is documented in the [Release Process wiki page](docs/wiki/Release-Process.md).
 
 <!-- BEGIN AUTOGEN: stats -->
-**11 devices** across 3 keyboard, 4 mouse, 4 streamdeck — 9 functional, 2 scaffolded.
+**13 devices** across 3 keyboard, 6 mouse, 4 streamdeck — 6 functional, 7 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 ---
@@ -81,10 +81,12 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 
 | Device | USB | Status | Features | Notes |
 |--------|-----|--------|----------|-------|
-| [AJAZZ AJ159](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51a` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor. |
-| [AJAZZ AJ199](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51b` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor. |
-| [AJAZZ AJ339](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51c` | 🟢 functional | RGB backlight, DPI stages, Firmware version | PAW3395 sensor, wireless variant pending. |
-| [AJAZZ AJ380](docs/protocols/mouse/aj_series.md) | `0x3554:0xf51d` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | PAW3950 sensor. |
+| [AJAZZ AJ-series wired (primary)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5C2E` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Covers AJ139 PRO / AJ159 / AJ159 MC / AJ159P MC / AJ179 / AJ139 V2 PRO / AJ179 V2 / AJ179 V2 MAX in their canonical USB-wired mode. PAW3395 / PAW3311 / PAW3370 / PAW3335 / PAW3950 sensor depending on SKU. HID configuration interface is `MI_02`. Wire-format reconciliation against the vendor driver still pending — see TODO `AJ-series wire format reconciliation` and `vendor-protocol-notes.md` Finding 11. |
+| [AJAZZ AJ-series wired (alt mode 5D2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5D2E` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs as `aj_series_wired_primary`; the vendor's `config.xml` lists three USB PIDs per device (5C2E / 5D2E / 5E2E) representing different USB-side mode descriptors. |
+| [AJAZZ AJ-series wired (alt mode 5E2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5E2E` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs as `aj_series_wired_primary`; third USB-mode descriptor. |
+| [AJAZZ AJ-series 2.4GHz dongle](docs/protocols/mouse/aj_series.md) | `0x248A:0x5C2F` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor=="248a"` and `idVendor=="249a"`. |
+| [AJAZZ AJ199 family (wired)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF500` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B. |
+| [AJAZZ AJ199 family (2.4GHz dongle)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF501` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe. |
 
 <!-- END AUTOGEN: devices-by-family -->
 

@@ -41,8 +41,29 @@ KERNEL=="hidraw*",    ATTRS{idVendor}=="0300", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3151", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------
-# AJAZZ AJ-series mice (AJ159 / AJ199 / AJ339 / AJ380)
+# AJAZZ AJ-series mice
 # ---------------------------------------------------------------------------
+# Two distinct VID spaces are used by the AJ-series mouse line, surfaced by
+# the 2026-04-29 vendor static-analysis pass (see
+# docs/research/vendor-protocol-notes.md Findings 8 + 9):
+#
+#   * VID 0x248A — AJ139 / AJ159 / AJ179 family (USB-wired and 2.4GHz dongle
+#     modes). The vendor's own driver enumerates them under PIDs
+#     0x5C2E / 0x5D2E / 0x5E2E (wired) and 0x5C2F (dongle).
+#
+#   * VID 0x249A — alternate VID for the 2.4GHz dongle of the same family
+#     (vendor exposes it under both VIDs depending on USB stack path).
+#
+#   * VID 0x3554 — AJ199 family (AJ199, AJ199 Max, AJ199 Carbon Fiber). PIDs
+#     in the 0xF500-0xF5D5 range; M_PID list `F500 / F546 / F566` for wired,
+#     D_PID list `F501 / F545 / F547 / F564 / F567 / F5D5` for dongle.
+#
+# Pre-2026-04-29 only `idVendor=="3554"` was tagged here, which meant AJ159
+# / AJ139 / AJ179 mice plugged into a Linux host received no `uaccess` ACL
+# and the app could not open the device. Tracking entry: TODO.md →
+# "AJ-series VID:PID enumeration drift".
+KERNEL=="hidraw*",    ATTRS{idVendor}=="248a", MODE="0660", TAG+="uaccess"
+KERNEL=="hidraw*",    ATTRS{idVendor}=="249a", MODE="0660", TAG+="uaccess"
 KERNEL=="hidraw*",    ATTRS{idVendor}=="3554", MODE="0660", TAG+="uaccess"
 
 # ---------------------------------------------------------------------------

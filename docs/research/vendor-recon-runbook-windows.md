@@ -51,32 +51,32 @@ clean.
 Before starting the runbook, confirm:
 
 - [ ] The static-analysis pass in `vendor-protocol-notes.md` is
-      familiar to you. The runtime captures here cross-validate
-      and refine those findings.
+  familiar to you. The runtime captures here cross-validate
+  and refine those findings.
 - [ ] You have **physical access to at least one AJAZZ device** in
-      the priority list below. A capture without a real device is
-      a paperweight.
+  the priority list below. A capture without a real device is
+  a paperweight.
 - [ ] The clean-room split is acknowledged: **the operator running
-      this runbook will NOT later commit code to the matching
-      `src/devices/<family>/` module.** A different "clean"
-      engineer reads the spec produced by this runbook and writes
-      the implementation.
+  this runbook will NOT later commit code to the matching
+  `src/devices/<family>/` module.** A different "clean"
+  engineer reads the spec produced by this runbook and writes
+  the implementation.
 - [ ] An encrypted out-of-repo vault exists for raw captures (e.g.
-      a VeraCrypt volume mounted at `D:\re-vault\` on the host,
-      shared into the VM as a read-write folder). Raw `.pcapng`
-      files NEVER enter the repo.
+  a VeraCrypt volume mounted at `D:\re-vault\` on the host,
+  shared into the VM as a read-write folder). Raw `.pcapng`
+  files NEVER enter the repo.
 
 Priority device list (capture order — highest information density
 first):
 
-| Priority | Device                  | Captures the                                          |
-| -------- | ----------------------- | ----------------------------------------------------- |
-| 1        | AKP153 / AKP153E         | Stream Dock USB-HID surface + WebSocket localhost      |
-| 2        | AKP03 / AKP05            | Stream Dock + encoder / dial / touch-strip frames      |
-| 3        | AK820 Max RGB           | Qt-5 keyboard driver wire format, RGB curve commands   |
-| 4        | AJ199 (any variant)     | Mouse HID Feature Reports — DPI / RGB / button remap   |
-| 5        | AJ159 / AJ179 (any)     | Cross-validate against the AJ159 device manifest       |
-| 6        | AK980 PRO (Microdia)    | Disambiguates `0x0c45:0x8009` from the proprietary AK   |
+| Priority | Device               | Captures the                                          |
+| -------- | -------------------- | ----------------------------------------------------- |
+| 1        | AKP153 / AKP153E     | Stream Dock USB-HID surface + WebSocket localhost     |
+| 2        | AKP03 / AKP05        | Stream Dock + encoder / dial / touch-strip frames     |
+| 3        | AK820 Max RGB        | Qt-5 keyboard driver wire format, RGB curve commands  |
+| 4        | AJ199 (any variant)  | Mouse HID Feature Reports — DPI / RGB / button remap  |
+| 5        | AJ159 / AJ179 (any)  | Cross-validate against the AJ159 device manifest      |
+| 6        | AK980 PRO (Microdia) | Disambiguates `0x0c45:0x8009` from the proprietary AK |
 
 ## 1. Disposable Windows VM setup
 
@@ -92,14 +92,14 @@ hypervisor-agnostic. Recommended baseline:
 
 VM specs:
 
-| Setting       | Value                                                            |
-| ------------- | ---------------------------------------------------------------- |
-| Guest OS      | Windows 10 22H2 or Windows 11 23H2 (English-US locale)           |
-| RAM           | 4 GB (8 GB if running Stream Dock)                               |
-| Disk          | 60 GB dynamic (~25 GB used after install)                        |
-| Network       | NAT, no VPN, no proxy (so vendor app's CDN reach is observable)  |
-| USB           | USB-3 controller passthrough enabled                             |
-| Snapshots     | `clean-base`, `tools-installed`, `vendor-installed`              |
+| Setting   | Value                                                           |
+| --------- | --------------------------------------------------------------- |
+| Guest OS  | Windows 10 22H2 or Windows 11 23H2 (English-US locale)          |
+| RAM       | 4 GB (8 GB if running Stream Dock)                              |
+| Disk      | 60 GB dynamic (~25 GB used after install)                       |
+| Network   | NAT, no VPN, no proxy (so vendor app's CDN reach is observable) |
+| USB       | USB-3 controller passthrough enabled                            |
+| Snapshots | `clean-base`, `tools-installed`, `vendor-installed`             |
 
 After first boot:
 
@@ -316,17 +316,17 @@ Static cross-checks to land in `vendor-protocol-notes.md` after
 the admin extract:
 
 - [ ] Confirm Qt 5 framework versions (read `Qt5Core.dll`'s
-      VersionInfo).
+  VersionInfo).
 - [ ] Enumerate the `index.html_*` PI pages (file count + each
-      one's size + which `$SD` events the JS calls). HTML / JS
-      content is configuration-shaped; reading is clean-room
-      acceptable. **Do NOT** copy the JS into our `pi_bridge.cpp`.
+  one's size + which `$SD` events the JS calls). HTML / JS
+  content is configuration-shaped; reading is clean-room
+  acceptable. **Do NOT** copy the JS into our `pi_bridge.cpp`.
 - [ ] Read the locale `.json` files for the action catalogue
-      strings — these are i18n, like the `text.xml` files inspected
-      in Finding 9 for keyboards / mice.
+  strings — these are i18n, like the `text.xml` files inspected
+  in Finding 9 for keyboards / mice.
 - [ ] Inspect `FirmwareUpgradeTool.exe`'s PE imports — does it
-      link `Qt5SerialPort.dll`? That confirms / refutes the
-      USB-CDC firmware-upgrade hypothesis from Finding 1.
+  link `Qt5SerialPort.dll`? That confirms / refutes the
+  USB-CDC firmware-upgrade hypothesis from Finding 1.
 
 ## 4. Mirabox-branded Stream Dock — special case
 

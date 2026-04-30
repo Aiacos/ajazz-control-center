@@ -321,25 +321,25 @@ running the installer in a VM (see
 
 **Authenticode signature (NEW dimension)**:
 
-| Field            | Value                                                                                                     |
-| ---------------- | --------------------------------------------------------------------------------------------------------- |
-| Status           | `Valid`                                                                                                   |
-| Signer subject   | `CN="Shenzhen An Rui Xin Technology Co., Ltd.", O="Shenzhen An Rui Xin Technology Co., Ltd.", S=Guangdong Sheng, C=CN, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.3=CN, SERIALNUMBER=91440300057893313F` |
-| Signer issuer    | `CN=Sectigo Public Code Signing CA EV R36, O=Sectigo Limited, C=GB`                                      |
-| Signer validity  | `2023-10-30` → `2024-10-29`                                                                              |
-| Signer thumbprint | `D7ED891C6EE663028E63995051E9C916D15B3E54`                                                              |
-| Signer serial    | `409BF6BB5B53D09F16D755DF5D16D2AE`                                                                       |
-| Timestamp authority | `CN=Globalsign TSA for MS Authenticode Advanced - G4, O=GlobalSign nv-sa, C=BE`                       |
-| Timestamp thumbprint | `31030E176AA4592EAB2C8BADE83299FCB5585DCF`                                                          |
+| Field                | Value                                                                                                                                                                                                                       |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Status               | `Valid`                                                                                                                                                                                                                     |
+| Signer subject       | `CN="Shenzhen An Rui Xin Technology Co., Ltd.", O="Shenzhen An Rui Xin Technology Co., Ltd.", S=Guangdong Sheng, C=CN, OID.2.5.4.15=Private Organization, OID.1.3.6.1.4.1.311.60.2.1.3=CN, SERIALNUMBER=91440300057893313F` |
+| Signer issuer        | `CN=Sectigo Public Code Signing CA EV R36, O=Sectigo Limited, C=GB`                                                                                                                                                         |
+| Signer validity      | `2023-10-30` → `2024-10-29`                                                                                                                                                                                                 |
+| Signer thumbprint    | `D7ED891C6EE663028E63995051E9C916D15B3E54`                                                                                                                                                                                  |
+| Signer serial        | `409BF6BB5B53D09F16D755DF5D16D2AE`                                                                                                                                                                                          |
+| Timestamp authority  | `CN=Globalsign TSA for MS Authenticode Advanced - G4, O=GlobalSign nv-sa, C=BE`                                                                                                                                             |
+| Timestamp thumbprint | `31030E176AA4592EAB2C8BADE83299FCB5585DCF`                                                                                                                                                                                  |
 
 **Cross-vendor entity tree** — three distinct identities surfaced
 across the artefacts captured to date:
 
-| Identity                                          | Surfaces in                       | Role                                  |
-| ------------------------------------------------- | --------------------------------- | ------------------------------------- |
-| `Shenzhen An Rui Xin Technology Co., Ltd.` (深圳安瑞鑫科技) | Stream Dock Authenticode signer   | Legal entity holding the EV cert      |
-| `HotSpot`                                         | Stream Dock VersionInfo CompanyName + Aliyun OSS bucket prefix `hotspot-oss-bucket` | Internal team / brand for the desktop app |
-| `AJAZZ` / `a-jazz, Inc.` / `黑爵外设 / 深圳市黑爵同创电子科技公司` | Mouse / keyboard driver VersionInfo + AJ199 Max Description.xml | Hardware vendor brand — see Finding 7 |
+| Identity                                                           | Surfaces in                                                                         | Role                                      |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------------------- | ----------------------------------------- |
+| `Shenzhen An Rui Xin Technology Co., Ltd.` (深圳安瑞鑫科技)        | Stream Dock Authenticode signer                                                     | Legal entity holding the EV cert          |
+| `HotSpot`                                                          | Stream Dock VersionInfo CompanyName + Aliyun OSS bucket prefix `hotspot-oss-bucket` | Internal team / brand for the desktop app |
+| `AJAZZ` / `a-jazz, Inc.` / `黑爵外设 / 深圳市黑爵同创电子科技公司` | Mouse / keyboard driver VersionInfo + AJ199 Max Description.xml                     | Hardware vendor brand — see Finding 7     |
 
 **VersionInfo block** — extracted from `.rsrc/2052/version.txt`:
 
@@ -408,12 +408,12 @@ VersionInfo `Comments` field on every inner installer reads literally
 
 **Inno-Setup-extracted file inventory**:
 
-| Capture id                            | Files | Total size | Driver-tool EXE                        | Tool size  | Toolkit |
-| ------------------------------------- | ----- | ---------- | -------------------------------------- | ---------- | ------- |
-| `static-2026-04-29-aj199-002`         | 78    | 3.4 MB     | `app/OemDrv.exe`                       | 2 211 840  | Win32 raw HID + GDI+; linker 9.0 (MSVC 2008); ts 2023-01-06 |
-| `static-2026-04-29-aj199max-001`      | 181   | 11.9 MB    | `app/Mouse Drive Beta.exe`             | 5 352 960  | **.NET / CLR** (`mscoree.dll` only); linker 48.0 |
-| `static-2026-04-29-aj159-001`         | 107   | 9.8 MB     | `app/AJAZZ Driver (X).exe`             | 1 868 800  | **MFC** (`mfc140u.dll`, `msvcp140.dll`, `MUI.dll`); linker 14.0; ts 2025-03-19 (UTC `0x67da196b`) |
-| `static-2026-04-29-ak820max-rgb-001`  | 121   | 58.1 MB    | `app/AK820MAX.exe`                     | 9 444 352  | **Qt 5** (`Qt5Core.dll`, `Qt5Gui.dll`, `Qt5Widgets.dll`, `Qt5Network.dll`, `Qt5Multimedia.dll`, `qwindows.dll`, 34 `.qm` translations); linker 14.0; ts 2024-11-20 |
+| Capture id                           | Files | Total size | Driver-tool EXE            | Tool size | Toolkit                                                                                                                                                            |
+| ------------------------------------ | ----- | ---------- | -------------------------- | --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `static-2026-04-29-aj199-002`        | 78    | 3.4 MB     | `app/OemDrv.exe`           | 2 211 840 | Win32 raw HID + GDI+; linker 9.0 (MSVC 2008); ts 2023-01-06                                                                                                        |
+| `static-2026-04-29-aj199max-001`     | 181   | 11.9 MB    | `app/Mouse Drive Beta.exe` | 5 352 960 | **.NET / CLR** (`mscoree.dll` only); linker 48.0                                                                                                                   |
+| `static-2026-04-29-aj159-001`        | 107   | 9.8 MB     | `app/AJAZZ Driver (X).exe` | 1 868 800 | **MFC** (`mfc140u.dll`, `msvcp140.dll`, `MUI.dll`); linker 14.0; ts 2025-03-19 (UTC `0x67da196b`)                                                                  |
+| `static-2026-04-29-ak820max-rgb-001` | 121   | 58.1 MB    | `app/AK820MAX.exe`         | 9 444 352 | **Qt 5** (`Qt5Core.dll`, `Qt5Gui.dll`, `Qt5Widgets.dll`, `Qt5Network.dll`, `Qt5Multimedia.dll`, `qwindows.dll`, 34 `.qm` translations); linker 14.0; ts 2024-11-20 |
 
 **Architectural insight**: the vendor maintains **four distinct
 driver chassis** in parallel — Win32-raw, .NET, MFC, Qt 5 — across
@@ -440,18 +440,18 @@ Pattern is unusual but benign.
 Every native driver tool (AJ199 V1.0 / AJ159 / AK820 Max RGB)
 imports the canonical **Windows native HID API**:
 
-| API                                | Used by                  | Purpose                                                          |
-| ---------------------------------- | ------------------------ | ---------------------------------------------------------------- |
-| `SetupDiGetClassDevsW/A`           | OemDrv, Driver(X), AK820 | Enumerate device interfaces in HID class                         |
-| `SetupDiEnumDeviceInterfaces`      | All                      | Iterate device instances                                         |
-| `SetupDiGetDeviceInterfaceDetailW/A` | All                    | Resolve device path                                              |
-| `SetupDiDestroyDeviceInfoList`     | All                      | Release enumeration handle                                       |
-| `HidD_GetHidGuid`                  | All                      | Get HID class GUID                                               |
-| `HidD_GetAttributes`               | OemDrv, Driver(X)        | Get VID/PID/version                                              |
-| `HidD_GetPreparsedData`, `HidD_FreePreparsedData` | OemDrv, Driver(X) | Parse report descriptor                                |
-| `HidP_GetCaps`                     | OemDrv, Driver(X)        | Read capability ranges                                           |
-| `HidP_GetSpecificButtonCaps`, `HidP_GetSpecificValueCaps` | OemDrv | Decode button / axis caps                                  |
-| **`HidD_SetFeature`**              | OemDrv (AJ199 V1.0)      | **Send Feature reports — primary command channel**              |
+| API                                                       | Used by                  | Purpose                                            |
+| --------------------------------------------------------- | ------------------------ | -------------------------------------------------- |
+| `SetupDiGetClassDevsW/A`                                  | OemDrv, Driver(X), AK820 | Enumerate device interfaces in HID class           |
+| `SetupDiEnumDeviceInterfaces`                             | All                      | Iterate device instances                           |
+| `SetupDiGetDeviceInterfaceDetailW/A`                      | All                      | Resolve device path                                |
+| `SetupDiDestroyDeviceInfoList`                            | All                      | Release enumeration handle                         |
+| `HidD_GetHidGuid`                                         | All                      | Get HID class GUID                                 |
+| `HidD_GetAttributes`                                      | OemDrv, Driver(X)        | Get VID/PID/version                                |
+| `HidD_GetPreparsedData`, `HidD_FreePreparsedData`         | OemDrv, Driver(X)        | Parse report descriptor                            |
+| `HidP_GetCaps`                                            | OemDrv, Driver(X)        | Read capability ranges                             |
+| `HidP_GetSpecificButtonCaps`, `HidP_GetSpecificValueCaps` | OemDrv                   | Decode button / axis caps                          |
+| **`HidD_SetFeature`**                                     | OemDrv (AJ199 V1.0)      | **Send Feature reports — primary command channel** |
 
 **Implication for our parity strategy**: the driver–device protocol
 is **HID Feature Reports on the configuration interface**, NOT
@@ -489,16 +489,16 @@ HID dependency.
 The AJ159 driver chassis ships a **complete VID:PID:Interface map**
 for **8 mouse models** it supports:
 
-| Mouse model      | device_type | dev_id | USB modes (vid:pid)                                                                        | 2.4G dongle modes                                          |
-| ---------------- | ----------- | ------ | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| AJ139 PRO        | 101         | M129   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
-| AJ159            | 102         | M620   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
-| AJ159 MC         | 103         | M630   | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                      | `248A:5C2F`, `249A:5C2F`                                   |
-| AJ159P MC        | (same chassis) | (same) | (see config.xml)                                                                       | (see config.xml)                                           |
-| AJ179            | 105         | M179, M603 | `248A:5C2E`, `248A:5D2E`, `248A:5E2E`                                                  | `248A:5C2F`, `249A:5C2F`                                   |
-| AJ179 V2         | (different) | (per config.xml) | (per config.xml)                                                                | (per config.xml)                                           |
-| AJ179 V2 MAX     | (different) | (per config.xml) | (per config.xml)                                                                | (per config.xml)                                           |
-| AJ139 V2 PRO     | 106         | M139   | `248A:5C2E`, `248A:5E2E`                                                                   | `248A:5C2F`, `249A:5C2F`                                   |
+| Mouse model  | device_type    | dev_id           | USB modes (vid:pid)                   | 2.4G dongle modes        |
+| ------------ | -------------- | ---------------- | ------------------------------------- | ------------------------ |
+| AJ139 PRO    | 101            | M129             | `248A:5C2E`, `248A:5D2E`, `248A:5E2E` | `248A:5C2F`, `249A:5C2F` |
+| AJ159        | 102            | M620             | `248A:5C2E`, `248A:5D2E`, `248A:5E2E` | `248A:5C2F`, `249A:5C2F` |
+| AJ159 MC     | 103            | M630             | `248A:5C2E`, `248A:5D2E`, `248A:5E2E` | `248A:5C2F`, `249A:5C2F` |
+| AJ159P MC    | (same chassis) | (same)           | (see config.xml)                      | (see config.xml)         |
+| AJ179        | 105            | M179, M603       | `248A:5C2E`, `248A:5D2E`, `248A:5E2E` | `248A:5C2F`, `249A:5C2F` |
+| AJ179 V2     | (different)    | (per config.xml) | (per config.xml)                      | (per config.xml)         |
+| AJ179 V2 MAX | (different)    | (per config.xml) | (per config.xml)                      | (per config.xml)         |
+| AJ139 V2 PRO | 106            | M139             | `248A:5C2E`, `248A:5E2E`              | `248A:5C2F`, `249A:5C2F` |
 
 Every mode entry uses **HID interface `MI_02`** — the **3rd HID
 interface** of the device is the configuration channel; interfaces
@@ -507,16 +507,16 @@ interface** of the device is the configuration channel; interfaces
 The AJ199 Max `Config.ini` uses base64-obfuscated VID/PID strings.
 Full decode (validated 2026-04-29):
 
-| Key      | Base64 ciphertext                                   | Plaintext                                               |
-| -------- | ---------------------------------------------------- | ------------------------------------------------------- |
-| `VID`    | `QUphenozNTU0`                                       | `AJazz3554`           — VID `0x3554`                    |
-| `M_PID`  | `QUphenozRjUwMCxGNTY2LEY1NDY=`                       | `AJazz3F500,F566,F546` — wired-mode PIDs                |
-| `D_PID`  | `QUphenozRjUwMSxGNTY0LEY1NjcsRjU0NSxGNTQ3LEY1RDU=`   | `AJazz3F501,F564,F567,F545,F547,F5D5` — 2.4G dongle PIDs |
-| `CID`    | `QUpBWlogRHJpdmVyIChKKTIw`                           | `AJAZZ Driver (J)20`  — driver CID prefix              |
-| `Sensor` | `MzMxMQ==`                                           | `3311`                — PixArt PAW3311 sensor flag      |
-| `MM`     | `QksyNTM1`                                           | `BK2535`              — **Beken BK2535 master MCU**     |
-| `DM`     | `Q1g1MjY1ME4=`                                       | `CX52650N`            — dongle MCU part number          |
-| `D4M`    | `Q0gzMlYzMDU=`                                       | `CH32V305`            — **WCH RISC-V CH32V305 MCU** (probably the 2.4G dongle controller) |
+| Key      | Base64 ciphertext                                  | Plaintext                                                                      |
+| -------- | -------------------------------------------------- | ------------------------------------------------------------------------------ |
+| `VID`    | `QUphenozNTU0`                                     | `AJazz3554` — VID `0x3554`                                                     |
+| `M_PID`  | `QUphenozRjUwMCxGNTY2LEY1NDY=`                     | `AJazz3F500,F566,F546` — wired-mode PIDs                                       |
+| `D_PID`  | `QUphenozRjUwMSxGNTY0LEY1NjcsRjU0NSxGNTQ3LEY1RDU=` | `AJazz3F501,F564,F567,F545,F547,F5D5` — 2.4G dongle PIDs                       |
+| `CID`    | `QUpBWlogRHJpdmVyIChKKTIw`                         | `AJAZZ Driver (J)20` — driver CID prefix                                       |
+| `Sensor` | `MzMxMQ==`                                         | `3311` — PixArt PAW3311 sensor flag                                            |
+| `MM`     | `QksyNTM1`                                         | `BK2535` — **Beken BK2535 master MCU**                                         |
+| `DM`     | `Q1g1MjY1ME4=`                                     | `CX52650N` — dongle MCU part number                                            |
+| `D4M`    | `Q0gzMlYzMDU=`                                     | `CH32V305` — **WCH RISC-V CH32V305 MCU** (probably the 2.4G dongle controller) |
 
 So the AJ199 family is on a different VID space (`248A` and `249A`
 for AJ159 family vs `3554` for AJ199 family). Base64 obfuscation is
@@ -632,16 +632,16 @@ of the source.
 
 ### Vendor-app architecture summary (post-2026-04-29 pass)
 
-| Surface                       | Toolkit                | Transport                          | Capture id (latest)                       |
-| ----------------------------- | ---------------------- | ---------------------------------- | ----------------------------------------- |
-| Stream Dock (Windows)         | Qt 5.x + WebEngine     | USB-HID + WebSocket localhost      | `static-2026-04-29-streamdock-win-002`    |
-| Stream Dock (macOS)           | Qt 6.4-6.5 + WebEngine | USB-HID + WebSocket localhost      | `static-2026-04-26-streamdock-mac-001`    |
-| AJ199 V1.0 driver             | Win32 raw + GDI+       | HID Feature Reports                | `static-2026-04-29-aj199-002`             |
-| AJ199 Max driver              | .NET / CLR             | HID Feature Reports (assumed)      | `static-2026-04-29-aj199max-001`          |
-| AJ159 driver (8 SKUs)         | MFC                    | HID Feature Reports (interface MI_02) | `static-2026-04-29-aj159-001`           |
-| AK820 Max RGB driver          | Qt 5.x                 | HID Feature Reports                | `static-2026-04-29-ak820max-rgb-001`      |
-| Firmware update tool          | Qt 5.x + QtSerialPort  | USB-CDC (inferred)                 | `static-2026-04-26-streamdock-win-001`    |
-| System monitor widget feeder  | Qt 5.x + OpenHardwareMonitorLib | IPC to main app           | `static-2026-04-26-streamdock-win-001`    |
+| Surface                      | Toolkit                         | Transport                             | Capture id (latest)                    |
+| ---------------------------- | ------------------------------- | ------------------------------------- | -------------------------------------- |
+| Stream Dock (Windows)        | Qt 5.x + WebEngine              | USB-HID + WebSocket localhost         | `static-2026-04-29-streamdock-win-002` |
+| Stream Dock (macOS)          | Qt 6.4-6.5 + WebEngine          | USB-HID + WebSocket localhost         | `static-2026-04-26-streamdock-mac-001` |
+| AJ199 V1.0 driver            | Win32 raw + GDI+                | HID Feature Reports                   | `static-2026-04-29-aj199-002`          |
+| AJ199 Max driver             | .NET / CLR                      | HID Feature Reports (assumed)         | `static-2026-04-29-aj199max-001`       |
+| AJ159 driver (8 SKUs)        | MFC                             | HID Feature Reports (interface MI_02) | `static-2026-04-29-aj159-001`          |
+| AK820 Max RGB driver         | Qt 5.x                          | HID Feature Reports                   | `static-2026-04-29-ak820max-rgb-001`   |
+| Firmware update tool         | Qt 5.x + QtSerialPort           | USB-CDC (inferred)                    | `static-2026-04-26-streamdock-win-001` |
+| System monitor widget feeder | Qt 5.x + OpenHardwareMonitorLib | IPC to main app                       | `static-2026-04-26-streamdock-win-001` |
 
 The next recon increment that would unlock implementation work is a
 **runtime USB capture** of a vendor app driving each device — see
@@ -672,20 +672,28 @@ Every `static-2026-04-XX-*` capture-id referenced in
 `TODO.md` parity backlog resolves to a `> **Capture id**:` block
 in this document. No orphan citations.
 
-### V3 — Implementation drift in `src/devices/mouse/` ❌ **Bug**
+### V3 — Implementation drift in `src/devices/mouse/` 🟢 **Fix shipped 2026-04-29**
 
-The AJ-series USB ID space surfaced by Finding 8 contradicts the
-values currently in our own
+The AJ-series USB ID space surfaced by Finding 8 contradicted the
+values that were in
 [`docs/_data/devices.yaml`](../_data/devices.yaml),
 [`src/devices/mouse/src/register.cpp`](../../src/devices/mouse/src/register.cpp),
-and [`resources/linux/99-ajazz.rules`](../../resources/linux/99-ajazz.rules):
+and [`resources/linux/99-ajazz.rules`](../../resources/linux/99-ajazz.rules)
+prior to the 2026-04-29 fix. **Status: data layer corrected** — six AJ-series
+mouse entries now enumerate the right `(VID, PID)` tuples (`0x248A` /
+`0x249A` for the AJ139 / AJ159 / AJ179 family; `0x3554` for the AJ199
+family) and the udev rule covers all three vendor IDs. Wire-format
+reconciliation (V11.A) is a separate, still-open task gated on a
+clean engineer + USB capture.
 
-| Device  | Our enumeration                         | Vendor reality (Finding 8)                                                                                  | Verdict   |
-| ------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------ | --------- |
-| AJ159   | VID `0x3554` PID `0xf51a`               | VID `0x248A` PIDs `0x5C2E/0x5D2E/0x5E2E` (USB) + VID `0x248A`/`0x249A` PID `0x5C2F` (2.4G dongle); HID interface `MI_02` | **WRONG VID + PID** |
-| AJ199   | VID `0x3554` PID `0xf51b`               | VID `0x3554` PIDs `0xF500/0xF566/0xF546` (wired-mode M_PID), `0xF501/0xF564/0xF567/0xF545/0xF547/0xF5D5` (dongle D_PID) | VID OK, **PID wrong** (`0xf51b` not in either set) |
-| AJ339   | VID `0x3554` PID `0xf51c`               | Vendor driver download not located (open item — see inventory)                                              | **Unverified** — values are educated guess at best |
-| AJ380   | VID `0x3554` PID `0xf51d`               | Vendor driver download not located                                                                          | **Unverified**     |
+Pre-fix table (kept here as the audit trail for the bug we shipped):
+
+| Device | Our enumeration           | Vendor reality (Finding 8)                                                                                               | Verdict                                            |
+| ------ | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------- |
+| AJ159  | VID `0x3554` PID `0xf51a` | VID `0x248A` PIDs `0x5C2E/0x5D2E/0x5E2E` (USB) + VID `0x248A`/`0x249A` PID `0x5C2F` (2.4G dongle); HID interface `MI_02` | **WRONG VID + PID**                                |
+| AJ199  | VID `0x3554` PID `0xf51b` | VID `0x3554` PIDs `0xF500/0xF566/0xF546` (wired-mode M_PID), `0xF501/0xF564/0xF567/0xF545/0xF547/0xF5D5` (dongle D_PID)  | VID OK, **PID wrong** (`0xf51b` not in either set) |
+| AJ339  | VID `0x3554` PID `0xf51c` | Vendor driver download not located (open item — see inventory)                                                           | **Unverified** — values are educated guess at best |
+| AJ380  | VID `0x3554` PID `0xf51d` | Vendor driver download not located                                                                                       | **Unverified**                                     |
 
 The four PIDs `0xF51A/B/C/D` in `register.cpp` are **sequential and
 fictional**; no equivalent values appear in any vendor manifest /
@@ -755,15 +763,15 @@ holds — no byte-level mappings or `#define` lines were transcribed.
 
 All seven cited TimeDateStamp values decode cleanly:
 
-| Hex          | Unix       | UTC                    | Note                                            |
-| ------------ | ---------- | ---------------------- | ----------------------------------------------- |
-| `0x4a870c9c` | 1250364572 | `2009-08-15 19:29:32` | AJ199 V1.0 wrapper — Borland stub, frozen      |
-| `0x5b226d52` | 1528982866 | `2018-06-14 13:27:46` | AK820 Max RGB wrapper — Borland stub, frozen   |
-| `0x60b88e27` | 1622707751 | `2021-06-03 08:09:11` | AJ159 wrapper                                   |
-| `0x6258476f` | 1649952623 | `2022-04-14 16:10:23` | AJ199 Max wrapper                               |
-| `0x63b8027b` | 1673003643 | `2023-01-06 11:14:03` | AJ199 V1.0 OemDrv (real driver build)          |
+| Hex          | Unix       | UTC                   | Note                                                                  |
+| ------------ | ---------- | --------------------- | --------------------------------------------------------------------- |
+| `0x4a870c9c` | 1250364572 | `2009-08-15 19:29:32` | AJ199 V1.0 wrapper — Borland stub, frozen                             |
+| `0x5b226d52` | 1528982866 | `2018-06-14 13:27:46` | AK820 Max RGB wrapper — Borland stub, frozen                          |
+| `0x60b88e27` | 1622707751 | `2021-06-03 08:09:11` | AJ159 wrapper                                                         |
+| `0x6258476f` | 1649952623 | `2022-04-14 16:10:23` | AJ199 Max wrapper                                                     |
+| `0x63b8027b` | 1673003643 | `2023-01-06 11:14:03` | AJ199 V1.0 OemDrv (real driver build)                                 |
 | `0x67da196b` | 1742346603 | `2025-03-19 01:10:03` | AJ159 driver (real build) — was `2025-03-18` in Finding 6 typo, fixed |
-| `0x673d8ae6` | 1732086502 | `2024-11-20 07:08:22` | AK820 Max RGB driver (real build)              |
+| `0x673d8ae6` | 1732086502 | `2024-11-20 07:08:22` | AK820 Max RGB driver (real build)                                     |
 
 ## Finding 11 — Wire protocol from disassembly (TAINTED — see clean-room note below)
 
@@ -810,14 +818,14 @@ All seven cited TimeDateStamp values decode cleanly:
 
 **Observed wire format**:
 
-| Aspect              | OemDrv.exe (vendor reality)                                       | Our `src/devices/mouse/src/aj_series.cpp` (claimed)                                                  |
-| ------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| Report length       | **17 bytes** (`push 0x11` immediately before `HidD_SetFeature`)   | 64 bytes (`constexpr std::size_t kReportSize = 64`)                                                   |
-| Report ID (byte 0)  | **`0x08`** (`mov byte [var_14h], 8` at `0x00450875`)              | `0x05` (`pkt[0] = 0x05`)                                                                              |
-| Header layout       | Multi-field struct starting at `var_14h` (offset 0 of buffer)     | `[0]=ReportId, [1]=cmd, [2]=sub, [3]=payload-length, [4..62]=payload`                                 |
-| Checksum byte (last)| **`0x55 − sum_lo − sum_hi − tail_byte`** (constant 0x55 base)     | `sum(bytes 1..62) mod 256` (simple modular sum)                                                       |
-| Checksum scope      | Iterates 8 little-endian words (16 bytes) of the body, splitting low/high accumulators in `bl`/`var_13h` | Sums all 62 body bytes flat into a 32-bit accumulator                                                 |
-| Send call           | `HidD_SetFeature(handle, buffer, 17)`                             | `m_transport->writeFeature(pkt)` with 64-byte buffer                                                  |
+| Aspect               | OemDrv.exe (vendor reality)                                                                              | Our `src/devices/mouse/src/aj_series.cpp` (claimed)                   |
+| -------------------- | -------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| Report length        | **17 bytes** (`push 0x11` immediately before `HidD_SetFeature`)                                          | 64 bytes (`constexpr std::size_t kReportSize = 64`)                   |
+| Report ID (byte 0)   | **`0x08`** (`mov byte [var_14h], 8` at `0x00450875`)                                                     | `0x05` (`pkt[0] = 0x05`)                                              |
+| Header layout        | Multi-field struct starting at `var_14h` (offset 0 of buffer)                                            | `[0]=ReportId, [1]=cmd, [2]=sub, [3]=payload-length, [4..62]=payload` |
+| Checksum byte (last) | **`0x55 − sum_lo − sum_hi − tail_byte`** (constant 0x55 base)                                            | `sum(bytes 1..62) mod 256` (simple modular sum)                       |
+| Checksum scope       | Iterates 8 little-endian words (16 bytes) of the body, splitting low/high accumulators in `bl`/`var_13h` | Sums all 62 body bytes flat into a 32-bit accumulator                 |
+| Send call            | `HidD_SetFeature(handle, buffer, 17)`                                                                    | `m_transport->writeFeature(pkt)` with 64-byte buffer                  |
 
 **Conclusion 11.A**: the wire format observed in the vendor's own
 `OemDrv.exe` does **not** match the format we send from
@@ -885,7 +893,7 @@ with multi-byte writes:
 - `or byte [var_48h], 0x80`
 - subsequent `lea rcx, [var_43h]` / `r8d, [rdx+0x10]` / call into
   `fcn.18000f060` (the central send dispatcher, common to all
-  UsbServer_* functions of size ~221 bytes)
+  UsbServer\_\* functions of size ~221 bytes)
 
 **This is structurally different from both** our 64-byte report
 format **and** OemDrv.exe's 17-byte format. The AJ199 Max driver:
@@ -919,7 +927,8 @@ The header comment in
 claims the protocol was
 
 > "Reverse-engineered from the official Windows utility (Wireshark
-> + USBPcap captures of `ajazz-aj199-official-software`)"
+>
+> - USBPcap captures of `ajazz-aj199-official-software`)"
 
 — with a referenced byte-level spec at
 `docs/protocols/mouse/aj_series.md`. The disassembly in 11.A shows

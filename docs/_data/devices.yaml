@@ -116,49 +116,96 @@ devices:
     notes: "Microdia-chipset wireless mech; enumerated, routed through the proprietary backend. Protocol mapping in progress — captures welcome (#issue)."
 
   # ----- Mice --------------------------------------------------------------
-  - codename: aj159
-    family: mouse
-    name: "AJAZZ AJ159"
-    vid: "0x3554"
-    pid: "0xf51a"
-    status: functional
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 4
-    notes: "PAW3395 sensor."
+  # The AJ-series mouse SKUs (AJ139 / AJ159 / AJ179 plus their MC / Pro / V2
+  # / Max variants — 8 in total per the vendor manifest) share USB
+  # descriptors at the USB layer. They are distinguished at runtime by a
+  # vendor-specific "dev_id" readback (M129 = AJ139 PRO, M620 = AJ159, M630
+  # = AJ159 MC, M179 / M603 = AJ179, M139 = AJ139 V2 PRO, …) — the registry
+  # therefore enumerates by (vid, pid) tuple, not by SKU. Sources, captured
+  # 2026-04-29: docs/research/vendor-protocol-notes.md Finding 8 (AJ159
+  # driver `app/config.xml`) and Finding 9 (AJ199 Max `Config.ini` base64-
+  # encoded VID/PID strings).
+  #
+  # Pre-2026-04-29 the four entries below were enumerated under VID
+  # `0x3554` with sequential PIDs `0xF51A-D` — those values were not present
+  # in any vendor config and turned out to be fictional. Real-world impact:
+  # AJAZZ AJ159 / AJ139 / AJ179 mice were silently invisible on every OS,
+  # and on Linux the udev `idVendor=="3554"` rule did not grant `uaccess`
+  # for them. Tracking entry: TODO.md → "AJ-series VID:PID enumeration drift".
 
-  - codename: aj199
+  - codename: aj_series_wired_primary
     family: mouse
-    name: "AJAZZ AJ199"
-    vid: "0x3554"
-    pid: "0xf51b"
-    status: functional
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 4
-    notes: "PAW3395 sensor."
-
-  - codename: aj339
-    family: mouse
-    name: "AJAZZ AJ339"
-    vid: "0x3554"
-    pid: "0xf51c"
-    status: functional
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "PAW3395 sensor, wireless variant pending."
-
-  - codename: aj380
-    family: mouse
-    name: "AJAZZ AJ380"
-    vid: "0x3554"
-    pid: "0xf51d"
+    name: "AJAZZ AJ-series wired (primary)"
+    vid: "0x248A"
+    pid: "0x5C2E"
     status: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
-    notes: "PAW3950 sensor."
+    notes: "Covers AJ139 PRO / AJ159 / AJ159 MC / AJ159P MC / AJ179 / AJ139 V2 PRO / AJ179 V2 / AJ179 V2 MAX in their canonical USB-wired mode. PAW3395 / PAW3311 / PAW3370 / PAW3335 / PAW3950 sensor depending on SKU. HID configuration interface is `MI_02`. Wire-format reconciliation against the vendor driver still pending — see TODO `AJ-series wire format reconciliation` and `vendor-protocol-notes.md` Finding 11."
+
+  - codename: aj_series_wired_alt
+    family: mouse
+    name: "AJAZZ AJ-series wired (alt mode 5D2E)"
+    vid: "0x248A"
+    pid: "0x5D2E"
+    status: scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages: 6
+    notes: "Same SKUs as `aj_series_wired_primary`; the vendor's `config.xml` lists three USB PIDs per device (5C2E / 5D2E / 5E2E) representing different USB-side mode descriptors."
+
+  - codename: aj_series_wired_alt2
+    family: mouse
+    name: "AJAZZ AJ-series wired (alt mode 5E2E)"
+    vid: "0x248A"
+    pid: "0x5E2E"
+    status: scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages: 6
+    notes: "Same SKUs as `aj_series_wired_primary`; third USB-mode descriptor."
+
+  - codename: aj_series_dongle
+    family: mouse
+    name: "AJAZZ AJ-series 2.4GHz dongle"
+    vid: "0x248A"
+    pid: "0x5C2F"
+    status: scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages: 6
+    notes: "Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor==\"248a\"` and `idVendor==\"249a\"`."
+
+  - codename: aj199_family
+    family: mouse
+    name: "AJAZZ AJ199 family (wired)"
+    vid: "0x3554"
+    pid: "0xF500"
+    status: scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages: 6
+    notes: "AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B."
+
+  - codename: aj199_family_dongle
+    family: mouse
+    name: "AJAZZ AJ199 family (2.4GHz dongle)"
+    vid: "0x3554"
+    pid: "0xF501"
+    status: scaffolded
+    capabilities: [rgb, dpi, firmware]
+    protocol_doc: docs/protocols/mouse/aj_series.md
+    dpi_stages: 6
+    notes: "AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe."
+
+  # AJ339 / AJ380: removed from the active registry 2026-04-29 because
+  # their VID:PID was a guess (sequential `0xF51C` / `0xF51D` matching no
+  # vendor manifest). The vendor consolidated EN/UK download pages do not
+  # list these models (re-verified 2026-04-29). Until either a USB
+  # capture surfaces the real VID:PID or a vendor support reply confirms
+  # the IDs, these SKUs are no longer enumerated. Tracking entry:
+  # TODO.md → "AJ-series VID:PID enumeration drift".
 
 # ---------------------------------------------------------------------------
 # Platform support matrix (used in README build-from-source table)

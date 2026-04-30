@@ -199,6 +199,7 @@ ______________________________________________________________________
   (probably folded into AJ199 family — needs report-descriptor
   comparison); SHA-256 archival pass to the encrypted out-of-repo
   vault.
+
 - 🟡 **Decompile / disassemble the AJAZZ desktop apps under a clean-
   room policy**: run the installers in a disposable VM, extract the
   Electron / .NET / Qt payloads, decompile with the appropriate
@@ -234,6 +235,7 @@ ______________________________________________________________________
   scripts, and the cleanup discipline that lets an operator pick
   up Phase B without re-discovering the toolchain. ≈ 2-3 days
   remaining once a person + hardware are scheduled.
+
 - [x] **Vendor feature inventory → gap analysis** — scaffold landed
   this cycle at
   [`docs/research/vendor-feature-matrix.md`](docs/research/vendor-feature-matrix.md).
@@ -245,6 +247,7 @@ ______________________________________________________________________
   flip to ✅ / ❌ only when a `capture-id` from
   `vendor-protocol-notes.md` lands. Open work — populate the
   Vendor column with verified behavior as recon ships.
+
 - 🟡 **Protocol parity backlog** (un-blocked 2026-04-29): the Phase A
   static pass flipped four ❓ rows in `vendor-feature-matrix.md` to
   verified-vendor (mouse polling rate, button remap / macros, lift-
@@ -264,17 +267,19 @@ ______________________________________________________________________
   - [ ] **Stream Dock Property Inspector HTML compat** — vendor ships ~11 `index.html_*` PI pages bundled in the MSI (per Finding 3); confirm via § 3.2 of the recon runbook (admin-extract). Cross-check what `$SD` events the JS calls; PI compat is required for plugin parity. Implementer is not the same as the runbook operator (clean-room split).
   - [ ] **Audio-reactive RGB on AK820 Max RGB** — vendor driver bundles `fftreal.dll` (real-input FFT). Likely powers an audio-reactive lighting mode that maps mic input spectrum to per-key RGB. New feature surface for our AK820 backend. Wire-capture the FFT mode toggle + observe whether it streams real-time updates over HID Feature Reports or is a fire-and-forget mode-switch.
 
-- 🟥 **AJ-series VID:PID enumeration drift** (filed 2026-04-29; **P0 — blocks AJ159 / AJ139 / AJ179 mouse support on every OS**): the validation cross-check pass that ran after Phase A landed found that `docs/_data/devices.yaml`, `src/devices/mouse/src/register.cpp`, and `resources/linux/99-ajazz.rules` enumerate AJ-series mice under VID `0x3554` with sequential PIDs `0xF51A/B/C/D`. The vendor's own driver `app/config.xml` (Finding 8 in `docs/research/vendor-protocol-notes.md`) maps AJ159 / AJ139 / AJ179 to **VID `0x248A` (USB) and `0x249A` (2.4G dongle)** with PID range `0x5C2E/0x5D2E/0x5E2E/0x5C2F`; AJ199 family is on VID `0x3554` but with PID range `0xF500-0xF5D5` (none of which is the `0xF51A-D` we currently enumerate). Real-world impact: AJ159 / AJ179 plugged into a Linux box gets no `uaccess` ACL (wrong VID in udev rule); on Windows / macOS they are not picked up by the device model. Fix:
-  - [ ] Update `docs/_data/devices.yaml` with the per-mode (USB / 2.4G dongle) VID:PID matrix from Finding 8.
-  - [ ] Re-generate `src/devices/mouse/src/register.cpp` to enumerate every tuple.
-  - [ ] Widen `resources/linux/99-ajazz.rules` to cover `248A`, `249A`, and `3554`.
-  - [ ] `make docs` to refresh README + wiki + AppStream metadata.
-  - [ ] AJ339 / AJ380: their VID:PID is currently a guess (vendor driver download not located — open item in inventory). Either remove from the registry until evidence lands, or wire-capture against real hardware.
-  - [ ] Clean-room: the engineer who fixes this MUST NOT have read Findings 5–10 (which means: not the same person as the 2026-04-29 recon-pass operator). Read only Finding 8 § "AJ159 driver chassis ships a complete VID:PID:Interface map" and the AJ199 Max base64 decode table.
+- 🟢 **AJ-series VID:PID enumeration drift** ✅ shipped 2026-04-29 (data layer): the validation cross-check pass found that `docs/_data/devices.yaml`, `src/devices/mouse/src/register.cpp`, and `resources/linux/99-ajazz.rules` enumerated AJ-series mice under VID `0x3554` with sequential PIDs `0xF51A/B/C/D`. The vendor's own driver `app/config.xml` (Finding 8 in `docs/research/vendor-protocol-notes.md`) maps AJ159 / AJ139 / AJ179 to **VID `0x248A` (USB) and `0x249A` (2.4G dongle)** with PID range `0x5C2E/0x5D2E/0x5E2E/0x5C2F`; AJ199 family is on VID `0x3554` but with PID range `0xF500-0xF5D5` (none of which is the `0xF51A-D` we previously enumerated).
 
-- 🟧 **Apple VID placeholder in keyboard registration** (filed 2026-04-29; LOW): `src/devices/keyboard/src/register.cpp` registers a "proprietary" entry under VID `0x05ac` PID `0x024f`. **`0x05ac` is Apple's vendor ID**; the comment marks the entry as a placeholder until the device database lands. Replace with a sentinel pair (e.g. `0x0000:0x0000`) or remove the entry until real values are sourced. Risk: an Apple keyboard with PID `0x024f` would currently be misclassified as an AJAZZ proprietary keyboard.
+  - [x] Updated `docs/_data/devices.yaml` with 6 AJ-series entries covering both VID spaces.
+  - [x] Updated `src/devices/mouse/src/register.cpp` to enumerate the corrected `(VID, PID)` tuples.
+  - [x] Widened `resources/linux/99-ajazz.rules` to cover `idVendor==248a`, `249a`, and `3554`.
+  - [x] Ran `make docs` (`scripts/generate-docs.py`) — README + wiki + AppStream regenerated from corrected YAML.
+  - [x] AJ339 / AJ380 removed from active registry until real-device VID:PID is captured (vendor driver download not located).
+  - [x] Clean-room: the data fix is derived from vendor `config.xml` / `Config.ini` (CONFIG-only files, explicitly clean-room safe per `docs/research/README.md` § 1) and from our own code, NOT from disassembly. Apply only the data; the wire-format reconciliation (next entry) is the part that requires a clean engineer.
+
+- 🟢 **Apple VID placeholder in keyboard registration** ✅ shipped 2026-04-29: `src/devices/keyboard/src/register.cpp` no longer registers the Apple-VID placeholder (`0x05AC:0x024F`). The entry was deleted along with a comment block noting why. AK820 / AK820 Pro / AK820 Max keyboards continue to be reachable via the VIA entry (SONiX prefix `0x3151`); the proprietary backend's per-model coverage will follow the device database wire-up.
 
 - 🟥 **AJ-series wire format reconciliation** (filed 2026-04-29; **P0 — likely-broken AJ199 V1.0 impl**): the disassembly cross-check pass that ran after Phase A (Finding 11 in `docs/research/vendor-protocol-notes.md`) found the wire format implemented in `src/devices/mouse/src/aj_series.cpp` does NOT match the wire format observed in the AJ199 V1.0 vendor driver `OemDrv.exe`'s `HidD_SetFeature` send path. Discrepancy is total: report length 64 vs **17 bytes**, report ID `0x05` vs **`0x08`**, checksum `sum mod 256` vs **`0x55 − sum_lo − sum_hi − tail_byte`**. AJ199 Max additionally speaks a third dialect again. Cannot determine without a runtime USB capture whether (a) our impl is fictional, (b) it matches a newer firmware, or (c) the vendor exposes a second wire-format path we have not yet traced. Fix:
+
   - [ ] Run `vendor-recon-runbook-windows.md` § 2 against AJ199 V1.0 hardware. Capture the USB Feature Report stream while the vendor app exercises every feature (DPI, RGB, polling rate, button remap).
   - [ ] Compare the captured bytes against `aj_series.cpp`'s `makeEnvelope()` output for the same operations.
   - [ ] If the two match: our impl is correct, simply note that the 2023-01 OemDrv.exe is on a deprecated wire format and current firmware uses our format.
@@ -283,10 +288,12 @@ ______________________________________________________________________
   - [ ] Update `docs/protocols/mouse/aj_series.md` with the byte-level layout from the capture (current doc is stale on multiple axes).
 
 - 🟧 **Reverse-engineering policy reconciliation** (filed 2026-04-29; LOW — process / docs-only): the project has three documents in conflict on disassembly:
+
   - `docs/protocols/REVERSE_ENGINEERING.md` § "Legal considerations" forbids it absolutely (`"No disassembly of vendor binaries"`).
   - `TODO.md` § "Reverse-engineering & vendor parity" contemplates it (`"decompile with the appropriate toolchain (asar + js-beautify for Electron, ILSpy / dnSpyEx for .NET, Ghidra / IDA for native binaries)"`).
   - `docs/research/vendor-recon-runbook-windows.md` (this cycle) explicitly forbids it (`"Decompiling vendor binaries... explicitly forbids"`).
-  The 2026-04-29 disassembly pass (Finding 11) was authorised on a one-off basis by the repo owner. The policy needs a single decision: allow disassembly under the engineer-split rule, or forbid it entirely (in which case Finding 11 would need to be redacted, leaving only the static-analysis findings 5–10). Recommend updating REVERSE_ENGINEERING.md + the runbook to align with whichever decision is taken. Until reconciled, future disassembly attempts should require explicit written authorisation per-pass, not silent precedent.
+    The 2026-04-29 disassembly pass (Finding 11) was authorised on a one-off basis by the repo owner. The policy needs a single decision: allow disassembly under the engineer-split rule, or forbid it entirely (in which case Finding 11 would need to be redacted, leaving only the static-analysis findings 5–10). Recommend updating REVERSE_ENGINEERING.md + the runbook to align with whichever decision is taken. Until reconciled, future disassembly attempts should require explicit written authorisation per-pass, not silent precedent.
+
 - [ ] **Stability & infrastructure cross-pollination**: where the
   vendor app already solves a hard problem better than we do (HID
   reconnect debounce timings, firmware update retry / rollback,
