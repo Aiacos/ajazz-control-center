@@ -1,11 +1,27 @@
 version: 2
+# `commit-message.prefix` is required so dependabot's auto-PRs pass the
+# Conventional Commits pre-commit hook (see .pre-commit-config.yaml). Without
+# it, PR merges would fail at the hook stage and the bumps would silently
+# accumulate — exactly the drift that left precommit-autoupdate.yml on
+# checkout@v5 / setup-python@v5.3 (fixed in 57e7e5d). The `groups` blocks
+# batch minor/patch updates into a single weekly PR per ecosystem so the
+# review surface stays reasonable; majors stay individual to keep risk
+# isolated.
 updates:
   - package-ecosystem: github-actions
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
     labels: [ dependencies, ci ]
+    commit-message: { prefix: "chore(ci)", include: scope }
+    groups:
+      actions-minor-and-patch:
+        update-types: [ minor, patch ]
   - package-ecosystem: pip
     directory: /
     schedule: { interval: weekly }
     labels: [ dependencies, python ]
+    commit-message: { prefix: "chore(deps)", include: scope }
+    groups:
+      python-minor-and-patch:
+        update-types: [ minor, patch ]
