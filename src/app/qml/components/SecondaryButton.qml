@@ -19,6 +19,7 @@ Button {
     background: Rectangle {
         id: bg
         radius: Theme.radiusMd
+        clip: true                   // contains the Ripple's expansion within button bounds
         color: root.hovered ? Theme.bgRowHover : "transparent"
         border.width: root.activeFocus ? Theme.focusRingWidth : 1
         border.color: root.activeFocus ? Theme.accent : Theme.borderSubtle
@@ -26,7 +27,6 @@ Button {
         Ripple {
             id: ripple
             anchors.fill: parent
-            cornerRadius: bg.radius
             rippleColor: Theme.fgPrimary
             rippleOpacity: 0.12          // M3 on-surface @ pressed (lower than primary)
             duration: Theme.durationMedium

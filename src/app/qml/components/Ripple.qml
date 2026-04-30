@@ -4,16 +4,27 @@
 //
 // Reusable component. Anchor to the button's background `Rectangle` and
 // trigger via `ripple.trigger(x, y)` from a `Connections` block on the
-// button's `pressedChanged` signal. The expanding circle is clipped to
-// the parent's rounded shape via a `MultiEffect` mask (same pattern used
-// by Card.qml's elevation shadows — single visual-effects pipeline for
-// clipped effects keeps the codebase coherent).
+// button's `pressedChanged` signal.
+//
+// Clipping convention: the parent `Rectangle` (button background) must
+// set `clip: true`. The clip is rectangular at the bounding box; the
+// rounded corners on small-radius buttons (radiusMd ≈ 6 px) show a
+// negligible triangular fill at the four corners during the peak of the
+// ripple, but the visible expansion stays inside the button.
+//
+// (We tried `MultiEffect { maskEnabled: true; maskSource: Rectangle {...} }`
+// for proper rounded clipping, but the inline `Rectangle` does not
+// satisfy `MultiEffect.maskSource`'s contract — Qt 6 docs require a
+// `ShaderEffectSource`, `Image`, or `Item` with `layer.enabled: true`.
+// Using a raw Rectangle triggered SIGABRT at first paint on real GPU
+// pipelines while passing the offscreen QPA. Parent-clip is the
+// pragmatic alternative; proper rounded mask would need a
+// `ShaderEffectSource` indirection. YAGNI for now.)
 //
 // API:
 //   property color rippleColor    — fill color of the expanding circle
 //   property real  rippleOpacity  — peak alpha during fade-in (0..1)
 //   property int   duration       — total animation time (ms)
-//   property real  cornerRadius   — corner radius of the parent surface
 //   function trigger(x, y)        — restart animation from (x, y)
 //
 // Asymmetric opacity envelope (30% fade-in / 70% fade-out) is M3-spec
@@ -21,7 +32,6 @@
 
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQuick.Effects
 import AjazzControlCenter
 
 Item {
@@ -35,8 +45,6 @@ Item {
     property real rippleOpacity: 0.16
     /// Total animation duration; bind to `Theme.durationMedium` (≈ 280 ms).
     property int duration: 280
-    /// Corner radius of the parent surface — needed for the mask.
-    property real cornerRadius: 0
 
     /// Restart the ripple animation from (x, y) in this Item's local
     /// coordinates. Center-origin callers pass (width/2, height/2).
@@ -44,16 +52,6 @@ Item {
         rippleCircle.originX = x
         rippleCircle.originY = y
         rippleAnim.restart()
-    }
-
-    layer.enabled: true
-    layer.effect: MultiEffect {
-        maskEnabled: true
-        maskSource: Rectangle {
-            width: root.width
-            height: root.height
-            radius: root.cornerRadius
-        }
     }
 
     Rectangle {

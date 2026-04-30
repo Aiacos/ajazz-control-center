@@ -20,6 +20,7 @@ Button {
     background: Rectangle {
         id: bg
         radius: Theme.radiusMd
+        clip: true                   // contains the Ripple's expansion within button bounds
         color: root.down ? Qt.darker(Theme.accent, 1.2)
                           : (root.hovered ? Qt.lighter(Theme.accent, 1.1) : Theme.accent)
         border.width: root.activeFocus ? Theme.focusRingWidth : 0
@@ -28,7 +29,6 @@ Button {
         Ripple {
             id: ripple
             anchors.fill: parent
-            cornerRadius: bg.radius
             rippleColor: "#0e1011"   // matches contentItem text color
             rippleOpacity: 0.16       // M3 on-primary @ pressed
             duration: Theme.durationMedium
