@@ -150,3 +150,6 @@ udev: ## (Linux) (re)install the udev rule without a full install
 
 doctor: ## Diagnose your environment: toolchain, Qt, Python, devices
 	@bash scripts/doctor.sh
+
+watch-ci: ## Watch GitHub Actions runs for HEAD until they all conclude
+	@bash scripts/watch-ci.sh
