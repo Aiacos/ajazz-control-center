@@ -58,6 +58,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: nightly-linux
+          retention-days: 1     # downloaded immediately by publish job, then disposable
           path: |
             build/linux-release/*.deb
             build/linux-release/*.rpm
@@ -86,6 +87,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: nightly-windows
+          retention-days: 1     # see nightly-linux
           path: |
             build/windows-release/*.msi
             build/windows-release/*.zip
@@ -118,6 +120,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: nightly-macos
+          retention-days: 1     # see nightly-linux
           path: |
             build/macos-release/*.dmg
             build/macos-release/*.tar.gz
