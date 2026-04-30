@@ -176,23 +176,29 @@ ______________________________________________________________________
   - a "Save as" file dialog for explicit paths. Wire-up needs:
     (1) `ProfileController::saveProfile()` / `loadProfile()` no-arg
     overloads that pick the default path, (2) a `QFileDialog` trigger for
-    "Save as" / "Open profile…", (3) bring `PropertyInspector.qml` /
-    `NativePropertyInspector.qml` back from dead-QML status (currently not
-    instantiated — see the cleanup backlog note below) once the buttons
-    actually save something the inspector can re-render. ≈ 1 day.
+    "Save as" / "Open profile…", (3) decide what to do about
+    `PropertyInspector.qml` / `NativePropertyInspector.qml`, which are
+    currently dead QML (no `PropertyInspector{}` or `NativePropertyInspector{}`
+    instantiation anywhere — `Main.qml:124` uses only `Inspector {}`).
+    Either re-hook them once the buttons actually save something the
+    inspector can re-render, or delete them from the QML module. ≈ 1 day.
 - [ ] **via_keyboard — per-LED RGB matrix path** (source-level stub
   `throw std::runtime_error` at `src/devices/keyboard/src/via_keyboard.cpp:185`).
-  The VIA protocol we speak today only exposes the solid-color / effect
-  command set (cmd `0x07` sub-command `0x04`); per-LED keying requires
-  the QMK `QMK_RGB_MATRIX` extension command-set (cmd `0x08` + LED-index
-  payload) which our firmware detection does not probe yet. Gate plan:
-  (a) add a `viaFeatures()` probe at device-open time that enumerates
-  the supported VIA command pages via the `GET_PROTOCOL_VERSION` round-
-  trip, (b) flip `KeyboardCapabilities::hasRgbMatrix` when the
-  `QMK_RGB_MATRIX` page is advertised, (c) implement the write path
-  under that gate. Until then `setRgbBuffer()` staying as a hard
-  exception is intentional — callers check capabilities first.
-  ≈ 1 day.
+  Today we speak the VIA `id_custom_set_value` command (cmd `0x08`)
+  against the `qmk_rgblight` channel (`0x01`) — sub-commands `0x02`
+  (brightness), `0x03` (effect), `0x04` (solid color). Per-LED keying
+  is a different VIA surface: `qmk_rgb_matrix` (channel ID is not
+  universal — newer firmwares advertise it as `0x03`, but the numeric
+  assignment can vary by build). Gate plan:
+  (a) at device-open time probe the supported VIA channels via
+  `id_custom_get_value` + `id_dynamic_keymap_get_layer_count` (or the
+  newer `id_get_supported_endpoints` when the firmware exposes it) to
+  confirm which channel number this particular board uses for RGB
+  matrix, (b) flip a `KeyboardCapabilities::hasRgbMatrix` flag based on
+  the probe result, (c) implement the write path — per-LED payload is
+  `{ led_index, r, g, b }` per LED — behind that gate. Until then the
+  hard exception is intentional: callers are expected to check
+  capabilities before calling. ≈ 1 day.
 - [ ] **macOS + Windows AutostartService backends** (source-level stub at
   `src/app/src/autostart_service.cpp:163`). Linux ships via the XDG
   `.desktop` autostart spec. Remaining:
@@ -205,21 +211,30 @@ ______________________________________________________________________
     same `--minimized` suffix. No admin rights needed (HKCU scope).
   - Feature-flag the platforms behind `#ifdef Q_OS_MACOS` / `Q_OS_WIN`
     alongside the existing Linux block. ≈ 0.5 day per platform.
-- [ ] **MacroRecorder — macOS + Windows native back-ends** (source-
-  level `(TODO)` tags in `src/core/include/ajazz/core/macro_recorder.hpp:14-15`).
-  Linux ships an evdev stub gated on `AJAZZ_FEATURE_MACRO_RECORDER`.
-  Remaining:
-  - **macOS**: `CGEventTap` via Accessibility permission (requires the
-    user to grant the app "Input Monitoring" in System Settings →
-    Privacy). Translate `CGEventFlags` + keycode into `MacroEvent`.
+- [ ] **MacroRecorder — real native back-ends on all three OSes**
+  (source-level `(TODO)` tags in
+  `src/core/include/ajazz/core/macro_recorder.hpp:14-15` and
+  `src/core/src/macro_recorder.cpp:10-12`). Today
+  `makeDefaultMacroRecorder()` returns a `StubRecorder` on every
+  platform — `start()` / `stop()` just log "stub recorder started /
+  stopped" so the UI workflow can be smoke-tested end-to-end, but no
+  real events are captured. The header mentions a build-time gate
+  `AJAZZ_FEATURE_MACRO_RECORDER`, but the option is **not wired**
+  through CMake yet; adding it is the first step. Platform plan:
+  - **Linux**: evdev (`/dev/input/eventN`) via a dedicated reader
+    thread. Requires membership in the `input` group (rule already
+    shipped in `resources/linux/99-ajazz.rules`) or CAP_DAC_READ_SEARCH.
+  - **macOS**: `CGEventTap` via Accessibility + "Input Monitoring"
+    permissions (System Settings → Privacy). Translate `CGEventFlags`
+    - keycode into `MacroEvent`.
   - **Windows**: `SetWindowsHookExW(WH_KEYBOARD_LL, ...)` low-level
     hook in a dedicated thread. Translate the `KBDLLHOOKSTRUCT` into
     `MacroEvent`. Beware: DirectInput-consumed events are invisible to
     WH_KEYBOARD_LL; a secondary `SetWindowsHookExW(WH_MOUSE_LL)` hook
     covers the mouse side.
-  - Both backends ship disabled by default; the runtime UI prompts the
-    user to enable the OS permission before the first capture.
-    ≈ 1 day per platform.
+    All three back-ends ship disabled by default; the runtime UI prompts
+    the user to enable the OS permission before the first capture.
+    ≈ 1 day per platform + 0.25 day for the CMake option wiring.
 
 ### Reverse-engineering & vendor parity (multi-day, research)
 
