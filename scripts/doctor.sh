@@ -24,7 +24,7 @@ fi
 ok() { printf '  %s✔%s %s\n' "$GRN" "$RST" "$*"; }
 bad() { printf '  %s✘%s %s\n' "$RED" "$RST" "$*"; }
 warn() { printf '  %s!%s %s\n' "$YLW" "$RST" "$*"; }
-head() { printf '\n%s== %s ==%s\n' "$BOLD" "$*" "$RST"; }
+section() { printf '\n%s== %s ==%s\n' "$BOLD" "$*" "$RST"; }
 
 need_ver() {
     # $1 = command, $2 = minimum version (dotted, e.g. 3.28)
@@ -46,14 +46,14 @@ need_ver() {
     fi
 }
 
-head "Toolchain"
+section "Toolchain"
 need_ver cmake 3.28
 need_ver ninja 1.11
 need_ver git 2.30
 if command -v g++ >/dev/null 2>&1; then need_ver g++ 13; else warn "g++ not found (clang++ can be used instead)"; fi
 if command -v clang++ >/dev/null 2>&1; then need_ver clang++ 17; fi
 
-head "Qt 6"
+section "Qt 6"
 if command -v qmake6 >/dev/null 2>&1; then
     ok "qmake6 — $(qmake6 -query QT_VERSION)"
 elif command -v qmake-qt6 >/dev/null 2>&1; then
@@ -64,11 +64,11 @@ else
     bad "Qt 6 not detected. On Fedora: sudo dnf install qt6-qtbase-devel"
 fi
 
-head "Python"
+section "Python"
 need_ver python3 3.11
 python3 -c "import pybind11" 2>/dev/null && ok "pybind11 (host)" || warn "pybind11 not in host Python (ok: bundled via FetchContent)"
 
-head "Runtime environment"
+section "Runtime environment"
 case "$(uname -s)" in
     Linux)
         [[ -f /etc/udev/rules.d/99-ajazz.rules ]] && ok "udev rule installed" || bad "udev rule missing — run: make udev"
@@ -82,7 +82,7 @@ case "$(uname -s)" in
     *) ok "$(uname -s)" ;;
 esac
 
-head "Attached AJAZZ devices"
+section "Attached AJAZZ devices"
 if command -v lsusb >/dev/null 2>&1; then
     found=0
     while IFS= read -r line; do
