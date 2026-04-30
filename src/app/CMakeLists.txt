@@ -166,6 +166,18 @@ if(AJAZZ_HAVE_WEBENGINE)
     list(APPEND _acc_qml_imports QtWebEngine QtWebChannel)
 endif()
 
+# Qt 6.8 introduced policy QTP0004: modules with QML files in a subdirectory (we have
+# qml/components/) need a separate generated qmldir in each subdirectory, so the components' own
+# implicit imports resolve to the module root instead of to `components/`. Without the policy set
+# explicitly, Qt 6.8+ issues a `CMake Warning (dev) at ... QTP0004 is not set` at configure time,
+# which violates our zero-warnings invariant. The policy only exists from Qt 6.8 onward; on 6.7 (our
+# baseline + the current CI matrix) there is no warning and no policy command to call, so the
+# `qt_policy` call is gated on a version check. `qt_standard_project_setup(REQUIRES 6.8)` would also
+# work, but we keep the REQUIRES floor at 6.7 until CI moves.
+if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
+    qt_policy(SET QTP0004 NEW)
+endif()
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter

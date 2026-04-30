@@ -68,10 +68,13 @@ FetchContent_Declare(
 )
 set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
 set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
-# hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3); newer CMake (>= 4.0) removed compat
-# with < 3.5. Force a modern policy floor for the subproject only so the fetched CMakeLists is
-# accepted without patching.
-set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+# hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under libusb/.
+# CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x emits
+# `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored project
+# targets a floor below 3.10. Force a 3.10 policy floor for the subproject only so the fetched
+# CMakeLists are accepted without patching *and* without triggering a deprecation warning (violates
+# our zero-warnings invariant). Revisit when hidapi upstream bumps its own minimum.
+set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
 FetchContent_MakeAvailable(hidapi)
 unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
 
