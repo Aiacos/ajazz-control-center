@@ -168,6 +168,58 @@ ______________________________________________________________________
   takes precedence over libusb when both are available). The libusb
   backend is built but not linked into our binary, so the dropped USB
   rules covered a code path we never enter at runtime.
+- [ ] **profile-buttons — wire Apply / Revert / Restore defaults to real
+  paths** (surfaced by source-level `TODO(profile-buttons)` at
+  `src/app/qml/Main.qml:111`). Today the three ProfileEditor buttons
+  toast `"not implemented yet"` because `ProfileController` lacks the
+  default-path resolution (`QStandardPaths::AppDataLocation/profile.json`)
+  - a "Save as" file dialog for explicit paths. Wire-up needs:
+    (1) `ProfileController::saveProfile()` / `loadProfile()` no-arg
+    overloads that pick the default path, (2) a `QFileDialog` trigger for
+    "Save as" / "Open profile…", (3) bring `PropertyInspector.qml` /
+    `NativePropertyInspector.qml` back from dead-QML status (currently not
+    instantiated — see the cleanup backlog note below) once the buttons
+    actually save something the inspector can re-render. ≈ 1 day.
+- [ ] **via_keyboard — per-LED RGB matrix path** (source-level stub
+  `throw std::runtime_error` at `src/devices/keyboard/src/via_keyboard.cpp:185`).
+  The VIA protocol we speak today only exposes the solid-color / effect
+  command set (cmd `0x07` sub-command `0x04`); per-LED keying requires
+  the QMK `QMK_RGB_MATRIX` extension command-set (cmd `0x08` + LED-index
+  payload) which our firmware detection does not probe yet. Gate plan:
+  (a) add a `viaFeatures()` probe at device-open time that enumerates
+  the supported VIA command pages via the `GET_PROTOCOL_VERSION` round-
+  trip, (b) flip `KeyboardCapabilities::hasRgbMatrix` when the
+  `QMK_RGB_MATRIX` page is advertised, (c) implement the write path
+  under that gate. Until then `setRgbBuffer()` staying as a hard
+  exception is intentional — callers check capabilities first.
+  ≈ 1 day.
+- [ ] **macOS + Windows AutostartService backends** (source-level stub at
+  `src/app/src/autostart_service.cpp:163`). Linux ships via the XDG
+  `.desktop` autostart spec. Remaining:
+  - **macOS**: write a LaunchAgent plist at
+    `~/Library/LaunchAgents/<appId>.plist` with `RunAtLoad = true`
+    and (for start-minimised) a `ProgramArguments` array that adds
+    `--minimized`. Register via `launchctl load -w`.
+  - **Windows**: write the `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+    registry value via `QSettings(QSettings::NativeFormat)` with the
+    same `--minimized` suffix. No admin rights needed (HKCU scope).
+  - Feature-flag the platforms behind `#ifdef Q_OS_MACOS` / `Q_OS_WIN`
+    alongside the existing Linux block. ≈ 0.5 day per platform.
+- [ ] **MacroRecorder — macOS + Windows native back-ends** (source-
+  level `(TODO)` tags in `src/core/include/ajazz/core/macro_recorder.hpp:14-15`).
+  Linux ships an evdev stub gated on `AJAZZ_FEATURE_MACRO_RECORDER`.
+  Remaining:
+  - **macOS**: `CGEventTap` via Accessibility permission (requires the
+    user to grant the app "Input Monitoring" in System Settings →
+    Privacy). Translate `CGEventFlags` + keycode into `MacroEvent`.
+  - **Windows**: `SetWindowsHookExW(WH_KEYBOARD_LL, ...)` low-level
+    hook in a dedicated thread. Translate the `KBDLLHOOKSTRUCT` into
+    `MacroEvent`. Beware: DirectInput-consumed events are invisible to
+    WH_KEYBOARD_LL; a secondary `SetWindowsHookExW(WH_MOUSE_LL)` hook
+    covers the mouse side.
+  - Both backends ship disabled by default; the runtime UI prompts the
+    user to enable the OS permission before the first capture.
+    ≈ 1 day per platform.
 
 ### Reverse-engineering & vendor parity (multi-day, research)
 
@@ -802,6 +854,159 @@ workstreams.
   for tab persistence; sharing the unqualified name caused
   `[missing-property] category` resolution errors when both modules were
   imported in the same file.
+
+______________________________________________________________________
+
+## Cleanup backlog (low-risk polish, opportunistic)
+
+Surfaced by an exhaustive code-quality audit on 2026-04-30. None of
+these are blocking; they are worth bundling into a rainy-day cleanup
+PR when a block of uninterrupted time is available.
+
+### Dead code
+
+- [ ] Remove `StreamdockCatalogFetcher::setCatalogUrlOverride` and
+  `OpenDeckCatalogFetcher::setCatalogUrlOverride` (defined but never
+  called from `src/` or `tests/`; cache-dir override is the only one
+  exercised by test fixtures). Header + source, ≈ 4 lines net.
+- [ ] Remove `akp153::buildShowLogo` (declared in
+  `akp153_protocol.hpp:87`, defined in `akp153.cpp:130`; no callers in
+  the tree — capability exists in firmware but is not wired to any
+  device method or UI surface).
+- [ ] Remove `akp153::emptyPacket()` helper — single caller
+  (`buildCmdHeader` one line below) and `std::array<...>{}` is already
+  zero-initialised; net loss of clarity.
+- [ ] Resolve the status of `src/app/qml/PropertyInspector.qml` +
+  `src/app/qml/NativePropertyInspector.qml`: no instantiation of
+  either `PropertyInspector { ... }` or `NativePropertyInspector { ... }`
+  exists anywhere in `src/app/qml/`. They are dead WIP files waiting
+  on the `profile-buttons` wire-up above. Once that lands — keep them;
+  until then, they bloat the QML module without runtime benefit.
+- [ ] Retire `scripts/_create_issues.sh` + `scripts/_issues.json` —
+  one-shot GitHub-issue bootstrap, no Makefile / CI reference. Move to
+  `docs/dev/archive/` or delete outright.
+
+### Stale comments / inline docs
+
+- [ ] `src/app/src/pi_bridge.hpp:23-25` claims "Compiled only when
+  `AJAZZ_HAVE_WEBENGINE` is defined" — FALSE. The file is compiled
+  unconditionally per `src/app/CMakeLists.txt:52` and contains no
+  `#ifdef AJAZZ_HAVE_WEBENGINE` guards. Either add the guard (matching
+  intent: PIBridge is useless without WebEngine) or correct the claim.
+- [ ] `src/plugins/src/out_of_process_plugin_host_win32.cpp:37-48` —
+  the "This file ships untested on Windows" paragraph is outdated. The
+  file IS now exercised on `windows-2022` via `test_out_of_process_plugin_host.cpp`
+  (commit `82779d9`). Strike the disclaimer.
+
+### Duplication (low-effort refactoring)
+
+- [ ] Extract `src/plugins/src/permission_gating.hpp` with shared
+  `grantsNetwork` / `grantsBroker` + the permission-string constants.
+  Today they are copy-pasted across
+  `linux_bwrap_sandbox.cpp` / `macos_sandbox_exec_sandbox.cpp` /
+  `windows_app_container_sandbox.cpp` — a drift hazard (the three
+  network-permission lists must stay in sync or user plugins get
+  different capabilities on different OSes). Zero behaviour change.
+- [ ] Extract `src/plugins/src/windows_utf8.hpp` with a single UTF-8
+  →wide helper. Today `utf8ToWide` (`out_of_process_plugin_host_win32.cpp:277`)
+  and `toWide` (`windows_app_container_sandbox.cpp:119`) are
+  byte-identical modulo the parameter type (`std::string const&` vs
+  `std::string_view`). Consolidate to `std::string_view`.
+- [ ] Extract a `CatalogFetcherBase` CRTP base (or a shared plain
+  helper) for `StreamdockCatalogFetcher` + `OpenDeckCatalogFetcher`.
+  Today `setCacheDirOverride` / `effectiveCatalogUrl` / `cacheFilePath`
+  / `loadFromCache` / `writeCache` / `loadBundledFallback` /
+  `emitSnapshot` are structurally identical — the only genuine
+  difference is the upstream wire-format translator. Adding a third
+  upstream (e.g. a future AJAZZ native plugin directory) would
+  triple the boilerplate. Estimated saving: ~150 lines.
+- [ ] Extract `src/devices/streamdeck/src/akp_framing.hpp` with a
+  templated `buildCmdHeader<CmdPrefix>(cmd)` + the
+  `buildSetBrightness` / `buildClearAll` / `buildClearKey` common
+  bodies. Today these are copy-pasted across `akp03.cpp` / `akp05.cpp`
+  / `akp153.cpp`; a fourth AKP SKU would quadruple them.
+- [ ] QML: extract `BaseButton.qml` from `PrimaryButton.qml` +
+  `SecondaryButton.qml` (identical `accessibleName`/`Description`,
+  identical `implicitHeight`, identical `leftPadding`/`rightPadding`,
+  identical `Connections` block on `pressedChanged` → `ripple.trigger`,
+  identical `Accessible.role`). Derived classes override only
+  `background:` colors/borders and `contentItem:` text weight.
+- [ ] CRTP-ify the QML singleton factory boilerplate shared by 8
+  classes (`s_xxxInstance` static + `create(QQmlEngine*, QJSEngine*)`
+  - `registerInstance(T*)`). Pattern duplicated in
+    `branding_service.cpp`, `theme_service.cpp`, `autostart_service.cpp`,
+    `tray_controller.cpp`, `device_model.cpp`, `profile_controller.cpp`,
+    `plugin_catalog_model.cpp`, `property_inspector_controller.cpp`.
+    A `template<class Derived> class QmlSingletonBridge` would collapse
+    ~15 lines per class to ~3.
+- [ ] Factor `tests/unit/sandbox_test_helpers.hpp` with the shared
+  `argvContains(argv, needle)` + `makeSandbox<T>(perms)` helpers
+  currently copy-pasted across `test_linux_bwrap_sandbox.cpp` /
+  `test_macos_sandbox_exec_sandbox.cpp` / `test_windows_app_container_sandbox.cpp`.
+
+### Magic numbers
+
+- [ ] Replace the `for (int i = 0; i < 8; ++i)` poll-drain cap in
+  `akp03.cpp:259` / `akp05.cpp:323` / `akp153.cpp:266` with a named
+  `constexpr std::size_t kMaxReportsPerPoll = 8;` in a shared header
+  (candidate: the new `akp_framing.hpp` above).
+- [ ] `src/devices/streamdeck/src/register.cpp:71-95` uses hex
+  literals (`0x0300`, `0x3001`, `0x5001`) for USB IDs that are already
+  defined as `akp03::VendorId` / `akp05::VendorId` /
+  `akp153::ProductId` in the protocol headers in scope. Replace the
+  literals with the named constants so a VID/PID correction propagates
+  via one edit instead of five.
+- [ ] Move hard-coded QML tile sizes (`EncoderCard.qml` 120×120,
+  `KeyCell.qml` 96×96, `PrimaryButton.qml` min-height 36) into
+  `Theme.qml` so the spacing / sizing tokens live in one place and
+  device-specific layouts can vary them declaratively.
+
+### Consistency
+
+- [ ] **QSettings double-key for "start minimised"** — the same
+  concept is persisted under TWO keys by two different services:
+
+  - `tray_controller.cpp:56` writes `"Window/StartMinimized"`
+    (CamelCase group, US spelling).
+  - `autostart_service.cpp:115-116` writes `"autostart/startMinimised"`
+    (lowerCamel group, UK spelling).
+
+  Today only `SettingsPage.qml:161-162` writes BOTH at once. A user
+  toggling the tray menu updates only the first; the next auto-launch
+  reads only the second → desync. Pick one key (recommend
+  `"Window/StartMinimized"` per the `TrayController` docstring), make
+  the other a read-on-startup migration shim, and delete after one
+  release cycle.
+
+- [ ] **C++ member-field prefix unified to `m_`** — the codebase is
+  split 50/50 between `m_foo` (core + devices + ~7 app files) and
+  `foo_` (8 app files: branding_service, theme_service,
+  autostart_service, pi_bridge, pi_url_request_interceptor,
+  single_instance_guard, tray_controller, property_inspector_controller).
+  Pick `m_` and run a global rename.
+
+- [ ] Align QSettings group naming — `"Appearance/Mode"` +
+  `"Window/StartMinimized"` (CamelCase) vs `"autostart/startMinimised"`
+
+  - `"Branding/ThemeOverride"` (mixed). Standardise on CamelCase
+    groups.
+
+- [ ] Unify shell-script naming under `scripts/` — kebab-case
+  dominates (`bootstrap-dev.sh`, `doctor.sh`, `run-clang-tidy.sh`);
+  `_create_issues.sh` + `_issues.json` use snake_case with underscore
+  prefix. Either rename the underscored ones (if kept) or retire them
+  per the dead-code bullet above.
+
+### Docstring polish (cosmetic)
+
+- [ ] Add `///` Doxygen blocks for the 12 trivial Q_PROPERTY readers
+  in `branding_service.hpp:60-74` (accent, accent2, bgBase, bgSidebar,
+  bgRowHover, fgPrimary, fgMuted — all one-liners returning a
+  pre-populated member). Current coverage is 95%+; this closes the
+  last 5%.
+- [ ] Add one-liner docs for the two signals
+  `launchOnLoginChanged(bool)` and `startMinimisedChanged(bool)` in
+  `autostart_service.hpp:72-73`.
 
 ______________________________________________________________________
 
