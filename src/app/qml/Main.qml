@@ -146,7 +146,7 @@ ApplicationWindow {
         height: root.height
 
         background: Rectangle {
-            color: Theme.bgBase
+            color: Theme.surfaceContainer
             border.color: Theme.borderSubtle
             border.width: 1
         }
@@ -174,7 +174,7 @@ ApplicationWindow {
         height: root.height
 
         background: Rectangle {
-            color: Theme.bgBase
+            color: Theme.surfaceContainer
             border.color: Theme.borderSubtle
             border.width: 1
         }

@@ -85,6 +85,50 @@ QtObject {
     readonly property color borderSubtle:
         Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.13))
 
+    // ---- M3 surface tint scale --------------------------------------------
+    // Material 3 elevation surfaces — `bgBase` tinted with `accent` at the
+    // M3-spec opacity ladder (5 / 8 / 11 / 14 / 16 %). Unlike `tile` (which
+    // uses `fgPrimary` for polarity-flip neutral elevation), these are
+    // *brand-flavored* surfaces — a warmth shift toward the accent color
+    // that reads as the same family in both dark and light themes because
+    // the low alpha keeps `bgBase` dominant.
+    //
+    // Wire from any surface that takes an `elevation: int` property:
+    //
+    //     Rectangle { color: Theme.surfaceAt(elevation) }
+    //
+    // Or pick a named token directly when the elevation is fixed:
+    //
+    //     Rectangle { color: Theme.surfaceContainer }   // level 3
+
+    /// Surface Container Lowest — level 1.
+    readonly property color surfaceContainerLowest:
+        Qt.tint(bgBase, Qt.rgba(accent.r, accent.g, accent.b, 0.05))
+    /// Surface Container Low — level 2.
+    readonly property color surfaceContainerLow:
+        Qt.tint(bgBase, Qt.rgba(accent.r, accent.g, accent.b, 0.08))
+    /// Surface Container — level 3 (default container surface).
+    readonly property color surfaceContainer:
+        Qt.tint(bgBase, Qt.rgba(accent.r, accent.g, accent.b, 0.11))
+    /// Surface Container High — level 4.
+    readonly property color surfaceContainerHigh:
+        Qt.tint(bgBase, Qt.rgba(accent.r, accent.g, accent.b, 0.14))
+    /// Surface Container Highest — level 5.
+    readonly property color surfaceContainerHighest:
+        Qt.tint(bgBase, Qt.rgba(accent.r, accent.g, accent.b, 0.16))
+
+    /// Resolve an elevation level to its surface-tint token. Levels 0 and
+    /// negative resolve to `bgBase` (no tint); levels above 5 clamp to
+    /// `surfaceContainerHighest`.
+    function surfaceAt(level) {
+        if (level <= 0) return bgBase
+        if (level === 1) return surfaceContainerLowest
+        if (level === 2) return surfaceContainerLow
+        if (level === 3) return surfaceContainer
+        if (level === 4) return surfaceContainerHigh
+        return surfaceContainerHighest
+    }
+
     // ---- Spacing / radius scale -------------------------------------------
     // Lightweight 4-point scale, matches what the QML tree already uses.
 

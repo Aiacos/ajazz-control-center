@@ -24,7 +24,7 @@ import AjazzControlCenter
 
 Rectangle {
     id: root
-    color: Theme.tile
+    color: root.elevation === 0 ? Theme.tile : Theme.surfaceAt(root.elevation)
     border.color: Theme.borderSubtle
     border.width: 1
     radius: Theme.radiusLg
