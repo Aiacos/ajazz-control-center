@@ -45,7 +45,7 @@ jobs:
               libxcb-cursor-dev libxkbcommon-x11-dev \
               python3-dev rpm file
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
-        with: { version: 6.7.3, cache: true }
+        with: { version:  6.8.3, cache: true }
       - name: Configure
         run: cmake --preset linux-release
       - name: Build
@@ -74,7 +74,7 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
       - uses: ilammy/msvc-dev-cmd@a102174a2b586eec2ea151a69e6fd14404a8ce7c  # v1.13.0
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
-        with: { version: 6.7.3, cache: true }
+        with: { version:  6.8.3, cache: true }
       - name: Configure
         run: cmake --preset windows-release
       - name: Build
@@ -104,7 +104,7 @@ jobs:
       - name: Install deps
         run: brew install ninja create-dmg
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
-        with: { version: 6.7.3, cache: true }
+        with: { version:  6.8.3, cache: true }
       - name: Configure (universal)
         run: |
           cmake -S . -B build/macos-release -G Ninja \

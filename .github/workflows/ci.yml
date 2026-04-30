@@ -67,7 +67,7 @@ jobs:
       - name: Install Qt 6
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
-          version: 6.7.3
+          version: 6.8.3
           cache: true
           modules: qtshadertools
 
@@ -114,7 +114,7 @@ jobs:
 
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
-          version: 6.7.3
+          version: 6.8.3
           cache: true
 
       - name: Configure
@@ -183,7 +183,7 @@ jobs:
               python3-dev python3-pip
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
-          version: 6.7.3
+          version: 6.8.3
           cache: true
           modules: qtshadertools
 
