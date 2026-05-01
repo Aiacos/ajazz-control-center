@@ -61,14 +61,25 @@ if(WIN32)
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 else()
+    # SEC-003 follow-up #51: Ed25519 manifest verifier. POSIX-only in this slice; the Win32 backend
+    # lands as a follow-up. The test exec's the publisher CLI via fork+execvp so the canonical-form
+    # contract is exercised cross-language end-to-end.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_linux_bwrap_sandbox.cpp
                 test_macos_sandbox_exec_sandbox.cpp
+                test_manifest_signer.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/linux_bwrap_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/macos_sandbox_exec_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
+    )
+    # AJAZZ_TEST_REPO_ROOT lets the verifier test locate scripts/sign-plugin-manifest.py +
+    # resources/trusted_publishers.json regardless of CWD when ctest runs the binary.
+    set_source_files_properties(
+        test_manifest_signer.cpp PROPERTIES COMPILE_DEFINITIONS
+                                            "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
     )
 endif()
 

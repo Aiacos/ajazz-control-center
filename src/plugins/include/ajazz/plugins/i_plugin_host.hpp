@@ -59,6 +59,22 @@ struct PluginInfo {
     /// future sandbox enforcement; nothing in slice 3a actually gates
     /// behaviour on this list.
     std::vector<std::string> permissions;
+
+    /// Manifest signature verification status (SEC-003 follow-up #51).
+    /// Set by the host *before* the plugin is dispatched: a manifest
+    /// without an Ed25519 signature, or with a tampered one, gets
+    /// `signed=false`. Verification uses
+    /// @c scripts/sign-plugin-manifest.py (subprocess) so the host
+    /// shares the canonical-form rules with the publisher tool —
+    /// see @c docs/architecture/PLUGIN-SYSTEM.md §"Manifest signing".
+    bool signed_{false};
+
+    /// Friendly publisher name resolved from
+    /// @c resources/trusted_publishers.json. Empty when @c signed_ is
+    /// @c false. Equal to @c "self-signed" when the manifest verifies
+    /// but its public key is not in the bundled trust roots — UI uses
+    /// this distinction to colour the verification chip.
+    std::string publisher;
 };
 
 /**

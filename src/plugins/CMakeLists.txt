@@ -13,8 +13,15 @@ if(WIN32)
          src/windows_app_container_sandbox.cpp
     )
 else()
-    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host.cpp
-         src/linux_bwrap_sandbox.cpp src/macos_sandbox_exec_sandbox.cpp
+    list(
+        APPEND
+        _ajazz_plugins_sources
+        src/out_of_process_plugin_host.cpp
+        src/linux_bwrap_sandbox.cpp
+        src/macos_sandbox_exec_sandbox.cpp
+        # SEC-003 follow-up #51: Ed25519 manifest verifier (POSIX). The TU is `#ifndef
+        # _WIN32`-guarded internally; Win32 implementation lands in a follow-up.
+        src/manifest_signer.cpp
     )
 endif()
 
