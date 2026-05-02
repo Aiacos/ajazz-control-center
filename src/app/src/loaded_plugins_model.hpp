@@ -116,6 +116,26 @@ public:
      */
     void setPlugins(std::vector<plugins::PluginInfo> plugins);
 
+    /**
+     * @brief Wire a long-lived plugin host so QML can trigger reloads.
+     *
+     * The pointer is non-owning — Application keeps the host alive
+     * for the application's lifetime. Pass @c nullptr to detach.
+     * After this call, @ref refresh becomes a usable Q_INVOKABLE for
+     * QML "Reload" buttons.
+     */
+    void setPluginHost(plugins::IPluginHost* host) noexcept;
+
+    /**
+     * @brief Re-pull the plugin inventory from the wired host.
+     *
+     * No-op when no host is wired. On IPC failure (host died, child
+     * crashed) the call leaves the model untouched and logs a
+     * warning — the existing rows stay visible so the UI never
+     * "disappears" on a transient error.
+     */
+    Q_INVOKABLE void refresh();
+
 signals:
     void countChanged();
 
@@ -128,6 +148,12 @@ private:
     [[nodiscard]] static QString trustLevelOf(plugins::PluginInfo const& info);
 
     std::vector<plugins::PluginInfo> m_plugins;
+    /// Non-owning pointer to the plugin host. The host is owned by
+    /// @c Application and outlives the model. Null until
+    /// @ref setPluginHost runs (on a build without
+    /// @c AJAZZ_PYTHON_HOST the model stays detached and
+    /// @ref refresh is a no-op).
+    plugins::IPluginHost* m_host{nullptr};
 };
 
 } // namespace ajazz::app

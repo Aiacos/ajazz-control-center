@@ -33,6 +33,12 @@ class HotplugMonitor;
 struct HotplugEvent;
 } // namespace ajazz::core
 
+#ifdef AJAZZ_PYTHON_HOST
+namespace ajazz::plugins {
+class IPluginHost;
+} // namespace ajazz::plugins
+#endif
+
 namespace ajazz::app {
 
 /**
@@ -92,6 +98,15 @@ private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
     void onHotplug(core::HotplugEvent const& ev);
 
+#ifdef AJAZZ_PYTHON_HOST
+    /// Spawn the @c OutOfProcessPluginHost, register the user-level
+    /// search path (XDG @c AppLocalDataLocation @c /plugins) and pull
+    /// the initial inventory into @c m_loadedPlugins. Failure is
+    /// logged + swallowed: the rest of the app keeps running, the
+    /// "Loaded" drawer just shows the empty state.
+    void initPluginHost();
+#endif
+
     /// Audit finding A1 — registry is constructor-owned, not a singleton.
     /// Declared first so members further down (DeviceModel) can hold a
     /// reference to it that is guaranteed to outlive them.
@@ -109,6 +124,13 @@ private:
     std::unique_ptr<PropertyInspectorController>
         m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
+#ifdef AJAZZ_PYTHON_HOST
+    /// Long-lived plugin host. Spawns the Python child + invokes the
+    /// Ed25519 verifier so @c LoadedPluginsModel rows carry trust
+    /// state. nullptr when the host failed to spawn (e.g. missing
+    /// Python or `cryptography`); the UI then shows "no plugins".
+    std::unique_ptr<plugins::IPluginHost> m_pluginHost;
+#endif
 };
 
 } // namespace ajazz::app

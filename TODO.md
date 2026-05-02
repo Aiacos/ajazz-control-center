@@ -147,6 +147,27 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
+- [ ] **Snap packaging recipe** — package the app for Canonical's
+  Snap store / `snapcraft`, complementing the existing Fedora /
+  Debian / Flatpak / Win / macOS recipes shipped in `9a94ae4`.
+  Required pieces:
+  - `snap/snapcraft.yaml` with the right `confinement` (likely
+    `strict` with explicit interfaces: `home`, `desktop`,
+    `desktop-legacy`, `wayland`, `x11`, `opengl`, `audio-playback`,
+    `network` — and crucially `raw-usb` + `hidraw` for the
+    Stream-Deck-class device backends; see
+    `resources/linux/99-ajazz.rules` for the hardware surface).
+  - Qt 6.8 base / content snap selection — `core24` vs the Qt
+    content snap; settle by trying both and benchmarking startup.
+  - `desktop` interface plug for the system tray + window.
+  - Verify QtWebEngine actually starts under strict confinement
+    (sandbox sub-process inside snap sandbox is historically
+    brittle); the alternative is `--no-sandbox` documented as a
+    Snap-specific quirk in the wiki.
+  - CI: extend `release.yml` with a `snap-build` job (`snapcraft remote-build` from a self-hosted runner is overkill here —
+    use the official `snapcore/action-build@v1`).
+  - Publish to the edge channel first; promote to stable once a
+    maintainer has smoke-tested on a clean Ubuntu 24.04.
 - [ ] **Square brand asset** for tray / app icon. The wordmark in
   `resources/branding/ajazz-logo.png` is a 3:1 banner; a centered crop
   produces mostly whitespace and looks worse than the current

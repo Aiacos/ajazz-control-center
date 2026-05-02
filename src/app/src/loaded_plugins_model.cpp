@@ -110,6 +110,24 @@ void LoadedPluginsModel::setPlugins(std::vector<plugins::PluginInfo> plugins) {
     emit countChanged();
 }
 
+void LoadedPluginsModel::setPluginHost(plugins::IPluginHost* host) noexcept {
+    m_host = host;
+}
+
+void LoadedPluginsModel::refresh() {
+    if (m_host == nullptr) {
+        return;
+    }
+    try {
+        // `IPluginHost::plugins` throws on a dead child / IPC timeout.
+        // Catch and keep the existing rows visible — a transient
+        // failure should not erase the UI; the user can retry.
+        setPlugins(m_host->plugins());
+    } catch (std::exception const& e) {
+        qWarning("LoadedPluginsModel::refresh: %s", e.what());
+    }
+}
+
 QString LoadedPluginsModel::trustLevelOf(plugins::PluginInfo const& info) {
     if (!info.signed_) {
         return QStringLiteral("unsigned");

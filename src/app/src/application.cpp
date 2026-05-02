@@ -22,6 +22,16 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 
+#ifdef AJAZZ_PYTHON_HOST
+#include "ajazz/plugins/manifest_signer.hpp"
+#include "ajazz/plugins/out_of_process_plugin_host.hpp"
+
+#include <QDir>
+#include <QStandardPaths>
+
+#include <exception>
+#endif
+
 namespace ajazz::app {
 
 Application::Application(QObject* parent)
@@ -74,7 +84,54 @@ void Application::bootstrap() {
     AJAZZ_LOG_INFO("app",
                    "bootstrap complete: {} supported devices",
                    static_cast<int>(m_deviceModel->rowCount()));
+
+#ifdef AJAZZ_PYTHON_HOST
+    initPluginHost();
+#endif
 }
+
+#ifdef AJAZZ_PYTHON_HOST
+void Application::initPluginHost() {
+    plugins::OutOfProcessHostConfig config;
+    config.childScript = AJAZZ_PLUGIN_HOST_SCRIPT;
+    config.pythonPath = {std::filesystem::path{AJAZZ_PLUGIN_PYTHONPATH}};
+
+    plugins::ManifestSignerConfig verifier;
+    verifier.verifierScript = AJAZZ_PLUGIN_VERIFIER_SCRIPT;
+    verifier.trustedPublishersFile = AJAZZ_PLUGIN_TRUST_ROOTS;
+    config.manifestVerifier = std::move(verifier);
+
+    try {
+        auto host = std::make_unique<plugins::OutOfProcessPluginHost>(std::move(config));
+
+        // User-level plugin search path: XDG `AppLocalDataLocation`, e.g.
+        // `~/.local/share/ajazz-control-center/plugins` on Linux. Created
+        // lazily so a fresh checkout doesn't error on the first launch.
+        QString const userPluginsQ =
+            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) +
+            QStringLiteral("/plugins");
+        QDir().mkpath(userPluginsQ);
+        host->addSearchPath(userPluginsQ.toStdString());
+        host->loadAll();
+
+        m_loadedPlugins->setPlugins(host->plugins());
+        m_loadedPlugins->setPluginHost(host.get());
+        m_pluginHost = std::move(host);
+
+        AJAZZ_LOG_INFO("app",
+                       "plugin host ready: {} loaded from {}",
+                       m_loadedPlugins->rowCountSimple(),
+                       userPluginsQ.toStdString());
+    } catch (std::exception const& e) {
+        // Common failure modes: python3 missing, child script missing
+        // (broken install), `cryptography` not installed (the
+        // verifier exec fails which makes loadAll/list_plugins
+        // appear to throw via the IPC contract). Logging keeps the
+        // user-visible app alive — the "Loaded" drawer stays empty.
+        AJAZZ_LOG_WARN("app", "plugin host disabled: {}", e.what());
+    }
+}
+#endif
 
 void Application::exposeToQml(QQmlApplicationEngine& engine) {
     // Services registered as QML singletons via QML_NAMED_ELEMENT + QML_SINGLETON.
