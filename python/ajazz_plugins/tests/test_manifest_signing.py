@@ -10,6 +10,7 @@ to roundtrip cleanly — these tests pin the canonical-form contract.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -62,9 +63,14 @@ def test_keygen_produces_valid_keypair(tmp_path: Path) -> None:
     assert res.returncode == 0, res.stderr
     assert (out / "priv.pem").exists()
     assert (out / "pub.pem").exists()
-    # priv.pem must be mode 0600 (rw owner only) so a leaked checkout
-    # doesn't leave the publisher key world-readable.
-    assert (out / "priv.pem").stat().st_mode & 0o077 == 0
+    # priv.pem must be mode 0600 (rw owner only) on POSIX so a leaked
+    # checkout doesn't leave the publisher key world-readable. Windows
+    # has no POSIX mode bits — `st_mode` reports ACL-derived flags that
+    # don't map to the Unix octal triplet, so the check is meaningless
+    # there. Confidentiality on Windows is enforced by the user-profile
+    # ACL inherited from `%USERPROFILE%`.
+    if os.name == "posix":
+        assert (out / "priv.pem").stat().st_mode & 0o077 == 0
 
 
 def test_sign_then_verify_roundtrips(tmp_path: Path) -> None:
