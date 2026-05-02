@@ -39,6 +39,7 @@ qt_add_executable(
     src/application.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
+    src/loaded_plugins_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
     src/profile_controller.cpp
@@ -201,6 +202,8 @@ qt_add_qml_module(
             src/profile_controller.hpp
             src/plugin_catalog_model.cpp
             src/plugin_catalog_model.hpp
+            src/loaded_plugins_model.cpp
+            src/loaded_plugins_model.hpp
             src/property_inspector_controller.cpp
             src/property_inspector_controller.hpp
     QML_FILES qml/Main.qml
@@ -213,6 +216,7 @@ qt_add_qml_module(
               qml/MousePanel.qml
               qml/Inspector.qml
               qml/PluginStore.qml
+              qml/LoadedPluginsPage.qml
               qml/PropertyInspector.qml
               qml/NativePropertyInspector.qml
               qml/SettingsPage.qml

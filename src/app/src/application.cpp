@@ -38,6 +38,7 @@ Application::Application(QObject* parent)
       m_trayController(
           std::make_unique<TrayController>(m_branding.get(), m_profileController.get(), this)),
       m_pluginCatalog(std::make_unique<PluginCatalogModel>(this)),
+      m_loadedPlugins(std::make_unique<LoadedPluginsModel>(this)),
       m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()) {}
 
@@ -85,6 +86,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     DeviceModel::registerInstance(m_deviceModel.get());
     ProfileController::registerInstance(m_profileController.get());
     PluginCatalogModel::registerInstance(m_pluginCatalog.get());
+    LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     // No more setContextProperty calls — every service is now a QML
     // singleton, statically resolvable by qmllint.

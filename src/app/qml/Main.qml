@@ -85,6 +85,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             onMinimizeRequested: root.hide()
             onPluginStoreRequested: pluginStoreDrawer.open()
+            onLoadedPluginsRequested: loadedPluginsDrawer.open()
             onSettingsRequested: settingsDrawer.open()
         }
 
@@ -166,6 +167,36 @@ ApplicationWindow {
         }
 
         PluginStore {
+            anchors.fill: parent
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // Loaded plugins drawer (SEC-003 #51 trust UI).
+    //
+    // Mirrors the Plugin Store drawer dimensions because the row layout
+    // benefits from the same horizontal real estate; the page itself is
+    // a vertical list rather than a grid, but the visual rhythm matches.
+    // ----------------------------------------------------------------------
+    Drawer {
+        id: loadedPluginsDrawer
+        edge: Qt.RightEdge
+        modal: true
+        dragMargin: 0
+        width: Math.min(960, Math.max(720, root.width * 0.75))
+        height: root.height
+
+        Material.theme: root.materialTheme
+        Material.accent: Theme.accent
+        Material.primary: Theme.accent2
+
+        background: Rectangle {
+            color: Theme.surfaceContainer
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        LoadedPluginsPage {
             anchors.fill: parent
         }
     }

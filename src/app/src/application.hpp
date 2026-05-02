@@ -15,6 +15,7 @@
 #include "autostart_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
+#include "loaded_plugins_model.hpp"
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
@@ -103,6 +104,8 @@ private:
     std::unique_ptr<ProfileController> m_profileController; ///< Profile load/save controller.
     std::unique_ptr<TrayController> m_trayController;       ///< System tray icon + menu.
     std::unique_ptr<PluginCatalogModel> m_pluginCatalog; ///< Plugin Store catalogue (mock for now).
+    std::unique_ptr<LoadedPluginsModel>
+        m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
     std::unique_ptr<PropertyInspectorController>
         m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.

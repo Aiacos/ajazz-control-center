@@ -24,6 +24,10 @@ Rectangle {
     /// listens for this and opens the Plugin Store drawer / page.
     signal pluginStoreRequested()
 
+    /// Emitted when the user clicks the "Loaded" button — opens the
+    /// runtime loaded-plugins drawer (SEC-003 #51 trust UI).
+    signal loadedPluginsRequested()
+
     /// Emitted when the user clicks the "Settings" button. Main.qml listens
     /// for this and opens the Settings drawer.
     signal settingsRequested()
@@ -109,6 +113,38 @@ Rectangle {
                 text: pluginsBtn.text
                 color: Theme.fgPrimary
                 font: pluginsBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: Theme.spacingSm
+                rightPadding: Theme.spacingSm
+            }
+        }
+
+        // Loaded plugins button — opens the runtime loaded-plugins
+        // drawer with the trust-chip UI from SEC-003 #51. Sits between
+        // the Plugin Store and Settings so the "Plugins (catalogue)" →
+        // "Loaded (runtime)" → "Settings" reading order matches the
+        // user's mental model: browse → manage → configure.
+        ToolButton {
+            id: loadedBtn
+            text: qsTr("Loaded")
+            font.pixelSize: Theme.fontMd
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Open the loaded-plugins panel")
+            onClicked: root.loadedPluginsRequested()
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Loaded plugins")
+            Accessible.description: qsTr("Review currently-loaded plugins and their signature status")
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: loadedBtn.hovered ? Theme.bgRowHover : "transparent"
+                border.width: loadedBtn.activeFocus ? Theme.focusRingWidth : 0
+                border.color: Theme.accent
+            }
+            contentItem: Text {
+                text: loadedBtn.text
+                color: Theme.fgPrimary
+                font: loadedBtn.font
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 leftPadding: Theme.spacingSm
