@@ -29,6 +29,9 @@ dev = [
     "ruff>=0.6",
     "black>=24.8",
     "mypy>=1.11",
+    # Required by scripts/sign-plugin-manifest.py — invoked as subprocess from
+    # python/ajazz_plugins/tests/test_manifest_signing.py.
+    "cryptography>=42.0",
 ]
 
 [tool.setuptools]
