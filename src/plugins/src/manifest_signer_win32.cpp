@@ -117,10 +117,11 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
     if (blob.empty()) {
         return {};
     }
-    // Walk `"key":"…"` then `"name":"…"` pairs within a 512-byte
-    // window each — duplicates the POSIX backend logic. Mirroring
-    // is intentional: any drift would be a cross-platform contract
-    // bug invisible to the test that runs on the dev's machine.
+    // Walk `"key":"…"` then `"name":"…"` pairs bounded by the entry's
+    // closing `}` — duplicates the POSIX backend logic. Mirroring is
+    // intentional: any drift would be a cross-platform contract bug
+    // invisible to the test that runs on the dev's machine. See the
+    // POSIX implementation for the full rationale on the `}` bound.
     std::vector<TrustedPublisher> out;
     std::string_view view{blob};
     std::size_t cursor = 0;
@@ -134,8 +135,11 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
         if (keyPos == std::string_view::npos) {
             break;
         }
-        auto const window =
-            remaining.substr(keyPos, std::min<std::size_t>(512, remaining.size() - keyPos));
+        auto const closeBrace = remaining.find('}', keyPos);
+        auto const windowLen = closeBrace == std::string_view::npos
+                                   ? std::min<std::size_t>(512, remaining.size() - keyPos)
+                                   : std::min<std::size_t>(closeBrace - keyPos + 1, 512);
+        auto const window = remaining.substr(keyPos, windowLen);
         auto const name = wire::findStringField(window, "name");
         if (!name.empty()) {
             out.push_back({key, name});

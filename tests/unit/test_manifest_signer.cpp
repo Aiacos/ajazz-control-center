@@ -277,3 +277,27 @@ TEST_CASE("loadTrustRoots: missing file returns empty list", "[manifest-signer]"
     auto const roots = loadTrustRoots("/no/such/file.json");
     REQUIRE(roots.empty());
 }
+
+TEST_CASE("loadTrustRoots: malformed entry never cross-pairs", "[manifest-signer]") {
+    // A publisher entry without a "name" must NOT pair with the next
+    // entry's name. The fix bounds the search window by `}` so the
+    // malformed entry produces no row instead of stealing a name.
+    // Pre-fix this would have emitted (KEY1, "Trusted Two").
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-trustroots-malformed";
+    fs::create_directories(tmp);
+    auto const malformed = tmp / "trusted_publishers.json";
+    {
+        std::ofstream f{malformed, std::ios::binary};
+        f << R"({
+  "publishers": [
+    { "key": "KEY1" },
+    { "key": "KEY2", "name": "Trusted Two" }
+  ]
+})";
+    }
+    auto const roots = loadTrustRoots(malformed);
+    REQUIRE(roots.size() == 1);
+    REQUIRE(roots[0].keyB64 == "KEY2");
+    REQUIRE(roots[0].name == "Trusted Two");
+    fs::remove_all(tmp);
+}

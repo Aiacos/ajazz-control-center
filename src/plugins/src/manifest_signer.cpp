@@ -106,8 +106,12 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
     }
     // The publishers list is `"publishers":[ {…}, {…} ]`. The mini
     // JSON helper doesn't do nested objects, so we walk it manually:
-    // for each `"key":"<value>"` followed (within a small window) by
-    // a `"name":"<value>"`, emit a TrustedPublisher.
+    // for each `"key":"<value>"` followed by a `"name":"<value>"`
+    // *within the same JSON object* (closing `}` boundary), emit a
+    // TrustedPublisher. Bounding by `}` prevents a malformed entry
+    // (key without name) from cross-pairing with the next entry's
+    // name — well-formed input is unaffected, malformed input fails
+    // closed (no entry emitted) instead of pairing across entries.
     std::vector<TrustedPublisher> out;
     std::string_view view{blob};
     std::size_t cursor = 0;
@@ -121,10 +125,15 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
         if (keyPos == std::string_view::npos) {
             break;
         }
-        // Look for "name" within the next 512 bytes — a single
-        // publisher entry is always small enough to fit.
-        auto const window =
-            remaining.substr(keyPos, std::min<std::size_t>(512, remaining.size() - keyPos));
+        // Window = from `"key"` to the next `}` (entry boundary), or
+        // 512 bytes if `}` isn't found within that range. The 512-byte
+        // cap exists for robustness against pathological input; a
+        // single publisher entry is always far smaller.
+        auto const closeBrace = remaining.find('}', keyPos);
+        auto const windowLen = closeBrace == std::string_view::npos
+                                   ? std::min<std::size_t>(512, remaining.size() - keyPos)
+                                   : std::min<std::size_t>(closeBrace - keyPos + 1, 512);
+        auto const window = remaining.substr(keyPos, windowLen);
         auto const name = wire::findStringField(window, "name");
         if (!name.empty()) {
             out.push_back({key, name});

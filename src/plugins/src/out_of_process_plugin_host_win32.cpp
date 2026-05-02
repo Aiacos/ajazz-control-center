@@ -375,7 +375,15 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
     m_impl->config = std::move(config);
 
     if (m_impl->config.pythonExecutable.empty()) {
-        m_impl->config.pythonExecutable = "python";
+        // Aligned to the POSIX backend ("python3") so a caller using
+        // the default config gets identical behaviour on every OS.
+        // Modern Windows installs (CI runners with `setup-python`,
+        // the python.org installer with the `py` launcher, conda,
+        // venv) all expose `python3.exe`. Bare-Windows users without
+        // `python3` on PATH must override this field — the
+        // `ManifestSignerConfig` field default already used "python3"
+        // so this is the consistent choice.
+        m_impl->config.pythonExecutable = "python3";
     }
     if (m_impl->config.childScript.empty()) {
         throw std::runtime_error("OutOfProcessPluginHost: childScript must be set in the config");
