@@ -10,6 +10,12 @@
  * side) and @c tests/unit/test_manifest_signer.cpp (C++ side, this
  * module).
  *
+ * Implementations live in two sibling translation units, selected
+ * by the `WIN32` CMake variable: `manifest_signer.cpp` (POSIX,
+ * `fork`+`execvp`) and `manifest_signer_win32.cpp` (Windows,
+ * `_wspawnvp`). Both files share this public header so callers
+ * never need an `#ifdef`.
+ *
  * Why subprocess-call into Python instead of linking libsodium:
  *   1. Zero new C++ deps. The plugins library is intentionally
  *      Qt-free + zero-3rd-party — adding crypto pulls in 600 KB and

@@ -30,7 +30,10 @@
 #include <string>
 #include <vector>
 
-#ifndef _WIN32
+#ifdef _WIN32
+#include <process.h>
+#include <windows.h>
+#else
 #include <sys/wait.h>
 #include <unistd.h>
 #endif
@@ -56,14 +59,36 @@ fs::path repoRoot() {
     return fs::path{AJAZZ_TEST_REPO_ROOT};
 }
 
-/// Run a child process and return exit code. Same fork+execvp shape
-/// as the verifier itself; lets the test exercise the Python signer
-/// without relying on std::system (avoids quoting trouble for paths
-/// with spaces).
+/// Run a child process and return its exit code, or -1 on spawn
+/// failure. Mirrors the platform split of the production verifier
+/// (`fork`+`execvp` on POSIX, `_wspawnvp` on Windows) so the tests
+/// exercise the Python signer through the same plumbing the host
+/// uses to invoke the verifier.
 int runChild(std::vector<std::string> argv) {
 #ifdef _WIN32
-    (void)argv;
-    return -1; // verifier is POSIX-only in this slice; test skipped on Win32
+    if (argv.empty()) {
+        return -1;
+    }
+    std::vector<std::wstring> wide;
+    wide.reserve(argv.size());
+    for (auto const& s : argv) {
+        int const size =
+            MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+        std::wstring w;
+        if (size > 0) {
+            w.resize(static_cast<std::size_t>(size));
+            MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), size);
+        }
+        wide.push_back(std::move(w));
+    }
+    std::vector<wchar_t const*> rawArgv;
+    rawArgv.reserve(wide.size() + 1);
+    for (auto const& w : wide) {
+        rawArgv.push_back(w.c_str());
+    }
+    rawArgv.push_back(nullptr);
+    intptr_t const rc = ::_wspawnvp(_P_WAIT, rawArgv[0], rawArgv.data());
+    return rc < 0 ? -1 : static_cast<int>(rc);
 #else
     std::vector<char*> rawArgv;
     rawArgv.reserve(argv.size() + 1);
@@ -127,8 +152,6 @@ ManifestSignerConfig makeConfig(fs::path const& trustRoots = {}) {
 }
 
 } // namespace
-
-#ifndef _WIN32
 
 TEST_CASE("manifest verifier: signed manifest passes", "[manifest-signer]") {
     auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-pass";
@@ -254,5 +277,3 @@ TEST_CASE("loadTrustRoots: missing file returns empty list", "[manifest-signer]"
     auto const roots = loadTrustRoots("/no/such/file.json");
     REQUIRE(roots.empty());
 }
-
-#endif // _WIN32

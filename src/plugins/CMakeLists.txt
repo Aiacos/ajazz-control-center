@@ -9,8 +9,14 @@
 # platform-agnostic.
 set(_ajazz_plugins_sources src/sandbox.cpp)
 if(WIN32)
-    list(APPEND _ajazz_plugins_sources src/out_of_process_plugin_host_win32.cpp
-         src/windows_app_container_sandbox.cpp
+    list(
+        APPEND
+        _ajazz_plugins_sources
+        src/out_of_process_plugin_host_win32.cpp
+        src/windows_app_container_sandbox.cpp
+        # SEC-003 follow-up #51: Ed25519 manifest verifier (Win32). Mirrors `manifest_signer.cpp`
+        # but uses `_wspawnvp` instead of `fork`+`execvp`.
+        src/manifest_signer_win32.cpp
     )
 else()
     list(
@@ -19,8 +25,7 @@ else()
         src/out_of_process_plugin_host.cpp
         src/linux_bwrap_sandbox.cpp
         src/macos_sandbox_exec_sandbox.cpp
-        # SEC-003 follow-up #51: Ed25519 manifest verifier (POSIX). The TU is `#ifndef
-        # _WIN32`-guarded internally; Win32 implementation lands in a follow-up.
+        # SEC-003 follow-up #51: Ed25519 manifest verifier (POSIX).
         src/manifest_signer.cpp
     )
 endif()

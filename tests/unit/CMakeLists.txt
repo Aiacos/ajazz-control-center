@@ -53,17 +53,20 @@ target_sources(ajazz_unit_tests PRIVATE test_out_of_process_plugin_host.cpp)
 target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
 
 if(WIN32)
+    # SEC-003 follow-up #51: Ed25519 manifest verifier — Win32 backend uses `_wspawnvp`. The test
+    # exercises the same canonical-form contract on Windows so any drift between the two backends
+    # surfaces immediately.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_windows_app_container_sandbox.cpp
+                test_manifest_signer.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/windows_app_container_sandbox.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_win32.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 else()
-    # SEC-003 follow-up #51: Ed25519 manifest verifier. POSIX-only in this slice; the Win32 backend
-    # lands as a follow-up. The test exec's the publisher CLI via fork+execvp so the canonical-form
-    # contract is exercised cross-language end-to-end.
+    # SEC-003 follow-up #51: Ed25519 manifest verifier — POSIX backend uses `fork`+`execvp`.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_linux_bwrap_sandbox.cpp
@@ -75,13 +78,15 @@ else()
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
-    # AJAZZ_TEST_REPO_ROOT lets the verifier test locate scripts/sign-plugin-manifest.py +
-    # resources/trusted_publishers.json regardless of CWD when ctest runs the binary.
-    set_source_files_properties(
-        test_manifest_signer.cpp PROPERTIES COMPILE_DEFINITIONS
-                                            "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
-    )
 endif()
+
+# AJAZZ_TEST_REPO_ROOT lets the verifier test locate scripts/sign-plugin-manifest.py +
+# resources/trusted_publishers.json regardless of CWD when ctest runs the binary. Applies on every
+# platform — the test now compiles on POSIX + Windows.
+set_source_files_properties(
+    test_manifest_signer.cpp PROPERTIES COMPILE_DEFINITIONS
+                                        "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
 
 # Set the AUTOMOC flag for the fetcher TU we pull in from the app target — StreamdockCatalogFetcher
 # is a Q_OBJECT so it needs moc to run.
