@@ -89,13 +89,18 @@ Page {
                 id: row
 
                 // Required role declarations — qmllint resolves them
-                // statically to LoadedPluginsModel::Roles.
+                // statically to LoadedPluginsModel::Roles. Only the roles
+                // the delegate body actually reads are declared `required`
+                // so qmllint catches a stale role rename and dead bindings
+                // don't accumulate. `isSigned` and `publisher` are still
+                // exposed by the model for future delegates (e.g. an
+                // expanded "details" panel) but the chip needs only
+                // `trustLevel` since the model already collapses the
+                // (signed_, publisher) pair into the enum string.
                 required property string pluginId
                 required property string name
                 required property string version
                 required property string authors
-                required property bool isSigned
-                required property string publisher
                 required property string trustLevel
 
                 width: ListView.view.width

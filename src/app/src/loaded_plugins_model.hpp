@@ -120,6 +120,11 @@ signals:
     void countChanged();
 
 private:
+    /// Collapse @c (signed_, publisher) into one of @c "trusted",
+    /// @c "self-signed", @c "unsigned". Static + private because the
+    /// rule is fixed by the @ref PluginInfo contract; the QML side
+    /// only sees the resulting string. Static so unit tests can call
+    /// it without constructing a model instance.
     [[nodiscard]] static QString trustLevelOf(plugins::PluginInfo const& info);
 
     std::vector<plugins::PluginInfo> m_plugins;

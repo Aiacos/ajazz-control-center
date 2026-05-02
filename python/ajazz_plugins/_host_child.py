@@ -157,6 +157,17 @@ def _add_search_path(msg: dict[str, Any]) -> None:
 def _load_one_plugin(plugin_dir: Path) -> tuple[bool, str, str]:
     """Try to import a single plugin directory.
 
+    Side effects on success:
+        - registers the imported instance under @c _plugins[id];
+        - records @c <plugin_dir>/manifest.json (or empty string when
+          the plugin ships no manifest) under @c _manifest_paths[id]
+          so the host's C++ side can verify the Ed25519 signature
+          (SEC-003 follow-up #51).
+
+    Args:
+        plugin_dir: Absolute path to the plugin's package directory
+            (the one containing ``plugin.py``).
+
     Returns:
         ``(ok, id, message)``. On success ``id`` is the plugin's id and
         ``message`` is empty; on failure ``id`` is the directory name
@@ -208,6 +219,12 @@ def _load_all() -> None:
     Discovers every ``<dir>/plugin.py`` under each registered search
     path and imports it. Per-plugin failures emit ``plugin_error``
     and continue.
+
+    Each successful import emits a ``plugin_loaded`` event carrying:
+    ``id``, ``name``, ``version``, ``authors``, ``permissions`` and
+    ``manifest_path`` — the last one is empty when the plugin ships no
+    ``manifest.json`` (the host then treats it as unsigned per the
+    SEC-003 follow-up #51 contract).
     """
     loaded_now = 0
     for root in _search_paths:
@@ -244,7 +261,15 @@ def _load_all() -> None:
 
 
 def _list_plugins() -> None:
-    """Stream the current inventory back to the host, terminator last."""
+    """Stream the current inventory back to the host, terminator last.
+
+    Emits one ``plugin`` event per loaded plugin with ``id``, ``name``,
+    ``version``, ``authors``, ``permissions`` and ``manifest_path``
+    (empty string when the plugin ships no manifest), then a single
+    ``plugins_complete`` event with the total count. The host's
+    Ed25519 verifier consumes ``manifest_path`` to populate
+    ``PluginInfo::signed_`` / ``PluginInfo::publisher`` (SEC-003 #51).
+    """
     for pid, instance in _plugins.items():
         _emit(
             {
