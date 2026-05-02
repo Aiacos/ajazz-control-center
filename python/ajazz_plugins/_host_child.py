@@ -90,6 +90,10 @@ def _emit(event: dict[str, object]) -> None:
 
 _search_paths: list[Path] = []
 _plugins: dict[str, Any] = {}  # plugin_id -> Plugin instance
+# Manifest path per plugin id, set when `<plugin_dir>/manifest.json` exists
+# at load time. Empty string means the plugin shipped without a manifest —
+# the host treats those as unsigned (SEC-003 follow-up #51 contract).
+_manifest_paths: dict[str, str] = {}
 _added_to_sys_path: set[str] = set()
 
 
@@ -191,6 +195,10 @@ def _load_one_plugin(plugin_dir: Path) -> tuple[bool, str, str]:
     if not isinstance(plugin_id, str) or not _is_safe_plugin_id(plugin_id):
         return False, pkg_name, "plugin reports unsafe id"
     _plugins[plugin_id] = instance
+    # Record the manifest path if the plugin ships one. The host's C++
+    # side calls the Ed25519 verifier on this exact file (SEC-003 #51).
+    manifest_file = plugin_dir / "manifest.json"
+    _manifest_paths[plugin_id] = str(manifest_file) if manifest_file.is_file() else ""
     return True, plugin_id, ""
 
 
@@ -226,6 +234,7 @@ def _load_all() -> None:
                         "version": str(getattr(instance, "version", "")),
                         "authors": str(getattr(instance, "authors", "")),
                         "permissions": _instance_permissions(instance),
+                        "manifest_path": _manifest_paths.get(pid, ""),
                     }
                 )
                 loaded_now += 1
@@ -245,6 +254,7 @@ def _list_plugins() -> None:
                 "version": str(getattr(instance, "version", "")),
                 "authors": str(getattr(instance, "authors", "")),
                 "permissions": _instance_permissions(instance),
+                "manifest_path": _manifest_paths.get(pid, ""),
             }
         )
     _emit({"event": "plugins_complete", "count": len(_plugins)})

@@ -411,6 +411,20 @@ std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
             info.version = findStringField(result.line, "version");
             info.authors = findStringField(result.line, "authors");
             info.permissions = findStringArrayField(result.line, "permissions");
+
+            // SEC-003 #51: verify the manifest's Ed25519 signature when the
+            // child reported its path AND the caller wired a verifier in
+            // through `OutOfProcessHostConfig::manifestVerifier`. Failure
+            // (no path, no config, invalid signature) all collapse to
+            // `signed_=false, publisher=""` — the unsigned-plugin contract.
+            auto const manifestPath = findStringField(result.line, "manifest_path");
+            if (!manifestPath.empty() && m_impl->config.manifestVerifier.has_value()) {
+                auto const verdict = verifyManifest(manifestPath, *m_impl->config.manifestVerifier);
+                info.signed_ = verdict.valid;
+                info.publisher = verdict.publisherName.empty() && verdict.valid
+                                     ? "self-signed"
+                                     : verdict.publisherName;
+            }
             out.push_back(std::move(info));
             continue;
         }

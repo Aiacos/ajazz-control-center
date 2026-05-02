@@ -37,12 +37,14 @@
 #pragma once
 
 #include "ajazz/plugins/i_plugin_host.hpp"
+#include "ajazz/plugins/manifest_signer.hpp"
 #include "ajazz/plugins/sandbox.hpp"
 
 #include <chrono>
 #include <cstddef>
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -91,6 +93,14 @@ struct OutOfProcessHostConfig {
     /// @ref NoOpSandbox — the slice-1/2/2.5/3a behaviour callers see
     /// today. Ownership transfers to the host on construction.
     std::unique_ptr<Sandbox> sandbox;
+
+    /// Optional manifest verifier configuration (SEC-003 follow-up #51).
+    /// When set, @ref OutOfProcessPluginHost::plugins runs each plugin's
+    /// `manifest.json` through @ref verifyManifest and populates
+    /// @ref PluginInfo::signed_ / @ref PluginInfo::publisher accordingly.
+    /// When unset (default), every plugin reports as unsigned — the
+    /// pre-#51 behaviour callers see today.
+    std::optional<ManifestSignerConfig> manifestVerifier;
 };
 
 /**

@@ -723,6 +723,16 @@ std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
             info.version = findStringField(result.line, "version");
             info.authors = findStringField(result.line, "authors");
             info.permissions = findStringArrayField(result.line, "permissions");
+
+            // SEC-003 #51: see the matching block in the POSIX backend.
+            auto const manifestPath = findStringField(result.line, "manifest_path");
+            if (!manifestPath.empty() && m_impl->config.manifestVerifier.has_value()) {
+                auto const verdict = verifyManifest(manifestPath, *m_impl->config.manifestVerifier);
+                info.signed_ = verdict.valid;
+                info.publisher = verdict.publisherName.empty() && verdict.valid
+                                     ? "self-signed"
+                                     : verdict.publisherName;
+            }
             out.push_back(std::move(info));
             continue;
         }
