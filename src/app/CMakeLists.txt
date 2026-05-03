@@ -245,6 +245,13 @@ qt_add_qml_module(
 
 target_include_directories(ajazz-control-center PRIVATE src)
 
+# `loaded_plugins_model.hpp` includes `ajazz/plugins/i_plugin_host.hpp` for the `PluginInfo`
+# definition (model rows reference it directly). The include is always needed — even when
+# `AJAZZ_BUILD_PYTHON_HOST=OFF` skips linking the library — because the header is header-only
+# declarations and the model still has to compile. Adding the include path unconditionally keeps
+# CodeQL (which configures with the plugin host disabled) and any future reduced-build target green.
+target_include_directories(ajazz-control-center PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
+
 target_link_libraries(
     ajazz-control-center
     PRIVATE ajazz::core
