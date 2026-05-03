@@ -147,38 +147,47 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
-- [ ] **Snap packaging recipe** — package the app for Canonical's
-  Snap store / `snapcraft`, complementing the existing Fedora /
-  Debian / Flatpak / Win / macOS recipes shipped in `9a94ae4`.
-  Required pieces:
-  - `snap/snapcraft.yaml` with the right `confinement` (likely
-    `strict` with explicit interfaces: `home`, `desktop`,
-    `desktop-legacy`, `wayland`, `x11`, `opengl`, `audio-playback`,
-    `network` — and crucially `raw-usb` + `hidraw` for the
-    Stream-Deck-class device backends; see
-    `resources/linux/99-ajazz.rules` for the hardware surface).
-  - Qt 6.8 base / content snap selection — `core24` vs the Qt
-    content snap; settle by trying both and benchmarking startup.
-  - `desktop` interface plug for the system tray + window.
-  - Verify QtWebEngine actually starts under strict confinement
-    (sandbox sub-process inside snap sandbox is historically
-    brittle); the alternative is `--no-sandbox` documented as a
-    Snap-specific quirk in the wiki.
-  - CI: extend `release.yml` with a `snap-build` job (`snapcraft remote-build` from a self-hosted runner is overkill here —
-    use the official `snapcore/action-build@v1`).
-  - Publish to the edge channel first; promote to stable once a
-    maintainer has smoke-tested on a clean Ubuntu 24.04.
+- [ ] **Snap packaging — first publish to the edge channel**.
+  Recipe scaffold + maintainer guide already shipped:
+
+  - `packaging/snap/snapcraft.yaml` — concrete manifest mirroring
+    the Flatpak file (`core24` base, `kde-neon-6` extension, the
+    manually-connected `raw-usb` + `hidraw` plugs for the device
+    backends).
+  - `docs/wiki/Snap-Packaging.md` — full guide covering local
+    build, the QtWebEngine sandbox-in-snap workaround, manual-
+    review pitfalls (`raw-usb` justification), and the four-channel
+    release ladder.
+
+  Open work to actually publish:
+
+  - Run `snapcraft pack --use-lxd packaging/snap` end-to-end on a
+    clean Ubuntu 24.04 box (CI doesn't have LXD; see
+    `docs/wiki/Snap-Packaging.md#local-build`).
+  - Add the `snap-build` job to `.github/workflows/release.yml`
+    using `snapcore/action-build@v1` (skeleton in the wiki).
+  - Run `snapcraft export-login` once with the
+    `Aiacos/ajazz-control-center` Snap Store account, store the
+    token as the `SNAP_STORE_TOKEN` repo secret.
+  - First push to `edge`; soak for one week then promote to
+    `beta` per the wiki's release ladder.
+  - File the manual-review request for the `raw-usb` plug with the
+    Snap Store team (linking to the device list page on the wiki
+    as justification).
+
 - [ ] **Square brand asset** for tray / app icon. The wordmark in
   `resources/branding/ajazz-logo.png` is a 3:1 banner; a centered crop
   produces mostly whitespace and looks worse than the current
   geometric placeholder. Either ask AJAZZ for a square logo or design a
   custom monogram inspired by the wordmark.
+
 - [x] **`make test` Windows fixture for `concurrent writers`** — switched
   to `ReplaceFileW` for the existing-destination case (the common path
   under contention) and widened the retry set to also catch
   `ERROR_LOCK_VIOLATION` and `ERROR_USER_MAPPED_FILE`. `MoveFileExW` is
   kept as the no-destination-yet fallback. Should eliminate the residual
   ~1/100 flake on windows-2022.
+
 - [x] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
   done this cycle. The four `SUBSYSTEM=="usb"` lines were dropped; only
   the matching `KERNEL=="hidraw*"` rules remain. **Validation**:
@@ -189,11 +198,13 @@ ______________________________________________________________________
   takes precedence over libusb when both are available). The libusb
   backend is built but not linked into our binary, so the dropped USB
   rules covered a code path we never enter at runtime.
+
 - [ ] **profile-buttons — wire Apply / Revert / Restore defaults to real
   paths** (surfaced by source-level `TODO(profile-buttons)` at
   `src/app/qml/Main.qml:111`). Today the three ProfileEditor buttons
   toast `"not implemented yet"` because `ProfileController` lacks the
   default-path resolution (`QStandardPaths::AppDataLocation/profile.json`)
+
   - a "Save as" file dialog for explicit paths. Wire-up needs:
     (1) `ProfileController::saveProfile()` / `loadProfile()` no-arg
     overloads that pick the default path, (2) a `QFileDialog` trigger for
@@ -203,6 +214,7 @@ ______________________________________________________________________
     instantiation anywhere — `Main.qml:124` uses only `Inspector {}`).
     Either re-hook them once the buttons actually save something the
     inspector can re-render, or delete them from the QML module. ≈ 1 day.
+
 - [ ] **via_keyboard — per-LED RGB matrix path** (source-level stub
   `throw std::runtime_error` at `src/devices/keyboard/src/via_keyboard.cpp:185`).
   Today we speak the VIA `id_custom_set_value` command (cmd `0x08`)
@@ -220,9 +232,11 @@ ______________________________________________________________________
   `{ led_index, r, g, b }` per LED — behind that gate. Until then the
   hard exception is intentional: callers are expected to check
   capabilities before calling. ≈ 1 day.
+
 - [ ] **macOS + Windows AutostartService backends** (source-level stub at
   `src/app/src/autostart_service.cpp:163`). Linux ships via the XDG
   `.desktop` autostart spec. Remaining:
+
   - **macOS**: write a LaunchAgent plist at
     `~/Library/LaunchAgents/<appId>.plist` with `RunAtLoad = true`
     and (for start-minimised) a `ProgramArguments` array that adds
@@ -232,6 +246,7 @@ ______________________________________________________________________
     same `--minimized` suffix. No admin rights needed (HKCU scope).
   - Feature-flag the platforms behind `#ifdef Q_OS_MACOS` / `Q_OS_WIN`
     alongside the existing Linux block. ≈ 0.5 day per platform.
+
 - [ ] **MacroRecorder — real native back-ends on all three OSes**
   (source-level `(TODO)` tags in
   `src/core/include/ajazz/core/macro_recorder.hpp:14-15` and
@@ -242,6 +257,7 @@ ______________________________________________________________________
   real events are captured. The header mentions a build-time gate
   `AJAZZ_FEATURE_MACRO_RECORDER`, but the option is **not wired**
   through CMake yet; adding it is the first step. Platform plan:
+
   - **Linux**: evdev (`/dev/input/eventN`) via a dedicated reader
     thread. Requires membership in the `input` group (rule already
     shipped in `resources/linux/99-ajazz.rules`) or CAP_DAC_READ_SEARCH.

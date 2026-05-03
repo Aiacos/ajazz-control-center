@@ -46,6 +46,7 @@ matches your desktop.
 - [Quick Start](Quick-Start)
 - [Release Process](Release-Process)
 - [Reverse Engineering](Reverse-Engineering)
+- [Snap Packaging](Snap-Packaging)
 - [Supported Devices](Supported-Devices)
 - [Troubleshooting](Troubleshooting)
 <!-- END AUTOGEN: toc-wiki -->

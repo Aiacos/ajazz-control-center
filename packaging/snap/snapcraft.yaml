@@ -1,0 +1,157 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# AJAZZ Control Center — Snap recipe.
+#
+# Mirrors `packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml` but for
+# Canonical's `snapd` confinement model. Build locally with `snapcraft pack`
+# from the repo root, or via CI `snap-build` job (see release.yml). For the
+# rationale behind every interface and the QtWebEngine sandbox-in-snap quirk,
+# read `docs/wiki/Snap-Packaging.md`.
+
+name: ajazz-control-center
+title: AJAZZ Control Center
+summary: Cross-platform control panel for AJAZZ Stream-Deck-class devices.
+description: |
+  Native, Qt-based control center for AJAZZ keypads, macropads and the
+  Stream-Deck-class device family. Supports per-key remapping, RGB
+  matrix editing, profile auto-switch, and a sandboxed Python plugin
+  SDK with Ed25519-signed manifests.
+
+  Strict-confinement build: USB / HID device access is granted via the
+  `raw-usb` and `hidraw` interfaces. Until the user runs `snap connect
+  ajazz-control-center:hidraw` once, the device list will appear empty.
+
+# Map upstream semver onto the Snap store schema. `grade: stable` lets the
+# build land on the stable channel; CI publishes to `edge` first regardless.
+adopt-info: ajazz-control-center
+grade: stable
+confinement: strict
+
+# `core24` (Ubuntu 24.04 LTS userland) gives us GLIBC 2.39 + GCC 13 + the
+# Qt 6.6 default. We pull Qt 6.8.3 from the official Qt content snap below
+# so the runtime exactly matches what `install-qt-action` produces in CI.
+base: core24
+
+# Snap-store architectures we publish for. Add `arm64` once the device
+# backends are exercised on aarch64 hardware (currently x86_64-only CI).
+platforms:
+  amd64:
+
+# `desktop` interface: tray icon + window display. `desktop-legacy` is
+# needed for X11 tray fallbacks on KDE Plasma. `wayland` + `x11` cover
+# both display servers; the runtime auto-detects.
+#
+# `raw-usb` + `hidraw`: gates access to /dev/hidraw* and /dev/bus/usb/*
+# which the streamdeck and keyboard backends both probe. These are
+# manually-connected interfaces — the user runs
+# `snap connect ajazz-control-center:hidraw` after install.
+#
+# `home`: read/write under `~/` for the profile JSON (default location:
+# `~/.config/Aiacos/AjazzControlCenter.conf`).
+#
+# `network`: the Plugin Store catalogue fetcher hits
+# `https://store.aiacos.dev` and the upstream Streamdock + OpenDeck
+# catalogue feeds. Disconnect this plug to disable online catalogue
+# (the bundled offline fixture still works).
+slots:
+  dbus-tray:
+    interface: dbus
+    bus: session
+    name: org.kde.StatusNotifierItem-${SNAP_INSTANCE_NAME}-1
+
+apps:
+  ajazz-control-center:
+    command: usr/bin/ajazz-control-center
+    extensions: [kde-neon-6]
+    common-id: io.github.Aiacos.AjazzControlCenter
+    desktop: usr/share/applications/ajazz-control-center.desktop
+    plugs:
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+      - audio-playback
+      - home
+      - network
+      - network-bind
+      - raw-usb
+      - hidraw
+      # `unity7` keeps the StatusNotifier tray protocol working on the
+      # legacy gtk-tray fallback path (older GNOME shells without the
+      # AppIndicator extension).
+      - unity7
+      - removable-media
+
+parts:
+  # The Qt 6.8.3 runtime is provided by the `kde-neon-6` extension above,
+  # but the version it ships (6.8.x at time of writing) is plumbed through
+  # the extension automatically. No manual `qt6-` part needed.
+
+  ajazz-control-center:
+    plugin: cmake
+    source: ../../
+    source-type: local
+    # Match the `release.yml` configuration: Release build, no werror
+    # (snapcraft's clang version may emit warnings the project's
+    # -Werror suppresses), all features ON.
+    cmake-parameters:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INSTALL_PREFIX=/usr
+      - -DAJAZZ_ENABLE_WERROR=OFF
+      - -DAJAZZ_BUILD_PROPERTY_INSPECTOR=ON
+      - -DAJAZZ_BUILD_PYTHON_HOST=ON
+    build-packages:
+      - cmake
+      - ninja-build
+      - pkg-config
+      - libudev-dev
+      - libusb-1.0-0-dev
+      - libhidapi-dev
+      - python3-dev
+      - libgl1-mesa-dev
+      - libxkbcommon-dev
+    stage-packages:
+      - libudev1
+      - libusb-1.0-0
+      - libhidapi-hidraw0
+      - python3
+      - python3-cryptography
+      - libxkbcommon0
+    override-pull: |
+      craftctl default
+      # Surface the upstream version into snapcraft (drives `adopt-info`).
+      craftctl set version="$(git -C "$CRAFT_PART_SRC" describe --tags --always --dirty 2>/dev/null || echo 0.0.0-dev)"
+      craftctl set grade=stable
+
+    # Strip debug symbols at stage time so the published snap stays under
+    # the soft 50 MiB tier-1 limit. Local builds can drop this override
+    # to keep symbols for `gdb`.
+    override-stage: |
+      craftctl default
+      find $CRAFT_STAGE -name '*.so*' -exec strip --strip-unneeded {} + 2>/dev/null || true
+
+  # Bundle the SEC-003 plugin-manifest verifier script + trust roots so
+  # the C++ host can find them at runtime. Mirrors what the Debian
+  # `postinst.sh` does on the .deb side.
+  plugin-resources:
+    plugin: dump
+    source: ../../
+    source-type: local
+    organize:
+      scripts/sign-plugin-manifest.py: usr/share/ajazz-control-center/scripts/sign-plugin-manifest.py
+      resources/trusted_publishers.json: usr/share/ajazz-control-center/resources/trusted_publishers.json
+      python/ajazz_plugins: usr/share/ajazz-control-center/python/ajazz_plugins
+    stage:
+      - usr/share/ajazz-control-center/**
+
+# Hooks fire on install / connect / disconnect of plugs. We use `connect`
+# to print a one-line nudge if the user hasn't connected `hidraw` yet —
+# without it the device list stays empty and the user gets no feedback.
+# The actual hook script lives at `snap/hooks/install` (CI generates it
+# from the YAML below).
+hooks:
+  configure:
+    plugs:
+      - hidraw
+      - raw-usb
