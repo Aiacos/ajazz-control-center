@@ -71,7 +71,7 @@ Page {
             Layout.fillHeight: true
             visible: LoadedPlugins.count === 0
             title: qsTr("No plugins loaded yet")
-            message: qsTr("Plugins will appear here once the host has imported them.")
+            body: qsTr("Plugins will appear here once the host has imported them.")
         }
 
         // Live list. Each row is a card with name + version on top and a
