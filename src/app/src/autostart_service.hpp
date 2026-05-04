@@ -40,7 +40,10 @@ class AutostartService : public QObject {
                    startMinimisedChanged)
 
 public:
-    explicit AutostartService(QObject* parent = nullptr);
+    // No default on `parent`: see BrandingService — a default-constructible
+    // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass
+    // the static `create()` factory, spawning a duplicate QML-side instance.
+    explicit AutostartService(QObject* parent);
 
     /// QML singleton factory — see BrandingService::create for the pattern.
     static AutostartService* create(QQmlEngine* qml, QJSEngine* js);

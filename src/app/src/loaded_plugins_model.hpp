@@ -90,7 +90,10 @@ public:
         TrustLevelRole,            ///< Derived enum string (see class doc).
     };
 
-    explicit LoadedPluginsModel(QObject* parent = nullptr);
+    // No default on `parent`: see BrandingService — a default-constructible
+    // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass
+    // the static `create()` factory, spawning a duplicate QML-side instance.
+    explicit LoadedPluginsModel(QObject* parent);
     ~LoadedPluginsModel() override = default;
 
     [[nodiscard]] int rowCount(QModelIndex const& parent = {}) const override;

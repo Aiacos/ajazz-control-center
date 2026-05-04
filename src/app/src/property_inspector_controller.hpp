@@ -121,7 +121,10 @@ public:
     /// Hand the singleton instance to the QML factory.
     static void registerInstance(PropertyInspectorController* instance) noexcept;
 
-    explicit PropertyInspectorController(QObject* parent = nullptr);
+    // No default on `parent`: see BrandingService — a default-constructible
+    // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass
+    // the static `create()` factory, spawning a duplicate QML-side instance.
+    explicit PropertyInspectorController(QObject* parent);
     ~PropertyInspectorController() override;
 
     [[nodiscard]] bool webEngineAvailable() const noexcept;

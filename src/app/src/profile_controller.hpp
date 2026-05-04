@@ -45,7 +45,10 @@ public:
     /// Hand the singleton instance to the QML factory.
     static void registerInstance(ProfileController* instance) noexcept;
 
-    explicit ProfileController(QObject* parent = nullptr);
+    // No default on `parent`: see BrandingService — a default-constructible
+    // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass
+    // the static `create()` factory, spawning a duplicate QML-side instance.
+    explicit ProfileController(QObject* parent);
 
     /**
      * @brief Load a profile from a JSON file and activate it.
