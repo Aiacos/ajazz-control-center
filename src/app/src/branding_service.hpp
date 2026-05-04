@@ -54,8 +54,20 @@ public:
      *
      * If `QSettings` contains a `Branding/ThemeOverride` path pointing at a
      * readable JSON file, the override is loaded instead.
+     *
+     * @note The `parent` parameter has no default value on purpose. Qt 6's
+     *       `QML_SINGLETON` SFINAE picks `SingletonConstructionMode::Constructor`
+     *       (default-construct via `new T`) over `Factory` (call our static
+     *       `create()`) whenever the class is default-constructible — even if
+     *       a static `create(QQmlEngine*, QJSEngine*)` exists. With a default
+     *       arg here, QML would silently spawn a *second* BrandingService and
+     *       read its (stale, dark-themed) palette while ThemeService updates
+     *       the registered instance. Forcing every caller to pass a parent
+     *       (or `nullptr` explicitly in tests) keeps the class non-default-
+     *       constructible so QML routes through `create()` and shares the
+     *       Application-owned instance.
      */
-    explicit BrandingService(QObject* parent = nullptr);
+    explicit BrandingService(QObject* parent);
 
     [[nodiscard]] QString productName() const noexcept { return productName_; }
     [[nodiscard]] QString vendorName() const noexcept { return vendorName_; }

@@ -50,10 +50,10 @@ QString writeThemeJson(QTemporaryDir const& dir, QByteArray const& contents) {
 
 } // namespace
 
-TEST_CASE("BrandingService: default-construction exposes the canonical AJAZZ palette",
+TEST_CASE("BrandingService: parent=nullptr construction exposes the canonical AJAZZ palette",
           "[branding]") {
     qtApp();
-    BrandingService svc;
+    BrandingService svc(nullptr);
     // The hardcoded fallback palette (loadEmbeddedDefaults) — these are
     // the AJAZZ dark theme baked into the binary. The embedded
     // `theme.json` resource is NOT linked into the test binary, so
@@ -84,7 +84,7 @@ TEST_CASE("BrandingService: loadThemeFile applies a valid override and emits the
       "fgMuted":    "#4a4a55"
     })");
 
-    BrandingService svc;
+    BrandingService svc(nullptr);
     QSignalSpy spy(&svc, &BrandingService::themeChanged);
     REQUIRE(spy.isValid());
 
@@ -108,7 +108,7 @@ TEST_CASE("BrandingService: loadThemeFile applies a valid override and emits the
 TEST_CASE("BrandingService: loadThemeFile rejects a missing file without mutation",
           "[branding][theme-load]") {
     qtApp();
-    BrandingService svc;
+    BrandingService svc(nullptr);
     auto const accentBefore = svc.accent();
     auto const bgBefore = svc.bgBase();
 
@@ -127,7 +127,7 @@ TEST_CASE("BrandingService: loadThemeFile rejects malformed JSON without mutatio
     REQUIRE(tmp.isValid());
     auto const path = writeThemeJson(tmp, QByteArray("{ this is not valid json"));
 
-    BrandingService svc;
+    BrandingService svc(nullptr);
     auto const accentBefore = svc.accent();
 
     QSignalSpy spy(&svc, &BrandingService::themeChanged);
@@ -143,7 +143,7 @@ TEST_CASE("BrandingService: loadThemeFile rejects non-object JSON (array / scala
     REQUIRE(tmp.isValid());
     auto const arrPath = writeThemeJson(tmp, QByteArray("[1, 2, 3]"));
 
-    BrandingService svc;
+    BrandingService svc(nullptr);
     auto const accentBefore = svc.accent();
     QSignalSpy spy(&svc, &BrandingService::themeChanged);
     REQUIRE_FALSE(svc.loadThemeFile(arrPath));
@@ -159,7 +159,7 @@ TEST_CASE("BrandingService: loadThemeFile preserves unspecified fields", "[brand
     // / bgSidebar / fgPrimary / etc. at their pre-load values.
     auto const path = writeThemeJson(tmp, R"({"accent": "#ff0000"})");
 
-    BrandingService svc;
+    BrandingService svc(nullptr);
     auto const bgBefore = svc.bgBase();
     auto const sidebarBefore = svc.bgSidebar();
     auto const fgBefore = svc.fgPrimary();
@@ -182,7 +182,7 @@ TEST_CASE("BrandingService: invalid color string is silently ignored", "[brandin
       "bgBase":  "#000000"
     })");
 
-    BrandingService svc;
+    BrandingService svc(nullptr);
     auto const accentBefore = svc.accent();
 
     REQUIRE(svc.loadThemeFile(path));

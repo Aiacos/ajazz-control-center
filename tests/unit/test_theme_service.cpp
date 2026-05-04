@@ -49,7 +49,7 @@ TEST_CASE("ThemeService: default mode is 'auto' when QSettings has no value", "[
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
     REQUIRE(theme.mode() == QStringLiteral("auto"));
 }
@@ -58,7 +58,7 @@ TEST_CASE("ThemeService: setMode('light') flips mode and emits modeChanged", "[t
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
     QSignalSpy spy(&theme, &ThemeService::modeChanged);
     REQUIRE(spy.isValid());
@@ -72,7 +72,7 @@ TEST_CASE("ThemeService: setMode('dark') flips mode and emits modeChanged", "[th
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
     QSignalSpy spy(&theme, &ThemeService::modeChanged);
 
@@ -85,7 +85,7 @@ TEST_CASE("ThemeService: setMode to the current mode is a no-op", "[theme]") {
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
 
     // Default is "auto"; setMode("auto") must not emit.
@@ -104,7 +104,7 @@ TEST_CASE("ThemeService: invalid strings fall back to 'auto'", "[theme]") {
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
 
     // Move off the default first so we can detect the fallback.
@@ -126,7 +126,7 @@ TEST_CASE("ThemeService: mode parsing is case-insensitive", "[theme]") {
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     ThemeService theme(&branding);
 
     theme.setMode(QStringLiteral("LIGHT"));
@@ -142,7 +142,7 @@ TEST_CASE("ThemeService: setMode persists to QSettings and the next instance res
     qtApp();
     clearThemeSettings();
 
-    BrandingService branding;
+    BrandingService branding(nullptr);
     {
         ThemeService theme(&branding);
         theme.setMode(QStringLiteral("light"));
