@@ -31,7 +31,7 @@ repos:
   # Hygiene: trailing whitespace, EOF newlines, large files, merge conflicts.
   # --------------------------------------------------------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v5.0.0
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
@@ -57,7 +57,7 @@ repos:
   # and runs a full pass in CI.
   # --------------------------------------------------------------------------
   - repo: https://github.com/pre-commit/mirrors-clang-format
-    rev: v18.1.8
+    rev: 39233709be54124a7371a50cbfc5325bd4fb9d90  # frozen: v22.1.4
     hooks:
       - id: clang-format
         types_or: [c++, c]
@@ -84,7 +84,7 @@ repos:
   # Python — ruff (format + lint) is the one tool to rule them all.
   # --------------------------------------------------------------------------
   - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.4
+    rev: 6fec9b7edb08fd9989088709d864a7826dc74e80  # frozen: v0.15.12
     hooks:
       - id: ruff
         args: [--fix, --exit-non-zero-on-fix]
@@ -94,7 +94,7 @@ repos:
   # CMake — cmake-format keeps our CMakeLists readable and consistent.
   # --------------------------------------------------------------------------
   - repo: https://github.com/cheshirekow/cmake-format-precommit
-    rev: v0.6.13
+    rev: e2c2116d86a80e72e7146a06e68b7c228afc6319  # frozen: v0.6.13
     hooks:
       - id: cmake-format
         additional_dependencies: [pyyaml]
@@ -105,7 +105,7 @@ repos:
   # YAML — yamllint catches indentation + style drift in workflows/manifests.
   # --------------------------------------------------------------------------
   - repo: https://github.com/adrienverge/yamllint
-    rev: v1.35.1
+    rev: cba56bcde1fdd01c1deb3f945e69764c291a6530  # frozen: v1.38.0
     hooks:
       - id: yamllint
         args: [--config-file=.yamllint.yaml]
@@ -114,13 +114,13 @@ repos:
   # Shell — shellcheck for correctness + shfmt for consistent formatting.
   # --------------------------------------------------------------------------
   - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.10.0.1
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
     hooks:
       - id: shellcheck
         args: [--severity=warning]
 
   - repo: https://github.com/scop/pre-commit-shfmt
-    rev: v3.10.0-2
+    rev: 05c1426671b9237fb5e1444dd63aa5731bec0dfb  # frozen: v3.13.1-1
     hooks:
       - id: shfmt
         args: [-w, -s, -i, "4", -ci]
@@ -129,7 +129,7 @@ repos:
   # Markdown — mdformat keeps docs and wiki consistent.
   # --------------------------------------------------------------------------
   - repo: https://github.com/executablebooks/mdformat
-    rev: 0.7.21
+    rev: 2d496dbc18e31b83a1596685347ffe0b6041daf0  # frozen: 1.0.0
     hooks:
       - id: mdformat
         # These files host AUTOGEN blocks whose layout is controlled by
@@ -152,7 +152,7 @@ repos:
   # GitHub Actions — actionlint catches workflow mistakes at commit time.
   # --------------------------------------------------------------------------
   - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.4
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
     hooks:
       - id: actionlint
 
@@ -160,7 +160,7 @@ repos:
   # Typos — catch spelling mistakes in code, comments, docs.
   # --------------------------------------------------------------------------
   - repo: https://github.com/crate-ci/typos
-    rev: v1.28.4
+    rev: a90d2a917d59472bef788897931c1a5a5d12870a  # frozen: v1
     hooks:
       - id: typos
         args: [--write-changes]
@@ -171,7 +171,7 @@ repos:
   # against its declared $schema. Catches manifest drift before CI.
   # --------------------------------------------------------------------------
   - repo: https://github.com/python-jsonschema/check-jsonschema
-    rev: 0.30.0
+    rev: 943377262562a12b57292fc98fabd7dbf81451fe  # frozen: 0.37.2
     hooks:
       - id: check-metaschema
         name: validate JSON Schemas (Draft 2020-12)
@@ -212,7 +212,7 @@ repos:
   # Commitlint — enforce Conventional Commits on the commit message.
   # --------------------------------------------------------------------------
   - repo: https://github.com/compilerla/conventional-pre-commit
-    rev: v3.6.0
+    rev: 3db014c16a9d31997ab8c07a4d61fcce936c8f0d  # frozen: v4.4.0
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
