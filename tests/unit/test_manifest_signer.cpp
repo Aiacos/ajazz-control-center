@@ -301,3 +301,36 @@ TEST_CASE("loadTrustRoots: malformed entry never cross-pairs", "[manifest-signer
     REQUIRE(roots[0].name == "Trusted Two");
     fs::remove_all(tmp);
 }
+
+TEST_CASE("loadTrustRoots: name-before-key entry resolves to a row", "[manifest-signer]") {
+    // JSON object members have no key-order guarantee — an entry
+    // written as `{"name":"X","key":"K"}` is legal and must yield the
+    // same TrustedPublisher as `{"key":"K","name":"X"}`. Pre-fix the
+    // mini-grep window started at `keyPos` and searched FORWARD for
+    // `"name"`, so the field appearing BEFORE `"key"` was outside the
+    // window and the entry silently demoted to self-signed (REVIEW
+    // WR-01). The fix widens the window backwards to the entry's
+    // opening `{` so the order is irrelevant.
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-trustroots-name-first";
+    fs::create_directories(tmp);
+    auto const reversed = tmp / "trusted_publishers.json";
+    {
+        std::ofstream f{reversed, std::ios::binary};
+        f << R"({
+  "publishers": [
+    { "name": "Trusted One", "key": "KEY1" },
+    { "key": "KEY2", "name": "Trusted Two" }
+  ]
+})";
+    }
+    auto const roots = loadTrustRoots(reversed);
+    REQUIRE(roots.size() == 2);
+    // The walk emits in cursor order (forward over the blob), and the
+    // cursor anchors on each `"key"` token, so the visit order is the
+    // file order. Both entries must resolve their names.
+    REQUIRE(roots[0].keyB64 == "KEY1");
+    REQUIRE(roots[0].name == "Trusted One");
+    REQUIRE(roots[1].keyB64 == "KEY2");
+    REQUIRE(roots[1].name == "Trusted Two");
+    fs::remove_all(tmp);
+}

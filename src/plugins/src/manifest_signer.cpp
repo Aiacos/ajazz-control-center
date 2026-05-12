@@ -107,11 +107,16 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
     // The publishers list is `"publishers":[ {…}, {…} ]`. The mini
     // JSON helper doesn't do nested objects, so we walk it manually:
     // for each `"key":"<value>"` followed by a `"name":"<value>"`
-    // *within the same JSON object* (closing `}` boundary), emit a
-    // TrustedPublisher. Bounding by `}` prevents a malformed entry
-    // (key without name) from cross-pairing with the next entry's
-    // name — well-formed input is unaffected, malformed input fails
-    // closed (no entry emitted) instead of pairing across entries.
+    // *within the same JSON object* (matched `{` … `}` boundary),
+    // emit a TrustedPublisher. Bounding by the entry braces both
+    //   1. prevents a malformed entry (key without name) from
+    //      cross-pairing with the next entry's name, and
+    //   2. lets us find `"name"` even when it appears BEFORE `"key"`
+    //      in the JSON object (legal JSON, no key-order guarantee —
+    //      previously such entries silently demoted to self-signed).
+    //      (REVIEW WR-01)
+    // Well-formed input is unaffected; malformed input fails closed
+    // (no entry emitted) rather than pairing across entries.
     std::vector<TrustedPublisher> out;
     std::string_view view{blob};
     std::size_t cursor = 0;
@@ -125,15 +130,18 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
         if (keyPos == std::string_view::npos) {
             break;
         }
-        // Window = from `"key"` to the next `}` (entry boundary), or
-        // 512 bytes if `}` isn't found within that range. The 512-byte
-        // cap exists for robustness against pathological input; a
-        // single publisher entry is always far smaller.
+        // Find the entry's open `{` by walking backwards from `keyPos`
+        // — this is the nearest `{` not preceded by another (no real
+        // nesting in publisher entries). If no `{` is found, fall back
+        // to the original keyPos-based window so the parser still makes
+        // forward progress on malformed input.
+        auto const openBrace = remaining.rfind('{', keyPos);
+        auto const windowStart = (openBrace == std::string_view::npos) ? keyPos : openBrace;
         auto const closeBrace = remaining.find('}', keyPos);
         auto const windowLen = closeBrace == std::string_view::npos
-                                   ? std::min<std::size_t>(512, remaining.size() - keyPos)
-                                   : std::min<std::size_t>(closeBrace - keyPos + 1, 512);
-        auto const window = remaining.substr(keyPos, windowLen);
+                                   ? std::min<std::size_t>(512, remaining.size() - windowStart)
+                                   : std::min<std::size_t>(closeBrace - windowStart + 1, 512);
+        auto const window = remaining.substr(windowStart, windowLen);
         auto const name = wire::findStringField(window, "name");
         if (!name.empty()) {
             out.push_back({key, name});

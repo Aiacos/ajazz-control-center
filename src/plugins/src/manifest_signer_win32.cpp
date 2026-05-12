@@ -118,10 +118,11 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
         return {};
     }
     // Walk `"key":"…"` then `"name":"…"` pairs bounded by the entry's
-    // closing `}` — duplicates the POSIX backend logic. Mirroring is
-    // intentional: any drift would be a cross-platform contract bug
-    // invisible to the test that runs on the dev's machine. See the
-    // POSIX implementation for the full rationale on the `}` bound.
+    // matched `{` … `}` braces — duplicates the POSIX backend logic.
+    // Mirroring is intentional: any drift would be a cross-platform
+    // contract bug invisible to the test that runs on the dev's
+    // machine. See the POSIX implementation for the full rationale on
+    // the brace-bound and the reverse-key-order fix (REVIEW WR-01).
     std::vector<TrustedPublisher> out;
     std::string_view view{blob};
     std::size_t cursor = 0;
@@ -135,11 +136,18 @@ std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPa
         if (keyPos == std::string_view::npos) {
             break;
         }
+        // Find the entry's open `{` by walking backwards from `keyPos`
+        // so the window covers the whole JSON object body — handles
+        // `"name"` appearing either before or after `"key"` in the
+        // entry. Falls back to keyPos-based window if no `{` precedes
+        // `keyPos`, so malformed input still makes forward progress.
+        auto const openBrace = remaining.rfind('{', keyPos);
+        auto const windowStart = (openBrace == std::string_view::npos) ? keyPos : openBrace;
         auto const closeBrace = remaining.find('}', keyPos);
         auto const windowLen = closeBrace == std::string_view::npos
-                                   ? std::min<std::size_t>(512, remaining.size() - keyPos)
-                                   : std::min<std::size_t>(closeBrace - keyPos + 1, 512);
-        auto const window = remaining.substr(keyPos, windowLen);
+                                   ? std::min<std::size_t>(512, remaining.size() - windowStart)
+                                   : std::min<std::size_t>(closeBrace - windowStart + 1, 512);
+        auto const window = remaining.substr(windowStart, windowLen);
         auto const name = wire::findStringField(window, "name");
         if (!name.empty()) {
             out.push_back({key, name});
