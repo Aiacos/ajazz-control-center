@@ -33,6 +33,7 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <type_traits>
 #include <vector>
 
 class QJSEngine;
@@ -286,5 +287,9 @@ private:
     QString m_opendeckStateString = QStringLiteral("loading");
     qint64 m_opendeckFetchedAtUnixMs = 0;
 };
+
+// See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
+static_assert(!std::is_default_constructible_v<PluginCatalogModel>,
+              "PluginCatalogModel must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

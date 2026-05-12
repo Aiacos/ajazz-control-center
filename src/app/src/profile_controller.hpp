@@ -18,6 +18,8 @@
 #include <QStringList>
 #include <QtQmlIntegration>
 
+#include <type_traits>
+
 class QJSEngine;
 class QQmlEngine;
 
@@ -143,5 +145,9 @@ private:
     ajazz::core::Profile m_profile{};
     QString m_path;
 };
+
+// See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
+static_assert(!std::is_default_constructible_v<ProfileController>,
+              "ProfileController must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

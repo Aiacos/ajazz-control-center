@@ -16,6 +16,8 @@
 #include <QtQmlIntegration>
 #include <QUrl>
 
+#include <type_traits>
+
 class QJSEngine;
 class QQmlEngine;
 
@@ -160,5 +162,12 @@ private:
     QColor fgPrimary_;
     QColor fgMuted_;
 };
+
+// Lock the load-bearing invariant from d7f932f at the compile site:
+// QML_SINGLETON + default-constructible class → Qt 6 picks
+// `SingletonConstructionMode::Constructor` over `Factory`, bypasses
+// our static `create()`, and spawns a duplicate QML-side instance.
+static_assert(!std::is_default_constructible_v<BrandingService>,
+              "BrandingService must not be default-constructible — see ctor @note.");
 
 } // namespace ajazz::app

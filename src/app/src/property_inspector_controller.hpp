@@ -43,6 +43,7 @@
 #include <QUrl>
 
 #include <memory>
+#include <type_traits>
 
 class QJSEngine;
 class QQmlEngine;
@@ -175,5 +176,12 @@ private:
     struct WebEngineImpl;
     std::unique_ptr<WebEngineImpl> webEngine_;
 };
+
+// See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
+// (Q_DISABLE_COPY_MOVE already prevents the other ways the type could be
+// default-constructed; this is belt-and-braces.)
+static_assert(
+    !std::is_default_constructible_v<PropertyInspectorController>,
+    "PropertyInspectorController must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

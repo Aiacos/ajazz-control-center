@@ -34,6 +34,7 @@
 #include <QStringList>
 #include <QtQmlIntegration>
 
+#include <type_traits>
 #include <vector>
 
 class QJSEngine;
@@ -158,5 +159,9 @@ private:
     /// @ref refresh is a no-op).
     plugins::IPluginHost* m_host{nullptr};
 };
+
+// See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
+static_assert(!std::is_default_constructible_v<LoadedPluginsModel>,
+              "LoadedPluginsModel must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

@@ -21,6 +21,8 @@
 #include <QString>
 #include <QtQmlIntegration>
 
+#include <type_traits>
+
 class QJSEngine;
 class QQmlEngine;
 
@@ -82,5 +84,9 @@ private:
     bool launchOnLogin_{false};
     bool startMinimised_{true};
 };
+
+// See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
+static_assert(!std::is_default_constructible_v<AutostartService>,
+              "AutostartService must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app
