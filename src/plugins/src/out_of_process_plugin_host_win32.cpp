@@ -692,16 +692,24 @@ bool OutOfProcessPluginHost::isAlive() const noexcept {
 }
 
 int OutOfProcessPluginHost::childPid() const noexcept {
-    // On Windows we expose the process HANDLE-as-int. The POSIX side
-    // returns the actual pid. Callers should treat the value as
-    // opaque ("a unique-per-process identifier the host knows
-    // about") rather than as a real OS pid; the existing logging
-    // call sites already do.
+    // Return the real OS pid via @c GetProcessId so the contract is
+    // symmetric with the POSIX backend (which returns the actual
+    // pid). The previous implementation truncated a 64-bit HANDLE to
+    // @c int, producing a value that was neither a real pid nor a
+    // usable HANDLE — diagnostic callers (logs, tests) silently
+    // printed misleading numbers (REVIEW WR-02).
+    //
+    // Win32 process IDs are 32-bit (DWORD) and fit comfortably in
+    // @c int. @c GetProcessId returns 0 on failure, which we map to
+    // the same -1 sentinel the POSIX side uses for a reaped child.
     if (!m_impl || m_impl->processHandle == -1) {
         return -1;
     }
-    return static_cast<int>(
-        reinterpret_cast<intptr_t>(reinterpret_cast<HANDLE>(m_impl->processHandle)));
+    DWORD const pid = GetProcessId(reinterpret_cast<HANDLE>(m_impl->processHandle));
+    if (pid == 0) {
+        return -1;
+    }
+    return static_cast<int>(pid);
 }
 
 std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
