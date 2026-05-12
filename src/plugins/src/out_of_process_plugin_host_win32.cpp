@@ -587,18 +587,19 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
     // _close will call CloseHandle. We do NOT keep both the HANDLE
     // and the fd pointing at the same pipe end.
     int const writeFd = _open_osfhandle(reinterpret_cast<intptr_t>(childStdinWrite), _O_BINARY);
-    // If the first _open_osfhandle succeeded, ownership has
-    // transferred and we must NOT CloseHandle(childStdinWrite) on
-    // cleanup — _close(writeFd) or the fd's destructor will do it.
-    // Track the transfer with a flag so the error path stays clean.
-    bool writeHandleOwned = (writeFd >= 0);
+    // If _open_osfhandle succeeded, ownership of the underlying HANDLE
+    // has transferred to the CRT — we must NOT CloseHandle(childStdinWrite)
+    // on cleanup; _close(writeFd) will do it. The flag is `const` and
+    // never re-read after the throw branch (the previous dead-store
+    // assignment to `false` was a leftover from an earlier draft).
+    // (REVIEW WR-05)
+    bool const writeHandleOwned = (writeFd >= 0);
     int const readFd =
         _open_osfhandle(reinterpret_cast<intptr_t>(childStdoutRead), _O_BINARY | _O_RDONLY);
     bool const readHandleOwned = (readFd >= 0);
     if (writeFd < 0 || readFd < 0) {
         if (writeHandleOwned) {
             _close(writeFd); // also closes childStdinWrite
-            writeHandleOwned = false;
         } else {
             CloseHandle(childStdinWrite);
         }
@@ -609,12 +610,17 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         }
         TerminateProcess(pi.hProcess, 1);
         CloseHandle(pi.hProcess);
+        // Mirrors the happy-path CloseHandle(pi.hThread) below — both
+        // branches release the same thread handle for the same reason
+        // (PROCESS_INFORMATION carries two refs; we only need the
+        // process handle alive). (REVIEW WR-05)
         CloseHandle(pi.hThread);
         throw std::runtime_error("OutOfProcessPluginHost: _open_osfhandle failed");
     }
 
     // The thread handle is not needed — the child's main thread runs
     // to completion of python3. Only the process handle is kept.
+    // The error branch above performs the symmetric CloseHandle.
     CloseHandle(pi.hThread);
 
     m_impl->processHandle = reinterpret_cast<intptr_t>(pi.hProcess);
