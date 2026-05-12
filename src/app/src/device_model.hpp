@@ -20,6 +20,7 @@
 
 #include <cstdint>
 #include <set>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -135,5 +136,14 @@ private:
     /// Populated by refresh() at startup and on every hot-plug event.
     std::set<std::pair<std::uint16_t, std::uint16_t>> m_connected;
 };
+
+// QML_SINGLETON dual-instance trap: DeviceModel stays safe today only
+// because the required `core::DeviceRegistry&` first ctor parameter is a
+// reference (and references have no "default"). A future refactor that
+// switches it to a default-nullable pointer silently re-arms the bug —
+// Qt 6 picks Constructor over Factory and spawns a duplicate QML-side
+// instance. See BrandingService / e221b21.
+static_assert(!std::is_default_constructible_v<DeviceModel>,
+              "DeviceModel must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

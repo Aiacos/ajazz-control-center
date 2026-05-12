@@ -14,6 +14,8 @@
 #include <QString>
 #include <QtQmlIntegration>
 
+#include <type_traits>
+
 class QAction;
 
 class QJSEngine;
@@ -144,5 +146,13 @@ private:
     bool paused_{false};
     QString batteryTooltip_; ///< Last battery summary sent via setDeviceBattery().
 };
+
+// QML_SINGLETON dual-instance trap: TrayController stays safe today only
+// because the required `BrandingService*` first ctor parameter has no
+// default value. Defaulting it (or making `profiles` the first parameter)
+// silently re-arms the bug — Qt 6 picks Constructor over Factory and
+// spawns a duplicate QML-side instance. See BrandingService / e221b21.
+static_assert(!std::is_default_constructible_v<TrayController>,
+              "TrayController must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app

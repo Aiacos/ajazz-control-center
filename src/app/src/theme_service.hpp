@@ -19,6 +19,8 @@
 #include <QString>
 #include <QtQmlIntegration>
 
+#include <type_traits>
+
 class QJSEngine;
 class QQmlEngine;
 
@@ -94,5 +96,13 @@ private:
     BrandingService* branding_ = nullptr; ///< Non-owning pointer.
     Mode mode_ = Mode::Auto;
 };
+
+// QML_SINGLETON dual-instance trap: ThemeService stays safe today only
+// because the required `BrandingService*` first ctor parameter has no
+// default value. If a future commit defaults that parameter, Qt 6 picks
+// `SingletonConstructionMode::Constructor` over `Factory` and spawns a
+// duplicate QML-side instance. See BrandingService / e221b21.
+static_assert(!std::is_default_constructible_v<ThemeService>,
+              "ThemeService must not be default-constructible — see BrandingService.");
 
 } // namespace ajazz::app
