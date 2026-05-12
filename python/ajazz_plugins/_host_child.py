@@ -345,11 +345,25 @@ def _crash_for_test() -> None:
     Uses ``os.kill(getpid(), SIGSEGV)`` so the host observes both signal
     delivery and a non-zero exit code, mirroring the failure mode of
     a misbehaving C extension inside the child.
+
+    On Windows ``os.kill(pid, SIGSEGV)`` raises (Win32 only honours
+    ``SIGTERM`` / ``CTRL_*`` for cross-process signalling and rejects
+    arbitrary signals to your own pid), so we catch every exception
+    type and drop through to the ``ctypes.string_at(0)`` belt — which
+    is what gets the test a non-zero exit + child death on Windows.
+    Without the catch, Python's default handler would print a
+    traceback and exit code 1 BEFORE the fallback runs, breaking the
+    "deterministic SIGSEGV semantics" contract the C++ test asserts.
+    (REVIEW WR-04)
     """
     _emit({"event": "crashing"})
     _ipc.flush()
-    os.kill(os.getpid(), signal.SIGSEGV)
-    # Belt and braces: if the platform somehow ignored the signal,
+    # `contextlib.suppress(Exception)` rather than try/except/pass per
+    # the project's ruff config (SIM105) — same semantics, fewer lines.
+    with contextlib.suppress(Exception):
+        os.kill(os.getpid(), signal.SIGSEGV)
+    # Belt and braces: if the platform somehow ignored the signal (or
+    # raised because os.kill(SIGSEGV) is unsupported, as on Windows),
     # fall back to a real null deref via `ctypes` so the test still
     # observes a non-zero exit and a child death.
     ctypes.string_at(0)
