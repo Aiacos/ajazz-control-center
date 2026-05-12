@@ -114,8 +114,16 @@ void Application::initPluginHost() {
         host->addSearchPath(userPluginsQ.toStdString());
         host->loadAll();
 
-        m_loadedPlugins->setPlugins(host->plugins());
+        // Wire the host pointer FIRST, then the row data — that way any
+        // QML "Reload" affordance (which calls @c LoadedPluginsModel::refresh
+        // via the host pointer) cannot observe a freshly-populated model
+        // backed by a null host. Today this ordering is unreachable because
+        // the QML engine isn't loaded until @c exposeToQml runs after
+        // @c bootstrap, but the previous order encoded a fragile
+        // assumption that future bootstrap reorganisation could violate.
+        // (REVIEW WR-03)
         m_loadedPlugins->setPluginHost(host.get());
+        m_loadedPlugins->setPlugins(host->plugins());
         m_pluginHost = std::move(host);
 
         AJAZZ_LOG_INFO("app",
