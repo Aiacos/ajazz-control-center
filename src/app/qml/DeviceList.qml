@@ -42,6 +42,12 @@ Rectangle {
 
         delegate: DeviceRow {
             // F-08/COD-019: required model roles instead of parent.parent.model.
+            // Names match DeviceModel::roleNames() exactly (model / codename /
+            // family / connected). To avoid the QML self-binding trap where
+            // `connected: connected` self-references the DeviceRow's `connected`
+            // property and resolves to its default `false`, the consumer-facing
+            // properties on DeviceRow are namespaced (deviceCodename /
+            // deviceConnected). See the note at the top of DeviceRow.qml.
             required property string model
             required property string codename
             required property int    family
@@ -49,8 +55,8 @@ Rectangle {
 
             width: ListView.view ? ListView.view.width : implicitWidth
             modelName: model
-            codename: codename
-            connected: connected
+            deviceCodename: codename
+            deviceConnected: connected
 
             onClicked: root.deviceSelected(codename)
         }

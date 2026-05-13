@@ -7,12 +7,20 @@
 // hover/press effects from QtQuick.Controls.
 //
 // Properties:
-//   * `modelName` — primary line (human-readable device model).
-//   * `codename`  — secondary line component (machine identifier).
-//   * `connected` — secondary line component (online state).
+//   * `modelName`        — primary line (human-readable device model).
+//   * `deviceCodename`   — secondary line component (machine identifier).
+//   * `deviceConnected`  — secondary line component (online state).
 //
 // Emits:
 //   * `clicked` — already provided by ItemDelegate.
+//
+// Naming note: `deviceCodename` / `deviceConnected` instead of the more
+// natural `codename` / `connected` so that the consumer's delegate can
+// declare `required property string codename` / `required property bool
+// connected` (the model role names) without shadowing — `<role>: <role>`
+// would otherwise self-bind to the component's own property and silently
+// resolve to the default value (empty string / false). Was the cause of
+// "all devices show offline" reported 2026-05-13.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -22,8 +30,8 @@ ItemDelegate {
     id: root
 
     property string modelName: ""
-    property string codename: ""
-    property bool connected: false
+    property string deviceCodename: ""
+    property bool deviceConnected: false
 
     height: 56
 
@@ -45,8 +53,8 @@ ItemDelegate {
         }
         Text {
             Layout.fillWidth: true
-            text: "%1 · %2".arg(root.codename)
-                           .arg(root.connected ? qsTr("connected") : qsTr("offline"))
+            text: "%1 · %2".arg(root.deviceCodename)
+                           .arg(root.deviceConnected ? qsTr("connected") : qsTr("offline"))
             color: Theme.fgMuted
             font.pixelSize: Theme.fontXs
             elide: Text.ElideRight
@@ -55,6 +63,7 @@ ItemDelegate {
 
     Accessible.role: Accessible.ListItem
     Accessible.name: root.modelName
-    Accessible.description: root.connected ? qsTr("Connected device %1").arg(root.codename)
-                                            : qsTr("Offline device %1").arg(root.codename)
+    Accessible.description: root.deviceConnected
+        ? qsTr("Connected device %1").arg(root.deviceCodename)
+        : qsTr("Offline device %1").arg(root.deviceCodename)
 }
