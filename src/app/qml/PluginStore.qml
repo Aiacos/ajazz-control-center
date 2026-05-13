@@ -563,6 +563,7 @@ Page {
                     spacing: Theme.spacingSm
 
                     Image {
+                        id: tileIcon
                         source: tile.iconUrl
                         sourceSize.width: 80
                         sourceSize.height: 80
@@ -571,8 +572,24 @@ Page {
                         fillMode: Image.PreserveAspectFit
                         smooth: true
                         mipmap: true
+                        asynchronous: true
                         Accessible.role: Accessible.Graphic
                         Accessible.name: qsTr("%1 icon").arg(tile.name)
+
+                        // Subtle placeholder shown while the icon is loading
+                        // or when the upstream URL fails (e.g. DNS error on
+                        // appstore.elgato.com which hosts Stream Deck plugin
+                        // icons cross-listed by the Streamdock catalogue).
+                        // Keeps the tile geometry stable so switching tabs
+                        // doesn't reflow the GridView around broken images.
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: tileIcon.status !== Image.Ready
+                            color: Theme.bgRowHover
+                            radius: Theme.radiusSm
+                            border.color: Theme.borderSubtle
+                            border.width: 1
+                        }
                     }
 
                     ColumnLayout {
@@ -726,6 +743,7 @@ Page {
                 Layout.fillWidth: true
                 spacing: Theme.spacingMd
                 Image {
+                    id: detailsIcon
                     source: details.entry.iconUrl || ""
                     sourceSize.width: 96
                     sourceSize.height: 96
@@ -733,6 +751,19 @@ Page {
                     Layout.preferredHeight: 48
                     fillMode: Image.PreserveAspectFit
                     smooth: true
+                    asynchronous: true
+
+                    // Same placeholder pattern as the tile icon — see
+                    // tileIcon for rationale. Keeps the details panel
+                    // header layout stable when the upstream URL fails.
+                    Rectangle {
+                        anchors.fill: parent
+                        visible: detailsIcon.status !== Image.Ready
+                        color: Theme.bgRowHover
+                        radius: Theme.radiusSm
+                        border.color: Theme.borderSubtle
+                        border.width: 1
+                    }
                 }
                 ColumnLayout {
                     Layout.fillWidth: true
