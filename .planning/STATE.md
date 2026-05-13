@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
 status: planning
 last_updated: '2026-05-13T21:30:00.000Z'
-last_activity: '2026-05-13 — Completed quick task 260513-uy6: Plugin Store Phase A (logs + Retry + re-entry guard)'
+last_activity: '2026-05-13 — Completed quick task 260513-v6b: Plugin Store Phase B (proxy + GridView refactor)'
 progress:
   total_phases: 6
   completed_phases: 0
@@ -65,6 +65,7 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 | ---------- | ----------------------------------------------------------------------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
 | 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic        | 2026-05-13 | 4acc9c5 | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/) |
 | 260513-uy6 | Plugin Store Phase A — fetcher logging + Retry buttons + re-entry guard | 2026-05-13 | ec9590c | [260513-uy6-plugin-store-phase-a](./quick/260513-uy6-plugin-store-phase-a/)                   |
+| 260513-v6b | Plugin Store Phase B — PluginCatalogProxyModel + GridView refactor      | 2026-05-13 | 9b1589f | [260513-v6b-plugin-store-phase-b](./quick/260513-v6b-plugin-store-phase-b/)                   |
 
 ### Blockers/Concerns
 
