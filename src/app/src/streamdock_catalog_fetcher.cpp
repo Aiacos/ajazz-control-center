@@ -22,6 +22,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QLoggingCategory>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -37,6 +38,12 @@
 namespace ajazz::app {
 
 namespace {
+
+/// Logging category for the Streamdock catalogue fetch path. Filter via
+/// `QT_LOGGING_RULES="ajazz.plugins.streamdock.debug=true"` or the
+/// matching `qtlogging.ini` rule. By default only `qCInfo` / `qCWarning`
+/// / `qCCritical` are surfaced; `qCDebug` is suppressed.
+Q_LOGGING_CATEGORY(lcStreamdock, "ajazz.plugins.streamdock")
 
 /// Public Space endpoint. Anonymous, accepts JSON POST bodies.
 constexpr char kDefaultCatalogUrl[] = "https://space.key123.vip/interface/user/productInfo/list";
@@ -421,14 +428,18 @@ void StreamdockCatalogFetcher::writeCache(std::vector<CatalogEntry> const& rows,
     QDir().mkpath(fi.absolutePath());
     QSaveFile out{path};
     if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qCWarning(lcStreamdock) << "cache write failed (open):" << path << out.errorString();
         return; // non-fatal; we'll retry on the next refresh.
     }
     QByteArray const payload = serialiseSnapshot(rows, QDateTime::currentMSecsSinceEpoch(), origin);
     if (out.write(payload) != payload.size()) {
+        qCWarning(lcStreamdock) << "cache write failed (short write):" << path << "wrote"
+                                << payload.size() << "bytes";
         out.cancelWriting();
         return;
     }
     out.commit(); // atomic rename of the .tmp into place.
+    qCInfo(lcStreamdock) << "cache written:" << path << "(" << payload.size() << "bytes)";
 }
 
 StreamdockCatalogFetcher::Snapshot StreamdockCatalogFetcher::loadFromCache() const {
@@ -472,6 +483,15 @@ void StreamdockCatalogFetcher::emitSnapshot(Snapshot snapshot) {
 }
 
 void StreamdockCatalogFetcher::refresh() {
+    // Re-entry guard: if a previous refresh() is still walking the
+    // pagination chain, ignore this call. Without this, two overlapping
+    // refresh()es can race on m_accumulated and drop rows mid-flight
+    // (see 260513-u0b-FINDINGS.md MEDIUM-2).
+    if (m_state == State::Loading) {
+        qCInfo(lcStreamdock) << "refresh() ignored \u2014 fetch already in flight";
+        return;
+    }
+
     // 1. Immediate: emit the cached snapshot if any, else the bundled
     //    fallback. The UI gets rows to render before the first network
     //    round-trip even returns.
@@ -486,8 +506,12 @@ void StreamdockCatalogFetcher::refresh() {
     QUrl const url = effectiveCatalogUrl();
     if (m_catalogUrlOverride == QStringLiteral("disabled") ||
         qEnvironmentVariable(kEnvOverride) == QStringLiteral("disabled")) {
+        qCInfo(lcStreamdock)
+            << "live fetch disabled via override \u2014 staying on cached/fallback";
         return;
     }
+
+    qCInfo(lcStreamdock) << "starting live catalogue fetch:" << url.toString();
 
     // Reset accumulated state and start at page 1.
     m_accumulated.clear();
@@ -506,8 +530,15 @@ void StreamdockCatalogFetcher::refresh() {
 void StreamdockCatalogFetcher::fetchPage(int pageNum) {
     QUrl const url = effectiveCatalogUrl();
     if (!url.isValid() || url.scheme().isEmpty()) {
+        qCWarning(lcStreamdock) << "fetchPage(" << pageNum
+                                << ") aborted — invalid URL:" << url.toString();
         return;
     }
+
+    qCInfo(lcStreamdock) << "fetching page" << pageNum
+                         << (m_inFlightTotalPages > 0
+                                 ? QStringLiteral("of %1").arg(m_inFlightTotalPages)
+                                 : QStringLiteral("(total unknown until page 1 returns)"));
 
     QNetworkRequest req{url};
     req.setHeader(QNetworkRequest::ContentTypeHeader,
@@ -535,6 +566,10 @@ void StreamdockCatalogFetcher::onPageFinished(QNetworkReply* reply) {
     QUrl const origin = effectiveCatalogUrl();
 
     if (reply->error() != QNetworkReply::NoError) {
+        qCWarning(lcStreamdock) << "page fetch failed:" << reply->error() << reply->errorString()
+                                << "(URL:" << reply->url().toString() << "HTTP:"
+                                << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute)
+                                << ")";
         // Live fetch failed. Keep the previously emitted cached / fallback
         // snapshot \u2014 we don't want to flap the UI back to "loading".
         if (m_state == State::Loading) {
@@ -549,8 +584,24 @@ void StreamdockCatalogFetcher::onPageFinished(QNetworkReply* reply) {
     QByteArray const bytes = reply->readAll();
     QJsonParseError err{};
     QJsonDocument const doc = QJsonDocument::fromJson(bytes, &err);
-    if (err.error != QJsonParseError::NoError || !doc.isObject() ||
-        doc.object().value(QStringLiteral("code")).toInt() != 200) {
+    if (err.error != QJsonParseError::NoError) {
+        qCWarning(lcStreamdock) << "JSON parse failed at offset" << err.offset << ":"
+                                << err.errorString() << "(first 200 bytes:" << bytes.left(200)
+                                << ")";
+        if (m_state == State::Loading) {
+            m_state = m_accumulated.empty() ? State::Offline : State::Cached;
+            emit stateChanged(m_state);
+        }
+        return;
+    }
+    if (!doc.isObject() || doc.object().value(QStringLiteral("code")).toInt() != 200) {
+        int const upstreamCode =
+            doc.isObject() ? doc.object().value(QStringLiteral("code")).toInt() : -1;
+        QString const upstreamMsg = doc.isObject()
+                                        ? doc.object().value(QStringLiteral("msg")).toString()
+                                        : QStringLiteral("(non-object payload)");
+        qCWarning(lcStreamdock) << "upstream envelope rejected: code=" << upstreamCode
+                                << "msg=" << upstreamMsg;
         if (m_state == State::Loading) {
             m_state = m_accumulated.empty() ? State::Offline : State::Cached;
             emit stateChanged(m_state);
@@ -563,6 +614,8 @@ void StreamdockCatalogFetcher::onPageFinished(QNetworkReply* reply) {
     int const pageNum = data.value(QStringLiteral("pageNum")).toInt(1);
     if (m_inFlightTotalPages == 0) {
         m_inFlightTotalPages = std::min(totalPage, kMaxPages);
+        qCInfo(lcStreamdock) << "upstream reports" << totalPage << "page(s); will fetch"
+                             << m_inFlightTotalPages << "(kMaxPages=" << kMaxPages << ")";
     }
 
     auto const pageRows = parseUpstreamJson(bytes, origin);
@@ -575,6 +628,8 @@ void StreamdockCatalogFetcher::onPageFinished(QNetworkReply* reply) {
     }
 
     // All pages collected \u2014 commit to disk and emit.
+    qCInfo(lcStreamdock) << "pagination complete:" << m_accumulated.size() << "row(s) across"
+                         << pageNum << "page(s) \u2014 writing cache";
     writeCache(m_accumulated, origin);
     Snapshot final;
     final.rows = std::move(m_accumulated);

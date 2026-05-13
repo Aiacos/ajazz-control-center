@@ -314,6 +314,22 @@ Page {
                         Accessible.role: Accessible.StaticText
                         Accessible.name: text
                     }
+                    // Retry — re-runs PluginCatalog.reload() which kicks both
+                    // fetchers. Disabled while a fetch is already in flight
+                    // (the fetcher's own re-entry guard would no-op the call
+                    // anyway, but disabling the button gives the user a
+                    // clearer affordance).
+                    ToolButton {
+                        text: "↻" // ↻
+                        font.pixelSize: Theme.fontMd
+                        enabled: streamdockBanner.streamdockState !== "loading" && PluginCatalog
+                        onClicked: if (PluginCatalog) PluginCatalog.reload()
+                        ToolTip.text: qsTr("Refresh catalogue")
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Refresh Streamdock catalogue")
+                    }
                 }
             }
         }
@@ -436,6 +452,17 @@ Page {
                         wrapMode: Text.WordWrap
                         Accessible.role: Accessible.StaticText
                         Accessible.name: text
+                    }
+                    ToolButton {
+                        text: "↻" // ↻
+                        font.pixelSize: Theme.fontMd
+                        enabled: opendeckBanner.opendeckState !== "loading" && PluginCatalog
+                        onClicked: if (PluginCatalog) PluginCatalog.reload()
+                        ToolTip.text: qsTr("Refresh catalogue")
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        Accessible.role: Accessible.Button
+                        Accessible.name: qsTr("Refresh OpenDeck catalogue")
                     }
                 }
             }

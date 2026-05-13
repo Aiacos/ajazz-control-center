@@ -20,6 +20,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QLoggingCategory>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -34,6 +35,10 @@
 namespace ajazz::app {
 
 namespace {
+
+/// Logging category for the OpenDeck catalogue fetch path. Filter via
+/// `QT_LOGGING_RULES="ajazz.plugins.opendeck.debug=true"` or qtlogging.ini.
+Q_LOGGING_CATEGORY(lcOpenDeck, "ajazz.plugins.opendeck")
 
 constexpr char kDefaultCatalogUrl[] = "https://plugins.amankhanna.me/catalogue.json";
 constexpr char kEnvOverride[] = "ACC_OPENDECK_CATALOG_URL";
@@ -275,10 +280,12 @@ OpenDeckCatalogFetcher::Snapshot OpenDeckCatalogFetcher::loadFromCache() const {
 void OpenDeckCatalogFetcher::writeCache(std::vector<CatalogEntry> const& rows, QUrl const& origin) {
     QString const path = cacheFilePath();
     if (path.isEmpty()) {
+        qCWarning(lcOpenDeck) << "cache write skipped — cache path is empty";
         return;
     }
     QSaveFile f(path);
     if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+        qCWarning(lcOpenDeck) << "cache write failed (open):" << path << f.errorString();
         return;
     }
     QJsonArray rowArr;
@@ -291,8 +298,15 @@ void OpenDeckCatalogFetcher::writeCache(std::vector<CatalogEntry> const& rows, Q
                static_cast<double>(QDateTime::currentMSecsSinceEpoch()));
     env.insert(QStringLiteral("sourceUrl"), origin.toString());
     env.insert(QStringLiteral("state"), QStringLiteral("online"));
-    f.write(QJsonDocument(env).toJson(QJsonDocument::Compact));
+    QByteArray const payload = QJsonDocument(env).toJson(QJsonDocument::Compact);
+    if (f.write(payload) != payload.size()) {
+        qCWarning(lcOpenDeck) << "cache write failed (short write):" << path << "wrote"
+                              << payload.size() << "bytes";
+        f.cancelWriting();
+        return;
+    }
     f.commit();
+    qCInfo(lcOpenDeck) << "cache written:" << path << "(" << payload.size() << "bytes)";
 }
 
 void OpenDeckCatalogFetcher::emitSnapshot(Snapshot snapshot) {
@@ -305,6 +319,14 @@ void OpenDeckCatalogFetcher::emitSnapshot(Snapshot snapshot) {
 }
 
 void OpenDeckCatalogFetcher::refresh() {
+    // Re-entry guard: a previous refresh() may still be waiting on its
+    // reply. Ignore this call instead of racing on m_state and the
+    // cache write (see 260513-u0b-FINDINGS.md MEDIUM-2).
+    if (m_state == State::Loading) {
+        qCInfo(lcOpenDeck) << "refresh() ignored — fetch already in flight";
+        return;
+    }
+
     // 1. Always emit cache OR bundled fallback first so the UI has
     //    something to render immediately.
     Snapshot initial = loadFromCache();
@@ -315,8 +337,11 @@ void OpenDeckCatalogFetcher::refresh() {
 
     QUrl const url = effectiveCatalogUrl();
     if (url.isEmpty() || url.toString() == QStringLiteral("disabled")) {
+        qCInfo(lcOpenDeck) << "live fetch disabled via override — staying on cached/fallback";
         return; // Live fetch disabled — keep the cache/fallback layer.
     }
+
+    qCInfo(lcOpenDeck) << "starting live catalogue fetch:" << url.toString();
 
     if (m_netAccessManager == nullptr) {
         m_netAccessManager = new QNetworkAccessManager(this);
@@ -340,6 +365,9 @@ void OpenDeckCatalogFetcher::refresh() {
 void OpenDeckCatalogFetcher::onReplyFinished(QNetworkReply* reply) {
     reply->deleteLater();
     if (reply->error() != QNetworkReply::NoError) {
+        qCWarning(lcOpenDeck) << "fetch failed:" << reply->error() << reply->errorString()
+                              << "(URL:" << reply->url().toString() << "HTTP:"
+                              << reply->attribute(QNetworkRequest::HttpStatusCodeAttribute) << ")";
         // Live fetch failed — keep whatever the initial emission
         // already gave us. We only update state to Offline if the
         // initial emission was the bundled fallback (no usable
@@ -359,6 +387,8 @@ void OpenDeckCatalogFetcher::onReplyFinished(QNetworkReply* reply) {
     QByteArray const bytes = reply->readAll();
     auto rows = parseUpstreamJson(bytes, reply->url());
     if (rows.empty()) {
+        qCWarning(lcOpenDeck) << "fetch returned no parseable rows (" << bytes.size()
+                              << "bytes); first 200 bytes:" << bytes.left(200);
         // Bad payload — same handling as a network failure.
         Snapshot restored = loadFromCache();
         if (restored.rows.empty()) {
@@ -367,6 +397,7 @@ void OpenDeckCatalogFetcher::onReplyFinished(QNetworkReply* reply) {
         emitSnapshot(restored);
         return;
     }
+    qCInfo(lcOpenDeck) << "fetch complete:" << rows.size() << "row(s) — writing cache";
     writeCache(rows, reply->url());
     Snapshot s;
     s.rows = std::move(rows);
