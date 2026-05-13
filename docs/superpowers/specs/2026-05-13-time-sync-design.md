@@ -1,15 +1,43 @@
 # Time Sync — Feature Design
 
 **Date:** 2026-05-13
-**Status:** Approved (design A: full scaffolding, backend stubs)
+**Status:** Approved (design A: pre-emptive scaffolding, backend stubs)
 **Author:** Brainstorming session 2026-05-13
 **Tracking:** TODO.md → "Time Sync feature"
 
+## Critical context (read this first)
+
+The 2026-05-13 vendor-app inventory pass (committed in `d5616ef`)
+established that **no AJAZZ Stream Dock device firmware currently
+exposes a host-settable RTC over HID**: the public Space Plugin SDK
+documents 12 sendable + 19 received events, none time-related, and the
+vendor desktop app's "clock widgets" are Vue components that render the
+host time onto a button-face image then push that image via the
+existing per-key image-upload path. Keyboard backends (AKB980 PRO) have
+not yet been verified — vendor driver V1.0.0.6 is a Delphi installer
+in `~/MEGAsync/Ajazz/` whose payload requires `wine`/`innoextract` to
+extract for static analysis.
+
+This feature therefore implements **pre-emptive scaffolding for a
+device-firmware capability that does not exist today**. All backends
+return `Result::NotImplemented` from `setTime()`. The user accepted this
+in the brainstorming session because:
+
+1. The pattern matches the existing `aj_series.cpp` precedent (wire
+   format documented but unconfirmed — see file header `@warning`).
+1. If a future firmware revision adds RTC support, only the backend
+   `setTime()` body needs to change; UI / service / capability /
+   documentation are already in place.
+1. An alternative "host-side clock widget" design exists (render
+   QImage host-side, push via existing image-upload) and is documented
+   as future-work in the Open Questions section. It is NOT this slice.
+
 ## Goal
 
-Let users sync the host system clock to AJAZZ devices that expose a clock /
-RTC over HID — typically Stream Dock variants whose displays render the
-current time. Two modes:
+Let users sync the host system clock to AJAZZ devices that expose a
+clock / RTC over HID — none today, but the scaffolding lets them do so
+the moment a backend implements `IClockCapable::setTime()` for real.
+Two modes:
 
 1. **Manual** — a "Sync now" button per device, immediate one-shot push.
 1. **Automatic** (toggle) — re-push the system time on each device connection
@@ -178,14 +206,14 @@ Computed from the registered descriptor's capability bitset.
   ```
 - Mouse backends (`src/devices/mouse/src/aj_series.cpp`): we do NOT
   add `IClockCapable` — mice don't render time, no use case.
-- Keyboard backend (AKB980 PRO): TBD pending vendor-app reverse-eng
-  (the V1.0.0.6 driver we have locally is a Delphi installer that
-  needs `wine`/`innoextract` to extract). Either:
-  - (a) add stub now (consistent with stream-deck) and document that
-    keyboard time-sync remains unverified;
-  - (b) wait for reverse-eng before deciding.
-    Default in this design: **(a)** — uniform pattern is easier than
-    the keyboard being a special case.
+- Keyboard backend (AKB980 PRO): default to **(a) add stub now**,
+  consistent with the stream-deck families. The V1.0.0.6 vendor driver
+  is locally archived as a Delphi installer (Win32 PE with `MZP` magic)
+  in `~/MEGAsync/Ajazz/`; extracting its payload requires `wine` /
+  `innoextract` which the dev environment doesn't currently have. The
+  stub keeps the surface uniform — keyboard handles `Capability::Clock`
+  the same way the stream-deck families do, and the day a real wire
+  format surfaces it's a one-method swap with no UI churn.
 
 ## Data flow
 
@@ -271,15 +299,35 @@ service + interface + capability bit; 0% of the wire-format paths
   (capability + UI + service); device-side wire format is still
   TBD per family."
 
-## Open questions / blockers (post-design)
+## Resolved design decisions (post-recon)
 
-| #   | Question                                                                                 | Decision needed by                          | Notes                                                                              |
-| --- | ---------------------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------------------------------------------------------- |
-| 1   | Wire format for AKB980 PRO keyboard time-sync                                            | Pre-implement (b)? Else default to (a) stub | V1.0.0.6 Delphi installer present locally; needs `wine` / `innoextract` to extract |
-| 2   | Wire format for Stream Dock family (AKP153 / AKP03 / AKP05 / 0x3004)                     | Background recon in progress                | Awaiting agent's `vendor-software-inventory.md` update                             |
-| 3   | Should `setTime` accept time-zone offset, or always UTC?                                 | Pre-implement                               | Default: always UTC at the interface; backends translate if firmware expects local |
-| 4   | Auto-sync interval beyond per-arrival re-push?                                           | Future slice                                | Out of scope for this design                                                       |
-| 5   | Should the Sync button live in DeviceRow (sidebar) or only in a per-device detail panel? | UI mock review                              | Default: both, sidebar for quick access, detail panel for confirmation feedback    |
+All five open questions were decided during the brainstorming session
+on 2026-05-13. None remain blockers for implementation.
+
+| #   | Question                                                                                 | Decision                                              | Rationale                                                                                                                                                                                                                                                                                                    |
+| --- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | Wire format for AKB980 PRO keyboard time-sync                                            | (a) stub now                                          | V1.0.0.6 Delphi installer is locally present in `~/MEGAsync/Ajazz/` but extracting requires `wine`/`innoextract` not installed in the dev env. Stub keeps the surface uniform with stream-deck families.                                                                                                     |
+| 2   | Wire format for Stream Dock family (AKP153 / AKP03 / AKP05 / 0x3004)                     | (a) stub now — feature confirmed ABSENT in vendor app | Background recon agent inventoried Mirabox 3.10.191.0421 + AJAZZ-rebranded builds and verified the Space Plugin SDK exposes 12 sendable + 19 received events, NONE time-related. Vendor "clock widget" is a host-side Vue component pushed as image. There is no firmware setTime to implement. See d5616ef. |
+| 3   | Should `setTime` accept time-zone offset, or always UTC?                                 | UTC at the interface                                  | Backends are responsible for translating to local / BCD / firmware-specific representation. Avoids two encodings of the same data crossing the API boundary.                                                                                                                                                 |
+| 4   | Auto-sync interval beyond per-arrival re-push?                                           | Out of scope                                          | Interval-based re-push adds queue management + power concerns; deferred until a real backend exists to validate the need.                                                                                                                                                                                    |
+| 5   | Should the Sync button live in DeviceRow (sidebar) or only in a per-device detail panel? | DeviceRow only (this slice)                           | Per-device detail panel doesn't exist yet in the codebase; introducing one is its own slice. Sidebar button + Settings toggle covers both manual and automatic UX.                                                                                                                                           |
+
+## Future-work alternative (NOT this slice)
+
+If product later wants Stream Dock displays to actually show the
+current time on a button face, the right design is **not** an
+extension of this slice. It is a separate "Clock Widget" feature that
+reuses the existing image-upload path:
+
+- A host-side `ClockWidget` (Qt + QPainter) renders a 85×85 / 72×72
+  PNG of the current time at ~1 Hz.
+- `ButtonAssignmentService` lets the user assign the widget to a
+  specific key on a Stream Dock device (alongside Key Press / Sleep
+  / etc. action types).
+- The render output is pushed via `IDisplayCapable::setKeyImage`,
+  which already exists in `akp153.cpp` / `akp03.cpp` / `akp05.cpp`.
+
+Tracked under TODO.md as a separate item.
 
 ## Build / test sequence
 
