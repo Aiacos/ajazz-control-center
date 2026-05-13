@@ -82,9 +82,9 @@ follow.
 
 ## Status
 
-| Track                     | Status                                                                                                         | Last updated |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------- | ------------ |
-| Inventory (URLs + hashes) | 🟡 partial — Stream Dock, AK keyboards, AJ mice covered; Mirabox-branded Stream Dock and Maude not yet probed. | 2026-04-26   |
-| Protocol notes            | ⚪ scaffold only — no captures performed yet.                                                                  | 2026-04-26   |
-| Feature matrix            | ⚪ scaffold only — populated as captures land.                                                                 | 2026-04-26   |
-| Techniques                | ⚪ scaffold only — populated as recon surfaces patterns.                                                       | 2026-04-26   |
+| Track                     | Status                                                                                                                                                                                      | Last updated |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| Inventory (URLs + hashes) | 🟡 partial — Stream Dock (incl. Mirabox-branded current build 3.10.191.0421 added 2026-05-13), AK keyboards, AJ mice covered; Maude still missing; SHA-256 archival pass open on most rows. | 2026-05-13   |
+| Protocol notes            | ⚪ scaffold only — no captures performed yet.                                                                                                                                               | 2026-04-26   |
+| Feature matrix            | ⚪ scaffold only — populated as captures land.                                                                                                                                              | 2026-04-26   |
+| Techniques                | ⚪ scaffold only — populated as recon surfaces patterns.                                                                                                                                    | 2026-04-26   |

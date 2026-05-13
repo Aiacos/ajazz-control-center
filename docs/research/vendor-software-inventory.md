@@ -46,7 +46,10 @@ All probe metadata captured **2026-04-26** unless an entry says
 otherwise. Rows annotated `(captured 2026-04-29)` were re-probed
 or downloaded during the static-analysis pass that produced
 Findings 5–10 in [`vendor-protocol-notes.md`](vendor-protocol-notes.md);
-SHA-256 hashes recorded there.
+SHA-256 hashes recorded there. Rows annotated
+`(captured 2026-05-13)` were re-probed during the time-sync
+feature scoping pass — see "Time-sync feature in vendor app"
+note immediately under the Stream Dock table.
 
 ## Stream Dock (Mirabox + AJAZZ-branded)
 
@@ -56,11 +59,15 @@ desktop-app stack. AJAZZ ships a re-branded installer that drops the
 Mirabox chrome but keeps the same WebSocket / SDK protocol. The
 shared catalogue API is documented at `https://sdk.key123.vip/en/guide/overview.html`.
 
-| Distribution                       | OS           | Version                                                              | Bytes       | Last-Modified | Content-MD5 (hex)                     | URL                                                                                                                   |
-| ---------------------------------- | ------------ | -------------------------------------------------------------------- | ----------- | ------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| Stream Dock — AJAZZ-branded global | Windows 7+   | **2.9.177.122** (captured 2026-04-29)                                | 121 620 400 | 2024-01-29    | `a1828628 11703e09 582a009a 6a9a6a90` | `https://hotspot-oss-bucket.oss-cn-shenzhen.aliyuncs.com/custom/AJAZZ/Stream-Dock-AJAZZ-Installer_Windows_global.exe` |
-| Stream Dock — AJAZZ-branded global | macOS 10.15+ | unspecified                                                          | 282 152 918 | 2024-02-01    | `dcbd35d9 54547369 c6e6e530 eef88dd3` | `https://hotspot-oss-bucket.oss-cn-shenzhen.aliyuncs.com/custom/AJAZZ/Stream-Dock-AJAZZ-Installer_Mac_global.dmg`     |
-| Stream Dock — Mirabox generic      | Windows      | listed on `cdn1.key123.vip/StreamDock/Stream-Dock-Installer_Windows` | pending     | pending       | pending                               | discovery page: `https://mirabox.key123.vip/download`                                                                 |
+| Distribution                                     | OS           | Version                                                                          | Bytes       | Last-Modified | Content-MD5 (hex)                     | URL                                                                                                                   |
+| ------------------------------------------------ | ------------ | -------------------------------------------------------------------------------- | ----------- | ------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| Stream Dock — AJAZZ-branded global               | Windows 7+   | **2.9.177.122** (captured 2026-04-29; HEAD unchanged 2026-05-13)                 | 121 620 400 | 2024-01-29    | `a1828628 11703e09 582a009a 6a9a6a90` | `https://hotspot-oss-bucket.oss-cn-shenzhen.aliyuncs.com/custom/AJAZZ/Stream-Dock-AJAZZ-Installer_Windows_global.exe` |
+| Stream Dock — AJAZZ-branded global               | macOS 10.15+ | unspecified (HEAD unchanged 2026-05-13)                                          | 282 152 918 | 2024-02-01    | `dcbd35d9 54547369 c6e6e530 eef88dd3` | `https://hotspot-oss-bucket.oss-cn-shenzhen.aliyuncs.com/custom/AJAZZ/Stream-Dock-AJAZZ-Installer_Mac_global.dmg`     |
+| Stream Dock — AJAZZ-branded global (CDN1 mirror) | Windows 7+   | unspecified (newer than the 2024 Aliyun copy; captured 2026-05-13)               | 560 933 008 | 2026-04-24    | `b8e556ff f3c40fe0 33734b47 ca152ed2` | `https://cdn1.key123.vip/Custom/AJAZZ/global/Stream-Dock-AJAZZ-Installer_Windows_global.exe`                          |
+| Stream Dock — AJAZZ-branded global (CDN1 mirror) | macOS        | unspecified (captured 2026-05-13; .pkg payload — superset of .dmg)               | 910 761 455 | 2026-05-08    | `22160044 29dc6167 dd96d871 4e0d807f` | `https://cdn1.key123.vip/Custom/AJAZZ/global/Stream-Dock-AJAZZ-Installer_Mac_global.pkg`                              |
+| Stream Dock — AJAZZ-branded global (CDN1 mirror) | macOS        | unspecified (captured 2026-05-13; .dmg variant — older than .pkg, kept for diff) | 281 559 472 | 2025-05-18    | `2ce75cf9 d4cceddb 8f5ace73 95785ef8` | `https://cdn1.key123.vip/Custom/AJAZZ/global/Stream-Dock-AJAZZ-Installer_Mac_global.dmg`                              |
+| Stream Dock — Mirabox generic (current build)    | Windows 7+   | latest from changelog **3.10.191.0421** (captured 2026-05-13)                    | 865 235 120 | 2026-05-09    | `58d79f63 647eacc0 7919727c 51a5a806` | `https://cdn1.key123.vip/StreamDock/Stream-Dock-Installer_Windows.exe` (also reachable as `https://key123.vip/win`)   |
+| Stream Dock — Mirabox generic (current build)    | macOS        | latest from changelog **3.10.191.0421** (captured 2026-05-13; `.pkg`)            | 873 135 104 | 2026-04-08    | `bdb447bf d84c5566 7053df2e 51a19c75` | `https://cdn1.key123.vip/StreamDock/Stream-Dock-Installer_Mac.pkg` (also reachable as `https://key123.vip/mac`)       |
 
 > **Stream Dock Windows 2.9.177.122 — full hashes** (captured
 > 2026-04-29, vendor URL above):
@@ -71,13 +78,72 @@ shared catalogue API is documented at `https://sdk.key123.vip/en/guide/overview.
 > - Authenticode: signed by `Shenzhen An Rui Xin Technology Co., Ltd.` (Sectigo Public Code Signing CA EV R36, valid 2023-10-30 → 2024-10-29, GlobalSign G4 timestamped). See `static-2026-04-29-streamdock-win-002` in `vendor-protocol-notes.md`.
 
 > **Source pages**: `https://support.key123.vip/faqs/streamVersion.html`
-> (version history, gated by JS — direct probe failed 2026-04-26),
-> `https://space.key123.vip/StreamDock` (catalogue + plugin store).
-> Plugin SDK reference: `https://sdk.key123.vip/en/guide/overview.html`.
+> (version history, gated by JS — direct probe failed 2026-04-26
+> and 2026-05-13), `https://space.key123.vip/StreamDock`
+> (catalogue + plugin store, also JS-rendered to empty for our
+> single-shot fetcher), `https://mirabox.net/pages/download` and
+> `https://mirabox.key123.vip/download` (download-page hubs,
+> JS-rendered). Plugin SDK reference:
+> `https://sdk.key123.vip/en/guide/overview.html`. Changelog
+> (server-side rendered, complete — see "Time-sync feature in vendor
+> app" note above): `https://sdk.key123.vip/en/guide/changelog.html`.
+> FAQ (server-side rendered, complete):
+> `https://support.key123.vip/faqs/streamDock.html`. SDK event
+> tables: `https://sdk.key123.vip/en/guide/events-sent.html`,
+> `https://sdk.key123.vip/en/guide/events-received.html`. SDK
+> examples: `https://sdk.key123.vip/en/example/clock.html`,
+> `https://sdk.key123.vip/en/example/timer.html`.
 
 > **Linux availability**: none. AJAZZ does not ship a Linux build of
 > the Stream Dock app; this is one of the primary motivations for
 > AJAZZ Control Center.
+
+> **Time-sync feature in vendor app — NOT EXPOSED at the SDK level**
+> (captured 2026-05-13). The public Space Plugin SDK
+> (`https://sdk.key123.vip/en/guide/events-sent.html`,
+> `https://sdk.key123.vip/en/guide/events-received.html`) lists
+> exactly 12 plugin-sendable events (`setSettings`, `getSettings`,
+> `setGlobalSettings`, `getGlobalSettings`, `openUrl`, `logMessage`,
+> `setTitle`, `setImage`, `showAlert`, `showOk`, `setState`,
+> `sendToPropertyInspector`) and 19 plugin-received events (`keyDown`,
+> `keyUp`, `dialDown`, `dialUp`, `dialRotate`, `willAppear`,
+> `willDisappear`, `titleParametersDidChange`, `deviceDidConnect`,
+> `deviceDidDisconnect`, `applicationDidLaunch`, `applicationDidTerminate`,
+> `systemDidWakeUp`, `propertyInspectorDidAppear`,
+> `propertyInspectorDidDisappear`, `sendToPlugin`,
+> `sendToPropertyInspector`, plus the two `didReceive*Settings`
+> shared events). **None** of these is a `setTime` / `setDateTime`
+> / `syncTime` / `setSystemTime` / `clockChanged` / `rtc*`. The
+> changelog (`https://sdk.key123.vip/en/guide/changelog.html`)
+> mentions a single time-related feature — version **2.10.183.1031**:
+> "Added the function of carousel to set time and implement
+> corresponding functions (limited to Stream Dock, Toolbox and OBS
+> Studio)" — and the FAQ (`https://support.key123.vip/faqs/streamDock.html`
+> #48: "How to use the countdown timer in the time plugin?"
+> answer: "Drag the 'Countdown' function to a button, set the
+> timer, and press the button to start the countdown") confirms
+> this is a host-side **countdown timer / clock-face widget**
+> (the static asset `btn_duration.png` documented as
+> `static-2026-04-26-streamdock-win-001` in
+> `vendor-protocol-notes.md`), **not** a device-RTC sync feature.
+> The SDK clock and timer examples
+> (`https://sdk.key123.vip/en/example/clock.html`,
+> `https://sdk.key123.vip/en/example/timer.html`) are Vue widgets
+> that render host time on a button face — they do not source
+> time from NTP and they do not write to the device. **Implication
+> for AJAZZ Control Center**: a "set device time" / "sync clock"
+> feature does NOT exist in the vendor app at the SDK / wire-
+> protocol level. If the AKP-class hardware has an on-device RTC
+> at all, it is set (if ever) by the vendor app's main process via
+> a private USB command that has not been surfaced via the public
+> SDK, and the Stream Dock product line *does not advertise*
+> on-device timekeeping as a user feature. Reverse-engineering the
+> binary for this specific feature is therefore unlikely to bear
+> fruit; a USB capture of the vendor app at first-connect would
+> be the cheapest way to confirm whether *any* time bytes are sent
+> over USB at startup. See the gap row in
+> [`vendor-feature-matrix.md`](vendor-feature-matrix.md) once that
+> capture lands.
 
 ## Keyboards
 
@@ -172,13 +238,19 @@ engineer can cross-check artefacts.
 These need a person + bandwidth to close:
 
 1. **Stream Dock — Mirabox-branded** Windows + macOS installers
-   (the non-`AJAZZ`-renamed builds). The discovery page
-   (`mirabox.key123.vip/download`) is JS-rendered and a single-shot
-   WebFetch still returns empty content (re-probed 2026-04-29).
-   Try a real browser session and record the raw URLs, sizes,
-   MD5s here — the Mirabox build is a strict superset of the
-   AJAZZ build for the AKP-class hardware so its protocol log is
-   the more thorough capture target.
+   (the non-`AJAZZ`-renamed builds). ✅ Direct CDN URLs found
+   2026-05-13 by guessing the canonical filename
+   (`cdn1.key123.vip/StreamDock/Stream-Dock-Installer_{Windows.exe,Mac.pkg}`)
+   — see the new "Mirabox generic (current build)" rows in the
+   table above. The 825 MB Win installer last-modified 2026-05-09
+   matches the changelog's current head version 3.10.191.0421
+   (date-stamped 2026-04-21). The Mac PKG (835 MB) was uploaded
+   2026-04-08 and is the .pkg payload (a strict superset of the
+   .dmg variant on the Custom/AJAZZ/global path). Inner version
+   strings (`(Get-Item).VersionInfo` for the Win .exe;
+   `pkgutil --payload-files` then `defaults read Info.plist CFBundleShortVersionString` for the Mac .pkg) **still pending**
+   — gated on a downstream-engineer download into the out-of-repo
+   vault. Authenticode and Mach-O signing chain also still pending.
 1. **Maude keyboard** — confirmed via web search (2026-04-29) NOT
    present on `ajazz.net` or `a-jazz.com`. Most likely (a) an
    internal codename, (b) a regional-only release, or (c)
@@ -206,6 +278,24 @@ These need a person + bandwidth to close:
    Findings 5–10 by capture-id. **Remaining**: every artefact in
    the table whose row says `pending` for Bytes / Last-Modified —
    re-probe and add hashes once they are downloaded.
+1. **Time-sync feature — confirmed ABSENT at the SDK level**
+   (captured 2026-05-13). Public Space Plugin SDK does not expose
+   any setTime / setDateTime / syncTime / setSystemTime /
+   clockChanged / rtc-\* event in either direction; the only time-
+   related vendor feature is a host-side countdown / clock-face
+   widget (`btn_duration.png` asset, FAQ #48 confirms it is a
+   user-driven button). **Remaining work** (gated on a downstream
+   engineer with capture hardware): (a) a USB capture of the
+   vendor app at first-connect to confirm whether the AKP-class
+   firmware exposes a private "set RTC" command not surfaced in
+   the SDK; (b) a strings dump of the Mirabox-current
+   `Stream-Dock-Installer_Windows.exe` (865 MB, captured above)
+   with the regex `grep -aE 'setTime|setDateTime|syncTime|setRTC|setClock|setSystemTime|TimeZone|NTP|date.*sync'`
+   to detect any private code paths. Do BOTH before deciding
+   whether the time-sync track in AJAZZ Control Center is parity
+   work or a clean greenfield design (TODO: cross-link to the
+   relevant TODO.md item once the feature is scoped). The
+   inventory entry above is the entry point for that work.
 1. **Version strings — partial** (captured 2026-04-29):
    AK820 Max RGB inner-EXE FileVersion `2024.11.20.01`, AJ199 V1.0
    inner build `20231205`, AJ199 Max inner-EXE FileVersion
