@@ -20,6 +20,10 @@ A modern, open, cross-platform control center for AJAZZ devices (stream decks, k
 
 `.planning/` was retrofitted onto this brownfield repo to enable structured `/gsd-code-review` of work that had already shipped to `main` without phase tracking. Two retro-phases wrap the most recent thematic clusters of commits (SEC-003 plugin host integration; QML_SINGLETON dual-instance sweep). PROJECT.md, ROADMAP.md, and STATE.md were created as stubs sufficient for the SDK to validate phase lookups; this is **not** a full GSD discovery output.
 
+## Milestone History
+
+- **v1.0** (shipped 2026-05-13) — Retro-fit catalogue. 2 phases, 7/7 success criteria, audit `tech_debt` (CR-01 + WR-01 deferred). Archived in `.planning/milestones/`.
+
 ## Key Constraints
 
 - No system-level mutations from tooling (no writes to `~/.config/niri/`, `~/.config/noctalia/`, `/usr/share/`, etc.) — see user-memory `feedback_no_system_mutations.md`.
