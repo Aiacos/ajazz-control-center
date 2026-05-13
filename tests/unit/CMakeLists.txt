@@ -21,6 +21,14 @@ add_executable(
     # different path.
     test_opendeck_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_catalog_fetcher.cpp
+    # PluginCatalogProxyModel: pins the filter contract for the Plugin
+    # Store GridView (HIGH-1/HIGH-2 fix from quick task 260513-u0b). The
+    # proxy references PluginCatalogModel::Roles only — no networking,
+    # no Qt event loop spin — so the source file links cleanly into
+    # this binary alongside the existing fetcher tests.
+    test_plugin_catalog_proxy_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_catalog_proxy_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_catalog_model.cpp
     # QtExecutor: pins the A2 audit-finding contract — non-blocking
     # scheduling, parent-thread dispatch, null-safe, drop-on-destroy.
     # Q_OBJECT in the header so AUTOMOC has to scan it.
