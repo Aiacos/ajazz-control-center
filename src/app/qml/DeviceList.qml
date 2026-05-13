@@ -58,6 +58,15 @@ Rectangle {
             deviceCodename: codename
             deviceConnected: connected
 
+            // Show only currently-connected devices in the sidebar. The
+            // model still exposes the full registry (14 supported models
+            // today), but the offline ones are hidden and collapsed to
+            // height 0 so they don't take up sidebar space. The
+            // EmptyState below the ListView covers the "nothing
+            // plugged in" case.
+            visible: connected
+            height: connected ? implicitHeight : 0
+
             onClicked: root.deviceSelected(codename)
         }
     }
