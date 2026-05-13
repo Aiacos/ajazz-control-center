@@ -40,6 +40,7 @@ qt_add_executable(
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     src/loaded_plugins_model.cpp
+    src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
     src/profile_controller.cpp

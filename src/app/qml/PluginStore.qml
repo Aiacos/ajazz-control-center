@@ -99,30 +99,19 @@ Page {
     }
 
     // ----------------------------------------------------------------------
-    // Filter helper. Keeping the predicate in JS lets us swap the underlying
-    // model (sort/filter proxy) without rewriting the QML.
+    // Filter proxy. Tab + query filtering used to live in QML JS
+    // (rowMatches() applied per-delegate via `visible: matches`), which
+    // left phantom slots in the GridView when non-matching tiles
+    // collapsed to width:0/height:0 and made the empty-state predicate
+    // drift on delegate recycle. PluginCatalogProxyModel (C++,
+    // QSortFilterProxyModel) moves that logic into the model layer so
+    // the GridView only sees rows that should render.
     // ----------------------------------------------------------------------
-    function rowMatches(name, description, tags, source, installed) {
-        // Tab filter.
-        switch (root.activeTab) {
-        case 1: if (!installed) return false; break;
-        case 2: if (source !== "streamdock") return false; break;
-        case 3: if (source !== "opendeck") return false; break;
-        case 4: if (source !== "community") return false; break;
-        default: break;
-        }
-        // Search filter — case-insensitive substring across name, summary
-        // and tag list. Empty query = match-all.
-        if (root.query.length === 0) {
-            return true;
-        }
-        const q = root.query;
-        if (name.toLowerCase().indexOf(q) >= 0) return true;
-        if (description.toLowerCase().indexOf(q) >= 0) return true;
-        for (let i = 0; i < tags.length; ++i) {
-            if (String(tags[i]).toLowerCase().indexOf(q) >= 0) return true;
-        }
-        return false;
+    PluginCatalogProxy {
+        id: catalogProxy
+        sourceModel: PluginCatalog
+        activeTab: root.activeTab
+        query: root.query
     }
 
     // ----------------------------------------------------------------------
@@ -481,9 +470,11 @@ Page {
             radius: Theme.radiusMd
 
             // Empty-state fallback when no rows match the current filter.
+            // `catalogProxy.count` is the single source of truth for the
+            // visible-row count now that the proxy filters in C++.
             EmptyState {
                 anchors.centerIn: parent
-                visible: grid.visibleCount === 0
+                visible: catalogProxy.count === 0
                 width: Math.min(parent.width - Theme.spacingXl * 2, 360)
                 title: root.query.length > 0
                     ? qsTr("No plugins match \u201C%1\u201D").arg(searchField.text)
@@ -504,16 +495,12 @@ Page {
                 anchors.margins: Theme.spacingMd
                 clip: true
 
-                /// Recomputed by the delegate's filtering Binding so the
-                /// empty-state fallback knows when to show itself.
-                property int visibleCount: 0
-
                 // Tile sizing — 240 wide × 200 tall, with 12 px gutter.
                 cellWidth: 252
                 cellHeight: 212
                 cacheBuffer: cellHeight * 2
 
-                model: PluginCatalog
+                model: catalogProxy
                 delegate: pluginTile
 
                 ScrollBar.vertical: ScrollBar {
@@ -549,28 +536,17 @@ Page {
             required property bool installed
             required property bool enabled
             required property string source
-            // Filtering is applied here so non-matching rows fold to zero
-            // height and the GridView reflows; Component recycling keeps
-            // this cheap even on catalogues with hundreds of entries.
-            readonly property bool matches: root.rowMatches(
-                tile.name, tile.description, tile.tags, tile.source, tile.installed)
-            visible: matches
-            width: matches ? grid.cellWidth - Theme.spacingMd : 0
-            height: matches ? grid.cellHeight - Theme.spacingMd : 0
+            // Filtering is now done in C++ by `catalogProxy`
+            // (PluginCatalogProxyModel). The GridView only sees rows that
+            // should render, so every delegate is unconditionally visible
+            // and sized — no more `visible:false; width:0; height:0`
+            // phantom slots, no more recycle-prone `visibleCount` math.
+            width: grid.cellWidth - Theme.spacingMd
+            height: grid.cellHeight - Theme.spacingMd
             radius: Theme.radiusMd
             color: tileMouse.containsMouse ? Theme.tileHover : Theme.tile
             border.color: root.selectedUuid === tile.uuid ? Theme.accent : Theme.borderSubtle
             border.width: root.selectedUuid === tile.uuid ? Theme.focusRingWidth : 1
-
-            // Bump the visible-count whenever this delegate is shown.
-            // Component.onCompleted fires per recycled instance, so we
-            // rely on the binding-based counter pattern instead.
-            onVisibleChanged: {
-                if (visible) grid.visibleCount += 1;
-                else grid.visibleCount = Math.max(0, grid.visibleCount - 1);
-            }
-            Component.onCompleted: if (visible) grid.visibleCount += 1
-            Component.onDestruction: if (visible) grid.visibleCount = Math.max(0, grid.visibleCount - 1)
 
             MouseArea {
                 id: tileMouse
