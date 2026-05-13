@@ -13,6 +13,7 @@
 // type-check `root.deviceSelected(...)` instead of warning unqualified.
 pragma ComponentBehavior: Bound
 import QtQuick
+import QtQml.Models
 import AjazzControlCenter
 import "components"
 
@@ -24,7 +25,7 @@ Rectangle {
     signal deviceSelected(string codename)
 
     /// Alias to the internal ListView model; set by the parent to supply devices.
-    property alias model: list.model
+    property alias model: visibleDevices.model
 
     ListView {
         id: list
@@ -40,34 +41,41 @@ Rectangle {
         // launch (no devices plugged in yet).
         visible: count > 0
 
-        delegate: DeviceRow {
-            // F-08/COD-019: required model roles instead of parent.parent.model.
-            // Names match DeviceModel::roleNames() exactly (model / codename /
-            // family / connected). To avoid the QML self-binding trap where
-            // `connected: connected` self-references the DeviceRow's `connected`
-            // property and resolves to its default `false`, the consumer-facing
-            // properties on DeviceRow are namespaced (deviceCodename /
-            // deviceConnected). See the note at the top of DeviceRow.qml.
-            required property string model
-            required property string codename
-            required property int    family
-            required property bool   connected
+        // Filter the underlying DeviceModel down to only currently-
+        // connected devices via DelegateModel.inItems. This is the Qt6
+        // idiomatic way to filter a ListView: the offline rows are
+        // excluded from the `items` group entirely, so ListView.spacing
+        // doesn't get applied to them as ghost gaps between visible
+        // rows (which previously left visible delegates vertically
+        // misaligned with each other depending on how many offline
+        // rows were interleaved between them).
+        model: DelegateModel {
+            id: visibleDevices
 
-            width: ListView.view ? ListView.view.width : implicitWidth
-            modelName: model
-            deviceCodename: codename
-            deviceConnected: connected
+            delegate: DeviceRow {
+                // F-08/COD-019: required model roles instead of parent.parent.model.
+                // Names match DeviceModel::roleNames() exactly. To avoid the QML
+                // self-binding trap (`connected: connected` would self-reference
+                // the DeviceRow's `connected` property and resolve to `false`),
+                // the consumer-facing properties on DeviceRow are namespaced
+                // (deviceCodename / deviceConnected). See the note at the top
+                // of DeviceRow.qml.
+                required property string model
+                required property string codename
+                required property int    family
+                required property bool   connected
 
-            // Show only currently-connected devices in the sidebar. The
-            // model still exposes the full registry (14 supported models
-            // today), but the offline ones are hidden and collapsed to
-            // height 0 so they don't take up sidebar space. The
-            // EmptyState below the ListView covers the "nothing
-            // plugged in" case.
-            visible: connected
-            height: connected ? implicitHeight : 0
+                width: ListView.view ? ListView.view.width : implicitWidth
+                modelName: model
+                deviceCodename: codename
+                deviceConnected: connected
 
-            onClicked: root.deviceSelected(codename)
+                // Exclude offline rows from the ListView's items group so
+                // ListView.spacing isn't applied to them.
+                DelegateModel.inItems: connected
+
+                onClicked: root.deviceSelected(codename)
+            }
         }
     }
 
