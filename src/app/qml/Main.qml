@@ -122,14 +122,13 @@ ApplicationWindow {
                 onRestoreDefaultsRequested: toast.show(qsTr("Restore defaults: not implemented yet"), "info")
             }
 
-            Inspector {
-                Layout.preferredWidth: 320
-                Layout.fillHeight: true
-                visible: root.width >= 1100
-                selectionLabel: editor.codename === ""
-                    ? ""
-                    : qsTr("Key %1").arg((editor.children.length > 0 ? 1 : 1))
-            }
+            // The per-key Inspector now lives inside KeyDesigner (Keys tab)
+            // so it has direct access to the binding ListModel and stays in
+            // sync with cell-preview updates without cross-component
+            // plumbing. Quick task 260514-1je. The previous top-level
+            // Inspector placeholder is removed — non-Keys tabs (RGB,
+            // Encoders, Mouse) will grow their own embedded inspectors as
+            // those features mature.
         }
     }
 
