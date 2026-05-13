@@ -17,14 +17,29 @@
 <p align="center">A modern, open, cross-platform control center for AJAZZ devices — stream decks, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.</p>
 
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/main-dark.png">
-    <source media="(prefers-color-scheme: light)" srcset="docs/screenshots/main-light.png">
-    <img alt="AJAZZ Control Center main window" src="docs/screenshots/main-dark.png" width="900">
-  </picture>
+  <img alt="AJAZZ Control Center — Plugin Store with three connected devices in the sidebar" src="docs/screenshots/main-dark.png" width="900">
 </p>
 
-> **Status:** early alpha. Scaffolding, architecture and CI are in place. Device backends are under active development.
+> **Status:** alpha. Hot-plug detection live with three device families connected today (Stream Dock, AK980 PRO, 2.4G 8K). Out-of-process sandboxed Python plugin host shipped. In-app Plugin Store mirroring the official AJAZZ Streamdock catalogue (~160 plugins) and the OpenDeck archive (~320 plugins), with on-disk cache + bundled offline fallback. 6 device families functional, 9 scaffolded.
+
+## Recent highlights
+
+### What's working today
+
+- **Hot-plug detection (2026-05-13).** The sidebar surfaces only currently-connected devices; reconnects rebind silently. Driven by `HotplugMonitor` on Linux udev, `WM_DEVICECHANGE` on Win32, and IOKit notifications on macOS.
+- **Out-of-process sandboxed Python plugin host (SEC-003).** Each plugin runs in a child process isolated by the platform's native sandbox (`bwrap` on Linux, `sandbox-exec` on macOS, AppContainer on Windows). The host gates loading on a signed-manifest verification against bundled trust roots.
+- **QML singleton invariant locked at build-time.** `QML_SINGLETON` services co-locate a `static_assert(!std::is_default_constructible_v<T>)` next to the class declaration — the long-standing dual-instance pattern (silent duplicate from Qt 6 SFINAE) becomes a compile error rather than a runtime mystery.
+- **In-app Plugin Store.** Live mirrors of the AJAZZ Streamdock + OpenDeck catalogues, browsable through tabbed search; per-source banners surface fetch state (loading / online / cached / offline) with a refresh affordance. Fetcher logging is on a Qt logging category (`QT_LOGGING_RULES="ajazz.plugins.*=true"`) for one-line diagnostics.
+- **VIA / QMK keyboard support.** Any VIA layout JSON works out of the box; the proprietary backend covers AK-series RGB + macros + layers.
+
+### Coming next (v1.1)
+
+The next milestone is scoped across six phases — see [`.planning/ROADMAP.md`](.planning/ROADMAP.md) for details.
+
+- **Device-lifecycle hardening** — disconnect-during-use safety (`shared_ptr<IDevice>` registry), reconnect / device-shuffle tests, multi-device baseline harness.
+- **Time-sync scaffolding** — host→device clock sync across all functional backends, with honest `NotImplemented` reporting until firmware exposes a settable RTC.
+- **Maturity tiers + scaffolded-device promotion** — surface honest "what works / what doesn't" per device, promote 1-2 Stream Dock siblings from scaffolded → partial.
+- **Win32 OOP host env-pollution fix (CR-01)** + **trust-roots parser hardening (WR-01)** — close v1.0 deferred robustness items.
 
 ## Try it now
 
@@ -110,8 +125,9 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 └──────────────────────────────────────────────────────────────────────────┘
               │                           │                   │
 ┌──────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│   Device Core (C++)  │   │  Python Plugin Host │   │   Persistence (C++) │
-│  HID + USB + hidapi  │   │  pybind11 embedded  │   │   JSON / SQLite     │
+│   Device Core (C++)  │   │  OOP Plugin Host    │   │   Persistence (C++) │
+│  HID + USB + hidapi  │   │  bwrap/sb-exec/AC   │   │   JSON / SQLite     │
+│  + Hot-plug monitor  │   │  signed-mfst gate   │   │   QSettings         │
 └──────────────────────┘   └─────────────────────┘   └─────────────────────┘
               │
 ┌──────────────────────────────────────────────────────────────────────────┐
