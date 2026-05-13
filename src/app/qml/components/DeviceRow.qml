@@ -33,7 +33,10 @@ ItemDelegate {
     property string deviceCodename: ""
     property bool deviceConnected: false
 
-    height: 56
+    // implicitHeight (not height) so the consumer can override —
+    // DeviceList collapses non-connected rows to 0 via
+    // `height: connected ? implicitHeight : 0`.
+    implicitHeight: 56
 
     background: Rectangle {
         radius: Theme.radiusMd
