@@ -84,6 +84,18 @@ devices:
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented."
 
+  - codename: akp03_variant_3004
+    family: streamdeck
+    name: "AJAZZ Stream Dock (PID 0x3004)"
+    vid: "0x0300"
+    pid: "0x3004"
+    keys: 6
+    encoders: 1
+    status: scaffolded
+    capabilities: [display, encoder]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Surfaced via real-device hot-plug capture 2026-05-13 as 'Ajazz HOTSPOTEKUSB HID DEMO'. Registered under AKP03 factory; exact retail SKU and capability profile to confirm against vendor manifests."
+
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
     family: keyboard
@@ -176,6 +188,17 @@ devices:
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
     notes: "Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor==\"248a\"` and `idVendor==\"249a\"`."
+
+  - codename: ajazz_24g_8k
+    family: mouse
+    name: "AJAZZ 2.4G 8K"
+    vid: "0x3151"
+    pid: "0x5007"
+    status: scaffolded
+    capabilities: [dpi, rgb]
+    protocol_doc: docs/research/vendor-protocol-notes.md
+    dpi_stages: 6
+    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. Wire format reuses AJ-series backend pending reconciliation."
 
   - codename: aj199_family
     family: mouse

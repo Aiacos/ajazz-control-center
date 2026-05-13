@@ -93,6 +93,26 @@ void registerAll(core::DeviceRegistry& registry) {
             .hasTouchStrip = true,
         },
         &makeAkp05);
+
+    // AKP03-class variant — surfaced via real-device hot-plug capture
+    // 2026-05-13 as `0300:3004` "Ajazz HOTSPOTEKUSB HID DEMO". The PID
+    // is adjacent to AKP03's 0x3001, so we register it under the AKP03
+    // factory with the AKP03 capability profile. The "HID DEMO" string
+    // suggests development firmware; the exact retail SKU should be
+    // confirmed against vendor manifests before promoting to "stable".
+    // Tracking: TODO.md → "Streamdock 0x0300:0x3004 SKU identification".
+    reg.registerDevice(
+        core::DeviceDescriptor{
+            .vendorId = 0x0300,
+            .productId = 0x3004,
+            .family = core::DeviceFamily::StreamDeck,
+            .model = "AJAZZ Stream Dock (PID 0x3004)",
+            .codename = "akp03_variant_3004",
+            .keyCount = 6,
+            .gridColumns = 3,
+            .encoderCount = 1,
+        },
+        &makeAkp03);
 }
 
 } // namespace ajazz::streamdeck

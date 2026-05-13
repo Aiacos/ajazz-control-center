@@ -7,7 +7,7 @@
 -->
 
 <!-- BEGIN AUTOGEN: stats -->
-**13 devices** across 3 keyboard, 6 mouse, 4 streamdeck — 6 functional, 7 scaffolded.
+**15 devices** across 3 keyboard, 7 mouse, 5 streamdeck — 6 functional, 9 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 Support levels:
@@ -28,6 +28,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | streamdeck | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
 | streamdeck | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 1 | 🟢 functional | display, encoder, macros |
 | streamdeck | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 15 | 4 | 🟢 functional | display, encoder, touch, macros |
+| streamdeck | [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 6 | 1 | 🟡 scaffolded | display, encoder |
 | keyboard | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | keyboard | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | keyboard | [AJAZZ AK980 PRO](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x8009` | — | — | 🟡 scaffolded | rgb, macros, layers |
@@ -35,6 +36,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | mouse | [AJAZZ AJ-series wired (alt mode 5D2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5D2E` | — | — | 🟡 scaffolded | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ-series wired (alt mode 5E2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5E2E` | — | — | 🟡 scaffolded | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ-series 2.4GHz dongle](docs/protocols/mouse/aj_series.md) | `0x248A:0x5C2F` | — | — | 🟡 scaffolded | rgb, dpi, firmware |
+| mouse | [AJAZZ 2.4G 8K](docs/research/vendor-protocol-notes.md) | `0x3151:0x5007` | — | — | 🟡 scaffolded | dpi, rgb |
 | mouse | [AJAZZ AJ199 family (wired)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF500` | — | — | 🟡 scaffolded | rgb, dpi, firmware |
 | mouse | [AJAZZ AJ199 family (2.4GHz dongle)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF501` | — | — | 🟡 scaffolded | rgb, dpi, firmware |
 <!-- END AUTOGEN: devices-table -->
@@ -50,6 +52,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Same protocol family as AKP153. |
 | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟢 functional | Per-key display, Encoder / dial, Macros | 6 keys + knob; PNG 72×72 image codec. Image/encoder I/O wired. |
 | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟢 functional | Per-key display, Encoder / dial, Touch strip, Macros | Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented. |
+| [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 🟡 scaffolded | Per-key display, Encoder / dial | Surfaced via real-device hot-plug capture 2026-05-13 as 'Ajazz HOTSPOTEKUSB HID DEMO'. Registered under AKP03 factory; exact retail SKU and capability profile to confirm against vendor manifests. |
 
 ### Keyboards
 
@@ -67,6 +70,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | [AJAZZ AJ-series wired (alt mode 5D2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5D2E` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs as `aj_series_wired_primary`; the vendor's `config.xml` lists three USB PIDs per device (5C2E / 5D2E / 5E2E) representing different USB-side mode descriptors. |
 | [AJAZZ AJ-series wired (alt mode 5E2E)](docs/protocols/mouse/aj_series.md) | `0x248A:0x5E2E` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs as `aj_series_wired_primary`; third USB-mode descriptor. |
 | [AJAZZ AJ-series 2.4GHz dongle](docs/protocols/mouse/aj_series.md) | `0x248A:0x5C2F` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor=="248a"` and `idVendor=="249a"`. |
+| [AJAZZ 2.4G 8K](docs/research/vendor-protocol-notes.md) | `0x3151:0x5007` | 🟡 scaffolded | DPI stages, RGB backlight | 8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. Wire format reuses AJ-series backend pending reconciliation. |
 | [AJAZZ AJ199 family (wired)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF500` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B. |
 | [AJAZZ AJ199 family (2.4GHz dongle)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF501` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe. |
 

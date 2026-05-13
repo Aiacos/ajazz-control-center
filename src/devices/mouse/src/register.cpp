@@ -58,6 +58,13 @@ void registerAll(core::DeviceRegistry& registry) {
         // AJ199 family (separate VID space).
         {0x3554, 0xF500, "AJAZZ AJ199 family (wired)", "aj199_family"},
         {0x3554, 0xF501, "AJAZZ AJ199 family (2.4GHz dongle)", "aj199_family_dongle"},
+        // AJAZZ 2.4G 8K wireless mouse — VID 0x3151 is the SONiX chip
+        // vendor (also used by VIA-compatible AJAZZ keyboards), the PID
+        // 0x5007 is the 8KHz-polling mouse SKU. Surfaced via real-device
+        // hot-plug capture 2026-05-13. Wire format reuses the AJ-series
+        // backend; configuration writes may no-op until reconciled
+        // (same caveat as AJ-series, see file header @warning).
+        {0x3151, 0x5007, "AJAZZ 2.4G 8K", "ajazz_24g_8k"},
     };
 
     for (auto const& m : kMice) {
