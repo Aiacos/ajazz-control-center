@@ -13,7 +13,8 @@
 // type-check `root.deviceSelected(...)` instead of warning unqualified.
 pragma ComponentBehavior: Bound
 import QtQuick
-import QtQml.Models
+import QtQuick.Controls
+import QtQuick.Layouts
 import AjazzControlCenter
 import "components"
 
@@ -24,57 +25,61 @@ Rectangle {
     /// Emitted when the user activates a device row; carries the device codename.
     signal deviceSelected(string codename)
 
-    /// Alias to the internal ListView model; set by the parent to supply devices.
-    property alias model: visibleDevices.model
+    /// The device model. Set by the parent (Main.qml) to DeviceModel.
+    /// We feed it to a Repeater inside a ColumnLayout (rather than a
+    /// ListView) so non-connected delegates can be hidden via
+    /// `visible: false` without ListView's spacing being applied to
+    /// the gap. ColumnLayout natively skips `visible: false` items
+    /// when computing positions, so the visible rows stay vertically
+    /// flush with each other regardless of how many offline rows are
+    /// interleaved between them in the underlying model.
+    property var model: null
 
-    ListView {
-        id: list
+    ScrollView {
+        id: scroll
         anchors.fill: parent
         anchors.margins: Theme.spacingSm
-        spacing: Theme.spacingXs
         clip: true
-        focus: true
-        keyNavigationEnabled: true
-        // Hide the empty list entirely when there are no devices — the
+        // Hide the entire scroll surface when nothing is connected — the
         // EmptyState below takes over the sidebar real estate. Without
         // this branch the sidebar looks like the app is broken on first
         // launch (no devices plugged in yet).
-        visible: count > 0
+        visible: rows.visibleChildren.length > 0
 
-        // Filter the underlying DeviceModel down to only currently-
-        // connected devices via DelegateModel.inItems. This is the Qt6
-        // idiomatic way to filter a ListView: the offline rows are
-        // excluded from the `items` group entirely, so ListView.spacing
-        // doesn't get applied to them as ghost gaps between visible
-        // rows (which previously left visible delegates vertically
-        // misaligned with each other depending on how many offline
-        // rows were interleaved between them).
-        model: DelegateModel {
-            id: visibleDevices
+        ColumnLayout {
+            id: rows
+            width: scroll.availableWidth
+            spacing: Theme.spacingXs
 
-            delegate: DeviceRow {
-                // F-08/COD-019: required model roles instead of parent.parent.model.
-                // Names match DeviceModel::roleNames() exactly. To avoid the QML
-                // self-binding trap (`connected: connected` would self-reference
-                // the DeviceRow's `connected` property and resolve to `false`),
-                // the consumer-facing properties on DeviceRow are namespaced
-                // (deviceCodename / deviceConnected). See the note at the top
-                // of DeviceRow.qml.
-                required property string model
-                required property string codename
-                required property int    family
-                required property bool   connected
+            Repeater {
+                model: root.model
 
-                width: ListView.view ? ListView.view.width : implicitWidth
-                modelName: model
-                deviceCodename: codename
-                deviceConnected: connected
+                delegate: DeviceRow {
+                    // F-08/COD-019: required model roles instead of parent.parent.model.
+                    // Names match DeviceModel::roleNames() exactly. To avoid the QML
+                    // self-binding trap (`connected: connected` would self-reference
+                    // the DeviceRow's `connected` property and resolve to `false`),
+                    // the consumer-facing properties on DeviceRow are namespaced
+                    // (deviceCodename / deviceConnected). See the note at the top
+                    // of DeviceRow.qml.
+                    required property string model
+                    required property string codename
+                    required property int    family
+                    required property bool   connected
 
-                // Exclude offline rows from the ListView's items group so
-                // ListView.spacing isn't applied to them.
-                DelegateModel.inItems: connected
+                    Layout.fillWidth: true
+                    modelName: model
+                    deviceCodename: codename
+                    deviceConnected: connected
 
-                onClicked: root.deviceSelected(codename)
+                    // ColumnLayout skips `visible: false` items entirely
+                    // when laying out children, so spacing isn't applied
+                    // to the hidden gap. No ghost spacing → connected
+                    // rows stay vertically flush with each other.
+                    visible: connected
+
+                    onClicked: root.deviceSelected(codename)
+                }
             }
         }
     }
