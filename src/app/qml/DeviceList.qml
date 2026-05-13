@@ -92,7 +92,11 @@ Rectangle {
         anchors.centerIn: parent
         anchors.margins: Theme.spacingLg
         width: parent.width - Theme.spacingLg * 2
-        visible: list.count === 0 && root.width >= 200
+        // Mirror the ScrollView visibility condition: hidden scroll
+        // means zero connected rows, which is exactly when we want
+        // the onboarding hint. Avoids the "scroll visible AND empty
+        // state visible at the same time" double-display.
+        visible: !scroll.visible && root.width >= 200
         title: qsTr("No devices yet")
         body: qsTr("Plug in an AJAZZ device — keyboard, Stream Dock, or mouse — and it will show up here automatically.")
     }
