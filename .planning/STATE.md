@@ -4,7 +4,7 @@ milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
 status: planning
 last_updated: '2026-05-13T21:30:00.000Z'
-last_activity: 2026-05-13
+last_activity: '2026-05-13 — Completed quick task 260513-u0b: Stream Dock plugin diagnostic'
 progress:
   total_phases: 6
   completed_phases: 0
@@ -58,6 +58,12 @@ Recent:
 ### Pending Todos
 
 None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checklist.
+
+### Quick Tasks Completed
+
+| #          | Description                                                      | Date       | Commit  | Directory                                                                                     |
+| ---------- | ---------------------------------------------------------------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
+| 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic | 2026-05-13 | pending | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/) |
 
 ### Blockers/Concerns
 
