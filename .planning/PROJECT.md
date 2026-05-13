@@ -16,6 +16,18 @@ A modern, open, cross-platform control center for AJAZZ devices (stream decks, k
 - CMake build, pre-commit, GitHub Actions CI/lint/nightly
 - Cross-platform: Linux primary, Windows + macOS supported
 
+## Current Milestone: v1.1 Device lifecycle hardening + scaffolding-to-functional
+
+**Goal:** Harden the device lifecycle (hot-plug correctness + multi-device tests), promote scaffolded device backends toward functional, land the time-sync scaffolding contract, and close the two v1.0 carry-over robustness items.
+
+**Target features:**
+
+- Hot-plug hardening — document the 2026-05-12/13 fix, disconnect-during-use, reconnect / device-shuffle, multi-device baseline tests.
+- Time-sync scaffolding — five-layer slice (capability flag → `IClockCapable` → `TimeSyncService` → QML UI → docs), adopting `docs/superpowers/plans/2026-05-13-time-sync.md` into GSD.
+- Scaffolded-device wiring — convert some/all of the 7 currently-scaffolded backends toward functional; specific devices picked during phase planning.
+- CR-01 — Win32 OOP host env pollution fix (per-spawn UTF-16 env block + `CREATE_UNICODE_ENVIRONMENT`). Requires Windows validation in this milestone.
+- WR-01 — `loadTrustRoots` parser hardening; needs an architectural decision (`nlohmann::json` dep vs. custom scanner vs. accept COD-031 break) before implementation.
+
 ## Planning Bootstrap (2026-05-12)
 
 `.planning/` was retrofitted onto this brownfield repo to enable structured `/gsd-code-review` of work that had already shipped to `main` without phase tracking. Two retro-phases wrap the most recent thematic clusters of commits (SEC-003 plugin host integration; QML_SINGLETON dual-instance sweep). PROJECT.md, ROADMAP.md, and STATE.md were created as stubs sufficient for the SDK to validate phase lookups; this is **not** a full GSD discovery output.
@@ -38,3 +50,26 @@ A modern, open, cross-platform control center for AJAZZ devices (stream decks, k
 | 2026-05-02 | Out-of-process Python plugin host (SEC-003)                                                                                          | Sandbox third-party plugin code from main app process; signed manifests gate plugin loading.                                                                    |
 | 2026-05-04 | `QML_SINGLETON` services must register a single shared instance via `qmlRegisterSingletonInstance` (not `QML_SINGLETON` macro alone) | Macro path silently created a second instance per QML import; light theme bug (`d7f932f`) surfaced this. Preventive sweep across 5 other services in `e221b21`. |
 | 2026-05-12 | Retro-fit GSD planning onto brownfield repo                                                                                          | Enable structured code-review of recent thematic clusters without restructuring git history.                                                                    |
+
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+
+1. Requirements invalidated? → Move to Out of Scope with reason
+1. Requirements validated? → Move to Validated with phase reference
+1. New requirements emerged? → Add to Active
+1. Decisions to log? → Add to Key Decisions
+1. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+
+1. Full review of all sections
+1. Core Value check — still the right priority?
+1. Audit Out of Scope — reasons still valid?
+1. Update Context with current state
+
+______________________________________________________________________
+
+*Last updated: 2026-05-13 after `/gsd-new-milestone` (v1.1 bootstrap)*

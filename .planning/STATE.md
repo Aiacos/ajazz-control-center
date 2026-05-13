@@ -1,16 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: Awaiting next milestone
-stopped_at: 'Code-review applied + pushed (10 commits total: 2 planning + 8 fix). `origin/main` at `6c785f0`, 0/0 with HEAD. CI run on 6c785f0 in progress at session end (Secret scan / CodeQL / Nightly green; Lint + CI build/test pending).'
-last_updated: '2026-05-13T13:06:33.505Z'
-last_activity: 2026-05-13 — Milestone v1.0 completed and archived
+milestone: v1.1
+milestone_name: Device lifecycle hardening + scaffolding-to-functional
+status: planning
+last_updated: '2026-05-13T17:42:47.135Z'
+last_activity: 2026-05-13
 progress:
-  total_phases: 2
+  total_phases: 0
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -20,23 +20,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-12)
 
 **Core value:** Modern open cross-platform control center for AJAZZ devices with Qt 6 / QML UI + Python plugin system.
-**Current focus:** v1.0 archived. Awaiting `/gsd-new-milestone` for v1.1 scope.
+**Current focus:** v1.1 — device lifecycle hardening, time-sync scaffolding, scaffolded-device wiring, CR-01 + WR-01 carry-overs.
 
 ## Current Position
 
-Phase: Milestone v1.0 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-13 — Milestone v1.0 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-13 — Milestone v1.1 started
 
 ## Performance Metrics
 
-**Velocity:** N/A — retro phases were executed pre-GSD; metrics not captured.
+**Velocity:** N/A — v1.1 just started; metrics will accumulate per phase.
 
-| Phase                  | Plans | Total | Avg/Plan |
-| ---------------------- | ----- | ----- | -------- |
-| 1. SEC-003 Plugin Host | 1     | —     | —        |
-| 2. QML_SINGLETON Sweep | 1     | —     | —        |
+| Phase | Plans | Total | Avg/Plan |
+| ----- | ----- | ----- | -------- |
+| —     | —     | —     | —        |
 
 ## Accumulated Context
 
@@ -67,10 +66,12 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 
 ## Session Continuity
 
-Last session: 2026-05-12
-Stopped at: Code-review applied + pushed (10 commits total: 2 planning + 8 fix). `origin/main` at `6c785f0`, 0/0 with HEAD. CI run on 6c785f0 in progress at session end (Secret scan / CodeQL / Nightly green; Lint + CI build/test pending).
+Last session: 2026-05-13
+Stopped at: v1.1 milestone bootstrap in progress — PROJECT.md updated, STATE.md reset via SDK. Requirements + roadmap still to write.
 Resume file: None
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Define REQUIREMENTS.md (`/gsd-new-milestone` continuation) — group v1.1 scope into REQ-IDs.
+- Spawn `gsd-roadmapper` to phase the milestone (starting at Phase 3).
+- After roadmap approval: `/gsd-discuss-phase 3` to scope hot-plug hardening.
