@@ -108,8 +108,13 @@ TEST_CASE("OpenDeck parseUpstreamJson translates the live array shape", "[opende
     REQUIRE(sp->author == QStringLiteral("BarRaider"));
     REQUIRE(sp->source == QStringLiteral("opendeck"));
     REQUIRE(sp->compatibility == QStringLiteral("opendeck"));
-    REQUIRE(sp->iconUrl.toString() ==
-            QStringLiteral("https://appstore.elgato.com/.../soundpad.png"));
+    // appstore.elgato.com is a globally-retired CDN as of 2026-05-13 (the
+    // CloudFront distribution behind it has no A/AAAA records anywhere).
+    // The translator filters out URLs targeting dead hosts so the QML
+    // Image element falls back to its placeholder Rectangle instead of
+    // looping on failed DNS lookups. See filterDeadIconHost() in
+    // opendeck_catalog_fetcher.cpp for rationale.
+    REQUIRE(sp->iconUrl.isEmpty());
     // Description is synthesised from the `link` field.
     REQUIRE(sp->description ==
             QStringLiteral("Stream Deck plugin from https://barraider.github.io/."));

@@ -25,6 +25,7 @@
 #include <QNetworkRequest>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 
@@ -38,6 +39,34 @@ constexpr char kDefaultCatalogUrl[] = "https://plugins.amankhanna.me/catalogue.j
 constexpr char kEnvOverride[] = "ACC_OPENDECK_CATALOG_URL";
 constexpr char kCacheFileName[] = "opendeck-catalog.json";
 constexpr char kBundledFallbackPath[] = ":/qt/qml/AjazzControlCenter/opendeck-fallback.json";
+
+/// Filter out icon URLs pointing to known-dead hosts.
+///
+/// The OpenDeck catalogue cross-lists Stream Deck plugins whose icons
+/// are hosted on Elgato's `appstore.elgato.com`. As of 2026-05-13 the
+/// CloudFront distribution backing that hostname
+/// (`dny43h5yzt0v8.cloudfront.net`) has been retired globally — the
+/// CNAME still resolves but no public DNS resolver returns A/AAAA
+/// records. ~324 of the 325 entries in the live OpenDeck catalogue
+/// point at this dead host. Without this rewriter, every tile in the
+/// OpenDeck tab triggers a failed DNS lookup that floods the QML log
+/// with `QML QuickImage: Host appstore.elgato.com non trovato`.
+///
+/// Returning an empty QUrl here lets `PluginStore.qml`'s Image
+/// fallback Rectangle (the placeholder added in commit 5d4f320) take
+/// over — same visual outcome, none of the wasted network round-trips
+/// and log noise. When Elgato restores the CDN (or upstream OpenDeck
+/// migrates to a working mirror), removing the host from the kill-list
+/// is enough to re-enable real icons.
+[[nodiscard]] QUrl filterDeadIconHost(QUrl url) {
+    static QStringList const kDeadHosts = {
+        QStringLiteral("appstore.elgato.com"),
+    };
+    if (kDeadHosts.contains(url.host(), Qt::CaseInsensitive)) {
+        return {};
+    }
+    return url;
+}
 
 /// Translate a single upstream entry to @ref CatalogEntry. Required
 /// fields: `id` and `name`. Everything else is best-effort and the
@@ -64,7 +93,7 @@ std::optional<CatalogEntry> translateEntry(QJsonObject const& obj) {
                             : QStringLiteral("Stream Deck plugin from %1.").arg(link);
     QString const iconUrl = obj.value(QStringLiteral("icon")).toString();
     if (!iconUrl.isEmpty()) {
-        entry.iconUrl = QUrl(iconUrl);
+        entry.iconUrl = filterDeadIconHost(QUrl(iconUrl));
     }
     entry.compatibility = QStringLiteral("opendeck");
     entry.source = QStringLiteral("opendeck");
@@ -94,7 +123,7 @@ std::vector<CatalogEntry> parseSnapshotEnvelope(QJsonObject const& envelope) {
         e.description = r.value(QStringLiteral("description")).toString();
         QString const iconUrl = r.value(QStringLiteral("iconUrl")).toString();
         if (!iconUrl.isEmpty()) {
-            e.iconUrl = QUrl(iconUrl);
+            e.iconUrl = filterDeadIconHost(QUrl(iconUrl));
         }
         e.compatibility = r.value(QStringLiteral("compatibility")).toString();
         e.source = r.value(QStringLiteral("source")).toString();
