@@ -63,7 +63,7 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 
 | #          | Description                                                      | Date       | Commit  | Directory                                                                                     |
 | ---------- | ---------------------------------------------------------------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
-| 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic | 2026-05-13 | pending | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/) |
+| 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic | 2026-05-13 | 4acc9c5 | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/) |
 
 ### Blockers/Concerns
 
