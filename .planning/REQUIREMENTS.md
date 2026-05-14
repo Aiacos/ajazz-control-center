@@ -12,9 +12,9 @@ Requirements for this milestone. Each maps to one roadmap phase (Phases 3-8). Ca
 
 Phase 3 deliverables — written rationale gating Phases 4-7.
 
-- [ ] **ARCH-01**: Project records WR-01 trust-roots parser choice (`nlohmann::json` PRIVATE-linked to `ajazz_plugins` vs in-tree 5-state scanner) with written rationale and explicit threat-model framing.
-- [ ] **ARCH-02**: Project records `HotplugMonitor` mock-seam approach (test-only `injectEvent` shim vs subclassable interface vs other) with rationale.
-- [ ] **ARCH-03**: Project confirms `DeviceRegistry` slot ownership migration (`unique_ptr<IDevice>` → `shared_ptr<IDevice>`) is in-scope and lands before Phase 5.
+- [x] **ARCH-01**: Project records WR-01 trust-roots parser choice (`nlohmann::json` PRIVATE-linked to `ajazz_plugins` vs in-tree 5-state scanner) with written rationale and explicit threat-model framing.
+- [x] **ARCH-02**: Project records `HotplugMonitor` mock-seam approach (test-only `injectEvent` shim vs subclassable interface vs other) with rationale.
+- [x] **ARCH-03**: Project confirms `DeviceRegistry` slot ownership migration (`unique_ptr<IDevice>` → `shared_ptr<IDevice>`) is in-scope and lands before Phase 5.
 
 ### Hot-Plug Hardening
 
@@ -100,9 +100,9 @@ Filled by roadmapper during Phase 3-8 mapping. Each requirement maps to exactly 
 
 | Requirement | Phase   | Status  |
 | ----------- | ------- | ------- |
-| ARCH-01     | Phase 3 | Pending |
-| ARCH-02     | Phase 3 | Pending |
-| ARCH-03     | Phase 3 | Pending |
+| ARCH-01     | Phase 3 | Locked  |
+| ARCH-02     | Phase 3 | Locked  |
+| ARCH-03     | Phase 3 | Locked  |
 | HOTPLUG-01  | Phase 4 | Pending |
 | HOTPLUG-02  | Phase 4 | Pending |
 | HOTPLUG-03  | Phase 4 | Pending |
