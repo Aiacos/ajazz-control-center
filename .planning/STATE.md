@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
-status: planning
+status: ready_to_plan
 last_updated: '2026-05-14T01:30:00.000Z'
 last_activity: 2026-05-14 — Phase 3 CONTEXT captured (ARCH-01 nlohmann + ARCH-02 injectEvent shim + ARCH-03 shared_ptr); plan+execute pending fresh session
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 0
   completed_plans: 0
-  percent: 0
+  percent: 17
 ---
 
 # Project State
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 
 ## Current Position
 
-Phase: Not started (roadmap just written; Phase 3 next)
-Plan: —
-Status: Roadmap drafted, awaiting `/gsd-discuss-phase 3`
-Last activity: 2026-05-13 — v1.1 roadmap created (Phases 3-8, 28 REQs mapped, 100% coverage)
+Phase: 4
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-14
 
 ## Performance Metrics
 
@@ -41,6 +41,7 @@ Last activity: 2026-05-13 — v1.1 roadmap created (Phases 3-8, 28 REQs mapped, 
 | 6. CR-01 Win32 Env Fix      | —     | —     | —        |
 | 7. WR-01 Trust-Roots Parser | —     | —     | —        |
 | 8. Scaffolded-Device Wiring | —     | —     | —        |
+| 3                           | 1     | -     | -        |
 
 ## Accumulated Context
 

@@ -19,7 +19,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 
 ### 🚧 v1.1 milestone (Phases 3-8)
 
-- [ ] **Phase 3: Architectural Decisions** — Decision-doc phase recording WR-01 parser choice, HotplugMonitor mock seam, and DeviceRegistry ownership migration commit.
+- [x] **Phase 3: Architectural Decisions** — Decision-doc phase recording WR-01 parser choice, HotplugMonitor mock seam, and DeviceRegistry ownership migration commit. (completed 2026-05-14)
 - [ ] **Phase 4: Hot-plug Hardening** — Migrate registry to `shared_ptr<IDevice>`, add coalescing debounce, multi-device test harness, offline-badge UX.
 - [ ] **Phase 5: Time-Sync Scaffolding** — Five-layer slice from `hasClock` capability flag through `IClockCapable` mix-in, `TimeSyncService`, QML UI, and honest `NotImplemented` reporting.
 - [ ] **Phase 6: CR-01 Win32 OOP Env Pollution Fix** — Per-spawn UTF-16 env block + `CREATE_UNICODE_ENVIRONMENT`; atomic removal of `_putenv_s` calls; Windows CI exercise.
@@ -120,7 +120,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 | --------------------------- | --------- | -------------- | ---------------- | ---------- |
 | 1. SEC-003 Plugin Host      | v1.0      | 1/1            | Complete (retro) | 2026-05-03 |
 | 2. QML Singleton Sweep      | v1.0      | 1/1            | Complete (retro) | 2026-05-04 |
-| 3. Architectural Decisions  | v1.1      | 0/1            | Not started      | —          |
+| 3. Architectural Decisions  | v1.1      | 1/1            | Complete         | 2026-05-14 |
 | 4. Hot-plug Hardening       | v1.1      | 0/?            | Not started      | —          |
 | 5. Time-Sync Scaffolding    | v1.1      | 0/1            | Not started      | —          |
 | 6. CR-01 Win32 Env Fix      | v1.1      | 0/?            | Not started      | —          |
