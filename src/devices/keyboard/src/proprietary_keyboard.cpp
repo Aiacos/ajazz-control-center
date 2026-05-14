@@ -185,6 +185,11 @@ namespace {
 using namespace ajazz::core;
 using namespace ajazz::keyboard::proprietary;
 
+// File-static once_flag (Pitfall 14): WARN emits at most once per process
+// lifetime for the AKB980 PRO backend. Distinct from the four Stream Dock
+// flags — different TU, different codename.
+std::once_flag s_warned_akb980;
+
 /**
  * @brief IDevice backend for proprietary-protocol AJAZZ keyboards.
  *
@@ -199,7 +204,8 @@ using namespace ajazz::keyboard::proprietary;
 class ProprietaryKeyboard final : public IDevice,
                                   public IKeyRemappable,
                                   public IRgbCapable,
-                                  public IFirmwareCapable {
+                                  public IFirmwareCapable,
+                                  public IClockCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
@@ -406,6 +412,21 @@ public:
     }
 
     [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
+
+    // ---- IClockCapable ------------------------------------------------------
+    //
+    // Scaffolded stub — AKB980 PRO firmware does not expose a host-settable
+    // RTC over HID today (vendor recon noted in 05-CONTEXT.md). WARN-once per
+    // process via s_warned_akb980 (Pitfall 14). VIA-protocol keyboards
+    // (ViaKeyboard) explicitly do NOT inherit IClockCapable per D-03 — they
+    // are QMK-style with no vendor clock surface.
+    [[nodiscard]] TimeSyncResult
+    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
+        std::call_once(s_warned_akb980, [] {
+            AJAZZ_LOG_WARN("keyboard.akb980", "setTime() not yet implemented for akb980");
+        });
+        return TimeSyncResult::NotImplemented;
+    }
 
 private:
     DeviceDescriptor m_descriptor;

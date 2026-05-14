@@ -44,6 +44,12 @@ void registerAll(core::DeviceRegistry& registry) {
     // lsusb enumeration; protocol mapping is still scaffolded — keys / RGB
     // are routed through the proprietary backend until a captured trace
     // either confirms VIA compatibility or motivates a dedicated handler.
+    //
+    // D-03 / Plan 05-03: ProprietaryKeyboard inherits IClockCapable and
+    // returns NotImplemented from setTime() with a WARN-once. Advertise the
+    // descriptor flag so the UI's Sync button can render. VIA keyboards
+    // (above) are explicitly excluded — QMK-style keyboards have no vendor
+    // clock surface.
     reg.registerDevice(
         core::DeviceDescriptor{
             .vendorId = 0x0c45, // Microdia (chip vendor used by AK980 PRO)
@@ -52,6 +58,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .model = "AJAZZ AK980 PRO",
             .codename = "ak980pro",
             .hasRgb = true,
+            .hasClock = true, // D-03: AKB980 PRO advertises Capability::Clock (scaffolded).
         },
         &makeProprietaryKeyboard);
 }
