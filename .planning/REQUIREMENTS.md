@@ -32,39 +32,39 @@ Phase 4 deliverables — disconnect-during-use safety, multi-device UX, test har
 
 Phase 5 deliverables — capability flag pattern, 5-layer slice top→bottom.
 
-- [ ] **TIMESYNC-01**: User can click a per-device "Sync now" button on devices that advertise `hasClock` capability; the button is hidden on devices without it.
-- [ ] **TIMESYNC-02**: All 4 functional backends (AKP153, AKP03, AKP05, AKB980 PRO) implement `IClockCapable::setTime()` as stubs returning `Result::NotImplemented` (no crashes, no false success).
-- [ ] **TIMESYNC-03**: User can enable a global "auto-sync time on device connect" toggle on the Settings page (`QSettings`-persisted).
-- [ ] **TIMESYNC-04**: Auto-sync fires 300ms after a stable device arrival, re-validates capability + connectedness at firing time, and gracefully handles `nullptr` from `dynamic_cast<IClockCapable*>` (Pitfall 2 mitigation).
-- [ ] **TIMESYNC-05**: `NotImplemented` results surface as an exclamation glyph + tooltip on the device row, not a success toast. Backend WARN logs are `std::once_flag`-gated to avoid spam (Pitfall 14).
-- [ ] **TIMESYNC-06**: `TimeSyncService` is registered as a QML singleton via `qmlRegisterSingletonInstance` with `static_assert(!std::is_default_constructible_v<TimeSyncService>)` build-break (Pitfall 4 mitigation).
+- [x] **TIMESYNC-01**: User can click a per-device "Sync now" button on devices that advertise `hasClock` capability; the button is hidden on devices without it.
+- [x] **TIMESYNC-02**: All 4 functional backends (AKP153, AKP03, AKP05, AKB980 PRO) implement `IClockCapable::setTime()` as stubs returning `Result::NotImplemented` (no crashes, no false success).
+- [x] **TIMESYNC-03**: User can enable a global "auto-sync time on device connect" toggle on the Settings page (`QSettings`-persisted).
+- [x] **TIMESYNC-04**: Auto-sync fires 300ms after a stable device arrival, re-validates capability + connectedness at firing time, and gracefully handles `nullptr` from `dynamic_cast<IClockCapable*>` (Pitfall 2 mitigation).
+- [x] **TIMESYNC-05**: `NotImplemented` results surface as an exclamation glyph + tooltip on the device row, not a success toast. Backend WARN logs are `std::once_flag`-gated to avoid spam (Pitfall 14).
+- [x] **TIMESYNC-06**: `TimeSyncService` is registered as a QML singleton via `qmlRegisterSingletonInstance` with `static_assert(!std::is_default_constructible_v<TimeSyncService>)` build-break (Pitfall 4 mitigation).
 
 ### Win32 Plugin Host (CR-01)
 
 Phase 6 deliverables — Win32-only fix, Windows CI required.
 
-- [ ] **WIN32-01**: Win32 OOP plugin host spawns Python child processes with a per-spawn UTF-16 environment block (`CREATE_UNICODE_ENVIRONMENT`), built from `GetEnvironmentStringsW` + 3 Python overrides + `\0\0` terminator + case-insensitive sort + preserved `=`-prefixed drive-letter entries.
-- [ ] **WIN32-02**: All three `_putenv_s` calls in `out_of_process_plugin_host_win32.cpp:463-467` are removed in the same commit as the env-block fix (no belt-and-braces leftover — Pitfall 6).
-- [ ] **WIN32-03**: Windows CI exercises the OOP host child spawn and asserts via `_wgetenv(L"PYTHONPATH")` that the parent process's env is unchanged after a child completes.
-- [ ] **WIN32-04**: A CI smoke test resolves the duplicate-key precedence question (first-wins vs last-wins on inherited `PYTHONPATH`) and the result is documented in the phase artefact.
+- [x] **WIN32-01**: Win32 OOP plugin host spawns Python child processes with a per-spawn UTF-16 environment block (`CREATE_UNICODE_ENVIRONMENT`), built from `GetEnvironmentStringsW` + 3 Python overrides + `\0\0` terminator + case-insensitive sort + preserved `=`-prefixed drive-letter entries.
+- [x] **WIN32-02**: All three `_putenv_s` calls in `out_of_process_plugin_host_win32.cpp:463-467` are removed in the same commit as the env-block fix (no belt-and-braces leftover — Pitfall 6).
+- [x] **WIN32-03**: Windows CI exercises the OOP host child spawn and asserts via `_wgetenv(L"PYTHONPATH")` that the parent process's env is unchanged after a child completes.
+- [x] **WIN32-04**: A CI smoke test resolves the duplicate-key precedence question (first-wins vs last-wins on inherited `PYTHONPATH`) and the result is documented in the phase artefact.
 
 ### Trust-Roots Parser (WR-01)
 
 Phase 7 deliverables — implementation of ARCH-01 choice, lockstep across two TUs.
 
-- [ ] **TRUST-01**: `loadTrustRoots` uses the parser chosen in ARCH-01. The mini-grep parser is fully removed from both `manifest_signer.cpp` and `manifest_signer_win32.cpp` in lockstep (drift re-introduces WR-01).
-- [ ] **TRUST-02**: `loadTrustRoots` enforces a 1 MB byte-cap (fails closed) and a 1024-entry cap on input to bound parser DoS (Pitfall 7).
-- [ ] **TRUST-03**: Test suite covers BOM, escape sequences, nested structures, and embedded NUL bytes in trust-roots input. Fuzz corpus runs \<1s on 100 KB inputs.
-- [ ] **TRUST-04**: Public-API header for `loadTrustRoots` documents the 0600 file-permissions assumption between read and verify (Pitfall 8 TOCTOU framing).
+- [x] **TRUST-01**: `loadTrustRoots` uses the parser chosen in ARCH-01. The mini-grep parser is fully removed from both `manifest_signer.cpp` and `manifest_signer_win32.cpp` in lockstep (drift re-introduces WR-01).
+- [x] **TRUST-02**: `loadTrustRoots` enforces a 1 MB byte-cap (fails closed) and a 1024-entry cap on input to bound parser DoS (Pitfall 7).
+- [x] **TRUST-03**: Test suite covers BOM, escape sequences, nested structures, and embedded NUL bytes in trust-roots input. Fuzz corpus runs \<1s on 100 KB inputs.
+- [x] **TRUST-04**: Public-API header for `loadTrustRoots` documents the 0600 file-permissions assumption between read and verify (Pitfall 8 TOCTOU framing).
 
 ### Scaffolded-Device Wiring
 
 Phase 8 deliverables — maturity-tier infrastructure + opportunistic promotion.
 
-- [ ] **DEVICES-01**: `docs/_data/devices.yaml` gains a `maturity` field per device with tiers: Scaffolded / Probed / Partial / Functional / Verified.
-- [ ] **DEVICES-02**: `DeviceModel` exposes a `MaturityRole`; QML sidebar surfaces the tier (badge or tooltip).
-- [ ] **DEVICES-03**: README regeneration includes per-family "what works / what doesn't" tooltips populated from the YAML.
-- [ ] **DEVICES-04**: 1-2 scaffolded stream-dock-family devices (siblings of AKP153/AKP03/AKP05) are promoted Tier 0 (Scaffolded) → Tier 2 (Partial). Specific candidates picked during phase planning.
+- [x] **DEVICES-01**: `docs/_data/devices.yaml` gains a `maturity` field per device with tiers: Scaffolded / Probed / Partial / Functional / Verified.
+- [x] **DEVICES-02**: `DeviceModel` exposes a `MaturityRole`; QML sidebar surfaces the tier (badge or tooltip).
+- [x] **DEVICES-03**: README regeneration includes per-family "what works / what doesn't" tooltips populated from the YAML.
+- [x] **DEVICES-04**: 1-2 scaffolded stream-dock-family devices (siblings of AKP153/AKP03/AKP05) are promoted Tier 0 (Scaffolded) → Tier 2 (Partial). Specific candidates picked during phase planning.
 
 ## Out of Scope
 
@@ -110,24 +110,24 @@ Filled by roadmapper during Phase 3-8 mapping. Each requirement maps to exactly 
 | HOTPLUG-05  | Phase 4 | Complete |
 | HOTPLUG-06  | Phase 4 | Complete |
 | HOTPLUG-07  | Phase 4 | Complete |
-| TIMESYNC-01 | Phase 5 | Pending  |
-| TIMESYNC-02 | Phase 5 | Pending  |
-| TIMESYNC-03 | Phase 5 | Pending  |
-| TIMESYNC-04 | Phase 5 | Pending  |
-| TIMESYNC-05 | Phase 5 | Pending  |
-| TIMESYNC-06 | Phase 5 | Pending  |
-| WIN32-01    | Phase 6 | Pending  |
-| WIN32-02    | Phase 6 | Pending  |
-| WIN32-03    | Phase 6 | Pending  |
-| WIN32-04    | Phase 6 | Pending  |
-| TRUST-01    | Phase 7 | Pending  |
-| TRUST-02    | Phase 7 | Pending  |
-| TRUST-03    | Phase 7 | Pending  |
-| TRUST-04    | Phase 7 | Pending  |
-| DEVICES-01  | Phase 8 | Pending  |
-| DEVICES-02  | Phase 8 | Pending  |
-| DEVICES-03  | Phase 8 | Pending  |
-| DEVICES-04  | Phase 8 | Pending  |
+| TIMESYNC-01 | Phase 5 | Complete |
+| TIMESYNC-02 | Phase 5 | Complete |
+| TIMESYNC-03 | Phase 5 | Complete |
+| TIMESYNC-04 | Phase 5 | Complete |
+| TIMESYNC-05 | Phase 5 | Complete |
+| TIMESYNC-06 | Phase 5 | Complete |
+| WIN32-01    | Phase 6 | Complete |
+| WIN32-02    | Phase 6 | Complete |
+| WIN32-03    | Phase 6 | Complete |
+| WIN32-04    | Phase 6 | Complete |
+| TRUST-01    | Phase 7 | Complete |
+| TRUST-02    | Phase 7 | Complete |
+| TRUST-03    | Phase 7 | Complete |
+| TRUST-04    | Phase 7 | Complete |
+| DEVICES-01  | Phase 8 | Complete |
+| DEVICES-02  | Phase 8 | Complete |
+| DEVICES-03  | Phase 8 | Complete |
+| DEVICES-04  | Phase 8 | Complete |
 
 **Coverage:**
 
