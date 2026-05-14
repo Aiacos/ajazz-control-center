@@ -141,7 +141,34 @@ TEST_CASE("Win32EnvBlock preserves =-prefixed drive-letter entries at front", "[
     // Pitfall 5 sub-trap 3: drive-letter-current-dir entries (e.g. `=Z:=Z:\test`)
     // are returned by GetEnvironmentStringsW and MUST appear at the FRONT of the
     // produced block, verbatim. They are NOT subject to sort or override merging.
+    //
+    // `SetEnvironmentVariableW(L"=Z:", ...)` is the canonical way to inject one
+    // of these entries, but its behavior across Windows versions is inconsistent:
+    // on the windows-2022 CI runner the call silently succeeds while
+    // GetEnvironmentStringsW does NOT then expose the `=Z:` entry. Detect that
+    // case via a precondition probe and SKIP the test rather than asserting
+    // against an empty snapshot — the underlying block-construction logic
+    // (lines 61-63 of win32_env_block.cpp) is what's under test, and we cannot
+    // exercise it without an actual `=`-prefixed entry in the parent env.
     SetEnvironmentVariableW(L"=Z:", L"Z:\\test");
+
+    bool injectionTook = false;
+    if (LPWCH probe = GetEnvironmentStringsW(); probe != nullptr) {
+        for (wchar_t const* cursor = probe; *cursor != L'\0';) {
+            std::wstring entry{cursor};
+            if (entry.rfind(L"=Z:", 0) == 0) {
+                injectionTook = true;
+                break;
+            }
+            cursor += entry.size() + 1;
+        }
+        FreeEnvironmentStringsW(probe);
+    }
+    if (!injectionTook) {
+        SetEnvironmentVariableW(L"=Z:", nullptr);
+        SKIP("SetEnvironmentVariableW silently refuses =-prefixed keys on this "
+             "Windows version; cannot inject a synthetic drive-letter entry.");
+    }
 
     std::map<std::wstring, std::wstring> overrides{{L"FOO", L"bar"}};
     ajazz::plugins::Win32EnvBlock block(std::move(overrides));

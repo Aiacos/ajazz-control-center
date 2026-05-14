@@ -138,12 +138,44 @@ std::wstring spawnPythonCaptureStdout(std::wstring const& sentinel) {
         throw std::runtime_error("SetHandleInformation failed");
     }
 
+    // Open NUL as the child's stdin. The original implementation passed
+    // `GetStdHandle(STD_INPUT_HANDLE)` here, but on a ctest-driven Windows
+    // CI runner that handle is often NULL or non-inheritable — and with
+    // `STARTF_USESTDHANDLES` + `bInheritHandles=TRUE` an invalid stdin
+    // makes `CreateProcessW` fail with `GetLastError()=87`
+    // (ERROR_INVALID_PARAMETER). Opening NUL gives an always-valid,
+    // inheritable, EOF-on-read handle the child won't block on. Production
+    // OOP host (out_of_process_plugin_host_win32.cpp:429) achieves the
+    // same goal via `CreatePipe` + closing the parent end; for a one-shot
+    // test child that just prints and exits, NUL is simpler.
+    HANDLE const childStdin = CreateFileW(L"NUL",
+                                          GENERIC_READ,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE,
+                                          &saAttr,
+                                          OPEN_EXISTING,
+                                          0,
+                                          nullptr);
+    if (childStdin == INVALID_HANDLE_VALUE) {
+        CloseHandle(childStdoutRead);
+        CloseHandle(childStdoutWrite);
+        throw std::runtime_error("CreateFileW(NUL) failed");
+    }
+
     STARTUPINFOW si{};
     si.cb = sizeof(STARTUPINFOW);
     si.dwFlags = STARTF_USESTDHANDLES;
-    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdInput = childStdin;
     si.hStdOutput = childStdoutWrite;
+    // stderr: GetStdHandle is OK here because we don't depend on the
+    // child being able to write — if the parent's stderr handle is
+    // invalid, CreateProcessW will reject it (good failure mode), but
+    // when running under ctest the parent's stderr IS a valid console
+    // or pipe in practice.
     si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+    if (si.hStdError == nullptr || si.hStdError == INVALID_HANDLE_VALUE) {
+        // Fallback: also point stderr at NUL when the parent has no console.
+        si.hStdError = childStdin;
+    }
 
     // Build the env block with the sentinel as PYTHONPATH override.
     // CR-01 contract: this is the same construction the production OOP host
@@ -172,6 +204,10 @@ std::wstring spawnPythonCaptureStdout(std::wstring const& sentinel) {
 
     // Close the write end in parent so the read side gets EOF when child exits.
     CloseHandle(childStdoutWrite);
+    // Close the parent's reference to the NUL stdin handle — the child
+    // inherited it; closing parent's copy is required to avoid a dangling
+    // handle reference per Win32 inheritance semantics.
+    CloseHandle(childStdin);
 
     if (ok == 0) {
         DWORD const err = GetLastError();
