@@ -7,7 +7,7 @@
 -->
 
 <!-- BEGIN AUTOGEN: stats -->
-**15 devices** across 3 keyboard, 7 mouse, 5 streamdeck — 6 functional, 9 scaffolded.
+**27 devices** across 3 keyboard, 7 mouse, 17 streamdeck — 10 functional, 17 scaffolded.
 <!-- END AUTOGEN: stats -->
 
 Support levels:
@@ -25,10 +25,22 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 | Family | Device | VID:PID | Keys | Encoders | Status | Capabilities |
 |--------|--------|---------|:----:|:--------:|--------|--------------|
 | streamdeck | [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
+| streamdeck | [AJAZZ AKP153 (Mirabox V1 firmware)](docs/protocols/streamdeck/akp153.md) | `0x5548:0x6674` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
 | streamdeck | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
-| streamdeck | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 1 | 🟢 functional | display, encoder, macros |
-| streamdeck | [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 15 | 4 | 🟢 functional | display, encoder, touch, macros |
-| streamdeck | [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 6 | 1 | 🟡 scaffolded | display, encoder |
+| streamdeck | [AJAZZ AKP153E (Mirabox V2 firmware)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1010` | 15 | 0 | 🟢 functional | display, rgb, macros, firmware |
+| streamdeck | [AJAZZ AKP153R](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1020` | 15 | 0 | 🟡 scaffolded | display, rgb, macros, firmware |
+| streamdeck | [AJAZZ AKP815](docs/protocols/streamdeck/akp815.md) | `0x5548:0x6672` | 15 | 0 | 🟡 scaffolded | display, macros, firmware |
+| streamdeck | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1001` | 6 | 3 | 🟢 functional | display, encoder, macros |
+| streamdeck | [AJAZZ AKP03 (legacy 0x3001 firmware)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 6 | 3 | 🟢 functional | display, encoder, macros |
+| streamdeck | [AJAZZ AKP03E](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3002` | 6 | 3 | 🟢 functional | display, encoder, macros |
+| streamdeck | [AJAZZ AKP03R](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1003` | 6 | 3 | 🟢 functional | display, encoder, macros |
+| streamdeck | [AJAZZ AKP03R rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3003` | 6 | 3 | 🟡 scaffolded | display, encoder, macros |
+| streamdeck | [Mirabox N3 (rev. 1)](docs/protocols/streamdeck/akp03.md) | `0x6602:0x1002` | 6 | 3 | 🟡 scaffolded | display, encoder, macros |
+| streamdeck | [Mirabox N3 (rev. 3)](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1002` | 6 | 3 | 🟡 scaffolded | display, encoder, macros |
+| streamdeck | [Mirabox N3EN](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1003` | 6 | 3 | 🟡 scaffolded | display, encoder, macros |
+| streamdeck | [AJAZZ AKP05 / AKP05E (provisional)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 10 | 4 | 🟡 scaffolded | display, encoder, touch, macros |
+| streamdeck | [Mirabox N4 / AJAZZ AKP05 family](docs/protocols/streamdeck/akp05.md) | `0x6603:0x1007` | 10 | 4 | 🟡 scaffolded | display, encoder, touch, macros |
+| streamdeck | [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 6 | 3 | 🟡 scaffolded | display, encoder |
 | keyboard | [AJAZZ AK series (QMK/VIA-compatible)](docs/protocols/keyboard/via.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | keyboard | [AJAZZ AK series (proprietary)](docs/protocols/keyboard/proprietary.md) | `0x3151:various` | — | — | 🟢 functional | rgb, macros, layers, firmware |
 | keyboard | [AJAZZ AK980 PRO](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x8009` | — | — | 🟡 scaffolded | rgb, macros, layers |
@@ -48,11 +60,23 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 
 | Device | USB | Status | Features | Notes |
 |--------|-----|--------|----------|-------|
-| [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Reference implementation. JPEG 85×85 per-key images. |
-| [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Same protocol family as AKP153. |
-| [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟢 functional | Per-key display, Encoder / dial, Macros | 6 keys + knob; PNG 72×72 image codec. Image/encoder I/O wired. |
-| [AJAZZ AKP05 / AKP05E (knobs)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟢 functional | Per-key display, Encoder / dial, Touch strip, Macros | Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented. |
-| [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 🟡 scaffolded | Per-key display, Encoder / dial | Surfaced via real-device hot-plug capture 2026-05-13 as 'Ajazz HOTSPOTEKUSB HID DEMO'. Registered under AKP03 factory; exact retail SKU and capability profile to confirm against vendor manifests. |
+| [AJAZZ AKP153 / Mirabox HSV293S](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered). |
+| [AJAZZ AKP153 (Mirabox V1 firmware)](docs/protocols/streamdeck/akp153.md) | `0x5548:0x6674` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware. |
+| [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`). |
+| [AJAZZ AKP153E (Mirabox V2 firmware)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1010` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version | Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153. |
+| [AJAZZ AKP153R](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1020` | 🟡 scaffolded | Per-key display, RGB backlight, Macros, Firmware version | Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks. |
+| [AJAZZ AKP815](docs/protocols/streamdeck/akp815.md) | `0x5548:0x6672` | 🟡 scaffolded | Per-key display, Macros, Firmware version | 15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md. |
+| [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, Encoder / dial, Macros | 6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility. |
+| [AJAZZ AKP03 (legacy 0x3001 firmware)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟢 functional | Per-key display, Encoder / dial, Macros | Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup. |
+| [AJAZZ AKP03E](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3002` | 🟢 functional | Per-key display, Encoder / dial, Macros | AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family. |
+| [AJAZZ AKP03R](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1003` | 🟢 functional | Per-key display, Encoder / dial, Macros | Regional revision; same protocol as AKP03 per ajazz-sdk. |
+| [AJAZZ AKP03R rev. 2](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3003` | 🟡 scaffolded | Per-key display, Encoder / dial, Macros | Per mirajazz this is a protocol_version 3 device (full press/release states + GIF support). Per-key images are 64x64 (Rot90) instead of 60x60 (Rot0). |
+| [Mirabox N3 (rev. 1)](docs/protocols/streamdeck/akp03.md) | `0x6602:0x1002` | 🟡 scaffolded | Per-key display, Encoder / dial, Macros | Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend. |
+| [Mirabox N3 (rev. 3)](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1002` | 🟡 scaffolded | Per-key display, Encoder / dial, Macros | Newer Mirabox N3 hardware revision; same backend. |
+| [Mirabox N3EN](docs/protocols/streamdeck/akp03.md) | `0x6603:0x1003` | 🟡 scaffolded | Per-key display, Encoder / dial, Macros | Mirabox SKU variant per opendeck-akp03 udev rules. |
+| [AJAZZ AKP05 / AKP05E (provisional)](docs/protocols/streamdeck/akp05.md) | `0x0300:0x5001` | 🟡 scaffolded | Per-key display, Encoder / dial, Touch strip, Macros | Stream Dock Plus-class: 10 LCD keys (2x5) + 4 endless encoders + LCD touchscreen strip (4 zones). VID:PID is a pre-2026-05-14 placeholder; canonical is `mirabox_n4`. Layout corrected from 15->10 keys after the 2026-05-14 research pass. |
+| [Mirabox N4 / AJAZZ AKP05 family](docs/protocols/streamdeck/akp05.md) | `0x6603:0x1007` | 🟡 scaffolded | Per-key display, Encoder / dial, Touch strip, Macros | Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device. |
+| [AJAZZ Stream Dock (PID 0x3004)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3004` | 🟡 scaffolded | Per-key display, Encoder / dial | Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests. |
 
 ### Keyboards
 

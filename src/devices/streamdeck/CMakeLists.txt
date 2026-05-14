@@ -1,4 +1,7 @@
-add_library(ajazz_streamdeck STATIC src/akp153.cpp src/akp03.cpp src/akp05.cpp src/register.cpp)
+add_library(
+    ajazz_streamdeck STATIC src/akp153.cpp src/akp03.cpp src/akp05.cpp src/akp815.cpp
+                            src/register.cpp
+)
 add_library(ajazz::streamdeck ALIAS ajazz_streamdeck)
 
 target_include_directories(

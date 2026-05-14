@@ -113,14 +113,20 @@ QHash<QString, QString> const& upstreamToAjazzDeviceCodename() {
         // Streamdock 6-key \u2192 AJAZZ AKP03.
         {QStringLiteral("N3"), QStringLiteral("akp03")},
         {QStringLiteral("N3E"), QStringLiteral("akp03")},
-        // Streamdock dial \u2192 AJAZZ AKP815.
-        {QStringLiteral("N4"), QStringLiteral("akp815")},
+        // Streamdock 10-key Plus-class (4 knobs + LCD touch strip) \u2192
+        // AJAZZ AKP05 / Mirabox N4. Pre-2026-05-14 this entry mapped to
+        // `akp815`, which is a different 15-key SKU; the bug surfaced in
+        // the 2026-05-14 research pass (see
+        // docs/protocols/streamdeck/_research-sources.md \u00a716.D).
+        {QStringLiteral("N4"), QStringLiteral("akp05")},
+        // Streamdock 15-key v1-API with 100x100 LCDs and an 800x480 strip.
+        // The upstream code is conjectured; update when a real catalogue
+        // row tagged for this SKU is observed.
         {QStringLiteral("293V3"), QStringLiteral("akp153")},
         {QStringLiteral("293V3E"), QStringLiteral("akp153e")},
         {QStringLiteral("293V25"), QStringLiteral("akp153")},
         {QStringLiteral("293V2"), QStringLiteral("akp153")},
-        // AK 980 \u2014 the upstream catalogue lists D92 (knob keyboard); the
-        // AKP815 happens to be the closest hardware peer for now.
+        // AK 980 \u2014 the upstream catalogue lists D92 (knob keyboard).
         {QStringLiteral("D92"), QStringLiteral("ak980pro")},
         {QStringLiteral("D92SE"), QStringLiteral("ak980pro")},
     };

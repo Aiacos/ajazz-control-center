@@ -147,6 +147,60 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
+- [ ] **AKP05 v3 framing migration**. Per `[mirajazz]`'s protocol-version
+  taxonomy (see `docs/protocols/streamdeck/_research-sources.md`), the
+  Mirabox N4 / AKP05 family is a **protocol_version 3** device with
+  **1024-byte packets** and native press/release events. Our current
+  `akp05_protocol.hpp` still hardcodes `PacketSize = 512`. When the
+  first real capture lands, gate the packet size on a detected protocol
+  version (mirroring `Kind::is_v2_api()` in `[ajazz-sdk]`) and adapt
+  `buildCmdHeader` accordingly. Tests must keep covering both 512- and
+  1024-byte paths.
+
+- [ ] **AKP03 v2 framing migration**. Same shape as the AKP05 entry
+  above: `[ajazz-sdk]/info.rs::Kind::Akp03::is_v2_api()` is true, so
+  AKP03 sends 1024-byte packets. Our backend currently still ships 512;
+  the change requires bumping `PacketSize` plus widening every chunk
+  loop in `akp03.cpp`. Confirm against a USB capture before flipping.
+
+- [ ] **AKP815 dedicated factory + image pipeline**. The newly registered
+  AKP815 backend (`src/devices/streamdeck/src/akp815.cpp`) currently
+  reuses the AKP153 image-transmit helpers, which means the per-key
+  image is sent verbatim without the 100×100 / Rot180 transform
+  documented in `docs/protocols/streamdeck/akp815.md`. When the image
+  pipeline ("phase 2") lands, branch on `displayInfo()` to apply the
+  right resize + rotation per device. Until then, callers must
+  pre-transform the JPEG themselves.
+
+- [ ] **AKP05 placeholder VID:PID retirement**. The `0x0300:0x5001`
+  pair we shipped before 2026-05-14 was a placeholder with no public
+  source. The canonical Mirabox N4 ID (`0x6603:0x1007`) is now also
+  registered in parallel. Once a capture confirms the AJAZZ-branded
+  AKP05's real VID:PID (vendor pages do not list it), delete the
+  placeholder from `register.cpp` and `devices.yaml`.
+
+- [ ] **AKP153 release-edge synthesis**. `akp153::parseInputReport`
+  returns `pressed = true` for every transition because the firmware
+  emits a single frame per press/release edge with no byte-10 polarity.
+  Today the backend silently reports only press events. Diff successive
+  frames inside `Akp153Device::poll()` to synthesise the matching
+  `KeyReleased` event so consumer code sees uniform paired transitions
+  (the AKP03 backend already does this through the v3 polarity bit).
+
+- [ ] **SEC-013 — strip JPEG metadata before logo upload**. `[pyajazz]`
+  documents that uploading an EXIF-bearing JPEG to the AKP153 boot-logo
+  endpoint can **brick the device**. Our future image pipeline must
+  strip every non-essential JFIF/EXIF/IPTC chunk before pushing to
+  `LOG` opcodes. Add a regression test that verifies a metadata-heavy
+  JPEG is rejected with a clear error.
+
+- [ ] **Streamdock 0x0300:0x3004 SKU identification**. Hot-plug capture
+  from 2026-05-13 surfaced this PID as "Ajazz HOTSPOTEKUSB HID DEMO".
+  Open issue with vendor support + scan AliExpress / Mirabox stores
+  for any SKU that enumerates with this PID. Until then the device
+  defaults to the AKP03 backend; a wrong factory match would fail
+  silently rather than report a clear error.
+
 - [ ] **Snap packaging — first publish to the edge channel**.
   Recipe scaffold + maintainer guide already shipped:
 

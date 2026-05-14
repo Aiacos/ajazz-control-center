@@ -36,6 +36,17 @@ capabilities:
 # ---------------------------------------------------------------------------
 devices:
   # ----- Stream decks ------------------------------------------------------
+  #
+  # USB identifier matrix consolidated 2026-05-14 from three independent
+  # reverse-engineering catalogues:
+  #
+  #   - mishamyrt/ajazz-sdk           (AJAZZ-branded SKUs, canonical PIDs)
+  #   - 4ndv/opendeck-akp03           (Mirabox N3 + rebadges)
+  #   - naerschhersch/opendeck-akp05  (Mirabox N4)
+  #
+  # See docs/protocols/streamdeck/_research-sources.md for the source tags
+  # cited in the protocol docs and src/devices/streamdeck/src/register.cpp.
+
   - codename: akp153
     family: streamdeck
     name: "AJAZZ AKP153 / Mirabox HSV293S"
@@ -46,7 +57,19 @@ devices:
     status: functional
     capabilities: [display, rgb, macros, firmware]
     protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Reference implementation. JPEG 85×85 per-key images."
+    notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered)."
+
+  - codename: akp153_v1
+    family: streamdeck
+    name: "AJAZZ AKP153 (Mirabox V1 firmware)"
+    vid: "0x5548"
+    pid: "0x6674"
+    keys: 15
+    encoders: 0
+    status: functional
+    capabilities: [display, rgb, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes: "Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware."
 
   - codename: akp153e
     family: streamdeck
@@ -58,31 +81,163 @@ devices:
     status: functional
     capabilities: [display, rgb, macros, firmware]
     protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Same protocol family as AKP153."
+    notes: "Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`)."
+
+  - codename: akp153e_v2
+    family: streamdeck
+    name: "AJAZZ AKP153E (Mirabox V2 firmware)"
+    vid: "0x0300"
+    pid: "0x1010"
+    keys: 15
+    encoders: 0
+    status: functional
+    capabilities: [display, rgb, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes: "Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153."
+
+  - codename: akp153r
+    family: streamdeck
+    name: "AJAZZ AKP153R"
+    vid: "0x0300"
+    pid: "0x1020"
+    keys: 15
+    encoders: 0
+    status: scaffolded
+    capabilities: [display, rgb, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp153.md
+    notes: "Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks."
+
+  - codename: akp815
+    family: streamdeck
+    name: "AJAZZ AKP815"
+    vid: "0x5548"
+    pid: "0x6672"
+    keys: 15
+    encoders: 0
+    status: scaffolded
+    capabilities: [display, macros, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp815.md
+    notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
 
   - codename: akp03
     family: streamdeck
     name: "AJAZZ AKP03 / Mirabox N3"
     vid: "0x0300"
-    pid: "0x3001"
+    pid: "0x1001"
     keys: 6
-    encoders: 1
+    encoders: 3
     status: functional
     capabilities: [display, encoder, macros]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "6 keys + knob; PNG 72×72 image codec. Image/encoder I/O wired."
+    notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility."
+
+  - codename: akp03_legacy
+    family: streamdeck
+    name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
+    vid: "0x0300"
+    pid: "0x3001"
+    keys: 6
+    encoders: 3
+    status: functional
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup."
+
+  - codename: akp03e
+    family: streamdeck
+    name: "AJAZZ AKP03E"
+    vid: "0x0300"
+    pid: "0x3002"
+    keys: 6
+    encoders: 3
+    status: functional
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family."
+
+  - codename: akp03r
+    family: streamdeck
+    name: "AJAZZ AKP03R"
+    vid: "0x0300"
+    pid: "0x1003"
+    keys: 6
+    encoders: 3
+    status: functional
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Regional revision; same protocol as AKP03 per ajazz-sdk."
+
+  - codename: akp03r_rev2
+    family: streamdeck
+    name: "AJAZZ AKP03R rev. 2"
+    vid: "0x0300"
+    pid: "0x3003"
+    keys: 6
+    encoders: 3
+    status: scaffolded
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Per mirajazz this is a protocol_version 3 device (full press/release states + GIF support). Per-key images are 64x64 (Rot90) instead of 60x60 (Rot0)."
+
+  - codename: mirabox_n3
+    family: streamdeck
+    name: "Mirabox N3 (rev. 1)"
+    vid: "0x6602"
+    pid: "0x1002"
+    keys: 6
+    encoders: 3
+    status: scaffolded
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend."
+
+  - codename: mirabox_n3_rev3
+    family: streamdeck
+    name: "Mirabox N3 (rev. 3)"
+    vid: "0x6603"
+    pid: "0x1002"
+    keys: 6
+    encoders: 3
+    status: scaffolded
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Newer Mirabox N3 hardware revision; same backend."
+
+  - codename: mirabox_n3en
+    family: streamdeck
+    name: "Mirabox N3EN"
+    vid: "0x6603"
+    pid: "0x1003"
+    keys: 6
+    encoders: 3
+    status: scaffolded
+    capabilities: [display, encoder, macros]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Mirabox SKU variant per opendeck-akp03 udev rules."
 
   - codename: akp05
     family: streamdeck
-    name: "AJAZZ AKP05 / AKP05E (knobs)"
+    name: "AJAZZ AKP05 / AKP05E (provisional)"
     vid: "0x0300"
     pid: "0x5001"
-    keys: 15
+    keys: 10
     encoders: 4
-    status: functional
+    status: scaffolded
     capabilities: [display, encoder, touch, macros]
     protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "Stream Dock Plus class; key/encoder/touch events and per-encoder screen I/O implemented."
+    notes: "Stream Dock Plus-class: 10 LCD keys (2x5) + 4 endless encoders + LCD touchscreen strip (4 zones). VID:PID is a pre-2026-05-14 placeholder; canonical is `mirabox_n4`. Layout corrected from 15->10 keys after the 2026-05-14 research pass."
+
+  - codename: mirabox_n4
+    family: streamdeck
+    name: "Mirabox N4 / AJAZZ AKP05 family"
+    vid: "0x6603"
+    pid: "0x1007"
+    keys: 10
+    encoders: 4
+    status: scaffolded
+    capabilities: [display, encoder, touch, macros]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device."
 
   - codename: akp03_variant_3004
     family: streamdeck
@@ -90,11 +245,11 @@ devices:
     vid: "0x0300"
     pid: "0x3004"
     keys: 6
-    encoders: 1
+    encoders: 3
     status: scaffolded
     capabilities: [display, encoder]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Surfaced via real-device hot-plug capture 2026-05-13 as 'Ajazz HOTSPOTEKUSB HID DEMO'. Registered under AKP03 factory; exact retail SKU and capability profile to confirm against vendor manifests."
+    notes: "Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests."
 
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic

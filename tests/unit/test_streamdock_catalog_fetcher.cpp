@@ -132,10 +132,12 @@ TEST_CASE("parseUpstreamJson translates the live response shape", "[streamdock][
     REQUIRE(spot->compatibility == QStringLiteral("streamdock"));
     REQUIRE(spot->source == QStringLiteral("streamdock"));
     REQUIRE(spot->streamdockProductId == QStringLiteral("101"));
-    // Devices: 293→akp153, 293E→akp153e, N4→akp815.
+    // Devices: 293→akp153, 293E→akp153e, N4→akp05 (Mirabox N4 is the
+    // Stream-Dock-Plus class, not the 15-key AKP815 — see the catalog
+    // mapping fix landed in the 2026-05-14 research pass).
     REQUIRE(spot->devices.contains(QStringLiteral("akp153")));
     REQUIRE(spot->devices.contains(QStringLiteral("akp153e")));
-    REQUIRE(spot->devices.contains(QStringLiteral("akp815")));
+    REQUIRE(spot->devices.contains(QStringLiteral("akp05")));
     // Description is the first paragraph of overview.
     REQUIRE(spot->description == QStringLiteral("Track now playing."));
     // Category falls back to Streaming, then becomes the first `types[]` entry.
@@ -147,7 +149,7 @@ TEST_CASE("parseUpstreamJson translates the live response shape", "[streamdock][
     REQUIRE(mix != nullptr);
     REQUIRE(mix->author == QStringLiteral("AJAZZ Streamdock"));
     REQUIRE(mix->sizeBytes == QString(QChar(0x2014)));
-    REQUIRE(mix->devices == QStringList{QStringLiteral("akp815")});
+    REQUIRE(mix->devices == QStringList{QStringLiteral("akp05")});
 }
 
 TEST_CASE("parseUpstreamJson accepts the cached-snapshot shape", "[streamdock][parse]") {

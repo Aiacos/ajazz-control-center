@@ -72,4 +72,20 @@ void registerAll(core::DeviceRegistry& registry);
  */
 [[nodiscard]] core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id);
 
+/**
+ * @brief Factory for the AJAZZ AKP815 backend.
+ *
+ * 15-key grid (5 rows × 3 columns) with 100×100 JPEG-encoded keys
+ * (`Rot180`, no mirror) and an 854×480 LCD strip. Reuses the AKP153
+ * wire protocol family at the framing level but with a different
+ * `key_image_format` per `[ajazz-sdk]/info.rs::Kind::Akp815`.
+ *
+ * Implements IDisplayCapable and IFirmwareCapable.
+ *
+ * @param d  Static descriptor from the registry.
+ * @param id Runtime device identifier (VID/PID/serial).
+ * @return Closed DevicePtr; call open() before I/O.
+ */
+[[nodiscard]] core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id);
+
 } // namespace ajazz::streamdeck
