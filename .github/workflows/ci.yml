@@ -44,6 +44,23 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      # ---- Pitfall 11 invariant: `hid_open` must stay inside hid_transport.cpp
+      # Runs only on Linux (the source tree is identical across runners — one
+      # check is enough) and BEFORE any Qt install / build step so a violation
+      # fails fast without burning ~10min of compile time.
+      - name: Enforce hid_open invariant (Pitfall 11)
+        if: runner.os == 'Linux'
+        run: |
+          # Pitfall 11: hid_open + hid_set_nonblocking must stay paired in
+          # src/core/src/hid_transport.cpp. Any new hid_open() call elsewhere
+          # in src/ skips the non-blocking flag and breaks I/O-thread shutdown.
+          if grep -rn 'hid_open(' src/ | grep -v hid_transport.cpp | grep -v 'hid_open_path('; then
+            echo "::error::hid_open() found outside src/core/src/hid_transport.cpp — Pitfall 11 invariant violated."
+            exit 1
+          fi
+          echo "hid_open invariant OK — only hid_transport.cpp opens HID handles."
+
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
