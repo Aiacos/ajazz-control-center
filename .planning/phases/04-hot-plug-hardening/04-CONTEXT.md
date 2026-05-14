@@ -45,6 +45,8 @@ Hard failures during enumeration (factory returns `nullptr`, `hid_open` returns 
 
 **Rationale:** Errors during enumeration are not user-actionable from inside the app (permission errors require terminal-side `udev` rule install or group membership; missing factories require a code change). Adding a UI surface would just add noise. Defer "actionable error" surfacing to whatever phase introduces device pairing/setup.
 
+**Includes the "catalog-referenced, no backend" case** (recheck 2026-05-14): the AKP815 is referenced 17 times across `PluginCatalogModel`, `StreamdockCatalogFetcher`, and `resources/streamdock-fallback.json` but has **no backend in `register.cpp`**. When such a device is plugged in, hidapi sees `0x5548:0x6672` but `DeviceRegistry::open()` returns `nullptr` (no factory match). D-02 covers this: WARN-log only, no toast, the device simply doesn't appear in the sidebar (because `enumerate()` never returned a row for it). Fixing the AKP815 backend gap is **Phase 8** scope, not Phase 4 — Phase 4's contract is that hot-plug stays stable while Phase 8 fills in the backends.
+
 ### D-03 — DeviceModel propagation: fine-grained dataChanged
 
 `DeviceModel::refresh()` no longer calls `beginResetModel`/`endResetModel`. Instead it diffs old vs new `m_connected` set and emits `dataChanged(idx, idx, {ConnectedRole})` for each row whose state flipped. Selection and scroll position survive automatically because indices don't move.
@@ -56,6 +58,8 @@ Hard failures during enumeration (factory returns `nullptr`, `hid_open` returns 
 DeviceModel rows continue to represent **registered backends** (one row per codename). Two physical AKP153s collapse to one sidebar row whose `ConnectedRole` is true if **any** unit is plugged in. Per-unit identity (codename + serial in the sidebar) is deferred to v1.2.
 
 **Rationale:** Multi-physical-unit UX requires ProfileController, KeyDesigner, and every per-codename surface to become per-unit too — not a Phase 4-sized change. The event-coalescing layer in `Application::onHotplug` *does* track `(vid, pid, serial)` (per HOTPLUG-05); the model layer just doesn't need to surface that yet.
+
+**Rebadge clarification** (recheck 2026-05-14): per Finding 16 in `docs/research/vendor-protocol-notes.md`, the AKP03 protocol is sold under **at least 8 different VID/PID pairs** (AJAZZ AKP03/E/R/R-rev2, Mirabox N3/N3-rev3/N3EN, Soomfon SE, Mars Gaming MSD-TWO, TreasLin N3, Redragon SS-551). Each rebadge gets its own `registerDevice(descriptor, factory)` call (different VID/PID, **same factory**) but **all of them share one `codename` = "akp03"** (or whichever marketing name we settle on). D-04 means: 8 rebadges × 1 connected unit each = **one** sidebar row labelled by codename, with `ConnectedRole=true`. The fine-grained `dataChanged` (D-03) walks rows, not VID/PID pairs — selection survives because the codename-keyed row index is stable across hot-plug. Planner must not introduce per-VID/PID rows; row identity is `codename`, period.
 
 ### D-05 — Debounce window: 300 ms
 
@@ -126,6 +130,12 @@ DeviceModel rows continue to represent **registered backends** (one row per code
 
 - `tests/unit/test_action_engine.cpp:119` — `FakeAsyncExecutor` precedent for the `injectEvent` test pattern (cited by ARCH-02).
 
+### Stream Dock catalog research (added 2026-05-14 via quick task 260514-h0w)
+
+- `docs/research/vendor-protocol-notes.md` Finding 16 (`§16.A..§16.D`) — Stream Dock device-catalog reconciliation. **Key fact for Phase 4 D-04:** at least 8 different VID/PID pairs map to the same `akp03`-protocol backend (rebadging across 7 third-party brands). Phase 4 row identity is `codename`, not `(vid, pid)` — see D-04 rebadge clarification.
+- `docs/protocols/streamdeck/_research-sources.md` — citation index for the four Stream Dock protocol docs. Phase 4 doesn't read protocol bytes, but planner should know this index exists so it can trace back claims if a registry-shaped question crosses into protocol territory.
+- `docs/protocols/streamdeck/akp815.md` — new device with **no backend in `register.cpp`**. Confirms the D-02 "log-only, no UI surface" policy is the right fit for catalog-referenced-but-unregistered devices. Backend gap itself is **Phase 8** scope.
+
 \</canonical_refs>
 
 \<code_context>
@@ -175,6 +185,7 @@ DeviceModel rows continue to represent **registered backends** (one row per code
 - **Proactive cache eviction on Removed events** — D-06 chose passive eviction (weak_ptr expiry). If a future phase finds the zombie-`shared_ptr` window problematic (e.g. consumer holds it for minutes), revisit and add active invalidation via `enable_shared_from_this` + `weak_ptr` upgrade-fail signalling.
 - **"Last seen N minutes ago" tooltip on offline rows** — would require a new role (`OfflineSinceRole`) and a per-row timestamp store. Could be a quality-of-life follow-up; not in scope for v1.1.
 - **`std::map<DeviceId, std::shared_ptr<IDevice>>` strong cache** (alternative to weak_ptr) — would keep instances alive even when no consumer holds a ref, trading memory for "no transient hid_open on second consumer". Rejected for v1.1 per principle of least surprise; reconsider if Phase 5 measurements show measurable open() latency.
+- **Stream Dock catalog corrections (Phase 8)** — added during recheck 2026-05-14: per `vendor-protocol-notes.md` Finding 16, the codebase has a known catalog gap (AKP815 backend missing despite 17 references; AKP153/AKP153E PIDs are wrong; AKP03 layout is wrong (6 keys + 1 encoder vs real 6 keys + 3 buttons + 3 encoders); AKP05/N4 is wrong (15 keys vs real 10 keys); `streamdock_catalog_fetcher.cpp:117` maps N4→akp815 instead of N4→akp05; rebadges across Mirabox / Soomfon / Mars Gaming / TreasLin / Redragon are unregistered). **All Phase 8 scope, not Phase 4.** Phase 4's contract is hot-plug stays stable while Phase 8 adds/corrects the backend registrations behind the curtain.
 
 </deferred>
 

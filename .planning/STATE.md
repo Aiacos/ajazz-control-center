@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
 status: planning
-stopped_at: Phase 4 context gathered (D-01..D-06 locked)
-last_updated: '2026-05-14T10:10:38.752Z'
+stopped_at: Phase 4 context revalidated against new Stream Dock research (quick 260514-h0w) — D-02 + D-04 amended
+last_updated: '2026-05-14T10:18:25.043Z'
 last_activity: 2026-05-14
 progress:
   total_phases: 6
@@ -63,12 +63,13 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 
 ### Quick Tasks Completed
 
-| #          | Description                                                             | Date       | Commit  | Directory                                                                                     |
-| ---------- | ----------------------------------------------------------------------- | ---------- | ------- | --------------------------------------------------------------------------------------------- |
-| 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic        | 2026-05-13 | 4acc9c5 | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/) |
-| 260513-uy6 | Plugin Store Phase A — fetcher logging + Retry buttons + re-entry guard | 2026-05-13 | ec9590c | [260513-uy6-plugin-store-phase-a](./quick/260513-uy6-plugin-store-phase-a/)                   |
-| 260513-v6b | Plugin Store Phase B — PluginCatalogProxyModel + GridView refactor      | 2026-05-13 | 9b1589f | [260513-v6b-plugin-store-phase-b](./quick/260513-v6b-plugin-store-phase-b/)                   |
-| 260514-1je | Stream Dock features research + KeyDesigner slice (AKP153)              | 2026-05-14 | 043d04a | [260514-1je-stream-dock-keydesigner](./quick/260514-1je-stream-dock-keydesigner/)             |
+| #          | Description                                                                                           | Date       | Commit  | Directory                                                                                                           |
+| ---------- | ----------------------------------------------------------------------------------------------------- | ---------- | ------- | ------------------------------------------------------------------------------------------------------------------- |
+| 260513-u0b | Stream Dock plugin loading + fetch + logs + UI layout diagnostic                                      | 2026-05-13 | 4acc9c5 | [260513-u0b-streamdock-plugins-diagnostic](./quick/260513-u0b-streamdock-plugins-diagnostic/)                       |
+| 260513-uy6 | Plugin Store Phase A — fetcher logging + Retry buttons + re-entry guard                               | 2026-05-13 | ec9590c | [260513-uy6-plugin-store-phase-a](./quick/260513-uy6-plugin-store-phase-a/)                                         |
+| 260513-v6b | Plugin Store Phase B — PluginCatalogProxyModel + GridView refactor                                    | 2026-05-13 | 9b1589f | [260513-v6b-plugin-store-phase-b](./quick/260513-v6b-plugin-store-phase-b/)                                         |
+| 260514-1je | Stream Dock features research + KeyDesigner slice (AKP153)                                            | 2026-05-14 | 043d04a | [260514-1je-stream-dock-keydesigner](./quick/260514-1je-stream-dock-keydesigner/)                                   |
+| 260514-h0w | Recheck Phase 4 CONTEXT vs new Stream Dock research (D-02 + D-04 amended; all D-01..D-06 still valid) | 2026-05-14 | pending | [260514-h0w-recheck-phase-4-context-vs-new-stream-do](./quick/260514-h0w-recheck-phase-4-context-vs-new-stream-do/) |
 
 ### Blockers/Concerns
 
@@ -85,8 +86,8 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 
 ## Session Continuity
 
-Last session: 2026-05-14T10:10:38.745Z
-Stopped at: Phase 4 context gathered (D-01..D-06 locked)
+Last session: 2026-05-14T10:18:25.036Z
+Stopped at: Phase 4 context revalidated against new Stream Dock research (quick 260514-h0w) — D-02 + D-04 amended
 Resume file: .planning/phases/04-hot-plug-hardening/04-CONTEXT.md
 
 ## Operator Next Steps
