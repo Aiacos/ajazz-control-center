@@ -78,13 +78,14 @@ struct DeviceDescriptor {
 struct DeviceEvent {
     /// Discriminates the type of input that occurred.
     enum class Kind : std::uint8_t {
-        KeyPressed,     ///< A key was depressed; `index` = 1-based key number.
-        KeyReleased,    ///< A key was released; `index` = 1-based key number.
-        EncoderTurned,  ///< Encoder rotated; `index` = encoder number, `value` = signed delta.
-        EncoderPressed, ///< Encoder knob depressed; `value` = 1 (down) or 0 (up).
-        TouchStrip,     ///< Touch-strip gesture; `value` encodes gesture + X coordinate.
-        Connected,      ///< Device became available on the bus.
-        Disconnected,   ///< Device was removed or lost.
+        KeyPressed,      ///< A key was depressed; `index` = 1-based key number.
+        KeyReleased,     ///< A key was released; `index` = 1-based key number.
+        EncoderTurned,   ///< Encoder rotated; `index` = encoder number, `value` = signed delta.
+        EncoderPressed,  ///< Encoder knob depressed; `index` = encoder number.
+        EncoderReleased, ///< Encoder knob released; `index` = encoder number.
+        TouchStrip,      ///< Touch-strip gesture; `value` encodes gesture + X coordinate.
+        Connected,       ///< Device became available on the bus.
+        Disconnected,    ///< Device was removed or lost.
     };
 
     Kind kind{Kind::Connected};
