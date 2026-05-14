@@ -49,12 +49,19 @@ add_executable(
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
     test_pi_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
+    # Phase 7 / Plan 07-02 / TRUST-03: loadTrustRoots corpus — positive cases
+    # (BOM, escape sequences, top-level array, boundary entry counts 1/2/100/1024),
+    # negative cases (>1 MB byte cap, 1025-entry overcount, truncated JSON, malformed
+    # UTF-8, wrong shape), and pinned NUL-byte handling. Exercises the nlohmann impl
+    # from Plan 07-01; the common.cpp source is already in the per-platform
+    # target_sources block below so the symbol resolves at link time.
+    test_load_trust_roots.cpp
     # Phase 4 multi-device hot-plug integration harness (Plan 04-05, HOTPLUG-06).
     # Drives the ARCH-02 mock seams (HotplugMonitor::injectEvent + MockHidEnumerator)
     # to mechanically prove SC1 (no UAF), SC2 (per-row dataChanged), SC4 (300ms
     # coalescing). The HotplugDebouncer + DeviceModel TUs are linked directly
     # rather than via the app target so the harness doesn't drag in the QML
-    # singleton machinery — both classes are Q_OBJECTs so AUTOMOC handles them.
+    # singleton machinery — both classes are Q_OBJECTTs so AUTOMOC handles them.
     # hotplug_monitor.cpp is recompiled here with AJAZZ_TESTING (target-wide define)
     # so the injectEvent shim symbol resolves at link time — libajazz_core.a was
     # built WITHOUT AJAZZ_TESTING so that production ABI stays clean (Plan 04-02
@@ -83,12 +90,10 @@ if(WIN32)
     # is linked in directly so the tests don't pull the full ajazz_plugins lib. Phase 7 (D-01):
     # `manifest_signer_common.cpp` carries the shared nlohmann-based `loadTrustRoots` impl and is
     # compiled into the test binary so the symbol resolves at link time without pulling the full
-    # ajazz_plugins lib.
-    # Phase 04 (Plan 04-06): Win32-only WM_DEVICECHANGE → HotplugEvent parser
-    # smoke test. Drives the AJAZZ_TESTING-gated `parseDevicePathW` helper +
-    # `injectEvent` round-trip with canonical AJAZZ Stream Dock device-path
-    # test vectors. Mitigates the Cross-Cutting pitfall (Linux-CI-blind Windows
-    # breakage) for the hot-plug subsystem.
+    # ajazz_plugins lib. Phase 04 (Plan 04-06): Win32-only WM_DEVICECHANGE → HotplugEvent parser
+    # smoke test. Drives the AJAZZ_TESTING-gated `parseDevicePathW` helper + `injectEvent`
+    # round-trip with canonical AJAZZ Stream Dock device-path test vectors. Mitigates the
+    # Cross-Cutting pitfall (Linux-CI-blind Windows breakage) for the hot-plug subsystem.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_windows_app_container_sandbox.cpp
