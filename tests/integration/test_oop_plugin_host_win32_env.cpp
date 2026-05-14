@@ -78,9 +78,22 @@ std::wstring trimRight(std::wstring const& s) {
 
 // Snapshot the current PYTHONPATH parent env value (NULL → empty string).
 // Used to capture before/after invariants for the CR-01 regression assert.
+//
+// Uses `_wdupenv_s` (MSVC's deprecation-free replacement for `_wgetenv`) so
+// the test compiles under `/W4 /WX` on the windows-2022 CI matrix without
+// the C4996 deprecation warning being promoted to an error.
 std::wstring snapshotParentPythonPath() {
-    auto const* p = _wgetenv(L"PYTHONPATH");
-    return p == nullptr ? std::wstring{} : std::wstring{p};
+    wchar_t* buf = nullptr;
+    size_t len = 0;
+    if (_wdupenv_s(&buf, &len, L"PYTHONPATH") != 0 || buf == nullptr) {
+        if (buf != nullptr) {
+            free(buf);
+        }
+        return std::wstring{};
+    }
+    std::wstring result{buf};
+    free(buf);
+    return result;
 }
 
 // Spawn `python3 <fixturesDir>/print_pythonpath.py` via CreateProcessW with a
