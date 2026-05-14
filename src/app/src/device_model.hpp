@@ -72,6 +72,7 @@ public:
         DpiStageCountRole,            ///< Number of DPI stages (mice).
         HasRgbRole,                   ///< True when the device exposes RGB lighting.
         HasTouchStripRole,            ///< True when the device exposes a touch strip.
+        HasClockRole, ///< True when the device advertises Capability::Clock (scaffolded; Phase 5).
     };
 
     /**

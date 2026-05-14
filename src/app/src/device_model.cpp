@@ -99,6 +99,8 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.hasRgb;
     case HasTouchStripRole:
         return d.hasTouchStrip;
+    case HasClockRole:
+        return d.hasClock;
     default:
         return {};
     }
@@ -118,6 +120,7 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
         {DpiStageCountRole, "dpiStageCount"},
         {HasRgbRole, "hasRgb"},
         {HasTouchStripRole, "hasTouchStrip"},
+        {HasClockRole, "deviceHasClock"},
     };
 }
 
@@ -280,6 +283,7 @@ QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
     m.insert(QStringLiteral("dpiStageCount"), static_cast<int>(it->dpiStageCount));
     m.insert(QStringLiteral("hasRgb"), it->hasRgb);
     m.insert(QStringLiteral("hasTouchStrip"), it->hasTouchStrip);
+    m.insert(QStringLiteral("hasClock"), it->hasClock);
     return m;
 }
 
