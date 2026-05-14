@@ -54,8 +54,15 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 1. Hot-plug events are coalesced by `(vid, pid, serial)` with a 250-500 ms trailing-edge debounce in `Application::onHotplug` before any consumer sees them, so a USB-hub shuffle produces at most one user-visible event per device (Pitfall 3 closed).
 1. The multi-device integration test exercises disconnect-during-use, reconnect, and device-shuffle scenarios using `MockHidEnumerator` + `HotplugMonitor::injectEvent`, and the same harness is exercised by a Windows CI smoke run for the `WM_DEVICECHANGE` path.
 1. A phase artefact documents the 2026-05-12/13 hot-plug debugging fix (what was broken, what changed, why 3 devices now work) so the institutional knowledge isn't lost.
-   **Plans**: TBD
-   **UI hint**: yes
+   **Plans**: 7 plans in 3 waves
+   - [ ] 04-01-PLAN.md — Atomic ownership migration (`unique_ptr` → `shared_ptr`) + `weak_ptr` cache (ARCH-03 / D-06 / HOTPLUG-01) — Wave 1
+   - [ ] 04-02-PLAN.md — Test seam: `HotplugMonitor::injectEvent` shim + constructor-injectable `HidEnumerator` (ARCH-02 / HOTPLUG-06) — Wave 2 *(depends on 04-01)*
+   - [ ] 04-03-PLAN.md — `HotplugDebouncer` (300ms trailing-edge, per-key) + `Application::onHotplug` wiring (D-05 / HOTPLUG-05) — Wave 1
+   - [ ] 04-04-PLAN.md — DeviceModel diff-driven `dataChanged` + lex sort + codename collapse + QML offline badge (D-03 / D-04 / HOTPLUG-02..04) — Wave 1
+   - [ ] 04-05-PLAN.md — Multi-device integration test harness (HOTPLUG-06) — Wave 3 *(depends on 04-01, 04-02, 04-03)*
+   - [ ] 04-06-PLAN.md — Windows `WM_DEVICECHANGE` smoke test + CI gate (HOTPLUG-06 cross-cutting) — Wave 3 *(depends on 04-02)*
+   - [ ] 04-07-PLAN.md — `04-HOTPLUG-RETRO.md` narrative + `hid_open` invariant CI grep (HOTPLUG-07 / Pitfall 11) — Wave 1
+     **UI hint**: yes
 
 ### Phase 5: Time-Sync Scaffolding
 
@@ -121,7 +128,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 | 1. SEC-003 Plugin Host      | v1.0      | 1/1            | Complete (retro) | 2026-05-03 |
 | 2. QML Singleton Sweep      | v1.0      | 1/1            | Complete (retro) | 2026-05-04 |
 | 3. Architectural Decisions  | v1.1      | 1/1            | Complete         | 2026-05-14 |
-| 4. Hot-plug Hardening       | v1.1      | 0/?            | Not started      | —          |
+| 4. Hot-plug Hardening       | v1.1      | 0/7            | Planned          | —          |
 | 5. Time-Sync Scaffolding    | v1.1      | 0/1            | Not started      | —          |
 | 6. CR-01 Win32 Env Fix      | v1.1      | 0/?            | Not started      | —          |
 | 7. WR-01 Trust-Roots Parser | v1.1      | 0/?            | Not started      | —          |
