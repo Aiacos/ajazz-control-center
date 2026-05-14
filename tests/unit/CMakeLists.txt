@@ -63,14 +63,19 @@ target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plug
 if(WIN32)
     # SEC-003 follow-up #51: Ed25519 manifest verifier — Win32 backend uses `_wspawnvp`. The test
     # exercises the same canonical-form contract on Windows so any drift between the two backends
-    # surfaces immediately.
+    # surfaces immediately. CR-01 (Phase 06, Plan 06-02): black-box tests for Win32EnvBlock — five
+    # TEST_CASEs covering the four Pitfall 5 sub-traps (\0\0 terminator, sort order, =-prefix
+    # preservation, snapshot-free) + D-04 case-insensitive override semantics. The implementation TU
+    # is linked in directly so the tests don't pull the full ajazz_plugins lib.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_windows_app_container_sandbox.cpp
                 test_manifest_signer.cpp
+                test_win32_env_block.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/windows_app_container_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_win32.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/win32_env_block.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 else()
@@ -144,7 +149,11 @@ target_link_libraries(
 target_include_directories(
     ajazz_unit_tests
     PRIVATE ${CMAKE_SOURCE_DIR}/src/devices/streamdeck/src
-            ${CMAKE_SOURCE_DIR}/src/devices/keyboard/src ${CMAKE_SOURCE_DIR}/src/app/src
+            ${CMAKE_SOURCE_DIR}/src/devices/keyboard/src
+            ${CMAKE_SOURCE_DIR}/src/app/src
+            # CR-01 (Phase 06, Plan 06-02): test_win32_env_block.cpp needs the host-private
+            # `win32_env_block.hpp` (it lives under src/plugins/src/, not include/).
+            ${CMAKE_SOURCE_DIR}/src/plugins/src
 )
 
 catch_discover_tests(ajazz_unit_tests)
