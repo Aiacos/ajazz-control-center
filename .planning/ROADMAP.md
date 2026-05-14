@@ -57,7 +57,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
    **Plans**: 7 plans in 3 waves
    - [x] 04-01-PLAN.md — Atomic ownership migration (`unique_ptr` → `shared_ptr`) + `weak_ptr` cache (ARCH-03 / D-06 / HOTPLUG-01) — Wave 1
    - [ ] 04-02-PLAN.md — Test seam: `HotplugMonitor::injectEvent` shim + constructor-injectable `HidEnumerator` (ARCH-02 / HOTPLUG-06) — Wave 2 *(depends on 04-01)*
-   - [ ] 04-03-PLAN.md — `HotplugDebouncer` (300ms trailing-edge, per-key) + `Application::onHotplug` wiring (D-05 / HOTPLUG-05) — Wave 1
+   - [x] 04-03-PLAN.md — `HotplugDebouncer` (300ms trailing-edge, per-key) + `Application::onHotplug` wiring (D-05 / HOTPLUG-05) — Wave 1
    - [ ] 04-04-PLAN.md — DeviceModel diff-driven `dataChanged` + lex sort + codename collapse + QML offline badge (D-03 / D-04 / HOTPLUG-02..04) — Wave 1
    - [ ] 04-05-PLAN.md — Multi-device integration test harness (HOTPLUG-06) — Wave 3 *(depends on 04-01, 04-02, 04-03)*
    - [ ] 04-06-PLAN.md — Windows `WM_DEVICECHANGE` smoke test + CI gate (HOTPLUG-06 cross-cutting) — Wave 3 *(depends on 04-02)*
