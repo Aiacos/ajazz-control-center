@@ -19,7 +19,9 @@
 #include <QVariantMap>
 
 #include <cstdint>
+#include <map>
 #include <set>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -105,7 +107,26 @@ public:
     [[nodiscard]] QHash<int, QByteArray> roleNames() const override;
 
     /**
-     * @brief Re-enumerate the registry and reset the model.
+     * @brief Re-enumerate the registry and propagate the diff to QML.
+     *
+     * Diff-driven per D-03: in the common path (row count unchanged), the
+     * method computes which rows' connected-state flipped between the
+     * previous refresh and now, and emits a per-row
+     * `dataChanged(index, index, {ConnectedRole})` signal for each
+     * changed row. Selection and scroll position survive automatically
+     * — no row index moves, so QML's `currentIndex` stays bound to the
+     * same row across hot-plug events.
+     *
+     * Falls back to `beginResetModel()` / `endResetModel()` only if the
+     * row count changes (a brand-new backend was registered between
+     * calls — unlikely outside bootstrap, but defensively handled).
+     *
+     * Row identity is `codename`, not `(vid, pid)` — multiple rebadge
+     * VID/PIDs sharing a codename collapse onto one row whose
+     * ConnectedRole is the OR across all rebadge keys (D-04). Rows are
+     * sorted lexicographically by `(family, codename)` per HOTPLUG-04;
+     * sort order is stable across arrival/departure/re-arrival.
+     *
      * @invokable Available from QML as `deviceModel.refresh()`.
      */
     Q_INVOKABLE void refresh();
@@ -130,11 +151,25 @@ private:
     /// `ajazz::app::Application`, which owns both us and the registry.
     core::DeviceRegistry& m_registry;
 
-    std::vector<core::DeviceDescriptor> m_rows; ///< Snapshot of registered descriptors.
+    /// Lexicographically-sorted (by family, codename) deduplicated rows.
+    ///
+    /// One row per `codename` — when multiple registered (vid, pid)
+    /// descriptors share a codename (the AKP03 rebadge case, D-04), the
+    /// first descriptor encountered is retained as the representative.
+    std::vector<core::DeviceDescriptor> m_rows;
 
     /// Set of (vendorId, productId) pairs currently visible to hidapi.
     /// Populated by refresh() at startup and on every hot-plug event.
     std::set<std::pair<std::uint16_t, std::uint16_t>> m_connected;
+
+    /// Codename → set of (vendorId, productId) keys that share that codename.
+    ///
+    /// Computed at refresh() time from the full `registry.enumerate()`
+    /// result (BEFORE codename collapse). Used by `data(ConnectedRole)`
+    /// to OR the per-rebadge connected-state into one row's value: a
+    /// codename row is connected iff ANY of its rebadge VID/PIDs
+    /// intersects `m_connected`. Closes the D-04 rebadge gap.
+    std::map<std::string, std::set<std::pair<std::uint16_t, std::uint16_t>>> m_codename_keys;
 };
 
 // QML_SINGLETON dual-instance trap: DeviceModel stays safe today only

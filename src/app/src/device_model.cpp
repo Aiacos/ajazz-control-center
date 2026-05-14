@@ -4,9 +4,13 @@
  * @brief DeviceModel QAbstractListModel implementation.
  *
  * refresh() calls DeviceRegistry::enumerate() to rebuild the static catalog
- * and hid_enumerate() to discover currently-plugged devices, wraps the
- * result in a beginResetModel()/endResetModel() pair so QML views rebuild
- * cleanly. ConnectedRole reflects the live presence of each (vid, pid).
+ * (collapsed by codename per D-04) and hid_enumerate() to discover
+ * currently-plugged devices, then propagates the diff to QML via per-row
+ * dataChanged({ConnectedRole}) signals (D-03). ConnectedRole ORs the live
+ * presence of every rebadge (vid, pid) that shares each codename. The
+ * full beginResetModel()/endResetModel() reset path is reserved for the
+ * defensive case where the row count actually changed (a backend was
+ * registered/unregistered between calls — bootstrap-only in v1.1).
  */
 #include "device_model.hpp"
 
@@ -62,11 +66,26 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
     case PidRole:
         return d.productId;
     case ConnectedRole: {
-        // Live HID presence test: a registry row is "connected" iff hidapi's
-        // last enumeration saw a device with the same (vendorId, productId).
-        // Refreshed by refresh() at startup and on every hot-plug event.
-        auto const key = std::make_pair(d.vendorId, d.productId);
-        return m_connected.find(key) != m_connected.end();
+        // Per D-04 rebadge contract: row identity is `codename`, so
+        // connected-state must OR across every rebadge (vid, pid) that
+        // shares this codename. The set is computed at refresh() time
+        // (`m_codename_keys`) so this lookup is O(rebadge_count) rather
+        // than O(registry_size). A codename row is connected iff ANY
+        // of its rebadge keys is in `m_connected`.
+        auto const it = m_codename_keys.find(d.codename);
+        if (it == m_codename_keys.end()) {
+            // No rebadge group recorded — fall back to the legacy
+            // single-key check (defensive; refresh() always populates
+            // m_codename_keys, so this path is unreachable in practice).
+            auto const key = std::make_pair(d.vendorId, d.productId);
+            return m_connected.find(key) != m_connected.end();
+        }
+        for (auto const& key : it->second) {
+            if (m_connected.find(key) != m_connected.end()) {
+                return true;
+            }
+        }
+        return false;
     }
     case KeyCountRole:
         return static_cast<int>(d.keyCount);
@@ -103,10 +122,116 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
 }
 
 void DeviceModel::refresh() {
-    beginResetModel();
-    m_rows = m_registry.enumerate();
-    refreshLiveEnumeration();
-    endResetModel();
+    // Diff-driven refresh per D-03 + HOTPLUG-02/03/04. Selection and
+    // scroll position survive automatically because no row index moves
+    // in the common path — we only emit per-row dataChanged for rows
+    // whose ConnectedRole flipped between previous refresh and now.
+
+    // Pull the full registry list — every (vid, pid) descriptor.
+    auto const all_descriptors = m_registry.enumerate();
+
+    // Step 1 — Build the new codename → keys map (D-04 rebadge collapse).
+    std::map<std::string, std::set<std::pair<std::uint16_t, std::uint16_t>>> next_codename_keys;
+    for (auto const& d : all_descriptors) {
+        next_codename_keys[d.codename].emplace(d.vendorId, d.productId);
+    }
+
+    // Step 2 — Collapse to one descriptor per codename (first-encountered
+    // wins as the representative row; the model name shown in the UI is
+    // therefore deterministic across runs because registerDevice() insertion
+    // order is deterministic).
+    std::vector<core::DeviceDescriptor> collapsed;
+    collapsed.reserve(next_codename_keys.size());
+    {
+        std::set<std::string> seen_codenames;
+        for (auto const& d : all_descriptors) {
+            if (seen_codenames.insert(d.codename).second) {
+                collapsed.push_back(d);
+            }
+        }
+    }
+
+    // Step 3 — Lex sort by (family, codename) per HOTPLUG-04. Stable
+    // across arrival/departure/re-arrival because both keys are
+    // attributes of the descriptor, not of the live presence state.
+    std::sort(collapsed.begin(),
+              collapsed.end(),
+              [](core::DeviceDescriptor const& a, core::DeviceDescriptor const& b) {
+                  if (a.family != b.family) {
+                      return static_cast<int>(a.family) < static_cast<int>(b.family);
+                  }
+                  return a.codename < b.codename;
+              });
+
+    // Step 4 — Compute connected-state-then for the OLD row layout
+    // (pre-update) using the old m_connected + m_codename_keys.
+    std::vector<bool> connected_then;
+    connected_then.reserve(m_rows.size());
+    for (auto const& d : m_rows) {
+        bool any = false;
+        if (auto const it = m_codename_keys.find(d.codename); it != m_codename_keys.end()) {
+            for (auto const& key : it->second) {
+                if (m_connected.find(key) != m_connected.end()) {
+                    any = true;
+                    break;
+                }
+            }
+        }
+        connected_then.push_back(any);
+    }
+
+    // Step 5 — Decide between common-path (sizes equal) and reset
+    // fallback (row count grew/shrank: a backend was registered or
+    // unregistered between calls — bootstrap-only in v1.1, but
+    // defensively handled).
+    bool const sizes_match = (collapsed.size() == m_rows.size());
+    bool codenames_match = sizes_match;
+    if (sizes_match) {
+        for (std::size_t i = 0; i < collapsed.size(); ++i) {
+            if (collapsed[i].codename != m_rows[i].codename) {
+                codenames_match = false;
+                break;
+            }
+        }
+    }
+
+    if (!codenames_match) {
+        AJAZZ_LOG_INFO("device-model",
+                       "row layout changed (was {} rows, now {}) — performing reset",
+                       static_cast<int>(m_rows.size()),
+                       static_cast<int>(collapsed.size()));
+        beginResetModel();
+        m_rows = std::move(collapsed);
+        m_codename_keys = std::move(next_codename_keys);
+        refreshLiveEnumeration();
+        endResetModel();
+        return;
+    }
+
+    // Common path — sizes + codename order are stable.
+    m_rows = std::move(collapsed);
+    m_codename_keys = std::move(next_codename_keys);
+    refreshLiveEnumeration(); // updates m_connected
+
+    // Step 6 — Compute connected-state-now for the new layout (which
+    // matches the old layout codename-for-codename) and emit per-row
+    // dataChanged for any row whose connected-state flipped.
+    for (std::size_t row = 0; row < m_rows.size(); ++row) {
+        auto const& d = m_rows[row];
+        bool now = false;
+        if (auto const it = m_codename_keys.find(d.codename); it != m_codename_keys.end()) {
+            for (auto const& key : it->second) {
+                if (m_connected.find(key) != m_connected.end()) {
+                    now = true;
+                    break;
+                }
+            }
+        }
+        if (now != connected_then[row]) {
+            QModelIndex const idx = createIndex(static_cast<int>(row), 0);
+            emit dataChanged(idx, idx, {ConnectedRole});
+        }
+    }
 }
 
 void DeviceModel::refreshLiveEnumeration() {
@@ -117,8 +242,17 @@ void DeviceModel::refreshLiveEnumeration() {
     m_connected = m_registry.enumerateConnectedHidKeys();
     int matching = 0;
     for (auto const& d : m_rows) {
-        if (m_connected.count(std::make_pair(d.vendorId, d.productId)) > 0) {
-            ++matching;
+        // Per D-04: a codename row is "online" iff ANY of its rebadge
+        // (vid, pid) keys is in m_connected. Walk the rebadge group
+        // recorded in m_codename_keys rather than the representative
+        // descriptor's single (vid, pid) pair.
+        if (auto const it = m_codename_keys.find(d.codename); it != m_codename_keys.end()) {
+            for (auto const& key : it->second) {
+                if (m_connected.count(key) > 0) {
+                    ++matching;
+                    break;
+                }
+            }
         }
     }
     AJAZZ_LOG_INFO("device-model",

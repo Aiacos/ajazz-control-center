@@ -27,12 +27,13 @@ Rectangle {
 
     /// The device model. Set by the parent (Main.qml) to DeviceModel.
     /// We feed it to a Repeater inside a ColumnLayout (rather than a
-    /// ListView) so non-connected delegates can be hidden via
-    /// `visible: false` without ListView's spacing being applied to
-    /// the gap. ColumnLayout natively skips `visible: false` items
-    /// when computing positions, so the visible rows stay vertically
-    /// flush with each other regardless of how many offline rows are
-    /// interleaved between them in the underlying model.
+    /// ListView) so the layout topology survives reflow under the
+    /// HOTPLUG-02 contract: ALL registered codename rows are present
+    /// at all times — disconnected ones surface an "Offline" badge
+    /// (see DeviceRow.qml) but stay at their lex-sorted position.
+    /// Phase 4 (D-03 + HOTPLUG-02/03/04) reverses the v1.0
+    /// connected-only filter so selection focus + scroll position
+    /// survive a disconnect/reconnect cycle automatically.
     property var model: null
 
     ScrollView {
@@ -40,11 +41,12 @@ Rectangle {
         anchors.fill: parent
         anchors.margins: Theme.spacingSm
         clip: true
-        // Hide the entire scroll surface when nothing is connected — the
-        // EmptyState below takes over the sidebar real estate. Without
-        // this branch the sidebar looks like the app is broken on first
-        // launch (no devices plugged in yet).
-        visible: rows.visibleChildren.length > 0
+        // Hide the entire scroll surface only when there are NO
+        // registered codenames at all (e.g. before bootstrap finishes
+        // — the sidebar would otherwise look broken). Once any row
+        // exists we always show the scroll surface; offline rows are
+        // surfaced via the Offline badge instead of being hidden.
+        visible: rows.children.length > 1 // Repeater itself counts as 1 child.
 
         ColumnLayout {
             id: rows
@@ -72,11 +74,12 @@ Rectangle {
                     deviceCodename: codename
                     deviceConnected: connected
 
-                    // ColumnLayout skips `visible: false` items entirely
-                    // when laying out children, so spacing isn't applied
-                    // to the hidden gap. No ghost spacing → connected
-                    // rows stay vertically flush with each other.
-                    visible: connected
+                    // HOTPLUG-02: rows always visible — offline state
+                    // surfaces via the Offline badge inside DeviceRow,
+                    // not by hiding the row. This is what makes
+                    // selection focus + scroll position survive a
+                    // disconnect/reconnect cycle (HOTPLUG-03): the
+                    // row index does not move.
 
                     onClicked: root.deviceSelected(codename)
                 }
@@ -84,16 +87,22 @@ Rectangle {
         }
     }
 
-    // Onboarding hint shown when no devices are connected and not in
+    // Onboarding hint shown when no devices are registered and not in
     // the collapsed-icon-only narrow layout (root.width < 200 covers the
     // 64 px collapsed mode that Main.qml falls into below 700 px window
     // width — drawing the title at that width clips badly).
+    //
+    // Pre-Phase 4 this also fired when devices were registered but none
+    // were connected. Post-Phase 4 the offline-badge UX (HOTPLUG-02)
+    // means the sidebar stays populated with offline rows, so the
+    // empty-state only appears in the genuinely-empty case (no
+    // backends registered yet).
     EmptyState {
         anchors.centerIn: parent
         anchors.margins: Theme.spacingLg
         width: parent.width - Theme.spacingLg * 2
         // Mirror the ScrollView visibility condition: hidden scroll
-        // means zero connected rows, which is exactly when we want
+        // means zero registered rows, which is exactly when we want
         // the onboarding hint. Avoids the "scroll visible AND empty
         // state visible at the same time" double-display.
         visible: !scroll.visible && root.width >= 200
