@@ -295,4 +295,205 @@ TEST_CASE("OOP env block isolates concurrent spawns (cross-instance race closed)
     REQUIRE(before == after);
 }
 
+namespace {
+
+// Spawn `python3 <fixturesDir>/print_pythonpath.py` with a MALFORMED env block
+// containing TWO PYTHONPATH= entries. The probe deliberately bypasses
+// Win32EnvBlock and constructs the block by hand into a vector<wchar_t>.
+// Used ONLY by the WIN32-04 duplicate-key precedence probe below; this is
+// observational, not assertion-based.
+//
+// The block layout: [parent env entries with PYTHONPATH removed]
+// [PYTHONPATH=firstValue\0] [PYTHONPATH=secondValue\0] [\0]
+// (final \0 makes the block end in \0\0).
+std::wstring spawnPythonWithDuplicatePythonPath(std::wstring const& firstValue,
+                                                std::wstring const& secondValue) {
+    std::wstring const pythonExe = locatePython();
+    if (pythonExe.empty()) {
+        throw std::runtime_error("python3.exe not on PATH");
+    }
+
+    std::wstring const fixturesDir = []() {
+        std::string const narrow = AJAZZ_FIXTURES_DIR;
+        return std::wstring{narrow.begin(), narrow.end()};
+    }();
+    std::wstring const scriptPath = fixturesDir + L"\\print_pythonpath.py";
+    std::wstring cmdline = L"\"" + pythonExe + L"\" \"" + scriptPath + L"\"";
+
+    // Hand-build the env block. Snapshot parent env, skip any existing
+    // PYTHONPATH entry (case-insensitive), then append the two malformed
+    // duplicate entries at the end, then the \0\0 terminator. Note: this
+    // block is NOT sorted (it's deliberately malformed for the probe). The
+    // CRT and Windows accept unsorted blocks but the documented contract
+    // is sorted; our probe sees what Windows does with the unsorted form.
+    std::vector<wchar_t> block;
+    LPWCH snapshot = GetEnvironmentStringsW();
+    if (snapshot != nullptr) {
+        LPWCH cursor = snapshot;
+        while (*cursor != L'\0') {
+            std::wstring entry{cursor};
+            // Skip parent's PYTHONPATH (case-insensitive match on the key).
+            std::wstring key;
+            auto const eq = entry.find(L'=');
+            if (eq != std::wstring::npos) {
+                key = entry.substr(0, eq);
+            } else {
+                key = entry;
+            }
+            bool const isPythonPath = !entry.empty() && entry.front() != L'=' &&
+                                      _wcsicmp(key.c_str(), L"PYTHONPATH") == 0;
+            if (!isPythonPath) {
+                block.insert(block.end(), entry.begin(), entry.end());
+                block.push_back(L'\0');
+            }
+            cursor += entry.size() + 1;
+        }
+        FreeEnvironmentStringsW(snapshot);
+    }
+
+    // Append duplicate PYTHONPATH entries IN ORDER.
+    std::wstring const firstEntry = L"PYTHONPATH=" + firstValue;
+    std::wstring const secondEntry = L"PYTHONPATH=" + secondValue;
+    block.insert(block.end(), firstEntry.begin(), firstEntry.end());
+    block.push_back(L'\0');
+    block.insert(block.end(), secondEntry.begin(), secondEntry.end());
+    block.push_back(L'\0');
+    // Block terminator.
+    block.push_back(L'\0');
+
+    // Spawn with the malformed block as lpEnvironment.
+    SECURITY_ATTRIBUTES saAttr{};
+    saAttr.nLength = sizeof(SECURITY_ATTRIBUTES);
+    saAttr.bInheritHandle = TRUE;
+    HANDLE childStdoutRead = nullptr;
+    HANDLE childStdoutWrite = nullptr;
+    if (CreatePipe(&childStdoutRead, &childStdoutWrite, &saAttr, 0) == 0) {
+        throw std::runtime_error("CreatePipe failed");
+    }
+    if (SetHandleInformation(childStdoutRead, HANDLE_FLAG_INHERIT, 0) == 0) {
+        CloseHandle(childStdoutRead);
+        CloseHandle(childStdoutWrite);
+        throw std::runtime_error("SetHandleInformation failed");
+    }
+
+    STARTUPINFOW si{};
+    si.cb = sizeof(STARTUPINFOW);
+    si.dwFlags = STARTF_USESTDHANDLES;
+    si.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
+    si.hStdOutput = childStdoutWrite;
+    si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+    PROCESS_INFORMATION pi{};
+    BOOL const ok = CreateProcessW(pythonExe.c_str(),
+                                   cmdline.data(),
+                                   nullptr,
+                                   nullptr,
+                                   TRUE,
+                                   CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT,
+                                   block.data(), // <-- malformed block with TWO PYTHONPATH entries
+                                   nullptr,
+                                   &si,
+                                   &pi);
+
+    CloseHandle(childStdoutWrite);
+
+    if (ok == 0) {
+        DWORD const err = GetLastError();
+        CloseHandle(childStdoutRead);
+        throw std::runtime_error("CreateProcessW failed, GetLastError=" + std::to_string(err));
+    }
+
+    DWORD const wait = WaitForSingleObject(pi.hProcess, 30000);
+
+    std::wstring captured;
+    if (wait == WAIT_OBJECT_0) {
+        std::vector<char> buf(4096);
+        DWORD bytesRead = 0;
+        while (
+            ReadFile(
+                childStdoutRead, buf.data(), static_cast<DWORD>(buf.size()), &bytesRead, nullptr) !=
+                0 &&
+            bytesRead > 0) {
+            int const wideLen = MultiByteToWideChar(
+                CP_UTF8, 0, buf.data(), static_cast<int>(bytesRead), nullptr, 0);
+            if (wideLen > 0) {
+                std::wstring chunk(static_cast<std::size_t>(wideLen), L'\0');
+                MultiByteToWideChar(
+                    CP_UTF8, 0, buf.data(), static_cast<int>(bytesRead), chunk.data(), wideLen);
+                captured.append(chunk);
+            }
+        }
+    }
+
+    CloseHandle(childStdoutRead);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+
+    if (wait != WAIT_OBJECT_0) {
+        throw std::runtime_error("python child timed out or wait failed");
+    }
+    return trimRight(captured);
+}
+
+} // namespace
+
+TEST_CASE("WIN32-04 probe: duplicate PYTHONPATH precedence",
+          "[oop_env][integration][duplicate-key-probe]") {
+    // OBSERVATIONAL test (Plan 06-03 Task 1). Uses WARN, not REQUIRE — the
+    // test does NOT fail either way. The CI log captures the observed value;
+    // Plan 06-03 Task 2 records it in `06-CR-01-RESOLUTION.md`.
+    //
+    // The question: when CreateProcessW receives an `lpEnvironment` block
+    // containing TWO PYTHONPATH= entries, which value reaches the child?
+    // MS docs imply first-wins (sequential walk semantics); nullprogram (2023)
+    // empirically observes last-wins. Our Win32EnvBlock collapses to ONE
+    // entry per key, so this question has no bearing on runtime correctness —
+    // it matters only for understanding what other CreateProcessW callers
+    // might experience.
+    if (locatePython().empty()) {
+        SKIP("python3.exe not on PATH");
+    }
+
+    std::wstring const firstValue = L"C:\\probe\\first";
+    std::wstring const secondValue = L"C:\\probe\\second";
+    std::wstring const observed = spawnPythonWithDuplicatePythonPath(firstValue, secondValue);
+
+    // Convert observed to narrow for the WARN line (Catch2's stringification
+    // of std::wstring is implementation-defined; UTF-8 narrow is portable).
+    std::string narrow;
+    if (!observed.empty()) {
+        int const narrowLen = WideCharToMultiByte(CP_UTF8,
+                                                  0,
+                                                  observed.c_str(),
+                                                  static_cast<int>(observed.size()),
+                                                  nullptr,
+                                                  0,
+                                                  nullptr,
+                                                  nullptr);
+        if (narrowLen > 0) {
+            narrow.resize(static_cast<std::size_t>(narrowLen));
+            WideCharToMultiByte(CP_UTF8,
+                                0,
+                                observed.c_str(),
+                                static_cast<int>(observed.size()),
+                                narrow.data(),
+                                narrowLen,
+                                nullptr,
+                                nullptr);
+        }
+    }
+
+    // Emit the WARN line in a stable format that Plan 06-03 Task 2 greps
+    // out of the CI log.
+    WARN("WIN32-04 result: PYTHONPATH = " << narrow);
+
+    // Sanity: the observed value is either the first or the second sentinel.
+    // The probe spawn produces a deterministic answer per Windows version,
+    // so observing neither would indicate a Win32 contract change (or a bug
+    // in the hand-built block).
+    bool const isFirst = (observed == firstValue);
+    bool const isLast = (observed == secondValue);
+    REQUIRE((isFirst || isLast));
+}
+
 #endif // _WIN32
