@@ -54,6 +54,13 @@ modules:
 
   - name: ajazz-control-center
     buildsystem: cmake-ninja
+    # Build in a separate `_flatpak_build/` subdirectory so CMAKE_SOURCE_DIR
+    # != CMAKE_BINARY_DIR. Our top-level CMakeLists.txt:21 has a guard
+    # `if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})` that fatal-errors
+    # on in-source builds, which is the flatpak-builder default with
+    # `type: dir`. Without builddir:true, the source tree IS the build tree
+    # and the guard fires.
+    builddir: true
     config-opts:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - -DAJAZZ_BUILD_TESTS=OFF
