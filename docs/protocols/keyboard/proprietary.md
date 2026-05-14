@@ -74,3 +74,20 @@ These map onto `ajazz::core::RgbEffect`:
 | Macros              | ✅ basic   |
 | Input report parser | 🟠 partial |
 | Capture fixtures    | 🟠 missing |
+
+## Time sync
+
+**Status:** scaffolded — not yet implemented.
+
+`ProprietaryKeyboard` (covering AKB980 PRO and other proprietary-protocol
+AJAZZ keyboards) inherits `IClockCapable` and returns
+`TimeSyncResult::NotImplemented` from `setTime()`, with a WARN-once via
+`s_warned_akb980` (Pitfall 14). VIA-protocol keyboards (`ViaKeyboard`)
+are explicitly excluded per D-03 — they are QMK-style with no vendor
+clock surface.
+
+When a wire format is captured (the Delphi installer in `~/MEGAsync/Ajazz/`
+needs `wine`/`innoextract` for static analysis), only this backend's body
+changes. See
+[`docs/superpowers/specs/2026-05-13-time-sync-design.md`](../../superpowers/specs/2026-05-13-time-sync-design.md)
+for the design contract.

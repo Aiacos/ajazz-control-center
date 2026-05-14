@@ -210,3 +210,14 @@ Boot logo:
 - `[mirabox-n3]` — vendor product page (dimensions, weight, materials)
 - [`akp153.md`](./akp153.md) — sister 15-key device on the v1 API
 - [`akp05.md`](./akp05.md) — full 10-key Plus-class device with touch strip
+
+## Time sync
+
+**Status:** scaffolded — not yet implemented.
+
+`Akp03Device` inherits `IClockCapable` and returns
+`TimeSyncResult::NotImplemented` from `setTime()`, with a WARN-once via
+`s_warned_akp03` (Pitfall 14). When a wire format lands, only this
+backend's body changes — UI / service / capability / glyph / Settings
+toggle all stay. See
+[`docs/superpowers/specs/2026-05-13-time-sync-design.md`](../../superpowers/specs/2026-05-13-time-sync-design.md).

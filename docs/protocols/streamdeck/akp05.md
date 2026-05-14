@@ -177,3 +177,13 @@ confirm with a capture.
 - `[ajazz-akp05e]` — AJAZZ-branded SKU product page (white / black variants)
 - [`akp03.md`](./akp03.md) — same v2 framing, smaller form factor
 - [`akp815.md`](./akp815.md) — sister 15-key device (LCD strip but no touchscreen)
+
+## Time sync
+
+**Status:** scaffolded — not yet implemented.
+
+`Akp05Device` inherits `IClockCapable` and returns
+`TimeSyncResult::NotImplemented` from `setTime()`, with a WARN-once via
+`s_warned_akp05` (Pitfall 14). See
+[`docs/superpowers/specs/2026-05-13-time-sync-design.md`](../../superpowers/specs/2026-05-13-time-sync-design.md)
+for the design contract.
