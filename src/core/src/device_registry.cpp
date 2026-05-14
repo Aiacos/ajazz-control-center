@@ -37,6 +37,8 @@ DeviceRegistry& DeviceRegistry::instance() {
 #pragma GCC diagnostic pop
 #endif
 
+DeviceRegistry::DeviceRegistry(HidEnumerator enumerator) : m_enumerator(std::move(enumerator)) {}
+
 void DeviceRegistry::registerDevice(DeviceDescriptor descriptor, DeviceFactory factory) {
     std::lock_guard const lock(m_mutex);
     auto const it = std::ranges::find_if(m_entries, [&](Entry const& e) {
@@ -70,6 +72,15 @@ std::vector<DeviceDescriptor> DeviceRegistry::enumerate() const {
 
 std::set<std::pair<std::uint16_t, std::uint16_t>>
 DeviceRegistry::enumerateConnectedHidKeys() const {
+    // ARCH-02 / HOTPLUG-06 test seam: if a custom HID enumerator was
+    // injected at construction, defer to it and skip real hidapi entirely.
+    // Production callers construct without an argument (m_enumerator is
+    // default-constructed empty std::function) and hit the real walker
+    // below.
+    if (m_enumerator) {
+        return m_enumerator();
+    }
+
     // hidapi calls hid_init() transparently on first use; the call is
     // idempotent and reference-counted, so it costs nothing on repeat
     // invocations from refresh()/hot-plug paths.

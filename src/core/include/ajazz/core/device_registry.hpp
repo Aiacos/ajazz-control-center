@@ -22,6 +22,7 @@
 #include "ajazz/core/device.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -45,7 +46,35 @@ namespace ajazz::core {
  */
 class DeviceRegistry {
 public:
-    DeviceRegistry() = default;
+    /**
+     * @brief Type-erased "currently-connected (vid, pid) set" enumerator.
+     *
+     * Default-constructed (empty) means "use the real `hid_enumerate(0, 0)`
+     * walker"; tests inject a callable that returns a synthetic set via
+     * `MockHidEnumerator` (tests/unit/mock_hid_enumerator.hpp) so the
+     * multi-device integration harness (HOTPLUG-06 / Plan 04-05) can drive
+     * the live-presence axis without touching real hidapi.
+     *
+     * Per ARCH-02, this constructor-injectable seam is one of two test
+     * surfaces Phase 4 lands (the other is `HotplugMonitor::injectEvent`).
+     */
+    using HidEnumerator = std::function<std::set<std::pair<std::uint16_t, std::uint16_t>>()>;
+
+    /**
+     * @brief Construct a DeviceRegistry, optionally with a custom HID enumerator.
+     *
+     * @param enumerator If empty (default), `enumerateConnectedHidKeys()`
+     *        walks the real `hid_enumerate(0, 0)` and returns OS-visible
+     *        VID/PID pairs. If set, calls are forwarded to the callable
+     *        — used exclusively by tests to drive synthetic "currently
+     *        connected" sets via `MockHidEnumerator`.
+     *
+     * The `explicit` qualifier preserves the no-arg ergonomics for
+     * production callers — `Application` constructs `core::DeviceRegistry
+     * m_registry;` as a data member with no arguments and the
+     * default-constructed `std::function` flags "use real hidapi."
+     */
+    explicit DeviceRegistry(HidEnumerator enumerator = {});
 
     /**
      * @brief Process-wide transition shim used by code that has not yet
@@ -165,6 +194,15 @@ private:
     /// no proactive invalidation on hot-plug Removed).
     mutable std::map<std::pair<std::uint16_t, std::uint16_t>, std::weak_ptr<IDevice>>
         m_open_devices;
+
+    /// Optional injected HID enumerator (ARCH-02 / HOTPLUG-06 test seam).
+    ///
+    /// When empty (production default), `enumerateConnectedHidKeys()` walks
+    /// the real `::hid_enumerate(0, 0)`. When set (test path), the callable
+    /// is invoked instead — `MockHidEnumerator` from `tests/unit/` returns
+    /// a settable synthetic (vid, pid) set so the multi-device integration
+    /// harness can drive live-presence without touching real hidapi.
+    HidEnumerator m_enumerator;
 };
 
 } // namespace ajazz::core

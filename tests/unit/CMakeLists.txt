@@ -96,6 +96,11 @@ set_source_files_properties(
                                         "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
 )
 
+# AJAZZ_TESTING flips on the ARCH-02 mock seams: HotplugMonitor::injectEvent (Plan 04-02) and any
+# other test-only hooks behind the same guard. Production ajazz_core builds never define this, so
+# the symbols disappear from the library ABI entirely.
+target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_TESTING)
+
 # Set the AUTOMOC flag for the fetcher TU we pull in from the app target — StreamdockCatalogFetcher
 # is a Q_OBJECT so it needs moc to run.
 set_target_properties(ajazz_unit_tests PROPERTIES AUTOMOC ON)

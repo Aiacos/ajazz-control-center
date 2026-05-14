@@ -399,6 +399,19 @@ void HotplugMonitor::setCallback(Callback cb) {
     p_->cb = std::move(cb);
 }
 
+#ifdef AJAZZ_TESTING
+void HotplugMonitor::injectEvent(HotplugEvent const& ev) {
+    // ARCH-02: synthesise the event through the exact same Callback path
+    // real per-OS events take (Linux udev / Win32 WM_DEVICECHANGE / macOS
+    // IOKit all funnel through `impl.snapshotCallback()(ev)`). Tests
+    // therefore exercise the production dispatch surface end-to-end without
+    // a real OS event source.
+    if (auto cb = p_->snapshotCallback()) {
+        cb(ev);
+    }
+}
+#endif
+
 bool HotplugMonitor::isRunning() const noexcept {
     return p_->running.load();
 }

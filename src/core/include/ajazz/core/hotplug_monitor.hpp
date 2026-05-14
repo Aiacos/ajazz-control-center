@@ -93,6 +93,26 @@ public:
     /// True between a successful @ref start and a subsequent @ref stop.
     [[nodiscard]] bool isRunning() const noexcept;
 
+#ifdef AJAZZ_TESTING
+    /**
+     * @brief Test-only hook: synthesise a HotplugEvent into the same internal
+     *        dispatch pipeline real udev/WM_DEVICECHANGE/IOKit events use.
+     *
+     * Per ARCH-02, this is the cheapest seam that meets HOTPLUG-06 (mock
+     * multi-device integration) and the Windows WM_DEVICECHANGE smoke test.
+     * Production builds (without AJAZZ_TESTING) do not see this declaration;
+     * the shim adds zero ABI surface to ajazz_core.
+     *
+     * The synthesised event flows through `p_->snapshotCallback()` — the
+     * exact same path real per-OS events take — so all subscribers
+     * (Application::onHotplug, HotplugDebouncer) see it indistinguishably.
+     * No state mutation, no thread hop; the test caller's thread invokes
+     * the Callback directly (matches the production contract that the
+     * Callback runs on a non-GUI thread).
+     */
+    void injectEvent(HotplugEvent const& ev);
+#endif
+
     /**
      * @brief Opaque platform state owned by the monitor.
      *
