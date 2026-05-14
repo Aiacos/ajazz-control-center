@@ -40,6 +40,7 @@ qt_add_executable(
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     src/loaded_plugins_model.cpp
+    src/time_sync_service.cpp
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
@@ -206,6 +207,8 @@ qt_add_qml_module(
             src/plugin_catalog_model.hpp
             src/loaded_plugins_model.cpp
             src/loaded_plugins_model.hpp
+            src/time_sync_service.cpp
+            src/time_sync_service.hpp
             src/property_inspector_controller.cpp
             src/property_inspector_controller.hpp
     QML_FILES qml/Main.qml

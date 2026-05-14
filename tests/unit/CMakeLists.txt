@@ -44,6 +44,13 @@ add_executable(
     # on top of BrandingService (already in this list).
     test_theme_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/theme_service.cpp
+    # TimeSyncService (Phase 5 / Plan 05-04): the QML TimeSyncService
+    # singleton's contract — Ok / NotImplemented / IoError / null-cast
+    # signal emission, autoSync persistence, onDeviceArrived gating.
+    # The cpp source is linked directly so the test binary doesn't need
+    # to pull the full app target (Q_OBJECT runs through AUTOMOC here).
+    test_time_sync_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/time_sync_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
