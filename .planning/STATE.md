@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
-status: executing
+status: ready_to_plan
 stopped_at: Phase 4 context revalidated against new Stream Dock research (quick 260514-h0w) — D-02 + D-04 amended
 last_updated: '2026-05-14T13:46:03.095Z'
 last_activity: 2026-05-14 -- Phase 05 execution started
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 26
   completed_plans: 13
-  percent: 50
+  percent: 67
 ---
 
 # Project State
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 
 ## Current Position
 
-Phase: 05 (time-sync-scaffolding) — EXECUTING
-Plan: 1 of 8
-Status: Executing Phase 05
-Last activity: 2026-05-14 -- Phase 05 execution started
+Phase: 06
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-05-14
 
 ## Performance Metrics
 
@@ -43,6 +43,7 @@ Last activity: 2026-05-14 -- Phase 05 execution started
 | 7. WR-01 Trust-Roots Parser | —     | —     | —        |
 | 8. Scaffolded-Device Wiring | —     | —     | —        |
 | 3                           | 1     | -     | -        |
+| 05                          | 8     | -     | -        |
 
 ## Accumulated Context
 
