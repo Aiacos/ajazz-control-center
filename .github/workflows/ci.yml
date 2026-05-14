@@ -119,9 +119,16 @@ jobs:
       # defined-out, name regex mismatch, test-list filter drift) — fails CI
       # if zero hot-plug tests run on the Windows runner. Mitigates the
       # Cross-Cutting pitfall (Linux-CI-blind Windows breakage) for HOTPLUG-06.
+      # Regex matches the actual test names: test_hotplug_harness.cpp uses
+      # "hot-plug" with hyphen and the HOTPLUG-* tag; test_hotplug_win32_smoke.cpp
+      # uses "Win32 device-path ..." and "Win32 injectEvent ..." patterns. The
+      # previous regex `hotplug` (no hyphen) plus the flag typo `--test-regex`
+      # (correct: --tests-regex / -R) both contributed to the v1.1 audit's
+      # "Windows CI green build PENDING" — the typo was a hard error, and the
+      # regex would have matched zero tests on Windows even after the typo fix.
       - name: Verify Windows hot-plug smoke ran
         if: runner.os == 'Windows'
-        run: ctest --preset ${{ matrix.preset }} --test-regex hotplug --output-on-failure
+        run: ctest --preset ${{ matrix.preset }} --tests-regex "hot-plug|HOTPLUG|injectEvent|device-path" --output-on-failure
 
       # ---- Python tests ---------------------------------------------------
       - name: Run Python tests
