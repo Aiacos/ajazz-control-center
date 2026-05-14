@@ -58,6 +58,24 @@ Win32EnvBlock::Win32EnvBlock(std::map<std::wstring, std::wstring> overrides) {
         while (*cursor != L'\0') {
             std::wstring entry{cursor};
 
+            // CRITICAL: snapshot the cursor advance BEFORE moving `entry`.
+            // Both branches below `std::move(entry)` into one of the vectors;
+            // reading `entry.size()` after the move is implementation-defined
+            // (a moved-from std::wstring is in a "valid but unspecified state").
+            // On MSVC's STL the moved-from string is cleared (size() == 0) for
+            // heap-allocated strings (i.e. anything longer than the 7-wchar SSO
+            // threshold) — that includes `PATH=...`, `SYSTEMROOT=...`, and most
+            // real env entries. Cursor would advance by 1 instead of size+1,
+            // silently dropping every subsequent entry past the first long one.
+            // This was the root cause of windows-2022 CI failures 167 (=Z: not
+            // in produced block) and 181/182/183 (CreateProcessW=87 because
+            // the env block we hand the child is missing SYSTEMROOT/PATH).
+            // Confirmed via diagnostic instrumentation in commit aeecc87:
+            //   envBlock entries=93, hasSYSTEMROOT=NO, hasPATH=NO
+            // libstdc++ and libc++ happen to leave moved-from size intact for
+            // SSO strings, masking the bug on Linux + macOS.
+            size_t const advance = entry.size() + 1;
+
             if (!entry.empty() && entry.front() == L'=') {
                 // `=C:=C:\foo` style. Goes to the front verbatim.
                 frontEntries.push_back(std::move(entry));
@@ -85,7 +103,7 @@ Win32EnvBlock::Win32EnvBlock(std::map<std::wstring, std::wstring> overrides) {
                 }
             }
 
-            cursor += entry.size() + 1; // advance past the `\0`
+            cursor += advance; // advance past the `\0`
         }
 
         // Pitfall 5 sub-trap "free the snapshot via FreeEnvironmentStringsW":
