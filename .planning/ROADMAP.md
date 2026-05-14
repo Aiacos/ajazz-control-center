@@ -91,7 +91,11 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 1. All three `_putenv_s` calls at `out_of_process_plugin_host_win32.cpp:463-467` are removed in the same commit as the env-block introduction — no belt-and-braces leftover (Pitfall 6 closed).
 1. Windows CI exercises the OOP host child spawn (not just a compile) and asserts via `_wgetenv(L"PYTHONPATH")` that the parent process's environment is unchanged after a child completes.
 1. A phase artefact documents the resolved duplicate-key precedence question (first-wins vs last-wins on inherited `PYTHONPATH`) using results from a CI smoke test, since MS docs and nullprogram disagree.
-   **Plans**: TBD
+   **Plans**: 3 plans
+
+- [ ] 06-01-PLAN.md — Win32EnvBlock RAII class + remove `_putenv_s` + wire both spawn branches + `CREATE_UNICODE_ENVIRONMENT` (single atomic fix commit, WIN32-01/02)
+- [ ] 06-02-PLAN.md — Catch2 unit test for env-block invariants + integration test spawning real Python child to assert parent `_wgetenv(L"PYTHONPATH")` unchanged (CR-01 regression test, WIN32-03)
+- [ ] 06-03-PLAN.md — WIN32-04 duplicate-key precedence probe + `06-CR-01-RESOLUTION.md` documenting CI-observed answer
 
 ### Phase 7: WR-01 Trust-Roots Parser Hardening
 
