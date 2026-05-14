@@ -32,6 +32,14 @@ modules:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - -DHIDAPI_BUILD_HIDTEST=OFF
       - -DHIDAPI_WITH_TESTS=OFF
+      # Disable the libusb backend. The Flatpak SDK runtime (org.kde.Platform
+      # 6.7) does not ship libusb-1.0, so the default hidapi build fails at
+      # `pkg_check_modules(libusb-1.0>=1.0.9)`. Our binary uses only the
+      # hidraw backend (kernel-native /dev/hidraw*) on Linux — see
+      # `resources/linux/99-ajazz.rules` ("The libusb backend is not used by
+      # our binary."). Disabling here aligns the Flatpak build with the
+      # runtime behavior already documented.
+      - -DHIDAPI_WITH_LIBUSB=OFF
     sources:
       - type: git
         url: https://github.com/libusb/hidapi.git
