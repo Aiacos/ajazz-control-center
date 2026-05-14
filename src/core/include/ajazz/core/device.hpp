@@ -67,6 +67,8 @@ struct DeviceDescriptor {
     std::uint16_t dpiStageCount{0}; ///< Number of DPI stages (mice; 0 if N/A).
     bool hasRgb{false};             ///< True if the device exposes RGB lighting.
     bool hasTouchStrip{false};      ///< True if the device exposes a touch strip.
+    bool hasClock{false}; ///< True if the device advertises Capability::Clock (scaffolded — see
+                          ///< IClockCapable).
 };
 
 /**

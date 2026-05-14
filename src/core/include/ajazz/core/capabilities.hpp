@@ -18,6 +18,7 @@
 #include "ajazz/core/device.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstdint>
 #include <optional>
 #include <span>
@@ -45,7 +46,17 @@ enum class Capability : std::uint32_t {
     Battery = 1u << 12,        ///< Wireless device; battery level is available.
     Firmware = 1u << 13,       ///< Firmware version query and update supported.
     PerAppProfiles = 1u << 14, ///< On-device per-application profile switching.
+    Clock = 1u << 15, ///< Host-settable RTC / clock surface (scaffolded — see IClockCapable).
 };
+
+// A-01 (Pitfall 13 lock): Capability::Clock bit value is load-bearing — the
+// design doc, devices.yaml, and the static_assert here all pin it to 1u << 15.
+// If a future contributor renumbers an earlier bit and shifts Clock to a
+// different position, this static_assert turns the silent ABI break into a
+// compile error. Capability bits MUST only be appended; never renumber.
+static_assert(static_cast<unsigned>(Capability::Clock) == (1u << 15),
+              "Capability::Clock must remain 1u << 15 — Pitfall 13: never renumber capability "
+              "bits; only append.");
 
 /**
  * @brief Bitwise OR of two Capability flags.
@@ -539,6 +550,54 @@ public:
      *         invalid or the update has not started.
      */
     [[nodiscard]] virtual std::uint8_t firmwareUpdateProgress(std::uint32_t token) const = 0;
+};
+
+// -----------------------------------------------------------------------------
+// Time-sync capability (host → device clock push)
+// -----------------------------------------------------------------------------
+/**
+ * @brief Outcome of a single @ref IClockCapable::setTime call.
+ *
+ * Tri-state because backend support is staged: as of 2026-05-13 no AJAZZ
+ * device firmware exposes a host-settable RTC over HID (vendor recon
+ * commit `d5616ef` confirmed the Stream Dock SDK has no time events; the
+ * AKB980 keyboard driver is locally archived as a Delphi installer that
+ * still requires extraction). Backends therefore return @c NotImplemented
+ * today and the application surface stays uniform across families. When a
+ * real wire format lands, only the backend body changes.
+ */
+enum class TimeSyncResult : std::uint8_t {
+    Ok = 0,             ///< Device acknowledged the new time.
+    NotImplemented = 1, ///< Backend has no wire format for setTime yet.
+    IoError = 2,        ///< HID write failed or the device timed out on the ack.
+};
+
+/**
+ * @brief Mix-in for devices that expose a host-settable RTC / clock.
+ *
+ * Pushes an absolute UTC moment-in-time to the device. Each implementation
+ * is responsible for converting to whatever encoding the firmware expects
+ * (BCD, Unix epoch, vendor-specific frame, …) — the interface stays
+ * representation-agnostic.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread (the
+ *       same thread that owns the @c hidapi handle).
+ *
+ * @see TimeSyncResult, Capability::Clock
+ */
+class IClockCapable {
+public:
+    virtual ~IClockCapable() = default;
+
+    /**
+     * @brief Set the device clock to the supplied UTC time-point.
+     * @param tp Absolute UTC time-point. Backends translate to local /
+     *           BCD / firmware-specific representation as needed.
+     * @return @c TimeSyncResult::Ok on confirmed acknowledgement,
+     *         @c NotImplemented while no wire format is wired up,
+     *         @c IoError on HID write failure or ack timeout.
+     */
+    [[nodiscard]] virtual TimeSyncResult setTime(std::chrono::system_clock::time_point tp) = 0;
 };
 
 } // namespace ajazz::core
