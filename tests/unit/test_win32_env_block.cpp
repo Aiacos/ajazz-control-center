@@ -175,6 +175,25 @@ TEST_CASE("Win32EnvBlock preserves =-prefixed drive-letter entries at front", "[
 
     auto const entries = walkBlock(block);
 
+    // Diagnostic dump: list all `=`-prefixed entries the BLOCK contains and
+    // how many entries are in the BLOCK total. If the probe loop above
+    // observed `=Z:` in the snapshot but the constructor missed it, this
+    // INFO() (printed only on REQUIRE failure) tells us whether the
+    // Win32EnvBlock constructor saw a DIFFERENT snapshot or whether the
+    // `=`-prefix branch is broken.
+    int blockEqCount = 0;
+    std::wstring blockEqDump;
+    for (auto const& e : entries) {
+        if (!e.empty() && e.front() == L'=') {
+            blockEqCount += 1;
+            if (blockEqDump.size() < 200) {
+                blockEqDump += e.substr(0, 30) + L" | ";
+            }
+        }
+    }
+    INFO("Win32EnvBlock walked entries: " << entries.size());
+    INFO("Win32EnvBlock `=`-prefixed entries: " << blockEqCount);
+
     // Find the `=Z:` entry and the `FOO` entry. The `=Z:` entry MUST appear
     // before the `FOO` entry.
     std::ptrdiff_t posDriveLetter = -1;
@@ -187,6 +206,23 @@ TEST_CASE("Win32EnvBlock preserves =-prefixed drive-letter entries at front", "[
             posFoo = static_cast<std::ptrdiff_t>(i);
         }
     }
+
+    // Re-probe AFTER block construction to confirm the parent env still
+    // contains `=Z:` (catches any race condition / kernel-side weirdness
+    // between the precondition probe and the constructor).
+    bool stillThere = false;
+    if (LPWCH probe2 = GetEnvironmentStringsW(); probe2 != nullptr) {
+        for (wchar_t const* cursor = probe2; *cursor != L'\0';) {
+            std::wstring entry{cursor};
+            if (entry.rfind(L"=Z:", 0) == 0) {
+                stillThere = true;
+                break;
+            }
+            cursor += entry.size() + 1;
+        }
+        FreeEnvironmentStringsW(probe2);
+    }
+    INFO("=Z: present in re-probe after construction: " << (stillThere ? "yes" : "no"));
 
     SetEnvironmentVariableW(L"=Z:", nullptr);
 

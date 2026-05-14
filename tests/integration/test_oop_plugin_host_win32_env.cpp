@@ -188,6 +188,48 @@ std::wstring spawnPythonCaptureStdout(std::wstring const& sentinel) {
     };
     ajazz::plugins::Win32EnvBlock envBlock(std::move(overrides));
 
+    // DIAGNOSTIC: walk the env block we're about to hand CreateProcessW and
+    // count entries + check for SYSTEMROOT and SYSTEMDRIVE presence. Win32
+    // is famously picky about both — a child process whose env block is
+    // missing these often makes CreateProcessW return ERROR_INVALID_PARAMETER
+    // (87). The diagnostic string is appended to the runtime_error message
+    // on failure so it surfaces in the Catch2 / ctest log.
+    auto envDiagnostic = [&envBlock]() -> std::string {
+        auto const* cursor = static_cast<wchar_t const*>(envBlock.data());
+        int total = 0;
+        int eqPrefixed = 0;
+        bool hasSystemRoot = false;
+        bool hasSystemDrive = false;
+        bool hasPath = false;
+        std::wstring first;
+        size_t totalChars = 0;
+        while (*cursor != L'\0') {
+            std::wstring const entry{cursor};
+            total += 1;
+            totalChars += entry.size() + 1;
+            if (!entry.empty() && entry.front() == L'=') {
+                eqPrefixed += 1;
+            }
+            if (_wcsnicmp(entry.c_str(), L"SYSTEMROOT=", 11) == 0)
+                hasSystemRoot = true;
+            if (_wcsnicmp(entry.c_str(), L"SYSTEMDRIVE=", 12) == 0)
+                hasSystemDrive = true;
+            if (_wcsnicmp(entry.c_str(), L"PATH=", 5) == 0)
+                hasPath = true;
+            if (total <= 3 && first.size() < 80) {
+                first += entry.substr(0, 30) + L" | ";
+            }
+            cursor += entry.size() + 1;
+        }
+        std::string out = " [envBlock entries=" + std::to_string(total) +
+                          ", eqPrefixed=" + std::to_string(eqPrefixed) +
+                          ", chars=" + std::to_string(totalChars) +
+                          ", hasSYSTEMROOT=" + (hasSystemRoot ? "yes" : "NO") +
+                          ", hasSYSTEMDRIVE=" + (hasSystemDrive ? "yes" : "NO") +
+                          ", hasPATH=" + (hasPath ? "yes" : "NO") + "]";
+        return out;
+    };
+
     DWORD const creationFlags = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT;
 
     PROCESS_INFORMATION pi{};
@@ -211,8 +253,13 @@ std::wstring spawnPythonCaptureStdout(std::wstring const& sentinel) {
 
     if (ok == 0) {
         DWORD const err = GetLastError();
+        std::string diag = envDiagnostic();
+        // Also report the stdin handle type as a sanity check.
+        DWORD const stdinType = GetFileType(si.hStdInput);
+        diag += " [stdinType=" + std::to_string(stdinType) + " (1=DISK, 2=CHAR, 3=PIPE, 4=REMOTE)]";
         CloseHandle(childStdoutRead);
-        throw std::runtime_error("CreateProcessW failed, GetLastError=" + std::to_string(err));
+        throw std::runtime_error("CreateProcessW failed, GetLastError=" + std::to_string(err) +
+                                 diag);
     }
 
     // 30-second timeout — generous enough for a script that prints one string
