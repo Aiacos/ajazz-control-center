@@ -91,10 +91,10 @@ TEST_CASE("TimeSyncService: setSystemTimeOn emits syncSucceeded on Ok", "[time-s
     auto mock = std::make_shared<MockClockDevice>(descFor("akp153"));
     mock->lastResult = ajazz::core::TimeSyncResult::Ok;
 
-    auto* const mockPtr = mock.get();
     ajazz::app::TimeSyncService svc(
-        [mockPtr](QString const& cn) -> ajazz::core::IDevice* {
-            return cn == QStringLiteral("akp153") ? mockPtr : nullptr;
+        [mock](QString const& cn) -> std::shared_ptr<ajazz::core::IDevice> {
+            return cn == QStringLiteral("akp153") ? std::shared_ptr<ajazz::core::IDevice>(mock)
+                                                  : nullptr;
         },
         nullptr);
 
@@ -115,9 +115,8 @@ TEST_CASE("TimeSyncService: setSystemTimeOn emits syncFailed on NotImplemented",
     auto mock = std::make_shared<MockClockDevice>(descFor("akp03"));
     mock->lastResult = ajazz::core::TimeSyncResult::NotImplemented;
 
-    auto* const mockPtr = mock.get();
     ajazz::app::TimeSyncService svc(
-        [mockPtr](QString const&) -> ajazz::core::IDevice* { return mockPtr; }, nullptr);
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; }, nullptr);
 
     QSignalSpy okSpy(&svc, &ajazz::app::TimeSyncService::syncSucceeded);
     QSignalSpy failSpy(&svc, &ajazz::app::TimeSyncService::syncFailed);
@@ -137,9 +136,8 @@ TEST_CASE("TimeSyncService: setSystemTimeOn emits syncFailed on IoError", "[time
     auto mock = std::make_shared<MockClockDevice>(descFor("akp05"));
     mock->lastResult = ajazz::core::TimeSyncResult::IoError;
 
-    auto* const mockPtr = mock.get();
     ajazz::app::TimeSyncService svc(
-        [mockPtr](QString const&) -> ajazz::core::IDevice* { return mockPtr; }, nullptr);
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; }, nullptr);
 
     QSignalSpy failSpy(&svc, &ajazz::app::TimeSyncService::syncFailed);
 
@@ -154,8 +152,8 @@ TEST_CASE("TimeSyncService: setSystemTimeOn emits syncFailed on IoError", "[time
 TEST_CASE("TimeSyncService: setSystemTimeOn fails cleanly when device is offline", "[time-sync]") {
     ajazz::tests::qtApp();
 
-    ajazz::app::TimeSyncService svc([](QString const&) -> ajazz::core::IDevice* { return nullptr; },
-                                    nullptr);
+    ajazz::app::TimeSyncService svc(
+        [](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return nullptr; }, nullptr);
 
     QSignalSpy failSpy(&svc, &ajazz::app::TimeSyncService::syncFailed);
     svc.setSystemTimeOn(QStringLiteral("missing"));
@@ -175,10 +173,9 @@ TEST_CASE("TimeSyncService: setSystemTimeOn fails cleanly when device has no ICl
     // cast in time_sync_service.cpp) must short-circuit before any
     // setTime call.
     auto mock = std::make_shared<MockDevice>(descFor("not-capable"));
-    auto* const mockPtr = mock.get();
 
     ajazz::app::TimeSyncService svc(
-        [mockPtr](QString const&) -> ajazz::core::IDevice* { return mockPtr; }, nullptr);
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; }, nullptr);
 
     QSignalSpy okSpy(&svc, &ajazz::app::TimeSyncService::syncSucceeded);
     QSignalSpy failSpy(&svc, &ajazz::app::TimeSyncService::syncFailed);
@@ -195,9 +192,8 @@ TEST_CASE("TimeSyncService: onDeviceArrived honours autoSync flag", "[time-sync]
     ajazz::tests::qtApp();
 
     auto mock = std::make_shared<MockClockDevice>(descFor("akp153"));
-    auto* const mockPtr = mock.get();
     ajazz::app::TimeSyncService svc(
-        [mockPtr](QString const&) -> ajazz::core::IDevice* { return mockPtr; }, nullptr);
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; }, nullptr);
 
     // Default is autoSync=false → arrival is a no-op.
     svc.setAutoSync(false);
@@ -217,8 +213,8 @@ TEST_CASE("TimeSyncService: setAutoSync emits autoSyncChanged exactly once per c
           "[time-sync]") {
     ajazz::tests::qtApp();
 
-    ajazz::app::TimeSyncService svc([](QString const&) -> ajazz::core::IDevice* { return nullptr; },
-                                    nullptr);
+    ajazz::app::TimeSyncService svc(
+        [](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return nullptr; }, nullptr);
 
     // Start from a known false baseline regardless of prior test order.
     svc.setAutoSync(false);

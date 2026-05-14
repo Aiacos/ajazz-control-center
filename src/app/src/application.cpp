@@ -11,6 +11,7 @@
  */
 #include "application.hpp"
 
+#include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/hotplug_monitor.hpp"
 #include "ajazz/core/logger.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
@@ -22,6 +23,7 @@
 #include <QMetaObject>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QTimer>
 
 #ifdef AJAZZ_PYTHON_HOST
 #include "ajazz/plugins/manifest_signer.hpp"
@@ -51,6 +53,35 @@ Application::Application(QObject* parent)
       m_pluginCatalog(std::make_unique<PluginCatalogModel>(this)),
       m_loadedPlugins(std::make_unique<LoadedPluginsModel>(this)),
       m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
+      // Phase 5 Plan 05-07 / A-04: TimeSyncService is constructed with a
+      // DeviceLookup lambda that captures m_deviceRegistry by reference.
+      // The lookup returns std::shared_ptr<IDevice> directly per the
+      // updated DeviceLookup signature; TimeSyncService::doPush() holds
+      // it in a local for the duration of the dynamic_cast → setTime
+      // sequence, closing the UAF window from Phase 4 D-06's weak_ptr
+      // cache. No more raw-pointer lifetime juggling.
+      //
+      // Codename → DeviceId resolution: walk m_deviceRegistry.enumerate()
+      // for a descriptor whose codename matches; pass (vid, pid) to
+      // open(). The empty serial string means open() matches on
+      // (vid, pid) only — sufficient for the v1.0 codebase where the
+      // descriptor key is (vid, pid) per Phase 4 D-04. Cost is O(N) over
+      // descriptors but N is small (~20) and the call is on the GUI
+      // thread; the inner registry lookup is O(1) per Phase 4 D-06.
+      m_timeSync(std::make_unique<TimeSyncService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          },
+          this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -166,6 +197,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     PluginCatalogModel::registerInstance(m_pluginCatalog.get());
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
+    TimeSyncService::registerInstance(m_timeSync.get());
     // No more setContextProperty calls — every service is now a QML
     // singleton, statically resolvable by qmllint.
     Q_UNUSED(engine);
@@ -208,6 +240,28 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
     // (vid, pid, serial) transition; that signal drives refresh().
     // No direct invokeMethod here — the debouncer owns thread safety.
     m_debouncer->observe(ev);
+
+    // Phase 5 Plan 05-07 / A-04: forward arrivals to TimeSyncService's
+    // 300 ms-debounced auto-sync hook. The debouncer above coalesces
+    // the OS-side burst (composite USB = 2 events per connect); this
+    // separate QTimer-singleShot inside onDeviceArrivedDebounced
+    // re-validates capability + connectedness at firing time
+    // (Pitfall 2). Total: Phase 4 D-05 300 ms + Phase 5 A-04 300 ms ≈
+    // 600 ms plug-in → auto-sync fire — within the design doc budget.
+    //
+    // Resolve VID/PID back to a codename via DeviceRegistry::enumerate
+    // (same path the DeviceLookup uses on its way back the other
+    // direction). If no descriptor matches the arrived VID/PID, drop
+    // silently — the device isn't one we know about.
+    if (ev.action == core::HotplugAction::Arrived) {
+        auto const descriptors = m_deviceRegistry.enumerate();
+        for (auto const& d : descriptors) {
+            if (d.vendorId == ev.vid && d.productId == ev.pid) {
+                m_timeSync->onDeviceArrivedDebounced(QString::fromStdString(d.codename));
+                break;
+            }
+        }
+    }
 }
 
 } // namespace ajazz::app

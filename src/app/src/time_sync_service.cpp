@@ -150,13 +150,19 @@ QString TimeSyncService::doPush(QString const& codename) {
     if (!m_lookup) {
         return QStringLiteral("Internal error: device lookup not configured");
     }
-    core::IDevice* const dev = m_lookup(codename);
-    if (dev == nullptr) {
+    // A-04 / D-01 amendment 3: the shared_ptr returned by the lookup is
+    // captured in this local for the duration of doPush. The dynamic_cast
+    // operates on dev.get() but dev's refcount keeps the IDevice alive
+    // across the cast → setTime sequence, closing the UAF window from
+    // Phase 4 D-06's weak_ptr cache. dev falls out of scope at function
+    // return.
+    std::shared_ptr<core::IDevice> const dev = m_lookup(codename);
+    if (!dev) {
         return QStringLiteral("Device '%1' not currently connected").arg(codename);
     }
     // Pitfall 2: dynamic_cast can return nullptr — the null-check is on
     // the very next two lines (well within the 3-line contract).
-    auto* const clk = dynamic_cast<core::IClockCapable*>(dev);
+    auto* const clk = dynamic_cast<core::IClockCapable*>(dev.get());
     if (clk == nullptr) {
         return QStringLiteral("Device '%1' does not advertise a clock surface").arg(codename);
     }

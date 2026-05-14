@@ -42,6 +42,7 @@
 
 #include <chrono>
 #include <functional>
+#include <memory>
 #include <type_traits>
 
 class QJSEngine;
@@ -73,21 +74,21 @@ class TimeSyncService : public QObject {
 
 public:
     /**
-     * @brief Caller-supplied lookup: codename → currently-open device, or null.
+     * @brief Caller-supplied lookup: codename → @c shared_ptr<IDevice>, or null.
      *
-     * The contract: the returned pointer must outlive the call to
-     * @c setSystemTimeOn / @c onDeviceArrived (the service does not own
-     * it). In production (Plan 05-07), the lookup lambda captures a
-     * @c std::shared_ptr<IDevice> in a local (A-04 / D-01 amendment 3)
-     * before returning the raw pointer — that lambda's stack frame keeps
-     * the @c shared_ptr alive across the dynamic_cast + setTime, closing
-     * the UAF window from Phase 4 D-06.
+     * The shared_ptr return is the A-04 / D-01 amendment 3 contract: in
+     * production, the lookup calls @c DeviceRegistry::open(deviceId) and
+     * returns the resulting shared_ptr directly. @c doPush holds the
+     * shared_ptr in a LOCAL for the duration of the dynamic_cast →
+     * setTime sequence, closing the UAF window from Phase 4 D-06's
+     * weak_ptr cache (a concurrent disconnect between open() and
+     * setTime() can no longer free the underlying IDevice mid-call).
      *
-     * In unit tests (Plan 05-04), the mock device is held by the test
-     * fixture's @c std::unique_ptr / @c std::shared_ptr for the entire
-     * test case.
+     * In unit tests (Plan 05-04), the mock device is wrapped in a
+     * @c std::shared_ptr (via @c std::make_shared<MockClockDevice>) and
+     * the test lookup lambda returns it directly.
      */
-    using DeviceLookup = std::function<core::IDevice*(QString const&)>;
+    using DeviceLookup = std::function<std::shared_ptr<core::IDevice>(QString const&)>;
 
     // No default on `parent`: see BrandingService — a default-constructible
     // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass

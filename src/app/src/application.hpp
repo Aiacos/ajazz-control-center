@@ -20,6 +20,7 @@
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
 #include "theme_service.hpp"
+#include "time_sync_service.hpp"
 #include "tray_controller.hpp"
 
 #include <QObject>
@@ -127,6 +128,12 @@ private:
         m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
     std::unique_ptr<PropertyInspectorController>
         m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
+    std::unique_ptr<TimeSyncService>
+        m_timeSync; ///< Phase 5: per-row Sync time + auto-sync hook. Owns the
+                    ///< DeviceLookup lambda that captures m_deviceRegistry by
+                    ///< reference and (per A-04 / D-01 amendment 3) holds the
+                    ///< shared_ptr<IDevice> in its own stack frame across the
+                    ///< dynamic_cast → setTime sequence.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).
