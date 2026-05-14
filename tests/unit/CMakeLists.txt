@@ -49,6 +49,20 @@ add_executable(
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
     test_pi_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
+    # Phase 4 multi-device hot-plug integration harness (Plan 04-05, HOTPLUG-06).
+    # Drives the ARCH-02 mock seams (HotplugMonitor::injectEvent + MockHidEnumerator)
+    # to mechanically prove SC1 (no UAF), SC2 (per-row dataChanged), SC4 (300ms
+    # coalescing). The HotplugDebouncer + DeviceModel TUs are linked directly
+    # rather than via the app target so the harness doesn't drag in the QML
+    # singleton machinery — both classes are Q_OBJECTs so AUTOMOC handles them.
+    # hotplug_monitor.cpp is recompiled here with AJAZZ_TESTING (target-wide define)
+    # so the injectEvent shim symbol resolves at link time — libajazz_core.a was
+    # built WITHOUT AJAZZ_TESTING so that production ABI stays clean (Plan 04-02
+    # invariant: production library has zero injectEvent symbols).
+    test_hotplug_harness.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/hotplug_debouncer.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/device_model.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/src/hotplug_monitor.cpp
 )
 # Out-of-process plugin host (audit finding A4). The class itself is Qt-free and pybind11-free, so
 # we link the platform-appropriate source directly into this test binary instead of pulling the
@@ -66,7 +80,10 @@ if(WIN32)
     # surfaces immediately. CR-01 (Phase 06, Plan 06-02): black-box tests for Win32EnvBlock — five
     # TEST_CASEs covering the four Pitfall 5 sub-traps (\0\0 terminator, sort order, =-prefix
     # preservation, snapshot-free) + D-04 case-insensitive override semantics. The implementation TU
-    # is linked in directly so the tests don't pull the full ajazz_plugins lib.
+    # is linked in directly so the tests don't pull the full ajazz_plugins lib. Phase 7 (D-01):
+    # `manifest_signer_common.cpp` carries the shared nlohmann-based `loadTrustRoots` impl and is
+    # compiled into the test binary so the symbol resolves at link time without pulling the full
+    # ajazz_plugins lib.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_windows_app_container_sandbox.cpp
@@ -75,11 +92,14 @@ if(WIN32)
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/windows_app_container_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_win32.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_common.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/win32_env_block.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 else()
-    # SEC-003 follow-up #51: Ed25519 manifest verifier — POSIX backend uses `fork`+`execvp`.
+    # SEC-003 follow-up #51: Ed25519 manifest verifier — POSIX backend uses `fork`+`execvp`. Phase 7
+    # (D-01): `manifest_signer_common.cpp` carries the shared nlohmann-based `loadTrustRoots` impl
+    # and is compiled into the test binary so the symbol resolves at link time.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_linux_bwrap_sandbox.cpp
@@ -89,6 +109,7 @@ else()
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/linux_bwrap_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/macos_sandbox_exec_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer.cpp
+                ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_common.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/sandbox.cpp
     )
 endif()
@@ -136,6 +157,11 @@ target_link_libraries(
             ajazz::mouse
             ajazz::warnings
             Catch2::Catch2WithMain
+            # Phase 7 / ARCH-01: nlohmann_json is consumed by the shared
+            # `manifest_signer_common.cpp` that this binary compiles directly. Same PRIVATE link
+            # discipline as `ajazz_plugins` itself — nlohmann never appears in any public header
+            # used by the rest of the test binary (COD-031 invariant).
+            nlohmann_json::nlohmann_json
             Qt6::Core
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
