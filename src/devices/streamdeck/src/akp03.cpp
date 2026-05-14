@@ -24,6 +24,7 @@
 #include <array>
 #include <cstring>
 #include <mutex>
+#include <utility>
 
 namespace ajazz::streamdeck {
 
@@ -118,15 +119,28 @@ std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
 /**
  * @brief Parse a raw HID input report into an AKP03 InputEvent.
  *
- * The tag byte at offset 9 discriminates event types:
- *   - 1..KeyCount (0x01..0x06): key event; byte 10 = 0x01 (press) / 0x00 (release).
- *   - 0x20..0x2F: encoder event; low nibble = encoder index (always 0 on AKP03);
- *     byte 10 = signed rotation delta (+1 CW, 0xFF = CCW); byte 11 = button edge.
+ * The tag byte at offset 9 carries an action code from a fixed table — see
+ * the `ActionXxx` constants in akp03_protocol.hpp (sourced from
+ * `[ajazz-sdk]/protocol/codes.rs`, cross-checked against
+ * `[opendeck-akp03]` and `tomekceszke/ajazz-akp03e`):
+ *
+ *   - `0x01..0x06`: LCD key 1..6 — emitted on press transition. Byte 10
+ *     carries the press/release polarity (`0x01` = press, `0x00` = release)
+ *     on firmware revisions that support it (Mirajazz protocol_version 3);
+ *     v2 firmwares only emit press events.
+ *   - `0x25`: side button 7 — release-only edge per `[companion]`.
+ *   - `0x30`: side button 8 — release-only edge.
+ *   - `0x31`: side button 9 — release-only edge.
+ *   - `0x33`/`0x35`/`0x34`: encoder 0/1/2 press (release synthesised below).
+ *   - `0x90`/`0x91`: encoder 0 CCW / CW rotation.
+ *   - `0x50`/`0x51`: encoder 1 CCW / CW rotation.
+ *   - `0x60`/`0x61`: encoder 2 CCW / CW rotation.
+ *   - `0x00`: NOP / keep-alive — discarded.
  *
  * ACK frames (bytes 0..2 == "ACK", i.e. 0x41, 0x43, 0x4B) are silently discarded.
  *
  * @param frame Raw bytes from ITransport::read().
- * @return Parsed InputEvent, or std::nullopt for ACK or unrecognised frames.
+ * @return Parsed InputEvent, or std::nullopt for ACK / NOP / unknown frames.
  */
 std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) {
     if (frame.size() < 16) {
@@ -140,42 +154,92 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
 
     auto const tag = frame[9];
 
-    // Key events: tag is the 1-based key index (1..KeyCount). A separate
-    // byte at offset 10 encodes the press/release edge (0x01 = press,
-    // 0x00 = release). This mirrors the AKP153 behaviour documented in
-    // docs/protocols/streamdeck/akp03.md.
-    if (tag >= 1 && tag <= KeyCount) {
+    // NOP / keep-alive — drop silently.
+    if (tag == akp03::ActionNop) {
+        return std::nullopt;
+    }
+
+    // LCD keys 1..6. v3 firmwares carry the press/release polarity at
+    // byte 10; v2 firmwares always emit a press transition.
+    if (tag >= akp03::ActionLcdKey1 && tag <= akp03::ActionLcdKey6) {
         bool const pressed = frame[10] != 0x00;
         InputEvent ev{};
         ev.kind = pressed ? InputEvent::Kind::KeyPressed : InputEvent::Kind::KeyReleased;
-        ev.index = tag;
+        ev.index = tag; // already 1-based
         return ev;
     }
 
-    // Encoder events: tag in [0x20..0x2f]. Bit 0..3 is the encoder index
-    // (always 0 on the AKP03, which has a single knob). Rotation is encoded
-    // as a signed delta in byte 10 (+1 CW, 0xff CCW, 0 for press/release),
-    // and byte 11 signals the button edge (0x01 = down, 0x00 = up).
-    if ((tag & 0xf0u) == 0x20u) {
-        auto const encIndex = static_cast<std::uint8_t>(tag & 0x0fu);
-        // SEC-010 / CWE-20: the AKP03 has exactly EncoderCount knobs; reject
-        // any tag that decodes to a higher index rather than emitting events
-        // for non-existent encoders.
-        if (encIndex >= akp03::EncoderCount) {
+    // Side buttons 7..9 (non-LCD). Release-only edge per `[companion]`;
+    // we expose them as a discrete `SideButton` kind so callers can wire
+    // them to actions without ambiguous press/release semantics.
+    if (tag == akp03::ActionSideButton7) {
+        InputEvent ev{};
+        ev.kind = InputEvent::Kind::SideButton;
+        ev.index = 7;
+        return ev;
+    }
+    if (tag == akp03::ActionSideButton8) {
+        InputEvent ev{};
+        ev.kind = InputEvent::Kind::SideButton;
+        ev.index = 8;
+        return ev;
+    }
+    if (tag == akp03::ActionSideButton9) {
+        InputEvent ev{};
+        ev.kind = InputEvent::Kind::SideButton;
+        ev.index = 9;
+        return ev;
+    }
+
+    // Encoder rotation (CCW / CW).
+    auto const decode_rotation =
+        [](std::uint8_t code) -> std::optional<std::pair<std::uint8_t, std::int8_t>> {
+        switch (code) {
+        case akp03::ActionEncoder0Ccw:
+            return std::pair{std::uint8_t{0}, std::int8_t{-1}};
+        case akp03::ActionEncoder0Cw:
+            return std::pair{std::uint8_t{0}, std::int8_t{+1}};
+        case akp03::ActionEncoder1Ccw:
+            return std::pair{std::uint8_t{1}, std::int8_t{-1}};
+        case akp03::ActionEncoder1Cw:
+            return std::pair{std::uint8_t{1}, std::int8_t{+1}};
+        case akp03::ActionEncoder2Ccw:
+            return std::pair{std::uint8_t{2}, std::int8_t{-1}};
+        case akp03::ActionEncoder2Cw:
+            return std::pair{std::uint8_t{2}, std::int8_t{+1}};
+        default:
             return std::nullopt;
         }
-        auto const rot = static_cast<std::int8_t>(frame[10]);
-        auto const btn = frame[11];
-
+    };
+    if (auto rot = decode_rotation(tag)) {
         InputEvent ev{};
-        ev.index = encIndex;
-        if (rot != 0) {
-            ev.kind = InputEvent::Kind::EncoderTurned;
-            ev.delta = rot;
-            return ev;
+        ev.kind = InputEvent::Kind::EncoderTurned;
+        ev.index = rot->first;
+        ev.delta = rot->second;
+        return ev;
+    }
+
+    // Encoder press. v2 firmware emits press-only; v3 carries the release
+    // edge at byte 10 (analogous to LCD-key polarity). Treat byte 10 == 0
+    // as a release when present so the synthesis path in poll() can stay
+    // uniform with the LCD-key branch.
+    auto const decode_press = [](std::uint8_t code) -> std::optional<std::uint8_t> {
+        switch (code) {
+        case akp03::ActionEncoder0Press:
+            return std::uint8_t{0};
+        case akp03::ActionEncoder1Press:
+            return std::uint8_t{1};
+        case akp03::ActionEncoder2Press:
+            return std::uint8_t{2};
+        default:
+            return std::nullopt;
         }
-        ev.kind =
-            btn != 0x00 ? InputEvent::Kind::EncoderPressed : InputEvent::Kind::EncoderReleased;
+    };
+    if (auto enc = decode_press(tag)) {
+        bool const released = (frame[10] == 0x00);
+        InputEvent ev{};
+        ev.kind = released ? InputEvent::Kind::EncoderReleased : InputEvent::Kind::EncoderPressed;
+        ev.index = *enc;
         return ev;
     }
 
@@ -276,6 +340,14 @@ public:
                 devEv.kind = DeviceEvent::Kind::KeyReleased;
                 devEv.index = ev->index;
                 break;
+            case akp03::InputEvent::Kind::SideButton:
+                // Side buttons fire release-only on this hardware; surface
+                // them as a paired press+release pulse so action engines
+                // wired for press semantics see them. The release is
+                // synthesised by emitting one extra event below.
+                devEv.kind = DeviceEvent::Kind::KeyPressed;
+                devEv.index = ev->index;
+                break;
             case akp03::InputEvent::Kind::EncoderTurned:
                 devEv.kind = DeviceEvent::Kind::EncoderTurned;
                 devEv.index = ev->index;
@@ -287,10 +359,12 @@ public:
                 devEv.value = 1;
                 break;
             case akp03::InputEvent::Kind::EncoderReleased:
-                devEv.kind = DeviceEvent::Kind::EncoderPressed;
+                devEv.kind = DeviceEvent::Kind::EncoderReleased;
                 devEv.index = ev->index;
                 devEv.value = 0;
                 break;
+            case akp03::InputEvent::Kind::Nop:
+                continue;
             }
 
             EventCallback cb;
@@ -300,6 +374,15 @@ public:
             }
             if (cb) {
                 cb(devEv);
+                // Side buttons only emit a release edge from hardware; we
+                // synthesise the matching `KeyReleased` so the consumer-
+                // facing API delivers paired events for every button.
+                if (ev->kind == akp03::InputEvent::Kind::SideButton) {
+                    DeviceEvent releaseEv{};
+                    releaseEv.kind = DeviceEvent::Kind::KeyReleased;
+                    releaseEv.index = ev->index;
+                    cb(releaseEv);
+                }
             }
             ++emitted;
         }
@@ -308,12 +391,15 @@ public:
 
     // ---- IDisplayCapable ----------------------------------------------------
     [[nodiscard]] DisplayInfo displayInfo() const noexcept override {
+        // Only the 6 LCD keys participate in `IDisplayCapable`. Side buttons
+        // 7..9 are surfaced as key events but have no visual surface; the UI
+        // layer renders them as plain buttons next to the grid.
         return DisplayInfo{
             .widthPx = akp03::KeyWidthPx,
             .heightPx = akp03::KeyHeightPx,
             .keyRows = 2,
             .keyCols = 3,
-            .jpegEncoded = false, // AKP03 expects PNG blobs
+            .jpegEncoded = true, // `[ajazz-sdk]` key_image_format: JPEG, Rot0, no mirror
         };
     }
 

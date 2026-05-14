@@ -347,7 +347,7 @@ public:
                 devEv.value = 1;
                 break;
             case akp05::InputEvent::Kind::EncoderReleased:
-                devEv.kind = DeviceEvent::Kind::EncoderPressed;
+                devEv.kind = DeviceEvent::Kind::EncoderReleased;
                 devEv.value = 0;
                 break;
             case akp05::InputEvent::Kind::TouchTap:
@@ -383,11 +383,16 @@ public:
 
     // ---- IDisplayCapable ----------------------------------------------------
     [[nodiscard]] DisplayInfo displayInfo() const noexcept override {
+        // Stream-Dock-Plus class: 2×5 LCD-key grid. Encoder LCDs and the
+        // touchscreen strip are addressed via separate sendImage paths
+        // (`buildEncoderImageHeader`, `buildMainImageHeader`) — they are
+        // intentionally not exposed via DisplayInfo because the API contract
+        // there is per-key-grid only.
         return DisplayInfo{
             .widthPx = akp05::KeyWidthPx,
             .heightPx = akp05::KeyHeightPx,
-            .keyRows = 3,
-            .keyCols = 5,
+            .keyRows = akp05::KeyRows,
+            .keyCols = akp05::KeyCols,
             .jpegEncoded = true,
         };
     }

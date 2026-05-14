@@ -1,18 +1,30 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file akp05_protocol.hpp
- * @brief AJAZZ AKP05 / AKP05E "Stream Dock Plus"-class wire protocol.
+ * @brief AJAZZ AKP05 / AKP05E / Mirabox N4 "Stream Dock Plus"-class wire protocol.
  *
- * 15 main keys (85×85 JPEG, identical format to AKP153), 4 endless rotary
- * encoders with 100×100 JPEG LCDs, one horizontal touch strip, and one
- * main 800×100 LCD. Framing uses the same 512-byte CRT-prefixed packet as
- * the rest of the AKP family, but with additional command words for the
- * encoder and main-LCD image paths.
+ * Hardware layout (per `[opendeck-akp05]`, `[mirabox-n4]`, `[companion]`):
  *
- * Clean-room reconstruction from docs/protocols/streamdeck/akp05.md. See
- * that document for the authoritative byte-level reference.
+ *   - **10 LCD keys** in a 2 rows × 5 columns grid (NOT 15 — earlier
+ *     versions of this header modelled the device incorrectly).
+ *   - **4 endless rotary encoders** with push function; each encoder maps
+ *     to one of 4 touch zones on the LCD strip below it.
+ *   - **LCD touchscreen strip** 110 × 14 mm physical, ≈ 800 × 480 px on
+ *     the underlying display panel, split into 4 touch zones aligned to
+ *     the 4 encoders (Stream Deck Plus-class architecture).
+ *   - Bundled USB-2 hub (2× USB-A + 2× USB-C) — not addressed via HID.
+ *
+ * Framing reuses the AKP family `CRT` prefix + 3-byte command word.
+ * Per `[mirajazz]`'s protocol-version table the AKP05 family is a
+ * **protocol_version 3** device: 1024-byte packets, native press/release
+ * states. We currently send 512-byte packets to remain backward-
+ * compatible with the older firmware revisions we shipped against; a
+ * follow-up will detect protocol version at open-time
+ * (`TODO.md` → "AKP05 v3 framing migration").
  *
  * @see akp153_protocol.hpp (shared framing conventions)
+ * @see akp03_protocol.hpp  (sister v2 device on the AKP family)
+ * @see ../_research-sources.md (citation tags resolved here)
  */
 #pragma once
 
@@ -23,20 +35,41 @@
 
 namespace ajazz::streamdeck::akp05 {
 
-// USB identifiers (provisional).
-inline constexpr std::uint16_t VendorId = 0x0300;  ///< USB Vendor ID (provisional).
-inline constexpr std::uint16_t ProductId = 0x5001; ///< USB Product ID (provisional).
+// USB identifiers.
+// `[opendeck-akp05]/40-opendeck-akp05.rules` lists Mirabox N4 as
+// `0x6603:0x1007`; the AJAZZ-branded AKP05 / AKP05E PID is not yet
+// public (no hardware sample in any of our reference projects).
+inline constexpr std::uint16_t VendorIdMiraboxN4 = 0x6603;  ///< Mirabox N4.
+inline constexpr std::uint16_t ProductIdMiraboxN4 = 0x1007; ///< Mirabox N4.
+inline constexpr std::uint16_t VendorId = 0x0300;           ///< Provisional, see README.
+inline constexpr std::uint16_t ProductId = 0x5001;          ///< Provisional, see README.
 
-// Physical geometry: 15 main keys (3×5), 4 encoders, one touch strip, one main LCD.
-inline constexpr std::uint8_t KeyCount = 15;                ///< Number of main key slots.
-inline constexpr std::uint8_t EncoderCount = 4;             ///< Number of rotary encoders.
-inline constexpr std::uint16_t KeyWidthPx = 85;             ///< Key JPEG width in pixels.
-inline constexpr std::uint16_t KeyHeightPx = 85;            ///< Key JPEG height in pixels.
-inline constexpr std::uint16_t EncoderScreenWidthPx = 100;  ///< Encoder LCD width in pixels.
-inline constexpr std::uint16_t EncoderScreenHeightPx = 100; ///< Encoder LCD height in pixels.
-inline constexpr std::uint16_t MainDisplayWidthPx = 800;    ///< Main LCD width in pixels.
-inline constexpr std::uint16_t MainDisplayHeightPx = 100;   ///< Main LCD height in pixels.
-inline constexpr std::uint16_t TouchStripRangeX = 640;      ///< Touch X coordinate range, 0..639.
+// Physical geometry — corrected after 2026-05-14 research pass.
+// Sources: `[opendeck-akp05]`, `[mirabox-n4]`, `[companion]`.
+inline constexpr std::uint8_t KeyCount = 10;             ///< LCD keys (2×5 grid).
+inline constexpr std::uint8_t KeyRows = 2;               ///< Physical rows of LCD keys.
+inline constexpr std::uint8_t KeyCols = 5;               ///< Physical columns of LCD keys.
+inline constexpr std::uint8_t EncoderCount = 4;          ///< Endless rotary encoders.
+inline constexpr std::uint8_t TouchZoneCount = 4;        ///< Touch-strip zones aligned to encoders.
+inline constexpr std::uint16_t KeyWidthPx = 85;          ///< Per-key JPEG dimension (legacy).
+inline constexpr std::uint16_t KeyHeightPx = 85;         ///< Per-key JPEG dimension (legacy).
+inline constexpr std::uint16_t TouchStripWidthPx = 800;  ///< LCD strip width.
+inline constexpr std::uint16_t TouchStripHeightPx = 480; ///< LCD strip height.
+inline constexpr std::uint16_t MainDisplayWidthPx = 800; ///< Legacy alias for code that wrote
+                                                         ///< to the strip as a "main" display.
+inline constexpr std::uint16_t MainDisplayHeightPx = 100; ///< Legacy alias (full strip height
+                                                          ///< is 480 px — UI uses ~100 px band).
+inline constexpr std::uint16_t TouchStripRangeX = 640;    ///< Touch X coordinate range, 0..639
+                                                          ///< (preserved for backwards-compat
+                                                          ///< tests; capture pending).
+
+// Per-encoder LCD overlay rendered as a slice of the LCD strip. Stream Deck
+// Plus uses 200×100 per encoder; the Mirabox N4 strip is 4 × (200×480) when
+// expressed as zones over the underlying 800×480 panel. We expose 100×100
+// for backwards-compat with the legacy code paths until the v3 capture
+// makes the real per-zone resolution explicit.
+inline constexpr std::uint16_t EncoderScreenWidthPx = 100;
+inline constexpr std::uint16_t EncoderScreenHeightPx = 100;
 
 /// All output and input reports are padded to this size.
 inline constexpr std::size_t PacketSize = 512;
