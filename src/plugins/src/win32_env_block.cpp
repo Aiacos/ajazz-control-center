@@ -12,7 +12,9 @@
 #include "win32_env_block.hpp"
 
 #include <algorithm>
-#include <cwchar> // _wcsicmp
+#include <cstddef>     // size_t
+#include <cwchar>      // _wcsicmp, _wcsnicmp
+#include <string_view> // std::wstring_view (sort comparator)
 #include <utility>
 
 namespace ajazz::plugins {
@@ -120,11 +122,38 @@ Win32EnvBlock::Win32EnvBlock(std::map<std::wstring, std::wstring> overrides) {
         mergedEntries.push_back(std::move(entry));
     }
 
-    // Pitfall 5 sub-trap 2: sort case-insensitively. Windows requires sorted
-    // env blocks; incorrect sort order = silent env corruption in the child.
-    // `=`-prefixed front entries do NOT participate in sort.
-    std::sort(mergedEntries.begin(), mergedEntries.end(), [](auto const& a, auto const& b) {
-        return compareKeyCI(a, b) < 0;
+    // Pitfall 5 sub-trap 2: sort case-insensitively BY KEY (the substring up
+    // to the first `=`). Windows requires env blocks to be sorted by variable
+    // name, NOT by the full KEY=VALUE entry — see
+    // https://learn.microsoft.com/en-us/windows/win32/procthread/changing-environment-variables
+    // ("The order of the variables in the environment is alphabetical, by
+    // name. Sort order is not case-sensitive.")
+    //
+    // The previous impl compared full entries via `_wcsicmp(a, b)`. That
+    // happens to match key-sort order in most cases — the `=` separator
+    // (0x3D) collates before letter chars, so differing keys collate before
+    // any value comparison kicks in — but it diverges when two keys collate
+    // equal case-insensitively (different casing, e.g. `Path=...` vs
+    // `PATH=...`) and differ by value: the impl sorted by value casing,
+    // which Windows considers an unsorted block. After the UB cursor-advance
+    // fix in 62e786b filled the block with the full parent env, test 166
+    // surfaced this latent sort-by-name regression on the real CI runner.
+    auto const keyView = [](std::wstring const& entry) -> std::wstring_view {
+        auto const eq = entry.find(L'=');
+        return std::wstring_view{entry.data(), eq == std::wstring::npos ? entry.size() : eq};
+    };
+    std::sort(mergedEntries.begin(), mergedEntries.end(), [&keyView](auto const& a, auto const& b) {
+        auto const ka = keyView(a);
+        auto const kb = keyView(b);
+        // _wcsnicmp compares up to min(|ka|,|kb|) wchars. If the
+        // common prefix is equal, the shorter key sorts first —
+        // which matches Win32's name-based ordering.
+        size_t const n = std::min(ka.size(), kb.size());
+        int const cmp = _wcsnicmp(ka.data(), kb.data(), n);
+        if (cmp != 0) {
+            return cmp < 0;
+        }
+        return ka.size() < kb.size();
     });
 
     // Step 6: serialize into m_block. Layout:
