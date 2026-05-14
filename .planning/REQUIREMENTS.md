@@ -25,7 +25,7 @@ Phase 4 deliverables — disconnect-during-use safety, multi-device UX, test har
 - [x] **HOTPLUG-03**: User's sidebar selection focus is retained across a disconnect/reconnect cycle.
 - [x] **HOTPLUG-04**: Sidebar device rows are sorted by `(deviceClass, codename)` lexicographically — stable across hot-plug events (no reorder-by-recency).
 - [x] **HOTPLUG-05**: Hot-plug events are coalesced by `(vid, pid, serial)` with 250-500ms trailing-edge debounce in `Application::onHotplug` before consumers see them.
-- [ ] **HOTPLUG-06**: Multi-device integration tests cover disconnect-during-use, reconnect, and device-shuffle scenarios via `MockHidEnumerator` + `HotplugMonitor::injectEvent` shim.
+- [x] **HOTPLUG-06**: Multi-device integration tests cover disconnect-during-use, reconnect, and device-shuffle scenarios via `MockHidEnumerator` + `HotplugMonitor::injectEvent` shim.
 - [x] **HOTPLUG-07**: 2026-05-12/13 hot-plug debugging fix is documented in a phase artefact (what was broken, what changed, why 3 devices now work).
 
 ### Time-Sync Scaffolding
@@ -108,7 +108,7 @@ Filled by roadmapper during Phase 3-8 mapping. Each requirement maps to exactly 
 | HOTPLUG-03  | Phase 4 | Complete |
 | HOTPLUG-04  | Phase 4 | Complete |
 | HOTPLUG-05  | Phase 4 | Complete |
-| HOTPLUG-06  | Phase 4 | Pending  |
+| HOTPLUG-06  | Phase 4 | Complete |
 | HOTPLUG-07  | Phase 4 | Complete |
 | TIMESYNC-01 | Phase 5 | Pending  |
 | TIMESYNC-02 | Phase 5 | Pending  |
