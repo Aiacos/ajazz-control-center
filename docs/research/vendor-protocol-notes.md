@@ -1346,6 +1346,136 @@ This finding refines the dialect roadmap in Finding 14:
   "AJ199 V1.0 supports 8 DPI stages, two RGB zones" — value to
   re-derive byte-level from a capture.
 
+## Finding 16 — Stream Dock device catalogue reconciliation (web-recon, 2026-05-14)
+
+> **Capture id**: `web-2026-05-14-streamdock-catalog-001`. Method: open-web
+> reading of three independent open-source reverse-engineering projects plus
+> vendor and community product pages. **No vendor source or binary was
+> downloaded or executed** — the inputs are README files, Rust constants,
+> udev rules, and HTML product pages, all already public on the open
+> internet. The findings were normalised into the four per-device docs in
+> [`docs/protocols/streamdeck/`](../protocols/streamdeck/) under the
+> tag-based citation scheme defined in
+> [`docs/protocols/streamdeck/_research-sources.md`](../protocols/streamdeck/_research-sources.md).
+
+This finding is **not tainted** (no decompilation, no copyrighted source
+read). It supersedes earlier provisional VID/PID notes for the Stream
+Dock family.
+
+### 16.A — Stream Dock device family is wider than `devices.yaml` claims
+
+The repository currently registers five Stream Dock SKUs (AKP153, AKP153E,
+AKP03, AKP05, plus an unknown sibling at `0x0300:0x3004`). The two
+canonical reverse-engineering catalogues (`[ajazz-sdk]` for the
+AJAZZ-branded surface, `[opendeck-akp03]` for the Mirabox-branded surface)
+together enumerate **at least 15 distinct USB identifiers** mapping to the
+same protocol family:
+
+| Codename            | Marketing name(s)                      | VID:PID         | Source                                        |
+| ------------------- | -------------------------------------- | --------------- | --------------------------------------------- |
+| AKP153              | AJAZZ AKP153 / Mirabox HSV293S / 293V3 | `0x5548:0x6674` | `[ajazz-sdk]`                                 |
+| AKP153E             | AJAZZ AKP153E (China)                  | `0x0300:0x1010` | `[ajazz-sdk]`                                 |
+| AKP153R             | AJAZZ AKP153R                          | `0x0300:0x1020` | `[ajazz-sdk]` — not yet registered            |
+| AKP815              | AJAZZ AKP815 (15-key + LCD strip)      | `0x5548:0x6672` | `[ajazz-sdk]` — not yet registered            |
+| AKP03               | AJAZZ AKP03                            | `0x0300:0x1001` | `[ajazz-sdk]` (our repo had `0x3001` — wrong) |
+| AKP03E              | AJAZZ AKP03E                           | `0x0300:0x3002` | `[ajazz-sdk]`                                 |
+| AKP03R              | AJAZZ AKP03R                           | `0x0300:0x1003` | `[ajazz-sdk]`                                 |
+| AKP03R rev. 2       | AJAZZ AKP03R rev 2                     | `0x0300:0x3003` | `[ajazz-sdk]`                                 |
+| Mirabox N3          | Mirabox N3                             | `0x6602:0x1002` | `[opendeck-akp03]`                            |
+| Mirabox N3 rev. 3   | Mirabox N3 rev 3                       | `0x6603:0x1002` | `[opendeck-akp03]`                            |
+| Mirabox N3EN        | Mirabox N3EN                           | `0x6603:0x1003` | `[opendeck-akp03]`                            |
+| Soomfon SE          | Soomfon Stream Controller SE           | `0x1500:0x3001` | `[opendeck-akp03]`                            |
+| Mars Gaming MSD-TWO | Mars Gaming MSD-TWO                    | `0x0B00:0x1001` | `[opendeck-akp03]`                            |
+| TreasLin N3         | TreasLin N3                            | `0x5548:0x1001` | `[opendeck-akp03]`                            |
+| Redragon SS-551     | Redragon Skyrider SS-551               | `0x0200:0x2000` | `[opendeck-akp03]`                            |
+| Mirabox N4          | Mirabox N4 (Stream-Dock-Plus class)    | `0x6603:0x1007` | `[opendeck-akp05]`                            |
+
+### 16.B — Layout corrections required in our backends
+
+Cross-referencing `[ajazz-sdk]/src/info.rs::Kind` with `[companion]`'s
+visual mapping of N3 / N4 produces three layout corrections that
+contradict the existing C++ implementation:
+
+1. **AKP03 / Mirabox N3** — the implementation models `6 keys + 1 encoder`. The real device has **6 LCD keys + 3 non-LCD buttons + 3
+   pressable rotary encoders** (action codes `0x25/0x30/0x31` for the
+   buttons, `0x90/0x91/0x50/0x51/0x60/0x61` for encoder rotation,
+   `0x33/0x35/0x34` for encoder press). The parser in
+   `parseInputReport` rejects all of these except the LCD keys.
+
+1. **AKP05 / Mirabox N4** — modeled as `15 keys (3×5) + 4 encoders + touch strip`. The real device is `10 LCD keys (2×5) + 4 rotary encoders + LCD touchscreen strip (110×14 mm, 4 zones) + USB hub`. The reduction from
+   15 to 10 keys is significant — `displayInfo()` must change. The Plus-
+   class touch behaviour follows the Stream Deck Plus architecture: 4
+   zones each tied to one encoder, tap on zone fires the encoder action,
+   swipe left/right paginates.
+
+1. **AKP815 (15-key + LCD strip)** — referenced in 17 places across
+   `PluginCatalogModel`, `StreamdockCatalogFetcher`, and the bundled
+   fallback JSON, but **no backend is registered at all** in
+   `register.cpp`. Per `[ajazz-sdk]/Kind::Akp815` it is a 15-key v1-API
+   device with a `0x5548:0x6672` USB identifier, 100×100 px JPEG keys
+   (`Rot180`, no mirror), and an 800×480 px addressable LCD strip.
+
+### 16.C — Image format details
+
+Per `[ajazz-sdk]`'s `key_image_format()` and `logo_image_format()`:
+
+| Model                      | Per-key JPEG | Per-key rotation      | Strip / logo JPEG   |
+| -------------------------- | ------------ | --------------------- | ------------------- |
+| AKP153 / AKP153E / AKP153R | 85 × 85      | `Rot90` + mirror both | 854 × 480 (`Rot0`)  |
+| AKP815                     | 100 × 100    | `Rot180`              | 800 × 480 (`Rot0`)  |
+| AKP03 / AKP03E / AKP03R    | 60 × 60      | `Rot0`                | 240 × 320 (`Rot90`) |
+| AKP03R rev. 2              | 64 × 64      | `Rot90`               | 240 × 320 (`Rot90`) |
+
+The current image-pipeline TODO ("phase 2") must apply these transforms
+before the `BAT` chain — sending an un-rotated/un-mirrored JPEG to the
+AKP153 results in glyphs being upside-down.
+
+### 16.D — Catalogue mapping bug
+
+`src/app/src/streamdock_catalog_fetcher.cpp:117` maps upstream
+`deviceUuid="N4"` to local codename `"akp815"`. Per the table in §16.A,
+N4 is the 10-key Plus-class device — the correct target is `akp05` (or a
+new `mirabox_n4` codename). The current mapping causes plugins tagged for
+the Plus-class controller to be advertised in the UI as compatible with a
+15-key device, and vice-versa for the AKP815 SKU (which is at present
+unreachable because no PID is wired up).
+
+### 16.E — Press / release edge semantics
+
+`[companion]`'s N3 and N4 documentation explicitly states:
+
+> Some Stream Dock models do not provide separate press and release
+> events for all controls — this is a hardware limitation.
+
+Specifically:
+
+- AKP03 / N3 non-LCD buttons (`0x25/0x30/0x31`): event on **release only**.
+- AKP03 / N3 encoder rotation: one event per detent, no release.
+- AKP05 / N4 encoders: **press only**, no release. Companion synthesises
+  release.
+- AKP815 keys: behaviour unknown — assumed identical to AKP153 (one
+  frame per transition, no byte-10 polarity) until a capture lands.
+
+Our backend dispatch must synthesise the missing edge to keep the
+`core::DeviceEvent` API uniform. The current
+`EncoderReleased → EncoderPressed value=0` workaround in
+`akp03.cpp:289-293` and `akp05.cpp:349-352` is a half-step in that
+direction; the proper fix is to extend `core::DeviceEvent::Kind` with an
+`EncoderReleased` variant.
+
+### 16.F — Cross-references
+
+- Per-device specs: [`docs/protocols/streamdeck/akp153.md`](../protocols/streamdeck/akp153.md),
+  [`akp03.md`](../protocols/streamdeck/akp03.md),
+  [`akp05.md`](../protocols/streamdeck/akp05.md),
+  [`akp815.md`](../protocols/streamdeck/akp815.md).
+- Sources index: [`_research-sources.md`](../protocols/streamdeck/_research-sources.md).
+- Tracking entries in `TODO.md`:
+  - "AKP03 layout reconciliation" (6 LCD + 3 buttons + 3 encoders)
+  - "AKP05 layout reconciliation" (10 keys not 15; touch zones 0..3)
+  - "AKP815 backend gap + N4 mapping fix"
+  - "Streamdock 0x0300:0x3004 SKU identification" (unchanged from earlier)
+
 ## Methodology
 
 ### Capture environments
@@ -1409,28 +1539,28 @@ implementers have a uniform contract to work against:
 
 ## Stream Dock — `streamDock` IPC + USB-HID
 
-> **Status — 2026-04-26**: not yet captured. Existing OSS work
-> (`opendeck-akp03`, `opendeck-akp153`, `mirajazz`) covered the
-> AKP03 + AKP153 USB-HID surface from independent recon — those
-> independent results inform `src/devices/streamdeck/` already.
-> The vendor desktop app's WebSocket layer (`localhost:port`,
-> Stream Deck SDK-2 dialect) and its plugin lifecycle have NOT
-> been captured under our methodology. The Plugin SDK doc
-> (`docs/architecture/PLUGIN-SDK.md`) is our spec; this section
-> will track the deltas observed by recon.
+> **Status — 2026-05-14**: USB-HID side substantially documented from
+> open-web reverse-engineering catalogues (see Finding 16 above and the
+> per-device docs in [`docs/protocols/streamdeck/`](../protocols/streamdeck/)).
+> The vendor desktop app's WebSocket / IPC layer remains uncaptured;
+> the Plugin SDK doc (`docs/architecture/PLUGIN-SDK.md`) is our spec
+> for it until a runtime capture lands.
 
 Sub-sections to fill once captures land:
 
 - `streamDock` WebSocket — connection handshake, auth (if any),
   event dialect (Stream Deck SDK-2 superset).
-- AKP03 / AKP153 / AKP05 USB-HID — already-documented protocol
-  cross-checks (see `docs/protocols/streamdeck/*.md`); new entries
-  here only when the vendor app uses commands the OSS does not.
-- AKP815 (with screen) USB-HID — not yet supported in our backend.
-- Firmware update flow — observed delivery of the firmware blob
-  - the subset of HID reports used to apply it. **High value**:
-    vendor knows how to recover from a half-applied flash; capture
-    the retry / rollback path before any of our own DFU work starts.
+- AKP03 / AKP153 / AKP05 / AKP815 USB-HID — per-device spec already
+  exists under [`docs/protocols/streamdeck/`](../protocols/streamdeck/);
+  new entries belong here only when the vendor app uses commands the
+  OSS catalogues (`ajazz-sdk`, `opendeck-akp03`, `opendeck-akp05`) do
+  not — most likely firmware-update opcodes.
+- Firmware update flow — observed delivery of the firmware blob and
+  the subset of HID reports used to apply it. **High value**: vendor
+  knows how to recover from a half-applied flash; capture the
+  retry / rollback path before any of our own DFU work starts.
+- `0x0300:0x3004` mystery SKU (hot-plug capture `[capture-2026-05-13]`)
+  — annotate against a real device when one surfaces.
 
 ## Keyboards — proprietary protocol
 
