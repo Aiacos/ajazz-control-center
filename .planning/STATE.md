@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
 status: executing
 stopped_at: Phase 4 context revalidated against new Stream Dock research (quick 260514-h0w) — D-02 + D-04 amended
-last_updated: '2026-05-14T11:39:57.576Z'
-last_activity: 2026-05-14
+last_updated: '2026-05-14T13:46:03.095Z'
+last_activity: 2026-05-14 -- Phase 05 execution started
 progress:
   total_phases: 6
-  completed_phases: 1
-  total_plans: 8
-  completed_plans: 4
+  completed_phases: 3
+  total_plans: 26
+  completed_plans: 13
   percent: 50
 ---
 
@@ -21,14 +21,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-13)
 
 **Core value:** Modern open cross-platform control center for AJAZZ devices with Qt 6 / QML UI + Python plugin system.
-**Current focus:** Phase 4 — hot-plug-hardening
+**Current focus:** Phase 05 — time-sync-scaffolding
 
 ## Current Position
 
-Phase: 4 (hot-plug-hardening) — EXECUTING
-Plan: 4 of 7
-Status: Ready to execute
-Last activity: 2026-05-14
+Phase: 05 (time-sync-scaffolding) — EXECUTING
+Plan: 1 of 8
+Status: Executing Phase 05
+Last activity: 2026-05-14 -- Phase 05 execution started
 
 ## Performance Metrics
 
