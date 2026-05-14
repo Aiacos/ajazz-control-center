@@ -1,55 +1,111 @@
 # Project: AJAZZ Control Center
 
+## What This Is
+
+A modern, open, cross-platform control center for AJAZZ devices (Stream Decks, keyboards, mice) with a Qt 6 / QML UI and an out-of-process Python plugin system for scripting, automation, and third-party integrations. As of v1.1, the device lifecycle is hot-plug-correct, plugin loading is signature-gated through a sandboxed host, and maturity tiers are honestly advertised per device.
+
 ## Core Value
 
-A modern, open, cross-platform control center for AJAZZ devices (stream decks, keyboards, mice) with a Qt 6 / QML UI and a Python out-of-process plugin system for scripting, automation, and third-party integrations.
+Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
 
 ## Scope
 
 - **In scope:** Device backends (HID, USB), Qt 6.7+ / QML 6 UI, Python 3.11+ plugin SDK, IPC + sandboxing for plugins, packaging across Linux (.deb/.rpm/.flatpak/.snap), Windows (.msi/.zip), macOS (.dmg), CI/release automation.
-- **Status:** Early alpha. Scaffolding, architecture and CI in place; device backends under active development. 13 devices catalogued: 6 functional, 7 scaffolded.
+- **Status:** Late alpha. v1.1 closed the two v1.0 carry-over robustness items (CR-01 Win32 env pollution, WR-01 trust-roots parser), hardened the device lifecycle, landed the time-sync scaffolding contract honestly, and promoted two Stream-Dock-family siblings off Tier 0. 13 catalogued devices: 7 functional, 4 partial/probed (with two newly promoted), 2 scaffolded.
 
 ## Stack
 
 - C++20, Qt 6.7+ (Widgets, QML, WebEngine, WebChannel)
 - Python 3.11+ for plugin host child processes
-- CMake build, pre-commit, GitHub Actions CI/lint/nightly
+- `nlohmann::json` 3.12.0 PRIVATE-linked to `ajazz_plugins` (FetchContent + vcpkg mirror) for `trust_roots.json` parsing; **NOT** present in `ajazz_core` or any installed public header (COD-031 boundary)
+- CMake build, pre-commit, GitHub Actions CI/lint/nightly; ctest preset `linux-release` (178/178 pass at v1.1 close)
 - Cross-platform: Linux primary, Windows + macOS supported
 
-## Current Milestone: v1.1 Device lifecycle hardening + scaffolding-to-functional
+## Requirements
 
-**Goal:** Harden the device lifecycle (hot-plug correctness + multi-device tests), promote scaffolded device backends toward functional, land the time-sync scaffolding contract, and close the two v1.0 carry-over robustness items.
+### Validated
 
-**Target features:**
+**v1.0 (retro-fit catalogue):**
 
-- Hot-plug hardening — document the 2026-05-12/13 fix, disconnect-during-use, reconnect / device-shuffle, multi-device baseline tests.
-- Time-sync scaffolding — five-layer slice (capability flag → `IClockCapable` → `TimeSyncService` → QML UI → docs), adopting `docs/superpowers/plans/2026-05-13-time-sync.md` into GSD.
-- Scaffolded-device wiring — convert some/all of the 7 currently-scaffolded backends toward functional; specific devices picked during phase planning.
-- CR-01 — Win32 OOP host env pollution fix (per-spawn UTF-16 env block + `CREATE_UNICODE_ENVIRONMENT`). Requires Windows validation in this milestone.
-- WR-01 — `loadTrustRoots` parser hardening; needs an architectural decision (`nlohmann::json` dep vs. custom scanner vs. accept COD-031 break) before implementation. **Resolved in v1.1 Phase 7 (ARCH-01 + TRUST-01..04):** `ajazz_plugins` now privately depends on `nlohmann::json` v3.12.0 (vendored via FetchContent, mirrored in `vcpkg.json`). The dep is PRIVATE-linked — it MUST NOT appear in `ajazz_core` or in any installed public header, preserving the COD-031 boundary at the library level rather than the project level. Trust-roots parsing is gated by a 1 MB byte cap and a 1024-entry cap (TRUST-02), with the 0600 TOCTOU contract documented at the public-API surface (TRUST-04).
+- ✓ Out-of-process Python plugin host with manifest-signature-gated loading — v1.0 (SEC-003)
+- ✓ `QML_SINGLETON` dual-instance prevention across 9 services with `static_assert` build-break — v1.0
 
-## Planning Bootstrap (2026-05-12)
+**v1.1 (device lifecycle hardening + scaffolding-to-functional):**
 
-`.planning/` was retrofitted onto this brownfield repo to enable structured `/gsd-code-review` of work that had already shipped to `main` without phase tracking. Two retro-phases wrap the most recent thematic clusters of commits (SEC-003 plugin host integration; QML_SINGLETON dual-instance sweep). PROJECT.md, ROADMAP.md, and STATE.md were created as stubs sufficient for the SDK to validate phase lookups; this is **not** a full GSD discovery output.
+- ✓ ARCH-01..03 — WR-01 parser choice, HotplugMonitor mock seam, DeviceRegistry ownership migration ratified upfront — v1.1
+- ✓ HOTPLUG-01..07 — `shared_ptr<IDevice>` migration; 300 ms debounce; diff-driven sidebar; offline badge + selection retention + lex sort; multi-device test harness (Linux + Win32 smoke); `hid_open()` CI grep gate — v1.1
+- ✓ TIMESYNC-01..06 — `hasClock` capability flag + `IClockCapable` mix-in + `TimeSyncService` QML singleton with `static_assert` build-break + Settings auto-sync toggle + per-row glyph; all 5 functional backends honestly return `NotImplemented` — v1.1
+- ✓ WIN32-01..04 — CR-01 closed: per-spawn UTF-16 env block + `CREATE_UNICODE_ENVIRONMENT`; all 3 `_putenv_s` calls removed atomically; parent env unchanged on Windows CI — v1.1
+- ✓ TRUST-01..04 — WR-01 closed: `nlohmann::json::parse` swap in lockstep across two TUs (PRIVATE-linked to `ajazz_plugins` only), 1 MB + 1024-entry caps, BOM/escape/NUL/oversize test corpus + libFuzzer harness, 0600 TOCTOU contract at public API — v1.1
+- ✓ DEVICES-01..04 — 5-tier maturity vocabulary in `devices.yaml`; `MaturityRole` + sidebar tooltip; README/wiki AUTOGEN per-family "works/partial/pending" prose; AKP815 → `probed`, Mirabox N3 → `partial` — v1.1
+
+### Active
+
+Next milestone bootstrapped fresh via `/gsd-new-milestone`. Carry-over candidates documented in `.planning/ROADMAP.md` and `.planning/MILESTONES.md` deferred-items section.
+
+### Out of Scope
+
+| Feature                                                  | Reason                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Real `IClockCapable::setTime` wire formats               | Blocked on firmware support — no AJAZZ device exposes a host-settable RTC per vendor recon. Defer to a milestone where a backend reverse-engineers firmware. |
+| Interval-based time re-sync timer                        | Anti-feature — drift-detection-then-resync, not time-keeping.                                                                                                |
+| Device→host time read-back                               | Different surface; firmware-dependent; not needed for one-shot set.                                                                                          |
+| Per-device timezone offset                               | Anti-feature — UTC at the interface boundary is the simpler primitive.                                                                                       |
+| World-clock / NTP client / sync-history log              | Out-of-scope for control-center; user has system clock for these.                                                                                            |
+| Render-time-on-keyface clock widget                      | Different feature (image-upload render path); not time-sync scaffolding.                                                                                     |
+| AKB980 PRO promotion                                     | Vendor driver is a Delphi installer requiring `wine`/`innoextract`; not in dev env.                                                                          |
+| Vendor-driver bundling / wine'd installers               | Clean-room reverse engineering only.                                                                                                                         |
+| Telemetry / device usage metrics                         | Anti-feature — privacy + scope creep.                                                                                                                        |
+| `nlohmann::json` in `ajazz_core` or any installed header | Crosses COD-031 boundary — PRIVATE-linked to `ajazz_plugins` only.                                                                                           |
+| Trompeloeil / FakeIt mocking frameworks                  | In-tree mock seam (`HotplugMonitor::injectEvent`) is sufficient and matches `FakeAsyncExecutor` precedent.                                                   |
+| Modal "Device disconnected" dialog                       | Anti-feature — silent reconnect + offline badge is the convergent UX across all 5 OSS competitor apps.                                                       |
+| Sidebar reorder by recency                               | Anti-feature — destroys focus retention; stable lexicographic sort is HOTPLUG-04.                                                                            |
+| Auto-retry loop hammering `hid_open` on disconnect       | Anti-feature — wastes CPU; coalescing + offline badge is the correct shape.                                                                                  |
+| Removal sound                                            | Anti-feature — noisy; offline badge sufficient.                                                                                                              |
+| "Time synced" toast on NotImplemented result             | Anti-feature — lying success UX. Use exclamation glyph + tooltip (TIMESYNC-05).                                                                              |
+| Big-bang "promote all 7 scaffolded devices"              | Too high variance for any single milestone; promotions stay opportunistic per-real-device-capture.                                                           |
+
+## Context
+
+**Codebase state at v1.1 close (2026-05-14):** ~26 KLOC C++ / QML production code (+23 K LoC milestone delta with mostly tests + docs), 178/178 ctest pass on `linux-release`, 26 plans landed across 6 phases in ~2 calendar days via parallel autonomous-execute agents.
+
+**Tech stack additions during v1.1:** `nlohmann::json` 3.12.0 (PRIVATE-linked, vendored via FetchContent, mirrored in vcpkg.json). No other external dependencies added.
+
+**Known issues / technical debt:**
+
+- Real-hardware visual UI verifications (Phase 5 Sync button + auto-sync glyph + Settings persistence; Phase 8 MaturityRole tooltip) — NOT VERIFIED on Linux dev box; waiting on access to hardware.
+- Windows CI back-fill of WIN32-04 duplicate-key precedence pending first windows-2022 matrix run.
+- Codename→maturity table in `device_model.cpp` is hand-written; promote to Qt resource + runtime YAML parse if catalogue grows.
+- libFuzzer harness opt-in compiles on Clang 19/21 but Fedora Clang 22 lacks `libclang_rt.fuzzer.a` — system packaging issue, not project bug; OSS-Fuzz containers unaffected.
+
+## Planning Bootstrap
+
+`.planning/` was retrofitted onto this brownfield repo on 2026-05-12 to enable structured `/gsd-code-review` of work that had already shipped to `main` without phase tracking. v1.0 retro-fit was 2 phases (SEC-003 + QML singleton sweep); v1.1 was 6 forward-planned phases (Architectural Decisions + Hot-plug + Time-sync + CR-01 + WR-01 + Devices).
 
 ## Milestone History
 
 - **v1.0** (shipped 2026-05-13) — Retro-fit catalogue. 2 phases, 7/7 success criteria, audit `tech_debt` (CR-01 + WR-01 deferred). Archived in `.planning/milestones/`.
+- **v1.1** (shipped 2026-05-14) — Device lifecycle hardening + scaffolding-to-functional. 6 phases (3-8), 26 plans, 28/28 requirements, 178/178 tests, audit `tech_debt` (6 deferred items — real-hardware UI verifies + Windows CI back-fill + maturity promotion blocked on captures + libFuzzer Fedora packaging). Archived in `.planning/milestones/`.
 
 ## Key Constraints
 
-- No system-level mutations from tooling (no writes to `~/.config/niri/`, `~/.config/noctalia/`, `/usr/share/`, etc.) — see user-memory `feedback_no_system_mutations.md`.
-- Direct-to-`main` workflow with frequent fetch+rebase; expect 3-5 remote commits per session — see user-memory `feedback_parallel_workflow.md`.
+- No system-level mutations from tooling (no writes to `~/.config/niri/`, `~/.config/noctalia/`, `/usr/share/`, etc.).
+- Direct-to-`main` workflow with frequent fetch+rebase; expect 3-5 remote commits per session.
 - Schema doc is the source of truth for JSON wire keys (`Profile::deviceCodename` ⇄ `"device"`).
-- Qt 6 QML gotchas catalogued in user-memory `reference_qt_qml_gotchas.md` — `QML_SINGLETON` dual-instance pattern is the most recent endemic bug class.
+- Qt 6 QML gotchas catalogued in user-memory `reference_qt_qml_gotchas.md` — `QML_SINGLETON` dual-instance pattern + `static_assert` build-break is the canonical fix.
+- Cap concurrent execute agents at 2 in future autonomous runs (parallel-execution lesson from v1.1).
 
 ## Key Decisions
 
-| Date       | Decision                                                                                                                             | Rationale                                                                                                                                                       |
-| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 2026-05-02 | Out-of-process Python plugin host (SEC-003)                                                                                          | Sandbox third-party plugin code from main app process; signed manifests gate plugin loading.                                                                    |
-| 2026-05-04 | `QML_SINGLETON` services must register a single shared instance via `qmlRegisterSingletonInstance` (not `QML_SINGLETON` macro alone) | Macro path silently created a second instance per QML import; light theme bug (`d7f932f`) surfaced this. Preventive sweep across 5 other services in `e221b21`. |
-| 2026-05-12 | Retro-fit GSD planning onto brownfield repo                                                                                          | Enable structured code-review of recent thematic clusters without restructuring git history.                                                                    |
+| Date       | Decision                                                                                                                             | Rationale                                                                                                                                                     | Outcome                                                                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 2026-05-02 | Out-of-process Python plugin host (SEC-003)                                                                                          | Sandbox third-party plugin code from main app process; signed manifests gate plugin loading.                                                                  | ✓ Good — held up under v1.1 CR-01 fix (env-block construction layered cleanly on top of the existing OOP host).                                                                      |
+| 2026-05-04 | `QML_SINGLETON` services must register a single shared instance via `qmlRegisterSingletonInstance` (not `QML_SINGLETON` macro alone) | Macro path silently created a second instance per QML import; light theme bug (`d7f932f`) surfaced this.                                                      | ✓ Good — pattern reused for `TimeSyncService` registration in v1.1; `static_assert(!std::is_default_constructible_v<T>)` converts the invariant to a build break across all 9 sites. |
+| 2026-05-12 | Retro-fit GSD planning onto brownfield repo                                                                                          | Enable structured code-review of recent thematic clusters without restructuring git history.                                                                  | ✓ Good — survived a full forward-planned milestone; v1.1 was structured planning end-to-end.                                                                                         |
+| 2026-05-14 | ARCH-01: `nlohmann::json` PRIVATE-linked to `ajazz_plugins` (vs in-tree 5-state scanner)                                             | Trust-roots parsing sits **inside** the plugin sandbox boundary; nlohmann's mature parser + COD-031 boundary preservation outweighs the dep cost.             | ✓ Good — TRUST-01..04 closed cleanly; zero `nlohmann` hits in `ajazz_core` or installed headers (verified by grep at audit time).                                                    |
+| 2026-05-14 | ARCH-02: `HotplugMonitor::injectEvent` test-only shim under `#ifdef AJAZZ_TESTING`                                                   | Matches `FakeAsyncExecutor` precedent; avoids the cost of a subclassable interface; shim symbol disappears entirely from production library.                  | ✓ Good — production ABI unchanged; \`objdump                                                                                                                                         |
+| 2026-05-14 | ARCH-03: `DeviceRegistry` slot ownership `unique_ptr<IDevice>` → `shared_ptr<IDevice>` in Phase 4                                    | Pitfall 1 UAF surface is unsolvable without shared ownership across the event-loop turn; load-bearing for Phase 5's auto-sync `dynamic_cast<IClockCapable*>`. | ✓ Good — `weak_ptr` flyweight in `DeviceRegistry::open()` keeps single-HID-handle invariant.                                                                                         |
+| 2026-05-14 | Cap concurrent execute agents at 2 (parallel-execution lesson)                                                                       | Three concurrent agents created a git race that split Phase 7's atomic commit + forced a Phase 5 planner `--no-verify`.                                       | ⚠ Revisit — applies to future autonomous runs; not yet validated in a follow-up milestone.                                                                                           |
 
 ## Evolution
 
@@ -72,4 +128,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ______________________________________________________________________
 
-*Last updated: 2026-05-13 after `/gsd-new-milestone` (v1.1 bootstrap)*
+*Last updated: 2026-05-14 after v1.1 milestone close*
