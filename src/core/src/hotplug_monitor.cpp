@@ -410,6 +410,50 @@ void HotplugMonitor::injectEvent(HotplugEvent const& ev) {
         cb(ev);
     }
 }
+
+#if defined(_WIN32)
+HotplugEvent HotplugMonitor::parseDevicePathW(wchar_t const* path,
+                                              HotplugAction action) noexcept {
+    // Mirrors the parseVidPid + ev-build sequence from `wndProc()`'s
+    // _WIN32 branch. Pure function — no side effects, no hidapi, no
+    // window-message dependencies. The serial substring is extracted
+    // from the third path segment when present (HID device paths have
+    // the form "\\?\HID#VID_xxxx&PID_yyyy#7&serial&..."); parsing
+    // failure on serial is non-fatal (returns empty serial).
+    HotplugEvent ev;
+    ev.action = action;
+    if (!path) {
+        return ev; // vid==0, pid==0 signals parse failure.
+    }
+    std::wstring_view const sv{path};
+    auto const v = sv.find(L"VID_");
+    auto const p = sv.find(L"PID_");
+    if (v == std::wstring_view::npos || p == std::wstring_view::npos) {
+        return ev;
+    }
+    ev.vid = static_cast<std::uint16_t>(std::wcstoul(sv.data() + v + 4, nullptr, 16));
+    ev.pid = static_cast<std::uint16_t>(std::wcstoul(sv.data() + p + 4, nullptr, 16));
+
+    // Serial: third '#'-separated segment when present. Example:
+    //   "\\?\HID#VID_5548&PID_6672#7&deadbeef&0&0000" -> serial = "7&deadbeef&0&0000"
+    auto const firstHash = sv.find(L'#');
+    if (firstHash != std::wstring_view::npos) {
+        auto const secondHash = sv.find(L'#', firstHash + 1);
+        if (secondHash != std::wstring_view::npos && secondHash + 1 < sv.size()) {
+            std::wstring_view const tail = sv.substr(secondHash + 1);
+            // Narrow-string serial — ASCII subset of the path is safe to cast,
+            // matches the production HotplugEvent.serial std::string field.
+            ev.serial.reserve(tail.size());
+            for (wchar_t c : tail) {
+                if (c < 0x80) {
+                    ev.serial.push_back(static_cast<char>(c));
+                }
+            }
+        }
+    }
+    return ev;
+}
+#endif
 #endif
 
 bool HotplugMonitor::isRunning() const noexcept {

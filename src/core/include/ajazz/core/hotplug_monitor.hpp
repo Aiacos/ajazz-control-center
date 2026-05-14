@@ -111,6 +111,32 @@ public:
      * Callback runs on a non-GUI thread).
      */
     void injectEvent(HotplugEvent const& ev);
+
+#if defined(_WIN32)
+    /**
+     * @brief Test-only Win32 helper: parse a `WM_DEVICECHANGE`
+     *        `DEV_BROADCAST_DEVICEINTERFACE_W::dbcc_name` device path
+     *        into a populated HotplugEvent.
+     *
+     * The production path inside `_WIN32` `wndProc` does:
+     *   1. parseVidPid(dbcc_name, vid, pid)
+     *   2. construct HotplugEvent with action + vid + pid
+     *   3. call `impl.snapshotCallback()(event)`
+     *
+     * This helper exposes step 1+2 as a pure function so the Win32 smoke
+     * test (Plan 04-06) can drive the parser with canonical device-path
+     * test vectors WITHOUT spinning up a real `WM_DEVICECHANGE` message
+     * pump. Used by `tests/unit/test_hotplug_win32_smoke.cpp`.
+     *
+     * @param path   Wide device-path string of the form
+     *               `"\\\\?\\HID#VID_5548&PID_6672#7&abcdef..."`.
+     * @param action Whether this is an Arrived or Removed event.
+     * @return Populated HotplugEvent if parsing succeeds (vid/pid non-zero);
+     *         otherwise an event with vid==0 && pid==0 (signals parse failure).
+     */
+    [[nodiscard]] static HotplugEvent parseDevicePathW(wchar_t const* path,
+                                                        HotplugAction action) noexcept;
+#endif
 #endif
 
     /**

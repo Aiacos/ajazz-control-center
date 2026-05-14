@@ -84,11 +84,17 @@ if(WIN32)
     # `manifest_signer_common.cpp` carries the shared nlohmann-based `loadTrustRoots` impl and is
     # compiled into the test binary so the symbol resolves at link time without pulling the full
     # ajazz_plugins lib.
+    # Phase 04 (Plan 04-06): Win32-only WM_DEVICECHANGE → HotplugEvent parser
+    # smoke test. Drives the AJAZZ_TESTING-gated `parseDevicePathW` helper +
+    # `injectEvent` round-trip with canonical AJAZZ Stream Dock device-path
+    # test vectors. Mitigates the Cross-Cutting pitfall (Linux-CI-blind Windows
+    # breakage) for the hot-plug subsystem.
     target_sources(
         ajazz_unit_tests
         PRIVATE test_windows_app_container_sandbox.cpp
                 test_manifest_signer.cpp
                 test_win32_env_block.cpp
+                test_hotplug_win32_smoke.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/out_of_process_plugin_host_win32.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/windows_app_container_sandbox.cpp
                 ${CMAKE_SOURCE_DIR}/src/plugins/src/manifest_signer_win32.cpp

@@ -112,6 +112,17 @@ jobs:
       - name: Test
         run: ctest --preset ${{ matrix.preset }}
 
+      # Phase 04 (Plan 04-06): explicit Win32 hot-plug smoke-ran gate.
+      # The canonical `ctest --preset windows-release` above picks up the new
+      # `test_hotplug_win32_smoke.cpp` automatically. This second invocation
+      # adds a loud failure mode if the suite is somehow skipped (compile-
+      # defined-out, name regex mismatch, test-list filter drift) — fails CI
+      # if zero hot-plug tests run on the Windows runner. Mitigates the
+      # Cross-Cutting pitfall (Linux-CI-blind Windows breakage) for HOTPLUG-06.
+      - name: Verify Windows hot-plug smoke ran
+        if: runner.os == 'Windows'
+        run: ctest --preset ${{ matrix.preset }} --test-regex hotplug --output-on-failure
+
       # ---- Python tests ---------------------------------------------------
       - name: Run Python tests
         run: pytest python/ -q
