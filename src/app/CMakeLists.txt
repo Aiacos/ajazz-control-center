@@ -54,6 +54,7 @@ qt_add_executable(
     src/pi_bridge.cpp
     src/pi_url_policy.cpp
     src/qt_executor.cpp
+    src/hotplug_debouncer.cpp
 )
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy

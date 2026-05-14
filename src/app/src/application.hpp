@@ -33,6 +33,10 @@ class HotplugMonitor;
 struct HotplugEvent;
 } // namespace ajazz::core
 
+namespace ajazz::app {
+class HotplugDebouncer;
+} // namespace ajazz::app
+
 #ifdef AJAZZ_PYTHON_HOST
 namespace ajazz::plugins {
 class IPluginHost;
@@ -124,6 +128,17 @@ private:
     std::unique_ptr<PropertyInspectorController>
         m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
+
+    /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).
+    ///
+    /// Declaration order matters — the debouncer is declared **after**
+    /// m_hotplug so it is destroyed **before** m_hotplug. This matches
+    /// the runtime invariant we want at shutdown: stop the OS event
+    /// source (m_hotplug) first, *then* tear down the debouncer (so
+    /// any in-flight QTimer is freed without firing into a destroyed
+    /// downstream consumer like m_deviceModel — which itself is
+    /// declared earlier and thus destroyed even later).
+    std::unique_ptr<HotplugDebouncer> m_debouncer;
 #ifdef AJAZZ_PYTHON_HOST
     /// Long-lived plugin host. Spawns the Python child + invokes the
     /// Ed25519 verifier so @c LoadedPluginsModel rows carry trust

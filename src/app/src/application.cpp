@@ -16,6 +16,7 @@
 #include "ajazz/keyboard/keyboard.hpp"
 #include "ajazz/mouse/mouse.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
+#include "hotplug_debouncer.hpp"
 
 #include <QCoreApplication>
 #include <QMetaObject>
@@ -50,7 +51,19 @@ Application::Application(QObject* parent)
       m_pluginCatalog(std::make_unique<PluginCatalogModel>(this)),
       m_loadedPlugins(std::make_unique<LoadedPluginsModel>(this)),
       m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
-      m_hotplug(std::make_unique<core::HotplugMonitor>()) {}
+      m_hotplug(std::make_unique<core::HotplugMonitor>()),
+      m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
+    // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
+    // owns its QTimers and lives on this Application's thread (the GUI
+    // thread); its `coalesced` signal is delivered to the DeviceModel on
+    // the same thread without an extra hop. Empty HotplugEvent payload
+    // is intentionally captured by-value into the lambda — only the
+    // act of coalescing matters for refresh(), not the event content.
+    QObject::connect(m_debouncer.get(),
+                     &HotplugDebouncer::coalesced,
+                     m_deviceModel.get(),
+                     [this](core::HotplugEvent const&) { m_deviceModel->refresh(); });
+}
 
 Application::~Application() {
     // Defensive shutdown ordering — the hot-plug worker queues
@@ -189,9 +202,12 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                    ev.action == core::HotplugAction::Arrived ? "+" : "-",
                    static_cast<int>(ev.vid),
                    static_cast<int>(ev.pid));
-    // Refresh on the GUI thread.
-    QMetaObject::invokeMethod(
-        m_deviceModel.get(), [this]() { m_deviceModel->refresh(); }, Qt::QueuedConnection);
+    // Route through the debouncer (300ms trailing-edge coalescing per
+    // D-05 / HOTPLUG-05). The debouncer marshals onto its owning
+    // (GUI) thread internally and emits `coalesced` once per stable
+    // (vid, pid, serial) transition; that signal drives refresh().
+    // No direct invokeMethod here — the debouncer owns thread safety.
+    m_debouncer->observe(ev);
 }
 
 } // namespace ajazz::app
