@@ -31,7 +31,6 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/core/hotplug_monitor.hpp"
-
 #include "device_model.hpp"
 #include "hotplug_debouncer.hpp"
 #include "mock_hid_enumerator.hpp"
@@ -75,9 +74,12 @@ namespace {
 /// returns 0 instead of touching closed transport state.
 class StubDevice : public IDevice {
 public:
-    StubDevice(DeviceDescriptor desc, DeviceId id) : m_descriptor(std::move(desc)), m_id(std::move(id)) {}
+    StubDevice(DeviceDescriptor desc, DeviceId id)
+        : m_descriptor(std::move(desc)), m_id(std::move(id)) {}
 
-    [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override { return m_descriptor; }
+    [[nodiscard]] DeviceDescriptor const& descriptor() const noexcept override {
+        return m_descriptor;
+    }
     [[nodiscard]] DeviceId id() const noexcept override { return m_id; }
     [[nodiscard]] std::string firmwareVersion() const override { return "stub-1.0"; }
 
@@ -140,11 +142,13 @@ void registerTestBackend(DeviceRegistry& registry, TestBackendSpec const& spec) 
 // IDevice's zombie contract (D-06) means subsequent method calls
 // return safely without touching closed transport state.
 // ----------------------------------------------------------------------------
-TEST_CASE("SC1: shared_ptr to IDevice survives a Removed hot-plug event", "[hotplug][harness][SC1]") {
+TEST_CASE("SC1: shared_ptr to IDevice survives a Removed hot-plug event",
+          "[hotplug][harness][SC1]") {
     qtApp();
 
     DeviceRegistry registry;
-    registerTestBackend(registry, {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
+    registerTestBackend(registry,
+                        {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
 
     DeviceId const id{0x5548, 0x6672, ""};
     DevicePtr dev = registry.open(id);
@@ -174,11 +178,13 @@ TEST_CASE("SC1: shared_ptr to IDevice survives a Removed hot-plug event", "[hotp
 // After both shared_ptrs drop, a fresh open() constructs a new
 // instance (passive eviction).
 // ----------------------------------------------------------------------------
-TEST_CASE("SC1.5: weak_ptr cache returns the same instance for shared keys (D-06)", "[hotplug][harness][D-06]") {
+TEST_CASE("SC1.5: weak_ptr cache returns the same instance for shared keys (D-06)",
+          "[hotplug][harness][D-06]") {
     qtApp();
 
     DeviceRegistry registry;
-    registerTestBackend(registry, {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
+    registerTestBackend(registry,
+                        {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
 
     DeviceId const id{0x5548, 0x6672, ""};
 
@@ -205,7 +211,8 @@ TEST_CASE("SC1.5: weak_ptr cache returns the same instance for shared keys (D-06
 // can produce 2-4 raw HotplugEvents within tens of milliseconds. The
 // debouncer collapses these into ONE emission per stable transition.
 // ----------------------------------------------------------------------------
-TEST_CASE("SC4: 300ms debounce coalesces 4 rapid same-key events into 1 emission", "[hotplug][harness][SC4][debouncer]") {
+TEST_CASE("SC4: 300ms debounce coalesces 4 rapid same-key events into 1 emission",
+          "[hotplug][harness][SC4][debouncer]") {
     qtApp();
 
     HotplugDebouncer debouncer;
@@ -230,7 +237,8 @@ TEST_CASE("SC4: 300ms debounce coalesces 4 rapid same-key events into 1 emission
 // device-shuffle scenario: distinct (vid, pid, serial) keys never reset
 // each other's windows.
 // ----------------------------------------------------------------------------
-TEST_CASE("SC4.2: per-key isolation — 3 distinct keys produce 3 coalesced emissions", "[hotplug][harness][debouncer][isolation]") {
+TEST_CASE("SC4.2: per-key isolation - 3 distinct keys produce 3 coalesced emissions",
+          "[hotplug][harness][debouncer][isolation]") {
     qtApp();
 
     HotplugDebouncer debouncer;
@@ -263,15 +271,18 @@ TEST_CASE("SC4.2: per-key isolation — 3 distinct keys produce 3 coalesced emis
 // is emitted on the affected row. The row count is unchanged. No
 // modelReset is emitted.
 // ----------------------------------------------------------------------------
-TEST_CASE("SC2: DeviceModel emits exactly one dataChanged({ConnectedRole}) per row flip", "[hotplug][harness][SC2][device_model]") {
+TEST_CASE("SC2: DeviceModel emits exactly one dataChanged({ConnectedRole}) per row flip",
+          "[hotplug][harness][SC2][device_model]") {
     qtApp();
 
     MockHidEnumerator mock;
     mock.setKeys({{0x5548, 0x6672}, {0x5548, 0x6673}});
 
     DeviceRegistry registry{mock.asEnumerator()};
-    registerTestBackend(registry, {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
-    registerTestBackend(registry, {0x5548, 0x6673, "akp05-stub", DeviceFamily::StreamDeck, "Stub AKP05"});
+    registerTestBackend(registry,
+                        {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
+    registerTestBackend(registry,
+                        {0x5548, 0x6673, "akp05-stub", DeviceFamily::StreamDeck, "Stub AKP05"});
 
     DeviceModel model{registry};
     model.refresh();
@@ -312,11 +323,13 @@ TEST_CASE("SC2: DeviceModel emits exactly one dataChanged({ConnectedRole}) per r
 // without crash, drop the shared_ptr, assert the next open() constructs
 // a fresh instance (cache miss after passive eviction).
 // ----------------------------------------------------------------------------
-TEST_CASE("SC1+D-06: disconnect-during-use composite (HOTPLUG-07 narrative)", "[hotplug][harness][HOTPLUG-07]") {
+TEST_CASE("SC1+D-06: disconnect-during-use composite (HOTPLUG-07 narrative)",
+          "[hotplug][harness][HOTPLUG-07]") {
     qtApp();
 
     DeviceRegistry registry;
-    registerTestBackend(registry, {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
+    registerTestBackend(registry,
+                        {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
 
     DeviceId const id{0x5548, 0x6672, ""};
     HotplugMonitor mon;

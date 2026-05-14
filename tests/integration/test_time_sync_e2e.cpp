@@ -81,7 +81,7 @@ auto makeProductionLookup(DeviceRegistry& registry) {
 
 } // namespace
 
-TEST_CASE("Phase 5 e2e: synthetic Stream Dock arrival → onDeviceArrived → NotImplemented signal",
+TEST_CASE("Phase 5 e2e: synthetic Stream Dock arrival -> onDeviceArrived -> NotImplemented signal",
           "[time-sync][integration][e2e]") {
     qtAppIntegration();
 
