@@ -69,7 +69,7 @@ None tracked in `.planning/todos/` — see repo-root `TODO.md` for legacy checkl
 | 260513-uy6 | Plugin Store Phase A — fetcher logging + Retry buttons + re-entry guard                               | 2026-05-13 | ec9590c | [260513-uy6-plugin-store-phase-a](./quick/260513-uy6-plugin-store-phase-a/)                                         |
 | 260513-v6b | Plugin Store Phase B — PluginCatalogProxyModel + GridView refactor                                    | 2026-05-13 | 9b1589f | [260513-v6b-plugin-store-phase-b](./quick/260513-v6b-plugin-store-phase-b/)                                         |
 | 260514-1je | Stream Dock features research + KeyDesigner slice (AKP153)                                            | 2026-05-14 | 043d04a | [260514-1je-stream-dock-keydesigner](./quick/260514-1je-stream-dock-keydesigner/)                                   |
-| 260514-h0w | Recheck Phase 4 CONTEXT vs new Stream Dock research (D-02 + D-04 amended; all D-01..D-06 still valid) | 2026-05-14 | pending | [260514-h0w-recheck-phase-4-context-vs-new-stream-do](./quick/260514-h0w-recheck-phase-4-context-vs-new-stream-do/) |
+| 260514-h0w | Recheck Phase 4 CONTEXT vs new Stream Dock research (D-02 + D-04 amended; all D-01..D-06 still valid) | 2026-05-14 | db88676 | [260514-h0w-recheck-phase-4-context-vs-new-stream-do](./quick/260514-h0w-recheck-phase-4-context-vs-new-stream-do/) |
 
 ### Blockers/Concerns
 
