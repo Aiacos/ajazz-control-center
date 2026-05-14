@@ -40,6 +40,7 @@
 #include <QTest>
 
 #include <atomic>
+#include <chrono>
 #include <cstdint>
 #include <memory>
 #include <set>
@@ -256,9 +257,23 @@ TEST_CASE("SC4.2: per-key isolation - 3 distinct keys produce 3 coalesced emissi
         debouncer.observe(evC);
     }
 
-    spy.wait(HotplugDebouncer::kDebounceMs + 100);
+    // `QSignalSpy::wait(N)` returns as soon as the count INCREMENTS by 1 or
+    // the timeout elapses — it does NOT loop until all queued signals
+    // arrive. With 3 per-key timers firing at slightly different moments
+    // (Windows QTimer has ~15ms granularity vs Linux's ~1ms), the first
+    // `wait` would return after the first emission, leaving 2 still pending
+    // and the `REQUIRE(spy.count() == 3)` racing the remaining fires.
+    //
+    // Pump the wait in a loop until we have all 3 emissions or hit a
+    // generous deadline. The body never blocks longer than `kDebounceMs +
+    // 100` for any individual call, so a failure mode still surfaces
+    // promptly.
+    auto const deadline = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+    while (spy.count() < 3 && std::chrono::steady_clock::now() < deadline) {
+        spy.wait(HotplugDebouncer::kDebounceMs + 100);
+    }
 
-    // Per-key isolation: 3 stable transitions → 3 emissions (NOT 9).
+    // Per-key isolation: 3 stable transitions -> 3 emissions (NOT 9).
     REQUIRE(spy.count() == 3);
 }
 
