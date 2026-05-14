@@ -38,6 +38,9 @@ void registerAll(core::DeviceRegistry& registry);
  * @param d   Device descriptor (model name, VID/PID, …).
  * @param id  Runtime identity including the USB serial string.
  * @return    Heap-allocated IDevice implementing IMouseCapable and IRgbCapable.
+ *            Returned via DevicePtr (shared_ptr alias per ARCH-03); the
+ *            DeviceRegistry flyweight cache (D-06) shares the same
+ *            instance across consumers.
  */
 [[nodiscard]] core::DevicePtr makeAjSeries(core::DeviceDescriptor const& d, core::DeviceId id);
 

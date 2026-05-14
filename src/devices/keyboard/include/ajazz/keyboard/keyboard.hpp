@@ -44,7 +44,9 @@ void registerAll(core::DeviceRegistry& registry);
  * @param d   Descriptor for the matched device (model, VID/PID, …).
  * @param id  Runtime identity including the USB serial string.
  * @return    Heap-allocated IDevice implementing IKeyRemappable, IRgbCapable,
- *            and IFirmwareCapable.
+ *            and IFirmwareCapable. Returned via DevicePtr (shared_ptr alias
+ *            per ARCH-03); the DeviceRegistry flyweight cache (D-06)
+ *            shares the same instance across consumers.
  */
 [[nodiscard]] core::DevicePtr makeViaKeyboard(core::DeviceDescriptor const& d, core::DeviceId id);
 
@@ -59,7 +61,9 @@ void registerAll(core::DeviceRegistry& registry);
  * @param d   Descriptor for the matched device.
  * @param id  Runtime identity including the USB serial string.
  * @return    Heap-allocated IDevice implementing IKeyRemappable, IRgbCapable,
- *            and IFirmwareCapable.
+ *            and IFirmwareCapable. Returned via DevicePtr (shared_ptr alias
+ *            per ARCH-03); the DeviceRegistry flyweight cache (D-06)
+ *            shares the same instance across consumers.
  */
 [[nodiscard]] core::DevicePtr makeProprietaryKeyboard(core::DeviceDescriptor const& d,
                                                       core::DeviceId id);

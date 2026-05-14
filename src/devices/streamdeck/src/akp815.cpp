@@ -259,7 +259,7 @@ private:
 } // namespace
 
 core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<Akp815Device>(d, std::move(id));
+    return std::make_shared<Akp815Device>(d, std::move(id));
 }
 
 } // namespace ajazz::streamdeck

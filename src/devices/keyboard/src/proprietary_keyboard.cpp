@@ -418,7 +418,7 @@ private:
 } // namespace
 
 core::DevicePtr makeProprietaryKeyboard(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<ProprietaryKeyboard>(d, std::move(id));
+    return std::make_shared<ProprietaryKeyboard>(d, std::move(id));
 }
 
 } // namespace ajazz::keyboard

@@ -44,7 +44,10 @@ void registerAll(core::DeviceRegistry& registry);
  *
  * @param d  Static descriptor from the registry.
  * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr; call open() before I/O.
+ * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
+ *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
+ *         hand the same instance to subsequent open(id) calls for the
+ *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id);
 
@@ -56,7 +59,10 @@ void registerAll(core::DeviceRegistry& registry);
  *
  * @param d  Static descriptor from the registry.
  * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr; call open() before I/O.
+ * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
+ *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
+ *         hand the same instance to subsequent open(id) calls for the
+ *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id);
 
@@ -68,7 +74,10 @@ void registerAll(core::DeviceRegistry& registry);
  *
  * @param d  Static descriptor from the registry.
  * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr; call open() before I/O.
+ * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
+ *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
+ *         hand the same instance to subsequent open(id) calls for the
+ *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id);
 
@@ -84,7 +93,10 @@ void registerAll(core::DeviceRegistry& registry);
  *
  * @param d  Static descriptor from the registry.
  * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr; call open() before I/O.
+ * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
+ *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
+ *         hand the same instance to subsequent open(id) calls for the
+ *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id);
 

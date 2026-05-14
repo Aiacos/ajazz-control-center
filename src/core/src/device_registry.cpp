@@ -85,11 +85,38 @@ DeviceRegistry::enumerateConnectedHidKeys() const {
 }
 
 DevicePtr DeviceRegistry::open(DeviceId const& id) const {
-    // Mutex hygiene (COD-004/005): never invoke user code (the factory) while
-    // holding the registry mutex. Copy the descriptor + factory out under the
-    // lock, then release before constructing the device. Factories can run
-    // arbitrary I/O (HID open, hidraw ioctls) and must not block other
-    // registry operations.
+    // Cache-aware flyweight per D-06: if a previous shared_ptr returned for
+    // the same (vid, pid) is still alive, return that same instance —
+    // multiple consumers share one backend / one HID handle. On miss /
+    // expiry, fall through to the registered factory and store the result
+    // back as a weak_ptr (passive eviction; no proactive invalidation).
+    //
+    // Lock-order rule (D-06):
+    //   1. Take `m_open_mutex` for cache lookup; release before anything else.
+    //   2. If miss, take `m_mutex` for descriptor/factory copy; release
+    //      before invoking the factory (COD-004/005 mutex hygiene — factories
+    //      run hidapi I/O and must not block enumerate()/registerDevice()).
+    //   3. Re-take `m_open_mutex` only for the post-construction weak_ptr
+    //      store. Never hold both mutexes simultaneously, never hold any
+    //      mutex across the factory call.
+    std::pair<std::uint16_t, std::uint16_t> const key{id.vendorId, id.productId};
+
+    // Step 1: cache lookup.
+    {
+        std::lock_guard const cacheLock(m_open_mutex);
+        auto const it = m_open_devices.find(key);
+        if (it != m_open_devices.end()) {
+            if (auto cached = it->second.lock()) {
+                AJAZZ_LOG_INFO(
+                    "registry", "cache hit for VID={:04x} PID={:04x}", id.vendorId, id.productId);
+                return cached;
+            }
+            // Expired — fall through; the slot will be overwritten below.
+        }
+    }
+
+    // Step 2: descriptor/factory copy under m_mutex (lock released before
+    // factory invocation per existing COD-004/005 hygiene).
     DeviceDescriptor descriptor;
     DeviceFactory factory;
     {
@@ -98,6 +125,11 @@ DevicePtr DeviceRegistry::open(DeviceId const& id) const {
             return e.descriptor.vendorId == id.vendorId && e.descriptor.productId == id.productId;
         });
         if (it == m_entries.end()) {
+            // Per D-02 (log-only error surface): the catalog may reference
+            // VID/PIDs that have no registered backend yet (e.g. AKP815
+            // before Phase 8 lands its registration). The device simply
+            // doesn't appear in the sidebar because enumerate() never
+            // returned a row for it. No toast, no UI surface.
             AJAZZ_LOG_WARN(
                 "registry", "no backend for VID={:04x} PID={:04x}", id.vendorId, id.productId);
             return nullptr;
@@ -105,7 +137,15 @@ DevicePtr DeviceRegistry::open(DeviceId const& id) const {
         descriptor = it->descriptor;
         factory = it->factory;
     }
-    return factory(descriptor, id);
+
+    // Step 3: invoke factory with no mutex held; then store the weak_ptr.
+    AJAZZ_LOG_INFO("registry", "cache miss for VID={:04x} PID={:04x}", id.vendorId, id.productId);
+    DevicePtr fresh = factory(descriptor, id);
+    if (fresh) {
+        std::lock_guard const cacheLock(m_open_mutex);
+        m_open_devices[key] = fresh; // implicit shared_ptr->weak_ptr.
+    }
+    return fresh;
 }
 
 } // namespace ajazz::core

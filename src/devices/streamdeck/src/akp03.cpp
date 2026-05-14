@@ -510,7 +510,7 @@ private:
  * @return Closed DevicePtr.
  */
 core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<Akp03Device>(d, std::move(id));
+    return std::make_shared<Akp03Device>(d, std::move(id));
 }
 
 } // namespace ajazz::streamdeck

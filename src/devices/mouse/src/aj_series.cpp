@@ -266,7 +266,7 @@ private:
 } // namespace
 
 core::DevicePtr makeAjSeries(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<AjSeriesMouse>(d, std::move(id));
+    return std::make_shared<AjSeriesMouse>(d, std::move(id));
 }
 
 } // namespace ajazz::mouse

@@ -406,7 +406,7 @@ private:
  *  @return     Owning pointer to the new device instance.
  */
 core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<Akp153Device>(d, std::move(id));
+    return std::make_shared<Akp153Device>(d, std::move(id));
 }
 
 } // namespace ajazz::streamdeck

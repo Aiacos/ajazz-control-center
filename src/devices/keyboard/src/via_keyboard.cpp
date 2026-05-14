@@ -215,7 +215,7 @@ private:
 } // namespace
 
 core::DevicePtr makeViaKeyboard(core::DeviceDescriptor const& d, core::DeviceId id) {
-    return std::make_unique<ViaKeyboard>(d, std::move(id));
+    return std::make_shared<ViaKeyboard>(d, std::move(id));
 }
 
 } // namespace ajazz::keyboard

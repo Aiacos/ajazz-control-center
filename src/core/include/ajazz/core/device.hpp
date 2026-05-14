@@ -108,6 +108,15 @@ using EventCallback = std::function<void(DeviceEvent const&)>;
  * @note Thread-safety: open()/close()/poll() are not thread-safe with
  *       respect to each other. onEvent() may be called from any thread
  *       before open(); the callback is invoked from the I/O thread.
+ *
+ * @note Zombie contract (D-06 / ARCH-03): each IDevice implementation MUST
+ *       gate every HID I/O call on an internal alive flag (or equivalent
+ *       hidapi handle validity check). After the underlying USB device
+ *       disappears, public methods return Result::DeviceGone (or equivalent
+ *       sentinel) rather than dereferencing closed handles. This is what
+ *       lets the shared_ptr flyweight cache (DeviceRegistry::open) hand the
+ *       same backend instance to multiple consumers safely across hot-plug
+ *       events. See D-06 in 04-CONTEXT.md and ARCH-03.
  * @see DeviceRegistry, capabilities.hpp
  */
 class IDevice {
@@ -170,14 +179,22 @@ protected:
     IDevice() = default;
 };
 
-/// Owning smart-pointer to a heap-allocated device backend.
-using DevicePtr = std::unique_ptr<IDevice>;
+/// Shared smart-pointer to a heap-allocated device backend.
+///
+/// Per ARCH-03 (atomic ownership migration) the registry slot ownership
+/// changed from `std::unique_ptr<IDevice>` to `std::shared_ptr<IDevice>` so
+/// that multiple consumers (KeyDesigner today, TimeSyncService in Phase 5)
+/// can hold a stable handle to the same backend instance across event-loop
+/// turns and across hot-plug events. The `DeviceRegistry::open()` flyweight
+/// (D-06) caches a `weak_ptr<IDevice>` per (vendorId, productId) so the
+/// same `(vid, pid)` always vends the same backend / one HID handle.
+using DevicePtr = std::shared_ptr<IDevice>;
 
 /**
  * @brief Factory function signature used by DeviceRegistry.
  *
  * Receives the static descriptor and runtime id of the device to construct.
- * Returns a fully initialised (but not yet open) DevicePtr.
+ * Returns a fully initialised (but not yet open) DevicePtr (shared_ptr).
  */
 using DeviceFactory = std::function<DevicePtr(DeviceDescriptor const&, DeviceId)>;
 

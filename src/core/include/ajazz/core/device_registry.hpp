@@ -22,6 +22,7 @@
 #include "ajazz/core/device.hpp"
 
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -99,14 +100,33 @@ public:
     enumerateConnectedHidKeys() const;
 
     /**
-     * @brief Instantiate the backend for a given device ID.
+     * @brief Instantiate (or return a cached) backend for a given device ID.
      *
-     * Looks up the factory by (vendorId, productId) and delegates
-     * construction to it. The returned device is not yet open.
+     * Looks up the factory by (vendorId, productId). On a cache miss (or
+     * after the previous shared_ptr for that key has been released) a fresh
+     * backend is constructed via the registered factory; on a cache hit the
+     * existing instance is returned directly.
+     *
+     * Flyweight semantics (D-06): if a previous shared_ptr returned by
+     * `open(id)` for the same (vendorId, productId) is still alive
+     * somewhere in the process, this call returns the **same** instance —
+     * multiple consumers share one backend / one HID handle. This pre-empts
+     * the Phase 5 multi-consumer Windows-exclusive-open bug and is the
+     * load-bearing precondition for any consumer that captures a
+     * `shared_ptr<IDevice>` across an event-loop turn.
+     *
+     * Cache eviction is **passive**: the cache slot is replaced when the
+     * `weak_ptr` expires (i.e. the last shared_ptr drops). There is no
+     * proactive invalidation on hot-plug Removed events — instead, the
+     * underlying IDevice implementation honours the zombie contract from
+     * `IDevice`'s class doc (return Result::DeviceGone or equivalent
+     * sentinel after the USB device disappears).
      *
      * @param id Runtime identifier of the device to open.
-     * @return Newly constructed DevicePtr, or nullptr if no matching
-     *         backend is registered.
+     * @return Shared backend instance for `id`, or `nullptr` if no matching
+     *         backend factory is registered (no toast / UI surface — log
+     *         only, per D-02).
+     * @see D-06 in 04-CONTEXT.md, ARCH-03 in 03-architectural-decisions/.
      */
     [[nodiscard]] DevicePtr open(DeviceId const& id) const;
 
@@ -124,6 +144,27 @@ private:
 
     mutable std::mutex m_mutex;   ///< Guards m_entries for thread-safe access.
     std::vector<Entry> m_entries; ///< Registered backends, ordered by insertion.
+
+    /// Separate mutex protecting `m_open_devices` (D-06).
+    ///
+    /// Kept distinct from `m_mutex` so a hot-plug-driven flurry of
+    /// `open()` calls does not contend with `enumerate()` /
+    /// `registerDevice()` traffic. Lock order: never hold both
+    /// simultaneously — the cache lookup releases `m_open_mutex` before
+    /// taking `m_mutex` for the descriptor/factory copy, then drops
+    /// `m_mutex` before invoking the factory, then re-takes
+    /// `m_open_mutex` only to store the resulting weak_ptr.
+    mutable std::mutex m_open_mutex;
+
+    /// Per-(vid, pid) flyweight cache of backend instances (D-06).
+    ///
+    /// Keyed by `(vendorId, productId)` — `serial` is intentionally not in
+    /// the key because the v1.1 contract is "one backend per device class
+    /// per process". The `weak_ptr` lets a backend be reclaimed naturally
+    /// when the last consumer drops its `shared_ptr` (passive eviction —
+    /// no proactive invalidation on hot-plug Removed).
+    mutable std::map<std::pair<std::uint16_t, std::uint16_t>, std::weak_ptr<IDevice>>
+        m_open_devices;
 };
 
 } // namespace ajazz::core
