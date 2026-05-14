@@ -55,7 +55,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
 1. The multi-device integration test exercises disconnect-during-use, reconnect, and device-shuffle scenarios using `MockHidEnumerator` + `HotplugMonitor::injectEvent`, and the same harness is exercised by a Windows CI smoke run for the `WM_DEVICECHANGE` path.
 1. A phase artefact documents the 2026-05-12/13 hot-plug debugging fix (what was broken, what changed, why 3 devices now work) so the institutional knowledge isn't lost.
    **Plans**: 7 plans in 3 waves
-   - [ ] 04-01-PLAN.md — Atomic ownership migration (`unique_ptr` → `shared_ptr`) + `weak_ptr` cache (ARCH-03 / D-06 / HOTPLUG-01) — Wave 1
+   - [x] 04-01-PLAN.md — Atomic ownership migration (`unique_ptr` → `shared_ptr`) + `weak_ptr` cache (ARCH-03 / D-06 / HOTPLUG-01) — Wave 1
    - [ ] 04-02-PLAN.md — Test seam: `HotplugMonitor::injectEvent` shim + constructor-injectable `HidEnumerator` (ARCH-02 / HOTPLUG-06) — Wave 2 *(depends on 04-01)*
    - [ ] 04-03-PLAN.md — `HotplugDebouncer` (300ms trailing-edge, per-key) + `Application::onHotplug` wiring (D-05 / HOTPLUG-05) — Wave 1
    - [ ] 04-04-PLAN.md — DeviceModel diff-driven `dataChanged` + lex sort + codename collapse + QML offline badge (D-03 / D-04 / HOTPLUG-02..04) — Wave 1

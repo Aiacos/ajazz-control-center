@@ -20,7 +20,7 @@ Phase 3 deliverables — written rationale gating Phases 4-7.
 
 Phase 4 deliverables — disconnect-during-use safety, multi-device UX, test harness.
 
-- [ ] **HOTPLUG-01**: User can disconnect a device while interacting with it without crashing the app (Pitfall 1 UAF closed via `shared_ptr<IDevice>` migration).
+- [x] **HOTPLUG-01**: User can disconnect a device while interacting with it without crashing the app (Pitfall 1 UAF closed via `shared_ptr<IDevice>` migration).
 - [ ] **HOTPLUG-02**: Disconnected device's sidebar row stays in place with an offline badge; the row does not disappear, and a subsequent reconnect re-binds silently.
 - [ ] **HOTPLUG-03**: User's sidebar selection focus is retained across a disconnect/reconnect cycle.
 - [ ] **HOTPLUG-04**: Sidebar device rows are sorted by `(deviceClass, codename)` lexicographically — stable across hot-plug events (no reorder-by-recency).
@@ -98,36 +98,36 @@ Explicitly excluded for v1.1. Documented to prevent scope creep — sourced from
 
 Filled by roadmapper during Phase 3-8 mapping. Each requirement maps to exactly one phase.
 
-| Requirement | Phase   | Status  |
-| ----------- | ------- | ------- |
-| ARCH-01     | Phase 3 | Locked  |
-| ARCH-02     | Phase 3 | Locked  |
-| ARCH-03     | Phase 3 | Locked  |
-| HOTPLUG-01  | Phase 4 | Pending |
-| HOTPLUG-02  | Phase 4 | Pending |
-| HOTPLUG-03  | Phase 4 | Pending |
-| HOTPLUG-04  | Phase 4 | Pending |
-| HOTPLUG-05  | Phase 4 | Pending |
-| HOTPLUG-06  | Phase 4 | Pending |
-| HOTPLUG-07  | Phase 4 | Pending |
-| TIMESYNC-01 | Phase 5 | Pending |
-| TIMESYNC-02 | Phase 5 | Pending |
-| TIMESYNC-03 | Phase 5 | Pending |
-| TIMESYNC-04 | Phase 5 | Pending |
-| TIMESYNC-05 | Phase 5 | Pending |
-| TIMESYNC-06 | Phase 5 | Pending |
-| WIN32-01    | Phase 6 | Pending |
-| WIN32-02    | Phase 6 | Pending |
-| WIN32-03    | Phase 6 | Pending |
-| WIN32-04    | Phase 6 | Pending |
-| TRUST-01    | Phase 7 | Pending |
-| TRUST-02    | Phase 7 | Pending |
-| TRUST-03    | Phase 7 | Pending |
-| TRUST-04    | Phase 7 | Pending |
-| DEVICES-01  | Phase 8 | Pending |
-| DEVICES-02  | Phase 8 | Pending |
-| DEVICES-03  | Phase 8 | Pending |
-| DEVICES-04  | Phase 8 | Pending |
+| Requirement | Phase   | Status   |
+| ----------- | ------- | -------- |
+| ARCH-01     | Phase 3 | Locked   |
+| ARCH-02     | Phase 3 | Locked   |
+| ARCH-03     | Phase 3 | Locked   |
+| HOTPLUG-01  | Phase 4 | Complete |
+| HOTPLUG-02  | Phase 4 | Pending  |
+| HOTPLUG-03  | Phase 4 | Pending  |
+| HOTPLUG-04  | Phase 4 | Pending  |
+| HOTPLUG-05  | Phase 4 | Pending  |
+| HOTPLUG-06  | Phase 4 | Pending  |
+| HOTPLUG-07  | Phase 4 | Pending  |
+| TIMESYNC-01 | Phase 5 | Pending  |
+| TIMESYNC-02 | Phase 5 | Pending  |
+| TIMESYNC-03 | Phase 5 | Pending  |
+| TIMESYNC-04 | Phase 5 | Pending  |
+| TIMESYNC-05 | Phase 5 | Pending  |
+| TIMESYNC-06 | Phase 5 | Pending  |
+| WIN32-01    | Phase 6 | Pending  |
+| WIN32-02    | Phase 6 | Pending  |
+| WIN32-03    | Phase 6 | Pending  |
+| WIN32-04    | Phase 6 | Pending  |
+| TRUST-01    | Phase 7 | Pending  |
+| TRUST-02    | Phase 7 | Pending  |
+| TRUST-03    | Phase 7 | Pending  |
+| TRUST-04    | Phase 7 | Pending  |
+| DEVICES-01  | Phase 8 | Pending  |
+| DEVICES-02  | Phase 8 | Pending  |
+| DEVICES-03  | Phase 8 | Pending  |
+| DEVICES-04  | Phase 8 | Pending  |
 
 **Coverage:**
 
