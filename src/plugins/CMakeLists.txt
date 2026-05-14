@@ -17,6 +17,10 @@ if(WIN32)
         # SEC-003 follow-up #51: Ed25519 manifest verifier (Win32). Mirrors `manifest_signer.cpp`
         # but uses `_wspawnvp` instead of `fork`+`execvp`.
         src/manifest_signer_win32.cpp
+        # CR-01 fix (Phase 06): per-spawn UTF-16 env block for CreateProcessW. Replaces the previous
+        # parent-env-mutating `_putenv_s` pattern that leaked PYTHONPATH across host instances and
+        # into sibling subprocesses.
+        src/win32_env_block.cpp
     )
 else()
     list(

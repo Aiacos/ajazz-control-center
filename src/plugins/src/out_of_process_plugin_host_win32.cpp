@@ -71,12 +71,14 @@
 // restrictedToken) when populating STARTUPINFOEX. The forward declaration
 // in sandbox.hpp is insufficient for member access.
 #include "process_attributes_impl_win32.hpp"
+#include "win32_env_block.hpp"
 #include "wire_protocol.hpp"
 
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <stdexcept>
@@ -450,9 +452,17 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
 
     // Build PYTHONPATH for the child. Windows uses ';' as the path
     // separator. PYTHONPATH is read by the child python interpreter
-    // at startup. We use the parent's environment (plus the new
-    // PYTHONPATH) so the child inherits PATH etc — CreateProcessW
-    // inherits the parent's env when lpEnvironment is null.
+    // at startup.
+    //
+    // CR-01 fix (Phase 06, plan 06-01): build a per-spawn Win32EnvBlock
+    // and pass it as `lpEnvironment` to BOTH CreateProcessW and
+    // CreateProcessAsUserW with CREATE_UNICODE_ENVIRONMENT in
+    // creationFlags. NO `_putenv_s` calls in this function — the
+    // previous belt-and-braces pattern polluted the parent process's
+    // env for the rest of its lifetime, leaked across host instances
+    // (the v1.0 audit's cross-instance race), and bled into sibling
+    // subprocesses (manifest verifier). See `win32_env_block.hpp` and
+    // `.planning/phases/06-cr-01-win32-oop-env-pollution-fix/`.
     std::string pythonPath;
     for (auto const& p : m_impl->config.pythonPath) {
         if (!pythonPath.empty()) {
@@ -460,15 +470,23 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         }
         pythonPath += p.string();
     }
-    if (!pythonPath.empty()) {
-        _putenv_s("PYTHONPATH", pythonPath.c_str());
-    }
-    _putenv_s("PYTHONDONTWRITEBYTECODE", "1");
-    _putenv_s("PYTHONUNBUFFERED", "1");
 
     // Build the wide command line.
     std::wstring cmdline = buildCommandLine(spawn.args);
     std::wstring const exePathWide = utf8ToWide(spawn.executable);
+
+    // CR-01: construct the per-spawn env block on the spawn-function stack
+    // so its lifetime spans BOTH the CreateProcessAsUserW and CreateProcessW
+    // calls below. Do NOT declare it inside either if/else branch —
+    // Pitfall 5 sub-trap "lifetime" requires the buffer outlive
+    // CreateProcessW. Overrides are spawn-local; the parent env stays clean.
+    std::map<std::wstring, std::wstring> envOverrides;
+    envOverrides.emplace(L"PYTHONDONTWRITEBYTECODE", L"1");
+    envOverrides.emplace(L"PYTHONUNBUFFERED", L"1");
+    if (!pythonPath.empty()) {
+        envOverrides.emplace(L"PYTHONPATH", utf8ToWide(pythonPath));
+    }
+    ajazz::plugins::Win32EnvBlock envBlock{std::move(envOverrides)};
 
     // STARTUPINFO (either plain or extended) wires up the inherited
     // stdio handles.
@@ -484,7 +502,10 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
 
     // Process creation flags. CREATE_NO_WINDOW keeps the child from
     // flashing a console window when the host is a GUI app.
-    DWORD creationFlags = CREATE_NO_WINDOW;
+    // CREATE_UNICODE_ENVIRONMENT (CR-01 fix) tells CreateProcessW to
+    // read `lpEnvironment` as a UTF-16 block — pairs with the
+    // `envBlock.data()` we pass to both spawn branches below.
+    DWORD creationFlags = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT;
 
     // AppContainer attribute list — only populated if the sandbox
     // gave us a container SID. Size query first, then Initialize +
@@ -544,10 +565,10 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
                                        cmdline.data(),
                                        nullptr,
                                        nullptr,
-                                       TRUE, // bInheritHandles
+                                       TRUE, // bInheritHandles — Pitfall 5: do NOT touch
                                        creationFlags,
-                                       nullptr, // lpEnvironment = parent's
-                                       nullptr, // lpCurrentDirectory = parent's
+                                       envBlock.data(), // lpEnvironment — CR-01 fix
+                                       nullptr,         // lpCurrentDirectory = parent's
                                        &siex.StartupInfo,
                                        &pi);
     } else {
@@ -555,10 +576,10 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
                                  cmdline.data(),
                                  nullptr,
                                  nullptr,
-                                 TRUE,
+                                 TRUE, // bInheritHandles — Pitfall 5: do NOT touch
                                  creationFlags,
-                                 nullptr,
-                                 nullptr,
+                                 envBlock.data(), // lpEnvironment — CR-01 fix
+                                 nullptr,         // lpCurrentDirectory = parent's
                                  &siex.StartupInfo,
                                  &pi);
     }
