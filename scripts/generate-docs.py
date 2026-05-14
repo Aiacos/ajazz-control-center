@@ -87,9 +87,14 @@ class Data:
         return self.raw.get("devices", [])
 
     @property
-    def statuses(self) -> dict[str, dict[str, str]]:
-        """Status definitions keyed by status code (e.g. ``"working"``)."""
-        return self.raw.get("statuses", {})
+    def maturities(self) -> dict[str, dict[str, str]]:
+        """Maturity tier definitions keyed by tier code (e.g. ``"functional"``).
+
+        Reads ``maturity_tiers`` from devices.yaml (renamed from ``statuses``
+        in Phase 8 / DEVICES-01). Falls back to the legacy ``statuses`` block
+        so older branches keep rendering during the transition window.
+        """
+        return self.raw.get("maturity_tiers", self.raw.get("statuses", {}))
 
     @property
     def capabilities(self) -> dict[str, str]:
@@ -105,19 +110,19 @@ class Data:
 # ---------------------------------------------------------------------------
 # Block renderers — each returns the inner markdown (without the HTML markers)
 # ---------------------------------------------------------------------------
-def _status_badge(status: str, statuses: dict[str, dict[str, str]]) -> str:
-    """Format a status code as an emoji + label badge string.
+def _maturity_badge(maturity: str, maturities: dict[str, dict[str, str]]) -> str:
+    """Format a maturity tier as an emoji + label badge string.
 
     Args:
-        status: Status code key (e.g. ``"working"``).
-        statuses: Status definitions dict from ``Data.statuses``.
+        maturity: Tier code key (e.g. ``"functional"``).
+        maturities: Tier definitions dict from ``Data.maturities``.
 
     Returns:
-        A string like ``"✅ Working"``; falls back to ``"❔ <status>"`` for
-        unknown codes.
+        A string like ``"🟢 functional"``; falls back to ``"❔ <maturity>"``
+        for unknown codes.
     """
-    s = statuses.get(status, {})
-    return f"{s.get('emoji', '❔')} {s.get('label', status)}"
+    s = maturities.get(maturity, {})
+    return f"{s.get('emoji', '❔')} {s.get('label', maturity)}"
 
 
 def render_devices_table(d: Data) -> str:
@@ -146,7 +151,7 @@ def render_devices_table(d: Data) -> str:
                 vp=vp,
                 keys=dev.get("keys", "—"),
                 enc=dev.get("encoders", "—"),
-                stat=_status_badge(dev.get("status", ""), d.statuses),
+                stat=_maturity_badge(dev.get("maturity", ""), d.maturities),
                 caps=caps,
             )
         )
@@ -187,7 +192,7 @@ def render_devices_by_family(d: Data) -> str:
             caps = ", ".join(d.capabilities.get(c, c) for c in dev.get("capabilities", []))
             out.append(
                 f"| [{dev['name']}]({dev.get('protocol_doc', '')}) | "
-                f"{vp} | {_status_badge(dev['status'], d.statuses)} | "
+                f"{vp} | {_maturity_badge(dev['maturity'], d.maturities)} | "
                 f"{caps} | {dev.get('notes', '')} |"
             )
         out.append("")
@@ -218,7 +223,7 @@ def render_legend(d: Data) -> str:
     Returns:
         A Markdown string for the ``legend`` AUTOGEN block.
     """
-    parts = [f"{s['emoji']} **{s['label']}** — {s['description']}" for s in d.statuses.values()]
+    parts = [f"{s['emoji']} **{s['label']}** — {s['description']}" for s in d.maturities.values()]
     return "\n" + " · ".join(parts) + "\n"
 
 
@@ -233,14 +238,14 @@ def render_stats(d: Data) -> str:
         ``stats`` AUTOGEN block.
     """
     by_family: dict[str, int] = {}
-    by_status: dict[str, int] = {}
+    by_maturity: dict[str, int] = {}
     for dev in d.devices:
         by_family[dev["family"]] = by_family.get(dev["family"], 0) + 1
-        by_status[dev["status"]] = by_status.get(dev["status"], 0) + 1
+        by_maturity[dev["maturity"]] = by_maturity.get(dev["maturity"], 0) + 1
     total = len(d.devices)
     fam_str = ", ".join(f"{n} {k}" for k, n in sorted(by_family.items()))
     stat_str = ", ".join(
-        f"{n} {d.statuses[k]['label']}" for k, n in by_status.items() if k in d.statuses
+        f"{n} {d.maturities[k]['label']}" for k, n in by_maturity.items() if k in d.maturities
     )
     return f"\n**{total} devices** across {fam_str} — {stat_str}.\n"
 

@@ -13,7 +13,7 @@
 Support levels:
 
 <!-- BEGIN AUTOGEN: legend -->
-🟢 **stable** — every vendor feature works · 🟢 **functional** — core I/O works (keys/LEDs) · 🟡 **scaffolded** — enumerated, protocol being mapped · 🟠 **requested** — captures wanted
+🟡 **scaffolded** — descriptor + factory exist; backend compiles but does not exercise the device · 🔵 **probed** — device enumerates and descriptor populated; no protocol writes confirmed · 🟠 **partial** — some features work end-to-end; advertised capability set incomplete or untested · 🟢 **functional** — all advertised capabilities work in practice; tested manually or in CI · ✅ **verified** — functional + automated CI on real hardware OR sustained user-confirmed reliability
 <!-- END AUTOGEN: legend -->
 
 Because protocols are reverse-engineered, support levels can change with

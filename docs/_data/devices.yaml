@@ -13,12 +13,13 @@
 # change there will be overwritten at the next sync.
 # =============================================================================
 
-# status buckets — order controls table sort + legend order
-statuses:
-  stable: { emoji: "🟢", label: "stable", description: "every vendor feature works" }
-  functional: { emoji: "🟢", label: "functional", description: "core I/O works (keys/LEDs)" }
-  scaffolded: { emoji: "🟡", label: "scaffolded", description: "enumerated, protocol being mapped" }
-  requested: { emoji: "🟠", label: "requested", description: "captures wanted" }
+# maturity tiers — order controls table sort + legend order
+maturity_tiers:
+  scaffolded: { emoji: "🟡", label: "scaffolded", description: "descriptor + factory exist; backend compiles but does not exercise the device" }
+  probed:     { emoji: "🔵", label: "probed",     description: "device enumerates and descriptor populated; no protocol writes confirmed" }
+  partial:    { emoji: "🟠", label: "partial",    description: "some features work end-to-end; advertised capability set incomplete or untested" }
+  functional: { emoji: "🟢", label: "functional", description: "all advertised capabilities work in practice; tested manually or in CI" }
+  verified:   { emoji: "✅", label: "verified",   description: "functional + automated CI on real hardware OR sustained user-confirmed reliability" }
 
 # capability keys → human label (used in feature matrix)
 capabilities:
@@ -55,7 +56,7 @@ devices:
     pid: "0x1001"
     keys: 15
     encoders: 0
-    status: functional
+    maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
     notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered)."
@@ -67,7 +68,7 @@ devices:
     pid: "0x6674"
     keys: 15
     encoders: 0
-    status: functional
+    maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
     notes: "Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware."
@@ -79,7 +80,7 @@ devices:
     pid: "0x1002"
     keys: 15
     encoders: 0
-    status: functional
+    maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
     notes: "Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`)."
@@ -91,7 +92,7 @@ devices:
     pid: "0x1010"
     keys: 15
     encoders: 0
-    status: functional
+    maturity: functional
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
     notes: "Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153."
@@ -103,7 +104,7 @@ devices:
     pid: "0x1020"
     keys: 15
     encoders: 0
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, rgb, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp153.md
     notes: "Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks."
@@ -115,7 +116,7 @@ devices:
     pid: "0x6672"
     keys: 15
     encoders: 0
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp815.md
     notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
@@ -127,7 +128,7 @@ devices:
     pid: "0x1001"
     keys: 6
     encoders: 3
-    status: functional
+    maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility."
@@ -139,7 +140,7 @@ devices:
     pid: "0x3001"
     keys: 6
     encoders: 3
-    status: functional
+    maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup."
@@ -151,7 +152,7 @@ devices:
     pid: "0x3002"
     keys: 6
     encoders: 3
-    status: functional
+    maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family."
@@ -163,7 +164,7 @@ devices:
     pid: "0x1003"
     keys: 6
     encoders: 3
-    status: functional
+    maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Regional revision; same protocol as AKP03 per ajazz-sdk."
@@ -175,7 +176,7 @@ devices:
     pid: "0x3003"
     keys: 6
     encoders: 3
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Per mirajazz this is a protocol_version 3 device (full press/release states + GIF support). Per-key images are 64x64 (Rot90) instead of 60x60 (Rot0)."
@@ -187,7 +188,7 @@ devices:
     pid: "0x1002"
     keys: 6
     encoders: 3
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend."
@@ -199,7 +200,7 @@ devices:
     pid: "0x1002"
     keys: 6
     encoders: 3
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Newer Mirabox N3 hardware revision; same backend."
@@ -211,7 +212,7 @@ devices:
     pid: "0x1003"
     keys: 6
     encoders: 3
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Mirabox SKU variant per opendeck-akp03 udev rules."
@@ -223,7 +224,7 @@ devices:
     pid: "0x5001"
     keys: 10
     encoders: 4
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, touch, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Stream Dock Plus-class: 10 LCD keys (2x5) + 4 endless encoders + LCD touchscreen strip (4 zones). VID:PID is a pre-2026-05-14 placeholder; canonical is `mirabox_n4`. Layout corrected from 15->10 keys after the 2026-05-14 research pass."
@@ -235,7 +236,7 @@ devices:
     pid: "0x1007"
     keys: 10
     encoders: 4
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, touch, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device."
@@ -247,7 +248,7 @@ devices:
     pid: "0x3004"
     keys: 6
     encoders: 3
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [display, encoder, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
     notes: "Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests."
@@ -258,7 +259,7 @@ devices:
     name: "AJAZZ AK series (QMK/VIA-compatible)"
     vid: "0x3151"
     pid: "various"
-    status: functional
+    maturity: functional
     capabilities: [rgb, macros, layers, firmware]
     protocol_doc: docs/protocols/keyboard/via.md
     notes: "Any VIA JSON layout is supported."
@@ -268,7 +269,7 @@ devices:
     name: "AJAZZ AK series (proprietary)"
     vid: "0x3151"
     pid: "various"
-    status: functional
+    maturity: functional
     capabilities: [rgb, macros, layers, firmware]
     protocol_doc: docs/protocols/keyboard/proprietary.md
     notes: "Clean-room backend; RGB zones, keymap and macro upload wired."
@@ -278,7 +279,7 @@ devices:
     name: "AJAZZ AK980 PRO"
     vid: "0x0c45"
     pid: "0x8009"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, macros, layers, clock]
     protocol_doc: docs/protocols/keyboard/proprietary.md
     notes: "Microdia-chipset wireless mech; enumerated, routed through the proprietary backend. Protocol mapping in progress — captures welcome (#issue). Time-sync scaffolded (Phase 5): TimeSyncService::setSystemTimeOn returns NotImplemented honestly until vendor wire format is captured."
@@ -306,7 +307,7 @@ devices:
     name: "AJAZZ AJ-series wired (primary)"
     vid: "0x248A"
     pid: "0x5C2E"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
@@ -317,7 +318,7 @@ devices:
     name: "AJAZZ AJ-series wired (alt mode 5D2E)"
     vid: "0x248A"
     pid: "0x5D2E"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
@@ -328,7 +329,7 @@ devices:
     name: "AJAZZ AJ-series wired (alt mode 5E2E)"
     vid: "0x248A"
     pid: "0x5E2E"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
@@ -339,7 +340,7 @@ devices:
     name: "AJAZZ AJ-series 2.4GHz dongle"
     vid: "0x248A"
     pid: "0x5C2F"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
@@ -350,7 +351,7 @@ devices:
     name: "AJAZZ 2.4G 8K"
     vid: "0x3151"
     pid: "0x5007"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [dpi, rgb]
     protocol_doc: docs/research/vendor-protocol-notes.md
     dpi_stages: 6
@@ -361,7 +362,7 @@ devices:
     name: "AJAZZ AJ199 family (wired)"
     vid: "0x3554"
     pid: "0xF500"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
@@ -372,7 +373,7 @@ devices:
     name: "AJAZZ AJ199 family (2.4GHz dongle)"
     vid: "0x3554"
     pid: "0xF501"
-    status: scaffolded
+    maturity: scaffolded
     capabilities: [rgb, dpi, firmware]
     protocol_doc: docs/protocols/mouse/aj_series.md
     dpi_stages: 6
