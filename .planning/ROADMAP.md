@@ -61,7 +61,7 @@ Audit: `tech_debt` — 7/7 success criteria PASSED; CR-01 (Win32 env pollution) 
    - [ ] 04-04-PLAN.md — DeviceModel diff-driven `dataChanged` + lex sort + codename collapse + QML offline badge (D-03 / D-04 / HOTPLUG-02..04) — Wave 1
    - [ ] 04-05-PLAN.md — Multi-device integration test harness (HOTPLUG-06) — Wave 3 *(depends on 04-01, 04-02, 04-03)*
    - [ ] 04-06-PLAN.md — Windows `WM_DEVICECHANGE` smoke test + CI gate (HOTPLUG-06 cross-cutting) — Wave 3 *(depends on 04-02)*
-   - [ ] 04-07-PLAN.md — `04-HOTPLUG-RETRO.md` narrative + `hid_open` invariant CI grep (HOTPLUG-07 / Pitfall 11) — Wave 1
+   - [x] 04-07-PLAN.md — `04-HOTPLUG-RETRO.md` narrative + `hid_open` invariant CI grep (HOTPLUG-07 / Pitfall 11) — Wave 1
      **UI hint**: yes
 
 ### Phase 5: Time-Sync Scaffolding

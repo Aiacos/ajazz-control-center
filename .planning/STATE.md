@@ -4,14 +4,14 @@ milestone: v1.1
 milestone_name: Device lifecycle hardening + scaffolding-to-functional
 status: executing
 stopped_at: Phase 4 context revalidated against new Stream Dock research (quick 260514-h0w) — D-02 + D-04 amended
-last_updated: '2026-05-14T11:34:55.762Z'
+last_updated: '2026-05-14T11:39:57.576Z'
 last_activity: 2026-05-14
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 8
-  completed_plans: 3
-  percent: 38
+  completed_plans: 4
+  percent: 50
 ---
 
 # Project State
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-13)
 ## Current Position
 
 Phase: 4 (hot-plug-hardening) — EXECUTING
-Plan: 3 of 7
+Plan: 4 of 7
 Status: Ready to execute
 Last activity: 2026-05-14
 
