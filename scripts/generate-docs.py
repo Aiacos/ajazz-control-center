@@ -190,10 +190,27 @@ def render_devices_by_family(d: Data) -> str:
         for dev in families[fam_key]:
             vp = f"`{dev.get('vid', '')}:{dev.get('pid', '')}`"
             caps = ", ".join(d.capabilities.get(c, c) for c in dev.get("capabilities", []))
+            # Phase 8 DEVICES-03: optional feature_summary block in devices.yaml
+            # surfaces a structured "works / partial / pending" prose summary in
+            # the Notes cell. When present, the regenerator emits it as a
+            # compact inline list ahead of the free-text `notes:` field. Devices
+            # without feature_summary keep just the free-text notes as before.
+            notes_parts: list[str] = []
+            fs = dev.get("feature_summary")
+            if isinstance(fs, dict):
+                if works := fs.get("works"):
+                    notes_parts.append("✓ " + "; ".join(works))
+                if partial := fs.get("partial"):
+                    notes_parts.append("⚠ " + "; ".join(partial))
+                if pending := fs.get("pending"):
+                    notes_parts.append("✗ " + "; ".join(pending))
+            if note := dev.get("notes"):
+                notes_parts.append(note)
+            notes_cell = " · ".join(notes_parts) if notes_parts else ""
             out.append(
                 f"| [{dev['name']}]({dev.get('protocol_doc', '')}) | "
                 f"{vp} | {_maturity_badge(dev['maturity'], d.maturities)} | "
-                f"{caps} | {dev.get('notes', '')} |"
+                f"{caps} | {notes_cell} |"
             )
         out.append("")
     return "\n".join(out) + "\n"

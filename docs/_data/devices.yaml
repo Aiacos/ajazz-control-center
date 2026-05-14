@@ -116,10 +116,20 @@ devices:
     pid: "0x6672"
     keys: 15
     encoders: 0
-    maturity: scaffolded
+    maturity: probed
     capabilities: [display, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp815.md
     notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
+    feature_summary:
+      works:
+        - "Descriptor + factory wired in register.cpp (0x5548:0x6672)"
+        - "Protocol artefact (akp815.md) with byte-0 Report ID convention"
+        - "Per-key image upload path inherited from AKP153 v1-API state machine"
+      partial:
+        - "100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output"
+      pending:
+        - "Real-device capture to promote probed -> partial"
+        - "800x480 strip image upload validation"
 
   - codename: akp03
     family: streamdeck
@@ -188,10 +198,20 @@ devices:
     pid: "0x1002"
     keys: 6
     encoders: 3
-    maturity: scaffolded
+    maturity: partial
     capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend."
+    protocol_doc: docs/protocols/streamdeck/mirabox_n3.md
+    notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend; Phase 8 DEVICES-04 promotion #2."
+    feature_summary:
+      works:
+        - "Descriptor + factory wired in register.cpp (0x6602:0x1002 via akp03_descriptor)"
+        - "Inherited from akp03: per-key image upload, brightness, encoder rotation/press"
+        - "Cross-reference protocol doc (mirabox_n3.md) citing akp03.md"
+      partial:
+        - "Inherited from akp03 functional tier — no first-hand Mirabox capture confirms Mirabox V1 firmware behaves identically"
+      pending:
+        - "Real Mirabox N3 (rev. 1) capture to promote partial -> functional"
+        - "USB-suspend handling on bus reset (Mirabox-specific quirks if any)"
 
   - codename: mirabox_n3_rev3
     family: streamdeck
