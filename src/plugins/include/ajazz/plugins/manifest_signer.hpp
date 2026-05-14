@@ -72,6 +72,13 @@ struct ManifestSignerConfig {
     /// Absolute path to `scripts/sign-plugin-manifest.py`.
     std::filesystem::path verifierScript;
     /// Absolute path to `resources/trusted_publishers.json`.
+    ///
+    /// Caller MUST ensure the file is mode 0600 (POSIX) / user-only-writable
+    /// (Win32) and owned by the running user. The verifier reads the file
+    /// once per `verifyManifest()` call and parses the in-memory blob, so
+    /// the TOCTOU surface is bounded to the read step and the file's
+    /// permissions contract — concurrent writes by another principal
+    /// produce undefined behaviour (TRUST-04 / Phase 7 / D-04).
     std::filesystem::path trustedPublishersFile;
 };
 

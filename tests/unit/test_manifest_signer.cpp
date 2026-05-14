@@ -280,9 +280,9 @@ TEST_CASE("loadTrustRoots: missing file returns empty list", "[manifest-signer]"
 
 TEST_CASE("loadTrustRoots: malformed entry never cross-pairs", "[manifest-signer]") {
     // A publisher entry without a "name" must NOT pair with the next
-    // entry's name. The fix bounds the search window by `}` so the
-    // malformed entry produces no row instead of stealing a name.
-    // Pre-fix this would have emitted (KEY1, "Trusted Two").
+    // entry's name. The nlohmann impl iterates parsed JSON objects
+    // structurally, so a missing field is skipped at the entry boundary
+    // and cannot pull in fields from a sibling entry.
     auto const tmp = fs::temp_directory_path() / "ajazz-test-trustroots-malformed";
     fs::create_directories(tmp);
     auto const malformed = tmp / "trusted_publishers.json";
@@ -302,15 +302,12 @@ TEST_CASE("loadTrustRoots: malformed entry never cross-pairs", "[manifest-signer
     fs::remove_all(tmp);
 }
 
-TEST_CASE("loadTrustRoots: name-before-key entry resolves to a row", "[manifest-signer]") {
-    // JSON object members have no key-order guarantee — an entry
-    // written as `{"name":"X","key":"K"}` is legal and must yield the
-    // same TrustedPublisher as `{"key":"K","name":"X"}`. Pre-fix the
-    // mini-grep window started at `keyPos` and searched FORWARD for
-    // `"name"`, so the field appearing BEFORE `"key"` was outside the
-    // window and the entry silently demoted to self-signed (REVIEW
-    // WR-01). The fix widens the window backwards to the entry's
-    // opening `{` so the order is irrelevant.
+TEST_CASE("loadTrustRoots: arbitrary key order produces equivalent rows", "[manifest-signer]") {
+    // JSON object members have no key-order guarantee — `{"name":"X","key":"K"}`
+    // and `{"key":"K","name":"X"}` MUST yield identical TrustedPublisher rows.
+    // This test pins that contract independent of the parser implementation,
+    // so a future fork that adopts a stricter parser cannot silently break
+    // key-order tolerance (D-02).
     auto const tmp = fs::temp_directory_path() / "ajazz-test-trustroots-name-first";
     fs::create_directories(tmp);
     auto const reversed = tmp / "trusted_publishers.json";
@@ -325,9 +322,9 @@ TEST_CASE("loadTrustRoots: name-before-key entry resolves to a row", "[manifest-
     }
     auto const roots = loadTrustRoots(reversed);
     REQUIRE(roots.size() == 2);
-    // The walk emits in cursor order (forward over the blob), and the
-    // cursor anchors on each `"key"` token, so the visit order is the
-    // file order. Both entries must resolve their names.
+    // Visit order matches the file order — nlohmann preserves JSON array order
+    // verbatim. Each entry's (key, name) pair must come back as written,
+    // regardless of which member was written first in the JSON object.
     REQUIRE(roots[0].keyB64 == "KEY1");
     REQUIRE(roots[0].name == "Trusted One");
     REQUIRE(roots[1].keyB64 == "KEY2");

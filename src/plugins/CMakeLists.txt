@@ -7,7 +7,12 @@
 # alongside the existing POSIX implementation. Each platform gets its own TU
 # under a `#ifdef _WIN32` / `#ifndef _WIN32` guard; the public header is
 # platform-agnostic.
-set(_ajazz_plugins_sources src/sandbox.cpp)
+# Phase 7 / ARCH-01: shared nlohmann-based loadTrustRoots impl lives in
+# manifest_signer_common.cpp and is compiled on every platform. The
+# platform-specific verifier TU (`manifest_signer.cpp` / `manifest_signer_win32.cpp`)
+# now includes `manifest_signer_common.hpp` and routes through the shared symbol —
+# drift between the two TUs is structurally impossible (D-01).
+set(_ajazz_plugins_sources src/sandbox.cpp src/manifest_signer_common.cpp)
 if(WIN32)
     list(
         APPEND
@@ -42,6 +47,12 @@ target_include_directories(
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-target_link_libraries(ajazz_plugins PUBLIC ajazz::core PRIVATE ajazz::warnings ajazz::sanitizers)
+# nlohmann_json is PRIVATE — it MUST NOT appear in `ajazz_core` or in any installed public header
+# (COD-031 invariant per Phase 3 / ARCH-01). The shared loadTrustRoots impl in
+# `manifest_signer_common.cpp` is the only consumer.
+target_link_libraries(
+    ajazz_plugins PUBLIC ajazz::core PRIVATE ajazz::warnings ajazz::sanitizers
+                                             nlohmann_json::nlohmann_json
+)
 
 set_target_properties(ajazz_plugins PROPERTIES POSITION_INDEPENDENT_CODE ON)

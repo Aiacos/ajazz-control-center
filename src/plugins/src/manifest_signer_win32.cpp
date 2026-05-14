@@ -30,6 +30,12 @@
 #ifdef _WIN32
 
 #include "ajazz/plugins/manifest_signer.hpp"
+
+// Phase 7 / ARCH-01 / D-01: shared nlohmann-based loadTrustRoots impl. This
+// TU `#include`s the common header to signal it routes through the single
+// shared definition in `manifest_signer_common.cpp` — the mini-grep body
+// that used to live here was deleted in the same atomic commit.
+#include "manifest_signer_common.hpp"
 #include "wire_protocol.hpp"
 
 #include <cstdio>
@@ -112,50 +118,11 @@ std::string extractPublicKey(std::string_view manifestBlob) {
 
 } // namespace
 
-std::vector<TrustedPublisher> loadTrustRoots(std::filesystem::path const& jsonPath) {
-    auto const blob = readFile(jsonPath);
-    if (blob.empty()) {
-        return {};
-    }
-    // Walk `"key":"…"` then `"name":"…"` pairs bounded by the entry's
-    // matched `{` … `}` braces — duplicates the POSIX backend logic.
-    // Mirroring is intentional: any drift would be a cross-platform
-    // contract bug invisible to the test that runs on the dev's
-    // machine. See the POSIX implementation for the full rationale on
-    // the brace-bound and the reverse-key-order fix (REVIEW WR-01).
-    std::vector<TrustedPublisher> out;
-    std::string_view view{blob};
-    std::size_t cursor = 0;
-    while (cursor < view.size()) {
-        auto const remaining = view.substr(cursor);
-        auto const key = wire::findStringField(remaining, "key");
-        if (key.empty()) {
-            break;
-        }
-        auto const keyPos = remaining.find("\"key\"");
-        if (keyPos == std::string_view::npos) {
-            break;
-        }
-        // Find the entry's open `{` by walking backwards from `keyPos`
-        // so the window covers the whole JSON object body — handles
-        // `"name"` appearing either before or after `"key"` in the
-        // entry. Falls back to keyPos-based window if no `{` precedes
-        // `keyPos`, so malformed input still makes forward progress.
-        auto const openBrace = remaining.rfind('{', keyPos);
-        auto const windowStart = (openBrace == std::string_view::npos) ? keyPos : openBrace;
-        auto const closeBrace = remaining.find('}', keyPos);
-        auto const windowLen = closeBrace == std::string_view::npos
-                                   ? std::min<std::size_t>(512, remaining.size() - windowStart)
-                                   : std::min<std::size_t>(closeBrace - windowStart + 1, 512);
-        auto const window = remaining.substr(windowStart, windowLen);
-        auto const name = wire::findStringField(window, "name");
-        if (!name.empty()) {
-            out.push_back({key, name});
-        }
-        cursor += keyPos + 5; // past `"key"` token
-    }
-    return out;
-}
+// loadTrustRoots is now defined exactly once in `manifest_signer_common.cpp`
+// (Phase 7 / ARCH-01 / D-01) — drift between this TU and `manifest_signer.cpp`
+// is structurally impossible by construction. The legacy mini-grep cursor walk that
+// used to live here (duplicated from the POSIX backend) was deleted in the same
+// atomic commit per ARCH-01 SC1.
 
 ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
                                     ManifestSignerConfig const& config) {

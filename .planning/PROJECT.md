@@ -26,7 +26,7 @@ A modern, open, cross-platform control center for AJAZZ devices (stream decks, k
 - Time-sync scaffolding — five-layer slice (capability flag → `IClockCapable` → `TimeSyncService` → QML UI → docs), adopting `docs/superpowers/plans/2026-05-13-time-sync.md` into GSD.
 - Scaffolded-device wiring — convert some/all of the 7 currently-scaffolded backends toward functional; specific devices picked during phase planning.
 - CR-01 — Win32 OOP host env pollution fix (per-spawn UTF-16 env block + `CREATE_UNICODE_ENVIRONMENT`). Requires Windows validation in this milestone.
-- WR-01 — `loadTrustRoots` parser hardening; needs an architectural decision (`nlohmann::json` dep vs. custom scanner vs. accept COD-031 break) before implementation.
+- WR-01 — `loadTrustRoots` parser hardening; needs an architectural decision (`nlohmann::json` dep vs. custom scanner vs. accept COD-031 break) before implementation. **Resolved in v1.1 Phase 7 (ARCH-01 + TRUST-01..04):** `ajazz_plugins` now privately depends on `nlohmann::json` v3.12.0 (vendored via FetchContent, mirrored in `vcpkg.json`). The dep is PRIVATE-linked — it MUST NOT appear in `ajazz_core` or in any installed public header, preserving the COD-031 boundary at the library level rather than the project level. Trust-roots parsing is gated by a 1 MB byte cap and a 1024-entry cap (TRUST-02), with the 0600 TOCTOU contract documented at the public-API surface (TRUST-04).
 
 ## Planning Bootstrap (2026-05-12)
 

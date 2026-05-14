@@ -78,6 +78,20 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
 FetchContent_MakeAvailable(hidapi)
 unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
 
+# nlohmann::json — vendored via FetchContent for reproducibility. PRIVATE-linked to `ajazz_plugins`
+# only (see `src/plugins/CMakeLists.txt`); MUST NOT appear in `ajazz_core` or any installed public
+# header (COD-031 invariant per Phase 3 / ARCH-01). Version pinned to v3.12.0 in lockstep with
+# `vcpkg.json`.
+FetchContent_Declare(
+    nlohmann_json
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG v3.12.0
+    GIT_SHALLOW TRUE
+)
+set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
+set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # -----------------------------------------------------------------------------
 # Subprojects
 # -----------------------------------------------------------------------------
