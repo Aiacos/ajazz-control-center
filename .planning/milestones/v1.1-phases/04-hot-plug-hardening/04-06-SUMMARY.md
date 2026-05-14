@@ -84,7 +84,7 @@ _Plan metadata commit (REQUIREMENTS.md update + this SUMMARY) follows below._
 ## Files Created/Modified
 
 - `src/core/include/ajazz/core/hotplug_monitor.hpp` (+26 lines) — added the `#if defined(_WIN32) ... [[nodiscard]] static HotplugEvent parseDevicePathW(wchar_t const*, HotplugAction) noexcept; #endif` declaration inside the existing `#ifdef AJAZZ_TESTING` block. Doc-comment quotes the production sequence the helper mirrors + the device-path format.
-- `src/core/src/hotplug_monitor.cpp` (+44 lines) — implementation under the same guards. Uses `std::wstring_view::find` for VID_/PID_ prefix location, `std::wcstoul` for hex parse, third-`#`-segment slice for serial. Independent of the WND_PROC pump.
+- `src/core/src/hotplug_monitor.cpp` (+44 lines) — implementation under the same guards. Uses `std::wstring_view::find` for VID\_/PID\_ prefix location, `std::wcstoul` for hex parse, third-`#`-segment slice for serial. Independent of the WND_PROC pump.
 - `tests/unit/test_hotplug_win32_smoke.cpp` (NEW, 102 LoC) — 4 TEST_CASEs gated at file level by `#if defined(_WIN32)`.
 - `tests/unit/CMakeLists.txt` (+6 lines) — `test_hotplug_win32_smoke.cpp` added to the `if(WIN32) ... target_sources(...)` block with an inline comment quoting the Cross-Cutting-pitfall mitigation.
 - `.github/workflows/ci.yml` (+11 lines) — "Verify Windows hot-plug smoke ran" step with explanatory block comment.
@@ -96,8 +96,8 @@ _Plan metadata commit (REQUIREMENTS.md update + this SUMMARY) follows below._
 The plan's example sketched a free function `parseDevicePathW(...)` in the test-only header. Making it a `static` member on `HotplugMonitor` instead has three benefits:
 
 1. **Namespace discipline**: the test seam lives inside `ajazz::core::HotplugMonitor::` rather than `ajazz::core::` — same scope-precision Plan 04-02's `injectEvent` chose.
-2. **Same guard pattern**: declared inside the existing `#ifdef AJAZZ_TESTING` block in `hotplug_monitor.hpp`, the helper inherits the production-ABI invisibility guarantee for free.
-3. **No header forward-declaration drift**: a free function would need to be declared in the production header (otherwise test code can't take its address). The `static` member lives inside the class declaration where everything else does.
+1. **Same guard pattern**: declared inside the existing `#ifdef AJAZZ_TESTING` block in `hotplug_monitor.hpp`, the helper inherits the production-ABI invisibility guarantee for free.
+1. **No header forward-declaration drift**: a free function would need to be declared in the production header (otherwise test code can't take its address). The `static` member lives inside the class declaration where everything else does.
 
 ### Why return `HotplugEvent` instead of `bool + out-parameters`
 
@@ -171,15 +171,15 @@ None. Linux compile + test pass clean on first attempt. The only minor friction 
 
 Phase 4 is complete:
 
-| REQ-ID     | Status   | Plan(s)                  |
-| ---------- | -------- | ------------------------ |
-| HOTPLUG-01 | Complete | 04-01                    |
-| HOTPLUG-02 | Complete | 04-04                    |
-| HOTPLUG-03 | Complete | 04-04                    |
-| HOTPLUG-04 | Complete | 04-04                    |
-| HOTPLUG-05 | Complete | 04-03                    |
-| HOTPLUG-06 | Complete | 04-02 + 04-05 + 04-06    |
-| HOTPLUG-07 | Complete | 04-07                    |
+| REQ-ID     | Status   | Plan(s)               |
+| ---------- | -------- | --------------------- |
+| HOTPLUG-01 | Complete | 04-01                 |
+| HOTPLUG-02 | Complete | 04-04                 |
+| HOTPLUG-03 | Complete | 04-04                 |
+| HOTPLUG-04 | Complete | 04-04                 |
+| HOTPLUG-05 | Complete | 04-03                 |
+| HOTPLUG-06 | Complete | 04-02 + 04-05 + 04-06 |
+| HOTPLUG-07 | Complete | 04-07                 |
 
 Phase 5 (Time-Sync Scaffolding) is now unblocked.
 
