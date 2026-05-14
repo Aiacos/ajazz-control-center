@@ -54,12 +54,11 @@ inline constexpr std::uint16_t Akp815V1Pid = 0x6672;
 inline constexpr std::uint16_t Akp153EV2Pid = 0x1010;
 inline constexpr std::uint16_t Akp153RV2Pid = 0x1020;
 
-// AKP03 sibling PIDs (Mirabox V2 vendor space `0x0300`).
-inline constexpr std::uint16_t Akp03Pid = 0x1001;      // [ajazz-sdk]
-inline constexpr std::uint16_t Akp03EPid = 0x3002;     // [ajazz-sdk]
-inline constexpr std::uint16_t Akp03RPid = 0x1003;     // [ajazz-sdk]
-inline constexpr std::uint16_t Akp03RRev2Pid = 0x3003; // [ajazz-sdk]
-inline constexpr std::uint16_t Akp03DemoPid = 0x3004;  // hot-plug capture 2026-05-13
+// AKP03 sibling PID for the development-firmware hot-plug capture
+// 2026-05-13 (`HOTSPOTEKUSB HID DEMO`). Other AKP03 / AKP03E / AKP03R /
+// AKP03R rev2 PIDs live in `akp03_protocol.hpp` as `akp03::ProductIdAkp03*`
+// and are referenced directly at the registration sites below.
+inline constexpr std::uint16_t Akp03DemoPid = 0x3004;
 
 // Generic AKP153 grid descriptor used by every 15-key variant.
 constexpr auto
