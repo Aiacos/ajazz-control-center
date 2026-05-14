@@ -32,6 +32,30 @@ ItemDelegate {
     property string modelName: ""
     property string deviceCodename: ""
     property bool deviceConnected: false
+    // Phase 5 Plan 05-06: gates the per-row "Sync time" ToolButton + glyph.
+    // Bound by DeviceList.qml from `model.deviceHasClock` (DeviceModel
+    // HasClockRole, Plan 05-05). The property name is `hasClockCapability`
+    // (NOT `deviceHasClock`) to dodge the QML self-binding trap — if both
+    // the model role and this property shared `deviceHasClock`, the binding
+    // `deviceHasClock: deviceHasClock` in DeviceList.qml would resolve to
+    // this property's own default (false) instead of the model role.
+    // Same naming convention rationale as deviceCodename / deviceConnected.
+    property bool hasClockCapability: false
+    // Last sync state for the per-row glyph (Plan 05-06):
+    //   ""              → no glyph (default).
+    //   "success"       → checkmark glyph (manual sync OK; D-02 toast also fires).
+    //   "not_implemented" → exclamation glyph + tooltip "not yet supported".
+    //   "io_error"      → exclamation glyph + tooltip "HID write failed".
+    //   "not_capable"   → exclamation glyph (rare — shouldn't happen if
+    //                     deviceHasClock-gating works correctly).
+    // Main.qml sets this via the Connections target: TimeSyncService block
+    // (manual sync) AND on autoSync ticks (D-02: glyph-only, no toast).
+    property string syncGlyphState: ""
+
+    /// Emitted by the Sync time ToolButton when the user manually triggers
+    /// a sync push for this row. Main.qml bubbles this up to
+    /// TimeSyncService.setSystemTimeOn(codename).
+    signal syncTimeRequested(string deviceCodename)
 
     // implicitHeight (not height) so the consumer can override.
     // Phase 4 (HOTPLUG-02) keeps offline rows fully laid out — the
@@ -73,6 +97,68 @@ ItemDelegate {
                 color: Theme.fgMuted
                 font.pixelSize: Theme.fontXs
                 elide: Text.ElideRight
+            }
+        }
+
+        // Phase 5 Plan 05-06: per-row "Sync time" ToolButton + glyph state.
+        //
+        // Visibility: `deviceHasClock` role from DeviceModel (Plan 05-05).
+        // Rows without the capability hide the button entirely — the
+        // descriptor-flag gate from Plan 05-01 keeps the surface tidy.
+        //
+        // Glyph: `syncGlyphState` (set by Main.qml on TimeSyncService signals)
+        // overlays a small status icon ("✓" / "!" / "") at the trailing edge.
+        //
+        // D-02 contract: manual click here ALWAYS emits syncTimeRequested
+        // (Main.qml fires the toast on syncSucceeded / syncFailed). Auto-sync
+        // failures never invoke this button — they just mutate syncGlyphState
+        // via the autoSync connection.
+        ToolButton {
+            id: syncButton
+            visible: root.hasClockCapability
+            Layout.alignment: Qt.AlignVCenter
+            // QtQuick.Controls 6 Material icon names map cleanly when the
+            // platform has icon-name resolution; otherwise we fall back on
+            // a plain text "↻" glyph which keeps the affordance discoverable
+            // without dragging in an extra qrc asset for v1.0.
+            icon.name: "view-refresh"
+            text: icon.name === "view-refresh" && icon.source.toString() === "" ? qsTr("↻") : ""
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Sync time to device")
+            ToolTip.delay: 500
+            onClicked: root.syncTimeRequested(root.deviceCodename)
+            Accessible.name: qsTr("Sync time to %1").arg(root.modelName)
+            Accessible.description: qsTr("Push the system time to this device's clock surface")
+        }
+
+        // Sync glyph (Plan 05-06 / D-02 surface).
+        //
+        // Renders only when syncGlyphState is non-empty. Reuses Theme palette
+        // tokens — no new colours added. Tooltip text mirrors the toast
+        // wording for manual-sync failures (NotImplemented / IoError); for
+        // auto-sync the tooltip is the only surface (D-02: no toast).
+        Text {
+            id: syncGlyph
+            visible: root.hasClockCapability && root.syncGlyphState !== ""
+            Layout.alignment: Qt.AlignVCenter
+            text: root.syncGlyphState === "success" ? qsTr("✓") : qsTr("!")
+            color: root.syncGlyphState === "success" ? Theme.accent : Theme.fgMuted
+            font.pixelSize: Theme.fontMd
+            ToolTip.visible: hoverArea.containsMouse
+            ToolTip.text: {
+                if (root.syncGlyphState === "success") return qsTr("Last sync OK");
+                if (root.syncGlyphState === "not_implemented") return qsTr("Time sync not yet supported on this device");
+                if (root.syncGlyphState === "io_error") return qsTr("Time sync failed: HID write error");
+                if (root.syncGlyphState === "not_capable") return qsTr("Device does not advertise a clock surface");
+                return "";
+            }
+            ToolTip.delay: 500
+
+            MouseArea {
+                id: hoverArea
+                anchors.fill: parent
+                hoverEnabled: true
+                acceptedButtons: Qt.NoButton // tooltip only
             }
         }
 

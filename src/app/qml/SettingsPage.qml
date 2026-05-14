@@ -169,6 +169,64 @@ Page {
             }
 
             // --------------------------------------------------------------
+            // Time sync (Phase 5 Plan 05-06 + 05-07)
+            //
+            // Auto-sync toggles whether arriving devices that advertise
+            // Capability::Clock get their RTC pushed to the host system
+            // time. As of v1.1 no AJAZZ device firmware exposes a host-
+            // settable RTC over HID — the toggle is honestly scaffolded so
+            // the day a wire format lands, only the backend stub changes.
+            // The hint text below makes the NotImplemented status visible
+            // (Pitfall 12 / Pitfall 13 honest UX).
+            // --------------------------------------------------------------
+            Label {
+                text: qsTr("Time sync")
+                color: Theme.fgPrimary
+                font.pixelSize: Theme.typeTitleMedium.pixelSize
+                font.weight: Theme.typeTitleMedium.weight
+                font.letterSpacing: Theme.typeTitleMedium.letterSpacing
+                Accessible.role: Accessible.Heading
+            }
+
+            Frame {
+                Layout.fillWidth: true
+                background: Rectangle {
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+                    radius: Theme.radiusMd
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: Theme.spacingSm
+
+                    SwitchDelegate {
+                        Layout.fillWidth: true
+                        text: qsTr("Auto-sync time on device connect")
+                        checked: TimeSyncService.autoSync
+                        onToggled: TimeSyncService.autoSync = checked
+                        Accessible.role: Accessible.Button
+                        Accessible.name: text
+                        Accessible.description: qsTr("When a capable device connects, set its clock to the system time after a short debounce.")
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Theme.spacingMd
+                        Layout.rightMargin: Theme.spacingMd
+                        Layout.bottomMargin: Theme.spacingSm
+                        text: qsTr("Note: Currently no AJAZZ device firmware supports host clock writes — the toggle is scaffolded so the wire format can drop in without UI churn.")
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        font.weight: Theme.typeBodySmall.weight
+                        font.letterSpacing: Theme.typeBodySmall.letterSpacing
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------
             // About / version footer (read-only)
             // --------------------------------------------------------------
             Label {

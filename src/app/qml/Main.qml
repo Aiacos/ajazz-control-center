@@ -103,6 +103,16 @@ ApplicationWindow {
                     editor.codename = codename;
                     editor.capabilities = DeviceModel.capabilitiesFor(codename);
                 }
+                // Phase 5 Plan 05-06: per-row Sync button bubbles its click
+                // up here; we forward to TimeSyncService.setSystemTimeOn.
+                // Manual-sync feedback surfaces via the Connections block
+                // below (toast + glyph per D-02). Latch the trigger source
+                // so the Connections block knows whether to fire a toast
+                // (manual) or only update the glyph (auto-sync).
+                onSyncTimeRequested: codename => {
+                    timeSyncLastTrigger = "manual";
+                    TimeSyncService.setSystemTimeOn(codename);
+                }
             }
 
             ProfileEditor {
@@ -133,6 +143,71 @@ ApplicationWindow {
     }
 
     Toast { id: toast }
+
+    // Phase 5 Plan 05-06: TimeSyncService feedback connections.
+    //
+    // D-02 contract:
+    //   * Manual sync (setSystemTimeOn from QML "Sync now" button) →
+    //     toast + per-row glyph.
+    //   * Auto-sync (onDeviceArrived[Debounced] from Application's
+    //     HotplugMonitor wiring) → glyph only, NEVER a toast.
+    //
+    // Since TimeSyncService emits the same signals for both surfaces, the
+    // tease apart happens here in QML: every syncSucceeded / syncFailed
+    // emits a per-row glyph update; the toast fires only when the trigger
+    // path was user-initiated (we track it via the lastTrigger property).
+    Connections {
+        target: TimeSyncService
+
+        function onSyncSucceeded(codename) {
+            // Glyph: always (D-02 surface = glyph in both manual + auto).
+            var m = sidebar.syncGlyphByCodename;
+            m[codename] = "success";
+            sidebar.syncGlyphByCodename = m;
+            // Toast: only on manual sync (D-02 — auto-sync stays silent
+            // on success). The lastTrigger latch is set by the manual
+            // path's onSyncTimeRequested handler above.
+            if (timeSyncLastTrigger === "manual") {
+                toast.show(qsTr("Time synced to %1").arg(codename), "success");
+                timeSyncLastTrigger = "";
+            }
+        }
+
+        function onSyncFailed(codename, message) {
+            // Reason classification from the message text (no enum surface
+            // on the signal — see time_sync_service.cpp doPush() return
+            // strings). Match on substrings so the glyph state reflects
+            // the same NotImplemented / IoError split as Plan 05-04's
+            // unit tests.
+            var glyph = "io_error";
+            if (message.indexOf("not yet implemented") !== -1) {
+                glyph = "not_implemented";
+            } else if (message.indexOf("does not advertise") !== -1) {
+                glyph = "not_capable";
+            } else if (message.indexOf("not currently connected") !== -1) {
+                glyph = "io_error"; // closest analogue for the glyph palette
+            }
+            var m = sidebar.syncGlyphByCodename;
+            m[codename] = glyph;
+            sidebar.syncGlyphByCodename = m;
+            // Toast: only on manual sync (D-02 — auto-sync surfaces glyph
+            // only, never toast).
+            if (timeSyncLastTrigger === "manual") {
+                if (glyph === "not_implemented") {
+                    toast.show(qsTr("Time sync not yet supported on this device"), "warning");
+                } else {
+                    toast.show(qsTr("Time sync failed: %1").arg(message), "error");
+                }
+                timeSyncLastTrigger = "";
+            }
+        }
+    }
+    /// Latch: "manual" iff the most recent setSystemTimeOn call came from
+    /// a user click on a DeviceRow Sync button; "" otherwise. Reset to ""
+    /// after each onSyncSucceeded / onSyncFailed handler runs, so a
+    /// subsequent auto-sync event correctly stays in glyph-only mode.
+    /// Set in onSyncTimeRequested above.
+    property string timeSyncLastTrigger: ""
 
     // ----------------------------------------------------------------------
     // Plugin Store drawer.
