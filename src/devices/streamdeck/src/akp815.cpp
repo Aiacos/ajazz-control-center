@@ -42,6 +42,10 @@ namespace {
 
 using namespace ajazz::core;
 
+// File-static once_flag (Pitfall 14): WARN emits at most once per process
+// lifetime for this backend. Distinct flag — not shared across backends.
+std::once_flag s_warned_akp815;
+
 /** @brief Concrete IDevice implementation for the AJAZZ AKP815.
  *
  *  @class Akp815Device
@@ -62,7 +66,10 @@ using namespace ajazz::core;
  *  @note Firmware update support is not yet implemented;
  *        @c beginFirmwareUpdate() throws unconditionally.
  */
-class Akp815Device final : public IDevice, public IDisplayCapable, public IFirmwareCapable {
+class Akp815Device final : public IDevice,
+                           public IDisplayCapable,
+                           public IFirmwareCapable,
+                           public IClockCapable {
 public:
     /// Production constructor: opens a real libhidapi transport for this device.
     Akp815Device(DeviceDescriptor descriptor, DeviceId id)
@@ -217,6 +224,19 @@ public:
     }
 
     [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
+
+    // ---- IClockCapable ------------------------------------------------------
+    //
+    // Scaffolded stub (A-02 — Phase 5 D-01 amendment 1): AKP815 backend landed
+    // post-upstream (commit 62da68c). Symmetric with akp153/03/05 — WARN-once
+    // via s_warned_akp815 (Pitfall 14), return NotImplemented.
+    [[nodiscard]] TimeSyncResult
+    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
+        std::call_once(s_warned_akp815, [] {
+            AJAZZ_LOG_WARN("streamdeck.akp815", "setTime() not yet implemented for akp815");
+        });
+        return TimeSyncResult::NotImplemented;
+    }
 
 private:
     /** @brief Transmit a JPEG image to a single AKP815 key LCD.

@@ -252,6 +252,11 @@ namespace {
 
 using namespace ajazz::core;
 
+// File-static once_flag (Pitfall 14): WARN emits at most once per process
+// lifetime for this backend, regardless of how many times setTime() is called.
+// Each backend has its OWN flag — not shared with the other Stream Dock files.
+std::once_flag s_warned_akp03;
+
 // -----------------------------------------------------------------------------
 // Akp03Device: wires protocol helpers to the transport and capability mix-ins.
 // -----------------------------------------------------------------------------
@@ -266,7 +271,10 @@ using namespace ajazz::core;
  * @note The callback is copied under a mutex inside poll() so that the
  *       lock is not held while user code runs.
  */
-class Akp03Device final : public IDevice, public IDisplayCapable, public IEncoderCapable {
+class Akp03Device final : public IDevice,
+                          public IDisplayCapable,
+                          public IEncoderCapable,
+                          public IClockCapable {
 public:
     /**
      * @brief Construct an Akp03Device and create its HID transport.
@@ -457,6 +465,18 @@ public:
                          std::uint16_t,
                          std::uint16_t) override {
         // No screen above the knob on AKP03.
+    }
+
+    // ---- IClockCapable ------------------------------------------------------
+    //
+    // Scaffolded stub — no AJAZZ firmware exposes a host-settable RTC over HID
+    // today. WARN-once per process via s_warned_akp03 (Pitfall 14).
+    [[nodiscard]] TimeSyncResult
+    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
+        std::call_once(s_warned_akp03, [] {
+            AJAZZ_LOG_WARN("streamdeck.akp03", "setTime() not yet implemented for akp03");
+        });
+        return TimeSyncResult::NotImplemented;
     }
 
 private:

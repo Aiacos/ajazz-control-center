@@ -111,34 +111,53 @@ akp03_descriptor(std::uint16_t vid, std::uint16_t pid, char const* model, char c
 void registerAll(core::DeviceRegistry& registry) {
     auto& reg = registry;
 
+    // A-03 / D-03: every Stream Dock backend inherits IClockCapable (Plan
+    // 05-02), so every descriptor row below sets its hasClock flag inline.
+    // The per-row repetition is intentional — it keeps capability
+    // advertisement visible at every row so a future contributor adding a new
+    // row cannot accidentally regress to a hasClock-false row.
+
     // ---- AKP153 family (15 LCD keys, 3×5 grid, JPEG 85×85) --------------
 
     // Legacy descriptor we shipped before the 2026-05-14 research pass.
     // Preserved for any deployment that already enumerated under this pair.
-    reg.registerDevice(akp153_descriptor(akp153::VendorId,
-                                         akp153::ProductIdInternational,
-                                         "AJAZZ AKP153 / Mirabox HSV293S",
-                                         "akp153"),
-                       &makeAkp153);
-    reg.registerDevice(
-        akp153_descriptor(akp153::VendorId, akp153::ProductIdChinese, "AJAZZ AKP153E", "akp153e"),
-        &makeAkp153);
+    {
+        auto d = akp153_descriptor(akp153::VendorId,
+                                   akp153::ProductIdInternational,
+                                   "AJAZZ AKP153 / Mirabox HSV293S",
+                                   "akp153");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp153);
+    }
+    {
+        auto d = akp153_descriptor(
+            akp153::VendorId, akp153::ProductIdChinese, "AJAZZ AKP153E", "akp153e");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp153);
+    }
 
     // Canonical Mirabox V1 vendor pair per `[ajazz-sdk]`.
-    reg.registerDevice(
-        akp153_descriptor(
-            MiraboxVendorV1, Akp153V1Pid, "AJAZZ AKP153 (Mirabox V1 firmware)", "akp153_v1"),
-        &makeAkp153);
+    {
+        auto d = akp153_descriptor(
+            MiraboxVendorV1, Akp153V1Pid, "AJAZZ AKP153 (Mirabox V1 firmware)", "akp153_v1");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp153);
+    }
 
     // AKP153E (China) — canonical PID is `0x1010` per `[ajazz-sdk]`.
-    reg.registerDevice(
-        akp153_descriptor(
-            akp153::VendorId, Akp153EV2Pid, "AJAZZ AKP153E (Mirabox V2 firmware)", "akp153e_v2"),
-        &makeAkp153);
+    {
+        auto d = akp153_descriptor(
+            akp153::VendorId, Akp153EV2Pid, "AJAZZ AKP153E (Mirabox V2 firmware)", "akp153e_v2");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp153);
+    }
 
     // AKP153R — regional revision, same protocol behind a new PID.
-    reg.registerDevice(
-        akp153_descriptor(akp153::VendorId, Akp153RV2Pid, "AJAZZ AKP153R", "akp153r"), &makeAkp153);
+    {
+        auto d = akp153_descriptor(akp153::VendorId, Akp153RV2Pid, "AJAZZ AKP153R", "akp153r");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp153);
+    }
 
     // ---- AKP815 (15 LCD keys, 5×3 grid, JPEG 100×100, LCD strip) -------
     //
@@ -157,6 +176,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .keyCount = akp815::KeyCount,
             .gridColumns = akp815::KeyCols,
             .encoderCount = 0,
+            .hasClock = true, // A-03 / D-03: every Stream Dock advertises Capability::Clock.
         },
         &makeAkp815);
 
@@ -165,46 +185,70 @@ void registerAll(core::DeviceRegistry& registry) {
     // Legacy `0x0300:0x3001` we shipped originally. Kept registered to
     // preserve hot-plug compatibility for any deployment running against
     // an early firmware that reports this PID; canonical is `0x1001`.
-    reg.registerDevice(
-        akp03_descriptor(akp03::VendorId, 0x3001, "AJAZZ AKP03 (legacy firmware)", "akp03_legacy"),
-        &makeAkp03);
+    {
+        auto d = akp03_descriptor(
+            akp03::VendorId, 0x3001, "AJAZZ AKP03 (legacy firmware)", "akp03_legacy");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
 
     // Canonical AKP03 family per `[ajazz-sdk]`.
-    reg.registerDevice(
-        akp03_descriptor(
-            akp03::VendorId, akp03::ProductIdAkp03, "AJAZZ AKP03 / Mirabox N3", "akp03"),
-        &makeAkp03);
-    reg.registerDevice(
-        akp03_descriptor(akp03::VendorId, akp03::ProductIdAkp03E, "AJAZZ AKP03E", "akp03e"),
-        &makeAkp03);
-    reg.registerDevice(
-        akp03_descriptor(akp03::VendorId, akp03::ProductIdAkp03R, "AJAZZ AKP03R", "akp03r"),
-        &makeAkp03);
-    reg.registerDevice(
-        akp03_descriptor(
-            akp03::VendorId, akp03::ProductIdAkp03RRev2, "AJAZZ AKP03R rev. 2", "akp03r_rev2"),
-        &makeAkp03);
+    {
+        auto d = akp03_descriptor(
+            akp03::VendorId, akp03::ProductIdAkp03, "AJAZZ AKP03 / Mirabox N3", "akp03");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
+    {
+        auto d =
+            akp03_descriptor(akp03::VendorId, akp03::ProductIdAkp03E, "AJAZZ AKP03E", "akp03e");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
+    {
+        auto d =
+            akp03_descriptor(akp03::VendorId, akp03::ProductIdAkp03R, "AJAZZ AKP03R", "akp03r");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
+    {
+        auto d = akp03_descriptor(
+            akp03::VendorId, akp03::ProductIdAkp03RRev2, "AJAZZ AKP03R rev. 2", "akp03r_rev2");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
 
     // Mirabox N3 rebrands per `[opendeck-akp03]`.
-    reg.registerDevice(
-        akp03_descriptor(MiraboxN3VendorOld, 0x1002, "Mirabox N3 (rev. 1)", "mirabox_n3"),
-        &makeAkp03);
-    reg.registerDevice(
-        akp03_descriptor(MiraboxN3VendorNew, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3"),
-        &makeAkp03);
-    reg.registerDevice(akp03_descriptor(MiraboxN3VendorNew, 0x1003, "Mirabox N3EN", "mirabox_n3en"),
-                       &makeAkp03);
+    {
+        auto d = akp03_descriptor(MiraboxN3VendorOld, 0x1002, "Mirabox N3 (rev. 1)", "mirabox_n3");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
+    {
+        auto d =
+            akp03_descriptor(MiraboxN3VendorNew, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
+    {
+        auto d = akp03_descriptor(MiraboxN3VendorNew, 0x1003, "Mirabox N3EN", "mirabox_n3en");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
 
     // 0x0300:0x3004 — surfaced via real-device hot-plug capture on
     // 2026-05-13 as "Ajazz HOTSPOTEKUSB HID DEMO". Not present in any
     // public catalogue; treated as an AKP03 sibling with development
     // firmware until a retail SKU is confirmed.
     // Tracking: TODO.md → "Streamdock 0x0300:0x3004 SKU identification".
-    reg.registerDevice(akp03_descriptor(akp03::VendorId,
-                                        Akp03DemoPid,
-                                        "AJAZZ Stream Dock (PID 0x3004 / HID DEMO)",
-                                        "akp03_variant_3004"),
-                       &makeAkp03);
+    {
+        auto d = akp03_descriptor(akp03::VendorId,
+                                  Akp03DemoPid,
+                                  "AJAZZ Stream Dock (PID 0x3004 / HID DEMO)",
+                                  "akp03_variant_3004");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
 
     // ---- AKP05 / Mirabox N4 (10 LCD keys + 4 encoders + touch strip) --
 
@@ -222,6 +266,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
+            .hasClock = true, // A-03 / D-03: AKP05 backend inherits IClockCapable (Plan 05-02).
         },
         &makeAkp05);
 
@@ -238,6 +283,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
+            .hasClock = true, // A-03 / D-03: shares Akp05Device backend → same IClockCapable.
         },
         &makeAkp05);
 }

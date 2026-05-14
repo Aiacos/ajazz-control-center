@@ -256,6 +256,10 @@ namespace {
 
 using namespace ajazz::core;
 
+// File-static once_flag (Pitfall 14): WARN emits at most once per process
+// lifetime for this backend. Distinct flag — not shared across backends.
+std::once_flag s_warned_akp05;
+
 /** @brief Concrete IDevice implementation for the AJAZZ AKP05 / AKP05E.
  *
  *  @class Akp05Device
@@ -272,7 +276,10 @@ using namespace ajazz::core;
  *  - One capacitive touch strip (X range 0–639)
  *  - One 800×100 main LCD panel
  */
-class Akp05Device final : public IDevice, public IDisplayCapable, public IEncoderCapable {
+class Akp05Device final : public IDevice,
+                          public IDisplayCapable,
+                          public IEncoderCapable,
+                          public IClockCapable {
 public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
         : Akp05Device(std::move(descriptor),
@@ -460,6 +467,18 @@ public:
                       encoderIndex,
                       static_cast<std::uint16_t>(std::min<std::size_t>(rgba.size(), 0xffff))),
                   rgba);
+    }
+
+    // ---- IClockCapable ------------------------------------------------------
+    //
+    // Scaffolded stub — no AJAZZ firmware exposes a host-settable RTC over HID
+    // today. WARN-once per process via s_warned_akp05 (Pitfall 14).
+    [[nodiscard]] TimeSyncResult
+    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
+        std::call_once(s_warned_akp05, [] {
+            AJAZZ_LOG_WARN("streamdeck.akp05", "setTime() not yet implemented for akp05");
+        });
+        return TimeSyncResult::NotImplemented;
     }
 
 private:

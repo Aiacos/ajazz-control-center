@@ -211,7 +211,16 @@ namespace {
  *  @note  Firmware update support is defined in the interface but not yet
  *         implemented; @c beginFirmwareUpdate() throws unconditionally.
  */
-class Akp153Device final : public IDevice, public IDisplayCapable, public IFirmwareCapable {
+// File-static once_flag (Pitfall 14): WARN emits at most once per process
+// lifetime for this backend, regardless of how many times setTime() is called.
+// Each backend has its OWN flag — first AKP153 call must not silence first
+// AKP03 call.
+std::once_flag s_warned_akp153;
+
+class Akp153Device final : public IDevice,
+                           public IDisplayCapable,
+                           public IFirmwareCapable,
+                           public IClockCapable {
 public:
     /// Production constructor: opens a real libhidapi transport for this device.
     Akp153Device(DeviceDescriptor descriptor, DeviceId id)
@@ -347,6 +356,22 @@ public:
     }
 
     [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
+
+    // ---- IClockCapable ------------------------------------------------------
+    //
+    // Scaffolded stub: no AJAZZ firmware exposes a host-settable RTC over HID
+    // today (vendor recon `d5616ef`). We advertise Capability::Clock via
+    // multiple inheritance so the UI / TimeSyncService dynamic_cast lands on a
+    // real target type, but the wire format is TBD per protocol family. WARN
+    // emits exactly once per process per backend via the file-static
+    // s_warned_<codename> once_flag (Pitfall 14 — never spam the log).
+    [[nodiscard]] TimeSyncResult
+    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
+        std::call_once(s_warned_akp153, [] {
+            AJAZZ_LOG_WARN("streamdeck.akp153", "setTime() not yet implemented for akp153");
+        });
+        return TimeSyncResult::NotImplemented;
+    }
 
 private:
     /** @brief Transmit a JPEG image to a single key LCD.
