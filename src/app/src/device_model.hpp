@@ -73,6 +73,8 @@ public:
         HasRgbRole,                   ///< True when the device exposes RGB lighting.
         HasTouchStripRole,            ///< True when the device exposes a touch strip.
         HasClockRole, ///< True when the device advertises Capability::Clock (scaffolded; Phase 5).
+        MaturityRole, ///< Maturity tier from devices.yaml:
+                      ///< scaffolded/probed/partial/functional/verified (Phase 8 DEVICES-02).
     };
 
     /**

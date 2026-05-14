@@ -41,6 +41,12 @@ ItemDelegate {
     // this property's own default (false) instead of the model role.
     // Same naming convention rationale as deviceCodename / deviceConnected.
     property bool hasClockCapability: false
+    // Maturity tier from DeviceModel.MaturityRole (Phase 8 DEVICES-02). String
+    // value from the 5-tier vocabulary: scaffolded / probed / partial / functional
+    // / verified. Surfaced as a tooltip on the row (NOT a visible badge — per the
+    // existing v1.0 styling vocabulary, badges are bounded by the existing slots).
+    property string deviceMaturity: "scaffolded"
+
     // Last sync state for the per-row glyph (Plan 05-06):
     //   ""              → no glyph (default).
     //   "success"       → checkmark glyph (manual sync OK; D-02 toast also fires).
@@ -202,4 +208,14 @@ ItemDelegate {
     Accessible.description: root.deviceConnected
         ? qsTr("Connected device %1").arg(root.deviceCodename)
         : qsTr("Offline device %1").arg(root.deviceCodename)
+
+    // Phase 8 DEVICES-02: maturity tier tooltip. Long-hover the row to see
+    // which tier the device is at. Per CONTEXT.md D-03 the tier is surfaced
+    // as a tooltip (NOT a visible badge) to stay within the existing v1.0
+    // styling vocabulary — badges occupy bounded slots (Offline pill,
+    // sync-state glyph), and adding a third visible element would crowd
+    // the row's right-side stack.
+    ToolTip.visible: root.hovered && root.deviceMaturity !== ""
+    ToolTip.text: qsTr("Maturity: %1").arg(root.deviceMaturity)
+    ToolTip.delay: 800
 }

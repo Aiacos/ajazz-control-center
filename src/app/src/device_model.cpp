@@ -17,7 +17,9 @@
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/core/logger.hpp"
 
+#include <QHash>
 #include <QQmlEngine>
+#include <QString>
 
 #include <algorithm>
 
@@ -27,6 +29,61 @@ namespace {
 
 /// Pointer set by DeviceModel::registerInstance, consumed by ::create.
 DeviceModel* s_deviceModelInstance = nullptr;
+
+/// Codename → maturity tier mapping. Mirrors `docs/_data/devices.yaml`
+/// (which is the single source of truth). Hand-written here for v1.1 —
+/// a future iteration may bake the YAML into a Qt resource and parse at
+/// startup, but the map is small (~30 entries) and the value vocabulary
+/// is fixed by Phase 8 D-01 (scaffolded/probed/partial/functional/verified).
+///
+/// Unknown codenames default to "scaffolded" via the lookup helper below.
+QHash<QString, QString> const& maturityByCodename() {
+    static QHash<QString, QString> const kMap = {
+        // AKP153 family (3x5 LCD, 85x85 JPEG keys, Rot90+mirror)
+        {QStringLiteral("akp153"), QStringLiteral("functional")},
+        {QStringLiteral("akp153_v1"), QStringLiteral("functional")},
+        {QStringLiteral("akp153e"), QStringLiteral("functional")},
+        {QStringLiteral("akp153e_v2"), QStringLiteral("functional")},
+        {QStringLiteral("akp153r"), QStringLiteral("scaffolded")},
+        // AKP815 family (5x3 LCD, 100x100 JPEG keys, Rot180) — Phase 8 promotion #1
+        {QStringLiteral("akp815"), QStringLiteral("scaffolded")},
+        // AKP03 family (6 LCD keys + 3 encoders + 3 buttons, 60x60 JPEG)
+        {QStringLiteral("akp03"), QStringLiteral("functional")},
+        {QStringLiteral("akp03_legacy"), QStringLiteral("functional")},
+        {QStringLiteral("akp03e"), QStringLiteral("functional")},
+        {QStringLiteral("akp03r"), QStringLiteral("functional")},
+        {QStringLiteral("akp03r_rev2"), QStringLiteral("scaffolded")},
+        // Mirabox-branded AKP03 siblings (opendeck-akp03 catalog) — n3 = promotion #2
+        {QStringLiteral("mirabox_n3"), QStringLiteral("partial")},
+        {QStringLiteral("mirabox_n3_rev3"), QStringLiteral("scaffolded")},
+        {QStringLiteral("mirabox_n3en"), QStringLiteral("scaffolded")},
+        // AKP05 / Mirabox N4 (Stream-Dock-Plus class: 2x5 LCD + 4 encoders + touch strip)
+        {QStringLiteral("akp05"), QStringLiteral("scaffolded")},
+        {QStringLiteral("mirabox_n4"), QStringLiteral("scaffolded")},
+        // Hot-plug capture 2026-05-13 surfaced this PID; routed through AKP03 factory
+        {QStringLiteral("akp03_variant_3004"), QStringLiteral("scaffolded")},
+        // Keyboards
+        {QStringLiteral("via_generic"), QStringLiteral("functional")},
+        {QStringLiteral("proprietary"), QStringLiteral("functional")},
+        {QStringLiteral("ak980pro"), QStringLiteral("scaffolded")},
+        // Mice
+        {QStringLiteral("aj_series_wired_primary"), QStringLiteral("scaffolded")},
+        {QStringLiteral("aj_series_wired_alt"), QStringLiteral("scaffolded")},
+        {QStringLiteral("aj_series_wired_alt2"), QStringLiteral("scaffolded")},
+        {QStringLiteral("aj_series_dongle"), QStringLiteral("scaffolded")},
+        {QStringLiteral("ajazz_24g_8k"), QStringLiteral("scaffolded")},
+        {QStringLiteral("aj199_family"), QStringLiteral("scaffolded")},
+        {QStringLiteral("aj199_family_dongle"), QStringLiteral("scaffolded")},
+    };
+    return kMap;
+}
+
+/// Look up the maturity tier for a codename. Falls back to "scaffolded"
+/// for unknown codenames so the QML side always has a valid tier string.
+QString maturityFor(std::string const& codename) {
+    auto const it = maturityByCodename().constFind(QString::fromStdString(codename));
+    return it == maturityByCodename().constEnd() ? QStringLiteral("scaffolded") : it.value();
+}
 
 } // namespace
 
@@ -101,6 +158,8 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.hasTouchStrip;
     case HasClockRole:
         return d.hasClock;
+    case MaturityRole:
+        return maturityFor(d.codename);
     default:
         return {};
     }
@@ -121,6 +180,7 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
         {HasRgbRole, "hasRgb"},
         {HasTouchStripRole, "hasTouchStrip"},
         {HasClockRole, "deviceHasClock"},
+        {MaturityRole, "maturity"},
     };
 }
 

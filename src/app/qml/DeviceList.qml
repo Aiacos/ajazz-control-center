@@ -93,6 +93,11 @@ Rectangle {
                     deviceCodename: codename
                     deviceConnected: connected
                     hasClockCapability: deviceHasClock
+                    // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.
+                    // Bound from DeviceModel.MaturityRole (`maturity` role name).
+                    // Same QML self-binding trap naming pattern as
+                    // deviceConnected: connected (line 94 above).
+                    deviceMaturity: maturity
                     // Per-row glyph state pulled from DeviceList's map (set
                     // by Main.qml on TimeSyncService signals — D-02).
                     syncGlyphState: root.syncGlyphByCodename[codename] || ""
