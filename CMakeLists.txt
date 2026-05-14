@@ -36,6 +36,11 @@ option(AJAZZ_ENABLE_WERROR "Treat warnings as errors" ON)
 option(AJAZZ_ENABLE_SANITIZERS "Enable ASan/UBSan in Debug builds" OFF)
 option(AJAZZ_ENABLE_TSAN "Enable ThreadSanitizer (mutually exclusive with ASan)" OFF)
 option(AJAZZ_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
+# Phase 7 / Plan 07-03: opt-in libFuzzer harnesses for plugin-host security primitives (currently
+# loadTrustRoots). Default OFF so the regular CI matrix is unaffected. Clang-only (libFuzzer is a
+# Clang sanitizer runtime); the tests/CMakeLists.txt gate errors out at configure time if
+# AJAZZ_BUILD_FUZZ_TESTS=ON is paired with GCC/MSVC, surfacing the constraint up front.
+option(AJAZZ_BUILD_FUZZ_TESTS "Build libFuzzer harnesses (Clang only, opt-in)" OFF)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(Warnings)
