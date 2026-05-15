@@ -14,7 +14,7 @@ Phase 9 deliverables — written rationale gating Phases 10-12. Captures-driven;
 
 - [x] **ARCH-04**: Project records the AKP03 image-encoding pipeline location (recommended: Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked to `ajazz_devices_streamdeck`; alternative: new `ajazz_imaging` static lib deferred to v1.3+ AKP815). Decision binds Phase 10.
 - [x] **ARCH-05**: Project records the `IClockCapable::setTime` wire-format outcome **per connected device**, based on Phase 9 captures. Default verdict (NO RTC opcode in any AJAZZ corpus): `hasClock=false` on `akp03_variant_3004` and `ak980pro`; `setTime` remains `NotImplemented`; PROJECT.md "Out of Scope" row preserved. Decision is binary per device; captures determine outcome.
-- [ ] **ARCH-06**: Project records the composite-HID dedup decision for `DeviceRegistry`. Default verdict (USB topology proves `0c45:7016` is a separate dongle on a different bus branch): **NOT firing** — `microdia_dongle_7016` enters catalogue as a separate `probed`-tier device with no dedup logic added. If Phase 9 captures contradict, decision flips and dedup infrastructure lands before Phase 12.
+- [x] **ARCH-06**: Project records the composite-HID dedup decision for `DeviceRegistry`. Default verdict (USB topology proves `0c45:7016` is a separate dongle on a different bus branch): **NOT firing** — `microdia_dongle_7016` enters catalogue as a separate `probed`-tier device with no dedup logic added. If Phase 9 captures contradict, decision flips and dedup infrastructure lands before Phase 12.
 
 ### Capture Infrastructure
 
@@ -137,7 +137,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | ----------- | -------- | -------- |
 | ARCH-04     | Phase 9  | Complete |
 | ARCH-05     | Phase 9  | Complete |
-| ARCH-06     | Phase 9  | Pending  |
+| ARCH-06     | Phase 9  | Complete |
 | CAPTURE-01  | Phase 9  | Pending  |
 | CAPTURE-02  | Phase 9  | Pending  |
 | CAPTURE-03  | Phase 9  | Complete |

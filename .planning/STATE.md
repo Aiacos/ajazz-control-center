@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Connected-Device Capability Parity
 status: executing
-stopped_at: ARCH-05 ratified at default verdict; Phase 9 5/7 plans complete
-last_updated: '2026-05-15T08:10:37.261Z'
+stopped_at: ARCH-06 ratified at default verdict; Phase 9 partial-scope complete (7/7 plans landed)
+last_updated: '2026-05-15T08:14:36.812Z'
 last_activity: 2026-05-15
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 5
+  completed_plans: 6
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 ## Current Position
 
 Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase
-Plan: 6 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
+Plan: 7 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
 Status: Ready to execute
 Last activity: 2026-05-15
 
-Progress: [███████░░░] 71%
+Progress: [█████████░] 86%
 
 ## Performance Metrics
 
@@ -63,6 +63,7 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: Phase 10/11/12 reuse pattern: makeAjSeriesWithTransport public factory overload exposes anonymous-namespace COD-026 DI ctor across TU boundaries (CAPTURE-04)
 - \[Phase ?\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
 - \[Phase Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp03_variant_3004 and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
+- \[Phase ?\]: \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
 
 ### Pending Todos
 
@@ -91,11 +92,12 @@ None tracked in `.planning/todos/`. v1.1 deferred items are captured in PROJECT.
 | Phase 09 P05        | 3min                                                                          | 1 tasks                           | 2 files                  |
 | Phase 09 P04        | 4min                                                                          | 3 tasks                           | 5 files                  |
 | Phase Phase 09 PP06 | 3min                                                                          | 1 tasks tasks                     | 2 files files            |
+| Phase 9 P7          | 7min                                                                          | 1 tasks                           | 6 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-15T08:10:37.253Z
-Stopped at: ARCH-05 ratified at default verdict; Phase 9 5/7 plans complete
+Last session: 2026-05-15T08:14:36.805Z
+Stopped at: ARCH-06 ratified at default verdict; Phase 9 partial-scope complete (7/7 plans landed)
 Resume file: None
 
 ## Operator Next Steps
