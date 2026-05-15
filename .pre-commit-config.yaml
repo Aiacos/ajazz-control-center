@@ -208,6 +208,21 @@ repos:
         pass_filenames: false
         files: '^CMakePresets\.json$'
 
+      # Reject raw USB capture files at commit time. Pitfall 17: a raw
+      # *.pcap of an in-use AJAZZ keyboard contains plaintext keystrokes
+      # recoverable via tshark or USB-Keyboard-Parser. The hook also
+      # rejects any binary file >10 KB under .planning/research/captures/.
+      # The global `exclude:` block above silences lint noise on the legacy
+      # docs/protocols/captures/.* path; this hook is the authoritative
+      # rejection layer and runs on every commit attempt, including under
+      # excluded paths. See docs/policies/capture-data-hygiene.md.
+      - id: reject-raw-captures
+        name: Reject raw USB capture files (CAPTURE-01 / Pitfall 17)
+        entry: scripts/reject-raw-captures.sh
+        language: system
+        pass_filenames: true
+        always_run: true
+
   # --------------------------------------------------------------------------
   # Commitlint — enforce Conventional Commits on the commit message.
   # --------------------------------------------------------------------------

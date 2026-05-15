@@ -1,0 +1,6 @@
+# Captures sink: every binary capture stays OUT of git per
+# docs/policies/capture-data-hygiene.md (Pitfall 17).
+# Only the two tracked files in this directory are README.md and .gitignore.
+*
+!.gitignore
+!README.md
