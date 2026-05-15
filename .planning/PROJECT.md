@@ -41,7 +41,25 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 ### Active
 
-Next milestone bootstrapped fresh via `/gsd-new-milestone`. Carry-over candidates documented in `.planning/ROADMAP.md` and `.planning/MILESTONES.md` deferred-items section.
+## Current Milestone: v1.2 Connected-Device Capability Parity
+
+**Goal:** Promote the 4 currently-connected scaffolded devices (3 catalogued + 1 unknown PID) to full advertised-capability parity with the native AJAZZ control software, driven by real-hardware USB protocol captures.
+
+**Target features:**
+
+- Native-behavior research baseline for each connected device (OSS reverse-engineering corpora + direct `usbmon`/Wireshark captures from real hardware).
+- AKP03 variant 0x3004 (Stream Dock 6-key): `display` + `encoder` + `clock` → `scaffolded` → `functional`.
+- AK980 PRO keyboard (0c45:8009): `rgb` + `macros` + `layers` + `clock` → `scaffolded` → `functional`/`partial` per capture coverage.
+- AJAZZ 2.4G 8K mouse (3151:5007): `dpi` + `rgb` → `scaffolded` → `functional`.
+- Unknown PID 0c45:7016: identify + add `devices.yaml` entry + protocol notes.
+- Back-fill v1.1 deferred visual UI verifies on real hardware (Phase 5 Sync button + auto-sync glyph + Settings persistence; Phase 8 MaturityRole tooltip).
+
+**Key context:**
+
+- All 4 devices physically connected with `uaccess` udev tag → no sudo needed for captures.
+- Phase 9 = formal research (4 parallel `gsd-project-researcher` agents); subsequent phases driven by research findings.
+- ARCH-04 candidate: real `IClockCapable::setTime` wire formats — currently "Out of Scope" with rationale "no AJAZZ device exposes a host-settable RTC"; re-evaluate if AKP03 captures contradict this.
+- COD-031 boundary preserved: no `nlohmann::json` in `ajazz_core` or installed headers.
 
 ### Out of Scope
 
@@ -128,4 +146,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ______________________________________________________________________
 
-*Last updated: 2026-05-14 after v1.1 milestone close*
+*Last updated: 2026-05-15 — v1.2 milestone "Connected-Device Capability Parity" bootstrap*

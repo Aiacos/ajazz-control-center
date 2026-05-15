@@ -1,11 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone:
-milestone_name:
-status: awaiting_next_milestone
-stopped_at: v1.1 archived; ready for /gsd-new-milestone
-last_updated: '2026-05-14T15:35:00.000Z'
-last_activity: 2026-05-14 — Milestone v1.1 completed and archived
+milestone: v1.2
+milestone_name: Connected-Device Capability Parity
+status: planning
+last_updated: '2026-05-15T05:22:47.171Z'
+last_activity: 2026-05-15
 progress:
   total_phases: 0
   completed_phases: 0
@@ -25,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-05-14)
 
 ## Current Position
 
-Phase: —
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-05-14 — Milestone v1.1 completed and archived
+Status: Defining requirements
+Last activity: 2026-05-15 — Milestone v1.2 started
 
 ## Accumulated Context
 
