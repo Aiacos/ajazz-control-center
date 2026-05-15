@@ -9,6 +9,7 @@
 #pragma once
 
 #include "ajazz/core/device.hpp"
+#include "ajazz/core/transport.hpp"
 
 namespace ajazz::core {
 class DeviceRegistry;
@@ -43,5 +44,31 @@ void registerAll(core::DeviceRegistry& registry);
  *            instance across consumers.
  */
 [[nodiscard]] core::DevicePtr makeAjSeries(core::DeviceDescriptor const& d, core::DeviceId id);
+
+/**
+ * @brief Test-only factory: construct an AJ-series mouse with an injected
+ *        @c ITransport (typically a `MockTransport` from
+ *        `tests/unit/fixtures/mock_transport.hpp`).
+ *
+ * Parallels the COD-026 DI test constructor on the anonymous-namespace
+ * `AjSeriesMouse` class inside `aj_series.cpp`, exposing it across
+ * translation-unit boundaries. Production code uses `makeAjSeries()` above,
+ * which builds a real HID transport from `(vendorId, productId, serial)`;
+ * tests use this overload to substitute a mock that records every write
+ * for byte-level wire-format assertions.
+ *
+ * @param d         Static model descriptor from the device registry.
+ * @param id        Runtime USB identifier of the specific device.
+ * @param transport Owned `ITransport` implementation. Ownership transfers
+ *                  to the returned device.
+ * @return          Heap-allocated `IDevice` implementing `IMouseCapable`
+ *                  and `IRgbCapable`. Identical surface to `makeAjSeries()`.
+ *
+ * @see CAPTURE-04 (.planning/phases/09-research-captures-hygiene/09-04-PLAN.md)
+ * @see ajazz::tests::MockTransport
+ */
+[[nodiscard]] core::DevicePtr makeAjSeriesWithTransport(core::DeviceDescriptor const& d,
+                                                        core::DeviceId id,
+                                                        core::TransportPtr transport);
 
 } // namespace ajazz::mouse

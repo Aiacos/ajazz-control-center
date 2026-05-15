@@ -6,6 +6,13 @@ add_executable(
     test_akp03_protocol.cpp
     test_akp05_protocol.cpp
     test_proprietary_keyboard_protocol.cpp
+    # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
+    # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`
+    # into AjSeriesMouse via the public `makeAjSeriesWithTransport` factory
+    # and asserts the exact 64-byte feature-report envelope produced by
+    # setActiveDpiStage(0). Locks the wire-format mock seam in place
+    # before Phase 10/11/12 byte-level tests depend on it.
+    test_aj_series_mock_transport.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

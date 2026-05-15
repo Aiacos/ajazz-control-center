@@ -269,4 +269,20 @@ core::DevicePtr makeAjSeries(core::DeviceDescriptor const& d, core::DeviceId id)
     return std::make_shared<AjSeriesMouse>(d, std::move(id));
 }
 
+/**
+ * @brief CAPTURE-04 (Plan 09-04) — test-only factory that forwards to the
+ *        anonymous-namespace `AjSeriesMouse` COD-026 DI constructor with
+ *        an injected `ITransport`.
+ *
+ * Production code uses `makeAjSeries()` above; this overload exposes the
+ * same backend with a substitutable transport so unit tests can assert
+ * byte-level wire-format equality via `MockTransport::writes()` without
+ * touching real HID hardware.
+ */
+core::DevicePtr makeAjSeriesWithTransport(core::DeviceDescriptor const& d,
+                                          core::DeviceId id,
+                                          core::TransportPtr transport) {
+    return std::make_shared<AjSeriesMouse>(d, std::move(id), std::move(transport));
+}
+
 } // namespace ajazz::mouse
