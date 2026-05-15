@@ -135,7 +135,7 @@ public:
      *         otherwise an event with vid==0 && pid==0 (signals parse failure).
      */
     [[nodiscard]] static HotplugEvent parseDevicePathW(wchar_t const* path,
-                                                        HotplugAction action) noexcept;
+                                                       HotplugAction action) noexcept;
 #endif
 #endif
 

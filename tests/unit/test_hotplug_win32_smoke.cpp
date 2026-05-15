@@ -35,33 +35,29 @@
 
 #include "ajazz/core/hotplug_monitor.hpp"
 
-#include <catch2/catch_test_macros.hpp>
-
 #include <atomic>
 #include <string>
+
+#include <catch2/catch_test_macros.hpp>
 
 using ajazz::core::HotplugAction;
 using ajazz::core::HotplugEvent;
 using ajazz::core::HotplugMonitor;
 
-TEST_CASE("Win32 device-path parses VID/PID/serial correctly",
-          "[hotplug][win32]") {
+TEST_CASE("Win32 device-path parses VID/PID/serial correctly", "[hotplug][win32]") {
     // Canonical AJAZZ AKP03 device path — vendor 0x5548, product 0x6672,
     // synthetic serial substring "7&deadbeef&0&0000" after the second '#'.
-    HotplugEvent const ev =
-        HotplugMonitor::parseDevicePathW(L"\\\\?\\HID#VID_5548&PID_6672#7&deadbeef&0&0000",
-                                          HotplugAction::Arrived);
+    HotplugEvent const ev = HotplugMonitor::parseDevicePathW(
+        L"\\\\?\\HID#VID_5548&PID_6672#7&deadbeef&0&0000", HotplugAction::Arrived);
     REQUIRE(ev.vid == 0x5548);
     REQUIRE(ev.pid == 0x6672);
     REQUIRE(ev.action == HotplugAction::Arrived);
     REQUIRE(ev.serial.find("deadbeef") != std::string::npos);
 }
 
-TEST_CASE("Win32 device-path Removed action survives the parser",
-          "[hotplug][win32]") {
-    HotplugEvent const ev =
-        HotplugMonitor::parseDevicePathW(L"\\\\?\\HID#VID_5548&PID_6670#1&abc&2&0",
-                                          HotplugAction::Removed);
+TEST_CASE("Win32 device-path Removed action survives the parser", "[hotplug][win32]") {
+    HotplugEvent const ev = HotplugMonitor::parseDevicePathW(
+        L"\\\\?\\HID#VID_5548&PID_6670#1&abc&2&0", HotplugAction::Removed);
     REQUIRE(ev.vid == 0x5548);
     REQUIRE(ev.pid == 0x6670);
     REQUIRE(ev.action == HotplugAction::Removed);
@@ -70,14 +66,12 @@ TEST_CASE("Win32 device-path Removed action survives the parser",
 TEST_CASE("Win32 device-path missing VID/PID returns 0/0 (parse failure sentinel)",
           "[hotplug][win32]") {
     HotplugEvent const ev =
-        HotplugMonitor::parseDevicePathW(L"\\\\?\\USB#some-garbage-path",
-                                          HotplugAction::Arrived);
+        HotplugMonitor::parseDevicePathW(L"\\\\?\\USB#some-garbage-path", HotplugAction::Arrived);
     REQUIRE(ev.vid == 0);
     REQUIRE(ev.pid == 0);
 }
 
-TEST_CASE("Win32 injectEvent path round-trips a synthetic event end-to-end",
-          "[hotplug][win32]") {
+TEST_CASE("Win32 injectEvent path round-trips a synthetic event end-to-end", "[hotplug][win32]") {
     HotplugEvent observed{};
     std::atomic<bool> fired{false};
 
