@@ -10,7 +10,7 @@ progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 6
+  completed_plans: 7
   percent: 0
 ---
 
@@ -25,12 +25,20 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 
 ## Current Position
 
-Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase
-Plan: 7 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
-Status: Ready to execute
-Last activity: 2026-05-15
+Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase, PARTIAL-SCOPE COMPLETE
+Plan: 7 of 7 partial-scope plans landed (CAPTURE-01..04 + ARCH-04/05/06 at default verdict)
+Status: Phase 9 paused at partial-scope boundary; Phase 9.x follow-up required before Phase 10 can start
+Last activity: 2026-05-15 — Phase 9 partial-scope execution complete (CAPTURE-01..04 infra + 3 ADRs at default verdict)
 
-Progress: [█████████░] 86%
+Progress: [██░░░░░░░░] 20% (1 of 5 phases partially complete; full v1.2 = 33 reqs across 5 phases)
+
+**Phase 9 ROADMAP success criteria status (4 of 5 closed by this partial-scope run):**
+
+- ✓ #1 Raw `.pcap`/`.pcapng` rejected at commit time (CAPTURE-01, hook + policy)
+- ✓ #2 Developer can install Wireshark + usbmon + use hex-to-cpparray.py (CAPTURE-02 + CAPTURE-03)
+- ✓ #3 `MockTransport` exists; backends accept via COD-026 DI (CAPTURE-04; 181/181 ctest)
+- ◌ #4 Sanitised capture fixtures for all 4 devices + per-device diff docs — **DEFERRED to Phase 9.x** (CAPTURE-05 + CAPTURE-06)
+- ✓ #5 ARCH-04 + ARCH-05 + ARCH-06 ratified in writing — at **DEFAULT VERDICT** pending Phase 9.x captures confirmation
 
 ## Performance Metrics
 
@@ -60,14 +68,35 @@ Phase 9 will ratify three new written ADRs:
 - **ARCH-05**: per-device `setTime` outcome (default verdict: NO RTC opcode in any AJAZZ corpus → `hasClock=false` on `akp03_variant_3004` and `ak980pro`; `setTime` stays `NotImplemented`).
 - **ARCH-06**: composite-HID dedup (default verdict: NOT firing — topology proves `0c45:7016` is a separate dongle on a different bus branch).
 - \[Phase 9\]: ARCH-04 default verdict ratified at `.planning/phases/09-research-captures-hygiene/ARCH-04.md` — AKP03 image-pipeline at `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` (Option C), PRIVATE-linked to `ajazz_devices_streamdeck`; Option B (new `ajazz_imaging` static lib) deferred to v1.3+; D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION) — Phase 10 gates on Phase 9.x captures-confirmation run (Pitfall 22). [commit: 60f3140]
-- \[Phase ?\]: Phase 10/11/12 reuse pattern: makeAjSeriesWithTransport public factory overload exposes anonymous-namespace COD-026 DI ctor across TU boundaries (CAPTURE-04)
-- \[Phase ?\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
-- \[Phase Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp03_variant_3004 and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
-- \[Phase ?\]: \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
+- \[Phase 9\]: Phase 10/11/12 reuse pattern: makeAjSeriesWithTransport public factory overload exposes anonymous-namespace COD-026 DI ctor across TU boundaries (CAPTURE-04)
+- \[Phase 9\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
+- \[Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp03_variant_3004 and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
+- \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
 
 ### Pending Todos
 
-None tracked in `.planning/todos/`. v1.1 deferred items are captured in PROJECT.md and inherited by v1.2 phases — VERIFY-01..04 (Phase 13) closes the real-hardware UI back-fills from v1.1.
+**Phase 9.x follow-up (user-driven, gates Phase 10 start):**
+
+1. Install Wireshark + usbmon prereqs on dev box per `docs/protocols/CAPTURING.md`:
+   - `sudo dnf install wireshark tshark` (or `sudo apt install wireshark tshark dumpcap`)
+   - `sudo modprobe usbmon`
+   - Optional: add user to `wireshark` group for unprivileged capture (`sudo usermod -aG wireshark $USER`)
+1. Produce sanitised captures for all 4 connected devices following the CAPTURING.md runbook (CAPTURE-05):
+   - `akp03_variant_3004` (`0300:3004`): image upload (first + last chunk), `CLE`, `LIG`, encoder rotate/press, `HAN`, negative-test for hypothetical `TIM` opcode
+   - `ak980pro` (`0c45:8009`): 20 RGB modes (cmd 0x13), sleep-timer (cmd 0x17), TFT chunked send (close TaxMachine TODO), `lsusb -v -d 0c45:8009` HID descriptor dump
+   - `ajazz_24g_8k` (`3151:5007`): DPI cycle, polling-rate dropdown, LOD, button bind, per-zone RGB, battery, flash commit; AJ199 V1.0 vs Max probe
+   - `microdia_dongle_7016` (`0c45:7016`): `lsusb -v`, `udevadm info -a /dev/hidraw{5,6}`, paired-input identification via `evtest`
+1. Run `scripts/hex-to-cpparray.py` per device to produce `tests/integration/fixtures/<codename>_*.h` headers + SHA-256 metadata in `.planning/research/captures/INDEX.md` (CAPTURE-06).
+1. Produce per-device wire-format diff docs:
+   - Extend `docs/protocols/streamdeck/akp03.md` with `0300:3004` first-party findings
+   - Create `docs/protocols/keyboard/ak980pro.md` if diverges from `proprietary.md`
+   - Create `docs/protocols/mouse/ajazz_24g_8k.md` if diverges from `aj_series.md`
+1. Run the 2-minute physical unplug test for ARCH-06 finalization: unplug `ak980pro`, observe whether `0c45:7016` disappears simultaneously. Default verdict expects NO simultaneous disappearance (separate dongle confirmed).
+1. Finalize ARCH-04 / ARCH-05 / ARCH-06 — flip from "DEFAULT VERDICT (PENDING CAPTURE CONFIRMATION)" to "FINAL" if captures confirm, or amend if they contradict. Update ADR Status section + PROJECT.md Key Decisions outcome column.
+
+After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-only run to close the deferred plans (CAPTURE-05, CAPTURE-06, ARCH-04/05/06 finalization). Then Phase 10 can start.
+
+**v1.1 carry-overs (inherited):** VERIFY-01..04 (Phase 13) closes the real-hardware UI back-fills (Phase 5 Sync button visibility, Settings auto-sync persistence, glyph behavior; Phase 8 MaturityRole tooltip).
 
 ### Blockers/Concerns
 
@@ -79,20 +108,20 @@ None tracked in `.planning/todos/`. v1.1 deferred items are captured in PROJECT.
 
 ## Deferred Items
 
-| Category            | Item                                                                          | Status                            | Deferred At              |
-| ------------------- | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
-| v1.3+ (KEYBOARD)    | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
-| v1.2.x (DISPLAY)    | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
-| v1.2.x / v1.3       | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
-| v1.2.x              | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
-| v1.2.x              | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
-| v1.2.x              | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
-| v1.2.x              | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
-| Phase 9 P3          | 6min                                                                          | 2 tasks                           | 2 files                  |
-| Phase 09 P05        | 3min                                                                          | 1 tasks                           | 2 files                  |
-| Phase 09 P04        | 4min                                                                          | 3 tasks                           | 5 files                  |
-| Phase Phase 09 PP06 | 3min                                                                          | 1 tasks tasks                     | 2 files files            |
-| Phase 9 P7          | 7min                                                                          | 1 tasks                           | 6 files                  |
+| Category         | Item                                                                          | Status                            | Deferred At              |
+| ---------------- | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
+| v1.3+ (KEYBOARD) | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
+| v1.2.x (DISPLAY) | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
+| v1.2.x / v1.3    | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
+| v1.2.x           | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
+| v1.2.x           | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
+| v1.2.x           | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
+| v1.2.x           | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
+| Phase 9 P03      | 6min                                                                          | 2 tasks                           | 2 files                  |
+| Phase 9 P04      | 4min                                                                          | 3 tasks                           | 5 files                  |
+| Phase 9 P05      | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P06      | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P07      | 7min                                                                          | 1 tasks                           | 6 files                  |
 
 ## Session Continuity
 
@@ -102,5 +131,11 @@ Resume file: None
 
 ## Operator Next Steps
 
-- `/gsd-plan-phase 9` to decompose Phase 9 (Research, Captures, Hygiene) into atomic plans. CAPTURE-01 is the first plan (gates everything else).
-- After Phase 9 ships, `/gsd-plan-phase 10` to start the AKP03 0x3004 promotion (canonical device-promotion template).
+**Phase 9 PARTIAL-SCOPE COMPLETE (2026-05-15).** Phase 9.x follow-up gates Phase 10:
+
+1. Read `### Pending Todos` above for the 6-step Phase 9.x follow-up checklist.
+1. Install Wireshark + usbmon prereqs (`docs/protocols/CAPTURING.md`).
+1. Produce captures for the 4 connected devices + run `scripts/hex-to-cpparray.py`.
+1. Run the ARCH-06 2-minute physical unplug test.
+1. Re-run `/gsd-plan-phase 9` (or invoke a focused Phase 9.x run) to land CAPTURE-05, CAPTURE-06, and ARCH-04/05/06 finalization.
+1. Once Phase 9.x ships, `/gsd-plan-phase 10` to start AKP03 0x3004 promotion (canonical device-promotion template; one-line `PacketSize 512 → 1024` fix unblocks 13 sibling SKUs).
