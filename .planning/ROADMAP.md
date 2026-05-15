@@ -72,7 +72,7 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 - [x] 09-03-PLAN.md — CAPTURE-03 hex-to-cpparray.py + pytest smoke test
 - [x] 09-04-PLAN.md — CAPTURE-04 MockTransport header-only fixture + AjSeriesMouse smoke test
 - [x] 09-05-PLAN.md — ARCH-04 default-verdict ratification (Qt6 host-side image pipeline, Option C)
-- [ ] 09-06-PLAN.md — ARCH-05 default-verdict ratification (no RTC opcode; hasClock=false per device)
+- [x] 09-06-PLAN.md — ARCH-05 default-verdict ratification (no RTC opcode; hasClock=false per device)
 - [ ] 09-07-PLAN.md — ARCH-06 default-verdict ratification (dongle is separate; NOT firing dedup)
 
 **Phase notes**:
@@ -187,7 +187,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 1
 | 6. CR-01 Win32 Env Fix                     | v1.1      | 3/3            | Complete         | 2026-05-14 |
 | 7. WR-01 Trust-Roots Parser                | v1.1      | 3/3            | Complete         | 2026-05-14 |
 | 8. Scaffolded-Device Wiring                | v1.1      | 4/4            | Complete         | 2026-05-14 |
-| 9. Research, Captures, Hygiene             | v1.2      | 4/7            | In Progress      |            |
+| 9. Research, Captures, Hygiene             | v1.2      | 5/7            | In Progress      |            |
 | 10. AKP03 variant_3004 Promotion           | v1.2      | 0/?            | Not started      | —          |
 | 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm  | v1.2      | 0/?            | Not started      | —          |
 | 12. AK980 PRO Promotion                    | v1.2      | 0/?            | Not started      | —          |
