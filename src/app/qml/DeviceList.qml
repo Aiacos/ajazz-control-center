@@ -39,13 +39,25 @@ Rectangle {
 
     /// The device model. Set by the parent (Main.qml) to DeviceModel.
     /// We feed it to a Repeater inside a ColumnLayout (rather than a
-    /// ListView) so the layout topology survives reflow under the
-    /// HOTPLUG-02 contract: ALL registered codename rows are present
-    /// at all times — disconnected ones surface an "Offline" badge
-    /// (see DeviceRow.qml) but stay at their lex-sorted position.
-    /// Phase 4 (D-03 + HOTPLUG-02/03/04) reverses the v1.0
-    /// connected-only filter so selection focus + scroll position
-    /// survive a disconnect/reconnect cycle automatically.
+    /// ListView) so the layout topology survives reflow when rows
+    /// appear/disappear (lex-sorted insertion preserved).
+    ///
+    /// **Connected-only filter (restored 2026-05-15, reverting Phase 4
+    /// HOTPLUG-02 mid-session offline-badge UX).** Each delegate sets
+    /// `visible: connected`, hiding rows for catalogued-but-not-currently-
+    /// connected devices. Rationale: when the catalogue grows to 13+ SKUs
+    /// and only 3-4 are physically plugged in, the offline-badged rows
+    /// dominate the sidebar visually and read as "the app is showing me
+    /// devices I don't have". Matches the original v1.0 spec at commit
+    /// d377d80 + e889d28, requested 2026-05-13.
+    ///
+    /// **Trade-off accepted**: HOTPLUG-02 selection-focus retention on
+    /// mid-session unplug no longer applies — when a device is unplugged
+    /// while the app runs, the row vanishes immediately (instead of
+    /// going to offline-badged state and keeping focus). The user
+    /// explicitly chose this in 2026-05-15. If selection retention
+    /// becomes needed again, the alternative is a "session-seen" filter
+    /// (visible: connected || wasConnectedThisSession) or a UI toggle.
     property var model: null
 
     ScrollView {
@@ -102,12 +114,21 @@ Rectangle {
                     // by Main.qml on TimeSyncService signals — D-02).
                     syncGlyphState: root.syncGlyphByCodename[codename] || ""
 
-                    // HOTPLUG-02: rows always visible — offline state
-                    // surfaces via the Offline badge inside DeviceRow,
-                    // not by hiding the row. This is what makes
-                    // selection focus + scroll position survive a
-                    // disconnect/reconnect cycle (HOTPLUG-03): the
-                    // row index does not move.
+                    // Connected-only sidebar filter (restored 2026-05-15
+                    // per user request, matching d377d80 spec). Hides
+                    // delegates for catalogued-but-not-currently-connected
+                    // devices. `visible: false` in a ColumnLayout child
+                    // also removes the item from layout sizing, so the
+                    // row collapses to zero height without needing an
+                    // explicit `Layout.preferredHeight` override.
+                    //
+                    // Trade-off vs HOTPLUG-02 mid-session unplug: the row
+                    // disappears immediately when a device is unplugged
+                    // while the app runs (instead of going offline-badged).
+                    // Selection focus is lost on the unplugged codename;
+                    // this is the explicit user trade-off captured at
+                    // the top-of-file `model` property docstring.
+                    visible: connected
 
                     onClicked: root.deviceSelected(codename)
                     onSyncTimeRequested: function(cn) { root.syncTimeRequested(cn); }
