@@ -1,0 +1,71 @@
+# LeakSanitizer suppression list — known third-party false positives at
+# Qt application teardown. These libraries cache state in static / global
+# context that lives until process exit; LSan flags it as "leaked" but
+# the memory is intentionally retained for the process lifetime.
+#
+# Real project leaks (in src/, our linked libraries, our QML/JS bindings)
+# are NOT suppressed and will still surface — verify by running:
+#
+#     LSAN_OPTIONS=suppressions=$PWD/.lsan-suppressions make run
+#
+# and triggering a known leak in our code (e.g. a forgotten `new QObject`
+# without parent). If LSan reports `Suppressions used:` with a non-zero
+# count for the suppressions below AND zero `Direct leak`/`Indirect leak`
+# entries from our code, the suppression list is doing exactly what it
+# should.
+#
+# Pattern format: see https://github.com/google/sanitizers/wiki/AddressSanitizerLeakSanitizer
+# `leak:` matches a frame's image-name or symbol substring.
+
+# --- fontconfig (FcConfigSetDefaultSubstitute, FcPatternObjectAddWithBinding,
+#                 FcConfigSubstituteWithPat — config caches retained for
+#                 process lifetime; freed only on FcFini() which Qt does
+#                 not call by design)
+leak:libfontconfig.so
+leak:FcConfig
+leak:FcPattern
+leak:FcFontSet
+
+# --- GTK 3 (used by the qgtk3 platformtheme plugin Qt6 loads when no
+#            Qt6::QtQuickControls2Material is themed — GTK3 retains a
+#            global GtkSettings + invisible-char map for process lifetime)
+leak:libgtk-3.so
+leak:gtk_entry_init
+leak:gtk_init
+leak:gtk_settings
+
+# --- pango / pangoft2 (font shaping caches — same lifetime story as
+#                       fontconfig; pango_layout_check_lines populates
+#                       per-process glyph caches that are never freed)
+leak:libpango-1.0.so
+leak:libpangoft2-1.0.so
+leak:libpangocairo-1.0.so
+leak:pango_layout
+leak:pango_fc_font_map
+leak:pango_itemize
+
+# --- HarfBuzz (text shaping engine pulled in transitively by pango/Qt;
+#               shape plan cache is process-lifetime)
+leak:libharfbuzz.so
+leak:hb_shape_plan_execute
+
+# --- GLib / GObject (g_object_new / g_type_create_instance leaks are
+#                     all transitive from GTK3 instantiation above)
+leak:libgobject-2.0.so
+leak:g_object_new
+leak:g_type_create_instance
+
+# --- Qt 6 GTK3 platformtheme plugin (the bridge between QGuiApplication
+#                                     and GTK3 — the plugin instance itself
+#                                     plus its QGtk3Storage cache live
+#                                     until process exit)
+leak:libqgtk3.so
+leak:QGtk3Interface
+leak:QGtk3Storage
+
+# --- Qt 6 QGuiApplicationPrivate::updatePalette / basePalette teardown
+#                                     leaks; everything above transitively
+#                                     dangles from this codepath.
+leak:QApplicationPrivate::basePalette
+leak:QGuiApplicationPrivate::updatePalette
+leak:QGuiApplicationPrivate::setPalette

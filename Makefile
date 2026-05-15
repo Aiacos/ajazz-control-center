@@ -60,6 +60,13 @@ run: build ## Build and launch the app
 	@# doesn't inherit the niri/sway/hyprland session env). Without this, Qt 6.5+
 	@# falls back to xcb, fails to load it, and aborts with a misleading message
 	@# about xcb-cursor0. Picks the first wayland-* socket in $$XDG_RUNTIME_DIR.
+	@#
+	@# LSAN_OPTIONS: the dev build links AddressSanitizer + LeakSanitizer. At
+	@# process exit, libfontconfig / libpango / libgtk-3 / Qt6 QGtk3 platform
+	@# theme retain process-lifetime caches that LSan flags as leaks. These are
+	@# third-party false positives — the suppression list at .lsan-suppressions
+	@# filters them so `make run` exits 0 on clean shutdown while still
+	@# surfacing real leaks in our own code.
 	@if [ -z "$$WAYLAND_DISPLAY" ] && [ -z "$$DISPLAY" ]; then \
 	    sock=$$(ls "$${XDG_RUNTIME_DIR:-/run/user/$$(id -u)}"/wayland-* 2>/dev/null | grep -v '\.lock$$' | head -1); \
 	    if [ -n "$$sock" ]; then \
@@ -68,6 +75,7 @@ run: build ## Build and launch the app
 	        export QT_QPA_PLATFORM=wayland; \
 	    fi; \
 	fi; \
+	export LSAN_OPTIONS="suppressions=$(CURDIR)/.lsan-suppressions:print_suppressions=0"; \
 	exec $(BIN)
 
 test: build ## Run all unit and integration tests
