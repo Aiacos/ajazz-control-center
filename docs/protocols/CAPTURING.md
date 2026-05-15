@@ -27,6 +27,29 @@ once, to produce a sanitised hex fixture that ends up under
 
 ______________________________________________________________________
 
+## 0. Platform Choice — milestone-specific
+
+The capture **target** determines which OS you capture on:
+
+| Capture target                                                                                                                                                            | OS to capture on                         | Section to follow                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- | ------------------------------------- |
+| **What the official AJAZZ vendor app sends to the device** (v1.2 primary use case — every `0300:3004` / `0c45:8009` / `3151:5007` device-driving capture for protocol RE) | **Windows** (or Windows in a VM, see §8) | §8 — Wireshark + USBPcap on Windows   |
+| What our own control center sends (regression / round-trip / wire-format-verification captures, no vendor app involved)                                                   | Linux (or anywhere our app runs)         | §1 → §7 — Wireshark + usbmon on Linux |
+
+**Why Windows is primary for v1.2:** the v1.2 milestone reverse-engineers vendor-app wire formats. The vendor app runs natively on Windows. CLAUDE.md hard rule forbids `wine` / `innoextract` / Delphi-installer extraction; running the vendor binary on Windows (physical, dual-boot, or VM) is the **only** clean-room-compliant way to trigger the device actions we need to capture.
+
+**Linux-only developer?** You have three options, in decreasing order of effort:
+
+1. **Dual-boot a Windows partition** — simplest hardware-wise; reboot to capture. Free.
+1. **Spare Windows machine on the same desk** — plug the AJAZZ device into the Windows box, capture there, copy `.pcap` to the Linux bench via USB stick / scp / shared folder.
+1. **WinBoat container on the Linux host** — real Windows 11 inside Docker+KVM with seamless RemoteApp integration (NOT `wine`). See §8.1.
+
+All three are CLAUDE.md-compliant. The vendor app runs on a real Windows kernel; we capture the USB side; we never decompile, extract, or modify the vendor binary.
+
+The rest of this document covers the Linux usbmon path in detail (§1-7) because the Linux-side workflow is also useful for the regression scenario in the right-hand column above. **For v1.2 vendor-app captures, skim §1-7 for terminology then jump to §8.**
+
+______________________________________________________________________
+
 ## 1. Prerequisites (one-time setup)
 
 The agent does NOT install these for you (CLAUDE.md hard rule — no
@@ -436,33 +459,123 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## 8. Windows USBPcap (appendix)
+## 8. Windows USBPcap (PRIMARY path for v1.2 vendor-app captures)
 
-Linux usbmon is the primary capture path for this project. Windows
-USBPcap exists for the rare case where you need to confirm a vendor
-opcode is identical between Linux- and Windows-driver firmware paths.
+For the v1.2 milestone "Connected-Device Capability Parity", Windows USBPcap is the **primary** capture path — the official AJAZZ vendor applications (Stream Dock app, AK980 PRO software, mouse driver utility) run natively on Windows and produce the wire formats we are reverse-engineering. The Linux usbmon path (§1-7) covers the regression scenario where our own control center generates the USB traffic.
 
-The mechanics are equivalent:
+### 8.0 Install
 
-1. Install Wireshark for Windows; the installer offers to install
-   USBPcap. Accept.
-1. Reboot (USBPcap installs a USB-stack filter driver; a reboot is
-   required for it to attach).
-1. Open Wireshark. The capture interface list will include
-   `USBPcap1`, `USBPcap2`, ... (one per USB root hub).
-1. Right-click an interface → "Capture from this device only" lets you
-   bind the capture to a single device's bus address — equivalent to
-   the per-bus filter step 4.2 enforces on Linux.
-1. Stop the capture and save as `.pcapng`.
+Single installer covers both Wireshark and USBPcap:
 
-`.pcapng` files from USBPcap use `DLT_USBPCAP` link-layer; `usbrply`
-handles them transparently (no separate decode path). All subsequent
-steps (5.1 → 5.6) are identical to the Linux flow.
+1. Download **Wireshark for Windows x64 Installer** from <https://www.wireshark.org/download.html> (~80 MB).
+1. Run the installer as Administrator.
+1. On the "Choose Components" screen, verify the following are checked:
+   - ☑ **Wireshark** (main GUI)
+   - ☑ **TShark** (CLI — useful for scripted captures with `-a duration:` event windowing)
+   - ☑ **USBPcap** ← optional in the installer but **mandatory for this project**
+   - ☑ Plugins & Extensions (default OK)
+1. USBPcap will prompt for confirmation to install its kernel-mode USB filter driver (Microsoft-signed; accept).
+1. **Reboot** is mandatory after install. USBPcap is a USB stack filter driver that attaches at boot; without a reboot, no `USBPcapN` capture interfaces appear in Wireshark.
 
-Caveat: Windows boot-keyboard reports are subject to the same
-Pitfall 17 leak as Linux. Apply `usb.bInterfaceProtocol != 1` in the
-extraction display filter on `ak980pro` / `microdia_dongle_7016`
-captures regardless of which OS produced the pcapng.
+Post-reboot verification (PowerShell or `cmd`):
+
+```cmd
+"C:\Program Files\Wireshark\tshark.exe" -D
+```
+
+You must see one or more `\\.\USBPcap<N>` interfaces in the list (one per USB root hub on the machine). If none appear, USBPcap did not attach — re-run the installer with the USBPcap component re-selected, or check `Device Manager → Non-Plug and Play Drivers → USBPcap1` for driver-load errors.
+
+### 8.1 WinBoat option for Linux developers
+
+[WinBoat](https://winboat.app/) ([GitHub](https://github.com/TibixDev/winboat)) is **NOT** `wine`. It runs a real, containerised Windows 11 instance inside Docker using KVM virtualisation, then uses FreeRDP with Microsoft's RemoteApp protocol to display individual Windows application windows seamlessly on the Linux desktop. The vendor app runs on a real Windows kernel; CLAUDE.md hard rule against `wine` / `innoextract` does NOT apply — this is the "separate VM-isolated machine" referenced in §6.
+
+Requirements:
+
+- ≥ 32 GB free disk space (Windows 11 install)
+- KVM enabled in BIOS / UEFI (Intel VT-x or AMD-V)
+- Docker + Docker Compose v2 installed
+- User in the `docker` group
+- FreeRDP installed (`sudo dnf install freerdp` on Fedora, `sudo apt install freerdp2-x11` on Debian / Ubuntu)
+- WinBoat AppImage / `.deb` / `.rpm` from <https://winboat.app/>
+
+Two capture-point options when using WinBoat:
+
+| Where you install Wireshark + USBPcap | What you capture                                                  | Pros                                                                                                              | Cons                                                                                                                      |
+| ------------------------------------- | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Inside the WinBoat Windows guest      | USB traffic as seen by the Windows kernel of the VM               | Simpler conceptually; USBPcap binds to USB devices passed through to the VM exactly as it would on a physical PC. | Requires WinBoat experimental USB passthrough to be working (per the WinBoat changelog this is now stable).               |
+| On the Linux host via `usbmon`        | USB traffic at the host level while the device is bound to the VM | Reuses the §1-7 Linux toolchain you already have; one less reboot.                                                | Whether `usbmon` sees URBs depends on the passthrough method. Verify with a smoke capture before committing to this path. |
+
+Recommended: install USBPcap **inside** the WinBoat Windows guest (option 1). Treat it as a normal Windows install per §8.0.
+
+USB passthrough setup in WinBoat:
+
+1. Plug the AJAZZ device into a USB port that is NOT used by the Linux host for input (avoid the same hub as your keyboard / mouse — see §8.4 caveat about co-located devices).
+1. In the WinBoat tray menu → Settings → USB Devices → enable passthrough for the target device (VID:PID listed).
+1. Inside the Windows guest, open Device Manager and confirm the device appears (e.g., "AJAZZ AKP03 Stream Dock" under HID-class devices).
+1. Install the vendor app inside the Windows guest. The vendor's `.exe` / `.msi` installer may be downloaded directly inside the guest's browser — do NOT run it through `wine` on the host.
+
+When you're done capturing, leave the device passed through if you plan to capture more, or detach via the tray menu to return it to the Linux host (your control center on the host will then see it again via `hidapi_hidraw`).
+
+### 8.2 Capture flow (identical on physical Windows and WinBoat)
+
+1. Identify which `USBPcap<N>` corresponds to the root hub your AJAZZ device sits on:
+
+   ```cmd
+   "C:\Program Files\Wireshark\tshark.exe" -D
+   ```
+
+   In Wireshark GUI: Capture → Options → check each `USBPcap<N>` to see which device list contains the AJAZZ VID:PID. Use the matching interface index.
+
+1. Capture via tshark (CLI, scripted) — example for AKP03 0x3004 image upload, 10-second window:
+
+   ```cmd
+   "C:\Program Files\Wireshark\tshark.exe" -i USBPcap1 ^
+       -f "usb.idVendor == 0x0300 and usb.idProduct == 0x3004" ^
+       -w C:\Users\%USERNAME%\akp03_image_upload.pcapng ^
+       -a duration:10
+   ```
+
+   Within the 10-second window, switch to the vendor app and trigger the target action (e.g., assign an image to key 1). Capture stops automatically.
+
+1. Or capture via Wireshark GUI: Capture → Options → select `USBPcap<N>` → Capture filter `usb.idVendor == 0x0300 and usb.idProduct == 0x3004` → Start → trigger device action in vendor app → Stop → File → Save As `.pcapng`.
+
+1. Transfer the `.pcapng` to the Linux dev box for fixture extraction (the host-side pre-commit hook will reject any `.pcap`/`.pcapng` from a `git add`, so this step never produces a committed file — you process the pcap in `/tmp/` or the gitignored `.planning/research/captures/` scratch sink, see §5).
+
+   Transfer methods: USB stick, `scp` from Windows via [PSCP](https://www.chiark.greenend.org.uk/~sgtatham/putty/latest.html), WinBoat's mounted home directory (the `~` of the Linux user is auto-mounted inside the Windows guest, so just save the `.pcapng` there), or a network share.
+
+1. On the Linux dev box, run the standard §5.1-5.6 pipeline:
+
+   ```bash
+   usbrply -j akp03_image_upload.pcapng > /tmp/cap.json
+   scripts/hex-to-cpparray.py /tmp/cap.json \
+       --device akp03_variant_3004 --capture image_upload_first_chunk \
+       > tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+   ```
+
+   `usbrply` handles both `DLT_USB_LINUX_MMAPPED` (Linux usbmon) and `DLT_USBPCAP` (Windows USBPcap) link-layer formats transparently — no separate decode path. All subsequent extraction steps are identical.
+
+### 8.3 Granularity difference vs Linux usbmon
+
+| Capture host    | Granularity                 | Implication                                                                                                                                     |
+| --------------- | --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux usbmon    | Per-bus (`usbmonN`)         | One AJAZZ device per `usbmonN` if the bus has only that device, otherwise filter via `-Y "usb.idVendor==..."` at extraction time.               |
+| Windows USBPcap | Per-root-hub (`USBPcap<N>`) | A root hub can host multiple devices (USB hubs daisy-chain off it). Apply a tighter `-f` capture filter or `-Y` display filter to disambiguate. |
+
+Either way, the §5 extraction pipeline runs the same final-stage `-Y` display filter that drops everything except the target VID:PID + control-channel reports.
+
+### 8.4 Caveats specific to Windows captures
+
+- **USBPcap captures EVERYTHING on the selected root hub**, including any other USB devices (keyboards, webcams, mass storage) on the same hub. **Use a USB hub dedicated to the AJAZZ device** to keep noise out of the capture; or move the AJAZZ device to a port on a different root hub from the system keyboard before capturing.
+- **Pitfall 17 boot-keyboard leak applies on Windows too.** Any keystroke flowing through the same root hub during capture is recoverable from the raw `.pcap`. Apply `usb.bInterfaceProtocol != 1` in the `-Y` extraction display filter on `ak980pro` / `microdia_dongle_7016` captures, identical to the Linux flow. The CAPTURE-01 pre-commit hook on the Linux side is the belt-and-braces backstop, but treat the raw `.pcap` on Windows as just-as-sensitive — don't share it in Discord, email, or bug reports.
+- **Wireshark capture filter (`-f`) vs display filter (`-Y`)** — same gotcha as Linux. `-f` uses BPF syntax (`usb.idVendor == 0x0300 and usb.idProduct == 0x3004`) and applies live during capture; `-Y` uses Wireshark display syntax and applies post-capture. They are not interchangeable. The recommended pattern is: `-f` to bound capture file size + obvious scope, `-Y` at `usbrply` / `tshark -r` extraction time for precise filtering.
+- **Vendor-app version pinning matters.** Record the vendor app version in your capture file naming or in the SHA-256 metadata blob (`.planning/research/captures/INDEX.md`). Different vendor app versions can emit slightly different command sequences for the same UI action (especially for AKP03 family where mirajazz documents three protocol-version generations).
+- **Anti-virus / EDR interference.** Some Windows AV / EDR products (Defender, CrowdStrike, etc.) flag kernel-mode USB filter drivers as suspicious. If USBPcap fails to attach or captures are empty, check `Event Viewer → Windows Logs → System` for driver-load errors; whitelist the USBPcap driver if needed.
+- **WinBoat dynamic USB passthrough is marked experimental.** If a target device does not appear in the Windows guest's Device Manager after enabling passthrough, fall back to physical-Windows or dual-boot for that device. File an issue at <https://github.com/TibixDev/winboat> if reproducible.
+
+### 8.5 When NOT to use the Windows path
+
+- **Regression-testing our own control center's wire format** (Phase 10/11/12 fixture-vs-emit verification). Our agent runs on Linux; capture our agent's traffic with Linux usbmon (§1-7).
+- **The vendor app does not exist for the device** (e.g., a future SKU we acquired before any vendor software shipped). Use the Linux usbmon path to characterise enumeration / descriptor / unsolicited input reports.
 
 ______________________________________________________________________
 
