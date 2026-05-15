@@ -4,13 +4,13 @@ milestone: v1.2
 milestone_name: Connected-Device Capability Parity
 status: executing
 stopped_at: ROADMAP.md written; 33 v1.2 requirements mapped across Phases 9-13; 100% coverage validated.
-last_updated: '2026-05-15T07:51:27.125Z'
-last_activity: 2026-05-15 — CAPTURE-03 hex-to-cpparray.py + 8-test pytest smoke suite landed (commit c2208a2).
+last_updated: '2026-05-15T07:59:32.545Z'
+last_activity: 2026-05-15
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 7
-  completed_plans: 2
+  completed_plans: 4
   percent: 0
 ---
 
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 ## Current Position
 
 Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase
-Plan: 3 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
-Status: Executing partial-scope Phase 9 (non-capture deliverables)
-Last activity: 2026-05-15 — CAPTURE-03 hex-to-cpparray.py + 8-test pytest smoke suite landed (commit c2208a2).
+Plan: 5 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
+Status: Ready to execute
+Last activity: 2026-05-15
 
-Progress: [███░░░░░░░] 29%
+Progress: [██████░░░░] 57%
 
 ## Performance Metrics
 
@@ -59,6 +59,9 @@ Phase 9 will ratify three new written ADRs:
 - **ARCH-04**: AKP03 image-encoding pipeline location (recommended: Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked).
 - **ARCH-05**: per-device `setTime` outcome (default verdict: NO RTC opcode in any AJAZZ corpus → `hasClock=false` on `akp03_variant_3004` and `ak980pro`; `setTime` stays `NotImplemented`).
 - **ARCH-06**: composite-HID dedup (default verdict: NOT firing — topology proves `0c45:7016` is a separate dongle on a different bus branch).
+- \[Phase 9\]: ARCH-04 default verdict ratified at `.planning/phases/09-research-captures-hygiene/ARCH-04.md` — AKP03 image-pipeline at `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` (Option C), PRIVATE-linked to `ajazz_devices_streamdeck`; Option B (new `ajazz_imaging` static lib) deferred to v1.3+; D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION) — Phase 10 gates on Phase 9.x captures-confirmation run (Pitfall 22). [commit: 60f3140]
+- \[Phase ?\]: Phase 10/11/12 reuse pattern: makeAjSeriesWithTransport public factory overload exposes anonymous-namespace COD-026 DI ctor across TU boundaries (CAPTURE-04)
+- \[Phase ?\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
 
 ### Pending Todos
 
@@ -84,10 +87,12 @@ None tracked in `.planning/todos/`. v1.1 deferred items are captured in PROJECT.
 | v1.2.x           | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
 | v1.2.x           | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
 | Phase 9 P3       | 6min                                                                          | 2 tasks                           | 2 files                  |
+| Phase 09 P05     | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 09 P04     | 4min                                                                          | 3 tasks                           | 5 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-15T07:51:07.071Z
+Last session: 2026-05-15T07:59:25.272Z
 Stopped at: ROADMAP.md written; 33 v1.2 requirements mapped across Phases 9-13; 100% coverage validated.
 Resume file: None
 

@@ -12,7 +12,7 @@ Requirements for this milestone. Each maps to one roadmap phase (Phases 9-13). N
 
 Phase 9 deliverables — written rationale gating Phases 10-12. Captures-driven; final wording set in Phase 9 once first-party captures land.
 
-- [ ] **ARCH-04**: Project records the AKP03 image-encoding pipeline location (recommended: Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked to `ajazz_devices_streamdeck`; alternative: new `ajazz_imaging` static lib deferred to v1.3+ AKP815). Decision binds Phase 10.
+- [x] **ARCH-04**: Project records the AKP03 image-encoding pipeline location (recommended: Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked to `ajazz_devices_streamdeck`; alternative: new `ajazz_imaging` static lib deferred to v1.3+ AKP815). Decision binds Phase 10.
 - [ ] **ARCH-05**: Project records the `IClockCapable::setTime` wire-format outcome **per connected device**, based on Phase 9 captures. Default verdict (NO RTC opcode in any AJAZZ corpus): `hasClock=false` on `akp03_variant_3004` and `ak980pro`; `setTime` remains `NotImplemented`; PROJECT.md "Out of Scope" row preserved. Decision is binary per device; captures determine outcome.
 - [ ] **ARCH-06**: Project records the composite-HID dedup decision for `DeviceRegistry`. Default verdict (USB topology proves `0c45:7016` is a separate dongle on a different bus branch): **NOT firing** — `microdia_dongle_7016` enters catalogue as a separate `probed`-tier device with no dedup logic added. If Phase 9 captures contradict, decision flips and dedup infrastructure lands before Phase 12.
 
@@ -23,7 +23,7 @@ Phase 9 deliverables — gates every subsequent implementation phase. Privacy-fi
 - [ ] **CAPTURE-01**: Repo enforces a capture-data-hygiene policy — `docs/policies/capture-data-hygiene.md` defines the policy, `.planning/research/captures/.gitignore` excludes `*.pcap` / `*.pcapng`, and a pre-commit hook rejects any commit attempting to add raw capture files. Must land before any researcher does a first capture (Pitfall 17 — keystroke recovery from raw `.pcap` is deterministic).
 - [ ] **CAPTURE-02**: `docs/protocols/CAPTURING.md` documents the Wireshark + `usbmon` + `dumpcap` runbook (Linux dev box prereq install, `usbmon` kernel-module mount, per-device capture filter `usb.idVendor == 0xVVVV && usb.idProduct == 0xPPPP`, USB-side-only event windowing).
 - [x] **CAPTURE-03**: `scripts/hex-to-cpparray.py` (≤30 LoC dev-time helper) extracts sanitized HID payload bytes from `usbrply`-decoded captures into `std::array<uint8_t, N>` C++ literals under `tests/integration/fixtures/<codename>_*.h`. No `libpcap` / `PcapPlusPlus` link-time dependency added.
-- [ ] **CAPTURE-04**: `tests/unit/fixtures/mock_transport.hpp` (NEW, ~80 LoC, header-only) implements a `MockTransport` exposing `write(span<const uint8_t>) → vector<vector<uint8_t>> writes()` for byte-level wire-format assertion. Backends accept it via the existing COD-026 DI constructor — no architectural change.
+- [x] **CAPTURE-04**: `tests/unit/fixtures/mock_transport.hpp` (NEW, ~80 LoC, header-only) implements a `MockTransport` exposing `write(span<const uint8_t>) → vector<vector<uint8_t>> writes()` for byte-level wire-format assertion. Backends accept it via the existing COD-026 DI constructor — no architectural change.
 - [ ] **CAPTURE-05**: Phase 9 produces sanitized capture fixtures for all 4 connected devices, SHA-256-indexed in a metadata blob committed to `.planning/research/captures/INDEX.md`; raw `.pcap` files stay out-of-tree per CAPTURE-01.
 - [ ] **CAPTURE-06**: Phase 9 produces per-device wire-format diff documents extending `docs/protocols/streamdeck/akp03.md` (for `0300:3004`) and creating `docs/protocols/keyboard/ak980pro.md` + `docs/protocols/mouse/ajazz_24g_8k.md` if findings diverge materially from the existing AKP03 / proprietary / aj_series protocol docs.
 
@@ -135,13 +135,13 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 
 | Requirement | Phase    | Status   |
 | ----------- | -------- | -------- |
-| ARCH-04     | Phase 9  | Pending  |
+| ARCH-04     | Phase 9  | Complete |
 | ARCH-05     | Phase 9  | Pending  |
 | ARCH-06     | Phase 9  | Pending  |
 | CAPTURE-01  | Phase 9  | Pending  |
 | CAPTURE-02  | Phase 9  | Pending  |
 | CAPTURE-03  | Phase 9  | Complete |
-| CAPTURE-04  | Phase 9  | Pending  |
+| CAPTURE-04  | Phase 9  | Complete |
 | CAPTURE-05  | Phase 9  | Pending  |
 | CAPTURE-06  | Phase 9  | Pending  |
 | DISPLAY-01  | Phase 10 | Pending  |
