@@ -65,12 +65,22 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 1. Sanitised capture fixtures exist for all 4 connected devices (`akp03_variant_3004`, `ak980pro`, `ajazz_24g_8k`, `0c45_7016`), SHA-256-indexed in `.planning/research/captures/INDEX.md`; raw `.pcap` files stay out-of-tree per CAPTURE-01 (CAPTURE-05). Per-device wire-format diff documents extend `docs/protocols/streamdeck/akp03.md` and add `docs/protocols/keyboard/ak980pro.md` + `docs/protocols/mouse/ajazz_24g_8k.md` where findings diverge from the existing OSS-corpus baseline (CAPTURE-06).
 1. Three written architectural decision artefacts land under `.planning/phases/09-research-captures-hygiene/`: ARCH-04 records the AKP03 image-encoding pipeline location (recommended Option C — Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked); ARCH-05 records the per-device `setTime` outcome (default verdict: `hasClock=false` on `akp03_variant_3004` and `ak980pro`, `setTime` stays `NotImplemented`; PROJECT.md Out-of-Scope row preserved); ARCH-06 records the composite-HID dedup decision (default verdict: NOT firing — topology proves `0c45:7016` is a separate dongle on a different bus branch).
 
-**Plans**: TBD
+**Plans**: 7 plans (partial-scope execution — non-capture deliverables only; CAPTURE-05/06 + ARCH-04/05/06 finalization deferred to a follow-up Phase 9.x run after the user produces captures)
+
+- [ ] 09-01-PLAN.md — CAPTURE-01 hygiene policy + gitignore + pre-commit hook (MUST-FIRST per D-01)
+- [ ] 09-02-PLAN.md — CAPTURE-02 CAPTURING.md Wireshark + usbmon + dumpcap runbook
+- [ ] 09-03-PLAN.md — CAPTURE-03 hex-to-cpparray.py + pytest smoke test
+- [ ] 09-04-PLAN.md — CAPTURE-04 MockTransport header-only fixture + AjSeriesMouse smoke test
+- [ ] 09-05-PLAN.md — ARCH-04 default-verdict ratification (Qt6 host-side image pipeline, Option C)
+- [ ] 09-06-PLAN.md — ARCH-05 default-verdict ratification (no RTC opcode; hasClock=false per device)
+- [ ] 09-07-PLAN.md — ARCH-06 default-verdict ratification (dongle is separate; NOT firing dedup)
+
 **Phase notes**:
 
 - This phase IS the research — no further `/gsd-research-phase` invocation needed for Phase 9.
 - ARCH decisions are captures-driven; default verdicts above are the expected outcome but Phase 9 captures can flip them. If ARCH-06 captures contradict (e.g. unplugging `ak980pro` causes `0c45:7016` to disappear simultaneously), dedup infrastructure lands before Phase 12 and Phase 13 re-sequences.
 - CAPTURE-01 is the milestone-blocking deliverable. Land it in the first plan of this phase before any capture is taken.
+- **PARTIAL EXECUTION (2026-05-15):** the partial-scope plan set above closes 4 of 5 Phase 9 success criteria (CAPTURE-01 hygiene; CAPTURE-02/03 runbook + script; CAPTURE-04 MockTransport; ARCH-04/05/06 default-verdict ratification). Success criterion #4 (sanitised fixtures for all 4 devices + diff docs — CAPTURE-05/06) stays pending until a follow-up Phase 9.x run, which requires the user to install Wireshark, load usbmon, and physically interact with the 4 connected devices (out of agent scope per CLAUDE.md hard rules).
 
 ### Phase 10: AKP03 variant_3004 Promotion
 
@@ -167,18 +177,18 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 **Execution Order:**
 Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 12 are device-clustered and could in principle fan out subject to the 2-agent concurrent cap, but Phase 10 establishes the template Phases 11/12 reuse — landing Phase 10 first remains the recommended sequencing.
 
-| Phase                                      | Milestone | Plans Complete | Status           | Completed  |
-| ------------------------------------------ | --------- | -------------- | ---------------- | ---------- |
-| 1. SEC-003 Plugin Host                     | v1.0      | 1/1            | Complete (retro) | 2026-05-03 |
-| 2. QML Singleton Sweep                     | v1.0      | 1/1            | Complete (retro) | 2026-05-04 |
-| 3. Architectural Decisions                 | v1.1      | 1/1            | Complete         | 2026-05-14 |
-| 4. Hot-plug Hardening                      | v1.1      | 7/7            | Complete         | 2026-05-14 |
-| 5. Time-Sync Scaffolding                   | v1.1      | 8/8            | Complete         | 2026-05-14 |
-| 6. CR-01 Win32 Env Fix                     | v1.1      | 3/3            | Complete         | 2026-05-14 |
-| 7. WR-01 Trust-Roots Parser                | v1.1      | 3/3            | Complete         | 2026-05-14 |
-| 8. Scaffolded-Device Wiring                | v1.1      | 4/4            | Complete         | 2026-05-14 |
-| 9. Research, Captures, Hygiene             | v1.2      | 0/?            | Not started      | —          |
-| 10. AKP03 variant_3004 Promotion           | v1.2      | 0/?            | Not started      | —          |
-| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm  | v1.2      | 0/?            | Not started      | —          |
-| 12. AK980 PRO Promotion                    | v1.2      | 0/?            | Not started      | —          |
-| 13. Catalogue + v1.1 UI Verifies Back-Fill | v1.2      | 0/?            | Not started      | —          |
+| Phase                                      | Milestone | Plans Complete | Status                  | Completed  |
+| ------------------------------------------ | --------- | -------------- | ----------------------- | ---------- |
+| 1. SEC-003 Plugin Host                     | v1.0      | 1/1            | Complete (retro)        | 2026-05-03 |
+| 2. QML Singleton Sweep                     | v1.0      | 1/1            | Complete (retro)        | 2026-05-04 |
+| 3. Architectural Decisions                 | v1.1      | 1/1            | Complete                | 2026-05-14 |
+| 4. Hot-plug Hardening                      | v1.1      | 7/7            | Complete                | 2026-05-14 |
+| 5. Time-Sync Scaffolding                   | v1.1      | 8/8            | Complete                | 2026-05-14 |
+| 6. CR-01 Win32 Env Fix                     | v1.1      | 3/3            | Complete                | 2026-05-14 |
+| 7. WR-01 Trust-Roots Parser                | v1.1      | 3/3            | Complete                | 2026-05-14 |
+| 8. Scaffolded-Device Wiring                | v1.1      | 4/4            | Complete                | 2026-05-14 |
+| 9. Research, Captures, Hygiene             | v1.2      | 0/7            | Planned (partial-scope) | —          |
+| 10. AKP03 variant_3004 Promotion           | v1.2      | 0/?            | Not started             | —          |
+| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm  | v1.2      | 0/?            | Not started             | —          |
+| 12. AK980 PRO Promotion                    | v1.2      | 0/?            | Not started             | —          |
+| 13. Catalogue + v1.1 UI Verifies Back-Fill | v1.2      | 0/?            | Not started             | —          |
