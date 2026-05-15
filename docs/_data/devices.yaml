@@ -407,6 +407,33 @@ devices:
   # the IDs, these SKUs are no longer enumerated. Tracking entry:
   # TODO.md → "AJ-series VID:PID enumeration drift".
 
+  # ----- Dongles -----------------------------------------------------------
+  # 2.4GHz USB receivers that proxy HID for a wireless peripheral. The
+  # dongle itself has no configurable capabilities — those are exposed
+  # on the paired-peripheral codename when the host talks to it. The
+  # dongle entry exists so the catalogue can describe the receiver SKU
+  # for documentation + UI honesty (the user sees a separate USB device
+  # at lsusb time and the control center should recognise it instead of
+  # treating it as an unknown device).
+
+  - codename: ak980pro_dongle_24g
+    family: dongle
+    name: "AJAZZ AK980 PRO 2.4GHz USB Receiver"
+    vid: "0x0c45"
+    pid: "0x7016"
+    maturity: probed
+    capabilities: []
+    protocol_doc: docs/protocols/keyboard/proprietary.md
+    notes: "2.4GHz USB receiver dongle paired with AJAZZ AK980 PRO (`ak980pro`, VID:PID 0c45:8009). Identified 2026-05-15 via HID report-descriptor parsing on real hardware: Interface 0 advertises a 6KRO boot keyboard + 64-byte vendor Feature Report on Consumer Page — the exact control-channel signature that TaxMachine documented for AK820 Pro / AK980 PRO at the wired VID:PID. Interface 1 is a 4-in-1 composite (mouse + system + consumer/media + 120-key NKRO keyboard) typical of SONiX wireless mech-keyboard receivers. When the host has both the USB-C wired connection AND the 2.4GHz dongle active, the same physical keyboard enumerates twice — once as `ak980pro` (wired path) and once via this dongle (RF-tunneled). No standalone capabilities advertised; the dongle is a transport, not a device — capability work belongs on the `ak980pro` codename and applies regardless of connection path. ARCH-06 default verdict (Phase 9 partial-scope, 2026-05-15) ratified composite-HID dedup NOT firing — topology (Full-Speed 12Mbps vs the AK980 PRO's High-Speed 480Mbps, separate USB bus branch) refutes the composite-interface hypothesis."
+    feature_summary:
+      works:
+        - "Identified via HID report-descriptor parsing on dev box hardware (2026-05-15)"
+        - "Topology evidence cited inline (Phase 9 ARCH-06 cross-reference)"
+      partial: []
+      pending:
+        - "Runtime entry in `src/devices/keyboard/src/register.cpp` (or new `src/devices/dongle/`) — this is catalog-only for now; sidebar visibility requires register.cpp + `DeviceFamily::Dongle` enum addition"
+        - "Captures-confirmation 2-minute physical unplug test (unplug `ak980pro` USB-C and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred"
+
 # ---------------------------------------------------------------------------
 # Platform support matrix (used in README build-from-source table)
 # ---------------------------------------------------------------------------

@@ -179,9 +179,10 @@ def render_devices_by_family(d: Data) -> str:
         "streamdeck": "Stream decks",
         "keyboard": "Keyboards",
         "mouse": "Mice",
+        "dongle": "Dongles",
     }
 
-    for fam_key in ["streamdeck", "keyboard", "mouse"]:
+    for fam_key in ["streamdeck", "keyboard", "mouse", "dongle"]:
         if fam_key not in families:
             continue
         out.append(f"### {titles.get(fam_key, fam_key.title())}\n")

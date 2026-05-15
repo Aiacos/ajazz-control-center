@@ -50,7 +50,7 @@ Don't want to build from source? Pre-built installers for every push to `main` a
 For stable, signed, slow-moving builds, see the [tagged releases](https://github.com/Aiacos/ajazz-control-center/releases). The release process is documented in the [Release Process wiki page](docs/wiki/Release-Process.md).
 
 <!-- BEGIN AUTOGEN: stats -->
-**27 devices** across 3 keyboard, 7 mouse, 17 streamdeck — 10 functional, 15 scaffolded, 1 probed, 1 partial.
+**28 devices** across 1 dongle, 3 keyboard, 7 mouse, 17 streamdeck — 10 functional, 15 scaffolded, 2 probed, 1 partial.
 <!-- END AUTOGEN: stats -->
 
 ---
@@ -116,6 +116,12 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 | [AJAZZ 2.4G 8K](docs/research/vendor-protocol-notes.md) | `0x3151:0x5007` | 🟡 scaffolded | DPI stages, RGB backlight | 8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. Wire format reuses AJ-series backend pending reconciliation. |
 | [AJAZZ AJ199 family (wired)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF500` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B. |
 | [AJAZZ AJ199 family (2.4GHz dongle)](docs/protocols/mouse/aj_series.md) | `0x3554:0xF501` | 🟡 scaffolded | RGB backlight, DPI stages, Firmware version | AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe. |
+
+### Dongles
+
+| Device | USB | Status | Features | Notes |
+|--------|-----|--------|----------|-------|
+| [AJAZZ AK980 PRO 2.4GHz USB Receiver](docs/protocols/keyboard/proprietary.md) | `0x0c45:0x7016` | 🔵 probed |  | ✓ Identified via HID report-descriptor parsing on dev box hardware (2026-05-15); Topology evidence cited inline (Phase 9 ARCH-06 cross-reference) · ✗ Runtime entry in `src/devices/keyboard/src/register.cpp` (or new `src/devices/dongle/`) — this is catalog-only for now; sidebar visibility requires register.cpp + `DeviceFamily::Dongle` enum addition; Captures-confirmation 2-minute physical unplug test (unplug `ak980pro` USB-C and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred · 2.4GHz USB receiver dongle paired with AJAZZ AK980 PRO (`ak980pro`, VID:PID 0c45:8009). Identified 2026-05-15 via HID report-descriptor parsing on real hardware: Interface 0 advertises a 6KRO boot keyboard + 64-byte vendor Feature Report on Consumer Page — the exact control-channel signature that TaxMachine documented for AK820 Pro / AK980 PRO at the wired VID:PID. Interface 1 is a 4-in-1 composite (mouse + system + consumer/media + 120-key NKRO keyboard) typical of SONiX wireless mech-keyboard receivers. When the host has both the USB-C wired connection AND the 2.4GHz dongle active, the same physical keyboard enumerates twice — once as `ak980pro` (wired path) and once via this dongle (RF-tunneled). No standalone capabilities advertised; the dongle is a transport, not a device — capability work belongs on the `ak980pro` codename and applies regardless of connection path. ARCH-06 default verdict (Phase 9 partial-scope, 2026-05-15) ratified composite-HID dedup NOT firing — topology (Full-Speed 12Mbps vs the AK980 PRO's High-Speed 480Mbps, separate USB bus branch) refutes the composite-interface hypothesis. |
 
 <!-- END AUTOGEN: devices-by-family -->
 
