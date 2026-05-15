@@ -22,7 +22,7 @@ Phase 9 deliverables — gates every subsequent implementation phase. Privacy-fi
 
 - [ ] **CAPTURE-01**: Repo enforces a capture-data-hygiene policy — `docs/policies/capture-data-hygiene.md` defines the policy, `.planning/research/captures/.gitignore` excludes `*.pcap` / `*.pcapng`, and a pre-commit hook rejects any commit attempting to add raw capture files. Must land before any researcher does a first capture (Pitfall 17 — keystroke recovery from raw `.pcap` is deterministic).
 - [ ] **CAPTURE-02**: `docs/protocols/CAPTURING.md` documents the Wireshark + `usbmon` + `dumpcap` runbook (Linux dev box prereq install, `usbmon` kernel-module mount, per-device capture filter `usb.idVendor == 0xVVVV && usb.idProduct == 0xPPPP`, USB-side-only event windowing).
-- [ ] **CAPTURE-03**: `scripts/hex-to-cpparray.py` (≤30 LoC dev-time helper) extracts sanitized HID payload bytes from `usbrply`-decoded captures into `std::array<uint8_t, N>` C++ literals under `tests/integration/fixtures/<codename>_*.h`. No `libpcap` / `PcapPlusPlus` link-time dependency added.
+- [x] **CAPTURE-03**: `scripts/hex-to-cpparray.py` (≤30 LoC dev-time helper) extracts sanitized HID payload bytes from `usbrply`-decoded captures into `std::array<uint8_t, N>` C++ literals under `tests/integration/fixtures/<codename>_*.h`. No `libpcap` / `PcapPlusPlus` link-time dependency added.
 - [ ] **CAPTURE-04**: `tests/unit/fixtures/mock_transport.hpp` (NEW, ~80 LoC, header-only) implements a `MockTransport` exposing `write(span<const uint8_t>) → vector<vector<uint8_t>> writes()` for byte-level wire-format assertion. Backends accept it via the existing COD-026 DI constructor — no architectural change.
 - [ ] **CAPTURE-05**: Phase 9 produces sanitized capture fixtures for all 4 connected devices, SHA-256-indexed in a metadata blob committed to `.planning/research/captures/INDEX.md`; raw `.pcap` files stay out-of-tree per CAPTURE-01.
 - [ ] **CAPTURE-06**: Phase 9 produces per-device wire-format diff documents extending `docs/protocols/streamdeck/akp03.md` (for `0300:3004`) and creating `docs/protocols/keyboard/ak980pro.md` + `docs/protocols/mouse/ajazz_24g_8k.md` if findings diverge materially from the existing AKP03 / proprietary / aj_series protocol docs.
@@ -133,41 +133,41 @@ Explicitly excluded from v1.2. Documented to prevent scope creep — sourced fro
 
 Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generation.
 
-| Requirement | Phase    | Status  |
-| ----------- | -------- | ------- |
-| ARCH-04     | Phase 9  | Pending |
-| ARCH-05     | Phase 9  | Pending |
-| ARCH-06     | Phase 9  | Pending |
-| CAPTURE-01  | Phase 9  | Pending |
-| CAPTURE-02  | Phase 9  | Pending |
-| CAPTURE-03  | Phase 9  | Pending |
-| CAPTURE-04  | Phase 9  | Pending |
-| CAPTURE-05  | Phase 9  | Pending |
-| CAPTURE-06  | Phase 9  | Pending |
-| DISPLAY-01  | Phase 10 | Pending |
-| DISPLAY-02  | Phase 10 | Pending |
-| DISPLAY-03  | Phase 10 | Pending |
-| DISPLAY-04  | Phase 10 | Pending |
-| INPUT-01    | Phase 10 | Pending |
-| INPUT-02    | Phase 10 | Pending |
-| KEYBOARD-01 | Phase 12 | Pending |
-| KEYBOARD-02 | Phase 12 | Pending |
-| KEYBOARD-03 | Phase 12 | Pending |
-| KEYBOARD-04 | Phase 12 | Pending |
-| MOUSE-01    | Phase 11 | Pending |
-| MOUSE-02    | Phase 11 | Pending |
-| MOUSE-03    | Phase 11 | Pending |
-| MOUSE-04    | Phase 11 | Pending |
-| MOUSE-05    | Phase 11 | Pending |
-| DEVICES-05  | Phase 10 | Pending |
-| DEVICES-06  | Phase 12 | Pending |
-| DEVICES-07  | Phase 11 | Pending |
-| DEVICES-08  | Phase 13 | Pending |
-| DEVICES-09  | Phase 13 | Pending |
-| VERIFY-01   | Phase 13 | Pending |
-| VERIFY-02   | Phase 13 | Pending |
-| VERIFY-03   | Phase 13 | Pending |
-| VERIFY-04   | Phase 13 | Pending |
+| Requirement | Phase    | Status   |
+| ----------- | -------- | -------- |
+| ARCH-04     | Phase 9  | Pending  |
+| ARCH-05     | Phase 9  | Pending  |
+| ARCH-06     | Phase 9  | Pending  |
+| CAPTURE-01  | Phase 9  | Pending  |
+| CAPTURE-02  | Phase 9  | Pending  |
+| CAPTURE-03  | Phase 9  | Complete |
+| CAPTURE-04  | Phase 9  | Pending  |
+| CAPTURE-05  | Phase 9  | Pending  |
+| CAPTURE-06  | Phase 9  | Pending  |
+| DISPLAY-01  | Phase 10 | Pending  |
+| DISPLAY-02  | Phase 10 | Pending  |
+| DISPLAY-03  | Phase 10 | Pending  |
+| DISPLAY-04  | Phase 10 | Pending  |
+| INPUT-01    | Phase 10 | Pending  |
+| INPUT-02    | Phase 10 | Pending  |
+| KEYBOARD-01 | Phase 12 | Pending  |
+| KEYBOARD-02 | Phase 12 | Pending  |
+| KEYBOARD-03 | Phase 12 | Pending  |
+| KEYBOARD-04 | Phase 12 | Pending  |
+| MOUSE-01    | Phase 11 | Pending  |
+| MOUSE-02    | Phase 11 | Pending  |
+| MOUSE-03    | Phase 11 | Pending  |
+| MOUSE-04    | Phase 11 | Pending  |
+| MOUSE-05    | Phase 11 | Pending  |
+| DEVICES-05  | Phase 10 | Pending  |
+| DEVICES-06  | Phase 12 | Pending  |
+| DEVICES-07  | Phase 11 | Pending  |
+| DEVICES-08  | Phase 13 | Pending  |
+| DEVICES-09  | Phase 13 | Pending  |
+| VERIFY-01   | Phase 13 | Pending  |
+| VERIFY-02   | Phase 13 | Pending  |
+| VERIFY-03   | Phase 13 | Pending  |
+| VERIFY-04   | Phase 13 | Pending  |
 
 **Coverage:**
 

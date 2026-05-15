@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Connected-Device Capability Parity
-status: ready_to_plan
-last_updated: '2026-05-15T06:00:00.000Z'
-last_activity: 2026-05-15
+status: executing
+stopped_at: ROADMAP.md written; 33 v1.2 requirements mapped across Phases 9-13; 100% coverage validated.
+last_updated: '2026-05-15T07:51:27.125Z'
+last_activity: 2026-05-15 — CAPTURE-03 hex-to-cpparray.py + 8-test pytest smoke suite landed (commit c2208a2).
 progress:
   total_phases: 5
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 2
   percent: 0
 ---
 
@@ -25,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 ## Current Position
 
 Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase
-Plan: — (planning has not started yet)
-Status: Ready to plan
-Last activity: 2026-05-15 — v1.2 roadmap created; 33 v1.2 requirements mapped across Phases 9-13 (100% coverage validated).
+Plan: 3 of 7 complete (09-01 + 09-02 + 09-03 landed; 09-04 MockTransport next)
+Status: Executing partial-scope Phase 9 (non-capture deliverables)
+Last activity: 2026-05-15 — CAPTURE-03 hex-to-cpparray.py + 8-test pytest smoke suite landed (commit c2208a2).
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [███░░░░░░░] 29%
 
 ## Performance Metrics
 
@@ -82,12 +83,13 @@ None tracked in `.planning/todos/`. v1.1 deferred items are captured in PROJECT.
 | v1.2.x           | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
 | v1.2.x           | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
 | v1.2.x           | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
+| Phase 9 P3       | 6min                                                                          | 2 tasks                           | 2 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-15 — `/gsd-new-milestone v1.2` (research → requirements → roadmap)
+Last session: 2026-05-15T07:51:07.071Z
 Stopped at: ROADMAP.md written; 33 v1.2 requirements mapped across Phases 9-13; 100% coverage validated.
-Resume file: none — Phase 9 ready to plan via `/gsd-plan-phase 9`.
+Resume file: None
 
 ## Operator Next Steps
 
