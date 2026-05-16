@@ -178,6 +178,7 @@ official pages — the file hash is the source of truth, not the URL.
 | AKS068 Pro                               | Windows       | v2.2                                                              | pending     | pending             | `https://orders.epomaker.com/software/AJAZZ_AKS068_driver_v2.2.zip`                                                                         |
 | AKS075 (tri-mode RGB w/ screen)          | Windows       | V1.0.0.2                                                          | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AKS075_Triple_Modes_RGB_With_Screen_Keyboard_Driver_V1.0.0.2.zip`             |
 | AKP815 Screen                            | Windows       | V1.177                                                            | 115 094 518 | 2024-03-08          | `https://orders.epomaker.com/software/AJAZZ_AKP815_Screen_driver_V1.177.zip`                                                                |
+| AK980 PRO (tri-mode w/ screen, RGB)      | Windows       | V1.0.0.6 (inner ProductVersion, captured 2026-05-16)              | 5 185 204   | pending             | local file `AJAZZ_AK980_Triple_Mode_With_Screen_RGB__Keyboard_Driver_V1.0.0.6.zip` — vendor CDN URL not yet probed                          |
 | NK68 (RGB wired)                         | Windows       | v1.0 (2025-06-04 build)                                           | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_NACODEX_NK68_RGB_Wired_Version_Keyboard_Driver_v1.0_20250604.zip`             |
 
 > **Maude keyboard**: not surfaced by either the EN or UK official
@@ -197,7 +198,7 @@ official pages — the file hash is the source of truth, not the URL.
 | AJ199 Carbon Fibre (tri-mode) | PAW3311     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ199_Carbon_fiber_Tripe_mode_PAW3311_Win_Mouse_Driver.zip`   |
 | AJ159 / AJ159 P (dual-mode)   | PAW3395     | Windows | inner V1.0.5.3 (linker ts 2025-03-18, captured 2026-04-29) | 6 020 626   | 2026-04-22    | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJ159_AJ159P_Dual_modes_PAW3395_Win_Mouse_Driver.zip`               |
 | AJ159 Pro                     | PAW3395     | Windows | unspecified                                                | 157 121 005 | 2025-04-30    | `https://orders.epomaker.com/software/AJ159_PRO_PAW3395_Win_driver.zip`                                                     |
-| AJ159 APEX                    | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://orders.epomaker.com/software/AJ159_APEX_PAW3950_Win_driver.zip`                                                    |
+| AJ159 APEX                    | PAW3950     | Windows | V2.1.94 (inner FileVersion, build code `WIN20250417`, captured 2026-05-16) | 157 121 017 | pending       | `https://orders.epomaker.com/software/AJ159_APEX_PAW3950_Win_driver.zip`                                                    |
 | AJ179 / AJ179 P (dual-mode)   | PAW3395     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ179_AJ179P_Dual-mode_PAW3395_Windows_Only_Mouse_Driver.zip` |
 | AJ179 APEX (tri-mode)         | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://orders.epomaker.com/software/AJAZZ_AJ179_APEX_Tri-mode_PAW3950_Win_Mouse_Driver.zip`                               |
 | AJ139 Max (tri-mode)          | PAW3395     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ139_MAX_Tripe_Mode_PAW3395_Win_System_Mouse_Driver.zip`     |
@@ -207,6 +208,32 @@ official pages — the file hash is the source of truth, not the URL.
 | AJ52 Pro (tri-mode)           | PAW3325     | Windows | unspecified                                                | pending     | pending       | `https://orders.epomaker.com/software/AJAZZ_AJ52PRO%EF%BC%88tri%20mode%EF%BC%89_PAW3325_mouse%20driver.zip`                 |
 | AM3 Pro (tri-mode)            | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_PRO_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
 | AM3 Max (tri-mode)            | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_MAX_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
+
+> **2026-05-16 archival pass — three artefacts hashed locally** (driver
+> installers acquired on the v1.2 dev box ahead of Phase 9.x captures):
+>
+> - **AJ159 APEX** outer zip `AJ159_APEX_PAW3950_Win_driver.zip`
+>   - bytes: `157 121 017`
+>   - sha256 (outer zip): `d8ea31f8c703b296f5ca7bf7760acf1c0aab47966ea1eb0983bbe2e2916784ce`
+>   - sha256 (inner installer `AJAZZ Driver（R）_setup_2.1.94(WIN20250417).exe`, FileVersion `2.1.94`): `b00b4de1e59e1d174676d59fc01e4ff335cc9c934ac0a9ef3fd2fdf1857b8a3a`
+>   - sha256 (inner `iot_driver.exe`, ~66 MB sibling component): `2b8bcaab6186cde1918863830496adab9ff1b6e49ffc5157ac6227d8ca416fb8`
+> - **AK980 PRO (tri-mode w/ screen, RGB)** outer zip `AJAZZ_AK980_Triple_Mode_With_Screen_RGB__Keyboard_Driver_V1.0.0.6.zip`
+>   - bytes: `5 185 204`
+>   - sha256 (outer zip): `07bdf005ac7526a16b6d895e4466da74206a8eed363c6f9aadc7c5e642e9bfb1`
+>   - sha256 (inner installer, ProductVersion `1.0.0.6`, `5 748 587` bytes): `f7051547c79ccf38edc3199a0f646788f558baf69006dd136505d0a2845a9791`
+>   - First inventory entry for the `ak980pro` codename (`0c45:8009`) — closes a previously-unfilled row in the keyboard table.
+> - **Stream Dock AJAZZ-branded Windows V3.10.195.0902** (newer than the
+>   `2.9.177.122` Aliyun copy and the Mirabox-branded `3.10.191.0421`):
+>   - outer zip `Stream_Dock_AJAZZ_Installer_Windows_1.zip`, `579 959 317` bytes, sha256: `ac2a9721796daf42ac8778db8774798228fd4254b58c898e85ed7a22e4d4bfd7`
+>   - inner installer `Stream-Dock-AJAZZ-Installer_Windows (1).exe`, `586 415 128` bytes, sha256: `d72503a35bcb241adb4d84aacae9132f8bff76ee0b39fc6cae0a11060d286c5c`
+>   - VersionInfo: `CompanyName=HotSpot`, `LegalCopyright=Copyright (C) 2025 HotSpot`, `FileDescription=Stream Dock AJAZZ Global Installer`, `FileVersion=3.10.195.0902`.
+>   - Source mirror not yet probed — likely a refresh of `https://hotspot-oss-bucket.oss-cn-shenzhen.aliyuncs.com/custom/AJAZZ/Stream-Dock-AJAZZ-Installer_Windows_global.exe` or the `cdn1.key123.vip/Custom/AJAZZ/global/...` mirror (tabled above). Confirm with a fresh HEAD when network access is available.
+>
+> All three artefacts are held out-of-repo (CLAUDE.md hard rule: no
+> vendor blob redistribution). The hashes above are the verification
+> seam — any downstream engineer who re-downloads the upstream URL and
+> sha256-matches against these values is looking at the same artefact
+> that triggered the Phase 9.x captures.
 
 > **AJ339, AJ380**: not present on the consolidated EN download
 > page. They appear in our `docs/_data/devices.yaml` (so AJAZZ
@@ -267,17 +294,25 @@ These need a person + bandwidth to close:
    ref Finding 8 in `vendor-protocol-notes.md` for the AJ-series
    USB ID space (`248A:5C2E/5D2E/5E2E` USB, `248A:5C2F` /
    `249A:5C2F` 2.4G dongle).
-1. **SHA-256 archival pass — partial** (captured 2026-04-29):
-   five priority installers downloaded with full hashes recorded.
-   Stream Dock Win sha256 + md5 are documented in the table-
+1. **SHA-256 archival pass — partial** (captured 2026-04-29 + 2026-05-16):
+   five priority installers downloaded 2026-04-29 with full hashes
+   recorded. Stream Dock Win sha256 + md5 are documented in the table-
    adjacent block above and matched between Aliyun's HEAD-reported
    Content-MD5 and the artefact's local hash (no CDN tampering).
    Mouse / keyboard outer-ZIP and inner-EXE sha256 hashes captured
    in the recon journal at `<vault>/journal/downloads-2026-04-29.json`
    (out of repo); referenced from `vendor-protocol-notes.md`
-   Findings 5–10 by capture-id. **Remaining**: every artefact in
-   the table whose row says `pending` for Bytes / Last-Modified —
-   re-probe and add hashes once they are downloaded.
+   Findings 5–10 by capture-id. **2026-05-16 increment**: three more
+   artefacts hashed for the v1.2 dev box (AJ159 APEX V2.1.94,
+   AK980 PRO V1.0.0.6, Stream Dock AJAZZ-branded V3.10.195.0902 —
+   see the "2026-05-16 archival pass" callout under the Mice table).
+   The AK980 PRO row closes the previously-empty `ak980pro` keyboard
+   entry, and the Stream Dock V3.10.195.0902 hash documents a newer
+   build than any of the existing five tabled Stream Dock rows.
+   **Remaining**: every artefact in the table whose row still says
+   `pending` for Bytes / Last-Modified — re-probe and add hashes once
+   they are downloaded; HEAD-probe the V3.10.195.0902 mirror URL to
+   tie the local sha256 back to a public CDN row.
 1. **Time-sync feature — confirmed ABSENT at the SDK level**
    (captured 2026-05-13). Public Space Plugin SDK does not expose
    any setTime / setDateTime / syncTime / setSystemTime /
