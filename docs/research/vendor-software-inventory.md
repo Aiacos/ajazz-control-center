@@ -162,24 +162,24 @@ official pages — the file hash is the source of truth, not the URL.
 | Model                                    | OS            | Version                                                           | Bytes       | Last-Modified (UTC) | URL                                                                                                                                         |
 | ---------------------------------------- | ------------- | ----------------------------------------------------------------- | ----------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
 | AK820 Max RGB                            | Windows       | V2.06.01 (inner FileVersion `2024.11.20.01`, captured 2026-04-29) | 17 983 320  | 2026-04-22          | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK820_MAX_RGB_Installer_V2.06.01.zip`                                         |
-| AK820 Max HE (wired+wireless)            | Windows       | 2.1.78                                                            | pending     | pending             | `https://downloads.mechlands.com/software/AJAZZ_AK820_MAX_HE_setup_2.1.78.zip`                                                              |
-| AK820                                    | Windows       | V1.0                                                              | pending     | pending             | `https://orders.epomaker.com/software/AJAZZ_AK820_Wired_Version_RGB_Keyboard_Driver_V1.0.zip`                                               |
-| AK820 Max                                | Windows       | V1.0                                                              | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK820_MAX_driver_V1.0.zip`                                                    |
-| AK820 Pro (Win)                          | Windows       | (n/a)                                                             | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK820Pro.zip`                                                                 |
+| AK820 Max HE (wired+wireless)            | Windows       | 2.1.78                                                            | 70 206 151  | 2025-02-05          | `https://downloads.mechlands.com/software/AJAZZ_AK820_MAX_HE_setup_2.1.78.zip`                                                              |
+| AK820                                    | Windows       | V1.0                                                              | 44 327 398  | 2025-08-26          | `https://orders.epomaker.com/software/AJAZZ_AK820_Wired_Version_RGB_Keyboard_Driver_V1.0.zip`                                               |
+| AK820 Max                                | Windows       | V1.0                                                              | 1 959 226   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK820_MAX_driver_V1.0.zip`                                                    |
+| AK820 Pro (Win)                          | Windows       | (n/a)                                                             | 5 756 247   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK820Pro.zip`                                                                 |
 | AK820 Pro (online driver)                | Windows (web) | live                                                              | n/a         | n/a                 | `https://ajazz.driveall.cn/#/`                                                                                                              |
-| AK680 Max — 8+1K (tri-mode RGB magnetic) | Windows       | V2.1.87                                                           | pending     | pending             | `https://downloads.mechlands.com/software/AJAZZ_AK680_MAX__8_1K_tripe_mode_RGB_magnetic_switch_keyboard_drive_V2.1.87.zip`                  |
-| AK680 Max — 8+8K (tri-mode RGB magnetic) | Windows       | V2.1.87                                                           | pending     | pending             | `https://downloads.mechlands.com/software/AJAZZ_AK680_MAX_8_8K_tripe_mode_RGB_magnetic_switch_keyboard_drive_V2.1.87.zip`                   |
-| AK832 (tri-mode white-light)             | Windows       | V1.1                                                              | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK832_Triple_modes_White_Light_Keyboard_Driver_V1.1.zip`                      |
-| AK832 Pro (tri-mode RGB)                 | Windows       | V1.0                                                              | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK832_Pro_Tri-mode_RGB__Keyboard_Driver_V1.0.zip`                             |
-| AK870 Wired Magnetic                     | Windows       | V2.05.01                                                          | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870_single-mode_RGB_magnetic_switch_keyboard_driver_Installer_V2.05.01.zip` |
-| AK870 V2 (tri-mode w/ screen)            | Windows       | 1.0.0.0                                                           | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870_V2_Tri_mode_RGB_Tri_mode_With_Screen_RGB_Keyboard_Driver-1.0.0.0.zip`   |
-| AK870MC                                  | Windows       | V1.0                                                              | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870MC_Single_Mode_Mixed_Color_Lighting_Keyboard_Driver_V1.0.zip`            |
-| AK650 (tri-mode w/ screen)               | Windows       | V1.0                                                              | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK650_Tri-mode_with_Screen_RGB_version_Keyboard_Driver_V1.0.zip`              |
-| AKS068 Pro                               | Windows       | v2.2                                                              | pending     | pending             | `https://orders.epomaker.com/software/AJAZZ_AKS068_driver_v2.2.zip`                                                                         |
-| AKS075 (tri-mode RGB w/ screen)          | Windows       | V1.0.0.2                                                          | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AKS075_Triple_Modes_RGB_With_Screen_Keyboard_Driver_V1.0.0.2.zip`             |
+| AK680 Max — 8+1K (tri-mode RGB magnetic) | Windows       | V2.1.87                                                           | 71 917 565  | 2025-01-09          | `https://downloads.mechlands.com/software/AJAZZ_AK680_MAX__8_1K_tripe_mode_RGB_magnetic_switch_keyboard_drive_V2.1.87.zip`                  |
+| AK680 Max — 8+8K (tri-mode RGB magnetic) | Windows       | V2.1.87                                                           | 71 917 565  | 2025-01-09          | `https://downloads.mechlands.com/software/AJAZZ_AK680_MAX_8_8K_tripe_mode_RGB_magnetic_switch_keyboard_drive_V2.1.87.zip`                   |
+| AK832 (tri-mode white-light)             | Windows       | V1.1                                                              | 8 558 188   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK832_Triple_modes_White_Light_Keyboard_Driver_V1.1.zip`                      |
+| AK832 Pro (tri-mode RGB)                 | Windows       | V1.0                                                              | 6 931 117   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK832_Pro_Tri-mode_RGB__Keyboard_Driver_V1.0.zip`                             |
+| AK870 Wired Magnetic                     | Windows       | V2.05.01                                                          | 16 624 713  | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870_single-mode_RGB_magnetic_switch_keyboard_driver_Installer_V2.05.01.zip` |
+| AK870 V2 (tri-mode w/ screen)            | Windows       | 1.0.0.0                                                           | 5 766 443   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870_V2_Tri_mode_RGB_Tri_mode_With_Screen_RGB_Keyboard_Driver-1.0.0.0.zip`   |
+| AK870MC                                  | Windows       | V1.0                                                              | 13 693 763  | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK870MC_Single_Mode_Mixed_Color_Lighting_Keyboard_Driver_V1.0.zip`            |
+| AK650 (tri-mode w/ screen)               | Windows       | V1.0                                                              | 5 051 914   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK650_Tri-mode_with_Screen_RGB_version_Keyboard_Driver_V1.0.zip`              |
+| AKS068 Pro                               | Windows       | v2.2                                                              | 62 575 328  | 2024-03-05          | `https://orders.epomaker.com/software/AJAZZ_AKS068_driver_v2.2.zip`                                                                         |
+| AKS075 (tri-mode RGB w/ screen)          | Windows       | V1.0.0.2                                                          | 5 244 112   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AKS075_Triple_Modes_RGB_With_Screen_Keyboard_Driver_V1.0.0.2.zip`             |
 | AKP815 Screen                            | Windows       | V1.177                                                            | 115 094 518 | 2024-03-08          | `https://orders.epomaker.com/software/AJAZZ_AKP815_Screen_driver_V1.177.zip`                                                                |
-| AK980 PRO (tri-mode w/ screen, RGB)      | Windows       | V1.0.0.6 (inner ProductVersion, captured 2026-05-16)              | 5 185 204   | pending             | local file `AJAZZ_AK980_Triple_Mode_With_Screen_RGB__Keyboard_Driver_V1.0.0.6.zip` — vendor CDN URL not yet probed                          |
-| NK68 (RGB wired)                         | Windows       | v1.0 (2025-06-04 build)                                           | pending     | pending             | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_NACODEX_NK68_RGB_Wired_Version_Keyboard_Driver_v1.0_20250604.zip`             |
+| AK980 PRO (tri-mode w/ screen, RGB)      | Windows       | V1.0.0.6 (inner ProductVersion, captured 2026-05-16)              | 5 185 204   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AK980_Triple_Mode_With_Screen_RGB__Keyboard_Driver_V1.0.0.6.zip` (canonical; orders.epomaker.com 404) |
+| NK68 (RGB wired)                         | Windows       | v1.0 (2025-06-04 build)                                           | 1 880 130   | shopify-echoes      | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_NACODEX_NK68_RGB_Wired_Version_Keyboard_Driver_v1.0_20250604.zip`             |
 
 > **Maude keyboard**: not surfaced by either the EN or UK official
 > pages as of 2026-04-26. The model is referenced in our TODO under
@@ -195,19 +195,19 @@ official pages — the file hash is the source of truth, not the URL.
 | ----------------------------- | ----------- | ------- | ---------------------------------------------------------- | ----------- | ------------- | --------------------------------------------------------------------------------------------------------------------------- |
 | AJ199 (no-RGB, dual-mode)     | PAW3395     | Windows | V1.0 (inner build `20231205`, captured 2026-04-29)         | 2 237 633   | 2026-04-24    | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ199_No_RGB_Dual_Modes_PAW3395_Mouse_Driver_V1.0.zip`        |
 | AJ199 Max (tri-mode)          | PAW3395     | Windows | inner V1.15.0.43 (build `2024.12.26`, captured 2026-04-29) | 7 567 973   | 2026-04-25    | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ199_MAX_Triple_Modes_PAW3395_Windows_Mouse_Driver.zip`      |
-| AJ199 Carbon Fibre (tri-mode) | PAW3311     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ199_Carbon_fiber_Tripe_mode_PAW3311_Win_Mouse_Driver.zip`   |
+| AJ199 Carbon Fibre (tri-mode) | PAW3311     | Windows | unspecified                                                | 4 381 562   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ199_Carbon_fiber_Tripe_mode_PAW3311_Win_Mouse_Driver.zip`   |
 | AJ159 / AJ159 P (dual-mode)   | PAW3395     | Windows | inner V1.0.5.3 (linker ts 2025-03-18, captured 2026-04-29) | 6 020 626   | 2026-04-22    | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJ159_AJ159P_Dual_modes_PAW3395_Win_Mouse_Driver.zip`               |
 | AJ159 Pro                     | PAW3395     | Windows | unspecified                                                | 157 121 005 | 2025-04-30    | `https://orders.epomaker.com/software/AJ159_PRO_PAW3395_Win_driver.zip`                                                     |
-| AJ159 APEX                    | PAW3950     | Windows | V2.1.94 (inner FileVersion, build code `WIN20250417`, captured 2026-05-16) | 157 121 017 | pending       | `https://orders.epomaker.com/software/AJ159_APEX_PAW3950_Win_driver.zip`                                                    |
-| AJ179 / AJ179 P (dual-mode)   | PAW3395     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ179_AJ179P_Dual-mode_PAW3395_Windows_Only_Mouse_Driver.zip` |
-| AJ179 APEX (tri-mode)         | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://orders.epomaker.com/software/AJAZZ_AJ179_APEX_Tri-mode_PAW3950_Win_Mouse_Driver.zip`                               |
-| AJ139 Max (tri-mode)          | PAW3395     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ139_MAX_Tripe_Mode_PAW3395_Win_System_Mouse_Driver.zip`     |
-| AJ039 (wired)                 | A704F       | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ039_Wired_Version_A704F_Mouse_Driver.zip`                   |
-| AJ129                         | PAW3327     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ129_PAW3327_Mouse_Driver.zip`                               |
-| AJ358 (gaming)                | unspecified | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ358_Gaming_Mouse_Driver.zip`                                |
-| AJ52 Pro (tri-mode)           | PAW3325     | Windows | unspecified                                                | pending     | pending       | `https://orders.epomaker.com/software/AJAZZ_AJ52PRO%EF%BC%88tri%20mode%EF%BC%89_PAW3325_mouse%20driver.zip`                 |
-| AM3 Pro (tri-mode)            | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_PRO_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
-| AM3 Max (tri-mode)            | PAW3950     | Windows | unspecified                                                | pending     | pending       | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_MAX_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
+| AJ159 APEX                    | PAW3950     | Windows | V2.1.94 (inner FileVersion, build code `WIN20250417`, captured 2026-05-16) | 157 121 017 | 2025-04-30    | `https://orders.epomaker.com/software/AJ159_APEX_PAW3950_Win_driver.zip` (HEAD-byte-matched 2026-05-16)                     |
+| AJ179 / AJ179 P (dual-mode)   | PAW3395     | Windows | unspecified                                                | 10 348 651  | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ179_AJ179P_Dual-mode_PAW3395_Windows_Only_Mouse_Driver.zip` |
+| AJ179 APEX (tri-mode)         | PAW3950     | Windows | unspecified — likely SAME ARTEFACT as AJ159 APEX (see callout below) | 157 121 017 | 2025-05-20    | `https://orders.epomaker.com/software/AJAZZ_AJ179_APEX_Tri-mode_PAW3950_Win_Mouse_Driver.zip`                               |
+| AJ139 Max (tri-mode)          | PAW3395     | Windows | unspecified                                                | 7 567 993   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ139_MAX_Tripe_Mode_PAW3395_Win_System_Mouse_Driver.zip`     |
+| AJ039 (wired)                 | A704F       | Windows | unspecified                                                | 4 043 744   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ039_Wired_Version_A704F_Mouse_Driver.zip`                   |
+| AJ129                         | PAW3327     | Windows | unspecified                                                | 4 287 866   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ129_PAW3327_Mouse_Driver.zip`                               |
+| AJ358 (gaming)                | unspecified | Windows | unspecified                                                | 11 740 600  | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AJ358_Gaming_Mouse_Driver.zip`                                |
+| AJ52 Pro (tri-mode)           | PAW3325     | Windows | unspecified                                                | 46 823 858  | 2024-07-24    | `https://orders.epomaker.com/software/AJAZZ_AJ52PRO%EF%BC%88tri%20mode%EF%BC%89_PAW3325_mouse%20driver.zip`                 |
+| AM3 Pro (tri-mode)            | PAW3950     | Windows | unspecified — likely SAME ARTEFACT as AM3 Max (see callout below) | 7 567 965   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_PRO_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
+| AM3 Max (tri-mode)            | PAW3950     | Windows | unspecified — likely SAME ARTEFACT as AM3 Pro (see callout below) | 7 567 965   | shopify-echoes | `https://cdn.shopify.com/s/files/1/0554/6678/6869/files/AJAZZ_AM3_MAX_Triple_Modes_PAW3950_Windows_Mouse_Driver.zip`        |
 
 > **2026-05-16 archival pass — three artefacts hashed locally** (driver
 > installers acquired on the v1.2 dev box ahead of Phase 9.x captures):
@@ -234,6 +234,53 @@ official pages — the file hash is the source of truth, not the URL.
 > seam — any downstream engineer who re-downloads the upstream URL and
 > sha256-matches against these values is looking at the same artefact
 > that triggered the Phase 9.x captures.
+
+> **2026-05-16 HEAD-probe pass — 25 URLs probed**: every "pending"
+> Bytes / Last-Modified row above was filled in from `curl -sIL` HEAD
+> responses, no bodies downloaded. Three findings worth promoting out
+> of the table:
+>
+> 1. **`orders.epomaker.com` does NOT mirror the AK980 PRO driver**
+>    (404 on the same path that works for AK820 / AK680 / AKS068).
+>    The Shopify CDN URL above is the canonical entry point for
+>    `AK980 PRO V1.0.0.6`; HEAD bytes (`5 185 204`) match the local
+>    archived outer zip exactly.
+> 1. **Stream Dock V3.10.195.0902 is NOT yet on either tabled CDN.**
+>    Re-probed 2026-05-16: `hotspot-oss-bucket.../Stream-Dock-AJAZZ-Installer_Windows_global.exe`
+>    still serves V2.9.177.122 (Content-MD5 `a182862811703e09582a009a6a9a6a90`,
+>    unchanged); `cdn1.key123.vip/Custom/AJAZZ/global/Stream-Dock-AJAZZ-Installer_Windows_global.exe`
+>    still serves the older V3.10.191-equivalent build (`b8e556ff...`,
+>    last-modified 2026-04-24, unchanged from 2026-05-13). The local
+>    `d72503a35bcb241adb4d84aacae9132f8bff76ee0b39fc6cae0a11060d286c5c`
+>    V3.10.195.0902 build came from a third distribution path
+>    (likely a per-product page download or direct support email);
+>    that path is still un-enumerated.
+> 1. **Two suspicious byte-count collisions** worth flagging for the
+>    SHA-256 archival pass once those drivers get downloaded:
+>    - **AM3 PRO and AM3 MAX** both report `7 567 965` bytes on Shopify
+>      CDN — strongly suggests one combined PRO+MAX installer relabelled
+>      under two product names. Cross-reference also: AJ199 Max reports
+>      `7 567 973` bytes (20 bytes larger), so AM3 PRO/MAX vs AJ199 Max
+>      are clearly distinct artefacts despite the size proximity.
+>    - **AJ159 APEX and AJ179 APEX** both report `157 121 017` bytes on
+>      epomaker mirrors, with epomaker ETags sharing the `95d79f9` size-
+>      suffix. AJ159 APEX last-modified 2025-04-30; AJ179 APEX last-
+>      modified 2025-05-20 (20 days later) → likely the same installer
+>      re-uploaded under the AJ179 APEX label. The AJ159 APEX local
+>      sha256 (`d8ea31f8c703...` from the 2026-05-16 archival pass)
+>      can be checked against an AJ179 APEX download to confirm or
+>      refute the relabel hypothesis.
+>    - Also: **AK680 Max 8+1K and 8+8K** both report `71 917 565` bytes
+>      with mtimes 2 seconds apart on mechlands — same upload batch,
+>      almost certainly the same artefact under two SKU labels.
+>
+> Shopify CDN limitations recorded in the table: the Shopify edge does
+> not expose true `Last-Modified` (it echoes the response timestamp)
+> and does not expose `Content-MD5` / hex `ETag` (only Cloudflare's
+> `cf-ray`). Hence `shopify-echoes` in the Last-Modified column for
+> Shopify-hosted rows. Mechlands and Epomaker mirrors run nginx and
+> DO expose real `Last-Modified` + nginx-style `ETag` (encoded as
+> Unix-mtime + length, not a hash).
 
 > **AJ339, AJ380**: not present on the consolidated EN download
 > page. They appear in our `docs/_data/devices.yaml` (so AJAZZ
