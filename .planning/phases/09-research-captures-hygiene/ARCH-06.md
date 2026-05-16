@@ -203,6 +203,21 @@ gate needs **no capture tooling** — no Wireshark, no `usbmon`, no
 `tshark`/`usbrply` pipeline. It is a 2-minute bench test the user runs
 during the Phase 9.x follow-up.
 
+**Indirect prior observation (2026-05-16, Windows dev box).** When connecting the
+AK980 PRO to the Windows 11 v1.2 dev box in wired or Bluetooth mode (NOT
+2.4G dongle mode), `usbipd list` (which enumerates ALL USB devices via the
+Windows host USB stack via Microsoft's `usbipd-win` 5.3.0) showed
+`0c45:8009` plugged in but did **NOT** enumerate `0c45:7016`. This is
+consistent with the default verdict — `0c45:7016` is a separate physical
+wireless dongle that is only present when the user opts into 2.4G mode
+and physically connects the bundled USB receiver. If the two PIDs were
+composite-HID interfaces of the same physical device (the alternative
+this ADR rejects), `0c45:7016` would be enumerated whenever `0c45:8009`
+is, regardless of operating mode. This observation does NOT replace the
+physical unplug test (because it operates on a Windows host where the
+AK980 PRO was not in 2.4G mode at observation time), but it corroborates
+the default verdict from a second platform's USB-enumeration layer.
+
 **Procedure:**
 
 1. Confirm both `0c45:8009` (ak980pro) and `0c45:7016` are recognised
