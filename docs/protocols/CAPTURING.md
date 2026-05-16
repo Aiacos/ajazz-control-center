@@ -465,9 +465,12 @@ For the v1.2 milestone "Connected-Device Capability Parity", Windows USBPcap is 
 
 ### 8.0 Install
 
-Single installer covers both Wireshark and USBPcap:
+> **⚠️ KNOWN FAILURE MODE on modern Windows 11 hardware (2026-05-16):**
+> USBPcap 1.5.4 (last release 2020) does NOT bind to USB 3.0 / USB4 root hubs of modern PCs (xHCI + USB4 Router topology). On such hosts `tshark -D` will not enumerate any `USBPcap<N>` interface even after `USBPcapCMD -I` + reboot. Wireshark 4.4+ has additionally **removed USBPcap from its installer bundle**. If both conditions hit, USBPcap is dead-end on that host. **Skip to §8.6** for the `usbipd-win` + WSL2 alternative (our-code captures only — does NOT cover vendor-app captures; for those use §8.1 WinBoat or a different host with working USBPcap).
 
-1. Download **Wireshark for Windows x64 Installer** from <https://www.wireshark.org/download.html> (~80 MB).
+The classic USBPcap install path (still works on older Windows 7-10 hardware with USB 2.0 controllers):
+
+1. Download a Wireshark version that still bundles USBPcap (≤ 4.0.x) from <https://1.na.dl.wireshark.org/win64/all-versions/> (~80 MB). The current Wireshark (4.6.x as of 2026-05) does NOT bundle USBPcap.
 1. Run the installer as Administrator.
 1. On the "Choose Components" screen, verify the following are checked:
    - ☑ **Wireshark** (main GUI)
@@ -483,7 +486,7 @@ Post-reboot verification (PowerShell or `cmd`):
 "C:\Program Files\Wireshark\tshark.exe" -D
 ```
 
-You must see one or more `\\.\USBPcap<N>` interfaces in the list (one per USB root hub on the machine). If none appear, USBPcap did not attach — re-run the installer with the USBPcap component re-selected, or check `Device Manager → Non-Plug and Play Drivers → USBPcap1` for driver-load errors.
+You must see one or more `\\.\USBPcap<N>` interfaces in the list (one per USB root hub on the machine). If none appear, USBPcap did not attach. First check `Device Manager → Non-Plug and Play Drivers → USBPcap1` for driver-load errors. If the driver IS installed but no `USBPcap<N>` enumerates, you have hit the modern-hardware failure mode documented in the box above — **switch to §8.6**.
 
 ### 8.1 WinBoat option for Linux developers
 
@@ -576,6 +579,86 @@ Either way, the §5 extraction pipeline runs the same final-stage `-Y` display f
 
 - **Regression-testing our own control center's wire format** (Phase 10/11/12 fixture-vs-emit verification). Our agent runs on Linux; capture our agent's traffic with Linux usbmon (§1-7).
 - **The vendor app does not exist for the device** (e.g., a future SKU we acquired before any vendor software shipped). Use the Linux usbmon path to characterise enumeration / descriptor / unsolicited input reports.
+
+### 8.6 Modern Windows fallback: usbipd-win + WSL2 (our-code captures only)
+
+When the §8.0 USBPcap path fails (modern Windows 11 with xHCI / USB4 root hubs — see the warning box at the top of §8.0), Microsoft's `usbipd-win` + WSL2 provides a clean alternative — but ONLY for capturing the wire traffic of **our own AJAZZ Control Center code** running inside WSL2. It does NOT replace USBPcap for capturing the **vendor app**, because USB/IP is an **exclusive transfer** (the device leaves the Windows host's USB stack when attached to WSL2 — the vendor app on Windows can no longer see it). For vendor-app captures on modern Windows, use §8.1 WinBoat instead, or run captures on a different host where §8.0 USBPcap still works.
+
+**When to choose this path:**
+
+- ✅ You're on modern Windows 11 (xHCI + USB4) where §8.0 USBPcap is dead, AND
+- ✅ Your target is wire-format verification of the *agent's* USB traffic (Phase 10/11/12 fixture-vs-emit), NOT the vendor app
+- ❌ NOT for vendor-app captures — those need the device on the Windows host. Use §8.1 WinBoat.
+
+**Setup (one-time, ~30 min):**
+
+1. Install usbipd-win on the Windows host:
+   ```powershell
+   winget install --exact --id dorssel.usbipd-win
+   ```
+   Verify: `usbipd --version` should print `5.3.0` or higher.
+
+2. Install WSL2 + Ubuntu (admin PowerShell):
+   ```powershell
+   wsl --install -d Ubuntu --no-launch
+   # Reboot to activate Hyper-V kernel mode
+   wsl -d Ubuntu                       # first launch — accept user creation OR run as root
+   ```
+
+3. Inside WSL2 Ubuntu, install capture deps:
+   ```bash
+   sudo apt update && sudo apt install -y wireshark-common tshark usbutils kmod
+   ```
+
+4. **Build a custom WSL2 kernel with `CONFIG_USB_MON=m`** — the stock Microsoft WSL2 kernel ships **without** usbmon, which is the kernel module that produces the `usbmon0..N` capture interfaces. Reference: <https://github.com/microsoft/WSL2-Linux-Kernel>. Disable `CONFIG_DEBUG_INFO_BTF` to avoid the libbpf -Werror failure with GCC 15. Drop the resulting `vmlinux` into `C:\Users\<user>\wsl2-custom-kernel` and point `%USERPROFILE%\.wslconfig` at it:
+   ```ini
+   [wsl2]
+   kernel=C:\\Users\\<user>\\wsl2-custom-kernel
+   ```
+   Then `wsl --shutdown` and restart Ubuntu. Verify: `modprobe usbmon && ls /sys/kernel/debug/usb/usbmon/` should list `0s 0u 1s 1u ...`.
+
+**Per-session capture flow:**
+
+1. List USB devices on the Windows host:
+   ```powershell
+   usbipd list
+   ```
+
+2. Bind + attach the AJAZZ device to WSL2 (admin PowerShell for `bind`, normal for `attach`):
+   ```powershell
+   # bind is one-time per device, persists across reboots
+   usbipd bind --force --busid <X-Y>      # --force needed if USBPcap driver is also installed
+   usbipd attach --busid <X-Y> --wsl Ubuntu
+   ```
+   *Note: `--force` is required when USBPcap is also installed on the host (usbipd treats the USBPcap filter as incompatible). If USBPcap is dead-end on your hardware, `--force` is safe — USBPcap isn't actually doing anything.*
+
+3. Inside WSL2 Ubuntu, verify the device is attached:
+   ```bash
+   lsusb            # should show your AJAZZ VID:PID
+   lsusb -t         # find which bus number (usb1 → usbmon1)
+   ls /dev/hidraw*  # confirm hidraw nodes were created
+   ```
+
+4. Run your AJAZZ Control Center on Linux (inside WSL2 or on the same Linux box where the device is now attached), then capture the wire traffic with the standard §1-7 Linux usbmon path:
+   ```bash
+   sudo modprobe usbmon
+   tshark -i usbmon1 -w /tmp/cap.pcapng -a duration:10
+   # (trigger the device action via the agent)
+   ```
+
+5. Extract per-device frames with the standard §5 pipeline; commit ONLY the sanitised `.h` fixture.
+
+6. When done, return the device to the Windows host:
+   ```powershell
+   usbipd detach --busid <X-Y>
+   ```
+
+**Caveats specific to usbipd-win + WSL2:**
+
+- **USB/IP is exclusive transfer**, not mirror. While the device is attached to WSL2, the Windows host's USB stack does not see it. You cannot simultaneously run the vendor app on Windows AND capture via this path.
+- **Mouse / keyboard attachment freezes Windows input.** Be careful with `usbipd attach --busid <X-Y>` for `0c45:8009` (ak980pro keyboard) or `3151:5007` (ajazz 8K mouse) if those are your only input devices — you'll lose mouse / keyboard control on Windows. Have a secondary keyboard / mouse plugged in (or use Remote Desktop) before attaching, or use `usbipd detach` from a different machine.
+- **8 kHz polling-rate devices fill the WSL2 vhci queue faster than the host network can drain it.** Use `-a filesize:51200` for `3151:5007` (Pitfall 21 cross-references).
+- **Custom WSL2 kernel adds ~30-60 min one-time build cost.** If you don't need usbmon (e.g., only running HID I/O tests), skip the kernel rebuild — usbipd attach works fine on the stock kernel; only the *packet capture* part needs usbmon.
 
 ______________________________________________________________________
 
