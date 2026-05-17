@@ -98,6 +98,26 @@ std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     return pkt;
 }
 
+std::array<std::uint8_t, PacketSize> buildVersionRequest() {
+    return buildCmdHeader(CmdVersion);
+}
+
+std::array<std::uint8_t, PacketSize> buildUploadFinished() {
+    // ULEND is the only AKP-family opcode (alongside QUCMD) with a 5-byte
+    // command word: bytes 5..9 = "ULEND". The bytes 0..2 still carry the
+    // standard "CRT" prefix; bytes 3..4 stay zero per the family convention.
+    std::array<std::uint8_t, PacketSize> pkt{};
+    pkt[0] = CmdPrefix[0];
+    pkt[1] = CmdPrefix[1];
+    pkt[2] = CmdPrefix[2];
+    pkt[5] = UploadFinishedMarker[0];
+    pkt[6] = UploadFinishedMarker[1];
+    pkt[7] = UploadFinishedMarker[2];
+    pkt[8] = UploadFinishedMarker[3];
+    pkt[9] = UploadFinishedMarker[4];
+    return pkt;
+}
+
 /** @brief Build the header packet for a key-image transfer.
  *
  *  The firmware expects one header packet followed immediately by one or more
@@ -550,6 +570,12 @@ private:
             (void)m_transport->write(chunk);
             offset += take;
         }
+        // Vendor RE (akp05_vendor.md §3 + roadmap §11.3): emit the 5-byte
+        // ULEND commit-after-image-burst sentinel. Previously we relied on
+        // STP from flush() but the vendor sends ULEND specifically after
+        // image streams. Missing this may cause firmware desync on large
+        // bursts (vendor RE annotation).
+        (void)m_transport->write(akp05::buildUploadFinished());
     }
 
     DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.

@@ -96,6 +96,25 @@ std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     return pkt;
 }
 
+std::array<std::uint8_t, PacketSize> buildVersionRequest() {
+    return buildCmdHeader(CmdVersion);
+}
+
+std::array<std::uint8_t, PacketSize> buildUploadFinished() {
+    // ULEND is a 5-byte command at offsets 5..9 (vs the standard 3-byte
+    // command at 5..7). The "CRT" prefix and zero bytes 3..4 are preserved.
+    std::array<std::uint8_t, PacketSize> pkt{};
+    pkt[0] = CmdPrefix[0];
+    pkt[1] = CmdPrefix[1];
+    pkt[2] = CmdPrefix[2];
+    pkt[5] = UploadFinishedMarker[0];
+    pkt[6] = UploadFinishedMarker[1];
+    pkt[7] = UploadFinishedMarker[2];
+    pkt[8] = UploadFinishedMarker[3];
+    pkt[9] = UploadFinishedMarker[4];
+    return pkt;
+}
+
 /**
  * @brief Build the first packet of a `Set PNG image` transfer.
  *
@@ -511,6 +530,9 @@ private:
             (void)m_transport->write(chunk);
             offset += take;
         }
+        // Vendor RE (akp05_vendor.md §3 + roadmap §11.3): emit ULEND
+        // commit-after-image-burst sentinel. Shared across the AKP family.
+        (void)m_transport->write(akp03::buildUploadFinished());
     }
 
     DeviceDescriptor m_descriptor; ///< Static model descriptor.

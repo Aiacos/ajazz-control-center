@@ -56,6 +56,56 @@ TEST_CASE("akp05 main image header uses MAI command", "[akp05][protocol]") {
     REQUIRE(pkt[11] == 0x00);
 }
 
+/// CRT VER probe must use prefix + "VER" command word with no payload.
+TEST_CASE("akp05 version request uses CRT prefix + VER command", "[akp05][protocol][vendor-re]") {
+    auto const pkt = buildVersionRequest();
+    REQUIRE(pkt.size() == PacketSize);
+    REQUIRE(pkt[0] == 0x43); // C
+    REQUIRE(pkt[1] == 0x52); // R
+    REQUIRE(pkt[2] == 0x54); // T
+    REQUIRE(pkt[5] == 0x56); // V
+    REQUIRE(pkt[6] == 0x45); // E
+    REQUIRE(pkt[7] == 0x52); // R
+    // All other bytes (3-4, 8-511) must be zero.
+    REQUIRE(pkt[3] == 0x00);
+    REQUIRE(pkt[4] == 0x00);
+    for (std::size_t i = 8; i < PacketSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+/// CRT ULEND commit sentinel uses a 5-byte command at offsets 5..9, not 5..7.
+TEST_CASE("akp05 upload-finished encodes ULEND at 5..9", "[akp05][protocol][vendor-re]") {
+    auto const pkt = buildUploadFinished();
+    REQUIRE(pkt.size() == PacketSize);
+    // CRT prefix preserved.
+    REQUIRE(pkt[0] == 0x43);
+    REQUIRE(pkt[1] == 0x52);
+    REQUIRE(pkt[2] == 0x54);
+    REQUIRE(pkt[3] == 0x00);
+    REQUIRE(pkt[4] == 0x00);
+    // 5-byte ULEND command word at offsets 5..9 (NOT the standard 5..7).
+    REQUIRE(pkt[5] == 0x55); // U
+    REQUIRE(pkt[6] == 0x4c); // L
+    REQUIRE(pkt[7] == 0x45); // E
+    REQUIRE(pkt[8] == 0x4e); // N
+    REQUIRE(pkt[9] == 0x44); // D
+    // Bytes 10..511 must be zero.
+    for (std::size_t i = 10; i < PacketSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+/// Pitfall guard: ULEND is distinct from STP (which is also a flush-class command).
+TEST_CASE("akp05 ULEND and STP are distinct opcodes", "[akp05][protocol][vendor-re]") {
+    auto const ulend = buildUploadFinished();
+    auto const stp = buildCmdHeader(CmdStop);
+    // ULEND has bytes 8-9 set (part of the 5-byte command); STP has them zero
+    // because its 3-byte "STP" command sits at 5..7 only.
+    REQUIRE(ulend[8] != stp[8]);
+    REQUIRE(ulend[9] != stp[9]);
+}
+
 /// buildClearAll() must set the key-index sentinel 0xFF at byte 11.
 TEST_CASE("akp05 clear-all encodes 0xff", "[akp05][protocol]") {
     auto const pkt = buildClearAll();

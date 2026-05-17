@@ -89,6 +89,17 @@ inline constexpr std::array<std::uint8_t, 3> CmdMainImage{0x4d,
 inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  ///< Flush / stop "STP".
 inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Clear key(s) "CLE".
 
+// Vendor-RE-discovered opcodes (akp05_vendor.md §1.5 + §3, 2026-05-17).
+// These extend the AKP-family command surface beyond what our v1.x backend
+// shipped against. CmdVersion is the firmware-version probe sent at open
+// time (vendor sends it as the first command); UploadFinishedMarker is the
+// 5-byte "ULEND" commit-after-image-burst sentinel that the vendor sends
+// after every chunked image upload (we previously only emitted STP, which
+// per the vendor RE may explain occasional firmware desync on large bursts).
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
+    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+
 /**
  * @brief Build the zero-padded 512-byte base packet for any command word.
  *
@@ -144,6 +155,29 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
 buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
+
+/**
+ * @brief Build the firmware-version probe packet (CRT VER, no payload).
+ *
+ * Sent at device-open time by the vendor app — the device responds with
+ * a 512-byte input report whose payload carries a version string. The
+ * response format is not yet decoded in our Ghidra dump; this builder
+ * only covers the request side. Backends that consume the response will
+ * land in a follow-up commit per roadmap §11.3.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildVersionRequest();
+
+/**
+ * @brief Build the upload-finished sentinel packet (CRT ULEND, no payload).
+ *
+ * 5-byte command word "ULEND" at offsets 5..9 (NOT the standard 3-byte
+ * command at offsets 5..7 — ULEND is one of two AKP-family opcodes with
+ * a wider command field; the other is "QUCMD"). Emitted by the vendor
+ * after every chunked image-upload burst. We previously only emitted the
+ * 3-byte STP flush; per akp05_vendor.md §3 row 193 this may explain
+ * occasional firmware desync on large image bursts.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildUploadFinished();
 
 /**
  * @brief Build the first packet of a main-LCD image transfer.
