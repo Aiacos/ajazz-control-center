@@ -7,6 +7,8 @@
 
 #include "ajazz/core/logger.hpp"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QJsonDocument>
 #include <QWebSocket>
 #include <QWebSocketServer>
@@ -72,6 +74,9 @@ void SdPluginServer::stop() {
     }
     for (auto& conn : m_connections) {
         if (conn.socket) {
+            // Disconnect all our slots first so the impending close() does
+            // not re-enter onClientDisconnected on a half-shut socket.
+            conn.socket->disconnect(this);
             conn.socket->close();
             conn.socket->deleteLater();
             conn.socket = nullptr;
@@ -79,6 +84,14 @@ void SdPluginServer::stop() {
     }
     m_connections.clear();
     m_server->close();
+    // Drain pending deleteLater() calls so the underlying QWebSocketServer
+    // (held by m_server) is not destroyed while sockets queued for deletion
+    // still hold back-pointers into it. Without this the next SdPluginServer
+    // instance in the same QCoreApplication can segfault when the event
+    // loop dispatches the stale DeferredDelete events.
+    if (QCoreApplication::instance() != nullptr) {
+        QCoreApplication::sendPostedEvents(nullptr, QEvent::DeferredDelete);
+    }
     AJAZZ_LOG_INFO("plugin-server", "stopped");
     emit stopped();
 }
