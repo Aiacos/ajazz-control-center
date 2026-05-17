@@ -74,6 +74,17 @@ TEST_CASE("SdPluginServer starts on an OS-assigned port and stops cleanly",
     REQUIRE(stoppedSpy.count() == 1);
 }
 
+/// Wait up to `timeout_ms` for `spy` to accumulate at least one entry.
+/// Returns true once the count is non-zero; false on timeout. Drains the
+/// event loop while waiting, so async network events get processed.
+bool waitForSpy(QSignalSpy& spy, int timeout_ms = 3000) {
+    auto until = QDateTime::currentMSecsSinceEpoch() + timeout_ms;
+    while (spy.count() == 0 && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+    return spy.count() > 0;
+}
+
 TEST_CASE("SdPluginServer accepts a WebSocket connection on the bound port",
           "[plugin-server][lifecycle]") {
     ensureQCoreApp();
@@ -84,9 +95,12 @@ TEST_CASE("SdPluginServer accepts a WebSocket connection on the bound port",
     QWebSocket client;
     QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(port)));
-    pump(500);
+    REQUIRE(waitForSpy(clientConnectedSpy));
     REQUIRE(clientConnectedSpy.count() == 1);
-    REQUIRE(server.connectedPluginCount() == 0); // hasn't registered yet
+    // The Elgato v6 protocol distinguishes "socket connected" from
+    // "plugin registered" - the registerPlugin handshake must arrive
+    // first. connectedPluginCount() counts only registered slots.
+    REQUIRE(server.connectedPluginCount() == 0);
 
     client.close();
     pump(200);
@@ -100,14 +114,15 @@ TEST_CASE("SdPluginServer registerPlugin handshake emits pluginRegistered",
     REQUIRE(server.start(0));
 
     QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
-    pump(200);
+    REQUIRE(waitForSpy(clientConnectedSpy));
 
     constexpr char const* kPluginUuid = "com.test.myplugin.action1";
     QString const registerMsg = QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})")
                                     .arg(QLatin1String(kPluginUuid));
     client.sendTextMessage(registerMsg);
-    pump(200);
+    REQUIRE(waitForSpy(registeredSpy));
 
     REQUIRE(registeredSpy.count() == 1);
     REQUIRE(registeredSpy.first().at(0).toString() == QLatin1String(kPluginUuid));
@@ -119,18 +134,20 @@ TEST_CASE("SdPluginServer action message emits actionReceived with parsed JSON",
     ensureQCoreApp();
     SdPluginServer server;
     QSignalSpy actionSpy(&server, &SdPluginServer::actionReceived);
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
     REQUIRE(server.start(0));
 
     QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
-    pump(200);
+    REQUIRE(waitForSpy(clientConnectedSpy));
     client.sendTextMessage(
         QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
-    pump(150);
+    REQUIRE(waitForSpy(registeredSpy));
     // setTitle is one of the 13 standard Elgato actions.
     client.sendTextMessage(
         QStringLiteral(R"({"event":"setTitle","context":"abc","payload":{"title":"Hi"}})"));
-    pump(200);
+    REQUIRE(waitForSpy(actionSpy));
 
     REQUIRE(actionSpy.count() == 1);
     auto const args = actionSpy.first();
@@ -145,20 +162,22 @@ TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
     ensureQCoreApp();
     SdPluginServer server;
     QSignalSpy unhandledSpy(&server, &SdPluginServer::unhandledEventReceived);
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
     REQUIRE(server.start(0));
 
     QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
-    pump(200);
+    REQUIRE(waitForSpy(clientConnectedSpy));
     client.sendTextMessage(
         QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
-    pump(150);
+    REQUIRE(waitForSpy(registeredSpy));
     // setBG is an AJAZZ-only extension - MVP doesn't implement it, but the
     // server must surface it via the unhandled signal so the app layer can
     // log / extend without losing the event.
     client.sendTextMessage(
         QStringLiteral(R"({"event":"setBG","payload":{"color":"#FF0000"}})"));
-    pump(200);
+    REQUIRE(waitForSpy(unhandledSpy));
 
     REQUIRE(unhandledSpy.count() == 1);
     REQUIRE(unhandledSpy.first().at(1).toString() == QStringLiteral("setBG"));

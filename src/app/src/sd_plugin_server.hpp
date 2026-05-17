@@ -94,7 +94,10 @@ public:
     ///         loopback-only security invariant.
     [[nodiscard]] QHostAddress bindAddress() const noexcept;
 
-    /// @return Number of currently-connected plugins (alive WebSocket clients).
+    /// @return Number of plugins that have completed the registerPlugin
+    ///         handshake (i.e. have a non-empty UUID). Sockets that connected
+    ///         but have not yet identified themselves are not counted here -
+    ///         see Elgato v6 protocol semantics.
     [[nodiscard]] int connectedPluginCount() const noexcept;
 
 signals:

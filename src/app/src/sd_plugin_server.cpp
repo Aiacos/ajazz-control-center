@@ -101,8 +101,9 @@ QHostAddress SdPluginServer::bindAddress() const noexcept {
 }
 
 int SdPluginServer::connectedPluginCount() const noexcept {
-    return static_cast<int>(std::count_if(m_connections.begin(), m_connections.end(),
-                                           [](auto const& c) { return c.socket != nullptr; }));
+    return static_cast<int>(std::count_if(
+        m_connections.begin(), m_connections.end(),
+        [](auto const& c) { return c.socket != nullptr && !c.uuid.isEmpty(); }));
 }
 
 void SdPluginServer::onNewConnection() {
