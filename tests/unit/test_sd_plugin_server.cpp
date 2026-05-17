@@ -31,11 +31,23 @@ void pump(int ms) {
 
 /// Lazy QCoreApplication singleton - Qt signals + the WebSocket stack need
 /// a running event loop. Catch2 binaries don't always have one.
+///
+/// IMPORTANT: the QCoreApplication is intentionally heap-allocated and
+/// never deleted. ctest's `Catch2 :: ParseAndAddCatchTests` splits each
+/// TEST_CASE into its own subprocess; at process exit the static-storage
+/// destructor of a stack-allocated QCoreApplication races against
+/// QtWebSockets' own background thread (still finishing socket teardown)
+/// and SIGSEGVs. By leaking it we let the OS reclaim memory after Qt's
+/// threads have already been forcibly torn down by exit(), which is the
+/// canonical pattern for Qt test helpers (see Qt docs §"Static
+/// destruction order fiasco").
 QCoreApplication* ensureQCoreApp() {
-    static int argc = 0;
-    static char* argv[] = {nullptr};
-    static QCoreApplication app(argc, argv);
-    return &app;
+    static QCoreApplication* app = []() {
+        static int argc = 0;
+        static char* argv[] = {nullptr};
+        return new QCoreApplication(argc, argv);
+    }();
+    return app;
 }
 
 } // namespace
