@@ -387,9 +387,18 @@ devices:
     pid: "0x5007"
     maturity: scaffolded
     capabilities: [dpi, rgb]
-    protocol_doc: docs/research/vendor-protocol-notes.md
+    protocol_doc: docs/protocols/mouse/aj_series_vendor.md
     dpi_stages: 6
-    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. Wire format reuses AJ-series backend pending reconciliation."
+    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. ⚠ WIRE FORMAT MISMATCH ⚠ — AJ159 APEX vendor RE (2026-05-17, aj_series_vendor.md) revealed every opcode in aj_series.cpp is wrong vs vendor firmware (kCmdDpi 0x21→0x54, kCmdPollRate 0x22→0x04, kCmdLod 0x23→byte 52 of 0x53 omnibus, kCmdButton 0x24→0x50 at byte 8, kCmdRgb 0x30→0x07 8-byte, kCmdBattery 0x40 nonexistent, checksum & 0xFF→& 0x7F). The damaging kCmdCommit=0x50 helper that collided with FEA_CMD_MOUSE_SET_KEYMATRIX has been REMOVED as a P0 safety guard (commit pending). Remaining setters degrade gracefully to silent no-ops until §11.5 rewrite. See docs/research/clean-reimplementation-roadmap.md §1.1, §11.5."
+    feature_summary:
+      works:
+        - "Descriptor + factory wired in register.cpp (3151:5007)"
+        - "P0 safety guard: damaging commit() helper (opcode 0x50) removed; no longer corrupts button slot 0"
+      partial: []
+      pending:
+        - "Wire-format rewrite per docs/protocols/mouse/aj_series_vendor.md (§11.5 roadmap, ~600 LOC code + ~400 LOC test, largest single commit in upcoming batch)"
+        - "Real-device round-trip witness once rewrite lands (promotes scaffolded → partial)"
+        - "8 onboard profiles, 8 DPI stages (not 6), 20 macros, OTA, TFT LCD widgets — all v1.3+ deferred"
 
   - codename: aj199_family
     family: mouse

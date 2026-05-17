@@ -3,18 +3,51 @@
  * @file aj_series.cpp
  * @brief IDevice backend for AJAZZ AJ-series gaming mice.
  *
- * Reverse-engineered from the official Windows utility (Wireshark + USBPcap
- * captures of @c ajazz-aj199-official-software).  Full byte-level reference
- * in docs/protocols/mouse/aj_series.md.
+ * **⚠ KNOWN WIRE-FORMAT MISMATCH ⚠**
+ * The AJ159 APEX vendor RE landed 2026-05-17 found that the opcode table
+ * baked into this file is **wrong against the actual AJ159 firmware** —
+ * see docs/protocols/mouse/aj_series_vendor.md and the prioritised gap
+ * list in docs/research/clean-reimplementation-roadmap.md §1 (P0 safety
+ * fixes) and §11.5 (full wire-format rewrite scheduled as the largest
+ * single commit in the next milestone window).
  *
- * Feature-report envelope (64 bytes):
+ * Specifically, the vendor app:
+ *   - uses opcode 0x54 (not 0x21) for the omnibus DPI-table write
+ *   - uses opcode 0x04 (not 0x22) for poll-rate via _RateToNum lookup
+ *   - rides LOD inside byte 52 of the 0x53 omnibus packet (not standalone 0x23)
+ *   - uses opcode 0x50 (not 0x24) for button binding, payload at byte 8
+ *   - uses opcode 0x07 (not 0x30) for an 8-byte light packet (no standalone
+ *     brightness opcode — brightness is byte 3 of that packet)
+ *   - pulls battery from the dongle's gRPC watchDevList stream — there is
+ *     NO standalone 0x40 query opcode
+ *   - computes checksum as `sum & 0x7F` (BIT7), NOT `sum & 0xFF` (BIT8) we
+ *     hard-code at line ~82
+ *
+ * **DAMAGING bug isolated in the same RE:** our former `commit()` helper
+ * wrote opcode `kCmdCommit = 0x50` which is `FEA_CMD_MOUSE_SET_KEYMATRIX`
+ * in vendor speak — every commit call silently corrupted button slot 0
+ * with a malformed keymap. The `commit()` helper and its two call sites
+ * have been **REMOVED** as a P0 safety guard (this file); the other wrong
+ * opcodes degrade gracefully to silent no-ops until the §11.5 rewrite
+ * lands. Risk currently contained because AJ159 family PIDs
+ * (0x3151:0x5008 wired / 0x3151:0x4026 wireless) are NOT registered in
+ * register.cpp — only 0x3151:0x5007 (ajazz_24g_8k) is, and per the
+ * vendor RE its wire format is likely the same broken set.
+ *
+ * Reverse-engineered from the official Windows utility (Wireshark + USBPcap
+ * captures of @c ajazz-aj199-official-software).  Byte-level vendor reference
+ * in docs/protocols/mouse/aj_series_vendor.md (vendor RE doc, authoritative).
+ * docs/protocols/mouse/aj_series.md (clean-room doc) is now STALE pending
+ * the §11.5 rewrite.
+ *
+ * Feature-report envelope (64 bytes, our current implementation):
  * @code
  *   byte  0 : report id (0x05)
- *   byte  1 : command id (CommandId enum)
+ *   byte  1 : command id (CommandId enum)         ← WRONG opcodes per §11.5
  *   byte  2 : sub-command
  *   byte  3 : payload length
  *   byte 4…N: payload
- *   byte 63 : checksum = sum(bytes 1..62) mod 256
+ *   byte 63 : checksum = sum(bytes 1..62) & 0xFF  ← WRONG (should be & 0x7F)
  * @endcode
  */
 //
@@ -38,14 +71,26 @@ using namespace ajazz::core;
 constexpr std::size_t kReportSize = 64;
 
 /// Command byte values placed at offset 1 of the 64-byte feature-report envelope.
+///
+/// **⚠ EVERY VALUE IN THIS ENUM IS WRONG against the AJ159 vendor firmware ⚠**
+/// See file-header comment for the corrected opcode table that the §11.5
+/// rewrite will introduce. The constants remain here so the file compiles
+/// and the wire format stays stable for non-AJ159 PIDs that historically
+/// shipped against this code path, but each setter using them currently
+/// degrades to a silent no-op on AJ159 family hardware.
+///
+/// `kCmdCommit = 0x50` in particular collides with
+/// `FEA_CMD_MOUSE_SET_KEYMATRIX` — its helper has been REMOVED from this
+/// translation unit as a P0 safety guard. The constant is retained for the
+/// §11.5 rewrite to replace with the vendor-correct keymap opcode.
 enum CommandId : std::uint8_t {
-    kCmdDpi = 0x21,      ///< Configure DPI stages and per-stage indicator colour.
-    kCmdPollRate = 0x22, ///< Set the USB polling rate (Hz).
-    kCmdLod = 0x23,      ///< Set the lift-off distance in tenths of a millimetre.
-    kCmdButton = 0x24,   ///< Bind a button to a HID action.
-    kCmdRgb = 0x30,      ///< Control RGB lighting (static / effect / brightness).
-    kCmdBattery = 0x40,  ///< Query battery level (wireless models only).
-    kCmdCommit = 0x50,   ///< Persist staged configuration to EEPROM.
+    kCmdDpi = 0x21,      ///< [WRONG; vendor: 0x54] Configure DPI stages and per-stage indicator colour.
+    kCmdPollRate = 0x22, ///< [WRONG; vendor: 0x04] Set the USB polling rate (Hz).
+    kCmdLod = 0x23,      ///< [WRONG; vendor: byte 52 of 0x53 omnibus] Set lift-off distance.
+    kCmdButton = 0x24,   ///< [WRONG; vendor: 0x50 at byte 8] Bind a button to a HID action.
+    kCmdRgb = 0x30,      ///< [WRONG; vendor: 0x07 8-byte packet] Control RGB lighting.
+    kCmdBattery = 0x40,  ///< [WRONG; vendor: no standalone opcode — dongle pushes via stream] Battery query.
+    kCmdCommit = 0x50,   ///< [DAMAGING; vendor: FEA_CMD_MOUSE_SET_KEYMATRIX] DO NOT INVOKE — helper removed.
 };
 
 /**
@@ -142,7 +187,11 @@ public:
             m_dpiStages[i] = stages[i];
             uploadDpiStage(static_cast<std::uint8_t>(i), stages[i]);
         }
-        commit();
+        // P0 safety guard (2026-05-17): commit() helper removed because its
+        // opcode 0x50 collides with FEA_CMD_MOUSE_SET_KEYMATRIX in the vendor
+        // firmware. The §11.5 rewrite will replace this with the vendor's
+        // actual commit path (the vendor app has NO separate commit step —
+        // writes via opcode 0x54 are immediately persistent).
     }
 
     void setDpiStage(std::uint8_t index, DpiStage stage) override {
@@ -154,7 +203,7 @@ public:
         }
         m_dpiStages[index] = stage;
         uploadDpiStage(index, stage);
-        commit();
+        // P0 safety guard (2026-05-17): no commit() call — see setDpiStages().
     }
 
     [[nodiscard]] std::vector<DpiStage> getDpiStages() const override { return m_dpiStages; }
@@ -248,10 +297,13 @@ private:
         (void)m_transport->writeFeature(pkt);
     }
 
-    void commit() {
-        auto const pkt = makeEnvelope(kCmdCommit, 0x00, {});
-        (void)m_transport->writeFeature(pkt);
-    }
+    // P0 safety guard (2026-05-17): commit() helper REMOVED. Its opcode 0x50
+    // collides with FEA_CMD_MOUSE_SET_KEYMATRIX in the AJAZZ vendor firmware
+    // (see roadmap §1.1 and docs/protocols/mouse/aj_series_vendor.md). Every
+    // call wrote a malformed 4-byte HID action to button slot 0, silently
+    // corrupting the user's button mapping. The §11.5 rewrite will implement
+    // the vendor-correct path (vendor has NO separate commit; opcode 0x54
+    // DPI writes are immediately persistent on hardware).
 
     DeviceDescriptor m_descriptor;
     DeviceId m_id;
