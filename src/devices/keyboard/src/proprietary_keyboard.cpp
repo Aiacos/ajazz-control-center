@@ -228,6 +228,24 @@ std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless) {
     return pkt;
 }
 
+std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
+    return {
+        static_cast<std::uint8_t>(chunkIdx & 0xffu),                        // byte 1: low 8 bits
+        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)),      // byte 2: 0x80 | high 7 bits
+        static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),                 // byte 3: middle 8 bits
+    };
+}
+
+std::array<std::uint8_t, ReportSize>
+buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks) {
+    auto pkt = makeReport(CmdScreenBulkBegin);
+    pkt[2] = 0x00;
+    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u); // LCD-select index + 1
+    pkt[4] = static_cast<std::uint8_t>(total4kChunks & 0xffu);
+    pkt[5] = static_cast<std::uint8_t>((total4kChunks >> 8) & 0xffu);
+    return pkt;
+}
+
 std::array<std::uint8_t, ReportSize> buildSetRgbModeData(std::uint8_t modeId,
                                                          std::uint8_t r,
                                                          std::uint8_t g,

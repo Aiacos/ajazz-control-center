@@ -387,6 +387,109 @@ TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 ≠ battery query opcode 0x20 
     REQUIRE(BatteryQuerySub == 0x01);
 }
 
+// ---------------------------------------------------------------------------
+// TFT screen image upload primitives — P3.9 scaled-down: chunk index encoder
+// (24-bit split across bytes 1/2/3 with 0x80 marker) + bulk-path BEGIN packet
+// (opcode 0x72 — 143× faster than the chunked 0x7F path).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ak980 TFT chunk-index encoder — round-trip for canonical values",
+          "[proprietary][protocol][tft]") {
+    auto decode = [](std::array<std::uint8_t, 3> const& enc) -> std::uint32_t {
+        return static_cast<std::uint32_t>(enc[0]) |
+               (static_cast<std::uint32_t>(enc[2]) << 8) |
+               ((static_cast<std::uint32_t>(enc[1]) & 0x7fu) << 16);
+    };
+    // 0 — first chunk of first frame.
+    auto e0 = encodeTftChunkIndex(0);
+    REQUIRE(e0[0] == 0x00);
+    REQUIRE(e0[1] == 0x80); // marker bit set, high 7 bits = 0
+    REQUIRE(e0[2] == 0x00);
+    REQUIRE(decode(e0) == 0);
+
+    // 2 314 — last chunk of a single 240x135 RGB565 frame (2 315 total).
+    auto e2314 = encodeTftChunkIndex(2314);
+    REQUIRE(decode(e2314) == 2314);
+    REQUIRE((e2314[1] & 0x80) == 0x80); // marker always set
+
+    // 324 099 — last chunk of a full 140-frame GIF (140 × 2 315 = 324 100).
+    auto eMax = encodeTftChunkIndex(324099);
+    REQUIRE(decode(eMax) == 324099);
+
+    // 0x7FFFFF — effective max (23 bits: 7-bit upper + 8-bit middle + 8-bit
+    // low; the MSB of byte 2 is the chunk marker, NOT part of the index).
+    // Inputs above this saturate (the high bit is dropped by the encoder).
+    auto eMaxMax = encodeTftChunkIndex(0x7fffff);
+    REQUIRE(decode(eMaxMax) == 0x7fffff);
+    REQUIRE(eMaxMax[1] == 0xff); // 0x80 marker | 0x7F upper-7 bits
+}
+
+TEST_CASE("ak980 TFT chunk-index encoder — values above 23-bit max saturate",
+          "[proprietary][protocol][tft]") {
+    // 24-bit max (0xFFFFFF) cannot be represented because the high bit of
+    // byte 2 is the chunk marker. A future contributor implementing the
+    // chunked upload path MUST cap chunk_idx at 0x7FFFFF (8 388 607); the
+    // practical limit is well below that (140 frames × 2 315 chunks/frame
+    // = 324 100 chunks << 0x7FFFFF).
+    auto const enc24bit = encodeTftChunkIndex(0xffffff);
+    // The encoder silently truncates the high bit: enc[1] = 0x80 | (0xFF & 0x7F)
+    // = 0x80 | 0x7F = 0xFF — same as encoding 0x7FFFFF.
+    REQUIRE(enc24bit[1] == 0xff);
+    auto const enc23bit = encodeTftChunkIndex(0x7fffff);
+    REQUIRE(enc24bit == enc23bit); // 0xFFFFFF and 0x7FFFFF produce identical wire bytes
+}
+
+TEST_CASE("ak980 TFT chunk-index encoder always sets the 0x80 marker",
+          "[proprietary][protocol][tft]") {
+    // The marker bit distinguishes a chunk packet from the header packet
+    // (whose byte 2 = 0x03 per ak980pro_tft_protocol.md §3.1). Critical
+    // invariant: every chunk encoding must have byte 1 (output[1]) with
+    // 0x80 set.
+    for (std::uint32_t idx : {0u, 1u, 100u, 2314u, 65535u, 324099u, 0xffffffu}) {
+        auto const enc = encodeTftChunkIndex(idx);
+        REQUIRE((enc[1] & 0x80) == 0x80);
+    }
+}
+
+TEST_CASE("ak980 TFT bulk-begin packet — opcode 0x72 + LCD-select + total chunks",
+          "[proprietary][protocol][tft]") {
+    // Single-LCD AK980 PRO (most common): pass lcdSelect=0 → wire byte 3 = 1.
+    // 240×135 RGB565 single frame = 64 800 B / 4 096 B = 16 chunks (rounded up).
+    auto const pkt = buildScreenBulkBegin(/*lcdSelect=*/0, /*total4kChunks=*/16);
+    REQUIRE(pkt.size() == ReportSize);
+    REQUIRE(pkt[0] == ReportId);            // 0x04
+    REQUIRE(pkt[1] == CmdScreenBulkBegin);  // 0x72
+    REQUIRE(pkt[2] == 0x00);
+    REQUIRE(pkt[3] == 0x01);                // lcdSelect 0 → wire 1
+    REQUIRE(pkt[4] == 0x10);                // total_4k_chunks low (16)
+    REQUIRE(pkt[5] == 0x00);                // total_4k_chunks high
+    // Trailing pad.
+    for (std::size_t i = 6; i < ReportSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("ak980 TFT bulk-begin — large frame counts encode LE correctly",
+          "[proprietary][protocol][tft]") {
+    // Full 140-frame GIF: ~64 800 B/frame × 140 = 9 072 000 B / 4 096 = 2 215 chunks
+    // 2 215 = 0x08A7 → low 0xA7, high 0x08
+    auto const pkt = buildScreenBulkBegin(0, 2215);
+    REQUIRE(pkt[4] == 0xa7);
+    REQUIRE(pkt[5] == 0x08);
+}
+
+TEST_CASE("ak980 TFT opcode constants — bulk (0x72) and chunked (0x7F) coexist",
+          "[proprietary][protocol][tft]") {
+    // Pitfall guard: a future contributor must not collapse the two TFT
+    // upload paths. They use distinct opcodes and distinct transport sizes
+    // (33-byte chunked vs 4097-byte bulk per ak980pro_tft_protocol.md §§3-4).
+    REQUIRE(CmdScreenBulkBegin == 0x72);
+    REQUIRE(CmdScreenHeader == 0x7f);
+    REQUIRE(CmdScreenSubBegin == 0x03);
+    REQUIRE(CmdScreenChunkMarker == 0x80);
+    REQUIRE(CmdScreenBulkBegin != CmdScreenHeader);
+}
+
 TEST_CASE("ak980 battery sub-command is distinct from per-key RGB sub",
           "[proprietary][protocol][battery]") {
     // Pitfall guard: opcode 0x20 multiplexes battery query (sub 0x01) and per-key

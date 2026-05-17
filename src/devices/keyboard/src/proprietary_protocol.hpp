@@ -342,6 +342,61 @@ buildSetRgbModeData(std::uint8_t modeId,
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless);
 
 /**
+ * @brief Encode a 24-bit chunk index into the three TFT-chunk header bytes.
+ *
+ * Per `ak980pro_tft_protocol.md` §3.3: the chunked TFT image upload path
+ * (opcode 0x7F + 0x80|chunk-marker) splits a 24-bit chunk index across
+ * bytes 1, 2, 3 of the 33-byte feature report, with the MSB of byte 2
+ * acting as the "chunk marker" (always set to 0x80 to distinguish a chunk
+ * packet from the header packet whose byte 2 = 0x03).
+ *
+ * Encoding:
+ *   byte 1 = chunkIdx & 0xFF             (low 8 bits)
+ *   byte 2 = 0x80 | ((chunkIdx >> 16) & 0x7F)  (high 7 bits + marker)
+ *   byte 3 = (chunkIdx >> 8) & 0xFF      (middle 8 bits)
+ *
+ * Inverse: `chunkIdx = byte[1] | (byte[3] << 8) | ((byte[2] & 0x7F) << 16)`.
+ * 24-bit range supports 16 777 215 chunks (vs practical max 324 100 for a
+ * 140-frame GIF; 7-bit upper portion alone covers 8 388 607).
+ *
+ * @param chunkIdx 0..0xFFFFFF (24-bit unsigned).
+ * @return {byte1, byte2, byte3} ready for placement in the chunk packet.
+ */
+[[nodiscard]] std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx);
+
+/**
+ * @brief Build the bulk-path TFT upload BEGIN packet (opcode 0x72).
+ *
+ * Per `ak980pro_tft_protocol.md` §4: the BULK TFT upload path is **143×
+ * faster** than the chunked 0x7F path (4.5 s vs 10.8 min for a full
+ * 140-frame GIF). This builder produces the BEGIN packet (65-byte
+ * feature report via FUN_0044eed0); the actual 4 KiB blocks that follow
+ * are sent via the WriteFile-direct path (FUN_0044f2d0), which is a
+ * separate transport channel that our ITransport must expose
+ * (write_bulk equivalent — deferred to a future commit).
+ *
+ * Byte layout:
+ *   byte 0: 0x04                    (HID Report ID — default)
+ *   byte 1: 0x72                    (CmdScreenBulkBegin)
+ *   byte 2: 0x00
+ *   byte 3: LCD-select index + 1    (single-LCD models pass 0 → wire 1)
+ *   byte 4: total_4k_chunks low byte
+ *   byte 5: total_4k_chunks high byte
+ *   bytes 6..63: 0x00
+ *
+ * Once a USB capture confirms the BULK chunk envelope on a real device,
+ * the follow-up commit will wire a `sendScreenBulkFrame()` method that
+ * loops `total_4k_chunks` times writing 4 KiB blocks via the bulk path.
+ *
+ * @param lcdSelect 0-based LCD index (most AK980 PRO models have 1 LCD → pass 0).
+ * @param total4kChunks Number of 4 KiB chunks the frame(s) will occupy
+ *                      (for a single 240×135 RGB565 frame = 64 800 B = 16
+ *                       chunks; for 140-frame GIF = 2 215 chunks).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks);
+
+/**
  * @brief Build the time-sync start packet — first of the 4-packet envelope.
  *
  * ReportId=0x04, opcode 0x18 (CMD_START), byte[8]=0x01. Resets the firmware's
