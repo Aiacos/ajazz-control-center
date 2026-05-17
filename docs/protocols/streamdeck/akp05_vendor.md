@@ -530,3 +530,95 @@ Cross-references to in-tree code:
 - Cross-link: [`akp03.md`](./akp03.md) — shares the same wire framing.
 - Cross-link: [`akp815.md`](./akp815.md) — shares the `MAI` strip
   protocol.
+
+## 14. Companion documents (deep RE pass 2 — 2026-05-17 evening)
+
+The first pass (§§1–13 above) catalogued the SDK's HID surface,
+opcode table, and gross plugin SDK architecture. A follow-up pass
+added four companion documents that drill deeper into specific
+subsystems:
+
+- **[`akp05_init_sequence.md`](./akp05_init_sequence.md)** — covers
+  the `WinMain → main() → bootstrap → device handshake` chain,
+  including the previously-undocumented WinUSB framing difference
+  (no report-ID byte; opcode at offset 5 instead of 6), the
+  `QLocalServer`-based single-instance enforcement, the registry
+  layout for per-device prefs, and the `QHostAddress::Any` listener
+  binding posture (security-sensitive — do NOT replicate verbatim).
+- **[`akp_plugin_sdk.md`](./akp_plugin_sdk.md)** — exhaustive plugin
+  SDK reference: 12 default plugins enumerated (we had said "11"
+  before; the `mkey.*` variant is the 12th), full manifest schema
+  including the AJAZZ-only fields (`IsK1Pro`, `RunAsAdministrator`,
+  `FSize`/`FFamily`, `Nodejs.Version`, `PUUID`), all 26+ AJAZZ-only
+  WebSocket actions (cross §3 from this file's §5.3), the
+  challenge/salt authentication handshake (`hello` → `passHello`
+  with salt → SHA-256 challenge), the plugin store URL pattern
+  and metadata fields, the QCefView JS-to-C++ bridge API surface
+  (`invokeMethod`, `executeJavascriptWithResult`, `cefQueryRequest`),
+  and the recommended Qt 6 / QWebChannel replacement pattern.
+- **[`akp_device_matrix.md`](./akp_device_matrix.md)** — full
+  per-SKU table: 96 codenames recognised by the vendor (we had
+  ~50 in §1.3 of this file). Each row includes VID:PID where
+  publicly confirmed, protocol version (v1/v2/v3 per `[mirajazz]`),
+  transport (hid vs winusb vs both), key/encoder/strip geometry,
+  per-key JPEG dimensions + rotation, brightness range, packet
+  size, and family-specific features. Notable additions:
+  AKP05 V25 codenames (`AKP05V25`, `AKP05EV25`, `AKP05RV25`),
+  Mirabox N4 Pro family (vibration + per-key RGB), keyboard-form
+  SKUs with embedded LCD (`K1Pro`, `K-992`, `MOLA`), and ~30 OEM
+  rebadges (`Streamplify`, `DarkFlash`, `IYUT`, `Womier`, `SANWA`,
+  `TOS300`, …).
+- **[`akp_dfu_protocol.md`](./akp_dfu_protocol.md)** — the firmware
+  upgrade protocol. The `aKDFU` 4-byte sentinel mentioned in §4.3
+  is the in-binary marker; the actual on-wire format is an
+  Allwinner SoC USB-upgrade protocol over libusb bulk endpoints
+  with CBW/CSW handshake, AIC.FW image header, per-FWC CRC
+  verification, and a multi-stage burn/verify/run flow. The doc
+  spells out why we MUST NOT reimplement this and what our backend
+  should do instead (detect DFU transition, suspend, resume on
+  re-enumeration). Includes captured strings from
+  `FirmwareUpgradeTool.exe`.
+
+### 14.1 Corrections to this document from the deeper pass
+
+- **§1.2 Backends table — WinUSB framing**: the framing diagram in
+  §2 of this file describes the **hidapi** packet layout. The
+  WinUSB layout is **one byte further left** (no report-ID byte at
+  offset 0 — the `'C','R','T'` prefix starts at offset 0; opcode
+  starts at offset 5 instead of 6; payload starts at offset 8
+  instead of 9). See `akp05_init_sequence.md` §3.4 for the table.
+  This affects every WinUSB-class device — currently mainly the
+  AKP05/N4 family for the touch-strip channel.
+- **§5.1 Transport — listener binding**: the WebSocket listener
+  binds to `QHostAddress::Any`, **not** `127.0.0.1` as previously
+  stated. The browser-side JS shim hardcodes `ws://127.0.0.1:<port>`
+  so the intended attack surface is local-only, but the C++
+  listener does accept LAN connections. We must NOT replicate this
+  in our implementation — see `akp_plugin_sdk.md` §9 row 1.
+- **§5.3 Actions table — completeness**: §5.3 of this file lists
+  ~16 actions; the actual vendor surface has 39 (verified in
+  `akp_plugin_sdk.md` §4.3 from `streamdock_exe_strings.txt`).
+- **§5.5 Built-in plugins**: §5.5 of this file lists ~17 built-in
+  UUIDs; we found additional ones (`com.hotspot.streamdock.vmix`,
+  `com.hotspot.streamdock.youtube`,
+  `com.hotspot.streamdock.pageindicatororgoto`,
+  `com.hotspot.streamdock.pagebackorforword`) — see
+  `akp_plugin_sdk.md` §1 paragraph after the table.
+- **`ProductIdAkp03Demo` PID `0x3004`** is already in our
+  `register.cpp` as `Akp03DemoPid`. The "HOTSPOTEKUSB HID DEMO"
+  string label confirmed the device is an AKP03 sibling on
+  development firmware.
+
+### 14.2 Items moved to follow-up captures (still gaps)
+
+- DFU-trigger HID packet shape (which `QUCMD` byte combo enters
+  DFU mode?).
+- One `.aic` firmware hex-dump to confirm AIC.FW header.
+- AKP05 V25 vs pre-V25 protocol-version differences (firmware
+  reports `293V25` vs `293V3`-class strings — runtime detection
+  needs a `VER` response sample).
+- AKP05 main-strip JPEG dimensions for non-rect-update path
+  (whole-strip `MAI` vs rect-update `DRA` — both exist but use
+  different geometry).
+- M_V boot-logo 1024-byte packet full layout (per §2 row 191 of
+  this file — header bytes only verified).
