@@ -1298,3 +1298,405 @@ not be amended via `/gsd-*` workflows; it should be re-generated when a
 substantive new vendor RE doc lands. The next 5 commits in §11 carry the
 actionable next steps; everything else feeds into v1.2.x and v1.3
 milestone planning.*
+
+______________________________________________________________________
+
+## 12. Deep RE pass 2026-05-17 — additional findings
+
+A second, **byte-level** RE pass landed 13 new docs on 2026-05-17 (3
+commits: `fdd5e48` Stream Dock, `bf869ac` AK980 PRO, `37bea86` AJ159
+mouse). Of these, **5 contradict** the original §11.1–§11.5 commit
+sequence in this document and force a re-ordering. The corrections, new
+opportunities, and contradictions are catalogued below. The concrete
+execution plan that results from this section lives in
+[`docs/research/phase3-patch-sequence.md`](./phase3-patch-sequence.md).
+
+### 12.1 New P0 corrections beyond the original §11.1–§11.5
+
+#### 12.1.1 AK980 PRO settings batch (0x07 0x10) byte map was WRONG
+
+**Source**: [`ak980pro_vendor.md` §13.2](../protocols/keyboard/ak980pro_vendor.md).
+
+Re-deriving from `FUN_00414290` with proper stack-offset analysis, the
+prior §2.7 proposal had bytes 5/6/7 carrying `fn_switch`/`sleep_time`/
+`key_respondtime` — that was wrong. **Bytes 5/6/7 carry the disable
+Win-key / Alt-F4 / Alt-Tab flags**; the real `fn_switch` is at byte 9,
+`sleep_time` at byte 10, `key_respondtime` at byte 12. Byte 8 is BOTH a
+disable-key flag (Alt-Tab) **and** the checksum slot (overwritten last).
+Bytes 18–19 are the `0xAA 0x55` trailer.
+
+If we had landed §2.7 / §11.x with the prior byte map, every settings
+write would have silently set Win-key / Alt-F4 / Alt-Tab disable flags
+that the UI never asked for. **Containment via documentation only** —
+no in-tree code yet implements this opcode.
+
+#### 12.1.2 AK980 PRO per-key RGB (0x20 0x04): 192 B wired (3 chunks of 64), 512 B wireless (8 chunks of 64) — NOT 6 chunks
+
+**Source**: [`ak980pro_perkey_rgb_protocol.md` §3](../protocols/keyboard/ak980pro_perkey_rgb_protocol.md) +
+[`ak980pro_vendor.md` §13.11](../protocols/keyboard/ak980pro_vendor.md).
+
+The prior §2.8 said "0xC0 (wired) / 0x200 (wireless) RGB blob". Both
+sizes are correct. The chunk count was implicit ("60-byte chunked
+upload" inherited from `CmdSetRgbBuffer = 0x0a`) and would have produced
+**wrong chunking**. Vendor uses **64-byte FEATURE-report slices** via
+`FUN_0044f0c0`: wired = **3 chunks × 64** = 192 B, wireless = **8 chunks
+× 64** = 512 B. Each on-wire chunk has NO opcode prefix — header packet
+(step 1) sets context, raw blob (step 2) follows, CMD_SAVE 0x02
+(step 3) closes.
+
+**Wired path is monochromatic** (1 byte per LED, indexed by
+`light_index`), not full RGB. To get arbitrary per-key colors on the
+wired interface we must layer `0x08` zone-color + `0x20 0x04`
+intensity. **Wireless is full 4-byte-per-LED [reserved=0, R, G, B]
+slots**, 128 LEDs addressable (5 slots unused beyond light_index 123).
+
+#### 12.1.3 AK980 PRO TFT bulk-upload opcode 0x72 is 143× faster than 0x7F path — change priority
+
+**Source**: [`ak980pro_tft_protocol.md` §4-§5](../protocols/keyboard/ak980pro_tft_protocol.md) +
+[`ak980pro_vendor.md` §13.10](../protocols/keyboard/ak980pro_vendor.md).
+
+The prior §2.9 proposed the chunked `0x7F 0x03 + 0x80|n` path, costing
+**~648 s (10.8 min)** for a 140-frame GIF. The deep pass found
+`FUN_00422920` uses an alternate **bulk path** with **opcode 0x72**
+(`CMD_SCREEN_BEGIN_BULK`) plus 4097-byte chunks via `FUN_0044f2d0` —
+**~4.5 s for the same 140-frame GIF**.
+
+Promote TFT image upload from `v1.2.x` deferred to **P0 v1.2** in
+phase3 sequence. Implement both paths: bulk by default, chunked as
+fallback when firmware rejects 0x72.
+
+#### 12.1.4 AK980 PRO Report ID 0x00 vs 0x04 transport — defer change
+
+**Source**: [`ak980pro_vendor.md` §13.1](../protocols/keyboard/ak980pro_vendor.md).
+
+The deep pass shows the vendor uses **two distinct HID transports**:
+- `FUN_0044f5f0` → `WriteFile` (HID OUTPUT, 33 B reports), framing
+  `[ReportID=0x00, opcode, sub, payload, …, checksum@8]` — opcode at
+  on-wire byte 1.
+- `FUN_0044eed0` → `HidD_SetFeature` (HID FEATURE, 65 B reports),
+  framing `[ReportID=0x00, 0x04, opcode, sub, payload, …]` — opcode at
+  on-wire byte 2; the **0x04 byte is a frame-magic, NOT the Report ID**.
+
+Our `proprietary_protocol.hpp:23` defines `ReportId = 0x04`. Empirically
+the AK980 PRO setTime path against gohv + KyleBoyer works with 0x04 as
+the first byte. Either interpretation is consistent on the wire — our
+HID stack prepends a Report ID byte; either 0x00 (correct) or 0x04
+(incorrect but the firmware tolerates it) lands the rest of the bytes
+in the right places.
+
+**DECISION**: defer the change pending hardware test against the
+**FEATURE-report** opcodes (0x13, 0x17, 0x18, 0x02, 0xF0). No observed
+bug; risk of changing what works > value of theoretical correctness.
+Captured as `[needs capture]` for negative validation.
+
+#### 12.1.5 AK980 PRO transport selection per opcode (TRANSPORT MATRIX)
+
+**Source**: [`ak980pro_vendor.md` §13.11 last table](../protocols/keyboard/ak980pro_vendor.md).
+
+Each opcode must use the matching transport — firmware enforces this:
+
+| Opcode group | Transport | Helper |
+| ------------ | --------- | ------ |
+| 0x07 0x10 (settings), 0x09 0x1C (macro wired), 0x0B 0x1C (lighting), 0x14 0x1C (macro assign), 0x20 0x01 (battery), 0x7F 0x03 + 0x80\|n (TFT chunks) | OUTPUT 33 B | `FUN_0044f5f0` |
+| 0x18 / 0x28 / 0xF0 (envelope verbs), 0x02 (SAVE), 0x13 (RGB mode), 0x17 (sleep timer), 0x19 / 0x15 (wireless macro), 0x72 (TFT bulk begin) | FEATURE 65 B | `FUN_0044eed0` |
+| 0x20 0x04 (per-key RGB write) | FEATURE 65 B chunked | `FUN_0044f0c0` |
+| bulk 4097-byte writes | OUTPUT 4097 B | `FUN_0044f2d0` |
+| 0xF5 0x03 / 0xF5 0x09 (per-key RGB readback) | OUTPUT + streaming read | `FUN_0044f3a0` |
+
+For our backend, this means `ITransport` needs a clear distinction
+between `write()` (OUTPUT path, hidapi `hid_write`) and `writeFeature()`
+(`hid_send_feature_report`). Audit existing usages in
+`proprietary_keyboard.cpp` to ensure each opcode goes through the right
+side.
+
+#### 12.1.6 AK980 PRO CMD_FINISH 0xF0 missing from every commit envelope
+
+**Source**: [`ak980pro_vendor.md` §13.7, §13.11](../protocols/keyboard/ak980pro_vendor.md).
+
+Every multi-packet envelope ends with **opcode 0xF0 (CMD_FINISH)**.
+Confirmed in three places: `FUN_0042b0a0` (RGB mode commit),
+`FUN_004340c0` (LCD mode commit), `FUN_0044b910` (macro upload close).
+Our ARCH-05.1 `setTime` envelope omits this — the firmware tolerates
+it but the vendor pattern is to always close with 0xF0. Pure additive
+fix; no behaviour change expected.
+
+#### 12.1.7 AK980 PRO LCD-aware time-sync uses 0x0C 0x10 (alternate opcode)
+
+**Source**: [`ak980pro_vendor.md` §13.8](../protocols/keyboard/ak980pro_vendor.md).
+
+`FUN_00423a10` (LCD-aware variant) uses opcode `0x0C 0x10` — a single
+33-byte FEATURE packet via `FUN_0044f5f0`, NOT the 4-packet 0x28
+envelope. This is the path that **should** drive the on-keyboard TFT
+time display on AK980 PRO (which HAS an LCD). Our ARCH-05.1 currently
+uses the multi-packet 0x28 path — that works (the firmware accepts
+both), but the 0x0C 0x10 single-packet form is the canonical vendor
+choice. Defer; document as future improvement.
+
+#### 12.1.8 AK980 PRO wireless macro upload uses 0x19 0x04 + 0x15 0x04 (NEW opcodes)
+
+**Source**: [`ak980pro_vendor.md` §13.9](../protocols/keyboard/ak980pro_vendor.md) +
+[`ak980pro_macros_protocol.md` §5](../protocols/keyboard/ak980pro_macros_protocol.md).
+
+Wired macro upload uses `0x09 0x1C` (28-byte chunks via OUTPUT 33 B).
+Wireless uses a **different envelope**: `0x19 0x04` (begin) + `0x15 0x04`
+(chunk info, byte 8 = chunk_count) + bulk body via `FUN_0044eed0` (auto-
+chunks at 64-byte boundaries) + `0x02 0x04` (save). Add to opcode table.
+
+#### 12.1.9 AK980 PRO macro mouse-remap footgun
+
+**Source**: [`ak980pro_macros_protocol.md` §3.2](../protocols/keyboard/ak980pro_macros_protocol.md).
+
+The DB-side `t_key_otherdata.value` field uses values `1=Left, 2=Right,
+3=Middle`. The on-wire byte uses **HID button bitmask** values
+`0x01=Left, 0x02=Middle, 0x04=Right`. **2 ↔ 3 swap.** A naïve port that
+forwards `value` straight to the wire byte breaks Right + Middle click
+recording. Must implement a `macroMouseDbToWire()` remap (one-line
+constexpr per macros_protocol.md §9.1) and write a dedicated test.
+
+#### 12.1.10 AJ-series mouse: `hid_write` (interrupt-OUT), NOT `writeFeature()`
+
+**Source**: [`aj_series_vendor.md` "Other corrections" §1](../protocols/mouse/aj_series_vendor.md).
+
+The renderer's `writeFeatureCmd` wrapper at `js:726774` calls `no()`
+(`sendMsg` wrapper at `js:56601`) — which uses **interrupt-OUT** (HID
+output report). `sendRawFeature` (= `hid_send_feature_report`) is only
+used by `writeRawFeatureCmd`, which the mouse path doesn't call.
+
+The prior §11.5 rewrite proposal said "writeFeature". **Use `write()`
+(interrupt-OUT) instead.** Concrete: `ITransport::write()` not
+`writeFeature()`. The `ITransport` abstraction in our tree maps this to
+`hid_write` on the hidapi backend. Apply correction in P0.5.
+
+#### 12.1.11 AJ-series mouse: BIT7 checksum confirmed by 98 call-site census
+
+**Source**: [`aj_series_vendor.md` "deep-dive appendices" §Critical finding](../protocols/mouse/aj_series_vendor.md) +
+[`aj_series_opcode_table.md` §1 "Hard fact: CheckSumType.BIT7"](../protocols/mouse/aj_series_opcode_table.md).
+
+The renderer census found `Wn.CheckSumType.BIT7` (or numeric `0` =
+BIT7) in **98 distinct call sites** and **zero** BIT8 call sites for
+mouse-class opcodes. The `BIT8` enum value is reserved for legacy non-
+AJAZZ VID SKUs (VKMS / akko / rongyuan).
+
+**UNBLOCKS P0.5 rewrite** — we no longer need a USBPcap capture to
+confirm checksum mode for the wire-format rewrite. `& 0x7F` is the
+right answer for every AJ-series PID.
+
+#### 12.1.12 AJ-series mouse: 8th DPI stage colour byte is wire-quirk (collides with checksum)
+
+**Source**: [`aj_series_vendor.md` "Other corrections" §3](../protocols/mouse/aj_series_vendor.md) +
+[`aj_series_opcode_table.md` §3.10 "Edge case on byte 63"](../protocols/mouse/aj_series_opcode_table.md).
+
+The 0x54 DPI-table packet has `byte 40..63 = 8 stages × 3 RGB bytes`.
+Byte 63 (= 40 + 23 = 8th-stage B-channel) **also is the checksum slot
+overwritten by the iot_driver after the renderer writes its bytes**.
+Net effect: the 8th DPI stage's B-channel colour is destroyed on the
+wire. The QML editor should grey out the 8th-stage colour swatch (or
+hide the 8th stage entirely, since firmware likely only uses 7
+visible stages anyway).
+
+#### 12.1.13 Stream Dock WinUSB framing — one byte further left than hidapi (no Report ID)
+
+**Source**: [`akp05_init_sequence.md` §3.4](../protocols/streamdeck/akp05_init_sequence.md) +
+[`akp05_vendor.md` §14.1](../protocols/streamdeck/akp05_vendor.md).
+
+The framing diagram in `akp05_vendor.md` §2 describes the **hidapi**
+packet layout (Report ID at byte 0, `CRT` at bytes 1..3, opcode at byte
+6). The **WinUSB** layout has **no report-ID byte** — `CRT` at bytes
+0..2, opcode at byte 5, payload at byte 8.
+
+This only matters for the WinUSB-class touch-strip channel on AKP05 /
+Mirabox N4 family (and the N4 Pro). Our current AKP05 backend uses
+hidapi for the touch-strip; if/when we move to WinUSB for higher
+bandwidth, we must shift opcode offsets one byte left. **Containment
+flag**: add a comment in `akp05_protocol.hpp` documenting the offset
+delta before WinUSB lands.
+
+#### 12.1.14 Stream Dock SDPluginServer binds 0.0.0.0 (security)
+
+**Source**: [`akp05_init_sequence.md` §5](../protocols/streamdeck/akp05_init_sequence.md) +
+[`akp_plugin_sdk.md` §4.1 + §9](../protocols/streamdeck/akp_plugin_sdk.md) +
+[`akp05_vendor.md` §14.1](../protocols/streamdeck/akp05_vendor.md).
+
+Vendor binds `QHostAddress::Any` on both WebSocket and TCP servers —
+all interfaces, including LAN-facing. Browser-side JS shim hardcodes
+`ws://127.0.0.1:<port>`, so the *intended* attack surface is local-only,
+but the C++ listener accepts LAN connections.
+
+**For our implementation: bind to `QHostAddress::LocalHost` only.**
+This is an anti-feature (§4.x) we must NOT replicate. SDPluginServer
+spec (§3.1) updates to require LocalHost binding + the salt/challenge
+auth (`hello` → `passHello` with salt, SHA-256 challenge) per
+`akp_plugin_sdk.md` §4.5.
+
+### 12.2 New P1/P2 features unlocked by deep RE
+
+#### 12.2.1 12 default plugins (not 11)
+
+**Source**: [`akp_plugin_sdk.md` §1](../protocols/streamdeck/akp_plugin_sdk.md).
+
+Prior pass said "11 default plugins"; deep pass found **12**. The 12th
+is `mkey.com.mirabox.streamdock.calendar.sdPlugin` — a K1Pro-keyboard-
+specific variant gated by `IsK1Pro: true` on the action.
+
+Plus ~50 built-in UUIDs handled in-process (page nav, profile nav,
+brightness, hotkey, multimedia, OBS, YouTube, vMix, system monitor,
+plain text, etc.) — covered by the SDPluginServer in §3.1.
+
+#### 12.2.2 39-action WebSocket surface (Elgato 13 + AJAZZ 26 extensions)
+
+**Source**: [`akp_plugin_sdk.md` §4.3 + §4.4](../protocols/streamdeck/akp_plugin_sdk.md).
+
+Prior §5.3 of `akp05_vendor.md` listed ~16 actions; deep pass enumerated
+**39 distinct plugin→host actions**, of which 26 are AJAZZ-only
+extensions (`setBG`, `openTouchbarSecondaryMenu`, `enterGatheringEvent`,
+`sendToDevice`, `setBackground`, `clearIcon`, `getScreenshot`,
+`getSystemAudioVolume`, `setAcImgTop`, `lockScreen`/`unLockScreen`,
+`getUserInfo`/`sendUserInfo`, `startAudioCapture`/`stopAudioCapture`,
+`onSwitchToFolderProfile`, `exitFullScreen`, `touchTap`,
+`getDetectedSensorsData`, `deleteAction`, `stopBackground`,
+`registrationScreenSaverEvent`, `setText`, etc.).
+
+Plus host→plugin events: 13 Elgato-standard + ~6 AJAZZ-specific
+(`passHello` with auth challenge, `keyDownCord`/`keyUpCord`,
+`deleteAction`, `lockScreen`/`unLockScreen` mirror).
+
+Update §3.1 SDPluginServer spec: 39-action surface, not 13.
+
+#### 12.2.3 96 Stream Dock codenames (vs 50 prior — register.cpp expansion)
+
+**Source**: [`akp_device_matrix.md` §§2-11](../protocols/streamdeck/akp_device_matrix.md).
+
+Prior pass had ~50 codenames in `akp05_vendor.md` §1.3. Deep pass
+catalogued **96 distinct codenames** across 7 silicon families (V1, V2,
+V25, V3, N1, N3, N4). Notable additions:
+
+- AKP05 V25 variants: `AKP05V25`, `AKP05EV25`, `AKP05RV25`
+- Mirabox N4 Pro family (vibration + per-key RGB): `MBox-N4Pro`,
+  `MBox-N4ProE`, `N4Pro`, `N4ProE`, `MSDPRO`, `MSDNEO`, `VSDN4Pro`
+- Mirabox N6 (6-key sibling): `MBox-N6`
+- ~30 OEM rebadges: `Streamplify`, `DarkFlash`, `IYUT_D15`, `Womier_D15`,
+  `SANWA`, `TOS300`, `MOLA`, `BRHubN4`, `BRHubN4Pro`, etc.
+- Keyboard-form SKUs with embedded LCD: `K1Pro`, `K1ProUS`, `K1ProZH`,
+  `Create_Pro`, `K-992`, `M18*` family
+
+Expansion target for `src/devices/streamdeck/src/register.cpp` — purely
+additive (new codename strings + sibling PIDs pointed at existing
+backend factories).
+
+#### 12.2.4 41 mouse PIDs + 6 partner VIDs (vs ~8 prior — register.cpp expansion)
+
+**Source**: [`aj_series_device_matrix.md` §1 + §7](../protocols/mouse/aj_series_device_matrix.md).
+
+Prior pass had ~8 PIDs; deep pass found **41 active AJAZZ-VID (0x3151)
+PIDs + 19 bootloader PIDs**, plus **6 partner VIDs** that ship the same
+iot_driver (Sino Wealth `0x25aa`, akko `0x347a`, VKMS `0x374a`,
+MagneticJade `0x3794`, rongyuan `0x342d`, Mad Catz `0x0738`, plus AK980
+PRO's Microdia `0x0c45`).
+
+Priority promotions for `src/devices/mouse/src/register.cpp`:
+- `aj159_apex_wired` = `0x3151:0x5008`
+- `aj159_apex_24g` = `0x3151:0x4026`
+- `aj159_apex_dongle` = `0x3151:0x4027` (dongle_common — exposes BOTH
+  keyboard + mouse children)
+- AJ179 APEX shares PIDs (`0x5008` + `0x4026`) — same wire format
+
+DO NOT promote partner-VID SKUs without explicit consent (trademark
+risk per `aj_series_device_matrix.md` §7.1 note).
+
+#### 12.2.5 AK980 PRO host-side 9 lighting effects (CustomLightMode)
+
+**Source**: [`ak980pro_mui_dll.md` §3](../protocols/keyboard/ak980pro_mui_dll.md).
+
+The vendor's `CustomLightMode` class (67 methods, largest app class)
+implements **9 host-side lighting effects** entirely in C++ on the host
+and then pushes cooked per-key RGB via opcode `0x20 0x04`:
+`InitLightStar` (Starlight), `InitLightRain` (Fluttering),
+`InitFlowerEffect` (Colorful Fountain), `InitBreathEffect` (Dynamic
+Breathing), `InitSpringEffect` (Rainbow Wave), `InitVerticalEffect`
+(Following Currents), `InitRollEffect` (Peak Revolving),
+`InitLightRotate` (Static On variants).
+
+Distinct from the **20 firmware-rendered modes** (opcode `0x13`). The
+keyboard MCU does NOT run the 9 host-side effects — host must compute
+60 fps frames and stream via `0x20 0x04` chunks.
+
+Cross-cutting design implication: a new `LightingEffectsService` Qt6
+service that owns 9 effect compositors + a per-key 144-slot
+`LightingMatrix` model + the upload worker. This is a non-trivial new
+subsystem (~1500 LOC) deferred to v1.3.
+
+#### 12.2.6 AK980 PRO TFT bulk 0x72 path (143× faster — see §12.1.3)
+
+Covered above. Top priority for `IDisplayCapable` extension to the
+keyboard family.
+
+### 12.3 Contradictions to resolve
+
+| # | Contradiction | DECISION | RATIONALE |
+| - | ------------- | -------- | --------- |
+| C-1 | Settings-batch byte map: §2.7 wrong vs §13.2 right | USE §13.2 byte map | Deep RE has stack-offset evidence; §2.7 was inferred from incomplete decompile. No in-tree implementation yet → no migration risk |
+| C-2 | Per-key RGB chunk count: "60-byte chunked" (§2.8) vs "64-byte chunked" (§13.11) | USE 64-byte chunks via `FUN_0044f0c0` | Deep RE explicitly traced `FUN_0044f0c0` chunking loop; "60-byte" was inherited from a different opcode (0x0a CmdSetRgbBuffer, NOT used on AK980 PRO) |
+| C-3 | Report ID 0x00 vs 0x04 (§13.1 says 0x00 + frame magic 0x04; our `proprietary_protocol.hpp:23` says ReportId=0x04) | **DEFER** | gohv/KyleBoyer/our impl all empirically work with 0x04 prefix. Either interpretation lands the same bytes if the HID stack-prepend behaves consistently. No observed bug. Capture-validate before changing |
+| C-4 | Mouse transport: `writeFeature` (§11.5) vs `hid_write` (§12.1.10 / aj_series_vendor.md §1) | USE `hid_write` (interrupt-OUT, `ITransport::write()`) | Renderer-side wrapper census proves mouse path uses `sendMsg` not `sendRawFeature`. Apply in P0.5 rewrite |
+| C-5 | DPI stage count: §2.14 says 8 stages; §12.1.12 says 8th stage colour B-byte is destroyed by checksum | EXPOSE 8 stages, GREY OUT 8th colour swatch | Firmware accepts 8 stages but truncates 8th-stage RGB byte; UI must reflect this |
+| C-6 | Stream Dock listener binding: §3.1 / §5.1 said `127.0.0.1`; deep pass §14.1 says `QHostAddress::Any` | OUR IMPL: bind LocalHost ONLY | Anti-feature §4.x — vendor footgun; we must NOT replicate. Add to anti-feature checklist |
+| C-7 | Stream Dock framing for WinUSB: §2 hidapi layout vs §14.1 WinUSB layout (one byte left, no ReportID) | DOCUMENT NOW, IMPLEMENT LATER | Only affects WinUSB touch-strip channel which we don't yet wire. Add comment to `akp05_protocol.hpp` so the next implementer doesn't miss it |
+| C-8 | TFT upload path priority: §2.9 (`v1.2.x`, 0x7F) vs §12.1.3 (P0 v1.2, 0x72 bulk) | PROMOTE TO P0 v1.2 via 0x72 bulk | 143× speedup justifies promotion; chunked 0x7F stays as fallback |
+| C-9 | LCD-aware time-sync uses 0x0C 0x10 (§13.8) vs 4-packet 0x28 envelope (our current impl) | KEEP 0x28, DOCUMENT 0x0C 0x10 AS FUTURE | Our 0x28 envelope works; switching opcodes is high-risk for zero user-visible benefit |
+| C-10 | "11 default plugins" (prior planning) vs "12 default plugins" (§12.2.1) | UPDATE to 12 | Off-by-one corrected; the 12th is the `mkey.*` K1Pro variant |
+| C-11 | "Default plugins" vs "built-in UUIDs": ~50 built-in UUIDs handled in-process | DOCUMENT BOTH; SDPluginServer surfaces both | The ~50 built-in UUIDs are the page-nav/profile-nav/brightness/etc. actions handled by the host without spawning a plugin process — they don't need .sdPlugin packaging |
+
+### 12.4 Amended §11 commit sequence preview
+
+The original §11 sequence (5 commits, P0 safety + features) was
+ordered before the deep RE pass. With the §12.1 corrections, the
+sequencing for the **next batch** of commits changes substantially. The
+authoritative new plan is
+[`docs/research/phase3-patch-sequence.md`](./phase3-patch-sequence.md) —
+which targets ~20 commits organised by risk tier (additive →
+medium-blast → high-risk rewrites) and defers P1 plugin-host work to a
+dedicated milestone.
+
+Quick changes vs §11:
+
+- **§11.1** (mouse safety guard) — **landed** (`00acf5e`)
+- **§11.2** (AK980 PRO battery 0x20 0x01) — **landed** (`eea50a5`)
+- **§11.3** (Stream Dock VER + ULEND for AKP03/AKP05) — **landed**
+  (`24c0965`); AKP153 + AKP815 propagation still queued (P3.7 in
+  phase3 sequence)
+- **§11.4** (DRA rect-addressable strip) — **landed** (`ef9597b`)
+- **§11.5** (AJ-series wire-format rewrite) — **unblocked** by §12.1.11
+  (BIT7 confirmed by 98-site census); also requires §12.1.10 transport
+  correction (`write()` not `writeFeature()`) + §12.1.12 8th-stage UX
+  caveat. Scheduled as **P3.12 (HIGH RISK)** in phase3 sequence
+
+### 12.5 New anti-features identified by deep RE pass
+
+To append to §4:
+
+- **§4.16 Stream Dock WebSocket binding to `QHostAddress::Any`**
+  ([`akp05_init_sequence.md` §5](../protocols/streamdeck/akp05_init_sequence.md)).
+  Vendor binds all interfaces despite the JS shim only ever connecting
+  via 127.0.0.1. We MUST bind `QHostAddress::LocalHost` only.
+- **§4.17 Stream Dock plugin-zip auto-unpack without signature
+  verification** ([`akp_plugin_sdk.md` §6](../protocols/streamdeck/akp_plugin_sdk.md)).
+  Vendor host extracts ZIPs from the plugin store and trusts the
+  contents. We MUST require a signature (Ed25519 over the manifest +
+  code) before extraction.
+- **§4.18 AK980 PRO custom MUI toolkit (mui.dll, 6 604 exports)**
+  ([`ak980pro_mui_dll.md` §1-§5](../protocols/keyboard/ak980pro_mui_dll.md)).
+  Already covered by §4.13 (anti-feature: custom UI framework). Deep
+  pass corroborates: mui.dll reimplements a subset of Qt 6 / QML in
+  1.2 MB of MFC-derived code.
+- **§4.19 Allwinner SoC USB-upgrade protocol (DFU)** —
+  [`akp_dfu_protocol.md`](../protocols/streamdeck/akp_dfu_protocol.md).
+  Already covered by §3.2 (defer DFU). Deep pass confirms: the DFU is
+  an Allwinner BROM upgrade with AIC.FW + CBW/CSW transport, NOT
+  Stream-Deck-protocol code. We MUST detect DFU transition + suspend
+  but NEVER reimplement.
+- **§4.20 Stream Dock AES-GCM-encrypted firmware blob with hardcoded
+  key** ([`akp_dfu_protocol.md` §4](../protocols/streamdeck/akp_dfu_protocol.md)).
+  Vendor decrypts downloaded firmware in-app with key
+  `a7e61c373e219033c21091fa607bf3b8`. We do not download or decrypt
+  firmware — see §4.10 (auto-update CDN).
+
