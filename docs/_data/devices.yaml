@@ -32,6 +32,7 @@ capabilities:
   layers: "Layers"
   firmware: "Firmware version"
   clock: "Host-settable clock (scaffolded)"
+  battery: "Battery charge level (wireless)"
 
 # ---------------------------------------------------------------------------
 # Devices
@@ -300,7 +301,7 @@ devices:
     vid: "0x0c45"
     pid: "0x8009"
     maturity: partial
-    capabilities: [rgb, macros, layers, clock]
+    capabilities: [rgb, macros, layers, clock, battery]
     protocol_doc: docs/protocols/keyboard/proprietary.md
     notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format: 4-packet HID Feature Report envelope (START 0x18 + PREAMBLE 0x28 + DATA magic 0x5A + SAVE 0x02), sent via writeFeature() (NOT write()), corroborated by gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node + Agent B vendor binary disassembly. setTime() implemented end-to-end; promotion partial -> functional gates on Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent)."
     feature_summary:

@@ -56,6 +56,10 @@ inline constexpr std::uint8_t CmdCommitEeprom =
 // use the default ReportId=0x04; the time-data packet uses ReportId=0x00
 // (the magic 0x5A at byte 2 is the firmware's discriminator).
 // ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdBatteryQuery =
+    0x20; ///< Battery / per-key-RGB family opcode (sub-cmd byte 2 discriminates).
+inline constexpr std::uint8_t BatteryQuerySub =
+    0x01; ///< Sub-command for charge-level read (response byte 3 = percent 0..100).
 inline constexpr std::uint8_t CmdStartTime =
     0x18; ///< Reset / "begin time-sync session" opcode — first packet of the 4-packet envelope.
 inline constexpr std::uint8_t CmdSetTime =
@@ -157,6 +161,19 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
 
 /// @brief Build a CmdCommitEeprom (0x0e) report (no payload).
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildCommitEeprom();
+
+/**
+ * @brief Build a battery-level query feature report (opcode 0x20, sub 0x01).
+ *
+ * Sent via @c ITransport::writeFeature(); the response (also a 65-byte feature
+ * report) is read via @c readFeature() and carries the charge percentage at
+ * byte 3 (0..100; 0 means "no battery" e.g. wired-only operation).
+ *
+ * Vendor poll cadence on AK980 PRO is once per 15 s while wireless — see
+ * ak980pro_vendor.md §3 (FUN_004358c0) and clean-reimplementation-roadmap.md
+ * §11.2.
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildBatteryQuery();
 
 /**
  * @brief Build the time-sync start packet — first of the 4-packet envelope.

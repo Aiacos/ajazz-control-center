@@ -553,6 +553,40 @@ public:
 };
 
 // -----------------------------------------------------------------------------
+// Battery capability (wireless devices — host queries charge level)
+// -----------------------------------------------------------------------------
+/**
+ * @brief Mix-in for wireless devices that expose a host-readable battery level.
+ *
+ * Distinct from @ref IMouseCapable::batteryPercent() which is a legacy
+ * convenience on the mouse mix-in; this interface is the canonical surface
+ * for any device family that has a host-pollable charge level (keyboards
+ * with 2.4 GHz / BT, wireless mice via dongle, etc.).
+ *
+ * Polling cadence is the caller's responsibility — typical UI services
+ * poll every 15 s (matches the AK980 PRO vendor app cadence per its RE
+ * @c FUN_00435250 200 ms loop sampled at 15 s tick boundaries).
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see Capability::Battery
+ */
+class IBatteryCapable {
+public:
+    virtual ~IBatteryCapable() = default;
+
+    /**
+     * @brief Query the current battery charge level.
+     *
+     * @return Percentage 0..100, or @c std::nullopt if the device is wired /
+     *         the battery sub-system is unavailable / the read timed out.
+     *
+     * @throws std::system_error if the underlying HID transport fails (distinct
+     *         from a clean "no battery" reply which returns @c std::nullopt).
+     */
+    [[nodiscard]] virtual std::optional<std::uint8_t> batteryPercent() = 0;
+};
+
+// -----------------------------------------------------------------------------
 // Time-sync capability (host → device clock push)
 // -----------------------------------------------------------------------------
 /**

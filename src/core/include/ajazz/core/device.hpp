@@ -69,6 +69,8 @@ struct DeviceDescriptor {
     bool hasTouchStrip{false};      ///< True if the device exposes a touch strip.
     bool hasClock{false}; ///< True if the device advertises Capability::Clock (scaffolded — see
                           ///< IClockCapable).
+    bool hasBattery{false}; ///< True if the device advertises Capability::Battery (wireless devices
+                            ///< with a host-readable charge level — see IBatteryCapable).
 };
 
 /**

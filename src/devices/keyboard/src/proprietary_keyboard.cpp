@@ -209,6 +209,12 @@ std::array<std::uint8_t, ReportSize> buildSetTimeSave() {
     return makeReport(CmdSaveRtc);
 }
 
+std::array<std::uint8_t, ReportSize> buildBatteryQuery() {
+    auto pkt = makeReport(CmdBatteryQuery);
+    pkt[2] = BatteryQuerySub; // 0x01 — discriminates battery from per-key RGB (sub 0x04)
+    return pkt;
+}
+
 /**
  * @brief Return the LED count for a given zone id.
  *
@@ -277,7 +283,8 @@ class ProprietaryKeyboard final : public IDevice,
                                   public IKeyRemappable,
                                   public IRgbCapable,
                                   public IFirmwareCapable,
-                                  public IClockCapable {
+                                  public IClockCapable,
+                                  public IBatteryCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
@@ -484,6 +491,43 @@ public:
     }
 
     [[nodiscard]] std::uint8_t firmwareUpdateProgress(std::uint32_t) const override { return 0; }
+
+    // ---- IBatteryCapable ----------------------------------------------------
+    //
+    // AK980 PRO charge level via opcode 0x20 sub 0x01 (request) + feature read
+    // (response). Wire format reverse-engineered from DeviceDriver.exe
+    // FUN_004358c0 (Ghidra, 2026-05-17) — see docs/protocols/keyboard/
+    // ak980pro_vendor.md §3 (opcode table row 0x20 0x01) + roadmap §11.2.
+    //
+    // Response byte 3 carries the charge percent (0..100). Byte 0 of the
+    // response should echo 0x20 — we use that as a sanity check to differentiate
+    // a real charge reply from a stray "no battery" feature read (0x00 echo +
+    // 0x00 charge means "wired, no battery"; we surface std::nullopt rather
+    // than a misleading 0%).
+    //
+    // Polling cadence is the caller's responsibility — vendor app polls 15 s
+    // when wireless. Our QML BatteryIndicator will subscribe to a
+    // BatteryService that owns the QTimer.
+    [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
+        try {
+            (void)m_transport->writeFeature(buildBatteryQuery());
+            std::array<std::uint8_t, ReportSize> resp{};
+            resp[0] = ReportId; // hidapi convention: pre-fill report id for feature read
+            auto const n = m_transport->readFeature(resp);
+            if (n < 4 || resp[0] != CmdBatteryQuery) {
+                return std::nullopt; // no reply / wrong report / wired-no-battery
+            }
+            auto const pct = resp[3];
+            if (pct == 0) {
+                return std::nullopt; // "no battery" sentinel; do not surface as 0%
+            }
+            return std::min<std::uint8_t>(pct, 100); // clamp out-of-range readings
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("keyboard.ak980", "batteryPercent: HID feature I/O failed: {}",
+                           e.what());
+            return std::nullopt;
+        }
+    }
 
     // ---- IClockCapable ------------------------------------------------------
     //

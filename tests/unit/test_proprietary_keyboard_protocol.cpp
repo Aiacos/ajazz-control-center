@@ -223,6 +223,34 @@ TEST_CASE("ak980 setTime save packet carries ReportId=0x04 + opcode 0x02",
     }
 }
 
+// ---------------------------------------------------------------------------
+// Battery query wire format (roadmap §11.2; ak980pro_vendor.md row 0x20 0x01).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 0x01",
+          "[proprietary][protocol][battery]") {
+    auto const pkt = buildBatteryQuery();
+    REQUIRE(pkt.size() == ReportSize);
+    REQUIRE(pkt[0] == ReportId);         // 0x04
+    REQUIRE(pkt[1] == CmdBatteryQuery);  // 0x20
+    REQUIRE(pkt[2] == BatteryQuerySub);  // 0x01 — discriminates from per-key RGB (sub 0x04)
+    // All other bytes must be zero.
+    for (std::size_t i = 3; i < ReportSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("ak980 battery sub-command is distinct from per-key RGB sub",
+          "[proprietary][protocol][battery]") {
+    // Pitfall guard: opcode 0x20 multiplexes battery query (sub 0x01) and per-key
+    // RGB upload (sub 0x04). A future contributor must not collapse them into one
+    // constant. Per-key RGB lands as a separate roadmap commit.
+    REQUIRE(BatteryQuerySub == 0x01);
+    REQUIRE(CmdBatteryQuery == 0x20);
+    // Distinct from the time-sync sub-byte semantics on opcode 0x28 / 0x18.
+    REQUIRE(BatteryQuerySub != 0x04);
+}
+
 TEST_CASE("ak980 setTime save opcode is distinct from CmdCommitEeprom",
           "[proprietary][protocol][clock]") {
     // Pitfall guard: a future contributor must not consolidate the two save opcodes
