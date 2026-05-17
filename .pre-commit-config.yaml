@@ -223,6 +223,17 @@ repos:
         pass_filenames: true
         always_run: true
 
+      # Enforce CLAUDE.md "Test names must be ASCII-only" rule. Three
+      # Windows CI failures in the 2026-05-17 session traced to Unicode
+      # chars in TEST_CASE titles getting mangled by the Win32 CMD
+      # codepage; this hook blocks the recurrence at commit time.
+      - id: check-test-names-ascii
+        name: TEST_CASE / SECTION titles must be ASCII only
+        entry: scripts/check-test-names-ascii.sh
+        language: system
+        files: '^tests/.*\.cpp$'
+        pass_filenames: true
+
   # --------------------------------------------------------------------------
   # Commitlint — enforce Conventional Commits on the commit message.
   # --------------------------------------------------------------------------
