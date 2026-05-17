@@ -102,6 +102,32 @@ std::array<std::uint8_t, PacketSize> buildVersionRequest() {
     return buildCmdHeader(CmdVersion);
 }
 
+std::array<std::uint8_t, PacketSize>
+buildSecondaryScreenHeader(std::uint8_t location,
+                           std::uint16_t width,
+                           std::uint16_t height,
+                           std::uint16_t x,
+                           std::uint16_t y,
+                           std::uint32_t jpegSize) {
+    auto pkt = buildCmdHeader(CmdSecondaryScreen);
+    // BE32 JPEG payload size at bytes 8..11.
+    pkt[8] = static_cast<std::uint8_t>((jpegSize >> 24) & 0xffu);
+    pkt[9] = static_cast<std::uint8_t>((jpegSize >> 16) & 0xffu);
+    pkt[10] = static_cast<std::uint8_t>((jpegSize >> 8) & 0xffu);
+    pkt[11] = static_cast<std::uint8_t>(jpegSize & 0xffu);
+    pkt[12] = location;
+    // BE16 rect width / height / x / y at bytes 13..20.
+    pkt[13] = static_cast<std::uint8_t>((width >> 8) & 0xffu);
+    pkt[14] = static_cast<std::uint8_t>(width & 0xffu);
+    pkt[15] = static_cast<std::uint8_t>((height >> 8) & 0xffu);
+    pkt[16] = static_cast<std::uint8_t>(height & 0xffu);
+    pkt[17] = static_cast<std::uint8_t>((x >> 8) & 0xffu);
+    pkt[18] = static_cast<std::uint8_t>(x & 0xffu);
+    pkt[19] = static_cast<std::uint8_t>((y >> 8) & 0xffu);
+    pkt[20] = static_cast<std::uint8_t>(y & 0xffu);
+    return pkt;
+}
+
 std::array<std::uint8_t, PacketSize> buildUploadFinished() {
     // ULEND is the only AKP-family opcode (alongside QUCMD) with a 5-byte
     // command word: bytes 5..9 = "ULEND". The bytes 0..2 still carry the
@@ -525,6 +551,48 @@ public:
         auto const jpeg = encodeForDevice(rgba, width, height, akp05EncoderTransform());
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
         sendImage(akp05::buildEncoderImageHeader(encoderIndex, sized), jpeg);
+    }
+
+    // ---- Rect-addressable touch-strip update (DRA, roadmap §11.4) -----------
+    //
+    // Vendor RE (akp05_vendor.md §3 row 190) — partial-update on the 800×480
+    // touch strip without re-uploading the whole panel. Massive bandwidth win
+    // for per-encoder overlay redraws (4 × 200×100 vs the whole 800×100/480).
+    //
+    // Not exposed via a capability mix-in yet (YAGNI — AKP05 is the only
+    // device family in our catalogue with a rect-addressable strip; promote
+    // to ISecondaryScreenCapable when AKP815/v3 captures motivate it).
+    //
+    // Caller is responsible for keeping `srcWidth × srcHeight` aligned to the
+    // intended zone, and for picking a sane `location` id (DO NOT pass 0x12 —
+    // vendor uses that to route through a different packet shape that we
+    // haven't yet captured; the runtime check below refuses).
+    void setSecondaryScreenImage(std::uint8_t location,
+                                 std::uint16_t zoneWidth,
+                                 std::uint16_t zoneHeight,
+                                 std::uint16_t zoneX,
+                                 std::uint16_t zoneY,
+                                 std::span<std::uint8_t const> rgba,
+                                 std::uint16_t srcWidth,
+                                 std::uint16_t srcHeight) {
+        if (location == 0x12) {
+            AJAZZ_LOG_WARN("akp05",
+                           "setSecondaryScreenImage: location=0x12 is reserved for the M_V "
+                           "boot-logo variant which is not yet captured; refusing");
+            return;
+        }
+        ImageTransform const transform{
+            .targetWidth = zoneWidth,
+            .targetHeight = zoneHeight,
+            .format = ImageFormat::Jpeg,
+            .rotationDegrees = 0,
+            .mirror = false,
+            .jpegQuality = 85,
+        };
+        auto const jpeg = encodeForDevice(rgba, srcWidth, srcHeight, transform);
+        auto const header = akp05::buildSecondaryScreenHeader(
+            location, zoneWidth, zoneHeight, zoneX, zoneY, static_cast<std::uint32_t>(jpeg.size()));
+        sendImage(header, jpeg);
     }
 
     // ---- IClockCapable ------------------------------------------------------

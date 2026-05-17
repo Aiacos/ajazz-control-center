@@ -99,6 +99,7 @@ inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Cl
 inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
 inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
     0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+inline constexpr std::array<std::uint8_t, 3> CmdSecondaryScreen{0x44, 0x52, 0x41}; ///< Touch-strip rect-addressable image "DRA".
 
 /**
  * @brief Build the zero-padded 512-byte base packet for any command word.
@@ -178,6 +179,54 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
  * occasional firmware desync on large image bursts.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildUploadFinished();
+
+/**
+ * @brief Build the header packet for a touch-strip rect-addressable image (DRA).
+ *
+ * Per vendor RE (akp05_vendor.md §3 row 190, SDDevice::getSecondaryScreenPicInfo):
+ * the AKP05/Mirabox N4 800×480 touch-strip supports partial-update via the
+ * "DRA" opcode — a 4-zone-aligned rect-addressable image upload that avoids
+ * re-encoding+re-uploading the whole 800×480 panel on every redraw. Massive
+ * bandwidth win when only one encoder's overlay zone changed.
+ *
+ * Wire layout (single 512-byte header packet):
+ *  - bytes 0..2:  "CRT" prefix
+ *  - bytes 3..4:  0x00 0x00
+ *  - bytes 5..7:  "DRA" (CmdSecondaryScreen)
+ *  - bytes 8..11: BE32 JPEG payload size
+ *  - byte  12:    location id (zone discriminator; vendor uses 0x12 to flag a
+ *                 boot-logo variant routed through the separate M_V packet —
+ *                 callers wanting that path should use a dedicated builder
+ *                 once captured)
+ *  - bytes 13..14: BE16 rect width
+ *  - bytes 15..16: BE16 rect height
+ *  - bytes 17..18: BE16 rect x origin
+ *  - bytes 19..20: BE16 rect y origin
+ *  - bytes 21..511: 0x00 padding
+ *
+ * Followed by JPEG payload in 512-byte chunks via the standard sendImage()
+ * path, then the ULEND commit sentinel (buildUploadFinished()).
+ *
+ * @param location  Zone id / location discriminator. 0x12 triggers vendor's
+ *                  M_V boot-logo variant (separate packet shape, not handled
+ *                  here); typical zone ids are small non-zero values.
+ *                  Caller is responsible for NOT passing 0x12 to this builder.
+ * @param width     Rect width in pixels (BE16; the device's strip is 800 px
+ *                  wide so width ≤ 800).
+ * @param height    Rect height in pixels (BE16; ≤ 480).
+ * @param x         Rect x origin in pixels (BE16).
+ * @param y         Rect y origin in pixels (BE16).
+ * @param jpegSize  Total JPEG payload size in bytes (BE32; max 0xFFFFFFFF
+ *                  but practically capped by HID transfer rate).
+ * @return 512-byte header packet.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize>
+buildSecondaryScreenHeader(std::uint8_t location,
+                           std::uint16_t width,
+                           std::uint16_t height,
+                           std::uint16_t x,
+                           std::uint16_t y,
+                           std::uint32_t jpegSize);
 
 /**
  * @brief Build the first packet of a main-LCD image transfer.
