@@ -664,3 +664,74 @@ All paths relative to
 - Our current backend: `src/devices/mouse/src/aj_series.cpp`
 - Capture workflow (blocked on xHCI): `docs/capturing/CAPTURING.md` §8.6
 - Related: `docs/research/builtin-plugin-categories.md`, `docs/research/feature-matrix.md`
+
+---
+
+## Deep-dive appendices (added 2026-05-17 second pass)
+
+The following companion documents were produced by a Ghidra-headless +
+extended-renderer pass that landed `iot_driver.exe` import and decompile
+output at `C:\Users\unilo\reverse-eng-workdir\` (binary-private to the
+workstation; not checked in). Each appendix is a self-contained byte-precise
+spec — refer to them for any wire-format work; this top-level doc remains
+the historical narrative.
+
+| Appendix | Contents |
+|----------|----------|
+| `aj_series_opcode_table.md` | Byte-precise reference for every FEA_CMD opcode the mouse path uses (~30 opcodes) — including full `0x53` and `0x54` byte layouts, the `_RateToNum` table (8K=0x81, 4K=0x82, 2K=0x84 — high bit *set* for high rates), the 8-byte `0x07` LED packet structure, macro chunking via `0x16`, and the OTA flow via `0x40` / `0x41` / `0xc1`. Ends with `Code corrections required` listing exact `aj_series.cpp` line numbers and Catch2 tests. |
+| `aj_series_sled_schema.md` | Reverse-engineered schema of every `sled 0.34.7` tree the vendor driver opens (`device_type`, `CONFIG`, `macro`, `screen`, `screen_image`, `user`, `custom_light`, `db_img_share`, `db_light_share`, `audio`, `gun`). Documents the per-table key shape, JSON-or-binary value encoding, and base64 gRPC round-trip. **No schema migration** in vendor: brittle. Our recommendation: do NOT copy this design; use `QSettings(IniFormat)` + per-profile JSON. |
+| `aj_series_ui_action_map.md` | Renderer-side UI handler → opcode map. Confirms every mouse-class UI action passes `CheckSumType.BIT7` and that ~all mouse settings funnel into one of three opcodes (`0x53` omnibus, `0x54` DPI, `0x07` LED). Includes QML pane structure recommendation for our reimplementation. |
+| `aj_series_device_matrix.md` | Full VID:PID matrix: 41 active AJAZZ-VID (`0x3151`) PIDs + 19 bootloader PIDs, plus 6 partner VIDs (KZZI, akko, VKMS / Valkyrie, rongyuan, MagneticJade — total ~120 PIDs the iot_driver supports). Per-SKU capability table (DPI count, polling rate cap, RGB, screen, OTA target). Action items for `register.cpp`: promote `aj159_apex_wired (0x5008)`, `aj159_apex_24g (0x4026)`, `aj159_apex_dongle (0x4027)`. |
+
+### Critical finding confirmed: `CheckSumType.BIT7` everywhere
+
+The second-pass renderer census found **zero call sites** that pass
+`CheckSumType.BIT8` anywhere in `main_beautified.js`. Every mouse-class
+write — `setMouseOption0`, `setMouseOption1`, `setReportRate`,
+`setLightSetting`, `setKeyConfigSimple`, `setFnKeyConfigSimple`,
+`setMacro`, `_setMacro`, `setCurrentProfile`, `getCurrentProfile`,
+`getFirmwareVersion`, `_oledUpgrade`, `mledUpgrade` — passes either
+the literal numeric `0` (which IS `BIT7` per the proto enum at
+`js:51246`) or the symbolic `Wn.CheckSumType.BIT7`. 98 distinct
+call sites across the bundle.
+
+**`BIT8` appears to be reserved for legacy SKUs from non-AJAZZ VIDs**
+the iot_driver also supports (mostly older devices on `0x25aa`,
+`0x342d`, `0x374a`). For our AJ-series backend, `& 0x7F` is the
+right answer.
+
+The Ghidra-side confirmation of the actual checksum function is in
+progress. Working hypothesis: the function lives at one of the
+addresses dumped by `iot_driver_hunt_checksum.txt` (caller graph of
+`hid_send_feature_report` at `FUN_00703000`); the immediate caller
+`FUN_00567fc0` is the `hid_normal::send_feature` adapter from
+`src\dj_hid_device\dj_hid\hid_normal.rs` (confirmed by the embedded
+panic message); the checksum logic is one frame up. Subsequent
+analysis lives in `iot_driver_find_7f_mask.txt` and the in-flight
+`iot_driver_checksum_strings.txt`. The renderer-side evidence above
+is sufficient to land the P0.5 rewrite without waiting for Ghidra.
+
+### Other corrections to the original narrative above
+
+1. **The mouse path uses `sendMsg` (interrupt-OUT), NOT `sendRawFeature`
+   (SET_REPORT).** The renderer `writeFeatureCmd` wrapper at `js:726774`
+   calls `no(devPath, t, a, i)` — `no()` is the `sendMsg` wrapper at
+   `js:56601`. `sendRawFeature` is wrapped by `uo()` at `js:56626` and
+   is only used by `writeRawFeatureCmd`, which is currently unused on
+   the mouse path. The opcode table doc reflects this — when our
+   backend lands the rewrite, use `hid_write` (or its `ITransport`
+   equivalent), not `hid_send_feature_report`.
+
+2. **AJ159 APEX wired and AJ179 APEX share PID `0x3151:0x5008`** (rows
+   `id=-2147485997` and `id=2360` in the renderer table differ only
+   by `displayName` and `name`). The renderer disambiguates them by
+   USB descriptor strings, not PID. For our backend we treat them as
+   the same SKU.
+
+3. **The 8th DPI stage's blue-channel colour byte (at byte 63 of the
+   `0x54` packet) is overwritten by the BIT7 checksum on the wire.**
+   This is a wire-format quirk: 8 stages × 3 colour bytes = 24 bytes,
+   starting at byte 40, so the last byte (40 + 23 = 63) collides with
+   the checksum slot. Effectively the 8th stage has no blue-channel
+   colour selectable. Our QML editor should grey out the 8th-stage
+   colour swatch.
