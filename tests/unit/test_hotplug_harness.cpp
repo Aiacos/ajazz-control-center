@@ -15,16 +15,16 @@
  *      `#ifdef AJAZZ_TESTING`) — synthesises events into the same
  *      `impl->snapshotCallback()` pipeline real OS events take.
  *
- * Coverage map (each TEST_CASE → ROADMAP success criterion):
+ * Coverage map (each TEST_CASE -> ROADMAP success criterion):
  *
  *   - SECTION 1 "shared_ptr survives Removed (Pitfall 1 / SC1)"
  *   - SECTION 2 "weak_ptr cache returns same instance (D-06)"
  *   - SECTION 3 "300ms debounce coalesces same-key burst (HOTPLUG-05 / D-05 / SC4)"
- *   - SECTION 4 "Per-key isolation — 3 keys → 3 emissions, not 9"
+ *   - SECTION 4 "Per-key isolation - 3 keys -> 3 emissions, not 9"
  *   - SECTION 5 "DeviceModel::dataChanged({ConnectedRole}) one-row-only (D-03 / SC2)"
  *   - SECTION 6 "Disconnect-during-use scenario (HOTPLUG-07 narrative)"
  *
- * Lifecycle assumption: every TEST_CASE is independent — DeviceRegistry,
+ * Lifecycle assumption: every TEST_CASE is independent - DeviceRegistry,
  * HotplugMonitor, HotplugDebouncer, DeviceModel are stack-allocated
  * inside the case so there is no inter-case state leak.
  */
@@ -232,7 +232,7 @@ TEST_CASE("SC4: 300ms debounce coalesces 4 rapid same-key events into 1 emission
 }
 
 // ----------------------------------------------------------------------------
-// SECTION 4: Per-key isolation — 3 distinct keys produce 3 emissions, not 9.
+// SECTION 4: Per-key isolation - 3 distinct keys produce 3 emissions, not 9.
 //
 // Per-key timer isolation is what makes the debouncer correct under a
 // device-shuffle scenario: distinct (vid, pid, serial) keys never reset
@@ -330,7 +330,7 @@ TEST_CASE("SC2: DeviceModel emits exactly one dataChanged({ConnectedRole}) per r
 }
 
 // ----------------------------------------------------------------------------
-// SECTION 6: Disconnect-during-use scenario (the 2026-05-12/13 fix narrative —
+// SECTION 6: Disconnect-during-use scenario (the 2026-05-12/13 fix narrative -
 // HOTPLUG-07 cross-link).
 //
 // Composite scenario: register a backend, open it, hold the shared_ptr,

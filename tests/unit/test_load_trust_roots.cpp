@@ -9,7 +9,7 @@
  * Layered additively on top of Plan 07-01's nlohmann-based impl. Does NOT
  * modify the impl; only exercises it. All test inputs are constructed at
  * test time in `std::filesystem::temp_directory_path()` and removed after
- * each TEST_CASE — no checked-in binary fixtures.
+ * each TEST_CASE - no checked-in binary fixtures.
  */
 #include "ajazz/plugins/manifest_signer.hpp"
 
@@ -37,7 +37,7 @@ void writeBinary(fs::path const& path, std::string_view content) {
 }
 
 /// Build {"publishers":[{"key":"K0","name":"N0"},...,{"key":"K<n-1>","name":"N<n-1>"}]}
-/// as a single std::string — used by the boundary-count SECTIONs and the
+/// as a single std::string - used by the boundary-count SECTIONs and the
 /// overcount negative SECTION.
 std::string makePublishersWithCount(std::size_t count) {
     std::ostringstream oss;

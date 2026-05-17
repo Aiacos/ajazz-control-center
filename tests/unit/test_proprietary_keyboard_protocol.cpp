@@ -376,7 +376,7 @@ TEST_CASE("ak980 per-key RGB blob sizes - wired 192 B + wireless 512 B (NOT 384 
     REQUIRE(kPerKeyWirelessBlobSize == kPerKeyWirelessChunkCount * 64);
 }
 
-TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 ≠ battery query opcode 0x20 sub 0x01",
+TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 != battery query opcode 0x20 sub 0x01",
           "[proprietary][protocol][perkey-rgb]") {
     // Pitfall guard: 0x20 multiplexes battery query (sub 0x01, single-shot read)
     // and per-key RGB upload (sub 0x04, multi-packet envelope). A future

@@ -35,7 +35,7 @@ namespace {
 // Envelope basics
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series report id at byte 0 is 0x05 - hard fact per opcode-table §1",
+TEST_CASE("AJ series report id at byte 0 is 0x05 - hard fact per opcode-table sec1",
           "[mouse][aj_series][wire][envelope]") {
     REQUIRE(kReportId == 0x05);
     // 65-byte buffer = 1 ReportID + 64 vendor envelope bytes
