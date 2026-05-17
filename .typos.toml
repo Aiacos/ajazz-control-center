@@ -60,6 +60,12 @@ Runing       = "Runing"
 # Italian vendor UI label in docs/research/builtin-plugin-categories.md
 # (the original Italian column from the AJAZZ vendor app translation).
 Vai          = "Vai"
+# Two-letter JS function name from disassembled iot_driver.exe cited
+# verbatim in docs/protocols/mouse/aj_series_vendor.md (weather widget
+# call chain). typos otherwise suggests "of/for/do/go/to". Accepting
+# the literal token is safer than relying on the per-file exclude in
+# case the pre-commit framework passes explicit paths bypassing it.
+fo           = "fo"
 
 [files]
 extend-exclude = [
