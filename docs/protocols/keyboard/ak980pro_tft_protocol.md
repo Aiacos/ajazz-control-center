@@ -34,8 +34,7 @@ ______________________________________________________________________
 
 The TFT upload uses the **HID FEATURE-report transport** (FUN_0044f5f0
 → FUN_00451220 → `WriteFile`) for both header and chunk packets. Each
-packet is exactly **33 bytes on the wire** (`OutputReportByteLength =
-0x21`). Wire layout for every TFT packet:
+packet is exactly **33 bytes on the wire** (`OutputReportByteLength = 0x21`). Wire layout for every TFT packet:
 
 ```
 byte 0 : 0x00          (HID Report ID — fixed)
@@ -83,6 +82,7 @@ for (int i = 0; i < frame_count; i++) {
 ```
 
 The buffer carries:
+
 - Byte 0 = total frame count (≤140)
 - Bytes 1..frame_count = per-frame delay in 2 ms units (one byte each)
 - Pixel data starting at byte `gif_headlength` = 256
@@ -240,6 +240,7 @@ SPI-display byte order: `0xRRRR_RGGG_GGGB_BBBB`).
 ### Verifying byte order (recommendation for our impl)
 
 When we reimplement, send a test image with:
+
 - Pixel (0, 0) = pure red = `0xF800` (R=31, G=0, B=0)
 - Pixel (1, 0) = pure green = `0x07E0`
 - Pixel (2, 0) = pure blue = `0x001F`
@@ -256,6 +257,7 @@ ______________________________________________________________________
 success. The only "feedback" is the `MProgress` bar incrementing.
 
 If we want to detect transport errors we'd need to:
+
 - Watch for HID write failures (Qt: `QHidDevice::write` returning -1)
 - Add an explicit `CMD_FINISH` after the last chunk (opcode `0xF0`) and
   wait for it to come back via the input-report poll path (no
@@ -280,8 +282,9 @@ covers a different device). To implement:
    `uploadGif(const QString& path)` slot and `progress(int percent)`
    signal.
 
-2. **`src/devices/keyboard/src/screen_uploader.cpp`** — implementation
+1. **`src/devices/keyboard/src/screen_uploader.cpp`** — implementation
    that:
+
    - Decodes the GIF via `QMovie` to a `QList<QImage>` (max 140 frames)
    - Converts each frame to RGB565 via a small helper (Eigen-style
      loop or, ideally, a SIMD path on AVX2)
@@ -291,7 +294,7 @@ covers a different device). To implement:
      the **chunked path (0x7F + 0x80-chunks)** on bulk failure
    - Emits `progress` every chunk
 
-3. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
+1. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
 
    ```cpp
    // TFT screen upload opcodes (FUN_004231c0, FUN_00422920).

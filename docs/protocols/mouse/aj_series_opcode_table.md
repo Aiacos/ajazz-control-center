@@ -11,7 +11,7 @@
 > `…\extracted\app32\resources\app\dist\static\js\main_beautified.js`
 > (line numbers given as `js:N`).
 
----
+______________________________________________________________________
 
 ## 1 — Envelope
 
@@ -46,12 +46,12 @@ NONE = 2
 Every mouse-class call site uses `BIT7` (or the numeric literal `0`, which
 is the same value). Census across `main_beautified.js`:
 
-| token                                | sites |
-|--------------------------------------|------:|
-| `Wn.CheckSumType.BIT7`               |    36 |
-| `writeFeatureCmd(buf, 0)`            |    62 |
-| `Wn.CheckSumType.BIT8`               | **0** |
-| `Wn.CheckSumType.NONE` (default-arg in transport wrappers — passthrough only) | 5 |
+| token                                                                         | sites |
+| ----------------------------------------------------------------------------- | ----: |
+| `Wn.CheckSumType.BIT7`                                                        |    36 |
+| `writeFeatureCmd(buf, 0)`                                                     |    62 |
+| `Wn.CheckSumType.BIT8`                                                        | **0** |
+| `Wn.CheckSumType.NONE` (default-arg in transport wrappers — passthrough only) |     5 |
 
 **Every** opcode-emitter from the mouse class (`setMouseOption0`,
 `setMouseOption1`, `setReportRate`, `setKeyConfigSimple`, `setFnKeyConfigSimple`,
@@ -82,7 +82,7 @@ supports devices from VID `0x25aa`, `0x342d`, `0x347a`, `0x374a`, `0x3794`,
 per-PID lookup table can fall back to `& 0xFF` if and when a real SKU
 that needs it ever appears.
 
----
+______________________________________________________________________
 
 ## 2 — Complete opcode catalogue
 
@@ -94,101 +94,101 @@ either a `SET = N` or `GET = N | 0x80` pair.
 
 ### 2.1 Base class (shared with keyboard / OLED)
 
-| Opcode | Mnemonic | Direction | Used on mouse path? | Renderer site |
-|-------:|----------|-----------|---------------------|---------------|
-| `0x00` | `FEA_CMD_SET_REV`                     | feature SET | no | — |
-| `0x80` | `FEA_CMD_GET_REV`                     | feature GET | **yes** — `getFirmwareVersion()` | `js:921263` |
-| `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`           | feature SET | no (handled by dongle) | — |
-| `0x02` | `FEA_CMD_SET_RESERT`                  | feature SET | **yes** — "Restore defaults" | search for opcode `2` |
-| `0x83` | `FEA_CMD_GET_BATTERY`                 | feature GET | **NO** — battery comes from `Device.battery` (gRPC `watchDevList`) | `js:50798` |
-| `0x04` | `FEA_CMD_SET_REPORT` (poll rate)      | feature SET | **yes** — `setReportRate()` | `js:921290` |
-| `0x84` | `FEA_CMD_GET_REPORT` (poll rate)      | feature GET | **yes** — `getReportRate()` | `js:921307` |
-| `0x05` | `FEA_CMD_SET_PROFILE`                 | feature SET | **yes** — `setCurrentProfile()` | `js:921350` |
-| `0x85` | `FEA_CMD_GET_PROFILE`                 | feature GET | **yes** — `getCurrentProfile()` | `js:921331` |
-| `0x06` | `FEA_CMD_SET_KBOPTION`                | feature SET | no (keyboard) | — |
-| `0x86` | `FEA_CMD_GET_KBOPTION`                | feature GET | no (keyboard) | — |
-| `0x07` | `FEA_CMD_SET_LEDPARAM`                | feature SET | **yes** — `setLightSetting()` | `js:920862` |
-| `0x87` | `FEA_CMD_GET_LEDPARAM`                | feature GET | **yes** — `getLightSetting()` | — |
-| `0x08` | `FEA_CMD_SET_SLEDPARAM`               | feature SET | no | — |
-| `0x88` | `FEA_CMD_GET_SLEDPARAM`               | feature GET | no | — |
-| `0x09` | `FEA_CMD_SET_KEYMATRIX`               | feature SET | no (keyboard; mouse uses 0x50) | — |
-| `0x89` | `FEA_CMD_GET_KEYMATRIX`               | feature GET | no (keyboard) | — |
-| `0x0a` | `FEA_CMD_SET_KEYENABLE`               | feature SET | no | — |
-| `0x8a` | `FEA_CMD_GET_KEYENABLE`               | feature GET | no | — |
-| `0x0b` | `FEA_CMD_SET_MACRO`                   | feature SET | no — mouse uses `0x16` SIMPLE form | — |
-| `0x8b` | `FEA_CMD_GET_MACRO`                   | feature GET | no | — |
-| `0x0c` | `FEA_CMD_SET_USERPIC`                 | feature SET | no — mouse uses `0x52` | — |
-| `0x8c` | `FEA_CMD_GET_USERPIC`                 | feature GET | no | — |
-| `0x0d` | `FEA_CMD_SET_AUDIO`                   | feature SET | no | — |
-| `0x0e` | `FEA_CMD_SET_WINDOS`                  | feature SET | no | — |
-| `0x10` | `FEA_CMD_SET_FN`                      | feature SET | no | — |
-| `0x90` | `FEA_CMD_GET_FN`                      | feature GET | no | — |
-| `0x11` | `FEA_CMD_SET_DEBOUNCE` (kb)           | feature SET | no — mouse uses byte 10 of `0x53` omnibus | — |
-| `0x91` | `FEA_CMD_GET_DEBOUNCE`                | feature GET | no | — |
-| `0x12` | `FEA_CMD_SET_SLEEPTIME` (kb)          | feature SET | no — mouse uses bytes 40..47 of `0x53` | — |
-| `0x92` | `FEA_CMD_GET_SLEEPTIME`               | feature GET | no | — |
-| `0x13` | `FEA_CMD_SET_KEYMATRIX_SIMPLE`        | feature SET | no | — |
-| `0x93` | `FEA_CMD_GET_KEYMATRIX_SIMPLE`        | feature GET | no | — |
-| `0x14` | `FEA_CMD_SET_USERPIC_SIMPLE`          | feature SET | no | — |
-| `0x94` | `FEA_CMD_GET_USERPIC_SIMPLE`          | feature GET | no | — |
-| `0x15` | `FEA_CMD_SET_FN_SIMPLE`               | feature SET | no | — |
-| `0x95` | `FEA_CMD_GET_FN_SIMPLE`               | feature GET | no | — |
-| `0x16` | `FEA_CMD_SET_MACRO_SIMPLE`            | feature SET | **yes** — `_setMacro()` chunked | `js:922079` |
-| `0x96` | `FEA_CMD_GET_MACRO_SIMPLE`            | feature GET | **yes** — `getMacro()` chunked | `js:921635` |
-| `0x17` | `FEA_CMD_SET_AUTOOS_EN`               | feature SET | no | — |
-| `0x97` | `FEA_CMD_GET_AUTOOS_EN`               | feature GET | no | — |
-| `0x18` | `FEA_CMD_SET_USERGIFSTART`            | feature SET | (mouse with screen) | `js:817098` |
-| `0x19` | `FEA_CMD_SET_USERGIF`                 | feature SET | (mouse with screen) | `js:817119` |
-| `0x20` | `FEA_CMD_SET_OLEDPICINDEX`            | feature SET | no | — |
-| `0xa0` | `FEA_CMD_GET_OLEDPICINDEX`            | feature GET | no | — |
-| `0x21` | `FEA_CMD_SET_OLEDPICDATA`             | feature SET | no | — |
-| `0xa1` | `FEA_CMD_GET_OLEDPICDATA`             | feature GET | no | — |
-| `0x22` | `FEA_CMD_SET_OLEDOPTION`              | feature SET | no | — |
-| `0xa2` | `FEA_CMD_GET_OLEDOPTION`              | feature GET | no | — |
-| `0x23` | `FEA_CMD_SET_KEYSTROKE`               | feature SET | no | — |
-| `0xa3` | `FEA_CMD_GET_KEYSTROKE`               | feature GET | no | — |
-| `0x24` | `FEA_CMD_SET_OLEDGIFDATA`             | feature SET | no | — |
-| `0xa4` | `FEA_CMD_GET_OLEDGIFDATA`             | feature GET | no | — |
-| `0x25` | `FEA_CMD_SETTFTLCDDATA`               | feature SET | (mouse with screen) | `js:817196` |
-| `0xa5` | `FEA_CMD_GETTFTLCDDATA`               | feature GET | (mouse with screen) | `js:736052` |
-| `0x26` | `FEA_CMD_SET_OLEDGIFINDEX`            | feature SET | no | — |
-| `0xa6` | `FEA_CMD_GET_OLEDGIFINDEX`            | feature GET | no | — |
-| `0x27` | `FEA_CMD_SET_OLEDLUANGAGE`            | feature SET | no | — |
-| `0x28` | `FEA_CMD_SET_OLEDCLOCK`               | feature SET | no | — |
-| `0x29` | `FEA_CMD_SET_SCREEN_24BITDATA`        | feature SET | (mouse with screen, 24-bit colour) | — |
-| `0xa9` | `FEA_CMD_GET_SCREEN_24BITDATA`        | feature GET | (mouse with screen) | — |
-| `0x2a` | `FEA_CMD_SET_OLEDWEATHER`             | feature SET | no | — |
-| `0x2b` | `FEA_CMD_SET_OLEDEFFECT`              | feature SET | no | — |
-| `0xab` | `FEA_CMD_GET_OLEDEFFECT`              | feature GET | no | — |
-| `0x2c` | `FEA_CMD_SET_FLASHCHIPERASSE`         | feature SET | (OLED erase) | `js:735950` |
-| `0xac` | `FEA_CMD_GET_FLASHCHIPERASSE`         | feature GET | no | — |
-| `0xad` | `FEA_CMD_GETOLED_VERSION`             | feature GET | no | — |
-| `0x30` | `FEA_CMD_SET_OLED_BOOT`               | feature SET | no | — |
-| `0xb0` | `FEA_CMD_GET_OLED_BOOT`               | feature GET | no | — |
-| `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`          | feature SET | no | — |
-| `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`          | feature GET | no | — |
-| `0x8f` | `FEA_CMD_GET_INFOR`                   | feature GET | yes (initial probe) | — |
+| Opcode | Mnemonic                         | Direction   | Used on mouse path?                                                | Renderer site         |
+| -----: | -------------------------------- | ----------- | ------------------------------------------------------------------ | --------------------- |
+| `0x00` | `FEA_CMD_SET_REV`                | feature SET | no                                                                 | —                     |
+| `0x80` | `FEA_CMD_GET_REV`                | feature GET | **yes** — `getFirmwareVersion()`                                   | `js:921263`           |
+| `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`      | feature SET | no (handled by dongle)                                             | —                     |
+| `0x02` | `FEA_CMD_SET_RESERT`             | feature SET | **yes** — "Restore defaults"                                       | search for opcode `2` |
+| `0x83` | `FEA_CMD_GET_BATTERY`            | feature GET | **NO** — battery comes from `Device.battery` (gRPC `watchDevList`) | `js:50798`            |
+| `0x04` | `FEA_CMD_SET_REPORT` (poll rate) | feature SET | **yes** — `setReportRate()`                                        | `js:921290`           |
+| `0x84` | `FEA_CMD_GET_REPORT` (poll rate) | feature GET | **yes** — `getReportRate()`                                        | `js:921307`           |
+| `0x05` | `FEA_CMD_SET_PROFILE`            | feature SET | **yes** — `setCurrentProfile()`                                    | `js:921350`           |
+| `0x85` | `FEA_CMD_GET_PROFILE`            | feature GET | **yes** — `getCurrentProfile()`                                    | `js:921331`           |
+| `0x06` | `FEA_CMD_SET_KBOPTION`           | feature SET | no (keyboard)                                                      | —                     |
+| `0x86` | `FEA_CMD_GET_KBOPTION`           | feature GET | no (keyboard)                                                      | —                     |
+| `0x07` | `FEA_CMD_SET_LEDPARAM`           | feature SET | **yes** — `setLightSetting()`                                      | `js:920862`           |
+| `0x87` | `FEA_CMD_GET_LEDPARAM`           | feature GET | **yes** — `getLightSetting()`                                      | —                     |
+| `0x08` | `FEA_CMD_SET_SLEDPARAM`          | feature SET | no                                                                 | —                     |
+| `0x88` | `FEA_CMD_GET_SLEDPARAM`          | feature GET | no                                                                 | —                     |
+| `0x09` | `FEA_CMD_SET_KEYMATRIX`          | feature SET | no (keyboard; mouse uses 0x50)                                     | —                     |
+| `0x89` | `FEA_CMD_GET_KEYMATRIX`          | feature GET | no (keyboard)                                                      | —                     |
+| `0x0a` | `FEA_CMD_SET_KEYENABLE`          | feature SET | no                                                                 | —                     |
+| `0x8a` | `FEA_CMD_GET_KEYENABLE`          | feature GET | no                                                                 | —                     |
+| `0x0b` | `FEA_CMD_SET_MACRO`              | feature SET | no — mouse uses `0x16` SIMPLE form                                 | —                     |
+| `0x8b` | `FEA_CMD_GET_MACRO`              | feature GET | no                                                                 | —                     |
+| `0x0c` | `FEA_CMD_SET_USERPIC`            | feature SET | no — mouse uses `0x52`                                             | —                     |
+| `0x8c` | `FEA_CMD_GET_USERPIC`            | feature GET | no                                                                 | —                     |
+| `0x0d` | `FEA_CMD_SET_AUDIO`              | feature SET | no                                                                 | —                     |
+| `0x0e` | `FEA_CMD_SET_WINDOS`             | feature SET | no                                                                 | —                     |
+| `0x10` | `FEA_CMD_SET_FN`                 | feature SET | no                                                                 | —                     |
+| `0x90` | `FEA_CMD_GET_FN`                 | feature GET | no                                                                 | —                     |
+| `0x11` | `FEA_CMD_SET_DEBOUNCE` (kb)      | feature SET | no — mouse uses byte 10 of `0x53` omnibus                          | —                     |
+| `0x91` | `FEA_CMD_GET_DEBOUNCE`           | feature GET | no                                                                 | —                     |
+| `0x12` | `FEA_CMD_SET_SLEEPTIME` (kb)     | feature SET | no — mouse uses bytes 40..47 of `0x53`                             | —                     |
+| `0x92` | `FEA_CMD_GET_SLEEPTIME`          | feature GET | no                                                                 | —                     |
+| `0x13` | `FEA_CMD_SET_KEYMATRIX_SIMPLE`   | feature SET | no                                                                 | —                     |
+| `0x93` | `FEA_CMD_GET_KEYMATRIX_SIMPLE`   | feature GET | no                                                                 | —                     |
+| `0x14` | `FEA_CMD_SET_USERPIC_SIMPLE`     | feature SET | no                                                                 | —                     |
+| `0x94` | `FEA_CMD_GET_USERPIC_SIMPLE`     | feature GET | no                                                                 | —                     |
+| `0x15` | `FEA_CMD_SET_FN_SIMPLE`          | feature SET | no                                                                 | —                     |
+| `0x95` | `FEA_CMD_GET_FN_SIMPLE`          | feature GET | no                                                                 | —                     |
+| `0x16` | `FEA_CMD_SET_MACRO_SIMPLE`       | feature SET | **yes** — `_setMacro()` chunked                                    | `js:922079`           |
+| `0x96` | `FEA_CMD_GET_MACRO_SIMPLE`       | feature GET | **yes** — `getMacro()` chunked                                     | `js:921635`           |
+| `0x17` | `FEA_CMD_SET_AUTOOS_EN`          | feature SET | no                                                                 | —                     |
+| `0x97` | `FEA_CMD_GET_AUTOOS_EN`          | feature GET | no                                                                 | —                     |
+| `0x18` | `FEA_CMD_SET_USERGIFSTART`       | feature SET | (mouse with screen)                                                | `js:817098`           |
+| `0x19` | `FEA_CMD_SET_USERGIF`            | feature SET | (mouse with screen)                                                | `js:817119`           |
+| `0x20` | `FEA_CMD_SET_OLEDPICINDEX`       | feature SET | no                                                                 | —                     |
+| `0xa0` | `FEA_CMD_GET_OLEDPICINDEX`       | feature GET | no                                                                 | —                     |
+| `0x21` | `FEA_CMD_SET_OLEDPICDATA`        | feature SET | no                                                                 | —                     |
+| `0xa1` | `FEA_CMD_GET_OLEDPICDATA`        | feature GET | no                                                                 | —                     |
+| `0x22` | `FEA_CMD_SET_OLEDOPTION`         | feature SET | no                                                                 | —                     |
+| `0xa2` | `FEA_CMD_GET_OLEDOPTION`         | feature GET | no                                                                 | —                     |
+| `0x23` | `FEA_CMD_SET_KEYSTROKE`          | feature SET | no                                                                 | —                     |
+| `0xa3` | `FEA_CMD_GET_KEYSTROKE`          | feature GET | no                                                                 | —                     |
+| `0x24` | `FEA_CMD_SET_OLEDGIFDATA`        | feature SET | no                                                                 | —                     |
+| `0xa4` | `FEA_CMD_GET_OLEDGIFDATA`        | feature GET | no                                                                 | —                     |
+| `0x25` | `FEA_CMD_SETTFTLCDDATA`          | feature SET | (mouse with screen)                                                | `js:817196`           |
+| `0xa5` | `FEA_CMD_GETTFTLCDDATA`          | feature GET | (mouse with screen)                                                | `js:736052`           |
+| `0x26` | `FEA_CMD_SET_OLEDGIFINDEX`       | feature SET | no                                                                 | —                     |
+| `0xa6` | `FEA_CMD_GET_OLEDGIFINDEX`       | feature GET | no                                                                 | —                     |
+| `0x27` | `FEA_CMD_SET_OLEDLUANGAGE`       | feature SET | no                                                                 | —                     |
+| `0x28` | `FEA_CMD_SET_OLEDCLOCK`          | feature SET | no                                                                 | —                     |
+| `0x29` | `FEA_CMD_SET_SCREEN_24BITDATA`   | feature SET | (mouse with screen, 24-bit colour)                                 | —                     |
+| `0xa9` | `FEA_CMD_GET_SCREEN_24BITDATA`   | feature GET | (mouse with screen)                                                | —                     |
+| `0x2a` | `FEA_CMD_SET_OLEDWEATHER`        | feature SET | no                                                                 | —                     |
+| `0x2b` | `FEA_CMD_SET_OLEDEFFECT`         | feature SET | no                                                                 | —                     |
+| `0xab` | `FEA_CMD_GET_OLEDEFFECT`         | feature GET | no                                                                 | —                     |
+| `0x2c` | `FEA_CMD_SET_FLASHCHIPERASSE`    | feature SET | (OLED erase)                                                       | `js:735950`           |
+| `0xac` | `FEA_CMD_GET_FLASHCHIPERASSE`    | feature GET | no                                                                 | —                     |
+| `0xad` | `FEA_CMD_GETOLED_VERSION`        | feature GET | no                                                                 | —                     |
+| `0x30` | `FEA_CMD_SET_OLED_BOOT`          | feature SET | no                                                                 | —                     |
+| `0xb0` | `FEA_CMD_GET_OLED_BOOT`          | feature GET | no                                                                 | —                     |
+| `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`     | feature SET | no                                                                 | —                     |
+| `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`     | feature GET | no                                                                 | —                     |
+| `0x8f` | `FEA_CMD_GET_INFOR`              | feature GET | yes (initial probe)                                                | —                     |
 
 ### 2.2 Mouse class extensions (`0x50..0x60`)
 
-| Opcode | Mnemonic | Direction | Renderer site |
-|-------:|----------|-----------|---------------|
-| `0x50` | `FEA_CMD_MOUSE_SET_KEYMATRIX`         | feature SET | `js:921897` |
-| `0xd0` | `FEA_CMD_MOUSE_GET_KEYMATRIX`         | feature GET | `js:921426` |
-| `0x51` | `FEA_CMD_MOUSE_SET_FNMATRIX`          | feature SET | `js:921929` |
-| `0xd1` | `FEA_CMD_MOUSE_GET_FNMATRIX`          | feature GET | (parallel of 0xd0) |
-| `0x52` | `FEA_CMD_MOUSE_SET_USERPIC`           | feature SET | (per-key picture) |
-| `0xd2` | `FEA_CMD_MOUSE_GET_USERPIC`           | feature GET | — |
-| `0x53` | `FEA_CMD_MOUSE_SET_OPTIONPARAM0`      | feature SET | `js:921127` |
-| `0xd3` | `FEA_CMD_MOUSE_GET_OPTIONPARAM0`      | feature GET | `js:921155` |
-| `0x54` | `FEA_CMD_MOUSE_SET_OPTIONPARAM1`      | feature SET | `js:921188` |
-| `0xd4` | `FEA_CMD_MOUSE_GET_OPTIONPARAM1`      | feature GET | `js:921222` |
-| `0x55` | `FEA_CMD_SET_DOWNCOUNT`               | feature SET | — (anti-feature — do NOT expose) |
-| `0x60` | `FEA_CMD_SET_CONTROLRECOIL`           | feature SET | — (anti-feature) |
-| `0xe0` | `FEA_CMD_GET_CONTROLRECOIL`           | feature GET | — (anti-feature) |
-| `0x61` | `FEA_CMD_GET_CLEARBLUEINFRO`          | feature SET | (BLE pairing reset) |
+| Opcode | Mnemonic                         | Direction   | Renderer site                    |
+| -----: | -------------------------------- | ----------- | -------------------------------- |
+| `0x50` | `FEA_CMD_MOUSE_SET_KEYMATRIX`    | feature SET | `js:921897`                      |
+| `0xd0` | `FEA_CMD_MOUSE_GET_KEYMATRIX`    | feature GET | `js:921426`                      |
+| `0x51` | `FEA_CMD_MOUSE_SET_FNMATRIX`     | feature SET | `js:921929`                      |
+| `0xd1` | `FEA_CMD_MOUSE_GET_FNMATRIX`     | feature GET | (parallel of 0xd0)               |
+| `0x52` | `FEA_CMD_MOUSE_SET_USERPIC`      | feature SET | (per-key picture)                |
+| `0xd2` | `FEA_CMD_MOUSE_GET_USERPIC`      | feature GET | —                                |
+| `0x53` | `FEA_CMD_MOUSE_SET_OPTIONPARAM0` | feature SET | `js:921127`                      |
+| `0xd3` | `FEA_CMD_MOUSE_GET_OPTIONPARAM0` | feature GET | `js:921155`                      |
+| `0x54` | `FEA_CMD_MOUSE_SET_OPTIONPARAM1` | feature SET | `js:921188`                      |
+| `0xd4` | `FEA_CMD_MOUSE_GET_OPTIONPARAM1` | feature GET | `js:921222`                      |
+| `0x55` | `FEA_CMD_SET_DOWNCOUNT`          | feature SET | — (anti-feature — do NOT expose) |
+| `0x60` | `FEA_CMD_SET_CONTROLRECOIL`      | feature SET | — (anti-feature)                 |
+| `0xe0` | `FEA_CMD_GET_CONTROLRECOIL`      | feature GET | — (anti-feature)                 |
+| `0x61` | `FEA_CMD_GET_CLEARBLUEINFRO`     | feature SET | (BLE pairing reset)              |
 
----
+______________________________________________________________________
 
 ## 3 — Byte-precise specifications (each opcode the mouse path uses)
 
@@ -246,14 +246,14 @@ is **NOT** `hz` itself but a coded byte from the `_RateToNum` table
 (`js:920911`):
 
 | UI label | byte code |
-|---------:|----------:|
-|  125 Hz  | `0x08` |
-|  250 Hz  | `0x04` |
-|  500 Hz  | `0x02` |
-| 1000 Hz  | `0x01` |
-| 2000 Hz  | `0x84` |
-| 4000 Hz  | `0x82` |
-| 8000 Hz  | `0x81` |
+| -------: | --------: |
+|   125 Hz |    `0x08` |
+|   250 Hz |    `0x04` |
+|   500 Hz |    `0x02` |
+|  1000 Hz |    `0x01` |
+|  2000 Hz |    `0x84` |
+|  4000 Hz |    `0x82` |
+|  8000 Hz |    `0x81` |
 
 ```
 byte 0  : 0x04         // FEA_CMD_SET_REPORT
@@ -291,19 +291,19 @@ byte 63 : checksum
 
 Effect type enum (`js:920977`):
 
-| Code | Name              | Notes |
-|-----:|-------------------|-------|
-| `0` | `LightOff`        | all bytes 0 |
-| `1` | `LightAlwaysOn`   | value=brightness, RGB=color, dazzle bit (mode bits) |
-| `2` | `LightBreath`     | + speed |
-| `3` | `LightNeon`       | option 0=Default 1=Random (rainbow cycle) |
-| `4` | `LightWave`       | option from `WAVEOP` (right=0, left=1, down=2, up=3) |
-| `5` | `LightDazzing`    | + speed (variant spelling) |
-| `6` | `LightLaser`      | + speed |
-| `7` | `LightMusicFollow`| option from `MP` (upright=0, separate=1, intersect=2) |
-| `8` | `LightScreenColor`| host-RGB feed |
-| `9` | `LightMusicFollow2` | second music mode |
-|(10) | `LightUserPicture` | special case — bytes [4,5,6] = `[0, 200, 200]` |
+| Code | Name                | Notes                                                 |
+| ---: | ------------------- | ----------------------------------------------------- |
+|  `0` | `LightOff`          | all bytes 0                                           |
+|  `1` | `LightAlwaysOn`     | value=brightness, RGB=color, dazzle bit (mode bits)   |
+|  `2` | `LightBreath`       | + speed                                               |
+|  `3` | `LightNeon`         | option 0=Default 1=Random (rainbow cycle)             |
+|  `4` | `LightWave`         | option from `WAVEOP` (right=0, left=1, down=2, up=3)  |
+|  `5` | `LightDazzing`      | + speed (variant spelling)                            |
+|  `6` | `LightLaser`        | + speed                                               |
+|  `7` | `LightMusicFollow`  | option from `MP` (upright=0, separate=1, intersect=2) |
+|  `8` | `LightScreenColor`  | host-RGB feed                                         |
+|  `9` | `LightMusicFollow2` | second music mode                                     |
+| (10) | `LightUserPicture`  | special case — bytes [4,5,6] = `[0, 200, 200]`        |
 
 The dazzle / mode-bits sub-field (`byte 4`) encoding (`js:920974–920976`):
 
@@ -340,12 +340,12 @@ byte 63 : checksum
 
 `changeArr` is a 4-byte action descriptor (`js:921952`):
 
-| `n[0]` (type byte) | meaning |
-|--------------------|---------|
-| `0` | combo / forbidden / unknown (n[1]=skey, n[2]=key, n[3]=key2) |
-| `1` | mouse-button (n[2] = OF[key][2]) |
-| `2`,`3`,`6`,`8`,`10`,`11`,`13`,`14`,`18`,`19`,`20`,`22` | system function |
-| `9` | macro (n[1]=mode, n[2]=macro idx) |
+| `n[0]` (type byte)                                      | meaning                                                      |
+| ------------------------------------------------------- | ------------------------------------------------------------ |
+| `0`                                                     | combo / forbidden / unknown (n[1]=skey, n[2]=key, n[3]=key2) |
+| `1`                                                     | mouse-button (n[2] = OF[key][2])                             |
+| `2`,`3`,`6`,`8`,`10`,`11`,`13`,`14`,`18`,`19`,`20`,`22` | system function                                              |
+| `9`                                                     | macro (n[1]=mode, n[2]=macro idx)                            |
 
 For "forbidden" type the entire 4-byte payload is `[0,0,0,0]` (`js:921955`).
 
@@ -540,14 +540,14 @@ The OTA flow has two parallel paths — `mledUpgrade` (mouse-MCU) and
 `oledUpgrade` (screen-MCU). Both share the same opcode set numerics but
 on different MCU controllers.
 
-| Opcode | Mnemonic | Purpose |
-|-------:|----------|---------|
-| `0x30` | `FEA_CMD_SET_OLED_BOOT`            | Enter screen-MCU bootloader: payload `[0x55,0xAA,0x55,0xAA,0,0,0]` |
-| `0xb0` | `FEA_CMD_GET_OLED_BOOT`            | Poll bootloader ready: response byte 1 = 1 |
-| `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`       | Start screen upload: payload `[uint16LE chunkCount]` |
-| `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`       | Poll progress |
-| (no opcode) | data chunks                       | 64-byte chunks of firmware |
-| `0xc1` | `FEA_CMD_GET_MLEDBOOTCHECKSUM`     | Send int32-LE accumulated checksum; resp byte 1 == 0x55 = ok |
+|      Opcode | Mnemonic                       | Purpose                                                            |
+| ----------: | ------------------------------ | ------------------------------------------------------------------ |
+|      `0x30` | `FEA_CMD_SET_OLED_BOOT`        | Enter screen-MCU bootloader: payload `[0x55,0xAA,0x55,0xAA,0,0,0]` |
+|      `0xb0` | `FEA_CMD_GET_OLED_BOOT`        | Poll bootloader ready: response byte 1 = 1                         |
+|      `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`   | Start screen upload: payload `[uint16LE chunkCount]`               |
+|      `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`   | Poll progress                                                      |
+| (no opcode) | data chunks                    | 64-byte chunks of firmware                                         |
+|      `0xc1` | `FEA_CMD_GET_MLEDBOOTCHECKSUM` | Send int32-LE accumulated checksum; resp byte 1 == 0x55 = ok       |
 
 The mouse-MCU variant (`mledUpgrade`) uses analogous opcodes `0x40`,
 `0xc0`, `0x41`, `0xc1` (`js:817399`, `js:817415`, `js:817472`):
@@ -565,17 +565,17 @@ image (the boot header).
 
 ### 3.14 Anti-features (do **NOT** implement)
 
-| Opcode | Mnemonic | Anti-feature |
-|-------:|----------|---------------|
-| `0x55` | `FEA_CMD_SET_DOWNCOUNT`              | rapid-fire countdown |
-| `0x60` | `FEA_CMD_SET_CONTROLRECOIL`          | recoil-control / no-recoil macro |
-| `0xe0` | `FEA_CMD_GET_CONTROLRECOIL`          | (read-side of recoil) |
-| `0x61` | `FEA_CMD_GET_CLEARBLUEINFRO`         | clear BLE pairing info (probably fine, but BLE is out-of-scope today) |
+| Opcode | Mnemonic                     | Anti-feature                                                          |
+| -----: | ---------------------------- | --------------------------------------------------------------------- |
+| `0x55` | `FEA_CMD_SET_DOWNCOUNT`      | rapid-fire countdown                                                  |
+| `0x60` | `FEA_CMD_SET_CONTROLRECOIL`  | recoil-control / no-recoil macro                                      |
+| `0xe0` | `FEA_CMD_GET_CONTROLRECOIL`  | (read-side of recoil)                                                 |
+| `0x61` | `FEA_CMD_GET_CLEARBLUEINFRO` | clear BLE pairing info (probably fine, but BLE is out-of-scope today) |
 
 The two recoil opcodes are anti-cheat liabilities and are universally
 disallowed in tournament play (Valorant, CS2, Apex). Do **not** implement.
 
----
+______________________________________________________________________
 
 ## 4 — Battery model (no opcode — pushed from dongle via gRPC)
 
@@ -602,7 +602,7 @@ dongle firmware reports both. Our backend's equivalent should expose a
 `batteryPercent()` method that:
 
 1. Returns `std::nullopt` for wired SKUs (no dongle, no battery).
-2. For wireless SKUs, subscribes to a hot-plug callback that watches
+1. For wireless SKUs, subscribes to a hot-plug callback that watches
    the dongle's `Device.battery` proto field — on Linux this maps to
    `/sys/class/power_supply/hid-<vid>:<pid>.*/capacity`.
 
@@ -619,7 +619,7 @@ message Status24 {
 mouse on a shared dongle (`js:50940`, common dangles like PID `0x4011`,
 `0x4014`, `0x4017`, etc. — see device matrix).
 
----
+______________________________________________________________________
 
 ## 5 — Checksum function (BIT7 / BIT8 / NONE)
 
@@ -638,10 +638,10 @@ checksum compute based on this enum. The function lives in
 `src\dj_dev_api\cmd_list.rs` per the binary's string table
 (`iot_driver_strings.txt:1622`). Three modes:
 
-| Enum | Wire byte 63 |
-|------|--------------|
-| `BIT7` (0) | `sum(bytes 0..62) & 0x7F` |
-| `BIT8` (1) | `sum(bytes 0..62) & 0xFF` |
+| Enum       | Wire byte 63                                     |
+| ---------- | ------------------------------------------------ |
+| `BIT7` (0) | `sum(bytes 0..62) & 0x7F`                        |
+| `BIT8` (1) | `sum(bytes 0..62) & 0xFF`                        |
 | `NONE` (2) | left as-is (renderer's bytes are passed through) |
 
 **Note on sum range.** I have not yet visually inspected the Rust
@@ -649,7 +649,7 @@ disassembly to confirm whether the sum range is bytes `0..=62` or
 `1..=62`. Two arguments for `0..=62`:
 
 1. It's strictly more defensive (every byte we touch is summed).
-2. The renderer never writes byte 0 with a non-opcode value, so
+1. The renderer never writes byte 0 with a non-opcode value, so
    sum(0..=62) == sum(1..=62) + opcode, and an attacker-controlled
    opcode would still be folded in.
 
@@ -664,7 +664,7 @@ caller of `hid_send_feature_report` — the checksum function is the
 small wrapper called immediately before. Look for the 0x7F literal in
 its decompilation.
 
----
+______________________________________________________________________
 
 ## 6 — Code corrections required
 
@@ -672,18 +672,18 @@ Files to change in our repo (line numbers as of commit `216b0b8`):
 
 ### 6.1 `src/devices/mouse/src/aj_series.cpp`
 
-| Line | Current | Replace with |
-|-----:|---------|--------------|
-| 86–94 | `CommandId` enum with `kCmdDpi=0x21`, `kCmdPollRate=0x22`, `kCmdLod=0x23`, `kCmdButton=0x24`, `kCmdRgb=0x30`, `kCmdBattery=0x40`, `kCmdCommit=0x50` | Delete `CommandId` enum. Replace with `enum FeaCmd : std::uint8_t` listing every opcode in §2 we actually use (~10 values). |
-| 127 | `& 0xff` | `& 0x7F` (BIT7 — see §5) |
-| 180 | `dpiStageCount() = 6` | `dpiStageCount() = 8` |
-| 217–223 | `setPollRateHz` writes uint16 BE: `p[0] = hz >> 8; p[1] = hz & 0xff` | Replace with single byte from a `constexpr std::array<std::pair<uint16_t, uint8_t>, 7>` table (the `_RateToNum` table in §3.4). Opcode: `0x04`. Payload at byte 2 (after profile byte 1). |
-| 227–231 | `setLiftOffDistanceMm(mm)` writes `(mm * 10)` at opcode 0x23 | Delete. LOD is byte 52 of the `0x53` omnibus packet. Expose via a `setMouseOption0()` helper. |
-| 233–243 | `setButtonBinding(button, action)` opcode 0x24, payload at byte 4 | Opcode `0x50`. Payload structure: `pkt[1]=profile`, `pkt[2]=button`, `pkt[8..11]=action`. |
-| 245–252 | `batteryPercent()` writes opcode 0x40 + reads response | Replace with `std::nullopt` for wired SKUs; for wireless, return cached value updated by a `Device.battery` watcher (gRPC equivalent of `udev change` events on Linux). |
-| 259–270 | `setRgbStatic` / `setRgbEffect` opcode 0x30 | Opcode `0x07`, single 8-byte payload via `LightSettingToBuffer` equivalent (see §3.5). |
-| 273–277 | `setRgbBrightness(percent)` opcode 0x30 sub 0x02 | **Delete this opcode entirely.** Brightness rides as byte 3 of the 8-byte light packet (`value` field). |
-| 287–298 | `uploadDpiStage(index, stage)` opcode 0x21, payload at byte 4 | Delete this per-stage upload. Replace with `setMouseOption1(stages, activeIdx)` that writes the full 8-stage table atomically via opcode `0x54` (see §3.10). |
+|    Line | Current                                                                                                                                             | Replace with                                                                                                                                                                              |
+| ------: | --------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   86–94 | `CommandId` enum with `kCmdDpi=0x21`, `kCmdPollRate=0x22`, `kCmdLod=0x23`, `kCmdButton=0x24`, `kCmdRgb=0x30`, `kCmdBattery=0x40`, `kCmdCommit=0x50` | Delete `CommandId` enum. Replace with `enum FeaCmd : std::uint8_t` listing every opcode in §2 we actually use (~10 values).                                                               |
+|     127 | `& 0xff`                                                                                                                                            | `& 0x7F` (BIT7 — see §5)                                                                                                                                                                  |
+|     180 | `dpiStageCount() = 6`                                                                                                                               | `dpiStageCount() = 8`                                                                                                                                                                     |
+| 217–223 | `setPollRateHz` writes uint16 BE: `p[0] = hz >> 8; p[1] = hz & 0xff`                                                                                | Replace with single byte from a `constexpr std::array<std::pair<uint16_t, uint8_t>, 7>` table (the `_RateToNum` table in §3.4). Opcode: `0x04`. Payload at byte 2 (after profile byte 1). |
+| 227–231 | `setLiftOffDistanceMm(mm)` writes `(mm * 10)` at opcode 0x23                                                                                        | Delete. LOD is byte 52 of the `0x53` omnibus packet. Expose via a `setMouseOption0()` helper.                                                                                             |
+| 233–243 | `setButtonBinding(button, action)` opcode 0x24, payload at byte 4                                                                                   | Opcode `0x50`. Payload structure: `pkt[1]=profile`, `pkt[2]=button`, `pkt[8..11]=action`.                                                                                                 |
+| 245–252 | `batteryPercent()` writes opcode 0x40 + reads response                                                                                              | Replace with `std::nullopt` for wired SKUs; for wireless, return cached value updated by a `Device.battery` watcher (gRPC equivalent of `udev change` events on Linux).                   |
+| 259–270 | `setRgbStatic` / `setRgbEffect` opcode 0x30                                                                                                         | Opcode `0x07`, single 8-byte payload via `LightSettingToBuffer` equivalent (see §3.5).                                                                                                    |
+| 273–277 | `setRgbBrightness(percent)` opcode 0x30 sub 0x02                                                                                                    | **Delete this opcode entirely.** Brightness rides as byte 3 of the 8-byte light packet (`value` field).                                                                                   |
+| 287–298 | `uploadDpiStage(index, stage)` opcode 0x21, payload at byte 4                                                                                       | Delete this per-stage upload. Replace with `setMouseOption1(stages, activeIdx)` that writes the full 8-stage table atomically via opcode `0x54` (see §3.10).                              |
 
 ### 6.2 New helper struct `AjSeriesOptionPacket`
 
@@ -894,37 +894,37 @@ TEST_CASE("AJ159: setMacro emits 0x16 with chunk index 0..N, last-chunk flag at 
 }
 ```
 
----
+______________________________________________________________________
 
 ## 7 — References for this document
 
-| Subject | File:Line |
-|---------|-----------|
-| Mouse FEA_CMD enum (full) | `dist/static/js/main_beautified.js:920839` |
-| `_RateToNum` table | `dist/static/js/main_beautified.js:920911` |
+| Subject                                   | File:Line                                  |
+| ----------------------------------------- | ------------------------------------------ |
+| Mouse FEA_CMD enum (full)                 | `dist/static/js/main_beautified.js:920839` |
+| `_RateToNum` table                        | `dist/static/js/main_beautified.js:920911` |
 | `_LightSettingToBuffer` (8-byte LED pack) | `dist/static/js/main_beautified.js:920967` |
-| `setMouseOption0` (omnibus 0x53) | `dist/static/js/main_beautified.js:921121` |
-| `getMouseOption0` parser | `dist/static/js/main_beautified.js:921150` |
-| `setMouseOption1` (DPI 0x54) | `dist/static/js/main_beautified.js:921182` |
-| `getMouseOption1` parser | `dist/static/js/main_beautified.js:921216` |
-| `setReportRate` | `dist/static/js/main_beautified.js:921271` |
-| `setKeyConfigSimple` (KEYMATRIX 0x50) | `dist/static/js/main_beautified.js:921877` |
-| `setFnKeyConfigSimple` (FNMATRIX 0x51) | `dist/static/js/main_beautified.js:921909` |
-| `setMacro` (256-byte payload assembly) | `dist/static/js/main_beautified.js:922019` |
-| `_setMacro` (0x16 chunked upload) | `dist/static/js/main_beautified.js:922079` |
-| `getFirmwareVersion` (0x80) | `dist/static/js/main_beautified.js:921258` |
-| `writeFeatureCmd` (transport wrapper) | `dist/static/js/main_beautified.js:726774` |
-| `commomFeature` (write+read helper) | `dist/static/js/main_beautified.js:726843` |
-| `no`/`oo`/`uo`/`io` gRPC wrappers | `dist/static/js/main_beautified.js:56600` |
-| `CheckSumType` enum | `dist/static/js/main_beautified.js:51245` |
-| Device proto `Device.battery` field | `dist/static/js/main_beautified.js:50798` |
-| `Status24` proto (battery + isOnline) | `dist/static/js/main_beautified.js:50890` |
-| iot_driver FEA_CMD strings | `iot_driver_strings.txt:1565–1621` |
-| iot_driver gRPC method names | `iot_driver_strings.txt:842, 849` |
-| iot_driver Rust source paths | `iot_driver_strings.txt:1622–1624` |
-| Rust build path | `iot_driver_strings.txt:850` |
+| `setMouseOption0` (omnibus 0x53)          | `dist/static/js/main_beautified.js:921121` |
+| `getMouseOption0` parser                  | `dist/static/js/main_beautified.js:921150` |
+| `setMouseOption1` (DPI 0x54)              | `dist/static/js/main_beautified.js:921182` |
+| `getMouseOption1` parser                  | `dist/static/js/main_beautified.js:921216` |
+| `setReportRate`                           | `dist/static/js/main_beautified.js:921271` |
+| `setKeyConfigSimple` (KEYMATRIX 0x50)     | `dist/static/js/main_beautified.js:921877` |
+| `setFnKeyConfigSimple` (FNMATRIX 0x51)    | `dist/static/js/main_beautified.js:921909` |
+| `setMacro` (256-byte payload assembly)    | `dist/static/js/main_beautified.js:922019` |
+| `_setMacro` (0x16 chunked upload)         | `dist/static/js/main_beautified.js:922079` |
+| `getFirmwareVersion` (0x80)               | `dist/static/js/main_beautified.js:921258` |
+| `writeFeatureCmd` (transport wrapper)     | `dist/static/js/main_beautified.js:726774` |
+| `commomFeature` (write+read helper)       | `dist/static/js/main_beautified.js:726843` |
+| `no`/`oo`/`uo`/`io` gRPC wrappers         | `dist/static/js/main_beautified.js:56600`  |
+| `CheckSumType` enum                       | `dist/static/js/main_beautified.js:51245`  |
+| Device proto `Device.battery` field       | `dist/static/js/main_beautified.js:50798`  |
+| `Status24` proto (battery + isOnline)     | `dist/static/js/main_beautified.js:50890`  |
+| iot_driver FEA_CMD strings                | `iot_driver_strings.txt:1565–1621`         |
+| iot_driver gRPC method names              | `iot_driver_strings.txt:842, 849`          |
+| iot_driver Rust source paths              | `iot_driver_strings.txt:1622–1624`         |
+| Rust build path                           | `iot_driver_strings.txt:850`               |
 
----
+______________________________________________________________________
 
 ## 8 — Ghidra worklist for next pass
 
@@ -932,7 +932,7 @@ TEST_CASE("AJ159: setMacro emits 0x16 with chunk index 0..N, last-chunk flag at 
    `C:\Users\unilo\reverse-eng-workdir\ghidra_projects\iot_driver_proj\`.
    Use `analyzeHeadless … -process -noanalysis` for subsequent runs.
 
-2. **Run** `HuntChecksum.java` (at `C:\Users\unilo\reverse-eng-workdir\`):
+1. **Run** `HuntChecksum.java` (at `C:\Users\unilo\reverse-eng-workdir\`):
 
    ```powershell
    & 'C:\ProgramData\chocolatey\lib\ghidra\tools\ghidra_12.1_PUBLIC\support\analyzeHeadless.bat' `
@@ -949,13 +949,13 @@ TEST_CASE("AJ159: setMacro emits 0x16 with chunk index 0..N, last-chunk flag at 
    immediately before `hid_send_feature_report` that takes a 64-byte
    buffer pointer and writes byte 63.
 
-3. **Look for** the `match` on `CheckSumType` enum in the same file —
+1. **Look for** the `match` on `CheckSumType` enum in the same file —
    it's a 3-arm `switch` that calls one of three functions
    (`checksum_bit7`, `checksum_bit8`, no-op). The `BIT7` arm should
    contain a `mov eax, 0x7F; and dl, al` or `lea / and ecx, 0x7F`
    instruction sequence around the byte-63 store.
 
-4. **Confirm** sum range (`0..=62` vs `1..=62`) by examining the loop
+1. **Confirm** sum range (`0..=62` vs `1..=62`) by examining the loop
    bounds. The loop is small (`for i in 1..63 { sum += buf[i] }` is
    the most likely pattern given that the renderer never writes byte
    0 to anything but the opcode).

@@ -1,4 +1,5 @@
 # Phase 3 patch sequence — concrete atomic commits for the
+
 # post-2026-05-17 deep-RE batch
 
 > Companion to
@@ -33,32 +34,32 @@ ______________________________________________________________________
 
 ## Index of commits
 
-| # | Title | Risk | Hours |
-|---|-------|------|------:|
-| **LOW** | | | |
-| P3.1 | `feat(keyboard): document AK980 PRO settings-batch byte map (0x07 0x10) constants` | LOW | 1 |
-| P3.2 | `feat(keyboard): add AK980 PRO TFT bulk-upload opcode constants (0x72)` | LOW | 1 |
-| P3.3 | `feat(keyboard): add AK980 PRO opcode constants 0x15 0x04, 0x19 0x04, 0x0C 0x10` | LOW | 1 |
-| P3.4 | `feat(streamdeck): register V25 codenames + Mirabox N4 Pro/N6 variants` | LOW | 2 |
-| P3.5 | `feat(mouse): register AJ159 APEX wired + 2.4G + dongle PIDs + partner-VID rows` | LOW | 3 |
-| P3.6 | `feat(keyboard): emit CMD_FINISH 0xF0 on every AK980 PRO commit envelope` | LOW | 3 |
-| P3.7 | `feat(streamdeck): propagate VER + ULEND to AKP153 + AKP815` | LOW | 3 |
-| **MEDIUM** | | | |
-| P3.8 | `fix(streamdeck): document WinUSB framing offset delta in akp05_protocol.hpp` | MEDIUM | 2 |
-| P3.9 | `feat(keyboard): implement AK980 PRO TFT image_pipeline via bulk 0x72 path` | MEDIUM | 16 |
-| P3.10 | `feat(keyboard): expose AK980 PRO 20 firmware RGB modes (opcode 0x13)` | MEDIUM | 8 |
-| P3.11 | `feat(keyboard): implement AK980 PRO per-key RGB write (opcode 0x20 0x04)` | MEDIUM | 12 |
-| **HIGH** | | | |
-| P3.12 | `refactor(mouse): rewrite aj_series.cpp wire format per AJ159 vendor RE` | HIGH | 40 |
-| P3.13 | `feat(mouse): expand devices.yaml with AJ159 family + maturity adjustments` | HIGH | 6 |
-| P3.14 | `feat(streamdeck): AKP05 single-instance + VER probe + isOld293Version handshake` | HIGH | 8 |
-| P3.15 | `feat(keyboard): implement AK980 PRO 9 host-side lighting effects (CustomLightMode)` | HIGH | 32 |
-| P3.16 | `feat(host): SDPluginServer Elgato v6 + 26 AJAZZ extensions (loopback-only)` | HIGH | 80 |
-| **P1 (deferred to dedicated milestone)** | | | |
-| P3.17 | `feat(plugin): plugin-store catalogue model + manifest parser` | P1 | 16 |
-| P3.18 | `feat(plugin): bundle + spawn 12 default plugins (sdPlugin loader)` | P1 | 24 |
-| P3.19 | `feat(keyboard): AK980 PRO macros (record + assign) with mouse-remap fix` | P1 | 32 |
-| P3.20 | `feat(core): IProfileCapable mix-in + ProfileManager + ForegroundAppMonitor` | P1 | 24 |
+| #                                        | Title                                                                                | Risk   | Hours |
+| ---------------------------------------- | ------------------------------------------------------------------------------------ | ------ | ----: |
+| **LOW**                                  |                                                                                      |        |       |
+| P3.1                                     | `feat(keyboard): document AK980 PRO settings-batch byte map (0x07 0x10) constants`   | LOW    |     1 |
+| P3.2                                     | `feat(keyboard): add AK980 PRO TFT bulk-upload opcode constants (0x72)`              | LOW    |     1 |
+| P3.3                                     | `feat(keyboard): add AK980 PRO opcode constants 0x15 0x04, 0x19 0x04, 0x0C 0x10`     | LOW    |     1 |
+| P3.4                                     | `feat(streamdeck): register V25 codenames + Mirabox N4 Pro/N6 variants`              | LOW    |     2 |
+| P3.5                                     | `feat(mouse): register AJ159 APEX wired + 2.4G + dongle PIDs + partner-VID rows`     | LOW    |     3 |
+| P3.6                                     | `feat(keyboard): emit CMD_FINISH 0xF0 on every AK980 PRO commit envelope`            | LOW    |     3 |
+| P3.7                                     | `feat(streamdeck): propagate VER + ULEND to AKP153 + AKP815`                         | LOW    |     3 |
+| **MEDIUM**                               |                                                                                      |        |       |
+| P3.8                                     | `fix(streamdeck): document WinUSB framing offset delta in akp05_protocol.hpp`        | MEDIUM |     2 |
+| P3.9                                     | `feat(keyboard): implement AK980 PRO TFT image_pipeline via bulk 0x72 path`          | MEDIUM |    16 |
+| P3.10                                    | `feat(keyboard): expose AK980 PRO 20 firmware RGB modes (opcode 0x13)`               | MEDIUM |     8 |
+| P3.11                                    | `feat(keyboard): implement AK980 PRO per-key RGB write (opcode 0x20 0x04)`           | MEDIUM |    12 |
+| **HIGH**                                 |                                                                                      |        |       |
+| P3.12                                    | `refactor(mouse): rewrite aj_series.cpp wire format per AJ159 vendor RE`             | HIGH   |    40 |
+| P3.13                                    | `feat(mouse): expand devices.yaml with AJ159 family + maturity adjustments`          | HIGH   |     6 |
+| P3.14                                    | `feat(streamdeck): AKP05 single-instance + VER probe + isOld293Version handshake`    | HIGH   |     8 |
+| P3.15                                    | `feat(keyboard): implement AK980 PRO 9 host-side lighting effects (CustomLightMode)` | HIGH   |    32 |
+| P3.16                                    | `feat(host): SDPluginServer Elgato v6 + 26 AJAZZ extensions (loopback-only)`         | HIGH   |    80 |
+| **P1 (deferred to dedicated milestone)** |                                                                                      |        |       |
+| P3.17                                    | `feat(plugin): plugin-store catalogue model + manifest parser`                       | P1     |    16 |
+| P3.18                                    | `feat(plugin): bundle + spawn 12 default plugins (sdPlugin loader)`                  | P1     |    24 |
+| P3.19                                    | `feat(keyboard): AK980 PRO macros (record + assign) with mouse-remap fix`            | P1     |    32 |
+| P3.20                                    | `feat(core): IProfileCapable mix-in + ProfileManager + ForegroundAppMonitor`         | P1     |    24 |
 
 **Total**: ~314 person-hours (~8 person-weeks) for P0+MEDIUM+HIGH (P3.1
 through P3.16). P1 deferred milestone adds ~96 hours (~2.5 weeks).
@@ -70,10 +71,9 @@ ______________________________________________________________________
 ### P3.1 `feat(keyboard): document AK980 PRO settings-batch byte map (0x07 0x10) constants`
 
 **Files touched**:
+
 - `src/devices/keyboard/src/proprietary_protocol.hpp:88` (insert before
-  `makeReport`) — add `CmdSettingsBatch = 0x07`, `SettingsBatchSub =
-  0x10`, `SettingsBatchTrailerHi = 0xAA`, `SettingsBatchTrailerLo =
-  0x55`, plus the byte offsets `kSettingsByteFixed = 5`,
+  `makeReport`) — add `CmdSettingsBatch = 0x07`, `SettingsBatchSub = 0x10`, `SettingsBatchTrailerHi = 0xAA`, `SettingsBatchTrailerLo = 0x55`, plus the byte offsets `kSettingsByteFixed = 5`,
   `kSettingsByteDisableWinKey = 6`, `kSettingsByteDisableAltF4 = 7`,
   `kSettingsByteDisableAltTab = 8` (= checksum slot),
   `kSettingsByteFnSwitch = 9`, `kSettingsByteSleepTime = 10`,
@@ -88,10 +88,12 @@ ______________________________________________________________________
 constants yet). Tag `[ak980pro-protocol]` for follow-up.
 **Dependencies**: none.
 **Verification**:
+
 ```
 cmake --build --preset linux-debug --target ajazz_keyboard
 ctest --preset linux-release -R '\[ak980pro-protocol\]'   # zero matches expected
 ```
+
 **Risk rationale**: header-only constants. Cannot affect any existing
 behaviour. Critical foundation for §12.1.1 byte-map correction.
 **Citation**:
@@ -102,6 +104,7 @@ ______________________________________________________________________
 ### P3.2 `feat(keyboard): add AK980 PRO TFT bulk-upload opcode constants (0x72)`
 
 **Files touched**:
+
 - `src/devices/keyboard/src/proprietary_protocol.hpp:88` — add
   `CmdScreenHeader = 0x7F` (chunked path), `CmdScreenSubBegin = 0x03`,
   `CmdScreenChunkMarker = 0x80`, `CmdScreenBulkBegin = 0x72` (bulk
@@ -109,8 +112,7 @@ ______________________________________________________________________
   semantically distinct).
 - Also add geometry constants: `kTftWidth = 240`, `kTftHeight = 135`,
   `kTftFrameBytes = 240*135*2`, `kTftChunkPayload = 28`,
-  `kTftBulkChunkSize = 4096`, `kTftMaxFrames = 140`, `kTftGifHeader =
-  256`, `kTftInterChunkMs = 2`.
+  `kTftBulkChunkSize = 4096`, `kTftMaxFrames = 140`, `kTftGifHeader = 256`, `kTftInterChunkMs = 2`.
 
 **Diff size estimate**: ~20 lines header-only.
 **Breaking?** No — additive constants.
@@ -127,6 +129,7 @@ ______________________________________________________________________
 ### P3.3 `feat(keyboard): add AK980 PRO opcode constants 0x15 0x04, 0x19 0x04, 0x0C 0x10`
 
 **Files touched**:
+
 - `src/devices/keyboard/src/proprietary_protocol.hpp:88` — add wireless
   macro opcodes: `CmdMacroBeginWireless = 0x19`,
   `MacroBeginWirelessSub = 0x04`, `CmdMacroChunkInfoWireless = 0x15`,
@@ -148,6 +151,7 @@ ______________________________________________________________________
 ### P3.4 `feat(streamdeck): register V25 codenames + Mirabox N4 Pro/N6 variants`
 
 **Files touched**:
+
 - `src/devices/streamdeck/src/register.cpp:138` (AKP03 family block) —
   add `(0x6602, 0x1003)` MBox-N3E (rev 1, currently missing); add
   codename strings `AKP03V25`, `AKP03EV25`, `AKP03RV25`, `SD12N3V25`,
@@ -168,18 +172,21 @@ ______________________________________________________________________
 expansion) + ~80 lines test.
 **Breaking?** No — additive enum / registry extensions.
 **Test coverage**: tag `[streamdeck-register]`. 6 cases minimum:
+
 - `RegisterTest::miraboxN3E_oldVendor_0x1003_resolves`
 - `RegisterTest::akp03V25_codename_branch`
 - `RegisterTest::akp05V25_codename_branch`
 - `RegisterTest::miraboxN4Pro_resolves`
 - `RegisterTest::miraboxN6_resolves`
 - `RegisterTest::ts183_codename_branch_to_akp815`
-**Dependencies**: none.
-**Verification**:
+  **Dependencies**: none.
+  **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[streamdeck-register\]'
 ```
+
 **Risk rationale**: additive enum / registry rows. No existing PID
 resolves change. New codenames simply gain a recognised path.
 **Citation**:
@@ -190,6 +197,7 @@ ______________________________________________________________________
 ### P3.5 `feat(mouse): register AJ159 APEX wired + 2.4G + dongle PIDs + partner-VID rows`
 
 **Files touched**:
+
 - `src/devices/mouse/src/register.cpp:88` (current registry; tiny file
   with just `ajazz_24g_8k` at `0x3151:0x5007`) — add:
   - `aj159_apex_wired` = `0x3151:0x5008`, marked `scaffolded` with
@@ -215,16 +223,19 @@ yaml.
 **Breaking?** No — additive registry rows; existing `0x5007` row
 unchanged.
 **Test coverage**: tag `[mouse-register]`. 4 cases:
+
 - `RegisterTest::aj159ApexWired_resolves_at_0x5008`
 - `RegisterTest::aj159Apex24g_capped_at_1000Hz`
 - `RegisterTest::aj159ApexDongle_dongleCommon_flag`
 - `RegisterTest::partnerVids_NOT_registered`
-**Dependencies**: none.
-**Verification**:
+  **Dependencies**: none.
+  **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[mouse-register\]'
 ```
+
 **Risk rationale**: additive. The new rows are `scaffolded` so users
 get a "device recognised but feature-set unverified" UX rather than no
 recognition at all.
@@ -236,6 +247,7 @@ ______________________________________________________________________
 ### P3.6 `feat(keyboard): emit CMD_FINISH 0xF0 on every AK980 PRO commit envelope`
 
 **Files touched**:
+
 - `src/devices/keyboard/src/proprietary_protocol.hpp:88` — add
   `CmdFinish = 0xF0` constant + `buildCommitFinish()` builder
   declaration.
@@ -261,10 +273,12 @@ real AK980 PRO before flipping ARCH-05.1 to FINAL.
 gains 1 new assertion.
 **Dependencies**: P3.1, P3.3 (constants).
 **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[clock\]'
 ```
+
 **Rollback plan**: revert single commit; the 4-packet envelope was the
 known-good state from `17abda4`. Pre-commit hook + regression test
 catches any wire-format drift.
@@ -280,8 +294,8 @@ ______________________________________________________________________
 ### P3.7 `feat(streamdeck): propagate VER + ULEND to AKP153 + AKP815`
 
 **Files touched**:
-- `src/devices/streamdeck/src/akp153_protocol.hpp` — add `CmdVersion =
-  {'V','E','R'}` (3-byte) + `CmdUploadFinished = {'U','L','E','N','D'}`
+
+- `src/devices/streamdeck/src/akp153_protocol.hpp` — add `CmdVersion = {'V','E','R'}` (3-byte) + `CmdUploadFinished = {'U','L','E','N','D'}`
   (5-byte) + `buildVersionRequest()` / `buildUploadFinished()`
   declarations. Mechanical copy from `akp05_protocol.hpp` / `akp03_protocol.hpp`.
 - `src/devices/streamdeck/src/akp815_protocol.hpp` — same.
@@ -298,16 +312,19 @@ ______________________________________________________________________
 **Breaking?** No — additive opcode emission; firmware ignores VER if
 it doesn't understand it. ULEND adds 1 packet per image-burst flush.
 **Test coverage**: tag `[streamdeck-protocol]`. 4 cases:
+
 - `Akp153ProtocolTest::open_emitsVerRequest_andCachesResponse`
 - `Akp153FlushTest::imageBurst_endsWith_STP_then_ULEND`
 - `Akp815ProtocolTest::open_emitsVerRequest_andCachesResponse`
 - `Akp815FlushTest::imageBurst_endsWith_STP_then_ULEND`
-**Dependencies**: none (carry-over from §11.3).
-**Verification**:
+  **Dependencies**: none (carry-over from §11.3).
+  **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[streamdeck-protocol\]'
 ```
+
 **Risk rationale**: mechanical copy of an already-landed (`24c0965`)
 pattern. Same firmware family.
 **Citation**:
@@ -320,6 +337,7 @@ ______________________________________________________________________
 ### P3.8 `fix(streamdeck): document WinUSB framing offset delta in akp05_protocol.hpp`
 
 **Files touched**:
+
 - `src/devices/streamdeck/src/akp05_protocol.hpp` (look up the existing
   framing comment block) — add a `// WINUSB FRAMING NOTE:` paragraph
   documenting that the WinUSB transport (when it lands) puts `CRT` at
@@ -342,31 +360,38 @@ ______________________________________________________________________
 ### P3.9 `feat(keyboard): implement AK980 PRO TFT image_pipeline via bulk 0x72 path`
 
 **Files touched**:
+
 - `src/devices/streamdeck/src/image_pipeline.cpp` (existing) →
   generalise: move RGBA → format-X encoder into a new shared static lib
   `ajazz_imaging` under `src/core/imaging/`. JPEG output stays for
   Stream Dock; new RGB565 output (big-endian, 240×135) for AK980 PRO
   TFT.
+
 - `src/devices/keyboard/include/ajazz/keyboard/screen_uploader.hpp`
   (new) — `class ScreenUploader : public QObject` with
   `uploadGif(QString path)` slot + `progress(int percent)` /
   `uploadFinished(bool ok)` signals. Decodes GIF via `QMovie` to ≤140
   frames; builds per-frame delay header; uploads via bulk 0x72 path.
+
 - `src/devices/keyboard/src/screen_uploader.cpp` (new) — implementation:
+
   1. CMD_START (0x18 0x04, FEATURE 65 B)
-  2. CMD_SCREEN_BEGIN_BULK (0x72 0x00, FEATURE 65 B, byte 4..5 = total
+  1. CMD_SCREEN_BEGIN_BULK (0x72 0x00, FEATURE 65 B, byte 4..5 = total
      4 KB chunks LE, byte 3 = LCD-index + 1)
-  3. bulk body via OUTPUT 4097 B writes (`hid_write` chunking)
-  4. CMD_SAVE (0x02 0x04, FEATURE 65 B)
-  5. CMD_FINISH (0xF0 0x04, FEATURE 65 B — per P3.6)
+  1. bulk body via OUTPUT 4097 B writes (`hid_write` chunking)
+  1. CMD_SAVE (0x02 0x04, FEATURE 65 B)
+  1. CMD_FINISH (0xF0 0x04, FEATURE 65 B — per P3.6)
 
   Fallback: if `0x72` FEATURE write returns error → fall back to chunked
   0x7F + 0x80|n path (slow but works).
+
 - `src/core/include/ajazz/core/capabilities.hpp` — extend `IDisplayCapable`
   to apply to keyboards (currently Stream-Dock-only). Add helper
   `setGifAnimation(QList<QImage>, QList<int> delaysMs)`.
+
 - `tests/unit/devices/keyboard/test_tft_packet_builder.cpp` (new) — ~6
   cases per `ak980pro_tft_protocol.md` §8.2:
+
   - `TftHeaderTest::bulkBegin_emits_0x72_with_LE_chunkCount`
   - `TftHeaderTest::chunkIndex0_encodesCorrectly`
   - `TftHeaderTest::chunkIndex2314_lastOfOneFrame_encodes`
@@ -381,10 +406,12 @@ is unchanged in behaviour (just moved + extended).
 **Test coverage**: tag `[ak980pro-tft]`. 6 cases.
 **Dependencies**: P3.1, P3.2, P3.3 (constants), P3.6 (CMD_FINISH).
 **Verification**:
+
 ```
 cmake --build --preset linux-debug --target ajazz_keyboard ajazz_imaging
 ctest --preset linux-release -R '\[ak980pro-tft\]'
 ```
+
 **Hardware-witness requirement**: upload a known-pattern GIF (e.g.,
 test image with red pixel at (0,0), green at (1,0), blue at (2,0)) to
 a real AK980 PRO. Verify TFT shows the colors in the right order +
@@ -401,9 +428,8 @@ ______________________________________________________________________
 ### P3.10 `feat(keyboard): expose AK980 PRO 20 firmware RGB modes (opcode 0x13)`
 
 **Files touched**:
-- `src/devices/keyboard/src/proprietary_protocol.hpp` — add `CmdSetRgbMode
-  = 0x13` + `buildSetRgbMode(uint8 modeId, Rgb tint, bool rainbow, uint8
-  brightness, uint8 speed, uint8 direction)` declaration.
+
+- `src/devices/keyboard/src/proprietary_protocol.hpp` — add `CmdSetRgbMode = 0x13` + `buildSetRgbMode(uint8 modeId, Rgb tint, bool rainbow, uint8 brightness, uint8 speed, uint8 direction)` declaration.
 - New file `src/devices/keyboard/include/ajazz/keyboard/ak980_lighting.hpp`
   — strong-typed `enum class AK980LightingMode : uint8_t` with all 20
   values (Static = 0x00, SingleOn = 0x01, Glittering = 0x02, Breath =
@@ -412,8 +438,7 @@ ______________________________________________________________________
   Tilt = 0x0C, Shuttle = 0x0D, … LedOff = 0x13). Use `Q_NAMESPACE` +
   `Q_ENUM_NS` so QML can iterate.
 - `src/devices/keyboard/src/proprietary_keyboard.cpp` — implement
-  builder; expose `setLightingMode(AK980LightingMode mode, Rgb tint,
-  …)` method.
+  builder; expose `setLightingMode(AK980LightingMode mode, Rgb tint, …)` method.
 - Envelope per [`ak980pro_vendor.md` §13.7](../protocols/keyboard/ak980pro_vendor.md):
   CMD_START 0x18 → CMD_MODE_BEGIN 0x13 → CMD_MODE_DATA (mode_id @
   byte 0, RGB @ 1..3, rainbow @ 8, brightness @ 9, speed @ 10, direction
@@ -432,10 +457,12 @@ ______________________________________________________________________
 **Test coverage**: tag `[ak980pro-lighting]`.
 **Dependencies**: P3.1, P3.6.
 **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[ak980pro-lighting\]'
 ```
+
 **Hardware-witness requirement**: cycle each of 20 modes on a real
 AK980 PRO and verify visible animation matches the mode name.
 **Risk rationale**: NEW feature; no existing call path affected. If
@@ -448,6 +475,7 @@ ______________________________________________________________________
 ### P3.11 `feat(keyboard): implement AK980 PRO per-key RGB write (opcode 0x20 0x04)`
 
 **Files touched**:
+
 - `src/devices/keyboard/src/proprietary_protocol.hpp` — add per-key RGB
   constants per
   [`ak980pro_perkey_rgb_protocol.md` §6.2](../protocols/keyboard/ak980pro_perkey_rgb_protocol.md):
@@ -455,23 +483,19 @@ ______________________________________________________________________
   - `kCmdPerKeyRgbReadback = 0xF5`, `kPerKeyReadbackWiredSub = 0x03`,
     `kPerKeyReadbackWirelessSub = 0x09`
   - `kPerKeyModeWired = 0x03`, `kPerKeyModeWireless = 0x08`
-  - `kPerKeyWiredBlobSize = 0xC0` (192), `kPerKeyWirelessBlobSize =
-    0x200` (512)
+  - `kPerKeyWiredBlobSize = 0xC0` (192), `kPerKeyWirelessBlobSize = 0x200` (512)
   - `kPerKeyWiredChunkCount = 3`, `kPerKeyWirelessChunkCount = 8` (NOT
     6 — corrects §2.8 of roadmap per §12.1.2)
 - New file `src/devices/keyboard/include/ajazz/keyboard/perkey_rgb.hpp`
-  — `class PerKeyRgb : public QObject` with `uploadColors(const
-  std::vector<LedColor>&, bool isWireless)` + signals.
+  — `class PerKeyRgb : public QObject` with `uploadColors(const std::vector<LedColor>&, bool isWireless)` + signals.
 - `src/devices/keyboard/src/perkey_rgb.cpp` (new) — 3-packet envelope:
   1. Header packet (`[0x20, 0x04, …, mode@byte8]`, 33 B OUTPUT via
-     `FUN_0044f0c0`-equivalent path → our `transport.writeFeature(…
-     0x41)` chunked)
-  2. RGB blob (raw 192/512 bytes, NO opcode prefix, FEATURE 64-byte
+     `FUN_0044f0c0`-equivalent path → our `transport.writeFeature(… 0x41)` chunked)
+  1. RGB blob (raw 192/512 bytes, NO opcode prefix, FEATURE 64-byte
      slices via chunked path — `hid_send_feature_report` per chunk)
-  3. CMD_SAVE `[0x02, 0x04, …]` 33 B
+  1. CMD_SAVE `[0x02, 0x04, …]` 33 B
 - `src/devices/keyboard/src/proprietary_keyboard.cpp` — wire up
-  `PerKeyRgb` instance; expose `setPerKeyRgb(std::span<Rgb const>
-  colors)` capability.
+  `PerKeyRgb` instance; expose `setPerKeyRgb(std::span<Rgb const> colors)` capability.
 - `tests/unit/devices/keyboard/test_ak980pro_perkey_rgb.cpp` (new) —
   per
   [`ak980pro_perkey_rgb_protocol.md` §6.2](../protocols/keyboard/ak980pro_perkey_rgb_protocol.md)
@@ -489,10 +513,12 @@ ______________________________________________________________________
 **Test coverage**: tag `[ak980pro-perkey-rgb]`.
 **Dependencies**: P3.1, P3.6.
 **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[ak980pro-perkey-rgb\]'
 ```
+
 **Hardware-witness requirement**: upload a sentinel pattern (LED #0 =
 red, LED #5 = green, LED #10 = blue) and visually verify on the real
 AK980 PRO. Specifically test on WIRELESS (4-byte-per-LED format is
@@ -510,23 +536,19 @@ ______________________________________________________________________
 ### P3.12 `refactor(mouse): rewrite aj_series.cpp wire format per AJ159 vendor RE`
 
 **Files touched** (this is the biggest commit in the entire sequence):
+
 - `src/devices/mouse/src/aj_series.cpp` (340 lines today, ~600 lines
   after) — wholesale rewrite per
   [`aj_series_opcode_table.md` §6.1](../protocols/mouse/aj_series_opcode_table.md):
   - **Line 48** (was `kCmdCommit = 0x50`): DELETE — vendor has no
     commit step (already removed in `00acf5e`).
   - **Lines 86–94** (current `CommandId` enum with all-wrong opcodes):
-    REPLACE with `enum class FeaCmd : std::uint8_t { GetRev = 0x80,
-    SetReport = 0x04, SetProfile = 0x05, SetLedParam = 0x07,
-    MouseSetKeyMatrix = 0x50, MouseSetFnMatrix = 0x51, MouseSetOption0
-    = 0x53, MouseSetOption1 = 0x54, SetMacroSimple = 0x16, SetReset =
-    0x02 };`
+    REPLACE with `enum class FeaCmd : std::uint8_t { GetRev = 0x80, SetReport = 0x04, SetProfile = 0x05, SetLedParam = 0x07, MouseSetKeyMatrix = 0x50, MouseSetFnMatrix = 0x51, MouseSetOption0 = 0x53, MouseSetOption1 = 0x54, SetMacroSimple = 0x16, SetReset = 0x02 };`
   - **Line 127** (`& 0xff`): CHANGE to `& 0x7F` (BIT7 — UNBLOCKED by
     §12.1.11 98-site renderer census).
   - **Line 180** (`dpiStageCount() = 6`): CHANGE to `8`.
   - **Lines 217–223** (`setPollRateHz` writes uint16 BE): REPLACE with
-    `_RateToNum` constexpr lookup table: `{125→0x08, 250→0x04, 500→0x02,
-    1000→0x01, 2000→0x84, 4000→0x82, 8000→0x81}`. Opcode `0x04`. Payload:
+    `_RateToNum` constexpr lookup table: `{125→0x08, 250→0x04, 500→0x02, 1000→0x01, 2000→0x84, 4000→0x82, 8000→0x81}`. Opcode `0x04`. Payload:
     `pkt[1]=profile`, `pkt[2]=rateCode`. Default profile=0.
   - **Lines 227–231** (`setLiftOffDistanceMm` opcode 0x23): DELETE.
     LOD becomes byte 52 of the 0x53 omnibus packet (see
@@ -592,12 +614,15 @@ hardware witness".
 ~10 cases.
 **Dependencies**: P3.5 (registered PIDs).
 **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[mouse\]'
 ```
+
 **Hardware-witness requirement**: USB capture on a real AJ159 APEX
 (0x3151:0x5008) of:
+
 - `setPollRateHz(8000)` → first byte should be `0x05` (Report ID), then
   `0x04` (opcode), then `0x00` (profile), then `0x81` (rate code).
 - `setActiveDpiStage(3)` → first byte `0x05`, then `0x54`, then `0x00`
@@ -606,28 +631,29 @@ ctest --preset linux-release -R '\[mouse\]'
 - `setButtonBinding(5, mouseRight)` → first byte `0x05`, then `0x50`,
   then `0x00`, then `0x05` (button idx), zeros to byte 7, then 4-byte
   action at bytes 8..11.
-**Rollback plan**: the rewrite lives behind a feature flag
-`AJAZZ_AJ_SERIES_WIRE_REWRITE` (CMake option, default `OFF` for one
-release, then default `ON` after hardware witness). If hardware witness
-fails, flip flag back to `OFF`; the existing safety-guard path from
-`00acf5e` keeps users protected.
-**Risk rationale**: HIGHEST risk in the sequence. Wire format
-changes are the load-bearing change for the mouse backend. BUT the
-status quo IS corruption-on-save per §1.1 — the existing code is more
-dangerous than the rewrite.
-**Honesty gate**: commit message body must explicitly state "wire
-format is now vendor-correct per `aj_series_opcode_table.md` but
-untested against real hardware; promotion `scaffolded → partial`
-requires real-device witness per Hardware-witness requirement above".
-**Citation**:
-[`aj_series_opcode_table.md` §6.1 + §6.3](../protocols/mouse/aj_series_opcode_table.md) +
-[`aj_series_vendor.md` "Other corrections"](../protocols/mouse/aj_series_vendor.md).
+  **Rollback plan**: the rewrite lives behind a feature flag
+  `AJAZZ_AJ_SERIES_WIRE_REWRITE` (CMake option, default `OFF` for one
+  release, then default `ON` after hardware witness). If hardware witness
+  fails, flip flag back to `OFF`; the existing safety-guard path from
+  `00acf5e` keeps users protected.
+  **Risk rationale**: HIGHEST risk in the sequence. Wire format
+  changes are the load-bearing change for the mouse backend. BUT the
+  status quo IS corruption-on-save per §1.1 — the existing code is more
+  dangerous than the rewrite.
+  **Honesty gate**: commit message body must explicitly state "wire
+  format is now vendor-correct per `aj_series_opcode_table.md` but
+  untested against real hardware; promotion `scaffolded → partial`
+  requires real-device witness per Hardware-witness requirement above".
+  **Citation**:
+  [`aj_series_opcode_table.md` §6.1 + §6.3](../protocols/mouse/aj_series_opcode_table.md) +
+  [`aj_series_vendor.md` "Other corrections"](../protocols/mouse/aj_series_vendor.md).
 
 ______________________________________________________________________
 
 ### P3.13 `feat(mouse): expand devices.yaml with AJ159 family + maturity adjustments`
 
 **Files touched**:
+
 - `docs/_data/devices.yaml`:
   - `ajazz_24g_8k` → keep `scaffolded` (registered as P3.5; behaviour
     still pending real device).
@@ -658,6 +684,7 @@ ______________________________________________________________________
 
 **Files touched** (per
 [`akp05_init_sequence.md` §10](../protocols/streamdeck/akp05_init_sequence.md)):
+
 - `src/host/main/src/main.cpp` (new file, ~80 lines) — Qt 6
   single-instance via `QLocalServer::listen("AjazzControlCenter_<userId>")`;
   fall-back `QLocalSocket::connectToServer()` with argv handoff if
@@ -699,6 +726,7 @@ ______________________________________________________________________
 
 **Files touched** (per
 [`ak980pro_mui_dll.md` §3 + §6](../protocols/keyboard/ak980pro_mui_dll.md)):
+
 - `src/devices/keyboard/lighting/` (new directory) — house the
   `LightingEffectsService` Qt6 service.
 - `src/devices/keyboard/include/ajazz/keyboard/lighting/effects.hpp`
@@ -734,10 +762,12 @@ ______________________________________________________________________
 golden frames are committed as fixtures.
 **Dependencies**: P3.10, P3.11.
 **Verification**:
+
 ```
 cmake --build --preset linux-debug
 ctest --preset linux-release -R '\[ak980pro-host-lighting\]'
 ```
+
 **Hardware-witness requirement**: visual verification of each effect
 on a real AK980 PRO. Effect names should match the user's expectation
 (starlight should look like stars, etc.).
@@ -755,6 +785,7 @@ ______________________________________________________________________
 
 **Files touched** (per
 [`akp_plugin_sdk.md` §9](../protocols/streamdeck/akp_plugin_sdk.md)):
+
 - `src/host/plugin-host/` (new module, ~1500 lines):
   - `sd_plugin_server.{hpp,cpp}` — `QWebSocketServer` on
     `QHostAddress::LocalHost` (NOT `Any` — see §12.1.14 / anti-feature
@@ -770,8 +801,7 @@ ______________________________________________________________________
     `nlohmann::json` (COD-031 boundary).
   - `node_runner.{hpp,cpp}` — spawn user-side Node.js (we do NOT
     bundle node20 — detect system node ≥ 20 and reject otherwise).
-    CLI: `<node> <codePath> -port <p> -pluginUUID <u> -registerEvent
-    registerPlugin -info <info>`.
+    CLI: `<node> <codePath> -port <p> -pluginUUID <u> -registerEvent registerPlugin -info <info>`.
   - `auth.{hpp,cpp}` — implement salt/challenge per
     [`akp_plugin_sdk.md` §4.5](../protocols/streamdeck/akp_plugin_sdk.md);
     SHA-256 of `password + salt`; reject after 5 failed attempts.
@@ -798,18 +828,21 @@ ______________________________________________________________________
 **Dependencies**: none (independent subsystem). MUST land BEFORE P3.18
 (plugin loader).
 **Verification**:
+
 ```
 cmake --build --preset linux-debug --target ajazz_plugin_host
 ctest --preset linux-release -R '\[plugin-host\]'
 ```
+
 **Risk rationale**: HIGH risk because it's a large new module with a
 security-sensitive surface (loopback WebSocket, auth, plugin process
 spawn). Mitigations:
+
 - LocalHost-only binding (not `Any`) — anti-feature §4.16
 - Salt/challenge auth per §4.5
 - Manifest signature verification deferred (§4.17 anti-feature) but
   documented + flagged as gap.
-**Citation**: `akp_plugin_sdk.md` §§1-9 + `akp05_init_sequence.md` §5.
+  **Citation**: `akp_plugin_sdk.md` §§1-9 + `akp05_init_sequence.md` §5.
 
 ______________________________________________________________________
 
@@ -870,6 +903,7 @@ ______________________________________________________________________
 [`ak980pro_macros_protocol.md` §§3-7](../protocols/keyboard/ak980pro_macros_protocol.md).
 
 Implement:
+
 - 4-byte event format (KeyDown/Up `0xB0`/`0x30`, Delay `0x50`, Mouse
   Down/Up `0x90`/`0x10`).
 - Mouse-remap: `1→0x01 (Left), 2→0x04 (Right), 3→0x02 (Middle)` — **NOT
@@ -887,9 +921,10 @@ Implement:
 `evdev` (Linux), `CGEventTap` (macOS).
 
 **Diff size estimate**: ~800 lines code (incl. 3 OS-specific recorders)
-+ ~400 lines test.
-**Dependencies**: P3.1, P3.3, P3.6.
-**Risk**: P1 (deferred to milestone after P0 ships).
+
+- ~400 lines test.
+  **Dependencies**: P3.1, P3.3, P3.6.
+  **Risk**: P1 (deferred to milestone after P0 ships).
 
 ______________________________________________________________________
 
@@ -917,47 +952,47 @@ ______________________________________________________________________
 
 ### Contradictions resolution table
 
-| ID | Contradiction | DECISION | RATIONALE |
-| -- | ------------- | -------- | --------- |
-| C-1 | Settings-batch byte map (§2.7 vs §13.2) | USE §13.2 (P3.1) | Deep RE has stack-offset evidence; no in-tree migration risk |
-| C-2 | Per-key RGB chunk count (60 vs 64 bytes) | USE 64-byte chunks (P3.11) | `FUN_0044f0c0` chunking loop traced; 60-byte was wrong opcode lineage |
-| C-3 | Report ID 0x00 vs 0x04 (§13.1) | **DEFER** | gohv/KyleBoyer/our impl all work with 0x04 prefix. Capture-validate before changing. Risk > value of theoretical correctness |
-| C-4 | Mouse transport: writeFeature vs hid_write | USE `hid_write` (P3.12) | Renderer census proves mouse uses `sendMsg` not `sendRawFeature` |
-| C-5 | DPI stages (8 with 8th-stage colour quirk) | EXPOSE 8 stages + grey out 8th colour (P3.12) | Firmware accepts 8 but truncates 8th colour B; UI must reflect |
-| C-6 | Stream Dock listener binding (`Any` vs `127.0.0.1`) | LOCALHOST ONLY (P3.16) | Vendor footgun → anti-feature §4.16 |
-| C-7 | Stream Dock WinUSB framing offset (1 byte left) | DOCUMENT NOW (P3.8), IMPLEMENT LATER | Only affects WinUSB touch-strip which we don't yet wire |
-| C-8 | TFT upload path priority | PROMOTE 0x72 bulk to P0 v1.2 (P3.9) | 143× speedup; 0x7F stays as fallback |
-| C-9 | LCD-aware time-sync (0x0C 0x10 vs 0x28) | KEEP 0x28, document 0x0C 0x10 as future | Our 0x28 envelope works; switching opcodes is high-risk for zero UX benefit |
-| C-10 | "11 default plugins" vs "12" | UPDATE to 12 (P3.18) | Off-by-one corrected |
-| C-11 | Default plugins vs built-in UUIDs | DOCUMENT BOTH (P3.16, P3.18) | Built-in UUIDs handled in-process; plugins spawn subprocess |
+| ID   | Contradiction                                       | DECISION                                      | RATIONALE                                                                                                                    |
+| ---- | --------------------------------------------------- | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| C-1  | Settings-batch byte map (§2.7 vs §13.2)             | USE §13.2 (P3.1)                              | Deep RE has stack-offset evidence; no in-tree migration risk                                                                 |
+| C-2  | Per-key RGB chunk count (60 vs 64 bytes)            | USE 64-byte chunks (P3.11)                    | `FUN_0044f0c0` chunking loop traced; 60-byte was wrong opcode lineage                                                        |
+| C-3  | Report ID 0x00 vs 0x04 (§13.1)                      | **DEFER**                                     | gohv/KyleBoyer/our impl all work with 0x04 prefix. Capture-validate before changing. Risk > value of theoretical correctness |
+| C-4  | Mouse transport: writeFeature vs hid_write          | USE `hid_write` (P3.12)                       | Renderer census proves mouse uses `sendMsg` not `sendRawFeature`                                                             |
+| C-5  | DPI stages (8 with 8th-stage colour quirk)          | EXPOSE 8 stages + grey out 8th colour (P3.12) | Firmware accepts 8 but truncates 8th colour B; UI must reflect                                                               |
+| C-6  | Stream Dock listener binding (`Any` vs `127.0.0.1`) | LOCALHOST ONLY (P3.16)                        | Vendor footgun → anti-feature §4.16                                                                                          |
+| C-7  | Stream Dock WinUSB framing offset (1 byte left)     | DOCUMENT NOW (P3.8), IMPLEMENT LATER          | Only affects WinUSB touch-strip which we don't yet wire                                                                      |
+| C-8  | TFT upload path priority                            | PROMOTE 0x72 bulk to P0 v1.2 (P3.9)           | 143× speedup; 0x7F stays as fallback                                                                                         |
+| C-9  | LCD-aware time-sync (0x0C 0x10 vs 0x28)             | KEEP 0x28, document 0x0C 0x10 as future       | Our 0x28 envelope works; switching opcodes is high-risk for zero UX benefit                                                  |
+| C-10 | "11 default plugins" vs "12"                        | UPDATE to 12 (P3.18)                          | Off-by-one corrected                                                                                                         |
+| C-11 | Default plugins vs built-in UUIDs                   | DOCUMENT BOTH (P3.16, P3.18)                  | Built-in UUIDs handled in-process; plugins spawn subprocess                                                                  |
 
 ### High-risk patch mitigation
 
-| Patch | Mitigation | Rollback plan | Feature flag? |
-| ----- | ---------- | ------------- | ------------- |
-| **P3.6** (CMD_FINISH 0xF0) | Hardware witness on AK980 PRO TFT clock after landing | Revert single commit | No (additive byte; firmware tolerates) |
-| **P3.9** (TFT bulk 0x72) | Fallback to chunked 0x7F path on bulk failure | Revert to chunked-only impl | Yes — `AJAZZ_TFT_BULK_PATH` default `ON` |
-| **P3.11** (per-key RGB) | Sentinel-pattern test on real hardware (LED #0 red, #5 green, #10 blue) before flipping `pending → works` | Revert; no other code path uses these constants | No |
-| **P3.12** (AJ-series rewrite) | USB capture validation of 3 representative packets BEFORE landing; `AJAZZ_AJ_SERIES_WIRE_REWRITE` flag default `OFF` first release | Flip flag back to `OFF`; existing `00acf5e` safety-guard keeps users protected | YES — REQUIRED |
-| **P3.14** (single-instance) | Test on all 3 platforms (Linux/macOS/Windows) before landing | Revert single commit; existing 2nd-instance behaviour was "no enforcement" (benign) | No |
-| **P3.15** (host lighting) | Snapshot tests against golden frames; visual verification on real device | Feature flag `AJAZZ_HOST_LIGHTING_EFFECTS` default `OFF` | YES |
-| **P3.16** (SDPluginServer) | LocalHost binding enforced; auth challenge required; manifest signature gap documented | Module-level disable via CMake `-DAJAZZ_BUILD_PLUGIN_HOST=OFF` | YES — module-level |
+| Patch                         | Mitigation                                                                                                                         | Rollback plan                                                                       | Feature flag?                            |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------- |
+| **P3.6** (CMD_FINISH 0xF0)    | Hardware witness on AK980 PRO TFT clock after landing                                                                              | Revert single commit                                                                | No (additive byte; firmware tolerates)   |
+| **P3.9** (TFT bulk 0x72)      | Fallback to chunked 0x7F path on bulk failure                                                                                      | Revert to chunked-only impl                                                         | Yes — `AJAZZ_TFT_BULK_PATH` default `ON` |
+| **P3.11** (per-key RGB)       | Sentinel-pattern test on real hardware (LED #0 red, #5 green, #10 blue) before flipping `pending → works`                          | Revert; no other code path uses these constants                                     | No                                       |
+| **P3.12** (AJ-series rewrite) | USB capture validation of 3 representative packets BEFORE landing; `AJAZZ_AJ_SERIES_WIRE_REWRITE` flag default `OFF` first release | Flip flag back to `OFF`; existing `00acf5e` safety-guard keeps users protected      | YES — REQUIRED                           |
+| **P3.14** (single-instance)   | Test on all 3 platforms (Linux/macOS/Windows) before landing                                                                       | Revert single commit; existing 2nd-instance behaviour was "no enforcement" (benign) | No                                       |
+| **P3.15** (host lighting)     | Snapshot tests against golden frames; visual verification on real device                                                           | Feature flag `AJAZZ_HOST_LIGHTING_EFFECTS` default `OFF`                            | YES                                      |
+| **P3.16** (SDPluginServer)    | LocalHost binding enforced; auth challenge required; manifest signature gap documented                                             | Module-level disable via CMake `-DAJAZZ_BUILD_PLUGIN_HOST=OFF`                      | YES — module-level                       |
 
 ### External blockers (`[needs capture]` items)
 
-| Blocker | What's needed | Who provides | When |
-| ------- | ------------- | ------------ | ---- |
-| AK980 PRO Report ID 0x00 vs 0x04 validation (C-3) | USB capture of vendor's first 4 bytes of any FEATURE-report opcode | usbipd-win + WSL2 + tshark per `CAPTURING.md` §8.6 | Before any change to `proprietary_protocol.hpp:23` |
-| AJ159 APEX wire-format validation (P3.12) | USB capture of 3 packets: `setPollRateHz(8000)`, `setActiveDpiStage(3)`, `setButtonBinding(5, mouseRight)` | usbipd-win + WSL2 against AJAZZ Driver(R) 2.1.94 on Win VM, real AJ159 hardware | Before flipping `AJAZZ_AJ_SERIES_WIRE_REWRITE=ON` |
-| AK980 PRO TFT bulk path validation (P3.9) | Hardware witness: upload sentinel GIF, verify visible output | User with real AK980 PRO + bundled GIF test fixture | After P3.9 lands, before `partial → functional` |
-| AK980 PRO per-key RGB validation (P3.11) | Hardware witness: sentinel pattern (LED #0 red, #5 green, #10 blue) on WIRELESS specifically | User with real AK980 PRO in 2.4G mode | After P3.11 lands |
-| AKP05 ULEND validation (P3.7) | Hardware witness: 10 rapid setKeyImage() calls, verify no firmware freeze | User with real AKP05/N4 | After P3.7 lands |
-| AKP05 V25 firmware version detection (P3.14) | One `VER` response sample to disambiguate `293V25` vs `293V3` | User with real AKP05 V25 hardware | Before `isOld293Version()` ships against AKP153 |
-| Stream Dock SDK plugin compat smoke test (P3.16) | Load 3 existing Elgato Stream Deck plugins (e.g., Wave Link, OBS Studio, Hue) and verify they connect + render | User-driven testing post-P3.16 | After P3.16 lands |
-| AK980 PRO 9 host-side lighting effects visual verification (P3.15) | Visual confirmation each effect matches its name (starlight looks like stars, etc.) | User with real AK980 PRO | After P3.15 lands |
-| AK980 PRO macros wireless mouse-remap (P3.19) | Recording test of "Right click" macro → verify the device replays Right click (not Middle click — the 2↔3 swap regression) | User with real AK980 PRO in wireless mode | After P3.19 lands |
-| AJ159 APEX 8K poll rate sustained throughput | Verify mouse can deliver 8 K reports/sec without dropping | User with real AJ159 APEX + perf-monitor tool | Post-P3.12 hardware witness |
-| AKP05 / AKP03R rev. 2 1024-byte packet size detection (`akp_device_matrix.md` §13 row 325-326) | VER response sample + capture of one image upload | User with real AKP05 V25 / AKP03R rev. 2 | Deferred — currently we send 512-byte packets and firmware tolerates |
+| Blocker                                                                                        | What's needed                                                                                                              | Who provides                                                                    | When                                                                 |
+| ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| AK980 PRO Report ID 0x00 vs 0x04 validation (C-3)                                              | USB capture of vendor's first 4 bytes of any FEATURE-report opcode                                                         | usbipd-win + WSL2 + tshark per `CAPTURING.md` §8.6                              | Before any change to `proprietary_protocol.hpp:23`                   |
+| AJ159 APEX wire-format validation (P3.12)                                                      | USB capture of 3 packets: `setPollRateHz(8000)`, `setActiveDpiStage(3)`, `setButtonBinding(5, mouseRight)`                 | usbipd-win + WSL2 against AJAZZ Driver(R) 2.1.94 on Win VM, real AJ159 hardware | Before flipping `AJAZZ_AJ_SERIES_WIRE_REWRITE=ON`                    |
+| AK980 PRO TFT bulk path validation (P3.9)                                                      | Hardware witness: upload sentinel GIF, verify visible output                                                               | User with real AK980 PRO + bundled GIF test fixture                             | After P3.9 lands, before `partial → functional`                      |
+| AK980 PRO per-key RGB validation (P3.11)                                                       | Hardware witness: sentinel pattern (LED #0 red, #5 green, #10 blue) on WIRELESS specifically                               | User with real AK980 PRO in 2.4G mode                                           | After P3.11 lands                                                    |
+| AKP05 ULEND validation (P3.7)                                                                  | Hardware witness: 10 rapid setKeyImage() calls, verify no firmware freeze                                                  | User with real AKP05/N4                                                         | After P3.7 lands                                                     |
+| AKP05 V25 firmware version detection (P3.14)                                                   | One `VER` response sample to disambiguate `293V25` vs `293V3`                                                              | User with real AKP05 V25 hardware                                               | Before `isOld293Version()` ships against AKP153                      |
+| Stream Dock SDK plugin compat smoke test (P3.16)                                               | Load 3 existing Elgato Stream Deck plugins (e.g., Wave Link, OBS Studio, Hue) and verify they connect + render             | User-driven testing post-P3.16                                                  | After P3.16 lands                                                    |
+| AK980 PRO 9 host-side lighting effects visual verification (P3.15)                             | Visual confirmation each effect matches its name (starlight looks like stars, etc.)                                        | User with real AK980 PRO                                                        | After P3.15 lands                                                    |
+| AK980 PRO macros wireless mouse-remap (P3.19)                                                  | Recording test of "Right click" macro → verify the device replays Right click (not Middle click — the 2↔3 swap regression) | User with real AK980 PRO in wireless mode                                       | After P3.19 lands                                                    |
+| AJ159 APEX 8K poll rate sustained throughput                                                   | Verify mouse can deliver 8 K reports/sec without dropping                                                                  | User with real AJ159 APEX + perf-monitor tool                                   | Post-P3.12 hardware witness                                          |
+| AKP05 / AKP03R rev. 2 1024-byte packet size detection (`akp_device_matrix.md` §13 row 325-326) | VER response sample + capture of one image upload                                                                          | User with real AKP05 V25 / AKP03R rev. 2                                        | Deferred — currently we send 512-byte packets and firmware tolerates |
 
 ______________________________________________________________________
 
@@ -971,6 +1006,7 @@ suggest dedicated abstractions:
 The 9 host-side lighting effects on AK980 PRO (P3.15), the
 SDPluginServer host-side rendering (P3.16), and the future AJ159 TFT
 widget set (roadmap §3.6) all need:
+
 - Worker-thread compositing pipeline
 - 60 fps frame budget tracker
 - Cooked-frame → device-specific upload coordinator
@@ -986,6 +1022,7 @@ The AJ159 vendor's `iot_driver.exe` strings reveal it was built from
 `D:\work\dj_hid_sdk_rs\target\i686-pc-windows-msvc\release\…\driver.rs`
 ([`aj_series_vendor.md` references §1622](../protocols/mouse/aj_series_vendor.md)).
 The same Rust SDK ships across:
+
 - AJAZZ branded mice/keyboards
 - KZZI / DAXA / akko / VKMS / rongyuan / MagneticJade / Mad Catz
   rebrands (6 partner VIDs per
@@ -1009,6 +1046,7 @@ methods, not just one polymorphic write. Audit current backend code
 for ambiguous calls before P3.12 lands.
 
 **Recommendation**: add a P3.0 commit BEFORE P3.12 that:
+
 - Audits every `ITransport::write*` call in mouse + keyboard backends.
 - Confirms which path each call should use per `aj_series_vendor.md`
   Other-corrections §1 + `ak980pro_vendor.md` §13.11 transport matrix.
@@ -1023,28 +1061,28 @@ ______________________________________________________________________
 
 The 15 anti-features from roadmap §4 + 5 new from §12.5:
 
-| # | Anti-feature | Source | Disposition |
-| - | ------------ | ------ | ----------- |
-| §4.1 | AJ159 gRPC localhost listener | aj_series_vendor.md 510-515 | NEVER — keep in-process `ITransport` |
-| §4.2 | AJ159 cloud login | aj_series_vendor.md 24, 494-498 | NEVER — file-system .ajprofile only |
-| §4.3 | AJ159 `getWeather` | aj_series_vendor.md 485-489 | NEVER — opt-in user-chosen provider only |
-| §4.4 | AJ159 `watchSystemInfo` telemetry | aj_series_vendor.md 490-493 | NEVER — opt-in per widget only |
-| §4.5 | AJ159 universal-analytics + node-machine-id | aj_series_vendor.md 499-505 | NEVER — zero analytics SDKs |
-| §4.6 | AJ159 recoil-control / rapid-fire | aj_series_vendor.md 231-234 | NEVER — anti-cheat liability (`aj_series_opcode_table.md` §3.14) |
-| §4.7 | AK980 PRO encrypted SQLite blob | ak980pro_vendor.md §9 | NEVER — plain JSON via QJsonDocument |
-| §4.8 | AK980 PRO HTTP-spawn FirmwareUpdateTool | ak980pro_vendor.md §6 | NEVER — in-app DFU when we ship it |
-| §4.9 | AK980 PRO 200 ms foreground-app polling | ak980pro_vendor.md §9 | NEVER — event-driven hooks |
-| §4.10 | Stream Dock Alibaba auto-update CDN | akp05_vendor.md §8 | NEVER — Flatpak/MSI/dnf/apt only |
-| §4.11 | Stream Dock Alibaba plugin store | akp05_vendor.md §8 | NEVER — self-hostable index |
-| §4.12 | Stream Dock global low-level keyboard hook | akp05_vendor.md §1.4 | OPT-IN with prompt; default OFF |
-| §4.13 | AK980 PRO custom MUI toolkit | ak980pro_vendor.md §9 | NEVER — Qt6/QML |
-| §4.14 | AK980 PRO dynamic LoadLibraryA | ak980pro_vendor.md §1.1 | NEVER — link `hidapi_hidraw` normally |
-| §4.15 | AJ159 universal mouse driver dozens-of-SKUs | aj_series_vendor.md 40 | NEVER — AJAZZ-only, no OEM rebrand support |
-| **§4.16 NEW** | Stream Dock WebSocket binding to `QHostAddress::Any` | akp05_init_sequence.md §5 + akp_plugin_sdk.md §4.1 | NEVER — bind LocalHost only (P3.16) |
-| **§4.17 NEW** | Stream Dock plugin-zip auto-unpack without signature | akp_plugin_sdk.md §6 | DEFER signature verification to dedicated commit; do NOT enable auto-fetch without it |
-| **§4.18 NEW** | AK980 PRO `mui.dll` 6 604-export custom toolkit | ak980pro_mui_dll.md §1-§5 | Already covered by §4.13; corroboration only |
-| **§4.19 NEW** | Allwinner SoC USB-upgrade (Stream Dock DFU) | akp_dfu_protocol.md §§1-9 | NEVER — detect DFU transition + suspend; never reimplement |
-| **§4.20 NEW** | Stream Dock AES-GCM-encrypted firmware with hardcoded key | akp_dfu_protocol.md §4 | NEVER — we don't download or decrypt firmware (already covered by §4.10) |
+| #             | Anti-feature                                              | Source                                             | Disposition                                                                           |
+| ------------- | --------------------------------------------------------- | -------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| §4.1          | AJ159 gRPC localhost listener                             | aj_series_vendor.md 510-515                        | NEVER — keep in-process `ITransport`                                                  |
+| §4.2          | AJ159 cloud login                                         | aj_series_vendor.md 24, 494-498                    | NEVER — file-system .ajprofile only                                                   |
+| §4.3          | AJ159 `getWeather`                                        | aj_series_vendor.md 485-489                        | NEVER — opt-in user-chosen provider only                                              |
+| §4.4          | AJ159 `watchSystemInfo` telemetry                         | aj_series_vendor.md 490-493                        | NEVER — opt-in per widget only                                                        |
+| §4.5          | AJ159 universal-analytics + node-machine-id               | aj_series_vendor.md 499-505                        | NEVER — zero analytics SDKs                                                           |
+| §4.6          | AJ159 recoil-control / rapid-fire                         | aj_series_vendor.md 231-234                        | NEVER — anti-cheat liability (`aj_series_opcode_table.md` §3.14)                      |
+| §4.7          | AK980 PRO encrypted SQLite blob                           | ak980pro_vendor.md §9                              | NEVER — plain JSON via QJsonDocument                                                  |
+| §4.8          | AK980 PRO HTTP-spawn FirmwareUpdateTool                   | ak980pro_vendor.md §6                              | NEVER — in-app DFU when we ship it                                                    |
+| §4.9          | AK980 PRO 200 ms foreground-app polling                   | ak980pro_vendor.md §9                              | NEVER — event-driven hooks                                                            |
+| §4.10         | Stream Dock Alibaba auto-update CDN                       | akp05_vendor.md §8                                 | NEVER — Flatpak/MSI/dnf/apt only                                                      |
+| §4.11         | Stream Dock Alibaba plugin store                          | akp05_vendor.md §8                                 | NEVER — self-hostable index                                                           |
+| §4.12         | Stream Dock global low-level keyboard hook                | akp05_vendor.md §1.4                               | OPT-IN with prompt; default OFF                                                       |
+| §4.13         | AK980 PRO custom MUI toolkit                              | ak980pro_vendor.md §9                              | NEVER — Qt6/QML                                                                       |
+| §4.14         | AK980 PRO dynamic LoadLibraryA                            | ak980pro_vendor.md §1.1                            | NEVER — link `hidapi_hidraw` normally                                                 |
+| §4.15         | AJ159 universal mouse driver dozens-of-SKUs               | aj_series_vendor.md 40                             | NEVER — AJAZZ-only, no OEM rebrand support                                            |
+| **§4.16 NEW** | Stream Dock WebSocket binding to `QHostAddress::Any`      | akp05_init_sequence.md §5 + akp_plugin_sdk.md §4.1 | NEVER — bind LocalHost only (P3.16)                                                   |
+| **§4.17 NEW** | Stream Dock plugin-zip auto-unpack without signature      | akp_plugin_sdk.md §6                               | DEFER signature verification to dedicated commit; do NOT enable auto-fetch without it |
+| **§4.18 NEW** | AK980 PRO `mui.dll` 6 604-export custom toolkit           | ak980pro_mui_dll.md §1-§5                          | Already covered by §4.13; corroboration only                                          |
+| **§4.19 NEW** | Allwinner SoC USB-upgrade (Stream Dock DFU)               | akp_dfu_protocol.md §§1-9                          | NEVER — detect DFU transition + suspend; never reimplement                            |
+| **§4.20 NEW** | Stream Dock AES-GCM-encrypted firmware with hardcoded key | akp_dfu_protocol.md §4                             | NEVER — we don't download or decrypt firmware (already covered by §4.10)              |
 
 ______________________________________________________________________
 

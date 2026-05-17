@@ -10,15 +10,15 @@
 > recommendations). This document captures what the vendor stores so we
 > know which fields users will expect to survive across sessions.
 
----
+______________________________________________________________________
 
 ## 1 — Storage location
 
-| OS | Path |
-|----|------|
-| Windows | `%APPDATA%\AJAZZ Driver（R）\iot_db\<table>\` |
-| Browser fallback (web-driver) | `./web_driver/iot_db/<table>` (cwd) |
-| Linux (vendor would be) | `~/.config/AJAZZ Driver（R）/iot_db/<table>/` |
+| OS                            | Path                                          |
+| ----------------------------- | --------------------------------------------- |
+| Windows                       | `%APPDATA%\AJAZZ Driver（R）\iot_db\<table>\` |
+| Browser fallback (web-driver) | `./web_driver/iot_db/<table>` (cwd)           |
+| Linux (vendor would be)       | `~/.config/AJAZZ Driver（R）/iot_db/<table>/` |
 
 Source: renderer `js:57509`:
 
@@ -44,32 +44,32 @@ iot_db
 
 … is what gets used if a request supplies a relative path.
 
----
+______________________________________________________________________
 
 ## 2 — Tables (sled tree names)
 
 From renderer `js:57534` `DBPATH` enum:
 
-| Constant | Tree name      | Contents (per evidence below) |
-|----------|----------------|-------------------------------|
-| `DEVICETYPE`         | `device_type`              | Per-PID device metadata (`displayName`, `dpi.count`, `reportRate`, ...) |
-| `CONFIG`             | `CONFIG`                   | Per-device profile-tied configuration (DPI table, polling rate, RGB, button map, sleep times, sensitivity, ...) — the host-side cache of the on-device omnibus packet |
-| `MACRO`              | `macro`                    | 256-byte macro buffers (one per macro slot per device) |
-| `SCREEN`             | `screen`                   | LCD UI configuration (selected widget, weather city, clock format, etc.) |
-| `SCREEN_IMAHE` [sic] | `screen_image`             | LCD wallpaper / animation frames (binary blobs) |
-| `USER`               | `user`                     | Cloud login state, machine UUID, last-shared profile, etc. |
-| `CUSTOM_LIGHT`       | `custom_light`             | User-saved RGB scenes (named light presets) |
-| `CUSTOM_LIGHT_IMAHE` [sic] | `db_custom_light_image` | Per-key wallpaper images for keyboards (n/a for mice) |
-| `IMG_SHARE`          | `db_img_share`             | Cached "Community Share" — wallpaper images downloaded from the cloud |
-| `LIGHT_SHARE`        | `db_light_share`           | Cached "Community Share" — light presets downloaded from the cloud |
-| `AUDIO`              | `audio`                    | Recorded audio for media-key macros (rare) |
-| `GUN`                | `gun`                      | Recoil-control macros (anti-feature; do **NOT** replicate) |
+| Constant                   | Tree name               | Contents (per evidence below)                                                                                                                                         |
+| -------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DEVICETYPE`               | `device_type`           | Per-PID device metadata (`displayName`, `dpi.count`, `reportRate`, ...)                                                                                               |
+| `CONFIG`                   | `CONFIG`                | Per-device profile-tied configuration (DPI table, polling rate, RGB, button map, sleep times, sensitivity, ...) — the host-side cache of the on-device omnibus packet |
+| `MACRO`                    | `macro`                 | 256-byte macro buffers (one per macro slot per device)                                                                                                                |
+| `SCREEN`                   | `screen`                | LCD UI configuration (selected widget, weather city, clock format, etc.)                                                                                              |
+| `SCREEN_IMAHE` [sic]       | `screen_image`          | LCD wallpaper / animation frames (binary blobs)                                                                                                                       |
+| `USER`                     | `user`                  | Cloud login state, machine UUID, last-shared profile, etc.                                                                                                            |
+| `CUSTOM_LIGHT`             | `custom_light`          | User-saved RGB scenes (named light presets)                                                                                                                           |
+| `CUSTOM_LIGHT_IMAHE` [sic] | `db_custom_light_image` | Per-key wallpaper images for keyboards (n/a for mice)                                                                                                                 |
+| `IMG_SHARE`                | `db_img_share`          | Cached "Community Share" — wallpaper images downloaded from the cloud                                                                                                 |
+| `LIGHT_SHARE`              | `db_light_share`        | Cached "Community Share" — light presets downloaded from the cloud                                                                                                    |
+| `AUDIO`                    | `audio`                 | Recorded audio for media-key macros (rare)                                                                                                                            |
+| `GUN`                      | `gun`                   | Recoil-control macros (anti-feature; do **NOT** replicate)                                                                                                            |
 
 The two `_IMAHE` typos in the JS enum are present verbatim and are the
 keys the renderer uses — they map to correctly-spelled `db_custom_light_image`
 and `screen_image` tree names on disk.
 
----
+______________________________________________________________________
 
 ## 3 — Key schema
 
@@ -109,16 +109,16 @@ The structured-key shape varies per table; common shapes:
 The vendor's lack of a fixed key-schema contract means every table
 read returns a raw `Uint8Array` and parses on the renderer side.
 
----
+______________________________________________________________________
 
 ## 4 — Value schema
 
 Three observed encodings (`js:57514–57530`):
 
-| Encoding | Used by |
-|----------|---------|
-| `JSON.stringify(obj)` → UTF-8 (`Nu()`) | `insertDataToDB` — every config object |
-| Raw `Uint8Array` (binary blob, no encoding) | `insertBufferToDB` — images, macro buffers |
+| Encoding                                          | Used by                                                                                                                    |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `JSON.stringify(obj)` → UTF-8 (`Nu()`)            | `insertDataToDB` — every config object                                                                                     |
+| Raw `Uint8Array` (binary blob, no encoding)       | `insertBufferToDB` — images, macro buffers                                                                                 |
 | `base64` (cached form returned by gRPC `GetItem`) | All reads via `getItemFromDb` — the iot_driver wraps stored bytes in base64 when sending back to the renderer (`js:57579`) |
 
 On read (`getItemFromDb` at `js:57569`):
@@ -134,7 +134,7 @@ So binary blobs (images, 256-byte macros) round-trip as base64 over the
 gRPC wire — the iot_driver stores them raw in sled but base64-encodes
 on every read.
 
----
+______________________________________________________________________
 
 ## 5 — Per-table semantics
 
@@ -304,9 +304,10 @@ and persisted; subsequent runs read it from sled instead of re-querying.
 > **Privacy concern**: the machineId is a stable hardware-derived UUID.
 > If the cloud endpoints (`api.rongyuan.tech:3814`, `api2.qmk.top:3814`)
 > are reachable, that UUID could be cross-correlated with user account
-> + IP + device PID. Our Qt reimplementation should not use
-> hardware-derived UUIDs for anything — if we ever need a device-scope
-> UUID, generate a random v4 on first run and store it locally.
+>
+> - IP + device PID. Our Qt reimplementation should not use
+>   hardware-derived UUIDs for anything — if we ever need a device-scope
+>   UUID, generate a random v4 on first run and store it locally.
 
 ### 5.6 `custom_light` / `db_custom_light_image`
 
@@ -363,7 +364,7 @@ Anti-cheat liability in any competitive title. The vendor app's
 "Recoil Control" UI writes to this table + sends opcode `0x60` to the
 device. **Do not implement.**
 
----
+______________________________________________________________________
 
 ## 6 — Migration model
 
@@ -387,26 +388,26 @@ startup. There is no schema-versioning at the JSON-value level either
 This is fragile. Our Qt design should:
 
 1. Embed a `schema_version` integer in every JSON value we persist.
-2. Use `QSettings(IniFormat)` (no embedded database; no format
+1. Use `QSettings(IniFormat)` (no embedded database; no format
    migration risk).
-3. For binary blobs (LCD wallpapers, macros), use plain files in
+1. For binary blobs (LCD wallpapers, macros), use plain files in
    `$XDG_DATA_HOME/ajazz/<vid>:<pid>/...` with `.json` siblings for
    metadata.
 
----
+______________________________________________________________________
 
 ## 7 — Disk space estimate (per device, per user)
 
-| Table | Typical size |
-|-------|--------------|
-| `device_type` (one row per active SKU) | ~2 KB |
-| `CONFIG.option0` (per profile)         | ~500 B |
-| `CONFIG.option1` (per profile)         | ~300 B |
-| `macro` (per active slot)              | ~5–20 KB |
-| `screen_image` (per LCD frame)         | ~30–500 KB |
-| `db_img_share` (cached per favourite)  | ~50–200 KB |
-| `db_light_share` (cached per favourite)| ~1 KB |
-| `user`                                 | ~2 KB |
+| Table                                   | Typical size |
+| --------------------------------------- | ------------ |
+| `device_type` (one row per active SKU)  | ~2 KB        |
+| `CONFIG.option0` (per profile)          | ~500 B       |
+| `CONFIG.option1` (per profile)          | ~300 B       |
+| `macro` (per active slot)               | ~5–20 KB     |
+| `screen_image` (per LCD frame)          | ~30–500 KB   |
+| `db_img_share` (cached per favourite)   | ~50–200 KB   |
+| `db_light_share` (cached per favourite) | ~1 KB        |
+| `user`                                  | ~2 KB        |
 
 A typical user with 1 AJ159 + 8 profiles + 5 macros + 1 LCD wallpaper
 will occupy **~500 KB to 2 MB** of sled data. The sled segment-file
@@ -414,7 +415,7 @@ overhead pushes this to ~10–20 MB on disk due to the way sled
 allocates fixed-size segment files (typically 256 MB by default;
 sled's `Config::segment_size` setting controls this).
 
----
+______________________________________________________________________
 
 ## 8 — Code corrections required
 
@@ -423,12 +424,12 @@ This document is informational only. The vendor's sled DB is
 
 ### 8.1 In our repo
 
-| File | Change |
-|------|--------|
-| `src/profiles/profile.hpp` | Add a `static constexpr std::uint8_t kSchemaVersion = 1;` and persist it in every JSON document we write — vendor's schema-free model is brittle. |
-| `src/profiles/profile.cpp` (`Profile::saveToFile()`) | Bake `"schema_version": kSchemaVersion` into the top-level JSON object. |
-| `docs/protocols/mouse/aj_series_vendor.md` §"Persistence model" | Reference this document for the full table-by-table breakdown. |
-| `docs/research/builtin-plugin-categories.md` (or wherever profile-sharing is discussed) | Note that the vendor's cloud-share endpoints are **anti-features** and we do not plan to implement equivalents. |
+| File                                                                                    | Change                                                                                                                                            |
+| --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/profiles/profile.hpp`                                                              | Add a `static constexpr std::uint8_t kSchemaVersion = 1;` and persist it in every JSON document we write — vendor's schema-free model is brittle. |
+| `src/profiles/profile.cpp` (`Profile::saveToFile()`)                                    | Bake `"schema_version": kSchemaVersion` into the top-level JSON object.                                                                           |
+| `docs/protocols/mouse/aj_series_vendor.md` §"Persistence model"                         | Reference this document for the full table-by-table breakdown.                                                                                    |
+| `docs/research/builtin-plugin-categories.md` (or wherever profile-sharing is discussed) | Note that the vendor's cloud-share endpoints are **anti-features** and we do not plan to implement equivalents.                                   |
 
 ### 8.2 Catch2 tests
 
@@ -456,17 +457,17 @@ TEST_CASE("Profile JSON: unknown future schema_version is rejected with a clear 
 }
 ```
 
----
+______________________________________________________________________
 
 ## 9 — References
 
-| Subject | File:Line |
-|---------|-----------|
-| sled crate version | `iot_driver_strings.txt:1344, 1684` (`sled-0.34.7`) |
-| sled storage path strings | `iot_driver_strings.txt:1360` (`./iot_dbiot_db`) |
-| iot_db default fallback | `iot_driver_strings.txt:3984` (sled pagecache version error) |
-| Renderer DBPATH enum | `dist/static/js/main_beautified.js:57534` |
-| `insertBufferToDB` / `insertDataToDB` | `dist/static/js/main_beautified.js:57537, 57548` |
-| `getItemFromDb` (with base64 round-trip) | `dist/static/js/main_beautified.js:57569` |
-| `node-machine-id` import | `package.json:23` |
-| Cloud endpoint references | `dist/static/js/main_beautified.js:53299–53302` |
+| Subject                                  | File:Line                                                    |
+| ---------------------------------------- | ------------------------------------------------------------ |
+| sled crate version                       | `iot_driver_strings.txt:1344, 1684` (`sled-0.34.7`)          |
+| sled storage path strings                | `iot_driver_strings.txt:1360` (`./iot_dbiot_db`)             |
+| iot_db default fallback                  | `iot_driver_strings.txt:3984` (sled pagecache version error) |
+| Renderer DBPATH enum                     | `dist/static/js/main_beautified.js:57534`                    |
+| `insertBufferToDB` / `insertDataToDB`    | `dist/static/js/main_beautified.js:57537, 57548`             |
+| `getItemFromDb` (with base64 round-trip) | `dist/static/js/main_beautified.js:57569`                    |
+| `node-machine-id` import                 | `package.json:23`                                            |
+| Cloud endpoint references                | `dist/static/js/main_beautified.js:53299–53302`              |

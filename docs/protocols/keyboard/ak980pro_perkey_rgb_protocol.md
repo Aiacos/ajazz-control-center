@@ -103,12 +103,12 @@ separate "active color" set via the 0x08 zone-color opcode (CmdSetRgbStatic).
 
 **4 bytes per LED**, indexed by `light_index`. Each entry layout:
 
-| Offset within slot | Field         | Meaning                                   |
-| ------------------ | ------------- | ----------------------------------------- |
-| +0                 | reserved (0)  | Always zero in the upload path            |
-| +1                 | **R** (0..255) | Red channel                               |
-| +2                 | **G** (0..255) | Green channel                             |
-| +3                 | **B** (0..255) | Blue channel                              |
+| Offset within slot | Field          | Meaning                        |
+| ------------------ | -------------- | ------------------------------ |
+| +0                 | reserved (0)   | Always zero in the upload path |
+| +1                 | **R** (0..255) | Red channel                    |
+| +2                 | **G** (0..255) | Green channel                  |
+| +3                 | **B** (0..255) | Blue channel                   |
 
 ```
 blob[light_index * 4 + 0] = 0;
@@ -136,15 +136,14 @@ R = low byte). Or, in conventional layout: **B is byte +3, G is byte
 
 So the correct interpretation is:
 
-| Offset | Field |
-| ------ | ----- |
+| Offset | Field    |
+| ------ | -------- |
 | +0     | reserved |
-| +1     | R |
-| +2     | G |
-| +3     | B |
+| +1     | R        |
+| +2     | G        |
+| +3     | B        |
 
-The `iVar4 + 0x30` write packs as `byte[+3] << 16 | byte[+2] << 8 |
-byte[+1]`. If we treat this as an ARGB or 0xRRGGBB value, **byte 1 = R**
+The `iVar4 + 0x30` write packs as `byte[+3] << 16 | byte[+2] << 8 | byte[+1]`. If we treat this as an ARGB or 0xRRGGBB value, **byte 1 = R**
 (low byte), **byte 2 = G**, **byte 3 = B** (high byte). That's just
 saying "the 4-byte slot stores BGR0 in memory order" if you read it as
 little-endian 32-bit, OR "0,R,G,B" in byte order.
@@ -196,6 +195,7 @@ bytes 9..600 : zero (large scratch buffer — but only first 64 bytes
 
 Sent via `FUN_0044f3a0(handle, buf, count)` — the **streaming reader**
 (see `ak980pro_vendor.md` §2.5). This function:
+
 - Sends the request via `WriteFile` (the first 64 bytes)
 - Reads `count * 64` bytes back via `ReadFile + GetTickCount` polling
   loop with 360 ms timeout (3 wired chunks = 192 bytes; 9 wireless
@@ -239,12 +239,12 @@ ______________________________________________________________________
 
 ## 5. Bandwidth budget
 
-| Direction | Bytes | Chunks | Sleep total | Wall time |
-| --------- | ----- | ------ | ----------- | --------- |
-| Write wired (0xC0 blob) | 192  | 3   | 6 ms      | ~30 ms total (3 packets at ~10 ms each through HidD_SetFeature) |
-| Write wireless (0x200 blob) | 512 | 8 | 16 ms    | ~80 ms total |
-| Read wired (0xC0)       | 192  | 3   | 6 ms      | ~30 ms |
-| Read wireless (0x240)   | 576  | 9   | 18 ms     | ~90 ms |
+| Direction                   | Bytes | Chunks | Sleep total | Wall time                                                       |
+| --------------------------- | ----- | ------ | ----------- | --------------------------------------------------------------- |
+| Write wired (0xC0 blob)     | 192   | 3      | 6 ms        | ~30 ms total (3 packets at ~10 ms each through HidD_SetFeature) |
+| Write wireless (0x200 blob) | 512   | 8      | 16 ms       | ~80 ms total                                                    |
+| Read wired (0xC0)           | 192   | 3      | 6 ms        | ~30 ms                                                          |
+| Read wireless (0x240)       | 576   | 9      | 18 ms       | ~90 ms                                                          |
 
 Fast enough for **real-time per-key editing** in the UI (≥ 30 fps for
 a color-picker drag preview). The wireless path is the bottleneck but
@@ -276,7 +276,7 @@ ______________________________________________________________________
    };
    ```
 
-2. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
+1. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
 
    ```cpp
    inline constexpr std::uint8_t kCmdPerKeyRgbWrite     = 0x20;  // sub 0x04
@@ -390,6 +390,6 @@ Two specific items need confirmation on real hardware before we ship:
    192)? Test by sending a sentinel pattern (e.g., LED #0 = 0xFF,
    others zero) and observing.
 
-2. **Wireless reserved byte**: does setting byte +0 to non-zero do
+1. **Wireless reserved byte**: does setting byte +0 to non-zero do
    anything? Could be fade-time, alpha, or simply ignored. Test by
    varying it across calls.

@@ -20,12 +20,12 @@
 
 ## 1. Binary inventory
 
-| File                          | Size  | Role                                                                                                   |
-| ----------------------------- | ----- | ------------------------------------------------------------------------------------------------------ |
-| `FirmwareUpgradeTool.exe`     | 1.8 MB | Qt 5 GUI shell; statically links the upgrade core (no separate `upgcmd.exe` shipped despite the embedded reference string `.\upgcmd\upgcmd.exe` at offset 491 — that's a leftover from an older dev tree where `upgcmd` was a CLI subcommand) |
-| `libusb-1.0.dll`              | 180 KB | Bulk USB I/O — used ONLY by FirmwareUpgradeTool (`SDLibrary1.dll` does NOT call any `libusb_*` API; the JSON dump confirms this) |
-| `aKDFU` sentinel              | 4 bytes | A 4-byte magic string found in `SDLibrary1.dll` (`sdlibrary1_strings.txt:29251`) and `Stream Dock AJAZZ.exe` (`streamdock_exe_strings.txt:608649`). Almost certainly the in-binary marker the main app checks to decide whether to dispatch a downloaded firmware blob to the upgrade tool. |
-| `AIC.FW`                      | 6 bytes | Firmware image format magic / header (`firmware_tool_strings.txt:282`). The classic Allwinner image format. |
+| File                      | Size    | Role                                                                                                                                                                                                                                                                                        |
+| ------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FirmwareUpgradeTool.exe` | 1.8 MB  | Qt 5 GUI shell; statically links the upgrade core (no separate `upgcmd.exe` shipped despite the embedded reference string `.\upgcmd\upgcmd.exe` at offset 491 — that's a leftover from an older dev tree where `upgcmd` was a CLI subcommand)                                               |
+| `libusb-1.0.dll`          | 180 KB  | Bulk USB I/O — used ONLY by FirmwareUpgradeTool (`SDLibrary1.dll` does NOT call any `libusb_*` API; the JSON dump confirms this)                                                                                                                                                            |
+| `aKDFU` sentinel          | 4 bytes | A 4-byte magic string found in `SDLibrary1.dll` (`sdlibrary1_strings.txt:29251`) and `Stream Dock AJAZZ.exe` (`streamdock_exe_strings.txt:608649`). Almost certainly the in-binary marker the main app checks to decide whether to dispatch a downloaded firmware blob to the upgrade tool. |
+| `AIC.FW`                  | 6 bytes | Firmware image format magic / header (`firmware_tool_strings.txt:282`). The classic Allwinner image format.                                                                                                                                                                                 |
 
 ## 2. End-to-end OTA flow
 
@@ -35,12 +35,12 @@
    hits `https://cdn1.key123.vip/Stock/firmware/firmware-version-check.json`
    (or one of the Custom/Prajnasys/StreamDock variants per `akp05_vendor.md`
    §4.3) and finds a newer version for the connected device.
-2. Main app downloads the firmware blob (HTTPS via libcurl) and stores
+1. Main app downloads the firmware blob (HTTPS via libcurl) and stores
    it under `%APPDATA%\HotSpot\Stream Dock AJAZZ\firmware\<codename>\<version>.aic`.
-3. Main app validates the file header: first 4 bytes must be `aKDFU` or
+1. Main app validates the file header: first 4 bytes must be `aKDFU` or
    the first 6 bytes must be `AIC.FW` (the two formats observed). If
    neither matches, the download is rejected with a notification.
-4. Main app spawns `FirmwareUpgradeTool.exe <path-to-.aic>` via
+1. Main app spawns `FirmwareUpgradeTool.exe <path-to-.aic>` via
    `QProcess::startDetached`. The main app then either exits the
    device's read/write threads gracefully (so the tool can claim the
    USB interface) or keeps them running for non-DFU devices — TBD via
@@ -90,15 +90,15 @@ The exact "stages" observed:
    valid response in DFU mode. The DFU mode device re-enumerates with
    a different VID:PID (the "UU device" in the strings) — likely
    `0x1f3a:????` for Allwinner BROM, but this needs USB capture.
-2. **Run to uboot**: the device's BROM (Boot ROM) is told to jump to
+1. **Run to uboot**: the device's BROM (Boot ROM) is told to jump to
    the bundled U-Boot loader (`ramboot 0x%lx %s %d` at offset 333).
-3. **Upload upgrade firmware components** (FWCs): each FWC is a
+1. **Upload upgrade firmware components** (FWCs): each FWC is a
    (target-partition, name, data) triple from the .aic image.
-4. **Burn**: device writes the FWC to its flash storage.
-5. **Run**: device executes the newly-flashed component (verifies it
+1. **Burn**: device writes the FWC to its flash storage.
+1. **Run**: device executes the newly-flashed component (verifies it
    boots cleanly before committing).
-6. **Switch stage / repeat** as needed.
-7. **Reboot to normal mode**: device re-enumerates back to its
+1. **Switch stage / repeat** as needed.
+1. **Reboot to normal mode**: device re-enumerates back to its
    original VID:PID.
 
 ## 3. CBW / CSW transport layer
@@ -119,12 +119,12 @@ CSW is not matched, Sig %#x, Tag got %#x, expect %#x
 
 Per the USB BBB (Bulk-Only Bulk-only Transport) spec:
 
-| Field        | CBW                                                              | CSW                                  |
-| ------------ | ---------------------------------------------------------------- | ------------------------------------ |
-| Signature    | 4 bytes (BBB-spec: 0x43425355 `USBC`; vendor likely customised)  | 4 bytes (0x53425355 `USBS`)          |
-| Tag          | 4-byte transaction id; CSW.Tag must match CBW.Tag                | echoes CBW.Tag                       |
-| Direction    | bit in flags                                                     | n/a                                  |
-| Length / status | data-transfer length / OK/Phase Error/Stall                   | residue + status                     |
+| Field           | CBW                                                             | CSW                         |
+| --------------- | --------------------------------------------------------------- | --------------------------- |
+| Signature       | 4 bytes (BBB-spec: 0x43425355 `USBC`; vendor likely customised) | 4 bytes (0x53425355 `USBS`) |
+| Tag             | 4-byte transaction id; CSW.Tag must match CBW.Tag               | echoes CBW.Tag              |
+| Direction       | bit in flags                                                    | n/a                         |
+| Length / status | data-transfer length / OK/Phase Error/Stall                     | residue + status            |
 
 The vendor's customisation is the **`AIC.FW` framing** wrapping the
 CBW/CSW pairs — see §4.
@@ -189,13 +189,13 @@ The main app sees:
 
 1. Original device's VID:PID disappears (`StreamDockWatcher.exe`
    fires a `WM_DEVICECHANGE` event).
-2. UU device's VID:PID appears.
-3. Main app **does not** open the UU device — it's owned by the
+1. UU device's VID:PID appears.
+1. Main app **does not** open the UU device — it's owned by the
    upgrade tool.
-4. Main app shows "Firmware update in progress" UI.
-5. When upgrade tool exits (success or failure), it triggers the
+1. Main app shows "Firmware update in progress" UI.
+1. When upgrade tool exits (success or failure), it triggers the
    device to reboot; original VID:PID reappears.
-6. Main app re-opens the device, queries version (`CRT VER`), and
+1. Main app re-opens the device, queries version (`CRT VER`), and
    confirms the new version matches the expected post-update version.
 
 ## 7. Recovery / failure modes
@@ -208,11 +208,10 @@ From strings:
 - `Resend firmware component.` (line 327) — automatic FWC re-send
   on transient USB errors.
 - `Switching to new stage, please ignore the error message.` (line
-  302) — between stages the device drops the USB endpoint briefly;
+  302\) — between stages the device drops the USB endpoint briefly;
   expected error.
 
-There is **no automatic rollback** on flash failure. If `FWC burn
-result` returns non-zero and the FWC happened to be the bootloader
+There is **no automatic rollback** on flash failure. If `FWC burn result` returns non-zero and the FWC happened to be the bootloader
 itself, the device is bricked until a hardware JTAG flash. Mitigation:
 the tool emits `jtag unlock ok.` / `jtag unlock failed.` strings (lines
 247-248) so a JTAG recovery path exists for hardware-equipped users.
@@ -222,11 +221,11 @@ the tool emits `jtag unlock ok.` / `jtag unlock failed.` strings (lines
 1. **Not Stream-Deck-protocol code.** It's an Allwinner SoC upgrade
    suite that happens to be embedded in the Stream Dock product. The
    wire format is bound to the SoC, not the Stream Dock surface.
-2. **Security & liability**. A botched flash bricks the device. We
+1. **Security & liability**. A botched flash bricks the device. We
    ship community software; the vendor ships warranty.
-3. **Maintenance burden**. New Allwinner silicon shifts the wrapper
+1. **Maintenance burden**. New Allwinner silicon shifts the wrapper
    protocol; we'd be chasing the vendor forever.
-4. **Trivial workaround**. We can simply detect "device disappeared,
+1. **Trivial workaround**. We can simply detect "device disappeared,
    wait for re-enumeration, re-acquire" — most users keep both our app
    and the vendor's tool installed.
 
@@ -238,29 +237,29 @@ the tool emits `jtag unlock ok.` / `jtag unlock failed.` strings (lines
    captures) appears within 5 s. If yes, log "device entered DFU
    mode" and suspend any device-specific UI; do NOT attempt to
    reopen the original VID:PID.
-2. **Detect DFU completion**: poll for the original VID:PID. When it
+1. **Detect DFU completion**: poll for the original VID:PID. When it
    reappears, wait 2 s (let firmware boot), then re-open and re-query
    firmware version. If version differs from cached, refresh the UI
    and notify the user.
-3. **Expose a "Launch Firmware Update Tool" action**: a small UI
+1. **Expose a "Launch Firmware Update Tool" action**: a small UI
    button that invokes the vendor's `FirmwareUpgradeTool.exe` if
    it's installed. Detect via:
    - Linux: `/opt/Stream Dock AJAZZ/FirmwareUpgradeTool` (vendor install dir)
    - macOS: `/Applications/Stream Dock AJAZZ.app/Contents/Resources/FirmwareUpgradeTool.app`
    - Windows: registry `HKLM\SOFTWARE\HotSpot\StreamDock\InstallPath`
-4. **Never download or unpack `.aic` files ourselves**.
+1. **Never download or unpack `.aic` files ourselves**.
 
 ## 10. Code corrections required
 
-| File                                                              | Change                                                                                                                                                                                                                                  | Breaking? | Tests needed                                                       |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------ |
-| `src/devices/streamdeck/include/ajazz/streamdeck/streamdeck.hpp`  | Add `enum class DfuState { Normal, Entering, InProgress, Returning }` and a `signal dfuStateChanged(DfuState)` on `IDevice`.                                                                                                            | additive  | `IDeviceTest::emitsDfuState_onDisappearReappear`                   |
-| `src/core/src/device_registry.cpp`                                | Add a separate `dfuVidPid` allow-list (initially empty; future PRs add per-family DFU pairs as they get captured). When a device disappears, check the registry's DFU list before treating the disappearance as "user unplugged".       | additive  | `DeviceRegistryTest::detectsDfuTransition_whenSiblingVidPidAppears`|
-| `src/host/ui/src/firmware_update_action.cpp` (new)                | Implement the "Launch vendor tool" action per §9.3. Detect tool path per OS; spawn via `QProcess::startDetached`; show a warning if not installed.                                                                                       | additive  | `FirmwareUpdateActionTest::detectsVendorToolPath_perOS`            |
-| `src/devices/streamdeck/src/akp05.cpp` (`Akp05Device::open`)      | Add a 2-second backoff after the device's VID:PID reappears post-DFU — the firmware boot is slow and the first `VER` query right after reappearance often times out.                                                                    | additive  | `Akp05ReopenAfterDfuTest::waits2sBeforeFirstVer`                   |
-| `docs/protocols/streamdeck/_research-sources.md`                  | Add citation `[firmware-tool-strings-2026-05-17]` → `C:\temp\firmware_tool_strings.txt`.                                                                                                                                                | additive  | n/a                                                                |
-| `TODO.md`                                                         | Add capture queue items: (1) UU-device VID:PID for AKP05/N4; (2) one `.aic` file hex-dump to confirm header format; (3) DFU-trigger HID packet (`QUCMD`-class?); (4) per-family DFU VID:PID list build.                                  | additive  | n/a                                                                |
-| **(NO file)**                                                     | **Explicitly DO NOT** add a libusb dependency to `ajazz_core`. Re-affirm the COD-031 boundary: libusb stays out of our core.                                                                                                              | n/a       | `BoundaryTest::ajazzCore_doesNotLinkLibusb` (grep-based)           |
+| File                                                             | Change                                                                                                                                                                                                                            | Breaking? | Tests needed                                                        |
+| ---------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------- | ------------------------------------------------------------------- |
+| `src/devices/streamdeck/include/ajazz/streamdeck/streamdeck.hpp` | Add `enum class DfuState { Normal, Entering, InProgress, Returning }` and a `signal dfuStateChanged(DfuState)` on `IDevice`.                                                                                                      | additive  | `IDeviceTest::emitsDfuState_onDisappearReappear`                    |
+| `src/core/src/device_registry.cpp`                               | Add a separate `dfuVidPid` allow-list (initially empty; future PRs add per-family DFU pairs as they get captured). When a device disappears, check the registry's DFU list before treating the disappearance as "user unplugged". | additive  | `DeviceRegistryTest::detectsDfuTransition_whenSiblingVidPidAppears` |
+| `src/host/ui/src/firmware_update_action.cpp` (new)               | Implement the "Launch vendor tool" action per §9.3. Detect tool path per OS; spawn via `QProcess::startDetached`; show a warning if not installed.                                                                                | additive  | `FirmwareUpdateActionTest::detectsVendorToolPath_perOS`             |
+| `src/devices/streamdeck/src/akp05.cpp` (`Akp05Device::open`)     | Add a 2-second backoff after the device's VID:PID reappears post-DFU — the firmware boot is slow and the first `VER` query right after reappearance often times out.                                                              | additive  | `Akp05ReopenAfterDfuTest::waits2sBeforeFirstVer`                    |
+| `docs/protocols/streamdeck/_research-sources.md`                 | Add citation `[firmware-tool-strings-2026-05-17]` → `C:\temp\firmware_tool_strings.txt`.                                                                                                                                          | additive  | n/a                                                                 |
+| `TODO.md`                                                        | Add capture queue items: (1) UU-device VID:PID for AKP05/N4; (2) one `.aic` file hex-dump to confirm header format; (3) DFU-trigger HID packet (`QUCMD`-class?); (4) per-family DFU VID:PID list build.                           | additive  | n/a                                                                 |
+| **(NO file)**                                                    | **Explicitly DO NOT** add a libusb dependency to `ajazz_core`. Re-affirm the COD-031 boundary: libusb stays out of our core.                                                                                                      | n/a       | `BoundaryTest::ajazzCore_doesNotLinkLibusb` (grep-based)            |
 
 ## 11. References
 

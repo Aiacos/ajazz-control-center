@@ -37,12 +37,12 @@ ______________________________________________________________________
 
 ## 2. Two opcodes for two transports
 
-| Opcode    | Path / role                                     | Function          | Notes |
-| --------- | ----------------------------------------------- | ----------------- | ----- |
-| `0x09 0x1C` | **Wired macro data upload** (28-byte chunks)  | `FUN_0042dc10`    | Sent through HID OUTPUT reports (`FUN_0044f5f0` → `WriteFile`, 33-byte report) |
-| `0x19 0x04` + `0x15 0x04` | **Wireless macro data upload** (4 KB bulk) | `FUN_0042d690` | Sent through HID FEATURE reports (`FUN_0044eed0` → `HidD_SetFeature`, 65-byte report) |
-| `0x14 0x1C` (wired) / `0x14 0x1C+0x10` (wireless) | **Macro→key assignment** (manual chunking) | `FUN_0044be90` | 33-byte short-feature reports, 7 chunks wired / 21 chunks wireless |
-| `0x23 0x04` (wired body 0xC0 / wireless 0x240) | **Macro record-buffer upload** (alternative assignment) | `FUN_0044ba20` | 65-byte feature reports, body via `FUN_0044eed0` |
+| Opcode                                            | Path / role                                             | Function       | Notes                                                                                 |
+| ------------------------------------------------- | ------------------------------------------------------- | -------------- | ------------------------------------------------------------------------------------- |
+| `0x09 0x1C`                                       | **Wired macro data upload** (28-byte chunks)            | `FUN_0042dc10` | Sent through HID OUTPUT reports (`FUN_0044f5f0` → `WriteFile`, 33-byte report)        |
+| `0x19 0x04` + `0x15 0x04`                         | **Wireless macro data upload** (4 KB bulk)              | `FUN_0042d690` | Sent through HID FEATURE reports (`FUN_0044eed0` → `HidD_SetFeature`, 65-byte report) |
+| `0x14 0x1C` (wired) / `0x14 0x1C+0x10` (wireless) | **Macro→key assignment** (manual chunking)              | `FUN_0044be90` | 33-byte short-feature reports, 7 chunks wired / 21 chunks wireless                    |
+| `0x23 0x04` (wired body 0xC0 / wireless 0x240)    | **Macro record-buffer upload** (alternative assignment) | `FUN_0044ba20` | 65-byte feature reports, body via `FUN_0044eed0`                                      |
 
 The 0x14 and 0x23 paths upload **the same assignment data** but through
 different transports. Likely 0x14 is the per-chunk progress-tracking
@@ -76,35 +76,33 @@ layout:
 events combined. Each event is 4 bytes, so **up to 795 events total**
 across all 100 slots.
 
-The wired path uses the full 3 584 bytes (`memset(&local_e58, 0,
-0xe00)`). The wireless path uses the same 3 584-byte buffer but caps the
-**payload sent** at `iVar3 = 0xa8c = 2 700 bytes` (`if (iVar3 == 0xa8c ||
-iVar3 + -0xa8c < 0)` short-circuits the build if the macros are larger),
+The wired path uses the full 3 584 bytes (`memset(&local_e58, 0, 0xe00)`). The wireless path uses the same 3 584-byte buffer but caps the
+**payload sent** at `iVar3 = 0xa8c = 2 700 bytes` (`if (iVar3 == 0xa8c || iVar3 + -0xa8c < 0)` short-circuits the build if the macros are larger),
 so wireless gets **≤ 575 events**.
 
 ### 3.1 Per-event 4-byte format
 
-| Bytes [0,1,2,3]                | Meaning                                                |
-| ------------------------------ | ------------------------------------------------------ |
-| `[delay_lo, delay_hi, ?, 0x50]` | **Delay event** — sleep `delay` ms (min clamped to 10) |
-| `[0, 0, keycode, 0xB0]`        | **Key Down** — HID usage code translated via `FUN_00451570` |
-| `[0, 0, keycode, 0x30]`        | **Key Up** — translated via `FUN_00451570`            |
-| `[0, 0, 0x01, 0x90]`           | **Mouse Left Down**                                    |
-| `[0, 0, 0x01, 0x10]`           | **Mouse Left Up**                                      |
-| `[0, 0, 0x04, 0x90]`           | **Mouse Right Down** (note: value `0x04`, not `0x02`)  |
-| `[0, 0, 0x04, 0x10]`           | **Mouse Right Up**                                     |
-| `[0, 0, 0x02, 0x90]`           | **Mouse Middle Down** (note: value `0x02`, not `0x03`) |
-| `[0, 0, 0x02, 0x10]`           | **Mouse Middle Up**                                    |
+| Bytes [0,1,2,3]                 | Meaning                                                     |
+| ------------------------------- | ----------------------------------------------------------- |
+| `[delay_lo, delay_hi, ?, 0x50]` | **Delay event** — sleep `delay` ms (min clamped to 10)      |
+| `[0, 0, keycode, 0xB0]`         | **Key Down** — HID usage code translated via `FUN_00451570` |
+| `[0, 0, keycode, 0x30]`         | **Key Up** — translated via `FUN_00451570`                  |
+| `[0, 0, 0x01, 0x90]`            | **Mouse Left Down**                                         |
+| `[0, 0, 0x01, 0x10]`            | **Mouse Left Up**                                           |
+| `[0, 0, 0x04, 0x90]`            | **Mouse Right Down** (note: value `0x04`, not `0x02`)       |
+| `[0, 0, 0x04, 0x10]`            | **Mouse Right Up**                                          |
+| `[0, 0, 0x02, 0x90]`            | **Mouse Middle Down** (note: value `0x02`, not `0x03`)      |
+| `[0, 0, 0x02, 0x10]`            | **Mouse Middle Up**                                         |
 
 The **byte 3 opcode** is:
 
-| Opcode | Meaning             |
-| ------ | ------------------- |
-| `0x10` | Mouse button Up     |
-| `0x30` | Key Up              |
-| `0x50` | Delay (sleep)       |
-| `0x90` | Mouse button Down   |
-| `0xB0` | Key Down            |
+| Opcode | Meaning           |
+| ------ | ----------------- |
+| `0x10` | Mouse button Up   |
+| `0x30` | Key Up            |
+| `0x50` | Delay (sleep)     |
+| `0x90` | Mouse button Down |
+| `0xB0` | Key Down          |
 
 Note the **invariant `byte 3 & 0x10 == 0x10` for Up events** and
 `& 0x80 == 0x80` for Down events, with `0x50` (delay) as the only one
@@ -120,14 +118,14 @@ a delay using the value at offset +0x14 (= `delay_ms`, min 10).
 The `t_key_otherdata` DB record uses two integer fields to describe a
 mouse event:
 
-| `type` | `value` | Meaning |
-| ------ | ------- | ------- |
-| 4      | 1       | Mouse Left Down |
-| 4      | 2       | Mouse Right Down |
+| `type` | `value` | Meaning           |
+| ------ | ------- | ----------------- |
+| 4      | 1       | Mouse Left Down   |
+| 4      | 2       | Mouse Right Down  |
 | 4      | 3       | Mouse Middle Down |
-| 5      | 1       | Mouse Left Up |
-| 5      | 2       | Mouse Right Up |
-| 5      | 3       | Mouse Middle Up |
+| 5      | 1       | Mouse Left Up     |
+| 5      | 2       | Mouse Right Up    |
+| 5      | 3       | Mouse Middle Up   |
 
 The wire byte `[0,0,WIRE,X0]` uses **HID button bitmask values**
 (`0x01` left, `0x02` middle, `0x04` right) **NOT** the DB `value` field
@@ -208,10 +206,11 @@ has an unusual `+1 / +2` based on whether `used_bytes & 0x3F == 0`).
 
 ### 5.2 Sentinel write before envelope
 
-Just before chunk 1 in the body, the binary writes `*(buf + used_bytes
-+ 2) = 0x55AA` (trailer at end of last full chunk's tail). This means
-chunk count is always **at least one chunk past the actual data** to
-contain the trailer.
+Just before chunk 1 in the body, the binary writes \`\*(buf + used_bytes
+
+- 2. = 0x55AA\` (trailer at end of last full chunk's tail). This means
+     chunk count is always **at least one chunk past the actual data** to
+     contain the trailer.
 
 ______________________________________________________________________
 
@@ -241,10 +240,10 @@ Sent via `FUN_0044f5f0(handle, header, 0x41)` (33-byte wire).
 
 ### 6.2 Source blob (600 bytes scratch, populated by light_index)
 
-The vendor's source buffer is **600 bytes** (`memset(&local_2b0, 0,
-600)`). For each `KeyItem` returned by `FUN_00409220(lvar5, …)`:
+The vendor's source buffer is **600 bytes** (`memset(&local_2b0, 0, 600)`). For each `KeyItem` returned by `FUN_00409220(lvar5, …)`:
 
 **Wired** (`*(param_1 + 0x7ac) == 0`):
+
 ```c
 if (*(int *)(iVar4 + 0x10) > 0) {   // key has assigned macro
     *(buf + iVar2) = 0xFF;          // 1 byte per LED, 0xFF = "yes"
@@ -252,6 +251,7 @@ if (*(int *)(iVar4 + 0x10) > 0) {   // key has assigned macro
 ```
 
 **Wireless** (`*(param_1 + 0x7ac) != 0`):
+
 ```c
 *(buf + iVar2 * 4 + 0) = (char)iVar2;            // light_index echo
 *(buf + iVar2 * 4 + 1) = *(iVar4 + 0x10);        // keycode low byte
@@ -262,6 +262,7 @@ if (*(int *)(iVar4 + 0x10) > 0) {   // key has assigned macro
 The blob is 1 byte/LED wired (192-byte payload after chunking) or
 4 bytes/LED wireless (576-byte payload). Trailer `0xAA 0x55` is written
 at:
+
 - **Wired**: offset 190..191 (= last 2 bytes of 192-byte payload),
   i.e. `local_1f2 = 0x55AA` at ebp-0x1F2 ≡ buffer offset 0xBE = 190.
 - **Wireless**: offset 574..575 (= last 2 bytes of 576-byte payload),
@@ -355,8 +356,7 @@ ______________________________________________________________________
 
 ## 8. Wire-format checksum
 
-Re-derived: FUN_0044f5f0 computes byte 8 = `sum(bytes[0..param_2-1])
-mod 256` over the caller's buffer, where byte 8 itself is summed as 0
+Re-derived: FUN_0044f5f0 computes byte 8 = `sum(bytes[0..param_2-1]) mod 256` over the caller's buffer, where byte 8 itself is summed as 0
 (since the store happens after the loop). Specifically:
 
 ```c
@@ -383,13 +383,14 @@ ______________________________________________________________________
 
 1. **`src/devices/keyboard/include/ajazz/keyboard/macro_uploader.hpp`**
    — `class MacroUploader` (`QObject`) with:
+
    - `upload(const QList<Macro>& macros, bool isWireless)`
    - `assignMacroToKey(int macroGroup, const QMap<int /*lightIdx*/, int /*macroSlot*/>& assignment, bool isWireless)`
    - signals `uploadProgress(int percent)`, `uploadFinished(bool ok)`
 
-2. **`src/devices/keyboard/src/macro_uploader.cpp`** — implementation.
+1. **`src/devices/keyboard/src/macro_uploader.cpp`** — implementation.
 
-3. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
+1. **`src/devices/keyboard/proprietary_protocol.hpp`** — add:
 
    ```cpp
    // Macro upload opcodes (FUN_0042dc10, FUN_0042d690).

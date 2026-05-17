@@ -23,24 +23,24 @@ ______________________________________________________________________
 
 ### 1.1 Binary
 
-| Property             | Value                                                                                |
-| -------------------- | ------------------------------------------------------------------------------------ |
-| Binary               | `app/DeviceDriver.exe` (1 802 752 bytes)                                             |
-| Type                 | PE32 x86, 32-bit MFC native (Visual Studio 2022 toolchain, MSVC linker 14.x)         |
-| UI framework         | bundled `mui.dll` (1.19 MB, 2 201 exports, custom MFC-like) — **not** Windows MUI    |
-| HID API binding      | dynamic via `LoadLibraryA("hid.dll")` + `GetProcAddress` (FUN_00450af0)              |
-| Transport            | `CreateFileW` + `WriteFile` (output) + `ReadFile` (input) + `DeviceIoControl 0xB0192` (IOCTL_HID_GET_INPUT_REPORT) |
-| Persistence          | SQLite (`db/<device>_datav1.db` under `%LOCALAPPDATA%/<device>/`)                    |
-| Firmware update      | External `FirmwareUpdateTool.exe` downloaded over HTTP (`FUN_0045a520`) — not in this binary |
-| Auto-start           | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` registry value                  |
+| Property        | Value                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Binary          | `app/DeviceDriver.exe` (1 802 752 bytes)                                                                           |
+| Type            | PE32 x86, 32-bit MFC native (Visual Studio 2022 toolchain, MSVC linker 14.x)                                       |
+| UI framework    | bundled `mui.dll` (1.19 MB, 2 201 exports, custom MFC-like) — **not** Windows MUI                                  |
+| HID API binding | dynamic via `LoadLibraryA("hid.dll")` + `GetProcAddress` (FUN_00450af0)                                            |
+| Transport       | `CreateFileW` + `WriteFile` (output) + `ReadFile` (input) + `DeviceIoControl 0xB0192` (IOCTL_HID_GET_INPUT_REPORT) |
+| Persistence     | SQLite (`db/<device>_datav1.db` under `%LOCALAPPDATA%/<device>/`)                                                  |
+| Firmware update | External `FirmwareUpdateTool.exe` downloaded over HTTP (`FUN_0045a520`) — not in this binary                       |
+| Auto-start      | `HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run` registry value                                                |
 
 ### 1.2 Device matrix (from `app/config.xml`)
 
-| Variant            | VID    | PID    | Mode             | HID interface     |
-| ------------------ | ------ | ------ | ---------------- | ----------------- |
-| AK980 PRO (wired)  | 0x0C45 | 0x8009 | USB              | `MI_00`           |
-| AK980 PRO (2.4 GHz)| 0x0C45 | 0xFEFE | 2.4 GHz Type-A   | `MI_03`           |
-| XS75T              | 0x05AC | 0x024F | USB              | `MI_00` (Apple VID, 75-key variant) |
+| Variant             | VID    | PID    | Mode           | HID interface                       |
+| ------------------- | ------ | ------ | -------------- | ----------------------------------- |
+| AK980 PRO (wired)   | 0x0C45 | 0x8009 | USB            | `MI_00`                             |
+| AK980 PRO (2.4 GHz) | 0x0C45 | 0xFEFE | 2.4 GHz Type-A | `MI_03`                             |
+| XS75T               | 0x05AC | 0x024F | USB            | `MI_00` (Apple VID, 75-key variant) |
 
 `config.xml` also publishes:
 
@@ -106,14 +106,14 @@ ______________________________________________________________________
    `HidD_GetProductString`, `HidD_SetFeature`, `HidD_GetFeature`,
    `HidD_GetIndexedString`, `HidD_GetPreparsedData`,
    `HidD_FreePreparsedData`, `HidP_GetCaps`).
-2. `SetupDiGetClassDevsA` with HID class GUID
+1. `SetupDiGetClassDevsA` with HID class GUID
    `{4D1E55B2-F16F-11CF-88CB-001111000030}` (standard `GUID_DEVINTERFACE_HID`).
-3. Enumerates interfaces, opens each with `CreateFileA` (RW, share RW,
+1. Enumerates interfaces, opens each with `CreateFileA` (RW, share RW,
    `OPEN_EXISTING`, `FILE_ATTRIBUTE_NORMAL | FILE_FLAG_OVERLAPPED`).
-4. Reads `HIDP_CAPS` via `HidD_GetPreparsedData` + `HidP_GetCaps`.
-5. Extracts interface number by parsing `&mi_NN` from the device path
+1. Reads `HIDP_CAPS` via `HidD_GetPreparsedData` + `HidP_GetCaps`.
+1. Extracts interface number by parsing `&mi_NN` from the device path
    (`strtol(... , ..., 16)`).
-6. The XS75T variant (Apple VID `0x05AC`) is opened via a **separate**
+1. The XS75T variant (Apple VID `0x05AC`) is opened via a **separate**
    enumerator `FUN_00413340` that filters paths by `wcsstr(L"05AC_PID")`.
 
 ### 2.2 Write path (`FUN_00451220`, output reports)
@@ -143,26 +143,26 @@ keyboard advertises either `0x21` (33 = ReportId + 32 data) or `0x41` (65
 
 ### 2.4 Three report sizes coexist
 
-| Size  | Usage                                                          |
-| ----- | -------------------------------------------------------------- |
-| 0x21  | 33-byte: short feature reports for **time-sync** and **status** (`FUN_0044f5f0` with `len=0x21`) |
-| 0x41  | 65-byte: standard configuration commands (most opcodes use `FUN_0044eed0` with `len=0x41`) |
-| 0x1001| 4097-byte: chunked image / bulk uploads (`FUN_0044f2d0`)        |
+| Size   | Usage                                                                                            |
+| ------ | ------------------------------------------------------------------------------------------------ |
+| 0x21   | 33-byte: short feature reports for **time-sync** and **status** (`FUN_0044f5f0` with `len=0x21`) |
+| 0x41   | 65-byte: standard configuration commands (most opcodes use `FUN_0044eed0` with `len=0x41`)       |
+| 0x1001 | 4097-byte: chunked image / bulk uploads (`FUN_0044f2d0`)                                         |
 
 `FUN_0044eed0` and `FUN_0044f0c0` branch on `param_2 < 0x42` vs `>= 0x42`
 and walk the buffer in 0x40-byte chunks for the multi-packet case.
 
 ### 2.5 Top-level dispatch wrappers
 
-| Wrapper        | Role                                                           |
-| -------------- | -------------------------------------------------------------- |
-| `FUN_0044f5f0` | Write 0x21-byte (33) report, retry once on failure, then poll for ACK with `FUN_00451300`. Checksum byte 8 = sum of bytes 0..7 mod 256. |
-| `FUN_0044f790` | Same as above but with **fixed** opcode `0x02` (save) and ACK match against response[0]==0x02. |
-| `FUN_0044eed0` | Write 0x41-byte (65) report (or chunked > 0x41), no readback. **The workhorse for almost every configuration command.** |
-| `FUN_0044f0c0` | Like `FUN_0044eed0` but reads a feature report afterwards (used for `0x2004` per-key RGB read-back). |
-| `FUN_0044f2d0` | Write 0x1001-byte (4097) bulk buffer. Used for **DFU / firmware blob** style uploads. |
+| Wrapper        | Role                                                                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `FUN_0044f5f0` | Write 0x21-byte (33) report, retry once on failure, then poll for ACK with `FUN_00451300`. Checksum byte 8 = sum of bytes 0..7 mod 256.                                                                  |
+| `FUN_0044f790` | Same as above but with **fixed** opcode `0x02` (save) and ACK match against response[0]==0x02.                                                                                                           |
+| `FUN_0044eed0` | Write 0x41-byte (65) report (or chunked > 0x41), no readback. **The workhorse for almost every configuration command.**                                                                                  |
+| `FUN_0044f0c0` | Like `FUN_0044eed0` but reads a feature report afterwards (used for `0x2004` per-key RGB read-back).                                                                                                     |
+| `FUN_0044f2d0` | Write 0x1001-byte (4097) bulk buffer. Used for **DFU / firmware blob** style uploads.                                                                                                                    |
 | `FUN_0044f3a0` | Streaming reader: timed loop with `timeBeginPeriod(1)`, 0x168 ms (360 ms) timeout, reads up to 9 chunks of 0x40 bytes. Used for **firmware version + battery query response** and per-key RGB read-back. |
-| `FUN_00435250` | 200 ms polling loop: reads 0x41-byte status with `FUN_00451300`, checks for `byte[0]==0x05, byte[1]==0xA6` → triggers profile-switch toast (key-combo on the keyboard switches profile). |
+| `FUN_00435250` | 200 ms polling loop: reads 0x41-byte status with `FUN_00451300`, checks for `byte[0]==0x05, byte[1]==0xA6` → triggers profile-switch toast (key-combo on the keyboard switches profile).                 |
 
 ______________________________________________________________________
 
@@ -187,41 +187,40 @@ Direction column: `H→D` = host to device (WriteFile); `D→H` = device to host
 `Status` codes: ✅ already in our backend (`proprietary_protocol.hpp`),
 🟡 **gap** — present in vendor but not implemented, 🔍 partially supported.
 
-| Opcode | Sub  | Dir  | Vendor function                  | UI label / role                          | Status |
-| ------ | ---- | ---- | -------------------------------- | ---------------------------------------- | ------ |
-| `0x01` | —    | H→D  | (firmware-version request)       | "Version" — gohv `FIRMWARE_VERSION`       | ✅      |
-| `0x02` | —    | H→D  | `FUN_0044f790`, time-sync save   | `CMD_SAVE` — persist RTC to NV-RAM        | ✅      |
-| `0x05` | `0x10`| H→D  | `FUN_0044be90`                  | KEY REMAP (assign macro/key to key)       | 🔍      |
-| `0x05` | `0x01`| H→D  | `FUN_004349f0`                  | KEY MODE select (single byte at +0x808)   | 🟡      |
-| `0x05` | (no) | H→D  | (legacy CmdSetKeycode)          | Single-key remap layer/row/col/keycode    | ✅      |
-| `0x07` | `0x10`| H→D  | `FUN_00414290`                  | **SETTINGS BATCH** (33-byte): fn_switch, sleep_time, key_respondtime | 🟡      |
-| `0x08` | zone | H→D  | (CmdSetRgbStatic)               | Static RGB per zone                       | ✅      |
-| `0x09` | `0x1c`| H→D  | `FUN_0042dc10`                  | **MACRO DATA UPLOAD** (28-byte chunks)    | 🟡      |
-| `0x0A` | —    | H→D  | (CmdSetRgbBuffer)               | Per-LED RGB chunked                       | ✅      |
-| `0x0B` | `0x1c`| H→D  | `FUN_00432be0`                  | LIGHTING params (mode+speed+brightness)   | 🔍      |
-| `0x0C` | —    | H→D  | (CmdSetLayer)                   | Layer switch                              | ✅      |
-| `0x0D` | —    | H→D  | (legacy CmdUploadMacro)         | Macro upload                              | 🔍      |
-| `0x0E` | —    | H→D  | (CmdCommitEeprom)               | EEPROM commit                             | ✅      |
-| `0x10` | `0x1c`| H→D  | `FUN_00418c40` (param_1==0)     | KEY REMAP CHUNK, Fn-layer **OFF**, 21 chunks × 28 bytes | 🟡      |
-| `0x12` | `0x1c`| H→D  | `FUN_00418c40` (param_1!=0)     | KEY REMAP CHUNK, Fn-layer **ON**, 21 chunks × 28 bytes  | 🟡      |
-| `0x13` | —    | H→D  | `FUN_0042b0a0`                  | **MODE_COMMAND** — set lighting effect (one of 20)    | 🟡      |
-| `0x14` | `0x1c`/`0x18` | H→D | `FUN_0044be90`           | KEY-MACRO ASSIGN, chunked (7 or 21 chunks) | 🟡      |
-| `0x17` | —    | H→D  | `FUN_00414020`                  | **SLEEP_TIME** — payload at byte 9 (`local_50`) | 🟡      |
-| `0x18` | —    | H→D  | (CmdStartTime / `FUN_004238e0`) | `CMD_START` — opens 4-packet envelope     | ✅      |
-| `0x20` | `0x01`| D→H | `FUN_004358c0`                  | **BATTERY QUERY** — response[3] = percent | 🟡      |
-| `0x20` | `0x04`| H→D  | `FUN_00427db0`, `FUN_004329a0`  | PER-KEY RGB UPLOAD (wired 0xC0 / wireless 0x200 bytes) | 🟡      |
-| `0x23` | —    | H→D  | `FUN_0044ba20`                  | MACRO RECORD-BUFFER UPLOAD (wireless variant uses 0x09) | 🟡      |
-| `0x27` | `0x09`| H→D  | `FUN_004183a0`                  | KEY remap Fn-layer **alternate** (0x11 fn0 / 0x27 fn1) | 🟡      |
-| `0x28` | —    | H→D  | (CmdSetTime / `FUN_004238e0`)   | `CMD_TIME` — time-sync preamble           | ✅      |
-| `0x37F`*| —   | H→D  | `FUN_004231c0`, `FUN_00422920`  | **LCD/TFT IMAGE HEADER** (`byte1=0x7F, byte2=0x03` — opens upload) | 🟡 (DISPLAY-05) |
-| `0x80\|n`*| —  | H→D  | `FUN_004231c0`                  | **LCD/TFT IMAGE CHUNK** (chunk_idx encoded across bytes 1/3) | 🟡 (DISPLAY-05) |
-| `0xF0` | —    | H→D  | `FUN_0042b0a0`, `FUN_0044b910`  | `CMD_FINISH` — closes a configuration envelope | 🟡      |
-| `0xF5` | `0x03`/`0x09` | H→D | `FUN_0042ae80`            | **READ-BACK CURRENT RGB** — wired 3 keys, wireless 9 keys per page | 🟡      |
+| Opcode      | Sub           | Dir | Vendor function                 | UI label / role                                                      | Status          |
+| ----------- | ------------- | --- | ------------------------------- | -------------------------------------------------------------------- | --------------- |
+| `0x01`      | —             | H→D | (firmware-version request)      | "Version" — gohv `FIRMWARE_VERSION`                                  | ✅              |
+| `0x02`      | —             | H→D | `FUN_0044f790`, time-sync save  | `CMD_SAVE` — persist RTC to NV-RAM                                   | ✅              |
+| `0x05`      | `0x10`        | H→D | `FUN_0044be90`                  | KEY REMAP (assign macro/key to key)                                  | 🔍              |
+| `0x05`      | `0x01`        | H→D | `FUN_004349f0`                  | KEY MODE select (single byte at +0x808)                              | 🟡              |
+| `0x05`      | (no)          | H→D | (legacy CmdSetKeycode)          | Single-key remap layer/row/col/keycode                               | ✅              |
+| `0x07`      | `0x10`        | H→D | `FUN_00414290`                  | **SETTINGS BATCH** (33-byte): fn_switch, sleep_time, key_respondtime | 🟡              |
+| `0x08`      | zone          | H→D | (CmdSetRgbStatic)               | Static RGB per zone                                                  | ✅              |
+| `0x09`      | `0x1c`        | H→D | `FUN_0042dc10`                  | **MACRO DATA UPLOAD** (28-byte chunks)                               | 🟡              |
+| `0x0A`      | —             | H→D | (CmdSetRgbBuffer)               | Per-LED RGB chunked                                                  | ✅              |
+| `0x0B`      | `0x1c`        | H→D | `FUN_00432be0`                  | LIGHTING params (mode+speed+brightness)                              | 🔍              |
+| `0x0C`      | —             | H→D | (CmdSetLayer)                   | Layer switch                                                         | ✅              |
+| `0x0D`      | —             | H→D | (legacy CmdUploadMacro)         | Macro upload                                                         | 🔍              |
+| `0x0E`      | —             | H→D | (CmdCommitEeprom)               | EEPROM commit                                                        | ✅              |
+| `0x10`      | `0x1c`        | H→D | `FUN_00418c40` (param_1==0)     | KEY REMAP CHUNK, Fn-layer **OFF**, 21 chunks × 28 bytes              | 🟡              |
+| `0x12`      | `0x1c`        | H→D | `FUN_00418c40` (param_1!=0)     | KEY REMAP CHUNK, Fn-layer **ON**, 21 chunks × 28 bytes               | 🟡              |
+| `0x13`      | —             | H→D | `FUN_0042b0a0`                  | **MODE_COMMAND** — set lighting effect (one of 20)                   | 🟡              |
+| `0x14`      | `0x1c`/`0x18` | H→D | `FUN_0044be90`                  | KEY-MACRO ASSIGN, chunked (7 or 21 chunks)                           | 🟡              |
+| `0x17`      | —             | H→D | `FUN_00414020`                  | **SLEEP_TIME** — payload at byte 9 (`local_50`)                      | 🟡              |
+| `0x18`      | —             | H→D | (CmdStartTime / `FUN_004238e0`) | `CMD_START` — opens 4-packet envelope                                | ✅              |
+| `0x20`      | `0x01`        | D→H | `FUN_004358c0`                  | **BATTERY QUERY** — response[3] = percent                            | 🟡              |
+| `0x20`      | `0x04`        | H→D | `FUN_00427db0`, `FUN_004329a0`  | PER-KEY RGB UPLOAD (wired 0xC0 / wireless 0x200 bytes)               | 🟡              |
+| `0x23`      | —             | H→D | `FUN_0044ba20`                  | MACRO RECORD-BUFFER UPLOAD (wireless variant uses 0x09)              | 🟡              |
+| `0x27`      | `0x09`        | H→D | `FUN_004183a0`                  | KEY remap Fn-layer **alternate** (0x11 fn0 / 0x27 fn1)               | 🟡              |
+| `0x28`      | —             | H→D | (CmdSetTime / `FUN_004238e0`)   | `CMD_TIME` — time-sync preamble                                      | ✅              |
+| `0x37F`\*   | —             | H→D | `FUN_004231c0`, `FUN_00422920`  | **LCD/TFT IMAGE HEADER** (`byte1=0x7F, byte2=0x03` — opens upload)   | 🟡 (DISPLAY-05) |
+| `0x80\|n`\* | —             | H→D | `FUN_004231c0`                  | **LCD/TFT IMAGE CHUNK** (chunk_idx encoded across bytes 1/3)         | 🟡 (DISPLAY-05) |
+| `0xF0`      | —             | H→D | `FUN_0042b0a0`, `FUN_0044b910`  | `CMD_FINISH` — closes a configuration envelope                       | 🟡              |
+| `0xF5`      | `0x03`/`0x09` | H→D | `FUN_0042ae80`                  | **READ-BACK CURRENT RGB** — wired 3 keys, wireless 9 keys per page   | 🟡              |
 
 \* The 0x37F / 0x80 entries are big-endian when read as a uint16 from byte 1
 of the buffer; the binary writes them as little-endian: `byte1 = 0x7F`,
-`byte2 = 0x03` for the header, and `byte1 = (idx & 0xFF)`, `byte2 = 0x80
-| (idx >> 16)` for chunks. See §6.
+`byte2 = 0x03` for the header, and `byte1 = (idx & 0xFF)`, `byte2 = 0x80 | (idx >> 16)` for chunks. See §6.
 
 ### 3.1 Time-sync 4-packet envelope (already in our backend — corroborates ARCH-05)
 
@@ -234,33 +233,33 @@ with **two new findings**:
    before `CMD_TIME` (`0x04 0x28 …`). This matches gohv's `CMD_START = 0x18`
    but **KyleBoyer's `packets.ts` skips it** — corroboration that
    `buildSetTimeStart()` is required.
-2. **`FUN_00423a10` (LCD-aware time-sync)** writes the **selected LCD index +
+1. **`FUN_00423a10` (LCD-aware time-sync)** writes the **selected LCD index +
    1** into byte 3 of the time-data packet (`local_4f = (char)iVar1 + 1`),
    where `iVar1 = LCDViewList::GetCurSel`. The basic `FUN_004238e0` writes
    the literal `(byte)0` there. If we ever support multi-LCD layouts this
    field is non-zero.
-3. **`wDayOfWeek`** is written at byte 10 (`local_4a` after the seconds
+1. **`wDayOfWeek`** is written at byte 10 (`local_4a` after the seconds
    byte). Our current builder writes `0x04` there per the gohv corpus —
    this matches but only by coincidence on a Thursday. **Apply the fix.**
 
 Time-data packet (ReportId=0x00) byte map confirmed:
 
-| Off | Value                              |
-| --- | ---------------------------------- |
-| 0   | 0x00 (HID Report ID)               |
-| 1   | LCD-select index + 1 (else 0)      |
-| 2   | 0x5A (magic)                       |
-| 3   | year % 2000  (note: vendor uses `% 2000` not `- 2000` — for 1999 this yields **1999** truncated; for 2026 it yields 26. We should match.) |
-| 4   | month (1-12)                       |
-| 5   | day (1-31)                         |
-| 6   | hour (0-23)                        |
-| 7   | minute (0-59)                      |
-| 8   | second (0-59)                      |
-| 9   | 0 (in basic variant)               |
-| 10  | wDayOfWeek (0=Sunday, vendor sets this; gohv hard-codes 0x04) |
-| 11..61 | 0                                |
-| 62  | 0xAA                               |
-| 63  | 0x55                               |
+| Off    | Value                                                                                                                                    |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| 0      | 0x00 (HID Report ID)                                                                                                                     |
+| 1      | LCD-select index + 1 (else 0)                                                                                                            |
+| 2      | 0x5A (magic)                                                                                                                             |
+| 3      | year % 2000 (note: vendor uses `% 2000` not `- 2000` — for 1999 this yields **1999** truncated; for 2026 it yields 26. We should match.) |
+| 4      | month (1-12)                                                                                                                             |
+| 5      | day (1-31)                                                                                                                               |
+| 6      | hour (0-23)                                                                                                                              |
+| 7      | minute (0-59)                                                                                                                            |
+| 8      | second (0-59)                                                                                                                            |
+| 9      | 0 (in basic variant)                                                                                                                     |
+| 10     | wDayOfWeek (0=Sunday, vendor sets this; gohv hard-codes 0x04)                                                                            |
+| 11..61 | 0                                                                                                                                        |
+| 62     | 0xAA                                                                                                                                     |
+| 63     | 0x55                                                                                                                                     |
 
 ### 3.2 Settings batch (NEW — `0x07 0x10`)
 
@@ -297,12 +296,12 @@ byte 9 : sleep_time value
 
 **Enum (matches gohv `SleepTime`):**
 
-| Value | Meaning   | UI label (1033.lan 142-145)         |
-| ----- | --------- | ----------------------------------- |
-| 0     | Never     | "No Sleep"                          |
-| 1     | 1 min     | "1min"                              |
-| 2     | 5 min     | "5min"                              |
-| 3     | 30 min    | "30min"                             |
+| Value | Meaning | UI label (1033.lan 142-145) |
+| ----- | ------- | --------------------------- |
+| 0     | Never   | "No Sleep"                  |
+| 1     | 1 min   | "1min"                      |
+| 2     | 5 min   | "5min"                      |
+| 3     | 30 min  | "30min"                     |
 
 ### 3.4 RGB mode (`0x13`)
 
@@ -322,28 +321,28 @@ bytes 14..15 : 0x55 0xAA trailer
 
 #### 3.4.1 The 20 lighting modes (`1033.lan` 521-540, in order)
 
-| ID   | English name (`1033.lan`)       | Chinese (`2052.lan`)   |
-| ---- | --------------------------------| ---------------------- |
-| 0x00 | Static (Static)                 | 常亮 / Static-On       |
-| 0x01 | SingleOn                        | 单点亮                 |
-| 0x02 | SingleOff                       | 单熄灭                 |
-| 0x03 | Glittering                      | 繁星点点               |
-| 0x04 | Falling                         | 漫天飞舞               |
-| 0x05 | Colourful                       | 万紫千红               |
-| 0x06 | Breath                          | 动感呼吸               |
-| 0x07 | Spectrum                        | 光圈循环               |
-| 0x08 | Outward                         | 彩浪涌动               |
-| 0x09 | Scrolling                       | 万彩纵横               |
-| 0x0A | Rolling                         | 寂静流光               |
-| 0x0B | Rotating                        | 峰回环绕               |
-| 0x0C | Explode                         | 一触即发               |
-| 0x0D | Launch                          | 一触惊艳               |
-| 0x0E | Ripples                         | 涟漪扩散               |
-| 0x0F | Flowing                         | 川流不息               |
-| 0x10 | Pulsating                       | 重峰叠叠               |
-| 0x11 | Tilt                            | 斜风细雨               |
-| 0x12 | Shuttle                         | 来回穿梭               |
-| 0x13 | LED Off                         | 关闭背光               |
+| ID   | English name (`1033.lan`) | Chinese (`2052.lan`) |
+| ---- | ------------------------- | -------------------- |
+| 0x00 | Static (Static)           | 常亮 / Static-On     |
+| 0x01 | SingleOn                  | 单点亮               |
+| 0x02 | SingleOff                 | 单熄灭               |
+| 0x03 | Glittering                | 繁星点点             |
+| 0x04 | Falling                   | 漫天飞舞             |
+| 0x05 | Colourful                 | 万紫千红             |
+| 0x06 | Breath                    | 动感呼吸             |
+| 0x07 | Spectrum                  | 光圈循环             |
+| 0x08 | Outward                   | 彩浪涌动             |
+| 0x09 | Scrolling                 | 万彩纵横             |
+| 0x0A | Rolling                   | 寂静流光             |
+| 0x0B | Rotating                  | 峰回环绕             |
+| 0x0C | Explode                   | 一触即发             |
+| 0x0D | Launch                    | 一触惊艳             |
+| 0x0E | Ripples                   | 涟漪扩散             |
+| 0x0F | Flowing                   | 川流不息             |
+| 0x10 | Pulsating                 | 重峰叠叠             |
+| 0x11 | Tilt                      | 斜风细雨             |
+| 0x12 | Shuttle                   | 来回穿梭             |
+| 0x13 | LED Off                   | 关闭背光             |
 
 There are 20 modes (`0..0x13`) for the **Real-time Lighting** picker. The
 **"My Exclusive Config" → User Lighting** path uses a different model
@@ -445,22 +444,22 @@ the firmware doesn't push a usual HID notification; the host actively polls.
 
 1. Build a 3584-byte (`0xE00`) buffer holding all macro events, with each
    macro prefixed by a 2-byte event count.
-2. Each **event** is **4 bytes**:
+1. Each **event** is **4 bytes**:
 
-| Type (in DB) | Action          | Bytes 0..3                                |
-| ------------ | --------------- | ----------------------------------------- |
-| 2            | Key Down        | `[key_lo, 0, key_hi, 0xB0]`               |
-| 3            | Key Up          | `[?, ?, key_hi, 0x30]`                    |
-| 4 (val 1)    | Mouse L Down    | `[1, ?, 1, 0x90]`                         |
-| 5 (val 1)    | Mouse L Up      | `[1, ?, 1, 0x10]`                         |
-| 4 (val 2)    | Mouse R Down    | `[4, ?, 4, 0x90]`                         |
-| 5 (val 2)    | Mouse R Up      | `[4, ?, 4, 0x10]`                         |
-| 4 (val 3)    | Mouse M Down    | `[2, ?, 2, 0x90]`                         |
-| 5 (val 3)    | Mouse M Up      | `[2, ?, 2, 0x10]`                         |
-| default      | Delay           | `[delay_lo, delay_hi, ?, 0x50]` (min 10ms)|
+| Type (in DB) | Action       | Bytes 0..3                                 |
+| ------------ | ------------ | ------------------------------------------ |
+| 2            | Key Down     | `[key_lo, 0, key_hi, 0xB0]`                |
+| 3            | Key Up       | `[?, ?, key_hi, 0x30]`                     |
+| 4 (val 1)    | Mouse L Down | `[1, ?, 1, 0x90]`                          |
+| 5 (val 1)    | Mouse L Up   | `[1, ?, 1, 0x10]`                          |
+| 4 (val 2)    | Mouse R Down | `[4, ?, 4, 0x90]`                          |
+| 5 (val 2)    | Mouse R Up   | `[4, ?, 4, 0x10]`                          |
+| 4 (val 3)    | Mouse M Down | `[2, ?, 2, 0x90]`                          |
+| 5 (val 3)    | Mouse M Up   | `[2, ?, 2, 0x10]`                          |
+| default      | Delay        | `[delay_lo, delay_hi, ?, 0x50]` (min 10ms) |
 
 3. Trailer `0xAA 0x55` at the end of the buffer.
-4. Split into 28-byte (0x1C) chunks; each chunk is sent as:
+1. Split into 28-byte (0x1C) chunks; each chunk is sent as:
 
 ```
 byte 1 : 0x09             (CMD_MACRO_DATA)
@@ -472,8 +471,7 @@ bytes 4..31 : 28 data bytes
 Send via `FUN_0044f5f0` (33-byte short report), 2 ms sleep between chunks.
 
 The macros themselves live in SQLite table
-`t_key_otherdata(macro_value INTEGER PK AUTOINCREMENT, macro_desc TEXT,
-param TEXT, type INTEGER)` keyed by `macro_value`.
+`t_key_otherdata(macro_value INTEGER PK AUTOINCREMENT, macro_desc TEXT, param TEXT, type INTEGER)` keyed by `macro_value`.
 
 ### 3.11 Macro-to-key assignment (`0x14`)
 
@@ -607,11 +605,11 @@ Instead it:
 1. Downloads `FirmwareUpdateTool.zip` from a URL (HTTP via WININET — see
    `FUN_0045a520`'s `InternetOpenA` / `HttpQueryInfoW` /
    `InternetReadFile` calls).
-2. Writes to `%TEMP%/FirmwareUpdateTool.zip` and unpacks to
+1. Writes to `%TEMP%/FirmwareUpdateTool.zip` and unpacks to
    `%TEMP%/FirmwareUpdateTool.exe`.
-3. `CreateProcessW` it, then waits on the process handle
+1. `CreateProcessW` it, then waits on the process handle
    (`OpenProcess(0x1FFFFF, …) + WaitForSingleObject(INFINITE)`).
-4. After the external tool exits, the main app reopens the HID
+1. After the external tool exits, the main app reopens the HID
    handle and re-enumerates (`FUN_004fa70`, the device manager).
 
 `FUN_0044f2d0` sends 0x1001-byte (4097-byte) **bulk** writes — likely
@@ -691,22 +689,22 @@ ______________________________________________________________________
    focus. Implementable in Qt6 via `QWindowList` polling or
    `SetWinEventHook(EVENT_SYSTEM_FOREGROUND)`. Cross-platform analogue:
    `org.kde.KWin` / `org.gnome.Shell` D-Bus on Linux.
-2. **140-frame GIF with per-frame delay editor** — the LCD UX allows the
+1. **140-frame GIF with per-frame delay editor** — the LCD UX allows the
    user to draw frame-by-frame with brush+eraser+text-insertion and set a
    per-frame delay in 2 ms units. Sketch (UI-level): QGraphicsScene with a
    ListModel for frames, brush size 1/3/5 px.
-3. **Music Rhythm (Rainbow/Reverse-Rainbow/Gradient/Spectrum/Solid)** —
+1. **Music Rhythm (Rainbow/Reverse-Rainbow/Gradient/Spectrum/Solid)** —
    the vendor app drives the keyboard's LEDs from system audio. We can do
    better than the vendor here (proper FFT + multiple visualizers, all on
    the Qt side, sending per-LED RGB to the keyboard).
-3. **Single key right-click → "more functions" context menu** — keymap
+1. **Single key right-click → "more functions" context menu** — keymap
    editor opens a 7-tab popover for advanced keys (mouse / multimedia /
    shortcut / open app / open URL / send text / multi-key). Same structure
    we should adopt — direct grid clicks for primary remap, right-click for
    the long tail.
-4. **Per-level (1-5) explanatory tooltip for Key Response Time** with
+1. **Per-level (1-5) explanatory tooltip for Key Response Time** with
    live wire / 2.4 GHz / Bluetooth latency estimates (`1033.lan` 600-624).
-5. **Hardware battery indicator + 15 s polling** (`FUN_004358c0`) — we
+1. **Hardware battery indicator + 15 s polling** (`FUN_004358c0`) — we
    should also poll battery every 15 s for wireless devices via opcode
    `0x20 0x01`.
 
@@ -714,61 +712,61 @@ ______________________________________________________________________
 
 1. **Custom MFC-like "MUI" UI framework** — the vendor ships its own UI
    toolkit (`mui.dll`, 2 201 exports). We use Qt 6 / QML. ✅ already done.
-2. **HTTP-driven external firmware updater** (`FirmwareUpdateTool.exe`
+1. **HTTP-driven external firmware updater** (`FirmwareUpdateTool.exe`
    download + spawn). Modern UX expects in-app firmware update with
    progress, ETA, and verify. Implement in our own backend with a worker
    thread + Qt's `QFile` + libusb_control_transfer or our HID transport.
-3. **Polling-based profile-switch ACK detection** (`FUN_00435250`,
+1. **Polling-based profile-switch ACK detection** (`FUN_00435250`,
    200 ms read loop). The Qt6 way is `QSocketNotifier` on the hidraw fd
    (Linux) or completion port on Windows.
-4. **In-tree SQLite with encrypted blobs** (`FUN_004635b0` shows a CRC32
+1. **In-tree SQLite with encrypted blobs** (`FUN_004635b0` shows a CRC32
    table encryption layer over file IO). For us, **plain JSON or QSettings
    suffices** — the threat model doesn't justify the complexity.
-5. **CSIDL_LOCAL_APPDATA hard-coding** — use `QStandardPaths::AppDataLocation`
+1. **CSIDL_LOCAL_APPDATA hard-coding** — use `QStandardPaths::AppDataLocation`
    which gives the right path on Linux / macOS too.
 
 ______________________________________________________________________
 
 ## 10. Modern Qt 6 / C++ reimplementation recommendations (per gap)
 
-| Gap                          | Recommended pattern                                                                  |
-| ---------------------------- | ------------------------------------------------------------------------------------ |
-| Per-key RGB grid editor      | `QAbstractItemModel` (6 × 19 grid from `rgb-keyboard.xml`) + QML `Repeater` + `ColorDialog`. On commit, build a single chunked buffer via §3.7 envelope. |
-| TFT image upload (`0x7F`/`0x80`) | Factor `src/devices/streamdeck/src/image_pipeline.cpp` into a generic `ajazz_imaging` static lib that produces RGB565 frames. New `KeyboardScreenUploader` (worker thread) consumes frames, emits `progress(int percent)` signal, writes via `IHidTransport`. |
-| 20 RGB modes (`0x13`)        | Strong-typed `enum class LightingMode : uint8_t { Static=0x00, …, LedOff=0x13 };` with `qmlRegisterUncreatableType`. QML `ListModel` populated from the enum (Qt 6.7 `QML_NAMED_ELEMENT` works). |
-| Settings batch (`0x07 0x10`) | Single `SettingsService::commit(fnSwitch, sleepTime, keyDelay)` method that builds the 33-byte report + checksum + posts to worker. Domain validation in the C++ layer; QML just binds via Q_PROPERTY. |
-| Battery query (`0x20 0x01`)  | `QTimer(15000)` on the device thread, emits `batteryChanged(int percent)` signal. QML binds to a `BatteryIndicator` component. |
+| Gap                                         | Recommended pattern                                                                                                                                                                                                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Per-key RGB grid editor                     | `QAbstractItemModel` (6 × 19 grid from `rgb-keyboard.xml`) + QML `Repeater` + `ColorDialog`. On commit, build a single chunked buffer via §3.7 envelope.                                                                                                                      |
+| TFT image upload (`0x7F`/`0x80`)            | Factor `src/devices/streamdeck/src/image_pipeline.cpp` into a generic `ajazz_imaging` static lib that produces RGB565 frames. New `KeyboardScreenUploader` (worker thread) consumes frames, emits `progress(int percent)` signal, writes via `IHidTransport`.                 |
+| 20 RGB modes (`0x13`)                       | Strong-typed `enum class LightingMode : uint8_t { Static=0x00, …, LedOff=0x13 };` with `qmlRegisterUncreatableType`. QML `ListModel` populated from the enum (Qt 6.7 `QML_NAMED_ELEMENT` works).                                                                              |
+| Settings batch (`0x07 0x10`)                | Single `SettingsService::commit(fnSwitch, sleepTime, keyDelay)` method that builds the 33-byte report + checksum + posts to worker. Domain validation in the C++ layer; QML just binds via Q_PROPERTY.                                                                        |
+| Battery query (`0x20 0x01`)                 | `QTimer(15000)` on the device thread, emits `batteryChanged(int percent)` signal. QML binds to a `BatteryIndicator` component.                                                                                                                                                |
 | Macro recording / data upload (`0x09 0x1C`) | `MacroRecorder` QObject hooks `QAbstractNativeEventFilter` (Win) / `evdev` (Linux) / `CGEventTap` (macOS). On finalize, serialize to the 4-byte event format (§3.10) and ship via 0x1C chunked upload. The per-event type/action encoding is unfortunately platform-specific. |
-| Macro assign to keys (`0x14`)| `MacroAssignmentModel` (table model 6 × 19) + `KeyEditorPopup`. On commit, build the 7- or 21-chunk envelope (§3.11). |
-| Key remap chunked (`0x10`/`0x12`) | `KeymapEditorModel`. On commit, build 21-chunk envelope (§3.12) **for each layer**. |
-| Auto profile-switch          | Cross-platform `ForegroundAppWatcher` interface; impls: Windows (`SetWinEventHook`), Linux (D-Bus per DE), macOS (NSWorkspace notifications). Map app exe path → profile slot, emit `profileSwitchRequested(int slot)`. |
-| Music Rhythm                 | Use `QAudioInput` + Qt's `QMediaCaptureSession` to capture loopback; run FFT via Eigen or KissFFT in a worker; ship 60 fps per-LED RGB via §3.7 envelope. |
-| Profile system (`t_profile_data`) | Replace SQLite with **QtSql + SQLite** (cross-platform, no extra dep) **or** plain JSON via `QJsonDocument` if we don't need queries. Auto-switch column maps to `Profile::trigger.app` field. |
-| FINISH packet (`0xF0`)       | Add `buildCommitFinish()` to `proprietary_protocol.hpp` returning `{0x04, 0xF0, 0, …}`. Every existing commit path (`commit()`, `setRgbMode()`, `uploadMacro()`) gains a `FINISH` call **after** `CMD_SAVE`. |
-| Firmware update / DFU        | **Defer to v1.3+** — capture the standalone `FirmwareUpdateTool.exe` separately first. Don't add half-baked DFU now. |
+| Macro assign to keys (`0x14`)               | `MacroAssignmentModel` (table model 6 × 19) + `KeyEditorPopup`. On commit, build the 7- or 21-chunk envelope (§3.11).                                                                                                                                                         |
+| Key remap chunked (`0x10`/`0x12`)           | `KeymapEditorModel`. On commit, build 21-chunk envelope (§3.12) **for each layer**.                                                                                                                                                                                           |
+| Auto profile-switch                         | Cross-platform `ForegroundAppWatcher` interface; impls: Windows (`SetWinEventHook`), Linux (D-Bus per DE), macOS (NSWorkspace notifications). Map app exe path → profile slot, emit `profileSwitchRequested(int slot)`.                                                       |
+| Music Rhythm                                | Use `QAudioInput` + Qt's `QMediaCaptureSession` to capture loopback; run FFT via Eigen or KissFFT in a worker; ship 60 fps per-LED RGB via §3.7 envelope.                                                                                                                     |
+| Profile system (`t_profile_data`)           | Replace SQLite with **QtSql + SQLite** (cross-platform, no extra dep) **or** plain JSON via `QJsonDocument` if we don't need queries. Auto-switch column maps to `Profile::trigger.app` field.                                                                                |
+| FINISH packet (`0xF0`)                      | Add `buildCommitFinish()` to `proprietary_protocol.hpp` returning `{0x04, 0xF0, 0, …}`. Every existing commit path (`commit()`, `setRgbMode()`, `uploadMacro()`) gains a `FINISH` call **after** `CMD_SAVE`.                                                                  |
+| Firmware update / DFU                       | **Defer to v1.3+** — capture the standalone `FirmwareUpdateTool.exe` separately first. Don't add half-baked DFU now.                                                                                                                                                          |
 
 ______________________________________________________________________
 
 ## 11. Cross-corroboration matrix (us ↔ gohv ↔ KyleBoyer ↔ vendor)
 
-| Opcode | Symbol            | Vendor (`DeviceDriver.exe`) | gohv (`protocol.rs`)   | KyleBoyer (`packets.ts`) | Our backend (`proprietary_protocol.hpp`) | Verdict |
-| ------ | ----------------- | --------------------------- | ---------------------- | ------------------------ | ----------------------------------------- | ------- |
-| 0x02   | CMD_SAVE          | ✓ (`FUN_0044f790`)          | ✓ `CMD_SAVE`           | ✓ `[0x04,0x02]`          | ✓ `CmdSaveRtc`                            | ✅ all agree |
-| 0x07   | CMD_SETTINGS_BATCH| ✓ (NEW, `FUN_00414290`)     | —                      | —                        | ❌                                        | 🟡 add it |
-| 0x09   | CMD_MACRO_DATA    | ✓ (`0x09 0x1C`)             | —                      | —                        | ❌                                        | 🟡 add it |
-| 0x0B   | CMD_LIGHTING_PARAMS | ✓ (`0x0B 0x1C`)           | (subsumed in 0x13)     | —                        | ⚠️ partial (we only do brightness)        | 🔍 extend |
-| 0x10/0x12 | CMD_KEYMAP_CHUNK | ✓                          | —                      | —                        | ❌                                        | 🟡 add it |
-| 0x13   | MODE_COMMAND      | ✓ (`0x1304`)                | ✓ `CMD_MODE`           | ✓ `[0x04,0x13]`          | ❌                                        | 🟡 add it (20 modes) |
-| 0x14   | CMD_MACRO_ASSIGN  | ✓                           | —                      | —                        | ❌                                        | 🟡 add it |
-| 0x17   | CMD_SLEEP         | ✓ (`0x1704`)                | ✓ `CMD_SLEEP`          | —                        | ❌                                        | 🟡 add it (4-value enum) |
-| 0x18   | CMD_START         | ✓                           | ✓ `CMD_START`          | ✓ `[0x04,0x18]`          | ✓ `CmdStartTime`                          | ✅ all agree |
-| 0x20   | CMD_BATTERY (sub 0x01) | ✓ (`FUN_004358c0`)     | —                      | —                        | ❌                                        | 🟡 add it |
-| 0x20   | CMD_RGB_PER_KEY (sub 0x04) | ✓                  | —                      | —                        | ⚠️ (we have 0x0A buffer, similar idea)     | 🔍 unify |
-| 0x23   | CMD_MACRO_RECBUF  | ✓                           | —                      | —                        | ❌                                        | 🟡 |
-| 0x28   | CMD_TIME          | ✓                           | ✓ `CMD_TIME`           | ✓ `[0x04,0x28]`          | ✓ `CmdSetTime`                            | ✅ all agree |
-| 0x7F/0x80 | CMD_SCREEN     | ✓ (`FUN_004231c0`, 28-byte chunks) | (different LCD)| —                        | ❌                                        | 🟡 add it (DISPLAY-05) |
-| 0xF0   | CMD_FINISH        | ✓ (`FUN_0042b0a0`, etc.)    | ✓ `CMD_FINISH`         | —                        | ❌                                        | 🟡 add it (envelope close) |
-| 0xF5   | CMD_RGB_READBACK  | ✓ (`FUN_0042ae80`)          | —                      | —                        | ❌                                        | 🟡 add it |
+| Opcode    | Symbol                     | Vendor (`DeviceDriver.exe`)        | gohv (`protocol.rs`) | KyleBoyer (`packets.ts`) | Our backend (`proprietary_protocol.hpp`) | Verdict                    |
+| --------- | -------------------------- | ---------------------------------- | -------------------- | ------------------------ | ---------------------------------------- | -------------------------- |
+| 0x02      | CMD_SAVE                   | ✓ (`FUN_0044f790`)                 | ✓ `CMD_SAVE`         | ✓ `[0x04,0x02]`          | ✓ `CmdSaveRtc`                           | ✅ all agree               |
+| 0x07      | CMD_SETTINGS_BATCH         | ✓ (NEW, `FUN_00414290`)            | —                    | —                        | ❌                                       | 🟡 add it                  |
+| 0x09      | CMD_MACRO_DATA             | ✓ (`0x09 0x1C`)                    | —                    | —                        | ❌                                       | 🟡 add it                  |
+| 0x0B      | CMD_LIGHTING_PARAMS        | ✓ (`0x0B 0x1C`)                    | (subsumed in 0x13)   | —                        | ⚠️ partial (we only do brightness)       | 🔍 extend                  |
+| 0x10/0x12 | CMD_KEYMAP_CHUNK           | ✓                                  | —                    | —                        | ❌                                       | 🟡 add it                  |
+| 0x13      | MODE_COMMAND               | ✓ (`0x1304`)                       | ✓ `CMD_MODE`         | ✓ `[0x04,0x13]`          | ❌                                       | 🟡 add it (20 modes)       |
+| 0x14      | CMD_MACRO_ASSIGN           | ✓                                  | —                    | —                        | ❌                                       | 🟡 add it                  |
+| 0x17      | CMD_SLEEP                  | ✓ (`0x1704`)                       | ✓ `CMD_SLEEP`        | —                        | ❌                                       | 🟡 add it (4-value enum)   |
+| 0x18      | CMD_START                  | ✓                                  | ✓ `CMD_START`        | ✓ `[0x04,0x18]`          | ✓ `CmdStartTime`                         | ✅ all agree               |
+| 0x20      | CMD_BATTERY (sub 0x01)     | ✓ (`FUN_004358c0`)                 | —                    | —                        | ❌                                       | 🟡 add it                  |
+| 0x20      | CMD_RGB_PER_KEY (sub 0x04) | ✓                                  | —                    | —                        | ⚠️ (we have 0x0A buffer, similar idea)   | 🔍 unify                   |
+| 0x23      | CMD_MACRO_RECBUF           | ✓                                  | —                    | —                        | ❌                                       | 🟡                         |
+| 0x28      | CMD_TIME                   | ✓                                  | ✓ `CMD_TIME`         | ✓ `[0x04,0x28]`          | ✓ `CmdSetTime`                           | ✅ all agree               |
+| 0x7F/0x80 | CMD_SCREEN                 | ✓ (`FUN_004231c0`, 28-byte chunks) | (different LCD)      | —                        | ❌                                       | 🟡 add it (DISPLAY-05)     |
+| 0xF0      | CMD_FINISH                 | ✓ (`FUN_0042b0a0`, etc.)           | ✓ `CMD_FINISH`       | —                        | ❌                                       | 🟡 add it (envelope close) |
+| 0xF5      | CMD_RGB_READBACK           | ✓ (`FUN_0042ae80`)                 | —                    | —                        | ❌                                       | 🟡 add it                  |
 
 ______________________________________________________________________
 
@@ -866,13 +864,13 @@ the four companion documents. See:
 The vendor binary uses **two distinct HID transports**, with **different
 on-wire framing**:
 
-| Helper          | Underlying API                       | On-wire bytes                                       |
-| --------------- | ------------------------------------ | --------------------------------------------------- |
-| `FUN_0044f5f0`  | `WriteFile` (HID OUTPUT report)      | `[ID=0x00, opcode, sub, payload, ..., checksum@8]` (33 B) |
-| `FUN_0044eed0`  | `HidD_SetFeature` (HID FEATURE report) | `[ID=0x00, 0x04, opcode, sub, payload, ...]` (65 B)  |
-| `FUN_0044f0c0`  | `HidD_SetFeature` chunked (64-B slices) | (same as 0044eed0, repeated per chunk)              |
-| `FUN_0044f2d0`  | `WriteFile` (bulk 4097-byte writes)  | `[ID=0x00, payload, ...]` (4097 B)                  |
-| `FUN_0044f3a0`  | `WriteFile` + `ReadFile` streaming   | (mixed; reader strips leading 0x00)                 |
+| Helper         | Underlying API                          | On-wire bytes                                             |
+| -------------- | --------------------------------------- | --------------------------------------------------------- |
+| `FUN_0044f5f0` | `WriteFile` (HID OUTPUT report)         | `[ID=0x00, opcode, sub, payload, ..., checksum@8]` (33 B) |
+| `FUN_0044eed0` | `HidD_SetFeature` (HID FEATURE report)  | `[ID=0x00, 0x04, opcode, sub, payload, ...]` (65 B)       |
+| `FUN_0044f0c0` | `HidD_SetFeature` chunked (64-B slices) | (same as 0044eed0, repeated per chunk)                    |
+| `FUN_0044f2d0` | `WriteFile` (bulk 4097-byte writes)     | `[ID=0x00, payload, ...]` (4097 B)                        |
+| `FUN_0044f3a0` | `WriteFile` + `ReadFile` streaming      | (mixed; reader strips leading 0x00)                       |
 
 So the **0x04** byte that appears at the start of FUN_0044eed0 buffers
 is **NOT** the HID Report ID — it's a fixed frame-magic byte
@@ -890,22 +888,22 @@ opcode is at byte 1 directly.
 
 Re-deriving from FUN_00414290 with proper stack offset analysis:
 
-| Offset | Value                                                         |
-| ------ | ------------------------------------------------------------- |
-| 0      | 0x00 (HID Report ID)                                          |
-| 1      | 0x07 (CMD_SETTINGS_BATCH)                                     |
-| 2      | 0x10 (sub-op)                                                 |
-| 3, 4   | 0, 0                                                          |
-| 5      | 0x01 (fixed)                                                  |
-| 6      | disable_winkey   (0 or 1; from `MUI::CCheckButton` at +0x678) |
-| 7      | disable_alt_f4    (0 or 1; from `MUI::CCheckButton` at +0x67c)|
-| 8      | disable_alt_tab   (0 or 1; from `MUI::CCheckButton` at +0x680) — *AND* checksum slot |
-| 9      | `fn_switch` value (int from `t_config_data`)                  |
-| 10     | `sleep_time` value                                            |
-| 11     | (unused)                                                      |
-| 12     | `key_respondtime` value                                       |
-| 18, 19 | 0xAA, 0x55 (trailer)                                          |
-| 20..32 | 0                                                             |
+| Offset | Value                                                                              |
+| ------ | ---------------------------------------------------------------------------------- |
+| 0      | 0x00 (HID Report ID)                                                               |
+| 1      | 0x07 (CMD_SETTINGS_BATCH)                                                          |
+| 2      | 0x10 (sub-op)                                                                      |
+| 3, 4   | 0, 0                                                                               |
+| 5      | 0x01 (fixed)                                                                       |
+| 6      | disable_winkey (0 or 1; from `MUI::CCheckButton` at +0x678)                        |
+| 7      | disable_alt_f4 (0 or 1; from `MUI::CCheckButton` at +0x67c)                        |
+| 8      | disable_alt_tab (0 or 1; from `MUI::CCheckButton` at +0x680) — *AND* checksum slot |
+| 9      | `fn_switch` value (int from `t_config_data`)                                       |
+| 10     | `sleep_time` value                                                                 |
+| 11     | (unused)                                                                           |
+| 12     | `key_respondtime` value                                                            |
+| 18, 19 | 0xAA, 0x55 (trailer)                                                               |
+| 20..32 | 0                                                                                  |
 
 The earlier §3.2 byte map was wrong — `value("fn_switch")` is at byte 9
 not byte 5; the three disable-key flags consume bytes 6, 7, 8; byte 8
@@ -976,17 +974,17 @@ The "alternate" key-remap path (FUN_004183a0) has **far richer encoding**
 than the binary's single-key path (FUN_00418f80). The 4-byte per-key
 entry written via FUN_00417ff0 has type-specific layouts:
 
-| `type` (DB)  | Bytes [0, 1, 2, 3] of slot                         | Meaning                          |
-| ------------ | -------------------------------------------------- | -------------------------------- |
-| 1            | `[0x05, 0x03, 0, 0]` (uint16 = 0x0305 at +0)       | Default / pass-through           |
-| 2            | `[2, keycode_translated, modifier_byte, 0]`        | Plain HID keycode (translated by `FUN_00451ca0`) |
-| 3            | `[6, profile_idx, modifier_byte, 0x24_flags]`      | Profile switch                   |
-| 5            | `[1, 0x01..0x10, 0x01 or 0x03, 0]`                 | Mouse: codes 0x101 LeftClick, 0x401 RightClick, 0x201 MiddleClick, 0x301 = 4th, 0x103 = ScrollUp, 0xFF03 = ScrollDown, 0x801 = 5th, 0x1001 = 6th |
-| 6            | `[3, multimedia_keycode, 0, 0]`                    | Multimedia: 0xCD play/pause, 0xB7 next, 0xB6 prev, 0xB5 stop, 0xE9 vol+, 0xEA vol-, 0xE2 mute |
-| 7            | `[2, 0x08..0x04, 0x07/0x08/0x0F/0x1A/0x2B/0x06/0x19/0x1B, 0]` | System keys (encoded as 2-byte values 0x708, 0x808, 0xF08, 0x1A01, 0x2B04, 0x601, 0x1901, 0x1B01); also `[2, 1, 0x02, 0]` for case 0xB (= 0x0102) and `[2, 2, 0x02, 0]` for case 10 (= 0x0202) |
-| 8/9/10/11    | `[5, 0x02, x_byte, 0]` (uint16 = 0x0205)           | Window-shortcut groups           |
-| 12 (case 0xC) | `[3, key_lo, key_hi, 0]` via `FUN_00419290(value, &lo, &hi)` | Multi-key combination |
-| 0xD          | `[7, key_lo, key_mid, key_hi]`                     | Macro launcher (4 bytes encode macro ID + flags) |
+| `type` (DB)   | Bytes [0, 1, 2, 3] of slot                                    | Meaning                                                                                                                                                                                        |
+| ------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1             | `[0x05, 0x03, 0, 0]` (uint16 = 0x0305 at +0)                  | Default / pass-through                                                                                                                                                                         |
+| 2             | `[2, keycode_translated, modifier_byte, 0]`                   | Plain HID keycode (translated by `FUN_00451ca0`)                                                                                                                                               |
+| 3             | `[6, profile_idx, modifier_byte, 0x24_flags]`                 | Profile switch                                                                                                                                                                                 |
+| 5             | `[1, 0x01..0x10, 0x01 or 0x03, 0]`                            | Mouse: codes 0x101 LeftClick, 0x401 RightClick, 0x201 MiddleClick, 0x301 = 4th, 0x103 = ScrollUp, 0xFF03 = ScrollDown, 0x801 = 5th, 0x1001 = 6th                                               |
+| 6             | `[3, multimedia_keycode, 0, 0]`                               | Multimedia: 0xCD play/pause, 0xB7 next, 0xB6 prev, 0xB5 stop, 0xE9 vol+, 0xEA vol-, 0xE2 mute                                                                                                  |
+| 7             | `[2, 0x08..0x04, 0x07/0x08/0x0F/0x1A/0x2B/0x06/0x19/0x1B, 0]` | System keys (encoded as 2-byte values 0x708, 0x808, 0xF08, 0x1A01, 0x2B04, 0x601, 0x1901, 0x1B01); also `[2, 1, 0x02, 0]` for case 0xB (= 0x0102) and `[2, 2, 0x02, 0]` for case 10 (= 0x0202) |
+| 8/9/10/11     | `[5, 0x02, x_byte, 0]` (uint16 = 0x0205)                      | Window-shortcut groups                                                                                                                                                                         |
+| 12 (case 0xC) | `[3, key_lo, key_hi, 0]` via `FUN_00419290(value, &lo, &hi)`  | Multi-key combination                                                                                                                                                                          |
+| 0xD           | `[7, key_lo, key_mid, key_hi]`                                | Macro launcher (4 bytes encode macro ID + flags)                                                                                                                                               |
 
 This is the **canonical per-key remap entry format** used for the full
 chunked upload (576 bytes / 144 keys × 4 bytes). The wireless macro
@@ -1038,23 +1036,23 @@ prior doc conflated the two.
 opcode `0x0C 0x10` (`local_54._1_4_ = 0x100c`), single-packet via
 `FUN_0044f5f0`. Byte map:
 
-| Off | Value                          |
-| --- | ------------------------------ |
-| 0   | 0x00 (Report ID)               |
-| 1   | 0x0C                           |
-| 2   | 0x10                           |
-| 3,4 | 0, 0                           |
-| 5   | lcd_idx + 1                    |
-| 6   | 0x5A                           |
-| 7   | wYear % 2000                   |
-| 8   | wMonth                         |
-| 9   | wDay                           |
-| 10  | wHour                          |
-| 11  | wMinute                        |
-| 12  | wSecond                        |
-| 13  | 0                              |
-| 14  | wDayOfWeek                     |
-| 18, 19 | 0xAA, 0x55                   |
+| Off    | Value            |
+| ------ | ---------------- |
+| 0      | 0x00 (Report ID) |
+| 1      | 0x0C             |
+| 2      | 0x10             |
+| 3,4    | 0, 0             |
+| 5      | lcd_idx + 1      |
+| 6      | 0x5A             |
+| 7      | wYear % 2000     |
+| 8      | wMonth           |
+| 9      | wDay             |
+| 10     | wHour            |
+| 11     | wMinute          |
+| 12     | wSecond          |
+| 13     | 0                |
+| 14     | wDayOfWeek       |
+| 18, 19 | 0xAA, 0x55       |
 
 This is the path that should be used when the keyboard has an LCD that
 displays the time (i.e., the AK980 PRO). The simpler `FUN_004238e0`
@@ -1078,12 +1076,12 @@ They're wireless-specific. Add to the opcode table.
 
 ### 13.10 Updated opcode table (delta from §3)
 
-| Opcode | Sub  | Dir  | Source function | Role                                                    |
-| ------ | ---- | ---- | --------------- | ------------------------------------------------------- |
-| `0x0C` | `0x10`| H→D | `FUN_00423a10` | **LCD-aware time-sync** (NEW, separate from 0x28 path)  |
-| `0x15` | `0x04`| H→D | `FUN_0042d690` | **Wireless macro chunk info** (chunk count at byte 8)   |
-| `0x19` | `0x04`| H→D | `FUN_0042d690` | **Wireless macro upload BEGIN** (precedes bulk body)    |
-| `0x72` | —    | H→D  | `FUN_00422920` | **TFT bulk upload BEGIN** (4 KB chunks via `FUN_0044f2d0`) |
+| Opcode | Sub    | Dir | Source function | Role                                                       |
+| ------ | ------ | --- | --------------- | ---------------------------------------------------------- |
+| `0x0C` | `0x10` | H→D | `FUN_00423a10`  | **LCD-aware time-sync** (NEW, separate from 0x28 path)     |
+| `0x15` | `0x04` | H→D | `FUN_0042d690`  | **Wireless macro chunk info** (chunk count at byte 8)      |
+| `0x19` | `0x04` | H→D | `FUN_0042d690`  | **Wireless macro upload BEGIN** (precedes bulk body)       |
+| `0x72` | —      | H→D | `FUN_00422920`  | **TFT bulk upload BEGIN** (4 KB chunks via `FUN_0044f2d0`) |
 
 ### 13.11 Findings impact on existing implementation
 
@@ -1099,8 +1097,7 @@ A summary of "must-fix" issues identified during this deep RE pass:
 
 - **Macro assignment**: wired = 7 chunks × 28 B = 192 B = 1 byte/LED;
   wireless = 21 chunks × 28 B (last = 16 B) = 576 B = 4 bytes/LED.
-  Each wireless slot is `[lightIdx_echo, keycode_lo, keycode_mid,
-  keycode_hi/flags]` — full keycode encoding per key, not just
+  Each wireless slot is `[lightIdx_echo, keycode_lo, keycode_mid, keycode_hi/flags]` — full keycode encoding per key, not just
   "has-macro" flag.
 
 - **TFT chunk index**: confirmed split across bytes 1, 3, and low 7 bits
@@ -1119,28 +1116,27 @@ A summary of "must-fix" issues identified during this deep RE pass:
   HidD_SetFeature) DO have a 0x04 magic at byte 1, opcode at byte 2.
   **Our backend must select the transport correctly for each opcode**:
 
-  | Opcode group       | Transport | Helper        |
-  | ------------------ | --------- | ------------- |
-  | 0x07 0x10 (settings batch) | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x09 0x1C (macro data wired) | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x0B 0x1C (lighting params) | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x14 0x1C (macro assign chunks) | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x20 0x01 (battery query) | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x7F 0x03 (TFT header)  | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x80\|n (TFT chunk)     | OUTPUT 33 B  | `FUN_0044f5f0` |
-  | 0x18 / 0x28 / 0xF0 (envelope verbs) | FEATURE 65 B | `FUN_0044eed0` |
-  | 0x02 (CMD_SAVE)         | FEATURE 65 B | `FUN_0044eed0` |
-  | 0x13 (RGB mode data)    | FEATURE 65 B | `FUN_0044eed0` |
-  | 0x17 (sleep timer envelope) | FEATURE 65 B | `FUN_0044eed0` |
-  | 0x19 / 0x15 (wireless macro) | FEATURE 65 B | `FUN_0044eed0` |
-  | 0x20 0x04 (per-key RGB write) | FEATURE 65 B chunked | `FUN_0044f0c0` |
-  | 0x23 (macro rec buffer)  | FEATURE 65 B + bulk body | `FUN_0044eed0` |
-  | 0x72 (TFT bulk begin)    | FEATURE 65 B | `FUN_0044eed0` |
-  | bulk 4097-byte writes    | OUTPUT 4097 B | `FUN_0044f2d0` |
-  | 0xF5 0x03/0x09 (per-key RGB readback) | OUTPUT + streaming read | `FUN_0044f3a0` |
+  | Opcode group                          | Transport                | Helper         |
+  | ------------------------------------- | ------------------------ | -------------- |
+  | 0x07 0x10 (settings batch)            | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x09 0x1C (macro data wired)          | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x0B 0x1C (lighting params)           | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x14 0x1C (macro assign chunks)       | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x20 0x01 (battery query)             | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x7F 0x03 (TFT header)                | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x80\|n (TFT chunk)                   | OUTPUT 33 B              | `FUN_0044f5f0` |
+  | 0x18 / 0x28 / 0xF0 (envelope verbs)   | FEATURE 65 B             | `FUN_0044eed0` |
+  | 0x02 (CMD_SAVE)                       | FEATURE 65 B             | `FUN_0044eed0` |
+  | 0x13 (RGB mode data)                  | FEATURE 65 B             | `FUN_0044eed0` |
+  | 0x17 (sleep timer envelope)           | FEATURE 65 B             | `FUN_0044eed0` |
+  | 0x19 / 0x15 (wireless macro)          | FEATURE 65 B             | `FUN_0044eed0` |
+  | 0x20 0x04 (per-key RGB write)         | FEATURE 65 B chunked     | `FUN_0044f0c0` |
+  | 0x23 (macro rec buffer)               | FEATURE 65 B + bulk body | `FUN_0044eed0` |
+  | 0x72 (TFT bulk begin)                 | FEATURE 65 B             | `FUN_0044eed0` |
+  | bulk 4097-byte writes                 | OUTPUT 4097 B            | `FUN_0044f2d0` |
+  | 0xF5 0x03/0x09 (per-key RGB readback) | OUTPUT + streaming read  | `FUN_0044f3a0` |
 
   This taxonomy is enforced by the firmware (it expects the report
   framing matching its descriptor). Sending opcode 0x07 0x10 in a 65-B
   FEATURE report will either be silently ignored or fail with
   `STATUS_INVALID_DEVICE_REQUEST`.
-
