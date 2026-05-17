@@ -69,6 +69,73 @@ inline constexpr std::uint8_t CmdSaveRtc =
 inline constexpr std::uint8_t TimeDataReportId =
     0x00; ///< HID Report ID for the time-data packet (not the default 0x04).
 
+// ---------------------------------------------------------------------------
+// Settings batch (cmd 0x07 0x10) — single-shot save of fn / sleep / key-response /
+// disable-winkey / disable-alt-f4 / disable-alt-tab + 0xAA 0x55 trailer.
+//
+// Wire layout (33-byte short report, BIT-7 checksum-style; verified via Ghidra
+// decompile of DeviceDriver.exe FUN_0044eed0 callers — see
+// docs/protocols/keyboard/ak980pro_vendor.md §13.2). Prior pass had the byte
+// map wrong (claimed fn/sleep/delay at 5/6/7); deep RE corrected to the
+// layout below. Constants only here — wiring deferred to a follow-up.
+// ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdSettingsBatch = 0x07;   ///< Settings batch opcode.
+inline constexpr std::uint8_t SettingsBatchSub = 0x10;   ///< Sub-cmd for save-batch.
+inline constexpr std::uint8_t SettingsBatchTrailerHi = 0xaa; ///< Trailer high (byte 18).
+inline constexpr std::uint8_t SettingsBatchTrailerLo = 0x55; ///< Trailer low  (byte 19).
+inline constexpr std::size_t kSettingsByteDisableWinKey = 6;     ///< Bool: disable Windows key.
+inline constexpr std::size_t kSettingsByteDisableAltF4 = 7;      ///< Bool: disable Alt+F4.
+inline constexpr std::size_t kSettingsByteDisableAltTab = 8;     ///< Bool: disable Alt+Tab.
+inline constexpr std::size_t kSettingsByteFnSwitch = 9;          ///< Fn-layer switch.
+inline constexpr std::size_t kSettingsByteSleepTime = 10;        ///< Sleep timer (enum).
+inline constexpr std::size_t kSettingsByteKeyResponseTime = 12;  ///< Key response level (1..5).
+inline constexpr std::size_t kSettingsByteTrailerHi = 18;        ///< Trailer high offset.
+inline constexpr std::size_t kSettingsByteTrailerLo = 19;        ///< Trailer low offset.
+
+// ---------------------------------------------------------------------------
+// TFT screen image-upload opcodes (240x135 RGB565 — AK980 PRO 1.14" TFT).
+//
+// TWO upload paths discovered (docs/protocols/keyboard/ak980pro_tft_protocol.md):
+//   (a) 28-byte chunked path: opcode 0x7F 0x03 + 0x80|chunkIdx — 2 315 chunks
+//       per frame, ~10.8 min for full 140-frame GIF. SLOW but works on every
+//       firmware revision.
+//   (b) 4 KiB bulk path: opcode 0x72 begin + bulk-write — ~4.5 s per frame,
+//       **143× faster**. Preferred when available; fall back to (a) otherwise.
+//
+// 24-bit chunk index for (a) is split across bytes 1 / 3 / low-7-bits of
+// byte 2 with the 0x80 marker. RGB565 big-endian, row-major top-down.
+// ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdScreenHeader = 0x7f;     ///< Chunked path begin.
+inline constexpr std::uint8_t CmdScreenSubBegin = 0x03;   ///< Sub-cmd for chunked begin.
+inline constexpr std::uint8_t CmdScreenChunkMarker = 0x80;///< OR-mask for chunk index byte.
+inline constexpr std::uint8_t CmdScreenBulkBegin = 0x72;  ///< 4 KiB bulk path begin (143× faster).
+inline constexpr std::uint8_t CmdScreenSave = 0x02; ///< Persist screen state (semantic alias for CmdSaveRtc).
+
+inline constexpr std::uint16_t kTftWidth = 240;         ///< TFT panel width in pixels.
+inline constexpr std::uint16_t kTftHeight = 135;        ///< TFT panel height in pixels.
+inline constexpr std::size_t kTftFrameBytes = 240u * 135u * 2u;  ///< RGB565 frame size (64 800 B).
+inline constexpr std::size_t kTftChunkPayload = 28;     ///< Payload bytes per 64-byte chunked report.
+inline constexpr std::size_t kTftBulkChunkSize = 4096;  ///< Bulk-path chunk size (4 KiB).
+inline constexpr std::size_t kTftMaxFrames = 140;       ///< Max GIF frames the firmware accepts.
+inline constexpr std::size_t kTftGifHeader = 256;       ///< GIF89a header byte count.
+inline constexpr std::size_t kTftInterChunkMs = 2;      ///< Inter-chunk delay (ms).
+
+// ---------------------------------------------------------------------------
+// Wireless macro upload (cmd 0x19 0x04 + cmd 0x15 0x04 — DIFFERENT transport
+// from wired 0x09 0x1C). See docs/protocols/keyboard/ak980pro_macros_protocol.md.
+//
+// LCD-aware time-sync alias (cmd 0x0C 0x10) — variant of CmdSetTime=0x28 used
+// on LCD-display models like AK980 PRO. The 0x28 envelope we ship works; this
+// constant is documented for future investigation whether the LCD variant
+// drives a richer display-side clock animation.
+// ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdMacroBeginWireless = 0x19;     ///< Wireless macro upload begin.
+inline constexpr std::uint8_t MacroBeginWirelessSub = 0x04;     ///< Sub-cmd for wireless begin.
+inline constexpr std::uint8_t CmdMacroChunkInfoWireless = 0x15; ///< Wireless macro chunk-info.
+inline constexpr std::uint8_t MacroChunkInfoWirelessSub = 0x04; ///< Sub-cmd for chunk-info.
+inline constexpr std::uint8_t CmdSetTimeLcd = 0x0c;             ///< LCD-aware time-sync alias.
+inline constexpr std::uint8_t CmdSetTimeLcdSub = 0x10;          ///< Sub-cmd for LCD time-sync.
+
 // RGB zone identifiers used with CmdSetRgbStatic, CmdSetRgbEffect, and CmdSetRgbBuffer.
 inline constexpr std::uint8_t ZoneKeys = 0x00;  ///< Main key matrix (104 LEDs).
 inline constexpr std::uint8_t ZoneSides = 0x01; ///< Side-lighting strip (18 LEDs).
