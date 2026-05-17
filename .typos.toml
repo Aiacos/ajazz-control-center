@@ -57,6 +57,9 @@ QtWebEngine = "QtWebEngine"
 Falsh        = "Falsh"
 ReadFalshData = "ReadFalshData"
 Runing       = "Runing"
+# Italian vendor UI label in docs/research/builtin-plugin-categories.md
+# (the original Italian column from the AJAZZ vendor app translation).
+Vai          = "Vai"
 
 [files]
 extend-exclude = [
@@ -68,4 +71,10 @@ extend-exclude = [
     "*.svg",
     "resources/icons/*",
     "python/ajazz_plugins/examples/**/assets/**",
+    # Vendor RE notes: tables cite verbatim JS / C++ symbol names from
+    # disassembly (e.g. `fo(lang, addr)`, `mui::WeatherUtils`). typos
+    # parses inside backticks and flags every short identifier; the
+    # whole class of docs is foreign-symbol heavy, so exclude wholesale.
+    "docs/protocols/mouse/aj_series_vendor.md",
+    "docs/protocols/mouse/aj_series_ui_action_map.md",
 ]
