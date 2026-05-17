@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Connected-Device Capability Parity
 status: executing
-stopped_at: ARCH-06 ratified at default verdict; Phase 9 partial-scope complete (7/7 plans landed)
-last_updated: '2026-05-15T08:14:36.812Z'
-last_activity: 2026-05-15
+stopped_at: ARCH-05.1 amends ARCH-05 — AK980 PRO firmware RTC implemented via opcode 0x28; ARCH-04 image pipeline implemented for AKP05; both ahead of Phase 10 schedule
+last_updated: '2026-05-17T12:00:00.000Z'
+last_activity: 2026-05-17
 progress:
   total_phases: 5
   completed_phases: 0
@@ -128,6 +128,16 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 Last session: 2026-05-15T08:14:36.805Z
 Stopped at: ARCH-06 ratified at default verdict; Phase 9 partial-scope complete (7/7 plans landed)
 Resume file: None
+
+## 2026-05-17 mid-milestone amendment update
+
+Two atomic commits landed ahead of Phase 10 schedule (autonomous research + execute run, 2026-05-17):
+
+- **acc239e** `feat(streamdeck): implement ARCH-04 host-side image pipeline for AKP05` — Qt6 QImage + QImageWriter pipeline at `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` (Option C from ARCH-04 default verdict). AKP05 backend now does RGBA8 → resize → JPEG host-side per IDisplayCapable contract; setKeyColor no longer falls back to clearKey. 10 new unit tests (32 assertions). Phase 10 DEVICES-05 prerequisite ARCH-04 implementation now in place; per-byte JPEG quality tuning still pending Phase 9.x AKP03 0x3004 capture confirmation (Pitfall 22).
+
+- **9787962** `feat(keyboard): implement AK980 PRO firmware RTC setTime (ARCH-05.1)` — partial flip of ARCH-05 default verdict. Two independent corpora (gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node, both targeting Sonix SN32F299 family at VID:PID 0x0c45:0x8009) document a host-settable firmware RTC at opcode 0x28. ProprietaryKeyboard::setTime() now writes the 3-packet (preamble + data + save) envelope. 6 new [clock]-tagged unit tests (203 assertions) pin byte-precise layout. ak980pro.maturity promoted scaffolded → partial. Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent) gates partial → functional promotion. ARCH-05 stands for Stream Dock family (AKP03/AKP05/Mirabox N3/N4) — Companion streamdock.ts audit confirms zero time opcodes there; clock widget on AKP05 main LCD strip is a v1.2.x deferred host-rendered TftClockWidget via the new image_pipeline.
+
+ARCH-05.1 ADR: `.planning/phases/09-research-captures-hygiene/ARCH-05.1.md`.
 
 ## Operator Next Steps
 
