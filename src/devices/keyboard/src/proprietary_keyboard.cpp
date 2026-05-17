@@ -215,6 +215,19 @@ std::array<std::uint8_t, ReportSize> buildBatteryQuery() {
     return pkt;
 }
 
+std::array<std::uint8_t, ReportSize> buildPerKeyRgbWriteHeader(bool isWireless) {
+    auto pkt = makeReport(kCmdPerKeyRgbWrite);
+    pkt[2] = kPerKeyRgbSub; // 0x04 — discriminates per-key RGB from battery query (sub 0x01)
+    pkt[9] = isWireless ? kPerKeyModeWireless : kPerKeyModeWired;
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless) {
+    auto pkt = makeReport(kCmdPerKeyRgbReadback);
+    pkt[2] = isWireless ? kPerKeyReadbackWirelessSub : kPerKeyReadbackWiredSub;
+    return pkt;
+}
+
 std::array<std::uint8_t, ReportSize> buildSetRgbModeData(std::uint8_t modeId,
                                                          std::uint8_t r,
                                                          std::uint8_t g,

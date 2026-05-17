@@ -131,6 +131,23 @@ inline constexpr std::size_t kTftInterChunkMs = 2;      ///< Inter-chunk delay (
 // ---------------------------------------------------------------------------
 inline constexpr std::uint8_t CmdSetRgbMode = 0x13;             ///< Firmware RGB lighting mode (opcode in 5-packet envelope; see ak980_lighting.hpp for the 20-mode enum).
 inline constexpr std::uint8_t CmdFinish = 0xf0;                 ///< End-of-envelope sentinel (vendor sends after every multi-packet commit; not yet emitted by us — see ak980pro_vendor.md §13.7).
+// Per-key RGB upload — opcode 0x20 multiplexed with battery query (sub 0x01)
+// via the sub-cmd byte. See ak980pro_perkey_rgb_protocol.md §§1-3 for the
+// full envelope (write header → RGB blob chunks → save). NOTE: wired path is
+// MONOCHROMATIC ONLY (1 byte per LED, firmware limitation per §3.1); only the
+// wireless path supports full per-key RGB color.
+inline constexpr std::uint8_t kCmdPerKeyRgbWrite = 0x20;        ///< Per-key RGB write opcode (same as CmdBatteryQuery; discriminated by sub).
+inline constexpr std::uint8_t kPerKeyRgbSub = 0x04;             ///< Sub-cmd for per-key RGB write.
+inline constexpr std::uint8_t kCmdPerKeyRgbReadback = 0xf5;     ///< Per-key RGB read-back opcode (cmd 0xF5).
+inline constexpr std::uint8_t kPerKeyReadbackWiredSub = 0x03;   ///< Read-back sub for wired path.
+inline constexpr std::uint8_t kPerKeyReadbackWirelessSub = 0x09;///< Read-back sub for 2.4 G wireless path.
+inline constexpr std::uint8_t kPerKeyModeWired = 0x03;          ///< Mode-byte value at packet offset 9 (wired).
+inline constexpr std::uint8_t kPerKeyModeWireless = 0x08;       ///< Mode-byte value at packet offset 9 (2.4 G wireless).
+inline constexpr std::size_t kPerKeyWiredBlobSize = 0xc0;       ///< 192 B — 1 byte/LED × 192 LEDs (MONOCHROME).
+inline constexpr std::size_t kPerKeyWirelessBlobSize = 0x200;   ///< 512 B — 4 byte/LED [reserved=0, R, G, B] × 128 LEDs.
+inline constexpr std::size_t kPerKeyWiredChunkCount = 3;        ///< 192 B / 64 B chunks = 3 chunks (wired).
+inline constexpr std::size_t kPerKeyWirelessChunkCount = 8;     ///< 512 B / 64 B chunks = 8 chunks (NOT 6 as prior doc — corrected by deep RE per ak980pro_perkey_rgb_protocol.md §2).
+
 inline constexpr std::uint8_t CmdMacroBeginWireless = 0x19;     ///< Wireless macro upload begin.
 inline constexpr std::uint8_t MacroBeginWirelessSub = 0x04;     ///< Sub-cmd for wireless begin.
 inline constexpr std::uint8_t CmdMacroChunkInfoWireless = 0x15; ///< Wireless macro chunk-info.
@@ -291,6 +308,38 @@ buildSetRgbModeData(std::uint8_t modeId,
                     std::uint8_t brightness,
                     std::uint8_t speed,
                     std::uint8_t direction);
+
+/**
+ * @brief Build the per-key RGB WRITE-HEADER packet (opcode 0x20 0x04).
+ *
+ * First packet of the 3-step per-key RGB envelope per
+ * `ak980pro_perkey_rgb_protocol.md` §1-3:
+ *   1. WRITE HEADER (this builder): ReportId=0x04, byte 1=0x20, byte 2=0x04,
+ *      byte 9 = mode (kPerKeyModeWired=0x03 OR kPerKeyModeWireless=0x08).
+ *   2. RGB blob chunks: 192 B (wired) or 512 B (wireless) sent as 64-byte
+ *      slices via the feature-report path. NO opcode prefix on the chunks
+ *      themselves; firmware infers them as continuation of step 1.
+ *   3. SAVE: `buildCommitEeprom()` (opcode 0x0E) OR `makeReport(CmdSaveRtc)`
+ *      (opcode 0x02). Per the vendor doc §3.7 the per-key RGB save uses 0x02
+ *      (semantic alias for both RTC-save and per-key-RGB save).
+ *
+ * Wired path is MONOCHROMATIC ONLY (1 byte per LED, firmware limitation —
+ * NOT a bug we introduce; per `ak980pro_perkey_rgb_protocol.md` §3.1).
+ *
+ * @param isWireless Pick the wireless mode byte (0x08) instead of wired (0x03).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildPerKeyRgbWriteHeader(bool isWireless);
+
+/**
+ * @brief Build the per-key RGB read-back request packet (opcode 0xF5).
+ *
+ * Sent BEFORE reading the chunked feature-report response carrying the
+ * current on-device per-key RGB state. Sub-cmd discriminates wired (0x03)
+ * from wireless (0x09) per `ak980pro_perkey_rgb_protocol.md` §6.2.
+ *
+ * @param isWireless Pick the wireless read-back sub (0x09) instead of wired (0x03).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless);
 
 /**
  * @brief Build the time-sync start packet — first of the 4-packet envelope.

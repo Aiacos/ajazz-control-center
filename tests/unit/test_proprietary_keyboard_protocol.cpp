@@ -318,6 +318,75 @@ TEST_CASE("ak980 lighting CmdSetRgbMode opcode is 0x13 + CmdFinish is 0xF0",
     REQUIRE(CmdSetRgbMode != CmdSetTime);
 }
 
+// ---------------------------------------------------------------------------
+// Per-key RGB upload header + readback (opcode 0x20 0x04 + 0xF5 0x03/0x09).
+// P3.11 — corrects the wireless chunk count to 8 (NOT 6 as prior pass).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ak980 per-key RGB write header — wired mode byte at offset 9 is 0x03",
+          "[proprietary][protocol][perkey-rgb]") {
+    auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/false);
+    REQUIRE(pkt.size() == ReportSize);
+    REQUIRE(pkt[0] == ReportId);
+    REQUIRE(pkt[1] == kCmdPerKeyRgbWrite);  // 0x20
+    REQUIRE(pkt[2] == kPerKeyRgbSub);        // 0x04
+    REQUIRE(pkt[9] == kPerKeyModeWired);     // 0x03
+    // All other bytes must be zero.
+    for (std::size_t i = 3; i < ReportSize; ++i) {
+        if (i == 9) {
+            continue;
+        }
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("ak980 per-key RGB write header — wireless mode byte at offset 9 is 0x08",
+          "[proprietary][protocol][perkey-rgb]") {
+    auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/true);
+    REQUIRE(pkt[0] == ReportId);
+    REQUIRE(pkt[1] == kCmdPerKeyRgbWrite);  // 0x20
+    REQUIRE(pkt[2] == kPerKeyRgbSub);        // 0x04
+    REQUIRE(pkt[9] == kPerKeyModeWireless);  // 0x08 (not 0x03)
+}
+
+TEST_CASE("ak980 per-key RGB readback — wired uses sub 0x03, wireless sub 0x09",
+          "[proprietary][protocol][perkey-rgb]") {
+    auto const wired = buildPerKeyRgbReadback(/*isWireless=*/false);
+    REQUIRE(wired[0] == ReportId);
+    REQUIRE(wired[1] == kCmdPerKeyRgbReadback); // 0xF5
+    REQUIRE(wired[2] == kPerKeyReadbackWiredSub); // 0x03
+
+    auto const wireless = buildPerKeyRgbReadback(/*isWireless=*/true);
+    REQUIRE(wireless[1] == kCmdPerKeyRgbReadback); // 0xF5
+    REQUIRE(wireless[2] == kPerKeyReadbackWirelessSub); // 0x09 (NOT 0x03)
+}
+
+TEST_CASE("ak980 per-key RGB blob sizes — wired 192 B + wireless 512 B (NOT 384 / 6 chunks)",
+          "[proprietary][protocol][perkey-rgb]") {
+    // Wired = monochrome only, 1 byte/LED × 192 LEDs = 192 B = 3 chunks of 64 B.
+    REQUIRE(kPerKeyWiredBlobSize == 192);
+    REQUIRE(kPerKeyWiredChunkCount == 3);
+    REQUIRE(kPerKeyWiredBlobSize == kPerKeyWiredChunkCount * 64);
+
+    // Wireless = full color, 4 byte/LED ([reserved=0, R, G, B]) × 128 LEDs
+    // = 512 B = 8 chunks of 64 B. The prior doc said 6 chunks (which would be
+    // 384 B), which is WRONG per deep RE — 8 chunks is correct.
+    REQUIRE(kPerKeyWirelessBlobSize == 512);
+    REQUIRE(kPerKeyWirelessChunkCount == 8);
+    REQUIRE(kPerKeyWirelessBlobSize == kPerKeyWirelessChunkCount * 64);
+}
+
+TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 ≠ battery query opcode 0x20 sub 0x01",
+          "[proprietary][protocol][perkey-rgb]") {
+    // Pitfall guard: 0x20 multiplexes battery query (sub 0x01, single-shot read)
+    // and per-key RGB upload (sub 0x04, multi-packet envelope). A future
+    // contributor must not collapse them.
+    REQUIRE(kCmdPerKeyRgbWrite == CmdBatteryQuery);
+    REQUIRE(kPerKeyRgbSub != BatteryQuerySub);
+    REQUIRE(kPerKeyRgbSub == 0x04);
+    REQUIRE(BatteryQuerySub == 0x01);
+}
+
 TEST_CASE("ak980 battery sub-command is distinct from per-key RGB sub",
           "[proprietary][protocol][battery]") {
     // Pitfall guard: opcode 0x20 multiplexes battery query (sub 0x01) and per-key
