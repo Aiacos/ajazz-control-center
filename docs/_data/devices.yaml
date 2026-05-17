@@ -381,6 +381,46 @@ devices:
     dpi_stages: 6
     notes: "Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor==\"248a\"` and `idVendor==\"249a\"`."
 
+  - codename: aj159_apex_wired
+    family: mouse
+    name: "AJAZZ AJ159 APEX (wired) / AJ179 APEX"
+    vid: "0x3151"
+    pid: "0x5008"
+    maturity: scaffolded
+    capabilities: [dpi, rgb]
+    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+    dpi_stages: 8
+    notes: "AJ159 APEX in USB wired mode + AJ179 APEX alias (disambiguated by descriptor strings, not by PID). 8 onboard DPI stages, 8 KHz polling. Wire format documented in aj_series_opcode_table.md (deep RE 2026-05-17). Promotion to partial requires P3.12 wire-format rewrite + real-device round-trip witness."
+    feature_summary:
+      works:
+        - "Descriptor + factory wired in register.cpp (3151:5008)"
+      partial: []
+      pending:
+        - "P3.12 aj_series.cpp wire-format rewrite per docs/protocols/mouse/aj_series_opcode_table.md (~600 LOC code + ~400 LOC test, feature-flagged AJAZZ_AJ_SERIES_WIRE_REWRITE)"
+        - "Real-device round-trip witness for scaffolded → partial promotion"
+
+  - codename: aj159_apex_24g
+    family: mouse
+    name: "AJAZZ AJ159 APEX (2.4G)"
+    vid: "0x3151"
+    pid: "0x4026"
+    maturity: scaffolded
+    capabilities: [dpi, rgb]
+    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+    dpi_stages: 8
+    notes: "AJ159 APEX in 2.4G wireless mode (capped at 1 KHz per vendor JS UI). Same wire format as wired sibling. Promotion blocked on P3.12 + real-device test."
+
+  - codename: aj159_apex_dongle
+    family: mouse
+    name: "AJAZZ AJ159 APEX 2.4G dongle (paired kbd+mouse)"
+    vid: "0x3151"
+    pid: "0x4027"
+    maturity: scaffolded
+    capabilities: [dpi, rgb]
+    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+    dpi_stages: 8
+    notes: "Paired 2.4G dongle exposing both keyboard + mouse child interfaces (dongle_common path per aj_series_device_matrix.md §1.2). Promotion blocked on P3.12."
+
   - codename: ajazz_24g_8k
     family: mouse
     name: "AJAZZ 2.4G 8K"

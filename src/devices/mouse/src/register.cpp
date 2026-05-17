@@ -65,6 +65,20 @@ void registerAll(core::DeviceRegistry& registry) {
         // backend; configuration writes may no-op until reconciled
         // (same caveat as AJ-series, see file header @warning).
         {0x3151, 0x5007, "AJAZZ 2.4G 8K", "ajazz_24g_8k"},
+        // AJ159 APEX family — three PIDs surfaced by deep RE pass
+        // 2026-05-17 (aj_series_device_matrix.md §1.2). All three share
+        // the same wire format documented in aj_series_opcode_table.md;
+        // backend dispatch is through the existing makeAjSeries factory.
+        // NOTE: AJ179 APEX shares the wired + 2.4G PIDs and is
+        // disambiguated by USB descriptor strings (not by PID). Treat
+        // these as scaffolded until P0.5 wire-format rewrite (commit
+        // P3.12) lands + a real-device round-trip witness confirms.
+        {0x3151, 0x5008, "AJAZZ AJ159 APEX (wired) / AJ179 APEX", "aj159_apex_wired"},
+        {0x3151, 0x4026, "AJAZZ AJ159 APEX (2.4G)", "aj159_apex_24g"},
+        {0x3151, 0x4027, "AJAZZ AJ159 APEX 2.4G dongle (paired kbd+mouse)", "aj159_apex_dongle"},
+        // Partner-VID rebadges (KZZI / akko / VKMS / rongyuan /
+        // MagneticJade) catalogued in aj_series_device_matrix.md §7.1.
+        // NOT registered here per trademark/licensing risk note in §7.1.
     };
 
     for (auto const& m : kMice) {
