@@ -17,14 +17,18 @@ set -euo pipefail
 
 bad=0
 for path in "$@"; do
-    case "$path" in
-        tests/*.cpp | tests/**/*.cpp) ;;
-        *) continue ;;
-    esac
+    # Filter to tests/**/*.cpp - pre-commit's `files:` regex already does
+    # this when invoked as a hook, but keep a defensive guard for direct
+    # CLI use. Bash regex match (=~) handles the recursive pattern that
+    # POSIX `case` globs cannot express portably.
+    [[ "$path" =~ ^tests/.*\.cpp$ ]] || continue
     [ -f "$path" ] || continue
-    # awk: emit one line per offending TEST_CASE/SECTION row with file:line:context
+    # awk: emit one line per offending TEST_CASE/SECTION row with file:line:context.
+    # Match only the actual Catch2 invocations (TEST_CASE( or SECTION() at the
+    # start of code after optional leading whitespace), not C++ comments that
+    # happen to mention "TEST_CASE" or "SECTION" in prose.
     out=$(awk '
-        /TEST_CASE|SECTION/ {
+        /^[[:space:]]*(TEST_CASE|SECTION)[[:space:]]*\(/ {
             if (match($0, /[^\x00-\x7F]/)) {
                 printf("%s:%d: non-ASCII in test title: %s\n", FILENAME, NR, $0)
             }
