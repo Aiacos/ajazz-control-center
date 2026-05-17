@@ -17,6 +17,11 @@ add_executable(
     # setActiveDpiStage(0). Locks the wire-format mock seam in place
     # before Phase 10/11/12 byte-level tests depend on it.
     test_aj_series_mock_transport.cpp
+    # P3.12 — vendor-correct wire-format primitives for AJ-series mouse.
+    # Byte-precise regression guards (BIT7 checksum, _RateToNum lookup,
+    # action at bytes 8..11 not 4..7, 8th-DPI-stage B/checksum collision,
+    # no-standalone-battery-opcode invariant).
+    test_aj_series_wire_format.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp
@@ -205,6 +210,7 @@ target_include_directories(
     ajazz_unit_tests
     PRIVATE ${CMAKE_SOURCE_DIR}/src/devices/streamdeck/src
             ${CMAKE_SOURCE_DIR}/src/devices/keyboard/src
+            ${CMAKE_SOURCE_DIR}/src/devices/mouse/src
             ${CMAKE_SOURCE_DIR}/src/app/src
             # CR-01 (Phase 06, Plan 06-02): test_win32_env_block.cpp needs the host-private
             # `win32_env_block.hpp` (it lives under src/plugins/src/, not include/).
