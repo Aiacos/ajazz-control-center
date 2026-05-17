@@ -1,60 +1,31 @@
 # Gitleaks configuration for AJAZZ Control Center.
 #
-# Strategy: keep the upstream default rule set (which catches real secrets like
-# AWS keys, GitHub PATs, Slack webhooks) but allowlist patterns that the
-# default `generic-api-key` regex flags as false-positives in our codebase:
+# Strategy: extend the upstream default rule set (so AWS keys, GitHub PATs,
+# Slack webhooks etc. still trigger), with a root-level allowlist for
+# false-positive patterns:
 #
-#   1. QSettings key literals of the form "Word/Word" — these are application
-#      settings paths, NOT secrets.
-#   2. AES-GCM keys and other crypto constants documented inside vendor-RE
-#      docs under docs/protocols/streamdeck/akp_dfu_protocol.md as security
-#      findings (NOT distributed keys; documented for clarity per the
-#      reverse-engineering audit trail).
+#   1. QSettings key string literals like "battery/poll-enabled" — these are
+#      application settings paths, NOT secrets, but they sometimes cross the
+#      default `generic-api-key` entropy threshold.
+#   2. Vendor-RE documentation under docs/protocols/ that catalogues
+#      high-entropy hex constants (e.g., the AES-GCM key extracted from
+#      Stream Dock AJAZZ.exe per akp_dfu_protocol.md). These are documented
+#      as security FINDINGS, NOT distributed secrets — they exist in the
+#      vendor binary itself and our docs cite them for audit-trail clarity.
 #
-# This file is loaded by the gitleaks GitHub Action when present at repo root.
+# This file is loaded automatically by the gitleaks GitHub Action when
+# present at the repo root.
+
 [extend]
 useDefault = true
 
-[[rules]]
-id = "generic-api-key-suppressed-paths"
-description = "Suppress generic-api-key false positives on QSettings keys + RE docs"
-regex = '''(?i)(api[_-]?key|secret|token|password|credentials)'''
-# We DON'T scan the body — this rule exists only to declare a default-matched
-# pattern that allowlist rules below can scope against.
-allowlist = [
-  { description = "QSettings string keys are not API keys",
-    paths = [
-      '''src/app/src/.*\.cpp''',
-      '''src/app/src/.*\.hpp''',
-      '''src/devices/.*\.cpp''',
-      '''src/devices/.*\.hpp''',
-    ] },
-  { description = "Vendor-RE docs document security findings (e.g. AES-GCM key in vendor binary); these are NOT distributed secrets",
-    paths = [
-      '''docs/protocols/streamdeck/akp_dfu_protocol\.md''',
-      '''docs/protocols/.*_vendor\.md''',
-      '''docs/research/clean-reimplementation-roadmap\.md''',
-      '''docs/research/phase3-patch-sequence\.md''',
-    ] },
-]
-
-# Project-wide path allowlist for vendor-RE artefacts. Reverse-engineered
-# byte tables + opcode catalogues inevitably contain high-entropy hex strings
-# that resemble keys but are wire-format documentation. Scoped narrowly to
-# the docs/protocols/ subtree so secret detection in source code is unaffected.
 [allowlist]
-description = "RE artefacts + Ghidra-derived hex docs"
+description = "QSettings literals + vendor-RE documentation"
 paths = [
-  '''docs/protocols/.*_protocol\.md''',
-  '''docs/protocols/.*_vendor\.md''',
-  '''docs/protocols/streamdeck/akp_device_matrix\.md''',
-  '''docs/protocols/streamdeck/akp_dfu_protocol\.md''',
-  '''docs/protocols/streamdeck/akp_plugin_sdk\.md''',
-  '''docs/protocols/streamdeck/akp05_init_sequence\.md''',
-  '''docs/protocols/keyboard/ak980pro_assets_inventory\.md''',
-  '''docs/protocols/keyboard/ak980pro_mui_dll\.md''',
-  '''docs/protocols/mouse/aj_series_opcode_table\.md''',
-  '''docs/protocols/mouse/aj_series_sled_schema\.md''',
-  '''docs/protocols/mouse/aj_series_ui_action_map\.md''',
-  '''docs/protocols/mouse/aj_series_device_matrix\.md''',
+    '''docs/protocols/.*\.md''',
+    '''docs/research/clean-reimplementation-roadmap\.md''',
+    '''docs/research/phase3-patch-sequence\.md''',
+]
+regexes = [
+    '''kSettingsKey\s*=\s*"[A-Za-z0-9._/-]+"''',
 ]
