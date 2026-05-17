@@ -24,8 +24,10 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
+#include <ctime>
 #include <mutex>
 #include <stdexcept>
 #include <string>
@@ -141,6 +143,60 @@ std::array<std::uint8_t, ReportSize> buildCommitEeprom() {
 }
 
 /**
+ * @brief Build the time-sync preamble packet — control packet for opcode 0x28.
+ *
+ * Uses the default ReportId=0x04 + CmdSetTime=0x28 at byte 1 + sentinel 0x01 at
+ * byte 8. The firmware reads this as "next packet is a CMD_TIME configuration
+ * data block, not a CMD_SAVE acknowledgement".
+ */
+std::array<std::uint8_t, ReportSize> buildSetTimePreamble() {
+    auto pkt = makeReport(CmdSetTime);
+    pkt[8] = 0x01;
+    return pkt;
+}
+
+/**
+ * @brief Build the 64-byte time-data packet (ReportId=0x00, magic 0x5A).
+ *
+ * See proprietary_protocol.hpp for the full byte spec. Year saturates at the
+ * 2000 floor so calling with std::chrono::system_clock epoch (year 1970) does
+ * not underflow into a uint8 wrap.
+ */
+std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
+                                                      std::uint8_t month,
+                                                      std::uint8_t day,
+                                                      std::uint8_t hour,
+                                                      std::uint8_t minute,
+                                                      std::uint8_t second) {
+    std::array<std::uint8_t, ReportSize> pkt{};
+    pkt[0] = TimeDataReportId; // 0x00 — NOT the default 0x04
+    pkt[1] = 0x01;
+    pkt[2] = 0x5a;
+    pkt[3] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;
+    pkt[4] = month;
+    pkt[5] = day;
+    pkt[6] = hour;
+    pkt[7] = minute;
+    pkt[8] = second;
+    pkt[9] = 0x00;
+    pkt[10] = 0x04;
+    // bytes 11..61 stay 0x00 from value-init.
+    pkt[ReportSize - 2] = 0xaa;
+    pkt[ReportSize - 1] = 0x55;
+    return pkt;
+}
+
+/**
+ * @brief Build the time-sync save packet — control packet for opcode 0x02.
+ *
+ * Distinct from buildCommitEeprom() (opcode 0x0E for keymap / RGB / macro
+ * state). The RTC has its own dedicated save opcode 0x02.
+ */
+std::array<std::uint8_t, ReportSize> buildSetTimeSave() {
+    return makeReport(CmdSaveRtc);
+}
+
+/**
  * @brief Return the LED count for a given zone id.
  *
  * @param zone  Zone id constant (ZoneKeys, ZoneSides, or ZoneLogo).
@@ -185,10 +241,13 @@ namespace {
 using namespace ajazz::core;
 using namespace ajazz::keyboard::proprietary;
 
-// File-static once_flag (Pitfall 14): WARN emits at most once per process
-// lifetime for the AKB980 PRO backend. Distinct from the four Stream Dock
-// flags — different TU, different codename.
-std::once_flag s_warned_akb980;
+// File-static once_flag (Pitfall 14): legacy WARN-once flag used by the v1.1
+// scaffolding stub. Retained in case a future regression demotes setTime back
+// to NotImplemented for this backend — the WARN payload would surface the same
+// log line shape that v1.1 dashboards alerted on. Currently UNUSED in code
+// (post-ARCH-05 amendment 2026-05-17, setTime() actually writes the 3-packet
+// 0x28 envelope and returns Ok / IoError).
+[[maybe_unused]] std::once_flag s_warned_akb980;
 
 /**
  * @brief IDevice backend for proprietary-protocol AJAZZ keyboards.
@@ -415,17 +474,55 @@ public:
 
     // ---- IClockCapable ------------------------------------------------------
     //
-    // Scaffolded stub — AKB980 PRO firmware does not expose a host-settable
-    // RTC over HID today (vendor recon noted in 05-CONTEXT.md). WARN-once per
-    // process via s_warned_akb980 (Pitfall 14). VIA-protocol keyboards
-    // (ViaKeyboard) explicitly do NOT inherit IClockCapable per D-03 — they
-    // are QMK-style with no vendor clock surface.
+    // ARCH-05 amendment (2026-05-17): AK980 PRO (Sonix SN32F299 family,
+    // VID:PID 0x0c45:0x8009) has a firmware RTC reachable via opcode 0x28.
+    // Wire format from two independent reverse-engineering corpora:
+    //   - github.com/gohv/EPOMAKER-Ajazz-AK820-Pro (src/protocol.rs)
+    //   - github.com/KyleBoyer/TFTTimeSync-node    (src/packets.ts)
+    // Both expose identical 3-packet sequence (preamble + data + save) with
+    // year-as-byte-offset-from-2000 + 0xAA 0x55 delimiter. VIA-protocol
+    // keyboards (ViaKeyboard) still do NOT inherit IClockCapable per D-03 —
+    // they are QMK-style with no vendor clock surface, untouched by this
+    // amendment.
+    //
+    // Vendor app sends LOCAL time (TaxMachine / KyleBoyer both pass through
+    // local Date components without UTC normalisation), so we convert from
+    // std::chrono::system_clock::time_point via localtime_s/localtime_r.
     [[nodiscard]] TimeSyncResult
-    setTime([[maybe_unused]] std::chrono::system_clock::time_point tp) override {
-        std::call_once(s_warned_akb980, [] {
-            AJAZZ_LOG_WARN("keyboard.akb980", "setTime() not yet implemented for akb980");
-        });
-        return TimeSyncResult::NotImplemented;
+    setTime(std::chrono::system_clock::time_point tp) override {
+        auto const tt = std::chrono::system_clock::to_time_t(tp);
+        std::tm local{};
+#ifdef _WIN32
+        if (::localtime_s(&local, &tt) != 0) {
+            AJAZZ_LOG_WARN("keyboard.ak980", "setTime: localtime_s failed");
+            return TimeSyncResult::IoError;
+        }
+#else
+        if (::localtime_r(&tt, &local) == nullptr) {
+            AJAZZ_LOG_WARN("keyboard.ak980", "setTime: localtime_r failed");
+            return TimeSyncResult::IoError;
+        }
+#endif
+        auto const year = static_cast<std::uint16_t>(local.tm_year + 1900);
+        auto const month = static_cast<std::uint8_t>(local.tm_mon + 1);
+        auto const day = static_cast<std::uint8_t>(local.tm_mday);
+        auto const hour = static_cast<std::uint8_t>(local.tm_hour);
+        auto const minute = static_cast<std::uint8_t>(local.tm_min);
+        auto const second = static_cast<std::uint8_t>(local.tm_sec);
+
+        try {
+            (void)m_transport->write(buildSetTimePreamble());
+            (void)m_transport->write(buildSetTimeData(year, month, day, hour, minute, second));
+            (void)m_transport->write(buildSetTimeSave());
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("keyboard.ak980", "setTime: HID write failed: {}", e.what());
+            return TimeSyncResult::IoError;
+        }
+
+        AJAZZ_LOG_INFO("keyboard.ak980",
+                       "setTime → device clock set to {:04}-{:02}-{:02} {:02}:{:02}:{:02} (local)",
+                       year, month, day, hour, minute, second);
+        return TimeSyncResult::Ok;
     }
 
 private:

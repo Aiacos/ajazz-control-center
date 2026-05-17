@@ -42,6 +42,27 @@ inline constexpr std::uint8_t CmdUploadMacro =
 inline constexpr std::uint8_t CmdCommitEeprom =
     0x0e; ///< Flush staged configuration to EEPROM (no payload).
 
+// ---------------------------------------------------------------------------
+// Time-sync wire format (ARCH-05 amendment, 2026-05-17).
+//
+// AK980 PRO + AK820 Pro family (Sonix SN32F299 MCU, VID:PID 0x0c45:0x8009)
+// expose a host-settable RTC via a three-packet sequence. Source-level
+// cross-corroboration:
+//
+//   - github.com/gohv/EPOMAKER-Ajazz-AK820-Pro (Rust, src/protocol.rs)
+//   - github.com/KyleBoyer/TFTTimeSync-node    (TypeScript, src/packets.ts)
+//
+// Both expose identical byte layouts. The control packets (preamble + save)
+// use the default ReportId=0x04; the time-data packet uses ReportId=0x00
+// (the magic 0x5A at byte 2 is the firmware's discriminator).
+// ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdSetTime =
+    0x28; ///< Configure / save RTC opcode (control packets, byte 1).
+inline constexpr std::uint8_t CmdSaveRtc =
+    0x02; ///< Persist RTC value to firmware NV-RAM (distinct from CmdCommitEeprom=0x0E).
+inline constexpr std::uint8_t TimeDataReportId =
+    0x00; ///< HID Report ID for the time-data packet (not the default 0x04).
+
 // RGB zone identifiers used with CmdSetRgbStatic, CmdSetRgbEffect, and CmdSetRgbBuffer.
 inline constexpr std::uint8_t ZoneKeys = 0x00;  ///< Main key matrix (104 LEDs).
 inline constexpr std::uint8_t ZoneSides = 0x01; ///< Side-lighting strip (18 LEDs).
@@ -134,6 +155,59 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
 
 /// @brief Build a CmdCommitEeprom (0x0e) report (no payload).
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildCommitEeprom();
+
+/**
+ * @brief Build the time-sync preamble packet (ReportId=0x04, opcode 0x28, byte[8]=0x01).
+ *
+ * Sent BEFORE the time-data packet. Tells the firmware "next packet is a CMD_TIME
+ * configuration data block".
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimePreamble();
+
+/**
+ * @brief Build the 64-byte time-data packet (ReportId=0x00, magic 0x5A).
+ *
+ * Byte layout:
+ *  - byte 0:  0x00 (HID Report ID — NOT the default 0x04 used by other commands)
+ *  - byte 1:  0x01 (fixed marker)
+ *  - byte 2:  0x5A (magic / firmware discriminator)
+ *  - byte 3:  year - 2000 (single byte; years < 2000 saturate to 0)
+ *  - byte 4:  month (1..12)
+ *  - byte 5:  day (1..31)
+ *  - byte 6:  hour (0..23)
+ *  - byte 7:  minute (0..59)
+ *  - byte 8:  second (0..59)
+ *  - byte 9:  0x00
+ *  - byte 10: 0x04 (fixed)
+ *  - bytes 11..61: 0x00
+ *  - byte 62: 0xAA (delimiter high)
+ *  - byte 63: 0x55 (delimiter low)
+ *
+ * @param year   Calendar year (e.g. 2026). Saturates at 2000 floor.
+ * @param month  1..12.
+ * @param day    1..31.
+ * @param hour   0..23.
+ * @param minute 0..59.
+ * @param second 0..59.
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildSetTimeData(std::uint16_t year,
+                 std::uint8_t month,
+                 std::uint8_t day,
+                 std::uint8_t hour,
+                 std::uint8_t minute,
+                 std::uint8_t second);
+
+/**
+ * @brief Build the time-sync save packet (ReportId=0x04, opcode 0x02).
+ *
+ * Sent AFTER the time-data packet. Instructs the firmware to persist the RTC
+ * value to NV-RAM so it survives a power cycle.
+ *
+ * @note Distinct from buildCommitEeprom() (which uses opcode 0x0E for keymap +
+ *       RGB + macro state). The RTC has its own save opcode 0x02.
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeSave();
 
 /**
  * @brief Return the LED count for a zone id.

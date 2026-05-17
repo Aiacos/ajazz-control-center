@@ -77,17 +77,51 @@ These map onto `ajazz::core::RgbEffect`:
 
 ## Time sync
 
-**Status:** scaffolded — not yet implemented.
+**Status:** implemented for AK980 PRO (ARCH-05.1, 2026-05-17) — pending
+physical round-trip witness for `functional` promotion.
 
-`ProprietaryKeyboard` (covering AKB980 PRO and other proprietary-protocol
-AJAZZ keyboards) inherits `IClockCapable` and returns
-`TimeSyncResult::NotImplemented` from `setTime()`, with a WARN-once via
-`s_warned_akb980` (Pitfall 14). VIA-protocol keyboards (`ViaKeyboard`)
-are explicitly excluded per D-03 — they are QMK-style with no vendor
-clock surface.
+`ProprietaryKeyboard::setTime()` writes a three-packet HID sequence to the
+device using the firmware RTC opcode `0x28`. The wire format is
+source-level corroborated against two independent reverse-engineering
+corpora targeting the same Sonix SN32F299 MCU family:
 
-When a wire format is captured (the Delphi installer in `~/MEGAsync/Ajazz/`
-needs `wine`/`innoextract` for static analysis), only this backend's body
-changes. See
-[`docs/superpowers/specs/2026-05-13-time-sync-design.md`](../../superpowers/specs/2026-05-13-time-sync-design.md)
-for the design contract.
+- `gohv/EPOMAKER-Ajazz-AK820-Pro` (Rust, `src/protocol.rs`)
+- `KyleBoyer/TFTTimeSync-node` (TypeScript, `src/packets.ts`)
+
+Both expose byte-for-byte identical layouts.
+
+### Three-packet sequence
+
+| # | Purpose  | Report ID | Byte 1 | Byte 8 | Notable bytes               |
+| - | -------- | --------- | ------ | ------ | --------------------------- |
+| 1 | Preamble | `0x04`    | `0x28` | `0x01` | else 0x00                   |
+| 2 | Data     | `0x00`    | `0x01` | second | b2=0x5A, b3=year-2000, b62=0xAA b63=0x55 |
+| 3 | Save     | `0x04`    | `0x02` | `0x00` | else 0x00                   |
+
+The data packet uses HID Report ID `0x00` (NOT the default `0x04` used by
+other commands); the firmware's real discriminator is the magic `0x5A` at
+byte 2. Year is encoded as a single byte offset from 2000 (saturates at
+0 for pre-2000); month is 1-based; the host sends LOCAL time, not UTC
+(matches vendor app behaviour per both corpora).
+
+The save opcode `0x02` is distinct from `CmdCommitEeprom = 0x0E` (used
+for keymap / RGB / macro state) — the RTC has its own NV-RAM save path.
+
+### What still gates `functional` promotion
+
+Pitfall 19 three-witness rule for `ak980pro.clock` post-amendment:
+
+1. **Capture witness:** source-level corroboration from two independent
+   corpora — SATISFIED.
+2. **Round-trip witness:** physical AK980 PRO accepts the 3-packet
+   sequence and the TFT clock widget shows the time we sent —
+   **DEFERRED to Phase 9.x physical test**.
+3. **Negative witness:** sending a wrong year (e.g. 2099) produces a
+   visible-but-wrong display, proving the firmware parses the field —
+   **DEFERRED to Phase 9.x physical test**.
+
+VIA-protocol keyboards (`ViaKeyboard`) are still explicitly excluded
+per D-03 — they are QMK-style with no vendor clock surface.
+
+See [`ARCH-05.1`](../../../.planning/phases/09-research-captures-hygiene/ARCH-05.1.md)
+for the full ADR.
