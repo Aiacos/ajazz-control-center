@@ -58,6 +58,15 @@ qt_add_executable(
     src/hotplug_debouncer.cpp
 )
 
+# P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only).
+# Conditional on Qt6::WebSockets availability — when the module is missing the
+# app still builds; plugin host functionality is disabled at runtime.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz-control-center PRIVATE src/sd_plugin_server.cpp)
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebSockets)
+    target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+endif()
+
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy
 # qt_add_qml_module's "no absolute paths" rule.
 set(ACC_APP_ICON ${CMAKE_SOURCE_DIR}/resources/icons/app.svg)
