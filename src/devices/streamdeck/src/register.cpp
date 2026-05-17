@@ -223,6 +223,16 @@ void registerAll(core::DeviceRegistry& registry) {
         d.hasClock = true;
         reg.registerDevice(d, &makeAkp03);
     }
+    // MBox-N3E (rev 1, old-vendor variant) — surfaced by Stream Dock vendor
+    // deep RE 2026-05-17 (`docs/protocols/streamdeck/akp_device_matrix.md`
+    // §4). Was missing from prior catalogue; the new-vendor sibling
+    // (`MiraboxN3VendorNew + 0x1003` = mirabox_n3en) was already registered.
+    {
+        auto d =
+            akp03_descriptor(MiraboxN3VendorOld, 0x1003, "Mirabox N3E (rev. 1)", "mirabox_n3e");
+        d.hasClock = true;
+        reg.registerDevice(d, &makeAkp03);
+    }
     {
         auto d =
             akp03_descriptor(MiraboxN3VendorNew, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3");
@@ -285,6 +295,30 @@ void registerAll(core::DeviceRegistry& registry) {
             .hasClock = true, // A-03 / D-03: shares Akp05Device backend → same IClockCapable.
         },
         &makeAkp05);
+
+    // -------------------------------------------------------------------------
+    // V25 (2025-revision) + OEM rebadge codenames AWAITING PID DISCOVERY.
+    //
+    // Stream Dock vendor SDK (SDLibrary1.dll) lists ~96 codenames across 7
+    // silicon families (see `docs/protocols/streamdeck/akp_device_matrix.md`).
+    // The PIDs below are NOT yet known; entries will be added here as soon as
+    // a real-device hot-plug capture surfaces them. Until then, an unknown
+    // VID:PID match logs an "unsupported device" warning rather than picking
+    // up the right family. The codename strings remain available for future
+    // log/UI cross-reference.
+    //
+    // AKP03 family (6-key + 3-encoder, same wire protocol as `makeAkp03`):
+    //   AKP03V25, AKP03EV25, AKP03RV25, SD12N3V25, TS16N3V25, VSDN3,
+    //   MBox-N3V25, MBox-N3EV25, MBox-N3 EV25, MSD-TWOV25, OMNIDIALV25
+    //
+    // AKP05 family (10-key + 4-encoder + strip, same wire as `makeAkp05`):
+    //   AKP05V25, AKP05EV25, AKP05RV25, MBox-N4Pro, MBox-N4ProE, MBox-N6,
+    //   N4Pro, N4ProE, N4V25, MSDPRO, MSDNEO, SD14N4V25, TS10N4V25, VSDN4,
+    //   VSDN4Pro, BRHubN4, BRHubN4Pro
+    //
+    // AKP815 family (15-key 5x3 + 800×480 strip):
+    //   TS183 (rebadge)
+    // -------------------------------------------------------------------------
 }
 
 } // namespace ajazz::streamdeck
