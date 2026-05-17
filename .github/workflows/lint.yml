@@ -120,8 +120,14 @@ jobs:
       - name: Install Qt 6.7
         # Project requires Qt >= 6.7 (see top-level CMakeLists.txt); the
         # qt6-* apt packages on ubuntu-24.04 only provide Qt 6.4.
+        # `qtwebsockets` is required by src/app/src/sd_plugin_server.cpp
+        # (Stream Deck Elgato v6 plugin server, P3.16); without it
+        # clang-tidy errors out with "'QWebSocket' file not found".
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
-        with: { version:  6.8.3, cache: true }
+        with:
+          version: 6.8.3
+          modules: qtwebsockets
+          cache: true
 
       - name: Configure
         run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF

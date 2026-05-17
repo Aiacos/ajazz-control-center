@@ -86,7 +86,12 @@ jobs:
         with:
           version: 6.8.3
           cache: true
-          modules: qtshadertools
+          # qtwebsockets is required by src/app/src/sd_plugin_server.cpp
+          # (Stream Deck Elgato v6 plugin server, P3.16). The CMake build
+          # tolerates its absence (find_package(... QUIET) sets
+          # AJAZZ_HAVE_WEBSOCKETS=OFF), but for CI we want the .cpp
+          # actually compiled so the integration is exercised.
+          modules: qtshadertools qtwebsockets
 
       # ---- Python ---------------------------------------------------------
       - name: Set up Python
@@ -156,6 +161,7 @@ jobs:
         with:
           version: 6.8.3
           cache: true
+          modules: qtwebsockets
 
       # Same rationale as the `build` job: the C++ test_manifest_signer.cpp
       # cases exec `python3 sign-plugin-manifest.py` which imports
@@ -231,7 +237,7 @@ jobs:
         with:
           version: 6.8.3
           cache: true
-          modules: qtshadertools
+          modules: qtshadertools qtwebsockets
 
       # Same rationale as the `build` job: ctest runs the manifest verifier
       # tests which exec `python3 sign-plugin-manifest.py`, importing
