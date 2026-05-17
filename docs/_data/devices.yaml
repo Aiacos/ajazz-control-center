@@ -302,11 +302,11 @@ devices:
     maturity: partial
     capabilities: [rgb, macros, layers, clock]
     protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format at opcode 0x28 via gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node — two independent corpora agree byte-for-byte. setTime() now writes the 3-packet (preamble + data + save) envelope; promotion partial -> functional gates on Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent)."
+    notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format: 4-packet HID Feature Report envelope (START 0x18 + PREAMBLE 0x28 + DATA magic 0x5A + SAVE 0x02), sent via writeFeature() (NOT write()), corroborated by gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node + Agent B vendor binary disassembly. setTime() implemented end-to-end; promotion partial -> functional gates on Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent)."
     feature_summary:
       works:
         - "Descriptor + factory wired in register.cpp (0c45:8009)"
-        - "Time-sync wire format implemented (ARCH-05.1): IClockCapable::setTime emits the 3-packet 0x28 envelope with local-time year-2000 byte encoding"
+        - "Time-sync wire format implemented (ARCH-05.1): IClockCapable::setTime emits the 4-packet 0x18/0x28/data/0x02 envelope via HID Feature Reports with local-time year-2000 byte encoding + 100ms settle window"
         - "RGB static / effect / per-LED buffer / brightness builders inherited from proprietary backend (AK680/AK510 wire format)"
         - "Macro chunked upload + key remap + layer switch inherited from proprietary backend"
       partial:

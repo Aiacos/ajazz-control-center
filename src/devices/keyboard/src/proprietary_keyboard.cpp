@@ -32,6 +32,7 @@
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <thread>
 
 namespace ajazz::keyboard {
 
@@ -149,6 +150,12 @@ std::array<std::uint8_t, ReportSize> buildCommitEeprom() {
  * byte 8. The firmware reads this as "next packet is a CMD_TIME configuration
  * data block, not a CMD_SAVE acknowledgement".
  */
+std::array<std::uint8_t, ReportSize> buildSetTimeStart() {
+    auto pkt = makeReport(CmdStartTime);
+    pkt[8] = 0x01; // configure-mode marker (gohv control_packet pattern)
+    return pkt;
+}
+
 std::array<std::uint8_t, ReportSize> buildSetTimePreamble() {
     auto pkt = makeReport(CmdSetTime);
     pkt[8] = 0x01;
@@ -474,19 +481,32 @@ public:
 
     // ---- IClockCapable ------------------------------------------------------
     //
-    // ARCH-05 amendment (2026-05-17): AK980 PRO (Sonix SN32F299 family,
+    // ARCH-05.1 amendment (2026-05-17): AK980 PRO (Sonix SN32F299 family,
     // VID:PID 0x0c45:0x8009) has a firmware RTC reachable via opcode 0x28.
     // Wire format from two independent reverse-engineering corpora:
-    //   - github.com/gohv/EPOMAKER-Ajazz-AK820-Pro (src/protocol.rs)
-    //   - github.com/KyleBoyer/TFTTimeSync-node    (src/packets.ts)
-    // Both expose identical 3-packet sequence (preamble + data + save) with
-    // year-as-byte-offset-from-2000 + 0xAA 0x55 delimiter. VIA-protocol
-    // keyboards (ViaKeyboard) still do NOT inherit IClockCapable per D-03 —
-    // they are QMK-style with no vendor clock surface, untouched by this
-    // amendment.
+    //   - github.com/gohv/EPOMAKER-Ajazz-AK820-Pro (src/protocol.rs + usb.rs)
+    //   - github.com/KyleBoyer/TFTTimeSync-node    (src/packets.ts + device.ts)
     //
-    // Vendor app sends LOCAL time (TaxMachine / KyleBoyer both pass through
-    // local Date components without UTC normalisation), so we convert from
+    // 4-packet envelope, each 64 bytes, all sent via HID SET_FEATURE (Control
+    // transfer with hid_send_feature_report), NOT HID Output Reports:
+    //   1. START    — ReportId=0x04 CMD_START=0x18 byte[8]=0x01
+    //   2. PREAMBLE — ReportId=0x04 CMD_TIME=0x28  byte[8]=0x01
+    //   3. DATA     — ReportId=0x00 magic 0x5A + year-2000/mm/dd/hh/mm/ss + 0xAA 0x55
+    //   4. SAVE     — ReportId=0x04 CMD_SAVE=0x02
+    // Followed by a 100ms sleep so the firmware has time to commit before any
+    // subsequent HID write reaches it (gohv usb.rs:set_time pattern).
+    //
+    // CRITICAL: this MUST use writeFeature() (hid_send_feature_report ⇒
+    // USB SET_REPORT on the control endpoint), not write() (hid_write ⇒
+    // interrupt OUT endpoint). Agent B disassembly of vendor DeviceDriver.exe
+    // confirmed it imports HidD_SetFeature for this code path. Earlier draft
+    // used write() and was a silent no-op against firmware.
+    //
+    // VIA-protocol keyboards (ViaKeyboard) still do NOT inherit IClockCapable
+    // per D-03 — they are QMK-style with no vendor clock surface, untouched.
+    //
+    // Vendor app sends LOCAL time (KyleBoyer + gohv both pass through local
+    // Date components without UTC normalisation), so we convert from
     // std::chrono::system_clock::time_point via localtime_s/localtime_r.
     [[nodiscard]] TimeSyncResult
     setTime(std::chrono::system_clock::time_point tp) override {
@@ -511,13 +531,18 @@ public:
         auto const second = static_cast<std::uint8_t>(local.tm_sec);
 
         try {
-            (void)m_transport->write(buildSetTimePreamble());
-            (void)m_transport->write(buildSetTimeData(year, month, day, hour, minute, second));
-            (void)m_transport->write(buildSetTimeSave());
+            (void)m_transport->writeFeature(buildSetTimeStart());
+            (void)m_transport->writeFeature(buildSetTimePreamble());
+            (void)m_transport->writeFeature(
+                buildSetTimeData(year, month, day, hour, minute, second));
+            (void)m_transport->writeFeature(buildSetTimeSave());
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("keyboard.ak980", "setTime: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("keyboard.ak980", "setTime: HID writeFeature failed: {}", e.what());
             return TimeSyncResult::IoError;
         }
+        // Settle window — firmware commits RTC to NV-RAM, racing a subsequent
+        // HID write here can drop the save (gohv usb.rs pattern).
+        std::this_thread::sleep_for(std::chrono::milliseconds{100});
 
         AJAZZ_LOG_INFO("keyboard.ak980",
                        "setTime → device clock set to {:04}-{:02}-{:02} {:02}:{:02}:{:02} (local)",

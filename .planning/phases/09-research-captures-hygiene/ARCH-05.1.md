@@ -47,9 +47,26 @@ Both corpora are referenced and ratified as primary sources for this amendment.
 
 ## Wire format (locked, source-level corroborated)
 
-Three sequential 64-byte HID output reports:
+**Four sequential 64-byte HID Feature reports**, each sent via
+`hid_send_feature_report` (USB control-endpoint `SET_REPORT` request), NOT
+via `hid_write` (interrupt OUT). This is a critical detail: an earlier draft
+of this implementation used Output Reports and was a silent no-op against
+firmware. Agent B's disassembly of the vendor `DeviceDriver.exe` (2026-05-17)
+confirmed it imports `HidD_SetFeature` for this code path.
 
-**Packet 1 — Preamble (control packet for CMD_TIME):**
+After the four packets, sleep 100ms before any subsequent HID I/O to let the
+firmware commit the RTC to NV-RAM (gohv `usb.rs` pattern; races without this
+sleep can drop the SAVE).
+
+**Packet 1 — Start (control packet for CMD_START, opcode 0x18):**
+```
+byte  0:  0x04   // HID Report ID (default)
+byte  1:  0x18   // CMD_START — resets firmware time-sync state machine
+byte  8:  0x01   // configure-mode marker
+bytes 2–7, 9–63: 0x00
+```
+
+**Packet 2 — Preamble (control packet for CMD_TIME, opcode 0x28):**
 ```
 byte  0:  0x04   // HID Report ID (default)
 byte  1:  0x28   // CMD_TIME
@@ -57,7 +74,7 @@ byte  8:  0x01   // configure-mode marker
 bytes 2–7, 9–63: 0x00
 ```
 
-**Packet 2 — Time data (HID Report ID 0x00, the magic discriminator):**
+**Packet 3 — Time data (HID Report ID 0x00, the magic discriminator):**
 ```
 byte  0:  0x00   // HID Report ID — NOT the default 0x04; firmware uses
                  //                  the magic 0x5A at byte 2 as the real
@@ -78,7 +95,7 @@ byte 62:  0xAA   // delimiter high
 byte 63:  0x55   // delimiter low
 ```
 
-**Packet 3 — Save (control packet for CMD_SAVE):**
+**Packet 4 — Save (control packet for CMD_SAVE):**
 ```
 byte  0:  0x04   // HID Report ID (default)
 byte  1:  0x02   // CMD_SAVE — distinct from CmdCommitEeprom (0x0E)
@@ -165,21 +182,39 @@ The ban on *synthesizing a fake `setSystemTimeOn` wire format from bytes that
 not weaken that — it ratifies a wire format that is **explicit, named, and
 cross-corroborated**, not a heuristic-inferred byte pattern.
 
-## Implementation status (as of this ADR)
+## Implementation status (as of this ADR — amended 2026-05-17 same-day)
 
 - **Wire format constants:** `src/devices/keyboard/src/proprietary_protocol.hpp`
-  `CmdSetTime = 0x28`, `CmdSaveRtc = 0x02`, `TimeDataReportId = 0x00`.
-- **Packet builders:** `buildSetTimePreamble()` / `buildSetTimeData(...)` /
-  `buildSetTimeSave()` in `src/devices/keyboard/src/proprietary_keyboard.cpp`.
-- **setTime backend:** `ProprietaryKeyboard::setTime()` calls the 3 builders
-  in sequence; returns `Ok` on success, `IoError` on transport throw.
-- **Unit tests:** 6 new `[clock]`-tagged cases in
-  `tests/unit/test_proprietary_keyboard_protocol.cpp` pinning byte layout,
-  pre-2000 saturation, year boundary, save-opcode distinctness from
-  `CmdCommitEeprom`.
+  `CmdStartTime = 0x18`, `CmdSetTime = 0x28`, `CmdSaveRtc = 0x02`,
+  `TimeDataReportId = 0x00`.
+- **Packet builders:** `buildSetTimeStart()` / `buildSetTimePreamble()` /
+  `buildSetTimeData(...)` / `buildSetTimeSave()` in
+  `src/devices/keyboard/src/proprietary_keyboard.cpp`.
+- **setTime backend:** `ProprietaryKeyboard::setTime()` calls all 4 builders
+  in sequence via `ITransport::writeFeature()` (NOT `write()`), followed by
+  a 100ms `std::this_thread::sleep_for` settle window. Returns `Ok` on
+  success, `IoError` on transport throw.
+- **Unit tests:** 8 new `[clock]`-tagged cases in
+  `tests/unit/test_proprietary_keyboard_protocol.cpp` pinning byte layout
+  of START + PREAMBLE + DATA + SAVE, pre-2000 saturation, year boundary,
+  and 4-opcode distinctness invariants (CMD_START / CMD_TIME / CMD_SAVE /
+  CmdCommitEeprom all mutually distinct).
 - **`devices.yaml` row:** `ak980pro.maturity` promoted `scaffolded` →
   `partial` with `notes:` line citing this ADR. Clock capability stays in
   `capabilities:` (was already there from v1.1 scaffolding).
+
+### Initial-draft post-mortem (same-day, 2026-05-17)
+
+The first commit (`9787962`) used `ITransport::write()` (HID Output Reports
+via interrupt OUT endpoint) and only 3 packets, missing the START. Agent B's
+disassembly of `DeviceDriver.exe` (2026-05-17 ~15:30) revealed that the
+vendor app imports `HidD_SetFeature` — i.e. uses the HID Feature Report path
+(control endpoint `SET_REPORT`). Re-reading `gohv/usb.rs` confirmed
+`send_feature()` is called for all 4 packets and `start_packet()` is the
+first of them. The amendment commit corrects both errors. Lesson: when a
+reverse-engineered Rust source uses an unfamiliar transport call
+(`send_feature` vs `write`), trace it to the underlying `hidapi` function
+name before assuming it maps to your project's `transport.write()`.
 
 ## Captures-confirmation trigger (Phase 9.x physical test)
 

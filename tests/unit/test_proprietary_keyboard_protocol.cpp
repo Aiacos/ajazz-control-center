@@ -98,6 +98,37 @@ TEST_CASE("ledCountForZone matches documentation", "[proprietary][protocol]") {
 // KyleBoyer/TFTTimeSync-node/src/packets.ts (identical byte layouts).
 // ---------------------------------------------------------------------------
 
+TEST_CASE("ak980 setTime start packet carries ReportId=0x04 + opcode 0x18 + marker 0x01",
+          "[proprietary][protocol][clock]") {
+    auto const pkt = buildSetTimeStart();
+    REQUIRE(pkt.size() == ReportSize);
+    REQUIRE(pkt[0] == ReportId);     // 0x04 — default report id
+    REQUIRE(pkt[1] == CmdStartTime); // 0x18 — resets firmware time-sync state machine
+    REQUIRE(pkt[8] == 0x01);         // configure-mode marker (gohv control_packet pattern)
+    for (std::size_t i = 0; i < ReportSize; ++i) {
+        if (i == 0 || i == 1 || i == 8) {
+            continue;
+        }
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("ak980 setTime opcodes are mutually distinct",
+          "[proprietary][protocol][clock]") {
+    // Pitfall guard: future contributors must not coalesce the 4 opcodes into
+    // shared constants. START / TIME / SAVE / EEPROM-commit all touch different
+    // firmware state.
+    REQUIRE(CmdStartTime != CmdSetTime);
+    REQUIRE(CmdSetTime != CmdSaveRtc);
+    REQUIRE(CmdStartTime != CmdSaveRtc);
+    REQUIRE(CmdStartTime != CmdCommitEeprom);
+    REQUIRE(CmdSaveRtc != CmdCommitEeprom);
+    REQUIRE(CmdStartTime == 0x18);
+    REQUIRE(CmdSetTime == 0x28);
+    REQUIRE(CmdSaveRtc == 0x02);
+    REQUIRE(CmdCommitEeprom == 0x0e);
+}
+
 TEST_CASE("ak980 setTime preamble carries ReportId=0x04 + opcode 0x28 + marker 0x01",
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimePreamble();

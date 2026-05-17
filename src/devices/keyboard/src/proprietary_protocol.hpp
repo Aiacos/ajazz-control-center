@@ -56,8 +56,10 @@ inline constexpr std::uint8_t CmdCommitEeprom =
 // use the default ReportId=0x04; the time-data packet uses ReportId=0x00
 // (the magic 0x5A at byte 2 is the firmware's discriminator).
 // ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdStartTime =
+    0x18; ///< Reset / "begin time-sync session" opcode — first packet of the 4-packet envelope.
 inline constexpr std::uint8_t CmdSetTime =
-    0x28; ///< Configure / save RTC opcode (control packets, byte 1).
+    0x28; ///< Configure RTC opcode (preamble control packet, byte 1).
 inline constexpr std::uint8_t CmdSaveRtc =
     0x02; ///< Persist RTC value to firmware NV-RAM (distinct from CmdCommitEeprom=0x0E).
 inline constexpr std::uint8_t TimeDataReportId =
@@ -157,10 +159,21 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildCommitEeprom();
 
 /**
+ * @brief Build the time-sync start packet — first of the 4-packet envelope.
+ *
+ * ReportId=0x04, opcode 0x18 (CMD_START), byte[8]=0x01. Resets the firmware's
+ * time-sync state machine and signals "the next 3 packets are a time-set
+ * sequence". Without this packet the firmware ignores the subsequent
+ * preamble + data + save (per gohv/EPOMAKER-Ajazz-AK820-Pro USB capture).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeStart();
+
+/**
  * @brief Build the time-sync preamble packet (ReportId=0x04, opcode 0x28, byte[8]=0x01).
  *
- * Sent BEFORE the time-data packet. Tells the firmware "next packet is a CMD_TIME
- * configuration data block".
+ * Second of the 4-packet envelope. Sent AFTER buildSetTimeStart() and BEFORE
+ * buildSetTimeData(). Tells the firmware "next packet is a CMD_TIME configuration
+ * data block".
  */
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimePreamble();
 

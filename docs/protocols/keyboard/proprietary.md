@@ -80,23 +80,33 @@ These map onto `ajazz::core::RgbEffect`:
 **Status:** implemented for AK980 PRO (ARCH-05.1, 2026-05-17) — pending
 physical round-trip witness for `functional` promotion.
 
-`ProprietaryKeyboard::setTime()` writes a three-packet HID sequence to the
-device using the firmware RTC opcode `0x28`. The wire format is
-source-level corroborated against two independent reverse-engineering
-corpora targeting the same Sonix SN32F299 MCU family:
+`ProprietaryKeyboard::setTime()` writes a **four-packet HID Feature Report**
+sequence to the device using the firmware RTC opcodes `0x18` + `0x28` + data
++ `0x02`. The wire format is source-level corroborated against two
+independent reverse-engineering corpora targeting the same Sonix SN32F299
+MCU family, plus disassembly of the AJAZZ vendor `DeviceDriver.exe`:
 
-- `gohv/EPOMAKER-Ajazz-AK820-Pro` (Rust, `src/protocol.rs`)
-- `KyleBoyer/TFTTimeSync-node` (TypeScript, `src/packets.ts`)
+- `gohv/EPOMAKER-Ajazz-AK820-Pro` (Rust, `src/protocol.rs` + `src/usb.rs`)
+- `KyleBoyer/TFTTimeSync-node` (TypeScript, `src/packets.ts` + `src/device.ts`)
+- `aar-rafi/aks075-linux` README credits gohv for the same wire format
+- Vendor `DeviceDriver.exe` imports `HidD_SetFeature` for this code path
+  (Agent B static analysis, 2026-05-17) — confirms the Feature Report
+  transport, not Output Report
 
-Both expose byte-for-byte identical layouts.
+All three corpora send the packets via `hid_send_feature_report` (USB
+control-endpoint `SET_REPORT`), not via `hid_write` (interrupt OUT).
 
-### Three-packet sequence
+### Four-packet sequence
 
 | # | Purpose  | Report ID | Byte 1 | Byte 8 | Notable bytes               |
 | - | -------- | --------- | ------ | ------ | --------------------------- |
-| 1 | Preamble | `0x04`    | `0x28` | `0x01` | else 0x00                   |
-| 2 | Data     | `0x00`    | `0x01` | second | b2=0x5A, b3=year-2000, b62=0xAA b63=0x55 |
-| 3 | Save     | `0x04`    | `0x02` | `0x00` | else 0x00                   |
+| 1 | Start    | `0x04`    | `0x18` | `0x01` | resets time-sync state machine |
+| 2 | Preamble | `0x04`    | `0x28` | `0x01` | configure-mode marker       |
+| 3 | Data     | `0x00`    | `0x01` | second | b2=0x5A, b3=year-2000, b62=0xAA b63=0x55 |
+| 4 | Save     | `0x04`    | `0x02` | `0x00` | persist RTC to NV-RAM       |
+
+After packet 4, sleep 100ms (gohv `usb.rs` pattern) so the firmware commits
+before any subsequent HID I/O can race the SAVE.
 
 The data packet uses HID Report ID `0x00` (NOT the default `0x04` used by
 other commands); the firmware's real discriminator is the magic `0x5A` at
