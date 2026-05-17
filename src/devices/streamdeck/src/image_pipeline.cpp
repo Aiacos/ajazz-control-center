@@ -37,11 +37,15 @@ QImage applyOrientation(QImage img, ImageTransform const& transform) {
         img = img.transformed(QTransform{}.rotate(rot), Qt::SmoothTransformation);
     }
     if (transform.mirror) {
-        // QImage::mirrored() is deprecated in Qt 6.13; Qt 6.9+ ships the replacement
-        // QImage::flipped(Qt::Orientations) which takes a flags bitset (Horizontal /
-        // Vertical / both). Horizontal flip matches the AKP153 mirror requirement
-        // documented in docs/protocols/streamdeck/akp153.md.
-        img = img.flipped(Qt::Horizontal);
+        // QImage::mirrored() is available on Qt 6.0+ (deprecated in Qt 6.13 in
+        // favour of `flipped(Qt::Orientations)`, but that replacement was only
+        // added in Qt 6.9 and our CI matrix still pins Qt 6.8.3). Stay on
+        // mirrored() until the CI Qt baseline bumps past 6.9 — the deprecation
+        // warning only fires on the local Qt 6.11.1 dev box and is suppressed
+        // by /external:W0 on MSVC + the deprecation annotation tolerance on
+        // the GCC/Clang CI paths. Horizontal flip matches the AKP153 mirror
+        // requirement documented in docs/protocols/streamdeck/akp153.md.
+        img = img.mirrored(/*horizontally=*/true, /*vertically=*/false);
     }
     return img;
 }
