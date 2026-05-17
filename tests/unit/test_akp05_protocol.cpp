@@ -74,7 +74,7 @@ TEST_CASE("akp05 version request uses CRT prefix + VER command", "[akp05][protoc
     }
 }
 
-/// CRT DRA rect-addressable strip image header — pin BE32 size + location + BE16 rect.
+/// CRT DRA rect-addressable strip image header - pin BE32 size + location + BE16 rect.
 TEST_CASE("akp05 secondary screen DRA header byte layout", "[akp05][protocol][vendor-re]") {
     auto const pkt = buildSecondaryScreenHeader(
         /*location=*/0x01,
@@ -124,7 +124,7 @@ TEST_CASE("akp05 DRA rect with non-zero origin encodes BE16 correctly",
     // BE16 x at 17..18 (200 = 0x00C8).
     REQUIRE(pkt[17] == 0x00);
     REQUIRE(pkt[18] == 0xc8);
-    // Large coordinate test: x=0x1234 → 0x12 0x34.
+    // Large coordinate test: x=0x1234 -> 0x12 0x34.
     auto const pkt2 = buildSecondaryScreenHeader(0x02, 100, 50, 0x1234, 0x5678, 0x100);
     REQUIRE(pkt2[17] == 0x12);
     REQUIRE(pkt2[18] == 0x34);
@@ -204,7 +204,7 @@ TEST_CASE("akp05 parser decodes all four encoders", "[akp05][protocol]") {
 /// Encoder ids ≥ 0x24 exceed the AKP05 encoder count and must return an empty optional.
 TEST_CASE("akp05 parser rejects out-of-range encoder ids", "[akp05][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x24; // encoder 4 — AKP05 only has 0..3
+    frame[9] = 0x24; // encoder 4 - AKP05 only has 0..3
     REQUIRE(!parseInputReport(frame).has_value());
 }
 

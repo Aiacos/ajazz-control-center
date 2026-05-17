@@ -103,8 +103,8 @@ TEST_CASE("ak980 setTime start packet carries ReportId=0x04 + opcode 0x18 + mark
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimeStart();
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);     // 0x04 — default report id
-    REQUIRE(pkt[1] == CmdStartTime); // 0x18 — resets firmware time-sync state machine
+    REQUIRE(pkt[0] == ReportId);     // 0x04 - default report id
+    REQUIRE(pkt[1] == CmdStartTime); // 0x18 - resets firmware time-sync state machine
     REQUIRE(pkt[8] == 0x01);         // configure-mode marker (gohv control_packet pattern)
     for (std::size_t i = 0; i < ReportSize; ++i) {
         if (i == 0 || i == 1 || i == 8) {
@@ -134,7 +134,7 @@ TEST_CASE("ak980 setTime preamble carries ReportId=0x04 + opcode 0x28 + marker 0
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimePreamble();
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);   // 0x04 — default report id
+    REQUIRE(pkt[0] == ReportId);   // 0x04 - default report id
     REQUIRE(pkt[1] == CmdSetTime); // 0x28
     REQUIRE(pkt[8] == 0x01);       // configure-mode marker
     // All other bytes must be zero.
@@ -148,10 +148,10 @@ TEST_CASE("ak980 setTime preamble carries ReportId=0x04 + opcode 0x28 + marker 0
 
 TEST_CASE("ak980 setTime data packet has report id 0x00 + magic 0x5A + delimiter 0xAA 0x55",
           "[proprietary][protocol][clock]") {
-    // 2026-05-17 14:23:45 — that day was a Sunday (wDayOfWeek=0).
+    // 2026-05-17 14:23:45 - that day was a Sunday (wDayOfWeek=0).
     auto const pkt = buildSetTimeData(2026, 5, 17, 14, 23, 45, /*dayOfWeek=*/0);
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == TimeDataReportId); // 0x00 — distinct from default ReportId=0x04
+    REQUIRE(pkt[0] == TimeDataReportId); // 0x00 - distinct from default ReportId=0x04
     REQUIRE(pkt[1] == 0x01);
     REQUIRE(pkt[2] == 0x5a);
     REQUIRE(pkt[3] == 26); // year-2000
@@ -183,7 +183,7 @@ TEST_CASE("ak980 setTime data packet encodes wDayOfWeek correctly",
         REQUIRE(pkt[10] == dow);
     }
 
-    // Out-of-range values are clamped to 0 (defensive — tm_wday is guaranteed
+    // Out-of-range values are clamped to 0 (defensive - tm_wday is guaranteed
     // 0..6 by the C library but a malformed caller must not corrupt the wire).
     auto const bad = buildSetTimeData(2026, 1, 1, 0, 0, 0, 99);
     REQUIRE(bad[10] == 0x00);
@@ -191,7 +191,7 @@ TEST_CASE("ak980 setTime data packet encodes wDayOfWeek correctly",
 
 TEST_CASE("ak980 setTime data packet saturates pre-2000 years to floor",
           "[proprietary][protocol][clock]") {
-    // 1999 must NOT underflow to 0xFF — it must clamp to year-2000 == 0.
+    // 1999 must NOT underflow to 0xFF - it must clamp to year-2000 == 0.
     auto const pkt = buildSetTimeData(1999, 1, 1, 0, 0, 0);
     REQUIRE(pkt[3] == 0);
     // 1970 (unix epoch) likewise clamps.
@@ -217,7 +217,7 @@ TEST_CASE("ak980 setTime save packet carries ReportId=0x04 + opcode 0x02",
     auto const pkt = buildSetTimeSave();
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == ReportId);   // 0x04
-    REQUIRE(pkt[1] == CmdSaveRtc); // 0x02 — distinct from CmdCommitEeprom=0x0E
+    REQUIRE(pkt[1] == CmdSaveRtc); // 0x02 - distinct from CmdCommitEeprom=0x0E
     // All other bytes must be zero.
     for (std::size_t i = 2; i < ReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
@@ -234,7 +234,7 @@ TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == ReportId);         // 0x04
     REQUIRE(pkt[1] == CmdBatteryQuery);  // 0x20
-    REQUIRE(pkt[2] == BatteryQuerySub);  // 0x01 — discriminates from per-key RGB (sub 0x04)
+    REQUIRE(pkt[2] == BatteryQuerySub);  // 0x01 - discriminates from per-key RGB (sub 0x04)
     // All other bytes must be zero.
     for (std::size_t i = 3; i < ReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
@@ -242,11 +242,11 @@ TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 
 }
 
 // ---------------------------------------------------------------------------
-// RGB firmware lighting mode (opcode 0x13) — P3.10 from
+// RGB firmware lighting mode (opcode 0x13) - P3.10 from
 // docs/research/phase3-patch-sequence.md.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ak980 setRgbMode data packet byte layout — Static + tint + flags",
+TEST_CASE("ak980 setRgbMode data packet byte layout - Static + tint + flags",
           "[proprietary][protocol][lighting]") {
     // Mode 0x06 (Breath) with red tint, no rainbow, brightness 3, speed 4,
     // direction Up (2).
@@ -320,10 +320,10 @@ TEST_CASE("ak980 lighting CmdSetRgbMode opcode is 0x13 + CmdFinish is 0xF0",
 
 // ---------------------------------------------------------------------------
 // Per-key RGB upload header + readback (opcode 0x20 0x04 + 0xF5 0x03/0x09).
-// P3.11 — corrects the wireless chunk count to 8 (NOT 6 as prior pass).
+// P3.11 - corrects the wireless chunk count to 8 (NOT 6 as prior pass).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ak980 per-key RGB write header — wired mode byte at offset 9 is 0x03",
+TEST_CASE("ak980 per-key RGB write header - wired mode byte at offset 9 is 0x03",
           "[proprietary][protocol][perkey-rgb]") {
     auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/false);
     REQUIRE(pkt.size() == ReportSize);
@@ -340,7 +340,7 @@ TEST_CASE("ak980 per-key RGB write header — wired mode byte at offset 9 is 0x0
     }
 }
 
-TEST_CASE("ak980 per-key RGB write header — wireless mode byte at offset 9 is 0x08",
+TEST_CASE("ak980 per-key RGB write header - wireless mode byte at offset 9 is 0x08",
           "[proprietary][protocol][perkey-rgb]") {
     auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/true);
     REQUIRE(pkt[0] == ReportId);
@@ -349,7 +349,7 @@ TEST_CASE("ak980 per-key RGB write header — wireless mode byte at offset 9 is 
     REQUIRE(pkt[9] == kPerKeyModeWireless);  // 0x08 (not 0x03)
 }
 
-TEST_CASE("ak980 per-key RGB readback — wired uses sub 0x03, wireless sub 0x09",
+TEST_CASE("ak980 per-key RGB readback - wired uses sub 0x03, wireless sub 0x09",
           "[proprietary][protocol][perkey-rgb]") {
     auto const wired = buildPerKeyRgbReadback(/*isWireless=*/false);
     REQUIRE(wired[0] == ReportId);
@@ -361,7 +361,7 @@ TEST_CASE("ak980 per-key RGB readback — wired uses sub 0x03, wireless sub 0x09
     REQUIRE(wireless[2] == kPerKeyReadbackWirelessSub); // 0x09 (NOT 0x03)
 }
 
-TEST_CASE("ak980 per-key RGB blob sizes — wired 192 B + wireless 512 B (NOT 384 / 6 chunks)",
+TEST_CASE("ak980 per-key RGB blob sizes - wired 192 B + wireless 512 B (NOT 384 / 6 chunks)",
           "[proprietary][protocol][perkey-rgb]") {
     // Wired = monochrome only, 1 byte/LED × 192 LEDs = 192 B = 3 chunks of 64 B.
     REQUIRE(kPerKeyWiredBlobSize == 192);
@@ -370,7 +370,7 @@ TEST_CASE("ak980 per-key RGB blob sizes — wired 192 B + wireless 512 B (NOT 38
 
     // Wireless = full color, 4 byte/LED ([reserved=0, R, G, B]) × 128 LEDs
     // = 512 B = 8 chunks of 64 B. The prior doc said 6 chunks (which would be
-    // 384 B), which is WRONG per deep RE — 8 chunks is correct.
+    // 384 B), which is WRONG per deep RE - 8 chunks is correct.
     REQUIRE(kPerKeyWirelessBlobSize == 512);
     REQUIRE(kPerKeyWirelessChunkCount == 8);
     REQUIRE(kPerKeyWirelessBlobSize == kPerKeyWirelessChunkCount * 64);
@@ -388,35 +388,35 @@ TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 ≠ battery query opcode 0x20 
 }
 
 // ---------------------------------------------------------------------------
-// TFT screen image upload primitives — P3.9 scaled-down: chunk index encoder
+// TFT screen image upload primitives - P3.9 scaled-down: chunk index encoder
 // (24-bit split across bytes 1/2/3 with 0x80 marker) + bulk-path BEGIN packet
-// (opcode 0x72 — 143× faster than the chunked 0x7F path).
+// (opcode 0x72 - 143× faster than the chunked 0x7F path).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ak980 TFT chunk-index encoder — round-trip for canonical values",
+TEST_CASE("ak980 TFT chunk-index encoder - round-trip for canonical values",
           "[proprietary][protocol][tft]") {
     auto decode = [](std::array<std::uint8_t, 3> const& enc) -> std::uint32_t {
         return static_cast<std::uint32_t>(enc[0]) |
                (static_cast<std::uint32_t>(enc[2]) << 8) |
                ((static_cast<std::uint32_t>(enc[1]) & 0x7fu) << 16);
     };
-    // 0 — first chunk of first frame.
+    // 0 - first chunk of first frame.
     auto e0 = encodeTftChunkIndex(0);
     REQUIRE(e0[0] == 0x00);
     REQUIRE(e0[1] == 0x80); // marker bit set, high 7 bits = 0
     REQUIRE(e0[2] == 0x00);
     REQUIRE(decode(e0) == 0);
 
-    // 2 314 — last chunk of a single 240x135 RGB565 frame (2 315 total).
+    // 2 314 - last chunk of a single 240x135 RGB565 frame (2 315 total).
     auto e2314 = encodeTftChunkIndex(2314);
     REQUIRE(decode(e2314) == 2314);
     REQUIRE((e2314[1] & 0x80) == 0x80); // marker always set
 
-    // 324 099 — last chunk of a full 140-frame GIF (140 × 2 315 = 324 100).
+    // 324 099 - last chunk of a full 140-frame GIF (140 × 2 315 = 324 100).
     auto eMax = encodeTftChunkIndex(324099);
     REQUIRE(decode(eMax) == 324099);
 
-    // 0x7FFFFF — effective max (23 bits: 7-bit upper + 8-bit middle + 8-bit
+    // 0x7FFFFF - effective max (23 bits: 7-bit upper + 8-bit middle + 8-bit
     // low; the MSB of byte 2 is the chunk marker, NOT part of the index).
     // Inputs above this saturate (the high bit is dropped by the encoder).
     auto eMaxMax = encodeTftChunkIndex(0x7fffff);
@@ -424,7 +424,7 @@ TEST_CASE("ak980 TFT chunk-index encoder — round-trip for canonical values",
     REQUIRE(eMaxMax[1] == 0xff); // 0x80 marker | 0x7F upper-7 bits
 }
 
-TEST_CASE("ak980 TFT chunk-index encoder — values above 23-bit max saturate",
+TEST_CASE("ak980 TFT chunk-index encoder - values above 23-bit max saturate",
           "[proprietary][protocol][tft]") {
     // 24-bit max (0xFFFFFF) cannot be represented because the high bit of
     // byte 2 is the chunk marker. A future contributor implementing the
@@ -433,7 +433,7 @@ TEST_CASE("ak980 TFT chunk-index encoder — values above 23-bit max saturate",
     // = 324 100 chunks << 0x7FFFFF).
     auto const enc24bit = encodeTftChunkIndex(0xffffff);
     // The encoder silently truncates the high bit: enc[1] = 0x80 | (0xFF & 0x7F)
-    // = 0x80 | 0x7F = 0xFF — same as encoding 0x7FFFFF.
+    // = 0x80 | 0x7F = 0xFF - same as encoding 0x7FFFFF.
     REQUIRE(enc24bit[1] == 0xff);
     auto const enc23bit = encodeTftChunkIndex(0x7fffff);
     REQUIRE(enc24bit == enc23bit); // 0xFFFFFF and 0x7FFFFF produce identical wire bytes
@@ -451,16 +451,16 @@ TEST_CASE("ak980 TFT chunk-index encoder always sets the 0x80 marker",
     }
 }
 
-TEST_CASE("ak980 TFT bulk-begin packet — opcode 0x72 + LCD-select + total chunks",
+TEST_CASE("ak980 TFT bulk-begin packet - opcode 0x72 + LCD-select + total chunks",
           "[proprietary][protocol][tft]") {
-    // Single-LCD AK980 PRO (most common): pass lcdSelect=0 → wire byte 3 = 1.
+    // Single-LCD AK980 PRO (most common): pass lcdSelect=0 -> wire byte 3 = 1.
     // 240×135 RGB565 single frame = 64 800 B / 4 096 B = 16 chunks (rounded up).
     auto const pkt = buildScreenBulkBegin(/*lcdSelect=*/0, /*total4kChunks=*/16);
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == ReportId);            // 0x04
     REQUIRE(pkt[1] == CmdScreenBulkBegin);  // 0x72
     REQUIRE(pkt[2] == 0x00);
-    REQUIRE(pkt[3] == 0x01);                // lcdSelect 0 → wire 1
+    REQUIRE(pkt[3] == 0x01);                // lcdSelect 0 -> wire 1
     REQUIRE(pkt[4] == 0x10);                // total_4k_chunks low (16)
     REQUIRE(pkt[5] == 0x00);                // total_4k_chunks high
     // Trailing pad.
@@ -469,16 +469,16 @@ TEST_CASE("ak980 TFT bulk-begin packet — opcode 0x72 + LCD-select + total chun
     }
 }
 
-TEST_CASE("ak980 TFT bulk-begin — large frame counts encode LE correctly",
+TEST_CASE("ak980 TFT bulk-begin - large frame counts encode LE correctly",
           "[proprietary][protocol][tft]") {
     // Full 140-frame GIF: ~64 800 B/frame × 140 = 9 072 000 B / 4 096 = 2 215 chunks
-    // 2 215 = 0x08A7 → low 0xA7, high 0x08
+    // 2 215 = 0x08A7 -> low 0xA7, high 0x08
     auto const pkt = buildScreenBulkBegin(0, 2215);
     REQUIRE(pkt[4] == 0xa7);
     REQUIRE(pkt[5] == 0x08);
 }
 
-TEST_CASE("ak980 TFT opcode constants — bulk (0x72) and chunked (0x7F) coexist",
+TEST_CASE("ak980 TFT opcode constants - bulk (0x72) and chunked (0x7F) coexist",
           "[proprietary][protocol][tft]") {
     // Pitfall guard: a future contributor must not collapse the two TFT
     // upload paths. They use distinct opcodes and distinct transport sizes

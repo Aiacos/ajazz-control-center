@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_sd_plugin_server.cpp
- * @brief MVP tests for SdPluginServer — loopback binding + registration handshake.
+ * @brief MVP tests for SdPluginServer - loopback binding + registration handshake.
  *
  * Verifies the load-bearing security invariant (loopback-only binding) and
- * the Elgato v6 register handshake (registerPlugin → pluginRegistered signal).
+ * the Elgato v6 register handshake (registerPlugin -> pluginRegistered signal).
  */
 #include "sd_plugin_server.hpp"
 
@@ -29,7 +29,7 @@ void pump(int ms) {
     }
 }
 
-/// Lazy QCoreApplication singleton — Qt signals + the WebSocket stack need
+/// Lazy QCoreApplication singleton - Qt signals + the WebSocket stack need
 /// a running event loop. Catch2 binaries don't always have one.
 QCoreApplication* ensureQCoreApp() {
     static int argc = 0;
@@ -40,7 +40,7 @@ QCoreApplication* ensureQCoreApp() {
 
 } // namespace
 
-TEST_CASE("SdPluginServer binds loopback only — never QHostAddress::Any",
+TEST_CASE("SdPluginServer binds loopback only - never QHostAddress::Any",
           "[plugin-server][security][loopback-only]") {
     ensureQCoreApp();
     SdPluginServer server;
@@ -48,7 +48,7 @@ TEST_CASE("SdPluginServer binds loopback only — never QHostAddress::Any",
     REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::Any));
     REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::AnyIPv4));
     REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::AnyIPv6));
-    // There is NO setter that would broaden the bind address — confirm by
+    // There is NO setter that would broaden the bind address - confirm by
     // grepping the public API (compile-time check: any added setter would
     // break the security contract and require explicit roadmap discussion).
 }
@@ -153,7 +153,7 @@ TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
     client.sendTextMessage(
         QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
     pump(150);
-    // setBG is an AJAZZ-only extension — MVP doesn't implement it, but the
+    // setBG is an AJAZZ-only extension - MVP doesn't implement it, but the
     // server must surface it via the unhandled signal so the app layer can
     // log / extend without losing the event.
     client.sendTextMessage(

@@ -17,7 +17,7 @@
  *
  * The action-code constants come from
  * `mishamyrt/ajazz-sdk/src/protocol/codes.rs` cross-checked against
- * `4ndv/opendeck-akp03` and `tomekceszke/ajazz-akp03e` — see
+ * `4ndv/opendeck-akp03` and `tomekceszke/ajazz-akp03e` - see
  * `docs/protocols/streamdeck/_research-sources.md`.
  */
 #include "akp03_protocol.hpp"
@@ -81,7 +81,7 @@ TEST_CASE("akp03 image header encodes BAT command and big-endian size", "[akp03]
 }
 
 // -----------------------------------------------------------------------------
-// Input parser — discrimination of every event class
+// Input parser - discrimination of every event class
 // -----------------------------------------------------------------------------
 
 /// Frames whose first three bytes are `ACK` are device acknowledgements and
@@ -244,7 +244,7 @@ TEST_CASE("akp03 parser decodes encoder 0 press and release", "[akp03][protocol]
 
 /// `0x35` and `0x34` are encoder 1 and 2 press respectively. Tests confirm
 /// the index decoding matches `[ajazz-sdk]`'s mapping (the SDK assigns
-/// 0x33→0, **0x35→1**, **0x34→2** — note the non-monotonic ordering).
+/// 0x33->0, **0x35->1**, **0x34->2** - note the non-monotonic ordering).
 TEST_CASE("akp03 parser decodes encoder 1 and 2 press", "[akp03][protocol]") {
     {
         std::array<std::uint8_t, 16> frame{};

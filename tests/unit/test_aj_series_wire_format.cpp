@@ -22,7 +22,7 @@ using namespace ajazz::mouse::aj_series;
 
 namespace {
 
-/// Independent BIT7 checksum verifier — sums payload range pkt[1..62] & 0x7F.
+/// Independent BIT7 checksum verifier - sums payload range pkt[1..62] & 0x7F.
 [[nodiscard]] std::uint8_t expectedBit7Checksum(
     std::array<std::uint8_t, kReportSize> const& pkt) {
     auto const sum = std::accumulate(pkt.begin() + 1, pkt.end() - 1, std::uint32_t{0});
@@ -35,7 +35,7 @@ namespace {
 // Envelope basics
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series report id at byte 0 is 0x05 — hard fact per opcode-table §1",
+TEST_CASE("AJ series report id at byte 0 is 0x05 - hard fact per opcode-table §1",
           "[mouse][aj_series][wire][envelope]") {
     REQUIRE(kReportId == 0x05);
     // 65-byte buffer = 1 ReportID + 64 vendor envelope bytes
@@ -62,7 +62,7 @@ TEST_CASE("AJ series checksum range is pkt[1..63] (63 bytes, opcode included)",
     a[1] = 0x42;        // opcode contributes to checksum
     std::array<std::uint8_t, kReportSize> b = a;
     a[1] = 0x42;
-    b[1] = 0x43;        // different opcode → different checksum
+    b[1] = 0x43;        // different opcode -> different checksum
     stampBit7Checksum(a);
     stampBit7Checksum(b);
     REQUIRE(a[kReportSize - 1] != b[kReportSize - 1]);
@@ -74,7 +74,7 @@ TEST_CASE("AJ series checksum range is pkt[1..63] (63 bytes, opcode included)",
 // §3.4 polling rate lookup
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series pollRateToWireCode — full _RateToNum lookup table",
+TEST_CASE("AJ series pollRateToWireCode - full _RateToNum lookup table",
           "[mouse][aj_series][wire][pollrate]") {
     REQUIRE(pollRateToWireCode(125) == 0x08);
     REQUIRE(pollRateToWireCode(250) == 0x04);
@@ -106,7 +106,7 @@ TEST_CASE("AJ series setReportRate 8000 Hz emits byte 3 = 0x81",
 // §3.10 MouseSetOption1 (DPI table)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series setOption1 — DPI table at bytes 9..24 LE + colours at 41..63",
+TEST_CASE("AJ series setOption1 - DPI table at bytes 9..24 LE + colours at 41..63",
           "[mouse][aj_series][wire][dpi]") {
     std::array<std::uint16_t, 8> dpis{400, 800, 1600, 3200, 6400, 12800, 25600, 42000};
     std::array<std::array<std::uint8_t, 3>, 8> colours{{
@@ -126,17 +126,17 @@ TEST_CASE("AJ series setOption1 — DPI table at bytes 9..24 LE + colours at 41.
     // Colour table at pkt[41..64] (8 × 3 bytes).
     REQUIRE(pkt[41] == 0xff); REQUIRE(pkt[42] == 0x00); REQUIRE(pkt[43] == 0x00); // stage 0 red
     REQUIRE(pkt[44] == 0x00); REQUIRE(pkt[45] == 0xff); REQUIRE(pkt[46] == 0x00); // stage 1 green
-    // Stage 7 B at pkt[64] is OVERWRITTEN by checksum on the wire — vendor
+    // Stage 7 B at pkt[64] is OVERWRITTEN by checksum on the wire - vendor
     // limitation per §3.10 edge case. We do NOT pin the byte's input value;
     // UI must surface this constraint to users.
     REQUIRE(pkt[kReportSize - 1] == expectedBit7Checksum(pkt));
 }
 
-TEST_CASE("AJ series setOption1 — 8th DPI stage B-channel collides with checksum",
+TEST_CASE("AJ series setOption1 - 8th DPI stage B-channel collides with checksum",
           "[mouse][aj_series][wire][dpi]") {
     // Regression guard for the §3.10 edge case: pkt[64] is BOTH stage-7 B-channel
     // (per colour-table layout) AND the BIT7 checksum slot. stampBit7Checksum()
-    // overwrites — this test confirms UI editors must grey out the 8th-stage
+    // overwrites - this test confirms UI editors must grey out the 8th-stage
     // colour swatch (or accept that the B channel will appear as garbage on
     // device read-back).
     std::array<std::uint16_t, 8> dpis{800, 800, 800, 800, 800, 800, 800, 800};
@@ -152,10 +152,10 @@ TEST_CASE("AJ series setOption1 — 8th DPI stage B-channel collides with checks
 }
 
 // ---------------------------------------------------------------------------
-// §3.6 MouseSetKeyMatrix — action at bytes 8..11 (our prior code had 4..7)
+// §3.6 MouseSetKeyMatrix - action at bytes 8..11 (our prior code had 4..7)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series setKeyMatrix — action 4 bytes at pkt[9..12] not pkt[5..8]",
+TEST_CASE("AJ series setKeyMatrix - action 4 bytes at pkt[9..12] not pkt[5..8]",
           "[mouse][aj_series][wire][keymap][safety]") {
     // Regression guard for §1.1 of the roadmap: our prior setButtonBinding
     // wrote action at byte 4 (offset wrong by 4). The vendor places action
@@ -176,7 +176,7 @@ TEST_CASE("AJ series setKeyMatrix — action 4 bytes at pkt[9..12] not pkt[5..8]
     REQUIRE(pkt[12] == 0xef);
 }
 
-TEST_CASE("AJ series setFnMatrix — opcode 0x51 with same action layout",
+TEST_CASE("AJ series setFnMatrix - opcode 0x51 with same action layout",
           "[mouse][aj_series][wire][keymap]") {
     auto const pkt = buildMouseSetFnMatrix(/*fnLayer=*/1, /*button=*/3, 0x11223344u);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetFnMatrix)); // 0x51
@@ -189,12 +189,12 @@ TEST_CASE("AJ series setFnMatrix — opcode 0x51 with same action layout",
 }
 
 // ---------------------------------------------------------------------------
-// §3.5 setLedParam — 8-byte LED block, pure-white sentinel
+// §3.5 setLedParam - 8-byte LED block, pure-white sentinel
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series setLedParam — basic AlwaysOn red with speed encoding",
+TEST_CASE("AJ series setLedParam - basic AlwaysOn red with speed encoding",
           "[mouse][aj_series][wire][led]") {
-    // Effect=1 (AlwaysOn), UI speed=3 → wire (4-3)=1, value=brightness=5,
+    // Effect=1 (AlwaysOn), UI speed=3 -> wire (4-3)=1, value=brightness=5,
     // modeBits=0x07 (NORMAL, no dazzle), RGB=red.
     auto const pkt = buildSetLedParam(/*effect=*/1, /*speed=*/3, /*value=*/5,
                                       /*modeBits=*/0x07, 0xff, 0x00, 0x00);
@@ -206,7 +206,7 @@ TEST_CASE("AJ series setLedParam — basic AlwaysOn red with speed encoding",
     REQUIRE(pkt[6] == 0xff); REQUIRE(pkt[7] == 0x00); REQUIRE(pkt[8] == 0x00);
 }
 
-TEST_CASE("AJ series setLedParam — pure-white 0xFFFFFF rewrites to 0xFAFAFA on the wire",
+TEST_CASE("AJ series setLedParam - pure-white 0xFFFFFF rewrites to 0xFAFAFA on the wire",
           "[mouse][aj_series][wire][led]") {
     // Vendor renderer's LED-off-detection sentinel: literal 0xFFFFFF would
     // mean "lights off" to firmware, so the wire layer remaps to 0xFAFAFA.
@@ -220,7 +220,7 @@ TEST_CASE("AJ series setLedParam — pure-white 0xFFFFFF rewrites to 0xFAFAFA on
 // §3.1 GetRev + §3.2 SetReset
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series getRev — opcode 0x80 only, no payload",
+TEST_CASE("AJ series getRev - opcode 0x80 only, no payload",
           "[mouse][aj_series][wire][firmware]") {
     auto const pkt = buildGetRev();
     REQUIRE(pkt[0] == kReportId);
@@ -232,7 +232,7 @@ TEST_CASE("AJ series getRev — opcode 0x80 only, no payload",
     REQUIRE(pkt[kReportSize - 1] == 0x00);
 }
 
-TEST_CASE("AJ series setReset — opcode 0x02 only, no payload (factory reset)",
+TEST_CASE("AJ series setReset - opcode 0x02 only, no payload (factory reset)",
           "[mouse][aj_series][wire][safety]") {
     auto const pkt = buildSetReset();
     REQUIRE(pkt[1] == 0x02);
@@ -240,7 +240,7 @@ TEST_CASE("AJ series setReset — opcode 0x02 only, no payload (factory reset)",
     REQUIRE(pkt[kReportSize - 1] == 0x02);
 }
 
-TEST_CASE("AJ series setProfile — clamps profile index to 7",
+TEST_CASE("AJ series setProfile - clamps profile index to 7",
           "[mouse][aj_series][wire][profile]") {
     auto const pkt = buildSetProfile(99);
     REQUIRE(pkt[1] == 0x05);
@@ -248,10 +248,10 @@ TEST_CASE("AJ series setProfile — clamps profile index to 7",
 }
 
 // ---------------------------------------------------------------------------
-// §3.9 MouseSetOption0 — omnibus packet
+// §3.9 MouseSetOption0 - omnibus packet
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series setOption0 — omnibus byte layout (profile, sensitivity, LOD)",
+TEST_CASE("AJ series setOption0 - omnibus byte layout (profile, sensitivity, LOD)",
           "[mouse][aj_series][wire][option0]") {
     OptionPacket0 opts{};
     opts.profile = 2;
@@ -272,7 +272,7 @@ TEST_CASE("AJ series setOption0 — omnibus byte layout (profile, sensitivity, L
     REQUIRE(pkt[54] == 1);    // angle snap on
 }
 
-TEST_CASE("AJ series setOption0 — clamps sensitivities to 100% and LOD to 2",
+TEST_CASE("AJ series setOption0 - clamps sensitivities to 100% and LOD to 2",
           "[mouse][aj_series][wire][option0]") {
     OptionPacket0 opts{};
     opts.xSensitivity = 250;
@@ -284,7 +284,7 @@ TEST_CASE("AJ series setOption0 — clamps sensitivities to 100% and LOD to 2",
     REQUIRE(pkt[53] == 2);
 }
 
-TEST_CASE("AJ series setOption0 — sleep timers as LE uint16 at vendor bytes 40..47",
+TEST_CASE("AJ series setOption0 - sleep timers as LE uint16 at vendor bytes 40..47",
           "[mouse][aj_series][wire][option0][sleep]") {
     OptionPacket0 opts{};
     opts.sleepBtIdleSec = 0x1234;
@@ -300,10 +300,10 @@ TEST_CASE("AJ series setOption0 — sleep timers as LE uint16 at vendor bytes 40
 }
 
 // ---------------------------------------------------------------------------
-// Opcode-table invariants — pitfall guards
+// Opcode-table invariants - pitfall guards
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series opcode table — values match vendor RE",
+TEST_CASE("AJ series opcode table - values match vendor RE",
           "[mouse][aj_series][wire][opcodes]") {
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetRev) == 0x80);
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetReset) == 0x02);
@@ -322,7 +322,7 @@ TEST_CASE("AJ series no-standalone-battery-opcode regression guard",
     // §4 of opcode-table: there is NO standalone battery query opcode on the
     // mouse path. Battery is push-streamed from the dongle via gRPC; our prior
     // kCmdBattery=0x40 was nonexistent. The new FeaCmd enum MUST NOT contain
-    // a 0x40 value — guard against future re-introduction.
+    // a 0x40 value - guard against future re-introduction.
     for (auto const cmd : {FeaCmd::GetRev, FeaCmd::SetReset, FeaCmd::SetProfile,
                             FeaCmd::SetReport, FeaCmd::SetLedParam,
                             FeaCmd::MouseSetKeyMatrix, FeaCmd::MouseSetFnMatrix,
