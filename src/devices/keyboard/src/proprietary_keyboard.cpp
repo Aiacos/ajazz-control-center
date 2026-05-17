@@ -215,6 +215,33 @@ std::array<std::uint8_t, ReportSize> buildBatteryQuery() {
     return pkt;
 }
 
+std::array<std::uint8_t, ReportSize> buildSetRgbModeData(std::uint8_t modeId,
+                                                         std::uint8_t r,
+                                                         std::uint8_t g,
+                                                         std::uint8_t b,
+                                                         std::uint8_t rainbow,
+                                                         std::uint8_t brightness,
+                                                         std::uint8_t speed,
+                                                         std::uint8_t direction) {
+    std::array<std::uint8_t, ReportSize> pkt{};
+    pkt[0] = ReportId;
+    // mode_id lives at byte 1 per ak980pro_vendor.md §3.4 (NOT at byte 2 like
+    // the battery query sub-cmd — the 0x13 opcode is the MODE_BEGIN packet
+    // that immediately precedes this DATA packet; the data itself uses byte 1
+    // for the actual mode value).
+    pkt[1] = modeId;
+    pkt[2] = r;
+    pkt[3] = g;
+    pkt[4] = b;
+    pkt[8] = (rainbow != 0) ? 0x01 : 0x00;
+    pkt[9] = std::min<std::uint8_t>(brightness, 5);
+    pkt[10] = std::min<std::uint8_t>(speed, 5);
+    pkt[11] = std::min<std::uint8_t>(direction, 3);
+    pkt[14] = 0x55;
+    pkt[15] = 0xaa;
+    return pkt;
+}
+
 /**
  * @brief Return the LED count for a given zone id.
  *

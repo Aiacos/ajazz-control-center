@@ -8,6 +8,7 @@
  * for every builder in proprietary_protocol.hpp, plus zone-name and
  * LED-count lookup helpers.
  */
+#include "ajazz/keyboard/ak980_lighting.hpp"
 #include "proprietary_protocol.hpp"
 
 #include <catch2/catch_test_macros.hpp>
@@ -238,6 +239,83 @@ TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 
     for (std::size_t i = 3; i < ReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
     }
+}
+
+// ---------------------------------------------------------------------------
+// RGB firmware lighting mode (opcode 0x13) — P3.10 from
+// docs/research/phase3-patch-sequence.md.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ak980 setRgbMode data packet byte layout — Static + tint + flags",
+          "[proprietary][protocol][lighting]") {
+    // Mode 0x06 (Breath) with red tint, no rainbow, brightness 3, speed 4,
+    // direction Up (2).
+    auto const pkt = buildSetRgbModeData(/*modeId=*/0x06,
+                                         /*r=*/0xff, /*g=*/0x00, /*b=*/0x00,
+                                         /*rainbow=*/0,
+                                         /*brightness=*/3,
+                                         /*speed=*/4,
+                                         /*direction=*/2);
+    REQUIRE(pkt.size() == ReportSize);
+    REQUIRE(pkt[0] == ReportId); // 0x04
+    REQUIRE(pkt[1] == 0x06);     // mode_id (Breath)
+    REQUIRE(pkt[2] == 0xff);     // R
+    REQUIRE(pkt[3] == 0x00);     // G
+    REQUIRE(pkt[4] == 0x00);     // B
+    REQUIRE(pkt[8] == 0x00);     // rainbow flag (off)
+    REQUIRE(pkt[9] == 3);        // brightness
+    REQUIRE(pkt[10] == 4);       // speed
+    REQUIRE(pkt[11] == 2);       // direction (Up)
+    REQUIRE(pkt[14] == 0x55);    // trailer hi
+    REQUIRE(pkt[15] == 0xaa);    // trailer lo
+    // Slots that should remain zero.
+    REQUIRE(pkt[5] == 0x00);
+    REQUIRE(pkt[6] == 0x00);
+    REQUIRE(pkt[7] == 0x00);
+    REQUIRE(pkt[12] == 0x00);
+    REQUIRE(pkt[13] == 0x00);
+    // Trailing pad.
+    for (std::size_t i = 16; i < ReportSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("ak980 setRgbMode rainbow flag normalises to 0/1",
+          "[proprietary][protocol][lighting]") {
+    auto const pkt = buildSetRgbModeData(0x07, 0, 0, 0, /*rainbow=*/123, 5, 5, 0);
+    REQUIRE(pkt[8] == 0x01); // any non-zero rainbow input normalises to 0x01
+}
+
+TEST_CASE("ak980 setRgbMode clamps brightness / speed / direction",
+          "[proprietary][protocol][lighting]") {
+    // brightness_max = 5, speed_max = 5, direction range 0..3.
+    auto const clamped =
+        buildSetRgbModeData(0x06, 0, 0, 0, 0, /*brightness=*/250, /*speed=*/99, /*direction=*/9);
+    REQUIRE(clamped[9] == 5);   // brightness clamp
+    REQUIRE(clamped[10] == 5);  // speed clamp
+    REQUIRE(clamped[11] == 3);  // direction clamp
+}
+
+TEST_CASE("ak980 lighting enum range covers all 20 firmware modes",
+          "[proprietary][protocol][lighting]") {
+    using ajazz::keyboard::AK980LightingMode;
+    // Sanity-check enum integer values match the wire-format expectations
+    // pinned in ak980_lighting.hpp. The full list (1033.lan 521-540) is
+    // documented in the header; this guards against accidental renumbering.
+    REQUIRE(static_cast<std::uint8_t>(AK980LightingMode::Static) == 0x00);
+    REQUIRE(static_cast<std::uint8_t>(AK980LightingMode::Breath) == 0x06);
+    REQUIRE(static_cast<std::uint8_t>(AK980LightingMode::Rotating) == 0x0b);
+    REQUIRE(static_cast<std::uint8_t>(AK980LightingMode::LedOff) == 0x13);
+}
+
+TEST_CASE("ak980 lighting CmdSetRgbMode opcode is 0x13 + CmdFinish is 0xF0",
+          "[proprietary][protocol][lighting]") {
+    REQUIRE(CmdSetRgbMode == 0x13);
+    REQUIRE(CmdFinish == 0xf0);
+    // 0x13 must NOT collide with the per-key RGB upload (0x20 sub 0x04) or
+    // the time-data magic at byte 2 of the time-sync data packet (0x5A).
+    REQUIRE(CmdSetRgbMode != CmdBatteryQuery);
+    REQUIRE(CmdSetRgbMode != CmdSetTime);
 }
 
 TEST_CASE("ak980 battery sub-command is distinct from per-key RGB sub",

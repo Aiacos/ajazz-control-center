@@ -129,6 +129,8 @@ inline constexpr std::size_t kTftInterChunkMs = 2;      ///< Inter-chunk delay (
 // constant is documented for future investigation whether the LCD variant
 // drives a richer display-side clock animation.
 // ---------------------------------------------------------------------------
+inline constexpr std::uint8_t CmdSetRgbMode = 0x13;             ///< Firmware RGB lighting mode (opcode in 5-packet envelope; see ak980_lighting.hpp for the 20-mode enum).
+inline constexpr std::uint8_t CmdFinish = 0xf0;                 ///< End-of-envelope sentinel (vendor sends after every multi-packet commit; not yet emitted by us — see ak980pro_vendor.md §13.7).
 inline constexpr std::uint8_t CmdMacroBeginWireless = 0x19;     ///< Wireless macro upload begin.
 inline constexpr std::uint8_t MacroBeginWirelessSub = 0x04;     ///< Sub-cmd for wireless begin.
 inline constexpr std::uint8_t CmdMacroChunkInfoWireless = 0x15; ///< Wireless macro chunk-info.
@@ -241,6 +243,54 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  * §11.2.
  */
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildBatteryQuery();
+
+/**
+ * @brief Build the DATA packet for a firmware lighting-mode change (opcode 0x13).
+ *
+ * Per `ak980pro_vendor.md` §3.4 (`FUN_0042b0a0`): the full envelope is the
+ * 5-packet sequence `CMD_START 0x18 → CMD_MODE_BEGIN 0x13 → DATA → CMD_SAVE
+ * 0x02 → CMD_FINISH 0xF0`. This builder produces the third packet (DATA)
+ * with byte-precise layout:
+ *
+ *  - byte 0:  HID Report ID (default 0x04 per our convention)
+ *  - byte 1:  mode_id (see @ref AK980LightingMode)
+ *  - byte 2:  R component (only honoured by modes that accept a tint)
+ *  - byte 3:  G component
+ *  - byte 4:  B component
+ *  - byte 8:  rainbow flag (0 = solid tint, 1 = cycle hue)
+ *  - byte 9:  brightness 0..5 (clamped; vendor enforces brightness_max=5)
+ *  - byte 10: speed 0..5 (clamped; vendor enforces speed_max=5)
+ *  - byte 11: direction (Left=0, Down=1, Up=2, Right=3)
+ *  - bytes 14..15: trailer 0x55 0xAA
+ *  - all other bytes 0x00
+ *
+ * The remaining 4 envelope packets are built by reusing existing helpers:
+ * `buildSetTimeStart()` produces a valid `CMD_START 0x18` control packet;
+ * the MODE_BEGIN, SAVE, and FINISH packets are simple `makeReport(cmd)` calls
+ * with their respective opcodes. The full envelope is wired in
+ * `ProprietaryKeyboard::setLightingMode()` (added in a follow-up commit once
+ * a real-device hardware witness verifies the byte layout).
+ *
+ * @param modeId     One of the 20 @ref AK980LightingMode values.
+ * @param r          Tint red component.
+ * @param g          Tint green component.
+ * @param b          Tint blue component.
+ * @param rainbow    Non-zero to cycle hues instead of using the tint.
+ * @param brightness 0..5 (clamped).
+ * @param speed      0..5 (clamped).
+ * @param direction  0..3 (Left/Down/Up/Right).
+ *
+ * @see ak980_lighting.hpp for the mode enum, ak980pro_vendor.md §3.4.1.
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildSetRgbModeData(std::uint8_t modeId,
+                    std::uint8_t r,
+                    std::uint8_t g,
+                    std::uint8_t b,
+                    std::uint8_t rainbow,
+                    std::uint8_t brightness,
+                    std::uint8_t speed,
+                    std::uint8_t direction);
 
 /**
  * @brief Build the time-sync start packet — first of the 4-packet envelope.
