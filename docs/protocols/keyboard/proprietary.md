@@ -82,14 +82,15 @@ physical round-trip witness for `functional` promotion.
 
 `ProprietaryKeyboard::setTime()` writes a **four-packet HID Feature Report**
 sequence to the device using the firmware RTC opcodes `0x18` + `0x28` + data
-+ `0x02`. The wire format is source-level corroborated against two
-independent reverse-engineering corpora targeting the same Sonix SN32F299
-MCU family, plus disassembly of the AJAZZ vendor `DeviceDriver.exe`:
 
-- `gohv/EPOMAKER-Ajazz-AK820-Pro` (Rust, `src/protocol.rs` + `src/usb.rs`)
-- `KyleBoyer/TFTTimeSync-node` (TypeScript, `src/packets.ts` + `src/device.ts`)
-- `aar-rafi/aks075-linux` README credits gohv for the same wire format
-- Vendor `DeviceDriver.exe` imports `HidD_SetFeature` for this code path
+- `0x02`. The wire format is source-level corroborated against two
+  independent reverse-engineering corpora targeting the same Sonix SN32F299
+  MCU family, plus disassembly of the AJAZZ vendor `DeviceDriver.exe`:
+
+* `gohv/EPOMAKER-Ajazz-AK820-Pro` (Rust, `src/protocol.rs` + `src/usb.rs`)
+* `KyleBoyer/TFTTimeSync-node` (TypeScript, `src/packets.ts` + `src/device.ts`)
+* `aar-rafi/aks075-linux` README credits gohv for the same wire format
+* Vendor `DeviceDriver.exe` imports `HidD_SetFeature` for this code path
   (Agent B static analysis, 2026-05-17) — confirms the Feature Report
   transport, not Output Report
 
@@ -98,12 +99,12 @@ control-endpoint `SET_REPORT`), not via `hid_write` (interrupt OUT).
 
 ### Four-packet sequence
 
-| # | Purpose  | Report ID | Byte 1 | Byte 8 | Notable bytes               |
-| - | -------- | --------- | ------ | ------ | --------------------------- |
-| 1 | Start    | `0x04`    | `0x18` | `0x01` | resets time-sync state machine |
-| 2 | Preamble | `0x04`    | `0x28` | `0x01` | configure-mode marker       |
-| 3 | Data     | `0x00`    | `0x01` | second | b2=0x5A, b3=year-2000, b62=0xAA b63=0x55 |
-| 4 | Save     | `0x04`    | `0x02` | `0x00` | persist RTC to NV-RAM       |
+| #   | Purpose  | Report ID | Byte 1 | Byte 8 | Notable bytes                            |
+| --- | -------- | --------- | ------ | ------ | ---------------------------------------- |
+| 1   | Start    | `0x04`    | `0x18` | `0x01` | resets time-sync state machine           |
+| 2   | Preamble | `0x04`    | `0x28` | `0x01` | configure-mode marker                    |
+| 3   | Data     | `0x00`    | `0x01` | second | b2=0x5A, b3=year-2000, b62=0xAA b63=0x55 |
+| 4   | Save     | `0x04`    | `0x02` | `0x00` | persist RTC to NV-RAM                    |
 
 After packet 4, sleep 100ms (gohv `usb.rs` pattern) so the firmware commits
 before any subsequent HID I/O can race the SAVE.
@@ -123,10 +124,10 @@ Pitfall 19 three-witness rule for `ak980pro.clock` post-amendment:
 
 1. **Capture witness:** source-level corroboration from two independent
    corpora — SATISFIED.
-2. **Round-trip witness:** physical AK980 PRO accepts the 3-packet
+1. **Round-trip witness:** physical AK980 PRO accepts the 3-packet
    sequence and the TFT clock widget shows the time we sent —
    **DEFERRED to Phase 9.x physical test**.
-3. **Negative witness:** sending a wrong year (e.g. 2099) produces a
+1. **Negative witness:** sending a wrong year (e.g. 2099) produces a
    visible-but-wrong display, proving the firmware parses the field —
    **DEFERRED to Phase 9.x physical test**.
 

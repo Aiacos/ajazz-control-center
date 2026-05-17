@@ -593,62 +593,74 @@ When the §8.0 USBPcap path fails (modern Windows 11 with xHCI / USB4 root hubs 
 **Setup (one-time, ~30 min):**
 
 1. Install usbipd-win on the Windows host:
+
    ```powershell
    winget install --exact --id dorssel.usbipd-win
    ```
+
    Verify: `usbipd --version` should print `5.3.0` or higher.
 
-2. Install WSL2 + Ubuntu (admin PowerShell):
+1. Install WSL2 + Ubuntu (admin PowerShell):
+
    ```powershell
    wsl --install -d Ubuntu --no-launch
    # Reboot to activate Hyper-V kernel mode
    wsl -d Ubuntu                       # first launch — accept user creation OR run as root
    ```
 
-3. Inside WSL2 Ubuntu, install capture deps:
+1. Inside WSL2 Ubuntu, install capture deps:
+
    ```bash
    sudo apt update && sudo apt install -y wireshark-common tshark usbutils kmod
    ```
 
-4. **Build a custom WSL2 kernel with `CONFIG_USB_MON=m`** — the stock Microsoft WSL2 kernel ships **without** usbmon, which is the kernel module that produces the `usbmon0..N` capture interfaces. Reference: <https://github.com/microsoft/WSL2-Linux-Kernel>. Disable `CONFIG_DEBUG_INFO_BTF` to avoid the libbpf -Werror failure with GCC 15. Drop the resulting `vmlinux` into `C:\Users\<user>\wsl2-custom-kernel` and point `%USERPROFILE%\.wslconfig` at it:
+1. **Build a custom WSL2 kernel with `CONFIG_USB_MON=m`** — the stock Microsoft WSL2 kernel ships **without** usbmon, which is the kernel module that produces the `usbmon0..N` capture interfaces. Reference: <https://github.com/microsoft/WSL2-Linux-Kernel>. Disable `CONFIG_DEBUG_INFO_BTF` to avoid the libbpf -Werror failure with GCC 15. Drop the resulting `vmlinux` into `C:\Users\<user>\wsl2-custom-kernel` and point `%USERPROFILE%\.wslconfig` at it:
+
    ```ini
    [wsl2]
    kernel=C:\\Users\\<user>\\wsl2-custom-kernel
    ```
+
    Then `wsl --shutdown` and restart Ubuntu. Verify: `modprobe usbmon && ls /sys/kernel/debug/usb/usbmon/` should list `0s 0u 1s 1u ...`.
 
 **Per-session capture flow:**
 
 1. List USB devices on the Windows host:
+
    ```powershell
    usbipd list
    ```
 
-2. Bind + attach the AJAZZ device to WSL2 (admin PowerShell for `bind`, normal for `attach`):
+1. Bind + attach the AJAZZ device to WSL2 (admin PowerShell for `bind`, normal for `attach`):
+
    ```powershell
    # bind is one-time per device, persists across reboots
    usbipd bind --force --busid <X-Y>      # --force needed if USBPcap driver is also installed
    usbipd attach --busid <X-Y> --wsl Ubuntu
    ```
+
    *Note: `--force` is required when USBPcap is also installed on the host (usbipd treats the USBPcap filter as incompatible). If USBPcap is dead-end on your hardware, `--force` is safe — USBPcap isn't actually doing anything.*
 
-3. Inside WSL2 Ubuntu, verify the device is attached:
+1. Inside WSL2 Ubuntu, verify the device is attached:
+
    ```bash
    lsusb            # should show your AJAZZ VID:PID
    lsusb -t         # find which bus number (usb1 → usbmon1)
    ls /dev/hidraw*  # confirm hidraw nodes were created
    ```
 
-4. Run your AJAZZ Control Center on Linux (inside WSL2 or on the same Linux box where the device is now attached), then capture the wire traffic with the standard §1-7 Linux usbmon path:
+1. Run your AJAZZ Control Center on Linux (inside WSL2 or on the same Linux box where the device is now attached), then capture the wire traffic with the standard §1-7 Linux usbmon path:
+
    ```bash
    sudo modprobe usbmon
    tshark -i usbmon1 -w /tmp/cap.pcapng -a duration:10
    # (trigger the device action via the agent)
    ```
 
-5. Extract per-device frames with the standard §5 pipeline; commit ONLY the sanitised `.h` fixture.
+1. Extract per-device frames with the standard §5 pipeline; commit ONLY the sanitised `.h` fixture.
 
-6. When done, return the device to the Windows host:
+1. When done, return the device to the Windows host:
+
    ```powershell
    usbipd detach --busid <X-Y>
    ```

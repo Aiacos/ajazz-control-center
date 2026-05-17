@@ -37,7 +37,7 @@ explicit firmware RTC reachable via opcode `0x28`:
    `time_data_packet(year, month, day, hour, minute, second)` /
    `save_packet()`.
 
-2. **`KyleBoyer/TFTTimeSync-node`** — TypeScript daemon for the AK820 Pro TFT
+1. **`KyleBoyer/TFTTimeSync-node`** — TypeScript daemon for the AK820 Pro TFT
    time-sync. File `src/packets.ts` `getConfigureTimePacket()` /
    `getUpdateTimePacket()` / `getSavePacket()` produce byte-for-byte identical
    packets to the gohv Rust source. Cross-corroboration is at the
@@ -59,6 +59,7 @@ firmware commit the RTC to NV-RAM (gohv `usb.rs` pattern; races without this
 sleep can drop the SAVE).
 
 **Packet 1 — Start (control packet for CMD_START, opcode 0x18):**
+
 ```
 byte  0:  0x04   // HID Report ID (default)
 byte  1:  0x18   // CMD_START — resets firmware time-sync state machine
@@ -67,6 +68,7 @@ bytes 2–7, 9–63: 0x00
 ```
 
 **Packet 2 — Preamble (control packet for CMD_TIME, opcode 0x28):**
+
 ```
 byte  0:  0x04   // HID Report ID (default)
 byte  1:  0x28   // CMD_TIME
@@ -75,6 +77,7 @@ bytes 2–7, 9–63: 0x00
 ```
 
 **Packet 3 — Time data (HID Report ID 0x00, the magic discriminator):**
+
 ```
 byte  0:  0x00   // HID Report ID — NOT the default 0x04; firmware uses
                  //                  the magic 0x5A at byte 2 as the real
@@ -96,6 +99,7 @@ byte 63:  0x55   // delimiter low
 ```
 
 **Packet 4 — Save (control packet for CMD_SAVE):**
+
 ```
 byte  0:  0x04   // HID Report ID (default)
 byte  1:  0x02   // CMD_SAVE — distinct from CmdCommitEeprom (0x0E)
@@ -123,11 +127,11 @@ Witnesses for `ak980pro` clock capability post-amendment:
    the same opcode `0x28` on the same chipset family. The probability that
    two unrelated reverse-engineers fabricated identical false byte sequences
    is vanishingly small.
-2. **Round-trip witness (TO BE CONFIRMED, Phase 9.x physical test):** after
+1. **Round-trip witness (TO BE CONFIRMED, Phase 9.x physical test):** after
    sending the 3-packet sequence with a deliberately wrong year (e.g. year
    2099), the keyboard's TFT clock widget should display 2099. If it does:
    round-trip witness confirmed.
-3. **Negative witness (TO BE CONFIRMED, Phase 9.x):** sending a deliberately
+1. **Negative witness (TO BE CONFIRMED, Phase 9.x):** sending a deliberately
    bad value (year `0xFF` representing 2255, or zeroed packet body) should
    produce a visible-but-wrong time, not a no-op. This proves the firmware
    parses the field rather than ignoring unrecognised opcodes.
@@ -140,11 +144,12 @@ sending a wrong time only changes a display; nothing destructive happens.
 
 The full promotion of `ak980pro.capabilities[clock]` from `scaffolded` to
 `functional` is gated on a Phase 9.x physical test that confirms witnesses (2)
-+ (3). Until then, this amendment promotes the maturity tier on the *capability
-backbone* (the wire format + setTime implementation) from `NotImplemented` to
-`Ok / IoError` and updates `devices.yaml` accordingly: `ak980pro.maturity`
-goes from `scaffolded` to `partial` (other capabilities — `rgb`, `macros`,
-`layers` — remain in `feature_summary.pending:` per Pitfall 29 honesty contract).
+
+- (3). Until then, this amendment promotes the maturity tier on the *capability
+  backbone* (the wire format + setTime implementation) from `NotImplemented` to
+  `Ok / IoError` and updates `devices.yaml` accordingly: `ak980pro.maturity`
+  goes from `scaffolded` to `partial` (other capabilities — `rgb`, `macros`,
+  `layers` — remain in `feature_summary.pending:` per Pitfall 29 honesty contract).
 
 ## Honesty-contract preservation
 
