@@ -191,7 +191,11 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  *  - byte 7:  minute (0..59)
  *  - byte 8:  second (0..59)
  *  - byte 9:  0x00
- *  - byte 10: 0x04 (fixed)
+ *  - byte 10: wDayOfWeek (0=Sunday..6=Saturday)
+ *             NB: gohv corpus hard-codes 0x04 here; that only matches the
+ *             vendor on a Thursday. Ghidra decompile of DeviceDriver.exe
+ *             (Agent C, 2026-05-17) confirmed the vendor reads the real
+ *             day-of-week. See ARCH-05.2 in docs/protocols/keyboard/ak980pro_vendor.md.
  *  - bytes 11..61: 0x00
  *  - byte 62: 0xAA (delimiter high)
  *  - byte 63: 0x55 (delimiter low)
@@ -209,7 +213,8 @@ buildSetTimeData(std::uint16_t year,
                  std::uint8_t day,
                  std::uint8_t hour,
                  std::uint8_t minute,
-                 std::uint8_t second);
+                 std::uint8_t second,
+                 std::uint8_t dayOfWeek = 0);
 
 /**
  * @brief Build the time-sync save packet (ReportId=0x04, opcode 0x02).

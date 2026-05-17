@@ -174,7 +174,8 @@ std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
                                                       std::uint8_t day,
                                                       std::uint8_t hour,
                                                       std::uint8_t minute,
-                                                      std::uint8_t second) {
+                                                      std::uint8_t second,
+                                                      std::uint8_t dayOfWeek) {
     std::array<std::uint8_t, ReportSize> pkt{};
     pkt[0] = TimeDataReportId; // 0x00 — NOT the default 0x04
     pkt[1] = 0x01;
@@ -186,7 +187,12 @@ std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
     pkt[7] = minute;
     pkt[8] = second;
     pkt[9] = 0x00;
-    pkt[10] = 0x04;
+    // wDayOfWeek (0=Sunday..6=Saturday). The gohv corpus hard-codes 0x04 here;
+    // Ghidra decompile of DeviceDriver.exe (2026-05-17, ak980pro_vendor.md
+    // §"Time-sync flow" lines 240-244) showed the vendor reads the real
+    // day-of-week. Clamp to 0..6 in case the caller passes an out-of-range
+    // value (tm_wday is guaranteed 0..6 by the C library but defensive).
+    pkt[10] = (dayOfWeek <= 6) ? dayOfWeek : 0;
     // bytes 11..61 stay 0x00 from value-init.
     pkt[ReportSize - 2] = 0xaa;
     pkt[ReportSize - 1] = 0x55;
@@ -529,12 +535,14 @@ public:
         auto const hour = static_cast<std::uint8_t>(local.tm_hour);
         auto const minute = static_cast<std::uint8_t>(local.tm_min);
         auto const second = static_cast<std::uint8_t>(local.tm_sec);
+        // tm_wday is 0..6 (Sunday..Saturday) per POSIX/Win32.
+        auto const dayOfWeek = static_cast<std::uint8_t>(local.tm_wday);
 
         try {
             (void)m_transport->writeFeature(buildSetTimeStart());
             (void)m_transport->writeFeature(buildSetTimePreamble());
             (void)m_transport->writeFeature(
-                buildSetTimeData(year, month, day, hour, minute, second));
+                buildSetTimeData(year, month, day, hour, minute, second, dayOfWeek));
             (void)m_transport->writeFeature(buildSetTimeSave());
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN("keyboard.ak980", "setTime: HID writeFeature failed: {}", e.what());

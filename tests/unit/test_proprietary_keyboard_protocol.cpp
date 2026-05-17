@@ -147,8 +147,8 @@ TEST_CASE("ak980 setTime preamble carries ReportId=0x04 + opcode 0x28 + marker 0
 
 TEST_CASE("ak980 setTime data packet has report id 0x00 + magic 0x5A + delimiter 0xAA 0x55",
           "[proprietary][protocol][clock]") {
-    // 2026-05-17 14:23:45
-    auto const pkt = buildSetTimeData(2026, 5, 17, 14, 23, 45);
+    // 2026-05-17 14:23:45 — that day was a Sunday (wDayOfWeek=0).
+    auto const pkt = buildSetTimeData(2026, 5, 17, 14, 23, 45, /*dayOfWeek=*/0);
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == TimeDataReportId); // 0x00 — distinct from default ReportId=0x04
     REQUIRE(pkt[1] == 0x01);
@@ -160,13 +160,32 @@ TEST_CASE("ak980 setTime data packet has report id 0x00 + magic 0x5A + delimiter
     REQUIRE(pkt[7] == 23); // minute
     REQUIRE(pkt[8] == 45); // second
     REQUIRE(pkt[9] == 0x00);
-    REQUIRE(pkt[10] == 0x04);
+    REQUIRE(pkt[10] == 0x00); // wDayOfWeek (Sunday)
     // Bytes 11..61 must be zero padding.
     for (std::size_t i = 11; i <= 61; ++i) {
         REQUIRE(pkt[i] == 0x00);
     }
     REQUIRE(pkt[62] == 0xaa); // delimiter high
     REQUIRE(pkt[63] == 0x55); // delimiter low
+}
+
+TEST_CASE("ak980 setTime data packet encodes wDayOfWeek correctly",
+          "[proprietary][protocol][clock]") {
+    // Per Ghidra decompile of DeviceDriver.exe (2026-05-17, ak980pro_vendor.md):
+    // vendor writes the actual day-of-week at byte 10, NOT the hard-coded 0x04
+    // that the gohv corpus uses. Default value of 0 must produce Sunday.
+    auto const sunday = buildSetTimeData(2026, 1, 4, 0, 0, 0); // default 0
+    REQUIRE(sunday[10] == 0x00);
+
+    for (std::uint8_t dow = 0; dow <= 6; ++dow) {
+        auto const pkt = buildSetTimeData(2026, 1, 1, 0, 0, 0, dow);
+        REQUIRE(pkt[10] == dow);
+    }
+
+    // Out-of-range values are clamped to 0 (defensive — tm_wday is guaranteed
+    // 0..6 by the C library but a malformed caller must not corrupt the wire).
+    auto const bad = buildSetTimeData(2026, 1, 1, 0, 0, 0, 99);
+    REQUIRE(bad[10] == 0x00);
 }
 
 TEST_CASE("ak980 setTime data packet saturates pre-2000 years to floor",
