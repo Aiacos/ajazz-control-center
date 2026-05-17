@@ -5,6 +5,10 @@ add_executable(
     test_akp153_protocol.cpp
     test_akp03_protocol.cpp
     test_akp05_protocol.cpp
+    # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline. Locks JPEG/PNG magic bytes,
+    # rotation/mirror transforms (AKP153 Rot90+mirror, AKP815 Rot180), and validation
+    # contracts (zero-area, dim mismatch).
+    test_image_pipeline.cpp
     test_proprietary_keyboard_protocol.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`

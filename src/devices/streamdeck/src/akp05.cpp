@@ -2,10 +2,10 @@
 /** @file akp05.cpp
  *  @brief AJAZZ AKP05 / AKP05E "Stream Dock Plus"-class device backend.
  *
- *  Implements the full wire protocol for the AKP05 family: 15 keys (85×85 JPEG,
- *  reusing the AKP153 image format), 4 endless rotary encoders each with a
- *  dedicated 100×100 LCD above it, one capacitive touch strip, and one 800×100
- *  main LCD panel.
+ *  Implements the full wire protocol for the AKP05 family: 10 keys in a 2×5
+ *  grid (85×85 JPEG, reusing the AKP153 image format), 4 endless rotary
+ *  encoders each with a dedicated 100×100 LCD above them, one capacitive
+ *  touch strip, and one 800×100 main LCD strip (full panel is 800×480).
  *
  *  The protocol is a clean-room reconstruction from the notes in
  *  docs/protocols/streamdeck/akp05.md; no third-party source is incorporated.
@@ -16,6 +16,7 @@
 #include "ajazz/core/logger.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
 #include "akp05_protocol.hpp"
+#include "image_pipeline.hpp"
 
 #include <algorithm>
 #include <array>
@@ -260,6 +261,41 @@ using namespace ajazz::core;
 // lifetime for this backend. Distinct flag — not shared across backends.
 std::once_flag s_warned_akp05;
 
+// ARCH-04 image-pipeline transforms for the three AKP05 display surfaces. Pulled
+// out as free helpers so the per-call setKeyImage / setEncoderImage / setMainImage
+// bodies stay one-liners and the geometry/orientation/quality constants live in
+// exactly one place.
+inline ImageTransform akp05KeyTransform() noexcept {
+    return ImageTransform{
+        .targetWidth = akp05::KeyWidthPx,
+        .targetHeight = akp05::KeyHeightPx,
+        .format = ImageFormat::Jpeg,
+        .rotationDegrees = 0,
+        .mirror = false,
+        .jpegQuality = 85,
+    };
+}
+inline ImageTransform akp05EncoderTransform() noexcept {
+    return ImageTransform{
+        .targetWidth = akp05::EncoderScreenWidthPx,
+        .targetHeight = akp05::EncoderScreenHeightPx,
+        .format = ImageFormat::Jpeg,
+        .rotationDegrees = 0,
+        .mirror = false,
+        .jpegQuality = 85,
+    };
+}
+inline ImageTransform akp05MainTransform() noexcept {
+    return ImageTransform{
+        .targetWidth = akp05::MainDisplayWidthPx,
+        .targetHeight = akp05::MainDisplayHeightPx,
+        .format = ImageFormat::Jpeg,
+        .rotationDegrees = 0,
+        .mirror = false,
+        .jpegQuality = 85,
+    };
+}
+
 /** @brief Concrete IDevice implementation for the AJAZZ AKP05 / AKP05E.
  *
  *  @class Akp05Device
@@ -271,10 +307,10 @@ std::once_flag s_warned_akp05;
  *  the caller because Qt's event loop drives @c poll() from a single thread.
  *
  *  Hardware capabilities:
- *  - 15 keys arranged in a 3×5 grid, each with an 85×85 JPEG LCD
+ *  - 10 keys arranged in a 2×5 grid, each with an 85×85 JPEG LCD
  *  - 4 endless rotary encoders with 100×100 JPEG LCDs
  *  - One capacitive touch strip (X range 0–639)
- *  - One 800×100 main LCD panel
+ *  - One 800×100 main LCD strip (full panel is 800×480)
  */
 class Akp05Device final : public IDevice,
                           public IDisplayCapable,
@@ -408,17 +444,20 @@ public:
                      std::span<std::uint8_t const> rgba,
                      std::uint16_t width,
                      std::uint16_t height) override {
-        (void)width;
-        (void)height;
-        sendImage(
-            akp05::buildKeyImageHeader(
-                keyIndex, static_cast<std::uint16_t>(std::min<std::size_t>(rgba.size(), 0xffff))),
-            rgba);
+        // ARCH-04: caller passes RGBA8 at any resolution per IDisplayCapable contract;
+        // backend resizes to the device's native 85×85 and JPEG-encodes host-side.
+        auto const jpeg = encodeForDevice(rgba, width, height, akp05KeyTransform());
+        auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
+        sendImage(akp05::buildKeyImageHeader(keyIndex, sized), jpeg);
     }
 
     void setKeyColor(std::uint8_t keyIndex, Rgb color) override {
-        (void)color;
-        clearKey(keyIndex);
+        // ARCH-04: synthesise a solid-color JPEG at native dimensions and ship via
+        // the standard key-image path. The 1×1 source is upscaled cheaply by
+        // QImage::scaled inside encodeSolid.
+        auto const jpeg = encodeSolid(color, akp05KeyTransform());
+        auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
+        sendImage(akp05::buildKeyImageHeader(keyIndex, sized), jpeg);
     }
 
     void clearKey(std::uint8_t keyIndex) override {
@@ -427,14 +466,15 @@ public:
         (void)m_transport->write(pkt);
     }
 
-    void setMainImage(std::span<std::uint8_t const> jpeg,
+    void setMainImage(std::span<std::uint8_t const> rgba,
                       std::uint16_t width,
                       std::uint16_t height) override {
-        (void)width;
-        (void)height;
-        sendImage(akp05::buildMainImageHeader(
-                      static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff))),
-                  jpeg);
+        // ARCH-04: 800×100 main LCD strip. Caller passes RGBA8 at any resolution;
+        // backend resizes to native + JPEG-encodes. Used by host-rendered clock
+        // widgets and any user-driven main-strip imagery.
+        auto const jpeg = encodeForDevice(rgba, width, height, akp05MainTransform());
+        auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
+        sendImage(akp05::buildMainImageHeader(sized), jpeg);
     }
 
     void setBrightness(std::uint8_t percent) override {
@@ -461,12 +501,10 @@ public:
                          std::span<std::uint8_t const> rgba,
                          std::uint16_t width,
                          std::uint16_t height) override {
-        (void)width;
-        (void)height;
-        sendImage(akp05::buildEncoderImageHeader(
-                      encoderIndex,
-                      static_cast<std::uint16_t>(std::min<std::size_t>(rgba.size(), 0xffff))),
-                  rgba);
+        // ARCH-04: 100×100 per-encoder LCD. RGBA8 → JPEG host-side.
+        auto const jpeg = encodeForDevice(rgba, width, height, akp05EncoderTransform());
+        auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
+        sendImage(akp05::buildEncoderImageHeader(encoderIndex, sized), jpeg);
     }
 
     // ---- IClockCapable ------------------------------------------------------
