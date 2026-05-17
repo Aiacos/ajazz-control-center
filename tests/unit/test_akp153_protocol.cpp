@@ -82,3 +82,40 @@ TEST_CASE("parser rejects frames shorter than 16 bytes", "[akp153][protocol]") {
     auto const ev = parseInputReport(frame);
     REQUIRE(!ev.has_value());
 }
+
+// ---------------------------------------------------------------------------
+// Vendor-RE-discovered opcodes (akp05_vendor.md §3, shared AKP-family wire).
+// P3.7 propagates CRT VER + CRT ULEND from AKP03/AKP05 to AKP153 / AKP815.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("akp153 version request uses CRT prefix + VER command",
+          "[akp153][protocol][vendor-re]") {
+    auto const pkt = buildVersionRequest();
+    REQUIRE(pkt.size() == PacketSize);
+    REQUIRE(pkt[0] == 0x43); // C
+    REQUIRE(pkt[1] == 0x52); // R
+    REQUIRE(pkt[2] == 0x54); // T
+    REQUIRE(pkt[5] == 0x56); // V
+    REQUIRE(pkt[6] == 0x45); // E
+    REQUIRE(pkt[7] == 0x52); // R
+    for (std::size_t i = 8; i < PacketSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}
+
+TEST_CASE("akp153 upload-finished encodes ULEND at 5..9",
+          "[akp153][protocol][vendor-re]") {
+    auto const pkt = buildUploadFinished();
+    REQUIRE(pkt.size() == PacketSize);
+    REQUIRE(pkt[0] == 0x43); // C
+    REQUIRE(pkt[1] == 0x52); // R
+    REQUIRE(pkt[2] == 0x54); // T
+    REQUIRE(pkt[5] == 0x55); // U
+    REQUIRE(pkt[6] == 0x4c); // L
+    REQUIRE(pkt[7] == 0x45); // E
+    REQUIRE(pkt[8] == 0x4e); // N
+    REQUIRE(pkt[9] == 0x44); // D
+    for (std::size_t i = 10; i < PacketSize; ++i) {
+        REQUIRE(pkt[i] == 0x00);
+    }
+}

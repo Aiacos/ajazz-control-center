@@ -119,6 +119,25 @@ std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     return pkt;
 }
 
+std::array<std::uint8_t, PacketSize> buildVersionRequest() {
+    return buildCmdHeader(CmdVersion);
+}
+
+std::array<std::uint8_t, PacketSize> buildUploadFinished() {
+    // ULEND is a 5-byte command at offsets 5..9 (not the standard 3-byte at 5..7).
+    // Shared across the AKP family per akp05_vendor.md §3.
+    std::array<std::uint8_t, PacketSize> pkt{};
+    pkt[0] = CmdPrefix[0];
+    pkt[1] = CmdPrefix[1];
+    pkt[2] = CmdPrefix[2];
+    pkt[5] = UploadFinishedMarker[0];
+    pkt[6] = UploadFinishedMarker[1];
+    pkt[7] = UploadFinishedMarker[2];
+    pkt[8] = UploadFinishedMarker[3];
+    pkt[9] = UploadFinishedMarker[4];
+    return pkt;
+}
+
 /** @brief Build a "show device logo" command packet.
  *
  *  Triggers the firmware to display the built-in AJAZZ logo on all key
@@ -407,6 +426,10 @@ private:
             (void)m_transport->write(chunk);
             offset += take;
         }
+        // P3.7: emit the 5-byte ULEND commit sentinel after the image burst
+        // (akp05_vendor.md §3 row 193). Shared across the AKP family — same
+        // pattern as AKP03/AKP05 from commit 24c0965.
+        (void)m_transport->write(akp153::buildUploadFinished());
     }
 
     DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.

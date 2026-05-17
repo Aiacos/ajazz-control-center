@@ -266,6 +266,9 @@ private:
             (void)m_transport->write(chunk);
             offset += take;
         }
+        // P3.7: emit the 5-byte ULEND commit sentinel after the image burst.
+        // AKP815 reuses akp153 builders (it has no separate protocol header).
+        (void)m_transport->write(akp153::buildUploadFinished());
     }
 
     DeviceDescriptor m_descriptor; ///< Static hardware description.

@@ -47,6 +47,30 @@ inline constexpr std::array<std::uint8_t, 3> CmdBat{0x42,
 inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  ///< Flush / stop "STP".
 inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Clear key(s) "CLE".
 
+// Vendor-RE-discovered opcodes (akp05_vendor.md §3, 2026-05-17). Same wire
+// format applies across the whole AKP family per SDLibrary1.dll Ghidra audit.
+// See clean-reimplementation-roadmap.md §11.3 carry-over + P3.7.
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
+    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+
+/**
+ * @brief Build the firmware-version probe (CRT VER, no payload).
+ *
+ * Request side only — response decoding deferred until a real-device capture
+ * surfaces the input-report shape. firmwareVersion() continues to return
+ * "unknown" until then.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildVersionRequest();
+
+/**
+ * @brief Build the upload-finished sentinel (CRT ULEND, 5-byte at offsets 5..9).
+ *
+ * Emitted after every chunked image upload to commit the burst. Without it,
+ * large image bursts may cause occasional firmware desync (vendor RE annotation).
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildUploadFinished();
+
 /**
  * @brief Build a `Set Brightness` output report.
  *
