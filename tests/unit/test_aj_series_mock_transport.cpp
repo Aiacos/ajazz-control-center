@@ -74,22 +74,29 @@ TEST_CASE("MockTransport captures setActiveDpiStage envelope on AjSeriesMouse",
 
     dpi->setActiveDpiStage(0);
 
-    REQUIRE(observer->writeFeatureCount() == 1);
+    // P3.12.2: AjSeriesMouse migrated to vendor-correct wire format.
+    // setActiveDpiStage now re-uploads the FULL 8-stage DPI table atomically
+    // via opcode 0x54 (FEA_CMD_MOUSE_SET_OPTIONPARAM1, vendor pattern). The
+    // packet is a 65-byte HID OUTPUT REPORT (writeFeature → write), checksum
+    // is BIT7 (& 0x7F), 8 stages of DPI/colour.
+    REQUIRE(observer->writeCount() == 1);                // OUTPUT report, NOT feature
+    REQUIRE(observer->writeFeatureCount() == 0);         // confirms transport correction
     REQUIRE(observer->writes().size() == 1);
     auto const& pkt = observer->writes().at(0);
-    REQUIRE(pkt.size() == 64);
+    REQUIRE(pkt.size() == 65);                            // 1 ReportId + 64 vendor envelope bytes
 
-    CHECK(pkt[0] == 0x05); // report id
-    CHECK(pkt[1] == 0x21); // kCmdDpi
-    CHECK(pkt[2] == 0x01); // sub-cmd: setActiveDpiStage
-    CHECK(pkt[3] == 0x01); // payload length
-    CHECK(pkt[4] == 0x00); // payload byte: stage index 0
-    for (std::size_t i = 5; i < 63; ++i) {
+    CHECK(pkt[0] == 0x05); // ReportId
+    CHECK(pkt[1] == 0x54); // FeaCmd::MouseSetOption1 (was 0x21, wrong)
+    CHECK(pkt[2] == 0x00); // active DPI stage = 0
+    CHECK(pkt[3] == 0x00); // stage count = 0 (all DPI values are 0 by default)
+    // bytes 4..8 reserved zero, then DPI table (LE uint16) at pkt[9..24]
+    for (std::size_t i = 4; i < 41; ++i) {
         CAPTURE(i);
-        CHECK(pkt[i] == 0x00); // zero-padding through byte 62
+        CHECK(pkt[i] == 0x00);
     }
-    // checksum = (0x21 + 0x01 + 0x01 + 0x00) & 0xff = 0x23
-    CHECK(pkt[63] == 0x23);
+    // BIT7 checksum at pkt[64] — sum of pkt[1..63] = 0x54 (opcode only) & 0x7F
+    // = 0x54. Other bytes are zero so the checksum is just the opcode value.
+    CHECK(pkt[64] == 0x54);
 }
 
 TEST_CASE("MockTransport reset() clears captured writes", "[unit][mock_transport][CAPTURE-04]") {
