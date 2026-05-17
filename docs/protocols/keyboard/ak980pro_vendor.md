@@ -836,9 +836,311 @@ Static dumps used in this analysis are at
 
 - `ghidra_hid_dump.json` (74 call sites + 3 222 strings)
 - `ghidra_hid_callers.json` (39 callers of inner HID writers, 2 hops deep)
+- `extra_funcs.json` (12 supporting helper functions: WriteFile/IOCTL wrappers, key translators, single-key remap writer, HID enumerator, dynamic loader)
+- `mui_dll_inventory.json` (6 604 mui.dll exports + 66 classes catalog + 30 sample decompiles)
+- `decomp_targets/` (39 per-function pseudocode dumps)
 
 Extraction scripts are at `C:/Users/unilo/reverse-eng-workdir/`:
 
 - `ExtractHidCalls.java` (GhidraScript — replaces the Python original which
   no longer works in Ghidra 12.x without PyGhidra/CPython)
 - `FindHidCallers.java` (BFS caller-tracer)
+- `DumpFunctionsByAddr.java` (one-shot dumper for arbitrary function addresses)
+- `EnumerateMuiExports.java` (mui.dll export enumerator)
+
+______________________________________________________________________
+
+## 13. Deep-dive addenda (2026-05-17)
+
+This section appends findings from the **deep RE pass** that produced
+the four companion documents. See:
+
+- [`ak980pro_mui_dll.md`](./ak980pro_mui_dll.md) — mui.dll first-pass RE
+- [`ak980pro_assets_inventory.md`](./ak980pro_assets_inventory.md) — vendor assets
+- [`ak980pro_tft_protocol.md`](./ak980pro_tft_protocol.md) — TFT image upload (deep)
+- [`ak980pro_macros_protocol.md`](./ak980pro_macros_protocol.md) — macro recording + assignment
+- [`ak980pro_perkey_rgb_protocol.md`](./ak980pro_perkey_rgb_protocol.md) — per-key RGB write/read
+
+### 13.1 Transport correction (CRITICAL)
+
+The vendor binary uses **two distinct HID transports**, with **different
+on-wire framing**:
+
+| Helper          | Underlying API                       | On-wire bytes                                       |
+| --------------- | ------------------------------------ | --------------------------------------------------- |
+| `FUN_0044f5f0`  | `WriteFile` (HID OUTPUT report)      | `[ID=0x00, opcode, sub, payload, ..., checksum@8]` (33 B) |
+| `FUN_0044eed0`  | `HidD_SetFeature` (HID FEATURE report) | `[ID=0x00, 0x04, opcode, sub, payload, ...]` (65 B)  |
+| `FUN_0044f0c0`  | `HidD_SetFeature` chunked (64-B slices) | (same as 0044eed0, repeated per chunk)              |
+| `FUN_0044f2d0`  | `WriteFile` (bulk 4097-byte writes)  | `[ID=0x00, payload, ...]` (4097 B)                  |
+| `FUN_0044f3a0`  | `WriteFile` + `ReadFile` streaming   | (mixed; reader strips leading 0x00)                 |
+
+So the **0x04** byte that appears at the start of FUN_0044eed0 buffers
+is **NOT** the HID Report ID — it's a fixed frame-magic byte
+**inserted by the FEATURE-report path between Report ID 0x00 and the
+real opcode**. For all 33-byte short reports (settings batch, macro
+data chunks, TFT chunks, lighting params, battery query), the **opcode
+sits at on-wire byte 1**, not byte 2.
+
+This means our previous citation of "byte 0 : 0x04 (HID Report ID)" was
+**wrong** for the FUN_0044eed0 path — Report ID is 0x00, frame-magic
+is 0x04 at byte 1, opcode is at byte 2. For the FUN_0044f5f0 path,
+opcode is at byte 1 directly.
+
+### 13.2 Settings batch (0x07 0x10) — byte map corrected
+
+Re-deriving from FUN_00414290 with proper stack offset analysis:
+
+| Offset | Value                                                         |
+| ------ | ------------------------------------------------------------- |
+| 0      | 0x00 (HID Report ID)                                          |
+| 1      | 0x07 (CMD_SETTINGS_BATCH)                                     |
+| 2      | 0x10 (sub-op)                                                 |
+| 3, 4   | 0, 0                                                          |
+| 5      | 0x01 (fixed)                                                  |
+| 6      | disable_winkey   (0 or 1; from `MUI::CCheckButton` at +0x678) |
+| 7      | disable_alt_f4    (0 or 1; from `MUI::CCheckButton` at +0x67c)|
+| 8      | disable_alt_tab   (0 or 1; from `MUI::CCheckButton` at +0x680) — *AND* checksum slot |
+| 9      | `fn_switch` value (int from `t_config_data`)                  |
+| 10     | `sleep_time` value                                            |
+| 11     | (unused)                                                      |
+| 12     | `key_respondtime` value                                       |
+| 18, 19 | 0xAA, 0x55 (trailer)                                          |
+| 20..32 | 0                                                             |
+
+The earlier §3.2 byte map was wrong — `value("fn_switch")` is at byte 9
+not byte 5; the three disable-key flags consume bytes 6, 7, 8; byte 8
+is also the checksum slot (overwritten last by FUN_0044f5f0).
+
+### 13.3 Sleep timer (0x17 0x04) envelope
+
+Re-derived from FUN_00414020:
+
+```
+1. CMD_START   : [0x04, 0x18, 0x04, ...]           (sent via FUN_0044eed0, 65 B FEATURE)
+2. CMD_SLEEP   : [0x04, 0x17, 0x04, ..., 0x01@8, ..., 0x01@14, ...]
+3. SETTINGS    : [0x04, 0x00, 0x01, ..., disable_winkey, disable_alt_f4,
+                 disable_alt_tab, fn_switch, sleep_time, ?, key_respondtime,
+                 ..., 0xAA 0x55]
+4. CMD_SAVE    : [0x04, 0x02, 0x04, ...]
+```
+
+So **sleep timer doesn't have its own data byte — it shares the
+"settings" packet at step 3**. The `local_4c` lone byte set at offset 8
+in step 2 is a **mode flag** (always 1), not the sleep value itself.
+
+The 4-value enum (Never/1min/5min/30min) is mapped to byte 10 of step 3.
+
+### 13.4 Lighting params batch (0x0B 0x1C) byte map
+
+Re-derived from FUN_00432be0:
+
+```
+byte 0 : 0x00 (HID Report ID)
+byte 1 : 0x0B
+byte 2 : 0x1C
+byte 3 : 0x00
+byte 4 : combo_at_0x618 → CurData (mode index)
+byte 5 : combo_at_0x630 → CurData (speed index)
+byte 6 : DAT(0x144) → brightness
+byte 7 : auVar1[0] (direction byte 0)
+byte 8 : checksum (computed; sum of bytes 0..7 + 9..32 with byte 8 = 0)
+byte 9..15 : auVar1[1..7] (direction + reserved bytes)
+byte 16 : `*param_1[1][4]` (5th byte of direction-state struct)
+...
+(sent as 33-byte FEATURE report via FUN_0044f5f0 with param_2=0x21)
+```
+
+There's also a debug trace: `MUI::M_Trace(L"mxn: %02d %02d %02d %02d %02d %02d %02d %02d %02d %02d \n", ...)` — printing
+all 10 input bytes that were just sent. So the vendor logs every
+lighting commit to the debug console.
+
+### 13.5 Battery query (0x20 0x01) confirmed
+
+`FUN_004358c0`:
+
+```
+Request : [Report_ID=0, 0x20, 0x01, 0x00, ...]      (33 B output)
+Response: [0x20, 0x01, ?, percent, ...]              (after ReadFile strips
+                                                     leading 0x00)
+```
+
+Polled every **15 s** when `*(this + 0x784) == 2` (wireless mode flag).
+Wired mode (`== 0`) returns nothing — the binary just skips the call.
+Reception calls `MUI::BatteryCtrl::SetBatteryInfo(percent, /*charging=*/0)`
+— the "charging" flag is **always passed as 0**, so the vendor's
+battery indicator doesn't show "charging" state. We can do better.
+
+### 13.6 Alt key remap (0x11 / 0x27 via FUN_004183a0) — complete encoding
+
+The "alternate" key-remap path (FUN_004183a0) has **far richer encoding**
+than the binary's single-key path (FUN_00418f80). The 4-byte per-key
+entry written via FUN_00417ff0 has type-specific layouts:
+
+| `type` (DB)  | Bytes [0, 1, 2, 3] of slot                         | Meaning                          |
+| ------------ | -------------------------------------------------- | -------------------------------- |
+| 1            | `[0x05, 0x03, 0, 0]` (uint16 = 0x0305 at +0)       | Default / pass-through           |
+| 2            | `[2, keycode_translated, modifier_byte, 0]`        | Plain HID keycode (translated by `FUN_00451ca0`) |
+| 3            | `[6, profile_idx, modifier_byte, 0x24_flags]`      | Profile switch                   |
+| 5            | `[1, 0x01..0x10, 0x01 or 0x03, 0]`                 | Mouse: codes 0x101 LeftClick, 0x401 RightClick, 0x201 MiddleClick, 0x301 = 4th, 0x103 = ScrollUp, 0xFF03 = ScrollDown, 0x801 = 5th, 0x1001 = 6th |
+| 6            | `[3, multimedia_keycode, 0, 0]`                    | Multimedia: 0xCD play/pause, 0xB7 next, 0xB6 prev, 0xB5 stop, 0xE9 vol+, 0xEA vol-, 0xE2 mute |
+| 7            | `[2, 0x08..0x04, 0x07/0x08/0x0F/0x1A/0x2B/0x06/0x19/0x1B, 0]` | System keys (encoded as 2-byte values 0x708, 0x808, 0xF08, 0x1A01, 0x2B04, 0x601, 0x1901, 0x1B01); also `[2, 1, 0x02, 0]` for case 0xB (= 0x0102) and `[2, 2, 0x02, 0]` for case 10 (= 0x0202) |
+| 8/9/10/11    | `[5, 0x02, x_byte, 0]` (uint16 = 0x0205)           | Window-shortcut groups           |
+| 12 (case 0xC) | `[3, key_lo, key_hi, 0]` via `FUN_00419290(value, &lo, &hi)` | Multi-key combination |
+| 0xD          | `[7, key_lo, key_mid, key_hi]`                     | Macro launcher (4 bytes encode macro ID + flags) |
+
+This is the **canonical per-key remap entry format** used for the full
+chunked upload (576 bytes / 144 keys × 4 bytes). The wireless macro
+assignment §6.2 of `ak980pro_macros_protocol.md` uses the same layout.
+
+### 13.7 RGB modes (0x13) envelope — full re-derivation
+
+`FUN_0042b0a0` confirmed envelope (5 steps):
+
+```
+1. CMD_START   [0x04, 0x18, 0x04, ...]
+2. CMD_MODE_BEGIN [0x04, 0x13, 0x04, ..., 0x01@8, ...]
+3. CMD_MODE_DATA  [0x04, mode_id@0, ?@1, ?@2, ?@3, ..., (direction)@8,
+                   (brightness)@9, (speed)@10, ..., 0xAA 0x55@14,15]
+4. CMD_SAVE    [0x04, 0x02, 0x04, ...]
+5. CMD_FINISH  [0x04, 0xF0, 0x04, ...]
+```
+
+Hmm wait — `FUN_0042b0a0` doesn't actually encode the byte map fully in
+the decompile because most fields come from `local_68`, `local_70`,
+`local_7c`, `local_78`, `local_74` (uninitialised stack values in some
+cases). The actual byte layout of the data packet step 3 is best
+inferred from gohv's `mode_data_packet`:
+
+```
+byte 0 : mode_id (0x00..0x13)
+bytes 1..3 : R, G, B tint (when mode supports it)
+byte 8 : rainbow flag (0/1)
+byte 9 : brightness (0..5)
+byte 10 : speed (0..5)
+byte 11 : direction (Left=0, Down=1, Up=2, Right=3)
+bytes 14..15 : 0xAA 0x55 trailer
+```
+
+This matches the existing §3.4 doc. The new finding from FUN_0042b0a0
+is the **explicit CMD_FINISH (0xF0) at step 5** — confirmed in three
+places in the binary (FUN_0042b0a0, FUN_004340c0, FUN_0044b910).
+
+**Add CMD_FINISH after every commit** in our backend.
+
+### 13.8 Time-sync — minor correction
+
+The `FUN_004238e0` time-data packet byte map (already in §3.1) is
+correct except for offset 1: **on-wire byte 1 = lcd_idx + 1**, not "0x00
+HID Report ID". The HID Report ID is byte 0 (= 0x00 from memset). The
+prior doc conflated the two.
+
+`FUN_00423a10` (LCD-aware variant) uses a **completely different**
+opcode `0x0C 0x10` (`local_54._1_4_ = 0x100c`), single-packet via
+`FUN_0044f5f0`. Byte map:
+
+| Off | Value                          |
+| --- | ------------------------------ |
+| 0   | 0x00 (Report ID)               |
+| 1   | 0x0C                           |
+| 2   | 0x10                           |
+| 3,4 | 0, 0                           |
+| 5   | lcd_idx + 1                    |
+| 6   | 0x5A                           |
+| 7   | wYear % 2000                   |
+| 8   | wMonth                         |
+| 9   | wDay                           |
+| 10  | wHour                          |
+| 11  | wMinute                        |
+| 12  | wSecond                        |
+| 13  | 0                              |
+| 14  | wDayOfWeek                     |
+| 18, 19 | 0xAA, 0x55                   |
+
+This is the path that should be used when the keyboard has an LCD that
+displays the time (i.e., the AK980 PRO). The simpler `FUN_004238e0`
+path is the **multi-packet envelope variant** for keyboards without
+LCD time displays.
+
+### 13.9 Wireless macro upload uses `0x19 0x04` + `0x15 0x04`
+
+FUN_0042d690 reveals the **wireless** macro data upload path is
+DIFFERENT from the wired (`0x09 0x1C`) path:
+
+```
+1. CMD_MACRO_BEGIN_WIRELESS: [0x04, 0x19, 0x04, ...]
+2. CMD_MACRO_CHUNKINFO:      [0x04, 0x15, 0x04, ..., chunk_count@8, ...]
+3. BULK BODY: `chunk_count * 64` bytes via FUN_0044eed0
+4. CMD_SAVE: [0x04, 0x02, 0x04, ...]
+```
+
+So opcodes **0x19** and **0x15** are new (not in the existing table).
+They're wireless-specific. Add to the opcode table.
+
+### 13.10 Updated opcode table (delta from §3)
+
+| Opcode | Sub  | Dir  | Source function | Role                                                    |
+| ------ | ---- | ---- | --------------- | ------------------------------------------------------- |
+| `0x0C` | `0x10`| H→D | `FUN_00423a10` | **LCD-aware time-sync** (NEW, separate from 0x28 path)  |
+| `0x15` | `0x04`| H→D | `FUN_0042d690` | **Wireless macro chunk info** (chunk count at byte 8)   |
+| `0x19` | `0x04`| H→D | `FUN_0042d690` | **Wireless macro upload BEGIN** (precedes bulk body)    |
+| `0x72` | —    | H→D  | `FUN_00422920` | **TFT bulk upload BEGIN** (4 KB chunks via `FUN_0044f2d0`) |
+
+### 13.11 Findings impact on existing implementation
+
+A summary of "must-fix" issues identified during this deep RE pass:
+
+- **Settings batch byte map**: bytes 5, 6, 7 do NOT carry the fn_switch /
+  sleep / delay values — they carry the disable-Win/Alt-F4/Alt-Tab
+  flags. Real fn_switch is at byte 9, sleep at 10, delay at 12.
+
+- **Per-key RGB byte budget**: wired = 192 bytes = **3 chunks of 64 B
+  each** (NOT 3 chunks of 28 B as one might infer from the §3.7 prior
+  doc). Wireless = 512 bytes = **8 chunks of 64 B each** (NOT 6).
+
+- **Macro assignment**: wired = 7 chunks × 28 B = 192 B = 1 byte/LED;
+  wireless = 21 chunks × 28 B (last = 16 B) = 576 B = 4 bytes/LED.
+  Each wireless slot is `[lightIdx_echo, keycode_lo, keycode_mid,
+  keycode_hi/flags]` — full keycode encoding per key, not just
+  "has-macro" flag.
+
+- **TFT chunk index**: confirmed split across bytes 1, 3, and low 7 bits
+  of byte 2 (with high bit of byte 2 = 0x80 marker). Max effective range
+  = 24 bits = 16 M chunks. The 17-bit description in the prior doc was
+  conservative — the actual range is 24 bits.
+
+- **CMD_FINISH (0xF0)** appears at the end of every multi-packet
+  envelope: lighting mode (FUN_0042b0a0), LCD-mode (FUN_004340c0),
+  macro upload close (FUN_0044b910), alt remap (FUN_004183a0). Add to
+  our backend.
+
+- **Transport choice matters for the 0x04 byte**: HID OUTPUT reports
+  (33 B short reports via WriteFile) do NOT have a 0x04 magic byte —
+  opcode is at on-wire byte 1. HID FEATURE reports (65 B via
+  HidD_SetFeature) DO have a 0x04 magic at byte 1, opcode at byte 2.
+  **Our backend must select the transport correctly for each opcode**:
+
+  | Opcode group       | Transport | Helper        |
+  | ------------------ | --------- | ------------- |
+  | 0x07 0x10 (settings batch) | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x09 0x1C (macro data wired) | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x0B 0x1C (lighting params) | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x14 0x1C (macro assign chunks) | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x20 0x01 (battery query) | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x7F 0x03 (TFT header)  | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x80\|n (TFT chunk)     | OUTPUT 33 B  | `FUN_0044f5f0` |
+  | 0x18 / 0x28 / 0xF0 (envelope verbs) | FEATURE 65 B | `FUN_0044eed0` |
+  | 0x02 (CMD_SAVE)         | FEATURE 65 B | `FUN_0044eed0` |
+  | 0x13 (RGB mode data)    | FEATURE 65 B | `FUN_0044eed0` |
+  | 0x17 (sleep timer envelope) | FEATURE 65 B | `FUN_0044eed0` |
+  | 0x19 / 0x15 (wireless macro) | FEATURE 65 B | `FUN_0044eed0` |
+  | 0x20 0x04 (per-key RGB write) | FEATURE 65 B chunked | `FUN_0044f0c0` |
+  | 0x23 (macro rec buffer)  | FEATURE 65 B + bulk body | `FUN_0044eed0` |
+  | 0x72 (TFT bulk begin)    | FEATURE 65 B | `FUN_0044eed0` |
+  | bulk 4097-byte writes    | OUTPUT 4097 B | `FUN_0044f2d0` |
+  | 0xF5 0x03/0x09 (per-key RGB readback) | OUTPUT + streaming read | `FUN_0044f3a0` |
+
+  This taxonomy is enforced by the firmware (it expects the report
+  framing matching its descriptor). Sending opcode 0x07 0x10 in a 65-B
+  FEATURE report will either be silently ignored or fail with
+  `STATUS_INVALID_DEVICE_REQUEST`.
+
