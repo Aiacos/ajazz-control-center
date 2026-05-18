@@ -36,14 +36,21 @@
 - **Native desktop notifications + autostart on every OS (2026-05-18).** Notifications dispatch through `notify-send` on Linux, `osascript` on macOS, PowerShell BurntToast / Forms-balloon fallback on Windows. Autostart wires a `.desktop` (Linux), a LaunchAgent plist (macOS), or an `HKCU\…\Run` registry value (Windows). 8 of 13 cross-platform features at full parity.
 - **15-minute periodic clock auto-sync (2026-05-18).** `TimeSyncService` runs a coarse-timer tick that re-pushes the host time to every connected `IClockCapable` device, so the AK980 PRO RTC and the mouse TFT face stay accurate across DST transitions and long sessions without user intervention.
 
-### Coming next (v1.1)
+### Coming next (v1.2 — active milestone)
 
-The next milestone is scoped across six phases — see [`.planning/ROADMAP.md`](.planning/ROADMAP.md) for details.
+v1.0 (Phases 1-2) shipped 2026-05-13 and v1.1 (Phases 3-8) shipped 2026-05-14. v1.2 ("Connected-Device Capability Parity") is in flight — see [`.planning/ROADMAP.md`](.planning/ROADMAP.md) and [`.planning/STATE.md`](.planning/STATE.md) for live status.
 
-- **Device-lifecycle hardening** — disconnect-during-use safety (`shared_ptr<IDevice>` registry), reconnect / device-shuffle tests, multi-device baseline harness.
-- **Time-sync scaffolding** — host→device clock sync across all functional backends, with honest `NotImplemented` reporting until firmware exposes a settable RTC.
-- **Maturity tiers + scaffolded-device promotion** — surface honest "what works / what doesn't" per device, promote 1-2 Stream Dock siblings from scaffolded → partial.
-- **Win32 OOP host env-pollution fix (CR-01)** + **trust-roots parser hardening (WR-01)** — close v1.0 deferred robustness items.
+- **Phase 9.x captures (gating)** — sanitised Wireshark/usbmon captures for the 4 connected devices + ratify ARCH-04/05/06 from default verdict to FINAL. Requires the developer to physically interact with the devices; runbook in [`docs/protocols/CAPTURING.md`](docs/protocols/CAPTURING.md).
+- **Phase 10 — AKP03 `0x3004` promotion** — one-line `PacketSize 512→1024` fix unblocks 13 sibling SKUs; real `setKeyImage` / encoder / brightness wired to the LCD. ARCH-04 host-side image pipeline already landed (2026-05-17).
+- **Phase 11 — AJAZZ 2.4G 8K mouse probe-and-confirm** — zero-OSS-corpus session on `3151:5007`: DPI cycle, polling-rate, LOD, per-zone RGB. Mouse OLED basetta clock+DPI face already landed (2026-05-18).
+- **Phase 12 — AK980 PRO promotion** — sleep-timer, brightness/speed/direction, host-save-vs-flash UX separation. Firmware RTC (ARCH-05.1) + 20-mode RGB picker already landed (2026-05-17 / 2026-05-18).
+- **Phase 13 — catalogue + v1.1 UI verifies back-fill** — `microdia_dongle_7016` at `probed`, real-hardware visual verifies for the Sync button / Settings auto-sync / glyph-only-no-toast / MaturityRole tooltip.
+
+### Open work (where to look)
+
+- **[`TODO.md`](TODO.md)** — living checklist sorted by effort (quick wins, medium fixes, multi-day refactors). Includes the cleanup backlog (dead code, magic numbers, consistency).
+- **[GitHub issues](https://github.com/Aiacos/ajazz-control-center/issues)** — 11 open as of 2026-05-18: 6 Phase 3 follow-ups (AK980 PRO settings batch, AKP05 9 host-side effects, AK980 macro record, plugin store bundling + archive extraction, profile auto-switch runtime) and 5 product-roadmap items (OpenRGB adapter, OBS plugins, live key remap, profile auto-switch on focused app, i18n).
+- **[`.planning/HANDOFF-2026-05-18.md`](.planning/HANDOFF-2026-05-18.md)** — snapshot of this development cycle (CI hardening + audits 1/2/3 + audit-3 user-facing landings) with explicit remaining-gaps punch list.
 
 ## Try it now
 

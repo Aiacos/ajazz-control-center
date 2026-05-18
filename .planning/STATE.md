@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.2
 milestone_name: Connected-Device Capability Parity
 status: executing
-stopped_at: ARCH-05.1 amends ARCH-05 — AK980 PRO firmware RTC implemented via opcode 0x28; ARCH-04 image pipeline implemented for AKP05; both ahead of Phase 10 schedule
-last_updated: '2026-05-17T12:00:00.000Z'
-last_activity: 2026-05-17
+stopped_at: 'Audit-3 (2026-05-18) landed user-visible features ahead of Phase 10-12 schedule: mouse OLED basetta clock+DPI (Phase 11 partial), AK980 PRO 20-mode firmware RGB picker (Phase 12 partial), real in-app plugin install. P3.6 AK980 CMD_FINISH 0xF0 closed (issue #58).'
+last_updated: '2026-05-18T11:00:00.000Z'
+last_activity: 2026-05-18
 progress:
   total_phases: 5
   completed_phases: 0
@@ -125,9 +125,9 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Session Continuity
 
-Last session: 2026-05-15T08:14:36.805Z
-Stopped at: ARCH-06 ratified at default verdict; Phase 9 partial-scope complete (7/7 plans landed)
-Resume file: None
+Last session: 2026-05-18T11:00:00.000Z
+Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
+Resume file: .planning/HANDOFF-2026-05-18.md
 
 ## 2026-05-17 mid-milestone amendment update
 
