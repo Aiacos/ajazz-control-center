@@ -1,516 +1,579 @@
 # =============================================================================
+
 # Single source of truth for device support data.
-#
+
+# 
+
 # Every table or list in README.md / docs/wiki/Supported-Devices.md that
+
 # mentions device status, USB IDs, features, or capabilities is GENERATED
+
 # from this file by `scripts/generate-docs.py`.
-#
+
+# 
+
 # To update the public-facing docs:
-#   1. Edit this file (or just add a new entry at the bottom).
-#   2. Run `make docs` (or let the pre-commit hook / CI do it for you).
-#
+
+# 1. Edit this file (or just add a new entry at the bottom).
+
+# 2. Run `make docs` (or let the pre-commit hook / CI do it for you).
+
+# 
+
 # Never hand-edit the AUTOGEN blocks in README.md or the wiki — any manual
+
 # change there will be overwritten at the next sync.
+
 # =============================================================================
 
 # maturity tiers — order controls table sort + legend order
+
 maturity_tiers:
-  scaffolded: { emoji: "🟡", label: "scaffolded", description: "descriptor + factory exist; backend compiles but does not exercise the device" }
-  probed:     { emoji: "🔵", label: "probed",     description: "device enumerates and descriptor populated; no protocol writes confirmed" }
-  partial:    { emoji: "🟠", label: "partial",    description: "some features work end-to-end; advertised capability set incomplete or untested" }
-  functional: { emoji: "🟢", label: "functional", description: "all advertised capabilities work in practice; tested manually or in CI" }
-  verified:   { emoji: "✅", label: "verified",   description: "functional + automated CI on real hardware OR sustained user-confirmed reliability" }
+scaffolded: { emoji: "🟡", label: "scaffolded", description: "descriptor + factory exist; backend compiles but does not exercise the device" }
+probed: { emoji: "🔵", label: "probed", description: "device enumerates and descriptor populated; no protocol writes confirmed" }
+partial: { emoji: "🟠", label: "partial", description: "some features work end-to-end; advertised capability set incomplete or untested" }
+functional: { emoji: "🟢", label: "functional", description: "all advertised capabilities work in practice; tested manually or in CI" }
+verified: { emoji: "✅", label: "verified", description: "functional + automated CI on real hardware OR sustained user-confirmed reliability" }
 
 # capability keys → human label (used in feature matrix)
+
 capabilities:
-  display: "Per-key display"
-  rgb: "RGB backlight"
-  encoder: "Encoder / dial"
-  touch: "Touch strip"
-  macros: "Macros"
-  dpi: "DPI stages"
-  layers: "Layers"
-  firmware: "Firmware version"
-  clock: "Host-settable clock (scaffolded)"
-  battery: "Battery charge level (wireless)"
+display: "Per-key display"
+rgb: "RGB backlight"
+encoder: "Encoder / dial"
+touch: "Touch strip"
+macros: "Macros"
+dpi: "DPI stages"
+layers: "Layers"
+firmware: "Firmware version"
+clock: "Host-settable clock (scaffolded)"
+battery: "Battery charge level (wireless)"
 
 # ---------------------------------------------------------------------------
+
 # Devices
+
 # ---------------------------------------------------------------------------
+
 devices:
-  # ----- Stream decks ------------------------------------------------------
-  #
-  # USB identifier matrix consolidated 2026-05-14 from three independent
-  # reverse-engineering catalogues:
-  #
-  #   - mishamyrt/ajazz-sdk           (AJAZZ-branded SKUs, canonical PIDs)
-  #   - 4ndv/opendeck-akp03           (Mirabox N3 + rebadges)
-  #   - naerschhersch/opendeck-akp05  (Mirabox N4)
-  #
-  # See docs/protocols/streamdeck/_research-sources.md for the source tags
-  # cited in the protocol docs and src/devices/streamdeck/src/register.cpp.
 
-  - codename: akp153
-    family: streamdeck
-    name: "AJAZZ AKP153 / Mirabox HSV293S"
-    vid: "0x0300"
-    pid: "0x1001"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered)."
+# ----- Stream decks ------------------------------------------------------
 
-  - codename: akp153_v1
-    family: streamdeck
-    name: "AJAZZ AKP153 (Mirabox V1 firmware)"
-    vid: "0x5548"
-    pid: "0x6674"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware."
+# 
 
-  - codename: akp153e
-    family: streamdeck
-    name: "AJAZZ AKP153E (China variant)"
-    vid: "0x0300"
-    pid: "0x1002"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`)."
+# USB identifier matrix consolidated 2026-05-14 from three independent
 
-  - codename: akp153e_v2
-    family: streamdeck
-    name: "AJAZZ AKP153E (Mirabox V2 firmware)"
-    vid: "0x0300"
-    pid: "0x1010"
-    keys: 15
-    encoders: 0
-    maturity: functional
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153."
+# reverse-engineering catalogues:
 
-  - codename: akp153r
-    family: streamdeck
-    name: "AJAZZ AKP153R"
-    vid: "0x0300"
-    pid: "0x1020"
-    keys: 15
-    encoders: 0
-    maturity: scaffolded
-    capabilities: [display, rgb, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp153.md
-    notes: "Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks."
+# 
 
-  - codename: akp815
-    family: streamdeck
-    name: "AJAZZ AKP815"
-    vid: "0x5548"
-    pid: "0x6672"
-    keys: 15
-    encoders: 0
-    maturity: probed
-    capabilities: [display, macros, firmware, clock]
-    protocol_doc: docs/protocols/streamdeck/akp815.md
-    notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
-    feature_summary:
-      works:
-        - "Descriptor + factory wired in register.cpp (0x5548:0x6672)"
-        - "Protocol artefact (akp815.md) with byte-0 Report ID convention"
-        - "Per-key image upload path inherited from AKP153 v1-API state machine"
-      partial:
-        - "100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output"
-      pending:
-        - "Real-device capture to promote probed -> partial"
-        - "800x480 strip image upload validation"
+# - mishamyrt/ajazz-sdk (AJAZZ-branded SKUs, canonical PIDs)
 
-  - codename: akp03
-    family: streamdeck
-    name: "AJAZZ AKP03 / Mirabox N3"
-    vid: "0x0300"
-    pid: "0x1001"
-    keys: 6
-    encoders: 3
-    maturity: functional
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility."
+# - 4ndv/opendeck-akp03 (Mirabox N3 + rebadges)
 
-  - codename: akp03_legacy
-    family: streamdeck
-    name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
-    vid: "0x0300"
-    pid: "0x3001"
-    keys: 6
-    encoders: 3
-    maturity: functional
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup."
+# - naerschhersch/opendeck-akp05 (Mirabox N4)
 
-  - codename: akp03e
-    family: streamdeck
-    name: "AJAZZ AKP03E"
-    vid: "0x0300"
-    pid: "0x3002"
-    keys: 6
-    encoders: 3
-    maturity: functional
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family."
+# 
 
-  - codename: akp03r
-    family: streamdeck
-    name: "AJAZZ AKP03R"
-    vid: "0x0300"
-    pid: "0x1003"
-    keys: 6
-    encoders: 3
-    maturity: functional
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Regional revision; same protocol as AKP03 per ajazz-sdk."
+# See docs/protocols/streamdeck/\_research-sources.md for the source tags
 
-  - codename: akp03r_rev2
-    family: streamdeck
-    name: "AJAZZ AKP03R rev. 2"
-    vid: "0x0300"
-    pid: "0x3003"
-    keys: 6
-    encoders: 3
-    maturity: scaffolded
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Per mirajazz this is a protocol_version 3 device (full press/release states + GIF support). Per-key images are 64x64 (Rot90) instead of 60x60 (Rot0)."
+# cited in the protocol docs and src/devices/streamdeck/src/register.cpp.
 
-  - codename: mirabox_n3
-    family: streamdeck
-    name: "Mirabox N3 (rev. 1)"
-    vid: "0x6602"
-    pid: "0x1002"
-    keys: 6
-    encoders: 3
-    maturity: partial
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/mirabox_n3.md
-    notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend; Phase 8 DEVICES-04 promotion #2."
-    feature_summary:
-      works:
-        - "Descriptor + factory wired in register.cpp (0x6602:0x1002 via akp03_descriptor)"
-        - "Inherited from akp03: per-key image upload, brightness, encoder rotation/press"
-        - "Cross-reference protocol doc (mirabox_n3.md) citing akp03.md"
-      partial:
-        - "Inherited from akp03 functional tier — no first-hand Mirabox capture confirms Mirabox V1 firmware behaves identically"
-      pending:
-        - "Real Mirabox N3 (rev. 1) capture to promote partial -> functional"
-        - "USB-suspend handling on bus reset (Mirabox-specific quirks if any)"
+- codename: akp153
+  family: streamdeck
+  name: "AJAZZ AKP153 / Mirabox HSV293S"
+  vid: "0x0300"
+  pid: "0x1001"
+  keys: 15
+  encoders: 0
+  maturity: functional
+  capabilities: [display, rgb, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp153.md
+  notes: "Reference 3x5 grid; 85x85 JPEG keys (Rot90+mirror). Legacy VID:PID kept for compatibility; the canonical Mirabox V1 pair is 0x5548:0x6674 (also registered)."
 
-  - codename: mirabox_n3_rev3
-    family: streamdeck
-    name: "Mirabox N3 (rev. 3)"
-    vid: "0x6603"
-    pid: "0x1002"
-    keys: 6
-    encoders: 3
-    maturity: scaffolded
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Newer Mirabox N3 hardware revision; same backend."
+- codename: akp153_v1
+  family: streamdeck
+  name: "AJAZZ AKP153 (Mirabox V1 firmware)"
+  vid: "0x5548"
+  pid: "0x6674"
+  keys: 15
+  encoders: 0
+  maturity: functional
+  capabilities: [display, rgb, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp153.md
+  notes: "Canonical USB pair per ajazz-sdk for the AKP153 with Mirabox V1 firmware."
 
-  - codename: mirabox_n3en
-    family: streamdeck
-    name: "Mirabox N3EN"
-    vid: "0x6603"
-    pid: "0x1003"
-    keys: 6
-    encoders: 3
-    maturity: scaffolded
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Mirabox SKU variant per opendeck-akp03 udev rules."
+- codename: akp153e
+  family: streamdeck
+  name: "AJAZZ AKP153E (China variant)"
+  vid: "0x0300"
+  pid: "0x1002"
+  keys: 15
+  encoders: 0
+  maturity: functional
+  capabilities: [display, rgb, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp153.md
+  notes: "Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`)."
 
-  - codename: akp05
-    family: streamdeck
-    name: "AJAZZ AKP05 / AKP05E (provisional)"
-    vid: "0x0300"
-    pid: "0x5001"
-    keys: 10
-    encoders: 4
-    maturity: scaffolded
-    capabilities: [display, encoder, touch, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "Stream Dock Plus-class: 10 LCD keys (2x5) + 4 endless encoders + LCD touchscreen strip (4 zones). VID:PID is a pre-2026-05-14 placeholder; canonical is `mirabox_n4`. Layout corrected from 15->10 keys after the 2026-05-14 research pass."
+- codename: akp153e_v2
+  family: streamdeck
+  name: "AJAZZ AKP153E (Mirabox V2 firmware)"
+  vid: "0x0300"
+  pid: "0x1010"
+  keys: 15
+  encoders: 0
+  maturity: functional
+  capabilities: [display, rgb, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp153.md
+  notes: "Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153."
 
-  - codename: mirabox_n4
-    family: streamdeck
-    name: "Mirabox N4 / AJAZZ AKP05 family"
-    vid: "0x6603"
-    pid: "0x1007"
-    keys: 10
-    encoders: 4
-    maturity: scaffolded
-    capabilities: [display, encoder, touch, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device."
+- codename: akp153r
+  family: streamdeck
+  name: "AJAZZ AKP153R"
+  vid: "0x0300"
+  pid: "0x1020"
+  keys: 15
+  encoders: 0
+  maturity: scaffolded
+  capabilities: [display, rgb, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp153.md
+  notes: "Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks."
 
-  - codename: akp03_variant_3004
-    family: streamdeck
-    name: "AJAZZ Stream Dock (PID 0x3004)"
-    vid: "0x0300"
-    pid: "0x3004"
-    keys: 6
-    encoders: 3
-    maturity: scaffolded
-    capabilities: [display, encoder, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests."
+- codename: akp815
+  family: streamdeck
+  name: "AJAZZ AKP815"
+  vid: "0x5548"
+  pid: "0x6672"
+  keys: 15
+  encoders: 0
+  maturity: probed
+  capabilities: [display, macros, firmware, clock]
+  protocol_doc: docs/protocols/streamdeck/akp815.md
+  notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
+  feature_summary:
+  works:
+  \- "Descriptor + factory wired in register.cpp (0x5548:0x6672)"
+  \- "Protocol artefact (akp815.md) with byte-0 Report ID convention"
+  \- "Per-key image upload path inherited from AKP153 v1-API state machine"
+  partial:
+  \- "100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output"
+  pending:
+  \- "Real-device capture to promote probed -> partial"
+  \- "800x480 strip image upload validation"
 
-  # ----- Keyboards ---------------------------------------------------------
-  - codename: via_generic
-    family: keyboard
-    name: "AJAZZ AK series (QMK/VIA-compatible)"
-    vid: "0x3151"
-    pid: "various"
-    maturity: functional
-    capabilities: [rgb, macros, layers, firmware]
-    protocol_doc: docs/protocols/keyboard/via.md
-    notes: "Any VIA JSON layout is supported."
+- codename: akp03
+  family: streamdeck
+  name: "AJAZZ AKP03 / Mirabox N3"
+  vid: "0x0300"
+  pid: "0x1001"
+  keys: 6
+  encoders: 3
+  maturity: functional
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility."
 
-  - codename: proprietary
-    family: keyboard
-    name: "AJAZZ AK series (proprietary)"
-    vid: "0x3151"
-    pid: "various"
-    maturity: functional
-    capabilities: [rgb, macros, layers, firmware]
-    protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "Clean-room backend; RGB zones, keymap and macro upload wired."
+- codename: akp03_legacy
+  family: streamdeck
+  name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
+  vid: "0x0300"
+  pid: "0x3001"
+  keys: 6
+  encoders: 3
+  maturity: functional
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup."
 
-  - codename: ak980pro
-    family: keyboard
-    name: "AJAZZ AK980 PRO"
-    vid: "0x0c45"
-    pid: "0x8009"
-    maturity: partial
-    capabilities: [rgb, macros, layers, clock, battery]
-    protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format: 4-packet HID Feature Report envelope (START 0x18 + PREAMBLE 0x28 + DATA magic 0x5A + SAVE 0x02), sent via writeFeature() (NOT write()), corroborated by gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node + Agent B vendor binary disassembly. setTime() implemented end-to-end; promotion partial -> functional gates on Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent)."
-    feature_summary:
-      works:
-        - "Descriptor + factory wired in register.cpp (0c45:8009)"
-        - "Time-sync wire format implemented (ARCH-05.1): IClockCapable::setTime emits the 4-packet 0x18/0x28/data/0x02 envelope via HID Feature Reports with local-time year-2000 byte encoding + 100ms settle window"
-        - "RGB static / effect / per-LED buffer / brightness builders inherited from proprietary backend (AK680/AK510 wire format)"
-        - "Macro chunked upload + key remap + layer switch inherited from proprietary backend"
-      partial:
-        - "RGB / macros / layers compile against the AK680/AK510 wire format — same chipset family is assumed but not field-confirmed on AK980 PRO specifically"
-      pending:
-        - "Phase 9.x physical round-trip witness for setTime (witness 2): TFT clock widget shows the time we sent"
-        - "Phase 9.x negative witness for setTime (witness 3): year 2099 produces visible-but-wrong display, proving firmware parses the field"
-        - "TFT 1.14\" image upload (cmd 0x72) — DISPLAY-05 deferred to v1.2.x"
-        - "20-mode RGB enum expansion (TaxMachine corpus has 20; our RgbEffect enum has 6)"
-        - "Sleep-timer wire format (cmd 0x17 4-state enum per gohv) — capture per-byte layout"
+- codename: akp03e
+  family: streamdeck
+  name: "AJAZZ AKP03E"
+  vid: "0x0300"
+  pid: "0x3002"
+  keys: 6
+  encoders: 3
+  maturity: functional
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family."
 
-  # ----- Mice --------------------------------------------------------------
-  # The AJ-series mouse SKUs (AJ139 / AJ159 / AJ179 plus their MC / Pro / V2
-  # / Max variants — 8 in total per the vendor manifest) share USB
-  # descriptors at the USB layer. They are distinguished at runtime by a
-  # vendor-specific "dev_id" readback (M129 = AJ139 PRO, M620 = AJ159, M630
-  # = AJ159 MC, M179 / M603 = AJ179, M139 = AJ139 V2 PRO, …) — the registry
-  # therefore enumerates by (vid, pid) tuple, not by SKU. Sources, captured
-  # 2026-04-29: docs/research/vendor-protocol-notes.md Finding 8 (AJ159
-  # driver `app/config.xml`) and Finding 9 (AJ199 Max `Config.ini` base64-
-  # encoded VID/PID strings).
-  #
-  # Pre-2026-04-29 the four entries below were enumerated under VID
-  # `0x3554` with sequential PIDs `0xF51A-D` — those values were not present
-  # in any vendor config and turned out to be fictional. Real-world impact:
-  # AJAZZ AJ159 / AJ139 / AJ179 mice were silently invisible on every OS,
-  # and on Linux the udev `idVendor=="3554"` rule did not grant `uaccess`
-  # for them. Tracking entry: TODO.md → "AJ-series VID:PID enumeration drift".
+- codename: akp03r
+  family: streamdeck
+  name: "AJAZZ AKP03R"
+  vid: "0x0300"
+  pid: "0x1003"
+  keys: 6
+  encoders: 3
+  maturity: functional
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Regional revision; same protocol as AKP03 per ajazz-sdk."
 
-  - codename: aj_series_wired_primary
-    family: mouse
-    name: "AJAZZ AJ-series wired (primary)"
-    vid: "0x248A"
-    pid: "0x5C2E"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "Covers AJ139 PRO / AJ159 / AJ159 MC / AJ159P MC / AJ179 / AJ139 V2 PRO / AJ179 V2 / AJ179 V2 MAX in their canonical USB-wired mode. PAW3395 / PAW3311 / PAW3370 / PAW3335 / PAW3950 sensor depending on SKU. HID configuration interface is `MI_02`. Wire-format reconciliation against the vendor driver still pending — see TODO `AJ-series wire format reconciliation` and `vendor-protocol-notes.md` Finding 11."
+- codename: akp03r_rev2
+  family: streamdeck
+  name: "AJAZZ AKP03R rev. 2"
+  vid: "0x0300"
+  pid: "0x3003"
+  keys: 6
+  encoders: 3
+  maturity: scaffolded
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Per mirajazz this is a protocol_version 3 device (full press/release states + GIF support). Per-key images are 64x64 (Rot90) instead of 60x60 (Rot0)."
 
-  - codename: aj_series_wired_alt
-    family: mouse
-    name: "AJAZZ AJ-series wired (alt mode 5D2E)"
-    vid: "0x248A"
-    pid: "0x5D2E"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "Same SKUs as `aj_series_wired_primary`; the vendor's `config.xml` lists three USB PIDs per device (5C2E / 5D2E / 5E2E) representing different USB-side mode descriptors."
+- codename: mirabox_n3
+  family: streamdeck
+  name: "Mirabox N3 (rev. 1)"
+  vid: "0x6602"
+  pid: "0x1002"
+  keys: 6
+  encoders: 3
+  maturity: partial
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/mirabox_n3.md
+  notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend; Phase 8 DEVICES-04 promotion #2."
+  feature_summary:
+  works:
+  \- "Descriptor + factory wired in register.cpp (0x6602:0x1002 via akp03_descriptor)"
+  \- "Inherited from akp03: per-key image upload, brightness, encoder rotation/press"
+  \- "Cross-reference protocol doc (mirabox_n3.md) citing akp03.md"
+  partial:
+  \- "Inherited from akp03 functional tier — no first-hand Mirabox capture confirms Mirabox V1 firmware behaves identically"
+  pending:
+  \- "Real Mirabox N3 (rev. 1) capture to promote partial -> functional"
+  \- "USB-suspend handling on bus reset (Mirabox-specific quirks if any)"
 
-  - codename: aj_series_wired_alt2
-    family: mouse
-    name: "AJAZZ AJ-series wired (alt mode 5E2E)"
-    vid: "0x248A"
-    pid: "0x5E2E"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "Same SKUs as `aj_series_wired_primary`; third USB-mode descriptor."
+- codename: mirabox_n3_rev3
+  family: streamdeck
+  name: "Mirabox N3 (rev. 3)"
+  vid: "0x6603"
+  pid: "0x1002"
+  keys: 6
+  encoders: 3
+  maturity: scaffolded
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Newer Mirabox N3 hardware revision; same backend."
 
-  - codename: aj_series_dongle
-    family: mouse
-    name: "AJAZZ AJ-series 2.4GHz dongle"
-    vid: "0x248A"
-    pid: "0x5C2F"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor==\"248a\"` and `idVendor==\"249a\"`."
+- codename: mirabox_n3en
+  family: streamdeck
+  name: "Mirabox N3EN"
+  vid: "0x6603"
+  pid: "0x1003"
+  keys: 6
+  encoders: 3
+  maturity: scaffolded
+  capabilities: [display, encoder, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Mirabox SKU variant per opendeck-akp03 udev rules."
 
-  - codename: aj159_apex_wired
-    family: mouse
-    name: "AJAZZ AJ159 APEX (wired) / AJ179 APEX"
-    vid: "0x3151"
-    pid: "0x5008"
-    maturity: scaffolded
-    capabilities: [dpi, rgb]
-    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
-    dpi_stages: 8
-    notes: "AJ159 APEX in USB wired mode + AJ179 APEX alias (disambiguated by descriptor strings, not by PID). 8 onboard DPI stages, 8 KHz polling. Wire format documented in aj_series_opcode_table.md (deep RE 2026-05-17). Promotion to partial requires P3.12 wire-format rewrite + real-device round-trip witness."
-    feature_summary:
-      works:
-        - "Descriptor + factory wired in register.cpp (3151:5008)"
-      partial: []
-      pending:
-        - "P3.12 aj_series.cpp wire-format rewrite per docs/protocols/mouse/aj_series_opcode_table.md (~600 LOC code + ~400 LOC test, feature-flagged AJAZZ_AJ_SERIES_WIRE_REWRITE)"
-        - "Real-device round-trip witness for scaffolded → partial promotion"
+- codename: akp05
+  family: streamdeck
+  name: "AJAZZ AKP05 / AKP05E (provisional)"
+  vid: "0x0300"
+  pid: "0x5001"
+  keys: 10
+  encoders: 4
+  maturity: scaffolded
+  capabilities: [display, encoder, touch, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp05.md
+  notes: "Stream Dock Plus-class: 10 LCD keys (2x5) + 4 endless encoders + LCD touchscreen strip (4 zones). VID:PID is a pre-2026-05-14 placeholder; canonical is `mirabox_n4`. Layout corrected from 15->10 keys after the 2026-05-14 research pass."
 
-  - codename: aj159_apex_24g
-    family: mouse
-    name: "AJAZZ AJ159 APEX (2.4G)"
-    vid: "0x3151"
-    pid: "0x4026"
-    maturity: scaffolded
-    capabilities: [dpi, rgb]
-    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
-    dpi_stages: 8
-    notes: "AJ159 APEX in 2.4G wireless mode (capped at 1 KHz per vendor JS UI). Same wire format as wired sibling. Promotion blocked on P3.12 + real-device test."
+- codename: mirabox_n4
+  family: streamdeck
+  name: "Mirabox N4 / AJAZZ AKP05 family"
+  vid: "0x6603"
+  pid: "0x1007"
+  keys: 10
+  encoders: 4
+  maturity: scaffolded
+  capabilities: [display, encoder, touch, macros, clock]
+  protocol_doc: docs/protocols/streamdeck/akp05.md
+  notes: "Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device."
 
-  - codename: aj159_apex_dongle
-    family: mouse
-    name: "AJAZZ AJ159 APEX 2.4G dongle (paired kbd+mouse)"
-    vid: "0x3151"
-    pid: "0x4027"
-    maturity: scaffolded
-    capabilities: [dpi, rgb]
-    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
-    dpi_stages: 8
-    notes: "Paired 2.4G dongle exposing both keyboard + mouse child interfaces (dongle_common path per aj_series_device_matrix.md §1.2). Promotion blocked on P3.12."
+- codename: akp03_variant_3004
+  family: streamdeck
+  name: "AJAZZ Stream Dock (PID 0x3004)"
+  vid: "0x0300"
+  pid: "0x3004"
+  keys: 6
+  encoders: 3
+  maturity: scaffolded
+  capabilities: [display, encoder, clock]
+  protocol_doc: docs/protocols/streamdeck/akp03.md
+  notes: "Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests."
 
-  - codename: ajazz_24g_8k
-    family: mouse
-    name: "AJAZZ 2.4G 8K"
-    vid: "0x3151"
-    pid: "0x5007"
-    maturity: scaffolded
-    capabilities: [dpi, rgb]
-    protocol_doc: docs/protocols/mouse/aj_series_vendor.md
-    dpi_stages: 6
-    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Surfaced via real-device hot-plug capture 2026-05-13. ⚠ WIRE FORMAT MISMATCH ⚠ — AJ159 APEX vendor RE (2026-05-17, aj_series_vendor.md) revealed every opcode in aj_series.cpp is wrong vs vendor firmware (kCmdDpi 0x21→0x54, kCmdPollRate 0x22→0x04, kCmdLod 0x23→byte 52 of 0x53 omnibus, kCmdButton 0x24→0x50 at byte 8, kCmdRgb 0x30→0x07 8-byte, kCmdBattery 0x40 nonexistent, checksum & 0xFF→& 0x7F). The damaging kCmdCommit=0x50 helper that collided with FEA_CMD_MOUSE_SET_KEYMATRIX has been REMOVED as a P0 safety guard (commit pending). Remaining setters degrade gracefully to silent no-ops until §11.5 rewrite. See docs/research/clean-reimplementation-roadmap.md §1.1, §11.5."
-    feature_summary:
-      works:
-        - "Descriptor + factory wired in register.cpp (3151:5007)"
-        - "P0 safety guard: damaging commit() helper (opcode 0x50) removed; no longer corrupts button slot 0"
-      partial: []
-      pending:
-        - "Wire-format rewrite per docs/protocols/mouse/aj_series_vendor.md (§11.5 roadmap, ~600 LOC code + ~400 LOC test, largest single commit in upcoming batch)"
-        - "Real-device round-trip witness once rewrite lands (promotes scaffolded → partial)"
-        - "8 onboard profiles, 8 DPI stages (not 6), 20 macros, OTA, TFT LCD widgets — all v1.3+ deferred"
+# ----- Keyboards ---------------------------------------------------------
 
-  - codename: aj199_family
-    family: mouse
-    name: "AJAZZ AJ199 family (wired)"
-    vid: "0x3554"
-    pid: "0xF500"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B."
+- codename: via_generic
+  family: keyboard
+  name: "AJAZZ AK series (QMK/VIA-compatible)"
+  vid: "0x3151"
+  pid: "various"
+  maturity: functional
+  capabilities: [rgb, macros, layers, firmware]
+  protocol_doc: docs/protocols/keyboard/via.md
+  notes: "Any VIA JSON layout is supported."
 
-  - codename: aj199_family_dongle
-    family: mouse
-    name: "AJAZZ AJ199 family (2.4GHz dongle)"
-    vid: "0x3554"
-    pid: "0xF501"
-    maturity: scaffolded
-    capabilities: [rgb, dpi, firmware]
-    protocol_doc: docs/protocols/mouse/aj_series.md
-    dpi_stages: 6
-    notes: "AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe."
+- codename: proprietary
+  family: keyboard
+  name: "AJAZZ AK series (proprietary)"
+  vid: "0x3151"
+  pid: "various"
+  maturity: functional
+  capabilities: [rgb, macros, layers, firmware]
+  protocol_doc: docs/protocols/keyboard/proprietary.md
+  notes: "Clean-room backend; RGB zones, keymap and macro upload wired."
 
-  # AJ339 / AJ380: removed from the active registry 2026-04-29 because
-  # their VID:PID was a guess (sequential `0xF51C` / `0xF51D` matching no
-  # vendor manifest). The vendor consolidated EN/UK download pages do not
-  # list these models (re-verified 2026-04-29). Until either a USB
-  # capture surfaces the real VID:PID or a vendor support reply confirms
-  # the IDs, these SKUs are no longer enumerated. Tracking entry:
-  # TODO.md → "AJ-series VID:PID enumeration drift".
+- codename: ak980pro
+  family: keyboard
+  name: "AJAZZ AK980 PRO"
+  vid: "0x0c45"
+  pid: "0x8009"
+  maturity: partial
+  capabilities: [rgb, macros, layers, clock, battery]
+  protocol_doc: docs/protocols/keyboard/proprietary.md
+  notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format: 4-packet HID Feature Report envelope (START 0x18 + PREAMBLE 0x28 + DATA magic 0x5A + SAVE 0x02), sent via writeFeature() (NOT write()), corroborated by gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node + Agent B vendor binary disassembly. setTime() implemented end-to-end; promotion partial -> functional gates on Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent)."
+  feature_summary:
+  works:
+  \- "Descriptor + factory wired in register.cpp (0c45:8009)"
+  \- "Time-sync wire format implemented (ARCH-05.1): IClockCapable::setTime emits the 4-packet 0x18/0x28/data/0x02 envelope via HID Feature Reports with local-time year-2000 byte encoding + 100ms settle window"
+  \- "RGB static / effect / per-LED buffer / brightness builders inherited from proprietary backend (AK680/AK510 wire format)"
+  \- "Macro chunked upload + key remap + layer switch inherited from proprietary backend"
+  partial:
+  \- "RGB / macros / layers compile against the AK680/AK510 wire format — same chipset family is assumed but not field-confirmed on AK980 PRO specifically"
+  pending:
+  \- "Phase 9.x physical round-trip witness for setTime (witness 2): TFT clock widget shows the time we sent"
+  \- "Phase 9.x negative witness for setTime (witness 3): year 2099 produces visible-but-wrong display, proving firmware parses the field"
+  \- "TFT 1.14" image upload (cmd 0x72) — DISPLAY-05 deferred to v1.2.x"
+  \- "20-mode RGB enum expansion (TaxMachine corpus has 20; our RgbEffect enum has 6)"
+  \- "Sleep-timer wire format (cmd 0x17 4-state enum per gohv) — capture per-byte layout"
 
-  # ----- Dongles -----------------------------------------------------------
-  # 2.4GHz USB receivers that proxy HID for a wireless peripheral. The
-  # dongle itself has no configurable capabilities — those are exposed
-  # on the paired-peripheral codename when the host talks to it. The
-  # dongle entry exists so the catalogue can describe the receiver SKU
-  # for documentation + UI honesty (the user sees a separate USB device
-  # at lsusb time and the control center should recognise it instead of
-  # treating it as an unknown device).
+# ----- Mice --------------------------------------------------------------
 
-  - codename: ak980pro_dongle_24g
-    family: dongle
-    name: "AJAZZ AK980 PRO 2.4GHz USB Receiver"
-    vid: "0x0c45"
-    pid: "0x7016"
-    maturity: probed
-    capabilities: []
-    protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "2.4GHz USB receiver dongle paired with AJAZZ AK980 PRO (`ak980pro`, VID:PID 0c45:8009). Identified 2026-05-15 via HID report-descriptor parsing on real hardware: Interface 0 advertises a 6KRO boot keyboard + 64-byte vendor Feature Report on Consumer Page — the exact control-channel signature that TaxMachine documented for AK820 Pro / AK980 PRO at the wired VID:PID. Interface 1 is a 4-in-1 composite (mouse + system + consumer/media + 120-key NKRO keyboard) typical of SONiX wireless mech-keyboard receivers. When the host has both the USB-C wired connection AND the 2.4GHz dongle active, the same physical keyboard enumerates twice — once as `ak980pro` (wired path) and once via this dongle (RF-tunneled). No standalone capabilities advertised; the dongle is a transport, not a device — capability work belongs on the `ak980pro` codename and applies regardless of connection path. ARCH-06 default verdict (Phase 9 partial-scope, 2026-05-15) ratified composite-HID dedup NOT firing — topology (Full-Speed 12Mbps vs the AK980 PRO's High-Speed 480Mbps, separate USB bus branch) refutes the composite-interface hypothesis."
-    feature_summary:
-      works:
-        - "Identified via HID report-descriptor parsing on dev box hardware (2026-05-15)"
-        - "Topology evidence cited inline (Phase 9 ARCH-06 cross-reference)"
-      partial: []
-      pending:
-        - "Runtime entry in `src/devices/keyboard/src/register.cpp` (or new `src/devices/dongle/`) — this is catalog-only for now; sidebar visibility requires register.cpp + `DeviceFamily::Dongle` enum addition"
-        - "Captures-confirmation 2-minute physical unplug test (unplug `ak980pro` USB-C and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred"
+# The AJ-series mouse SKUs (AJ139 / AJ159 / AJ179 plus their MC / Pro / V2
+
+# / Max variants — 8 in total per the vendor manifest) share USB
+
+# descriptors at the USB layer. They are distinguished at runtime by a
+
+# vendor-specific "dev_id" readback (M129 = AJ139 PRO, M620 = AJ159, M630
+
+# = AJ159 MC, M179 / M603 = AJ179, M139 = AJ139 V2 PRO, …) — the registry
+
+# therefore enumerates by (vid, pid) tuple, not by SKU. Sources, captured
+
+# 2026-04-29: docs/research/vendor-protocol-notes.md Finding 8 (AJ159
+
+# driver `app/config.xml`) and Finding 9 (AJ199 Max `Config.ini` base64-
+
+# encoded VID/PID strings).
+
+# 
+
+# Pre-2026-04-29 the four entries below were enumerated under VID
+
+# `0x3554` with sequential PIDs `0xF51A-D` — those values were not present
+
+# in any vendor config and turned out to be fictional. Real-world impact:
+
+# AJAZZ AJ159 / AJ139 / AJ179 mice were silently invisible on every OS,
+
+# and on Linux the udev `idVendor=="3554"` rule did not grant `uaccess`
+
+# for them. Tracking entry: TODO.md → "AJ-series VID:PID enumeration drift".
+
+- codename: aj_series_wired_primary
+  family: mouse
+  name: "AJAZZ AJ-series wired (primary)"
+  vid: "0x248A"
+  pid: "0x5C2E"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 6
+  notes: "Covers AJ139 PRO / AJ159 / AJ159 MC / AJ159P MC / AJ179 / AJ139 V2 PRO / AJ179 V2 / AJ179 V2 MAX in their canonical USB-wired mode. PAW3395 / PAW3311 / PAW3370 / PAW3335 / PAW3950 sensor depending on SKU. HID configuration interface is `MI_02`. Wire-format reconciliation against the vendor driver still pending — see TODO `AJ-series wire format reconciliation` and `vendor-protocol-notes.md` Finding 11."
+
+- codename: aj_series_wired_alt
+  family: mouse
+  name: "AJAZZ AJ-series wired (alt mode 5D2E)"
+  vid: "0x248A"
+  pid: "0x5D2E"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 6
+  notes: "Same SKUs as `aj_series_wired_primary`; the vendor's `config.xml` lists three USB PIDs per device (5C2E / 5D2E / 5E2E) representing different USB-side mode descriptors."
+
+- codename: aj_series_wired_alt2
+  family: mouse
+  name: "AJAZZ AJ-series wired (alt mode 5E2E)"
+  vid: "0x248A"
+  pid: "0x5E2E"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 6
+  notes: "Same SKUs as `aj_series_wired_primary`; third USB-mode descriptor."
+
+- codename: aj_series_dongle
+  family: mouse
+  name: "AJAZZ AJ-series 2.4GHz dongle"
+  vid: "0x248A"
+  pid: "0x5C2F"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 6
+  notes: "Same SKUs in 2.4GHz wireless mode through the bundled USB dongle. Vendor also exposes the same dongle under VID `0x249A` PID `0x5C2F` — reason unclear (likely USB stack path difference). For udev coverage, include both `idVendor==\"248a\"` and `idVendor==\"249a\"`."
+
+- codename: aj159_apex_wired
+  family: mouse
+  name: "AJAZZ AJ159 APEX (wired) / AJ179 APEX"
+  vid: "0x3151"
+  pid: "0x5008"
+  maturity: scaffolded
+  capabilities: [dpi, rgb]
+  protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+  dpi_stages: 8
+  notes: "AJ159 APEX in USB wired mode + AJ179 APEX alias (disambiguated by descriptor strings, not by PID). 8 onboard DPI stages, 8 KHz polling. Wire format documented in aj_series_opcode_table.md (deep RE 2026-05-17). Promotion to partial requires P3.12 wire-format rewrite + real-device round-trip witness."
+  feature_summary:
+  works:
+  \- "Descriptor + factory wired in register.cpp (3151:5008)"
+  partial: []
+  pending:
+  \- "P3.12 aj_series.cpp wire-format rewrite per docs/protocols/mouse/aj_series_opcode_table.md (~600 LOC code + ~400 LOC test, feature-flagged AJAZZ_AJ_SERIES_WIRE_REWRITE)"
+  \- "Real-device round-trip witness for scaffolded → partial promotion"
+
+- codename: aj159_apex_24g
+  family: mouse
+  name: "AJAZZ AJ159 APEX (2.4G)"
+  vid: "0x3151"
+  pid: "0x4026"
+  maturity: scaffolded
+  capabilities: [dpi, rgb]
+  protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+  dpi_stages: 8
+  notes: "AJ159 APEX in 2.4G wireless mode (capped at 1 KHz per vendor JS UI). Same wire format as wired sibling. Promotion blocked on P3.12 + real-device test."
+
+- codename: aj159_apex_dongle
+  family: mouse
+  name: "AJAZZ AJ159 APEX 2.4G dongle (paired kbd+mouse)"
+  vid: "0x3151"
+  pid: "0x4027"
+  maturity: scaffolded
+  capabilities: [dpi, rgb]
+  protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+  dpi_stages: 8
+  notes: "Paired 2.4G dongle exposing both keyboard + mouse child interfaces (dongle_common path per aj_series_device_matrix.md §1.2). Promotion blocked on P3.12."
+
+- codename: ajazz_24g_8k
+  family: mouse
+  name: "AJAZZ 2.4G 8K"
+  vid: "0x3151"
+  pid: "0x5007"
+  maturity: partial
+  capabilities: [dpi, rgb, display, clock]
+  protocol_doc: docs/protocols/mouse/aj_series_vendor.md
+  dpi_stages: 8
+  notes: "8KHz-polling wireless mouse on SONiX VID prefix. Has a TFT LCD basetta showing clock + DPI (2026-05-18 implementation: opcode 0x25 SETTFTLCDDATA chunked RGB565 with host-side QImage renderer, wired to IClockCapable so TimeSyncService drives it). Wire-format rewrite for setters landed in P3.12.1/.2 (656fb1c, 0e9bb04)."
+  feature_summary:
+  works:
+  \- "Descriptor + factory wired in register.cpp (3151:5007)"
+  \- "P0 safety guard: damaging commit() helper (opcode 0x50) removed; no longer corrupts button slot 0"
+  partial: []
+  pending:
+  \- "Wire-format rewrite per docs/protocols/mouse/aj_series_vendor.md (§11.5 roadmap, ~600 LOC code + ~400 LOC test, largest single commit in upcoming batch)"
+  \- "Real-device round-trip witness once rewrite lands (promotes scaffolded → partial)"
+  \- "8 onboard profiles, 8 DPI stages (not 6), 20 macros, OTA, TFT LCD widgets — all v1.3+ deferred"
+
+- codename: aj199_family
+  family: mouse
+  name: "AJAZZ AJ199 family (wired)"
+  vid: "0x3554"
+  pid: "0xF500"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware, display, clock]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 8
+  notes: "AJ199 / AJ199 Max / AJ199 Carbon Fiber. Wired-mode primary PID per AJ199 Max `Config.ini` `M_PID` (`F500`); the same family also enumerates under PIDs `F546` and `F566` for variant SKUs. AJ199 Max wire format is structurally different from AJ199 V1.0 (offset-based struct vs flat report) — see `vendor-protocol-notes.md` Finding 11.B. Has TFT LCD basetta wired to the shared 0x25 chunked clock+DPI renderer (2026-05-18)."
+
+- codename: aj199_family_dongle
+  family: mouse
+  name: "AJAZZ AJ199 family (2.4GHz dongle)"
+  vid: "0x3554"
+  pid: "0xF501"
+  maturity: scaffolded
+  capabilities: [rgb, dpi, firmware, display, clock]
+  protocol_doc: docs/protocols/mouse/aj_series.md
+  dpi_stages: 8
+  notes: "AJ199 family in 2.4GHz mode. Vendor `D_PID` list is `F501,F564,F567,F545,F547,F5D5` — six dongle-mode PIDs distinguishing variant SKUs at the USB layer. We register the first one as canonical here; future work may broaden coverage with a runtime probe. Has TFT LCD basetta wired to the shared 0x25 chunked clock+DPI renderer (2026-05-18)."
+
+# AJ339 / AJ380: removed from the active registry 2026-04-29 because
+
+# their VID:PID was a guess (sequential `0xF51C` / `0xF51D` matching no
+
+# vendor manifest). The vendor consolidated EN/UK download pages do not
+
+# list these models (re-verified 2026-04-29). Until either a USB
+
+# capture surfaces the real VID:PID or a vendor support reply confirms
+
+# the IDs, these SKUs are no longer enumerated. Tracking entry:
+
+# TODO.md → "AJ-series VID:PID enumeration drift".
+
+# ----- Dongles -----------------------------------------------------------
+
+# 2.4GHz USB receivers that proxy HID for a wireless peripheral. The
+
+# dongle itself has no configurable capabilities — those are exposed
+
+# on the paired-peripheral codename when the host talks to it. The
+
+# dongle entry exists so the catalogue can describe the receiver SKU
+
+# for documentation + UI honesty (the user sees a separate USB device
+
+# at lsusb time and the control center should recognise it instead of
+
+# treating it as an unknown device).
+
+- codename: ak980pro_dongle_24g
+  family: dongle
+  name: "AJAZZ AK980 PRO 2.4GHz USB Receiver"
+  vid: "0x0c45"
+  pid: "0x7016"
+  maturity: probed
+  capabilities: []
+  protocol_doc: docs/protocols/keyboard/proprietary.md
+  notes: "2.4GHz USB receiver dongle paired with AJAZZ AK980 PRO (`ak980pro`, VID:PID 0c45:8009). Identified 2026-05-15 via HID report-descriptor parsing on real hardware: Interface 0 advertises a 6KRO boot keyboard + 64-byte vendor Feature Report on Consumer Page — the exact control-channel signature that TaxMachine documented for AK820 Pro / AK980 PRO at the wired VID:PID. Interface 1 is a 4-in-1 composite (mouse + system + consumer/media + 120-key NKRO keyboard) typical of SONiX wireless mech-keyboard receivers. When the host has both the USB-C wired connection AND the 2.4GHz dongle active, the same physical keyboard enumerates twice — once as `ak980pro` (wired path) and once via this dongle (RF-tunneled). No standalone capabilities advertised; the dongle is a transport, not a device — capability work belongs on the `ak980pro` codename and applies regardless of connection path. ARCH-06 default verdict (Phase 9 partial-scope, 2026-05-15) ratified composite-HID dedup NOT firing — topology (Full-Speed 12Mbps vs the AK980 PRO's High-Speed 480Mbps, separate USB bus branch) refutes the composite-interface hypothesis."
+  feature_summary:
+  works:
+  \- "Identified via HID report-descriptor parsing on dev box hardware (2026-05-15)"
+  \- "Topology evidence cited inline (Phase 9 ARCH-06 cross-reference)"
+  partial: []
+  pending:
+  \- "Runtime entry in `src/devices/keyboard/src/register.cpp` (or new `src/devices/dongle/`) — this is catalog-only for now; sidebar visibility requires register.cpp + `DeviceFamily::Dongle` enum addition"
+  \- "Captures-confirmation 2-minute physical unplug test (unplug `ak980pro` USB-C and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred"
 
 # ---------------------------------------------------------------------------
+
 # Platform support matrix (used in README build-from-source table)
+
 # ---------------------------------------------------------------------------
+
 platforms:
-  - name: "Linux"
-    build: "✅ first-class"
-    install: ".rpm / .deb / .flatpak"
-    notes: "udev `TAG+=uaccess` — no group, no logout"
-  - name: "macOS"
-    build: "✅ universal"
-    install: ".dmg (arm64 + x86_64)"
-    notes: "Grant Input Monitoring on first launch"
-  - name: "Windows"
-    build: "✅ MSVC 2022"
-    install: ".msi (winget)"
-    notes: "No drivers required"
+
+- name: "Linux"
+  build: "✅ first-class"
+  install: ".rpm / .deb / .flatpak"
+  notes: "udev `TAG+=uaccess` — no group, no logout"
+- name: "macOS"
+  build: "✅ universal"
+  install: ".dmg (arm64 + x86_64)"
+  notes: "Grant Input Monitoring on first launch"
+- name: "Windows"
+  build: "✅ MSVC 2022"
+  install: ".msi (winget)"
+  notes: "No drivers required"

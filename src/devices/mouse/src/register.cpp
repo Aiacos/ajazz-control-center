@@ -36,6 +36,8 @@
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/mouse/mouse.hpp"
 
+#include <string_view>
+
 namespace ajazz::mouse {
 
 void registerAll(core::DeviceRegistry& registry) {
@@ -81,7 +83,21 @@ void registerAll(core::DeviceRegistry& registry) {
         // NOT registered here per trademark/licensing risk note in §7.1.
     };
 
+    // SKUs that ship the TFT LCD basetta and therefore advertise
+    // IClockCapable (clock+DPI face rendered host-side, uploaded via
+    // chunked 0x25). Other AJ-series mice without a TFT silently
+    // ignore the opcode at the firmware level, but advertising the
+    // capability would surface a misleading "Sync clock" button in the
+    // sidebar, so we gate it by codename. Source: per-model field guides
+    // in docs/protocols/mouse/aj_series_device_matrix.md §1, §2.
+    auto const hasTftBasetta = [](std::string_view codename) {
+        return codename == "ajazz_24g_8k" || codename == "aj199_family" ||
+               codename == "aj199_family_dongle" || codename == "aj159_apex_wired" ||
+               codename == "aj159_apex_24g" || codename == "aj159_apex_dongle";
+    };
+
     for (auto const& m : kMice) {
+        bool const tft = hasTftBasetta(m.codename);
         reg.registerDevice(
             core::DeviceDescriptor{
                 .vendorId = m.vid,
@@ -89,11 +105,11 @@ void registerAll(core::DeviceRegistry& registry) {
                 .family = core::DeviceFamily::Mouse,
                 .model = m.model,
                 .codename = m.codename,
-                // AJ-series mice expose 6 DPI stages with per-stage RGB
-                // (AJ159 device manifest `report_max="4"` actually limits
-                // the polling rate to 4 stages, NOT the DPI count).
-                .dpiStageCount = 6,
+                // P3.12 RE pass confirmed 8 DPI stages (not 6) on the
+                // vendor wire (`aj_series_opcode_table.md` §3.10).
+                .dpiStageCount = 8,
                 .hasRgb = true,
+                .hasClock = tft,
             },
             &makeAjSeries);
     }

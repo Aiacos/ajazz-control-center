@@ -46,7 +46,7 @@ inline QHash<QString, QString> deviceMaturityByCodename() {
         {QStringLiteral("aj159_apex_wired"), QStringLiteral("scaffolded")},
         {QStringLiteral("aj159_apex_24g"), QStringLiteral("scaffolded")},
         {QStringLiteral("aj159_apex_dongle"), QStringLiteral("scaffolded")},
-        {QStringLiteral("ajazz_24g_8k"), QStringLiteral("scaffolded")},
+        {QStringLiteral("ajazz_24g_8k"), QStringLiteral("partial")},
         {QStringLiteral("aj199_family"), QStringLiteral("scaffolded")},
         {QStringLiteral("aj199_family_dongle"), QStringLiteral("scaffolded")},
         {QStringLiteral("ak980pro_dongle_24g"), QStringLiteral("probed")},

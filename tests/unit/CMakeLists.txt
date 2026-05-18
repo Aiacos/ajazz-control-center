@@ -28,6 +28,12 @@ add_executable(
     # action at bytes 8..11 not 4..7, 8th-DPI-stage B/checksum collision,
     # no-standalone-battery-opcode invariant).
     test_aj_series_wire_format.cpp
+    # 2026-05-18 OLED basetta: end-to-end byte-level test for the
+    # AJ-series mouse TFT LCD clock+DPI upload (opcode 0x25 chunked
+    # RGB565). Wires MockTransport through makeAjSeriesWithTransport,
+    # invokes IClockCapable::setTime(), and asserts every chunk's
+    # envelope. Pins the OLED basetta code path against regression.
+    test_aj_series_tft_clock.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp
