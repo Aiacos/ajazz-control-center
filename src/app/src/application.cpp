@@ -198,6 +198,16 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());
+    // Wire the periodic auto-sync enumerator now that DeviceModel is
+    // registered + connected to live hotplug. The TimeSyncService timer
+    // (15 min interval) calls this back to enumerate IClockCapable
+    // devices when autoSync is on. Capturing m_deviceModel.get() is safe
+    // because DeviceModel is owned by Application for the same lifetime
+    // as TimeSyncService (both Application members destroyed in
+    // construction-order reverse).
+    auto* const deviceModel = m_deviceModel.get();
+    m_timeSync->setConnectedCodenameEnumerator(
+        [deviceModel]() { return deviceModel->connectedCodenames(); });
     // No more setContextProperty calls — every service is now a QML
     // singleton, statically resolvable by qmllint.
     Q_UNUSED(engine);

@@ -146,6 +146,19 @@ public:
      */
     [[nodiscard]] Q_INVOKABLE QVariantMap capabilitiesFor(QString const& codename) const;
 
+    /**
+     * @brief Return the codenames of devices currently considered
+     *        connected (per the last @ref refresh()).
+     *
+     * Used by @ref TimeSyncService::setConnectedCodenameEnumerator
+     * to enumerate IClockCapable devices for periodic auto-sync.
+     * Cheap (O(rows) iteration over `m_codename_keys`); safe to call
+     * from any thread that holds the QML main-thread guarantee.
+     *
+     * @return Vector of codenames whose ConnectedRole is currently true.
+     */
+    [[nodiscard]] std::vector<QString> connectedCodenames() const;
+
 private:
     /// Refresh m_connected by walking hid_enumerate(); cheap (≈ms) on Linux.
     void refreshLiveEnumeration();

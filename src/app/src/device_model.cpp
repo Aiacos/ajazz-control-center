@@ -313,4 +313,30 @@ QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
     return m;
 }
 
+std::vector<QString> DeviceModel::connectedCodenames() const {
+    // O(rows) walk over the row vector — each row's connected-state is
+    // already memoised in m_codename_keys + m_connected (D-04 OR-across-
+    // rebadge), so we just need to filter. Mirrors the logic in the
+    // ConnectedRole branch of data().
+    std::vector<QString> out;
+    out.reserve(m_rows.size());
+    for (auto const& row : m_rows) {
+        auto const it = m_codename_keys.find(row.codename);
+        if (it == m_codename_keys.end()) {
+            continue;
+        }
+        bool connected = false;
+        for (auto const& key : it->second) {
+            if (m_connected.find(key) != m_connected.end()) {
+                connected = true;
+                break;
+            }
+        }
+        if (connected) {
+            out.emplace_back(QString::fromStdString(row.codename));
+        }
+    }
+    return out;
+}
+
 } // namespace ajazz::app
