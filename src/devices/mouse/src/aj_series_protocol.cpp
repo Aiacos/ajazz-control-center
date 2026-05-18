@@ -407,6 +407,46 @@ encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events) {
     return out;
 }
 
+std::array<std::uint8_t, kReportSize> buildKeyMatrixRequest(std::uint8_t profile) {
+    // §3.7 line 357..361: opcode 0xD0, profile idx at vendor byte 1
+    // (our pkt[2]), every other body byte 0, BIT7 checksum at pkt[64].
+    auto pkt = startReport(FeaCmd::MouseGetKeyMatrix);
+    pkt[2] = std::min<std::uint8_t>(profile, 7); // 8 profile slots per §3.3
+    stampBit7Checksum(pkt);
+    return pkt;
+}
+
+std::optional<ajazz::core::MouseKeyMatrix>
+parseKeyMatrixResponse(std::span<std::uint8_t const> resp) {
+    // §3.7 line 363: "Response: 64 bytes = 16 × 4-byte action records (one per
+    // button)." Accept either the bare 64-byte body OR a 65-byte envelope with
+    // a leading HID Report ID prefix (libhidapi's hid_read_timeout pattern on
+    // numbered-report devices). Any other length is a wire-shape mismatch and
+    // returns nullopt — the caller logs / falls back.
+    std::size_t offset = 0;
+    if (resp.size() == kKeyMatrixResponseBytes) {
+        offset = 0;
+    } else if (resp.size() == kKeyMatrixResponseBytes + 1) {
+        // Skip the leading Report ID byte; the 64-byte body follows.
+        offset = 1;
+    } else {
+        return std::nullopt;
+    }
+    ajazz::core::MouseKeyMatrix matrix{};
+    for (std::size_t slot = 0; slot < kKeyMatrixSlotCount; ++slot) {
+        std::size_t const base = offset + slot * kMouseActionBytes;
+        // Wire-byte transparent: copy the 4 bytes verbatim so the type-byte
+        // decoding stays in caller / UI code per §3.6's action-byte table.
+        matrix.bindings[slot].bytes = {
+            resp[base + 0],
+            resp[base + 1],
+            resp[base + 2],
+            resp[base + 3],
+        };
+    }
+    return matrix;
+}
+
 std::array<std::uint8_t, kReportSize>
 buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
                    std::uint16_t chunkIndex, std::span<std::uint8_t const> payload) {

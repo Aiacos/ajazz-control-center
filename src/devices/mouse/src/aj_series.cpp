@@ -46,6 +46,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <mutex>
 #include <stdexcept>
 
@@ -85,7 +86,8 @@ class AjSeriesMouse final : public IDevice,
                             public IFactoryResettable,
                             public IDpiTableCapable,
                             public IMouseFnRemappable,
-                            public IMouseMacroCapable {
+                            public IMouseMacroCapable,
+                            public IMouseKeyMatrixReadable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -625,6 +627,63 @@ public:
                        chunkCount,
                        payloadBytes);
         return true;
+    }
+
+    // ---- IMouseKeyMatrixReadable (§3.7 — FEA_CMD_MOUSE_GET_KEYMATRIX 0xD0) --
+    //
+    // Round-trip read: write the §3.7 request packet (opcode 0xD0 + profile
+    // byte + BIT7 checksum), wait for the 64-byte response, parse into a
+    // MouseKeyMatrix. Returns nullopt on any failure (HID transport
+    // exception, read timeout, malformed response shape) so callers can
+    // treat "unavailable" uniformly without exception handling.
+    //
+    // The read uses the OUTPUT-REPORT transport surface (m_transport->read)
+    // matching the SET counterpart's m_transport->write at opcode 0x50 —
+    // vendor's iot_driver wraps hid_write / hid_read on the configuration
+    // interface, not feature reports, per the file-level comment.
+    //
+    // Read timeout: 500 ms — a generous bound that still surfaces a hung
+    // firmware quickly enough for the QML profile-import flow to fall back
+    // to "unknown bindings" without UI blocking.
+    [[nodiscard]] std::optional<core::MouseKeyMatrix> readKeyMatrix() override {
+        auto const req = aj_series::buildKeyMatrixRequest(m_activeProfile);
+        try {
+            (void)m_transport->write(req);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "readKeyMatrix: HID write failed: {}", e.what());
+            return std::nullopt;
+        }
+        // Allocate the larger of the two valid response shapes (64 or 65 B)
+        // so the parser's leading-Report-ID path can fire when the transport
+        // hands us a numbered-report-style response.
+        std::array<std::uint8_t, aj_series::kKeyMatrixResponseBytes + 1> buf{};
+        std::size_t bytesRead = 0;
+        try {
+            bytesRead = m_transport->read(buf, std::chrono::milliseconds{500});
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "readKeyMatrix: HID read failed: {}", e.what());
+            return std::nullopt;
+        }
+        if (bytesRead == 0) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "readKeyMatrix: read timed out (no response)");
+            return std::nullopt;
+        }
+        auto matrix = aj_series::parseKeyMatrixResponse(
+            std::span<std::uint8_t const>(buf.data(), bytesRead));
+        if (!matrix) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "readKeyMatrix: parser rejected response of {} bytes",
+                           bytesRead);
+            return std::nullopt;
+        }
+        AJAZZ_LOG_INFO("mouse.aj_series",
+                       "key matrix read: profile={}, {} slots decoded",
+                       static_cast<unsigned>(m_activeProfile),
+                       aj_series::kKeyMatrixSlotCount);
+        return matrix;
     }
 
 private:

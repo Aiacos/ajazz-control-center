@@ -28,7 +28,9 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
+#include <vector>
 
 namespace ajazz::mouse::aj_series {
 
@@ -447,5 +449,76 @@ buildMacroChunk(std::uint8_t slot,
  */
 [[nodiscard]] std::vector<std::uint8_t>
 encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events);
+
+// ---------------------------------------------------------------------------
+// §3.7 — MOUSE_GET_KEYMATRIX (opcode 0xD0) full key-matrix read
+// ---------------------------------------------------------------------------
+//
+// Vendor's `_getKeyMatrix(profile)` at js:921420. Single-packet request, then
+// a 64-byte response carrying 16 × 4-byte action records (one slot per
+// physical button per §3.6's action-byte table).
+
+/// Number of action slots returned by the §3.7 response per
+/// `aj_series_opcode_table.md` §3.7 line 363 ("16 × 4-byte action records").
+inline constexpr std::size_t kKeyMatrixSlotCount = 16;
+
+/// Byte width of each §3.6 action descriptor (`changeArr` record).
+inline constexpr std::size_t kMouseActionBytes = 4;
+
+/// Total response payload bytes carried by the §3.7 read-back (16 × 4 = 64).
+inline constexpr std::size_t kKeyMatrixResponseBytes =
+    kKeyMatrixSlotCount * kMouseActionBytes;
+
+/**
+ * @brief §3.7 build the FEA_CMD_MOUSE_GET_KEYMATRIX request packet.
+ *
+ * Wire layout (our @c pkt[N+1] convention vs vendor byte N from §3.7):
+ *   - pkt[1]      = 0xD0 (FEA_CMD_MOUSE_GET_KEYMATRIX, vendor byte 0)
+ *   - pkt[2]      = profile idx (clamped 0..7,         vendor byte 1)
+ *   - pkt[3..63]  = 0 reserved                         (vendor bytes 2..62)
+ *   - pkt[64]     = BIT7 checksum                      (vendor byte 63)
+ *
+ * Profile slot semantics match the SET counterpart at opcode 0x50 (§3.6)
+ * and the active-profile picker at opcode 0x05 (§3.3): firmware persists
+ * the current slot across power-cycle, and this read-back targets that
+ * specific slot (vendor utility caches per-profile bindings client-side).
+ *
+ * @param profile Active onboard profile slot (clamped 0..7).
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildKeyMatrixRequest(std::uint8_t profile);
+
+/**
+ * @brief §3.7 parse a key-matrix response packet into a @ref MouseKeyMatrix.
+ *
+ * Pure parser — no transport / I/O coupling. The caller is responsible for
+ * having driven the request-response round-trip and is handing the raw
+ * response bytes (whatever the @c ITransport::read surface delivered) into
+ * this helper for decoding.
+ *
+ * Accepts either of two valid response shapes:
+ *   - @c kKeyMatrixResponseBytes (64) bytes: raw 16 × 4-byte action records
+ *     starting at the first byte of @p resp.
+ *   - @c kKeyMatrixResponseBytes + 1 (65) bytes: response with a leading
+ *     HID Report ID prefix (typical of libhidapi's @c hid_read_timeout on
+ *     numbered-report devices); the first byte is skipped and the 16 × 4
+ *     records start at @p resp[1].
+ *
+ * Any other length (< 64 bytes — truncated / NAK; > 65 bytes — unexpected
+ * envelope) returns @c std::nullopt rather than silently truncating, so
+ * callers can distinguish a clean read from a wire-shape mismatch worth
+ * logging. The response is otherwise wire-byte transparent: every action
+ * record's 4 bytes are copied verbatim into @ref MouseAction::bytes so the
+ * type-byte decoding stays in caller / UI code (see §3.6 action-byte table).
+ *
+ * @note No checksum validation — §3.7 documents 64 response bytes of action
+ *       records but does NOT define a response-side checksum slot (the
+ *       request-side BIT7 checksum is for the host-to-device direction).
+ *
+ * @param resp Raw response bytes from the device.
+ * @return Decoded @ref MouseKeyMatrix, or @c std::nullopt on size mismatch.
+ */
+[[nodiscard]] std::optional<ajazz::core::MouseKeyMatrix>
+parseKeyMatrixResponse(std::span<std::uint8_t const> resp);
 
 } // namespace ajazz::mouse::aj_series

@@ -99,6 +99,17 @@ add_executable(
     # behaviours are covered too so destructive caller bugs cannot poke
     # an unrelated firmware slot.
     test_aj_series_mouse_macros.cpp
+    # 2026-05-18 key-matrix readback: byte-level tests for the AJ-series
+    # mouse IMouseKeyMatrixReadable surface (opcode 0xD0
+    # FEA_CMD_MOUSE_GET_KEYMATRIX, sec 3.7). Pins the request packet shape
+    # (opcode at pkt[1], profile at pkt[2], BIT7 checksum at pkt[64]) plus
+    # the response parser (16 x 4-byte action records; accepts both the
+    # bare 64-byte body and the 65-byte envelope with leading Report ID
+    # prefix; rejects too-short / oversize responses). End-to-end round-
+    # trip exercises the AjSeriesMouse write -> read -> parse orchestration
+    # via MockTransport::enqueueRead, including the timeout / truncated
+    # response failure modes.
+    test_aj_series_keymatrix_readback.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp
