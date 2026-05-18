@@ -109,6 +109,9 @@ inline constexpr std::array<std::uint8_t, 3> CmdSecondaryScreen{
     0x44,
     0x52,
     0x41}; ///< Touch-strip rect-addressable image "DRA".
+inline constexpr std::array<std::uint8_t, 3> CmdLogo{0x4c,
+                                                     0x4f,
+                                                     0x47}; ///< Firmware boot-logo upload "LOG".
 
 /**
  * @brief Build the zero-padded 512-byte base packet for any command word.
@@ -247,6 +250,21 @@ buildSecondaryScreenHeader(std::uint8_t location,
  * @return 512-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize);
+
+/**
+ * @brief Build the header packet for a firmware boot-logo upload (CRT LOG).
+ *
+ * Per vendor RE (akp05_vendor.md §2 row 188, SDDevice::sendLogoSizeCommand at
+ * 0x180023a70): the AKP05/Mirabox N4 accepts a custom "boot logo / splash"
+ * JPEG that the firmware displays at power-on. The header carries the total
+ * JPEG byte count at bytes 10..11 (BE16, mirroring the buildKeyImageHeader
+ * shape); the JPEG itself follows in 512-byte chunks through the standard
+ * sendImage() path, then the ULEND commit sentinel.
+ *
+ * @param jpegSize Total JPEG payload size in bytes (BE16; capped at 0xFFFF).
+ * @return 512-byte header packet.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize);
 
 /**
  * @brief Parsed input event from a raw 512-byte HID input report.

@@ -501,6 +501,81 @@ public:
     [[nodiscard]] virtual KeyboardSettings keyboardSettings() const = 0;
 };
 
+// -----------------------------------------------------------------------------
+// Boot-logo capability (firmware splash / boot-time image upload)
+// -----------------------------------------------------------------------------
+/**
+ * @class IBootLogoCapable
+ * @brief Optional capability exposing a device's "custom boot logo" upload op.
+ *
+ * Pushes an RGBA8 image that the firmware persists to flash and displays at
+ * power-on (vendor "Custom boot logo / screensaver" feature). Distinct from
+ * @ref IDisplayCapable::setMainImage which targets the live LCD strip and is
+ * volatile across power-cycle. Currently implemented by @c Akp05Device via
+ * the AKP05/Mirabox N4 "LOG" opcode per
+ * @c docs/protocols/streamdeck/akp05_vendor.md §2 row 188.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ */
+class IBootLogoCapable {
+public:
+    virtual ~IBootLogoCapable() = default;
+
+    /**
+     * @brief Push an RGBA8 image to the device's boot-logo flash slot.
+     *
+     * Backends resize to the device's native boot-logo dimensions and encode
+     * to the appropriate codec before transmitting. Callers may pass any
+     * resolution; the backend normalises.
+     *
+     * @param rgba   Tightly packed RGBA8 pixels, length == width * height * 4.
+     * @param width  Source image width in pixels (> 0).
+     * @param height Source image height in pixels (> 0).
+     *
+     * @pre rgba.size() == width * height * 4u
+     */
+    virtual void setBootLogo(std::span<std::uint8_t const> rgba,
+                             std::uint16_t width,
+                             std::uint16_t height) = 0;
+};
+
+// -----------------------------------------------------------------------------
+// Factory-reset capability (destructive — user-initiated only)
+// -----------------------------------------------------------------------------
+/**
+ * @class IFactoryResettable
+ * @brief Optional capability exposing a device's "Restore defaults" wire op.
+ *
+ * Destructive: the firmware reverts every persisted user setting (key bindings,
+ * macros, DPI table, lighting, sleep timers, …) to the factory defaults.
+ * Backends implementing this MUST only invoke the wire packet from a deliberate
+ * user-initiated control surface (e.g. a confirmation-gated "Reset to factory
+ * defaults" button in QML); never auto-call on open / close / hot-plug.
+ *
+ * Currently implemented by @c AjSeriesMouse via opcode @c FEA_CMD_SET_RESERT
+ * 0x02 per @c docs/protocols/mouse/aj_series_opcode_table.md §3.2. The wire
+ * packet carries no payload — opcode + BIT7 checksum only.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ */
+class IFactoryResettable {
+public:
+    virtual ~IFactoryResettable() = default;
+
+    /**
+     * @brief Push the factory-reset wire packet to the device.
+     *
+     * Destructive — every persisted setting reverts to vendor defaults on the
+     * device. Caller is responsible for any UI confirmation prompt; backends
+     * do NOT prompt internally. Backends log the action at WARN level so the
+     * destructive emission is traceable in the journal even if the calling
+     * UI path is unclear.
+     *
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool factoryReset() = 0;
+};
+
 /**
  * @enum LiftOffDistance
  * @brief Vendor 3-step lift-off-distance enum carried by byte 52 of the
@@ -858,6 +933,140 @@ public:
      * @return Battery percentage (0..100), or std::nullopt for wired devices.
      */
     [[nodiscard]] virtual std::optional<std::uint8_t> batteryPercent() const = 0;
+};
+
+// -----------------------------------------------------------------------------
+// DPI table per-profile capability (AJ-series mouse opcode 0x54)
+// -----------------------------------------------------------------------------
+/**
+ * @struct DpiTable
+ * @brief Per-profile 8-stage DPI preset table for AJ-series mice.
+ *
+ * Mirrors the §3.10 wire envelope of @c FEA_CMD_MOUSE_SET_OPTIONPARAM1 (opcode
+ * 0x54) per @c docs/protocols/mouse/aj_series_opcode_table.md §3.10. The
+ * vendor firmware stores one such table per onboard profile slot; switching
+ * profile (@ref IProfileSelectCapable) brings up a different DPI ladder.
+ *
+ * Layout (host-side, byte map per §3.10 lines 442..452):
+ *   - @c profile      — onboard profile slot the table targets (vendor byte 1).
+ *   - @c activeStage  — currently-active stage index 0..7 (vendor byte 2).
+ *   - @c stageCount   — number of enabled stages 1..8 (vendor byte 3).
+ *   - @c stages       — 8 DPI presets; each carries a uint16 DPI value (sent
+ *                       at vendor bytes 8..23 as uint16-LE) and an RGB indicator
+ *                       colour (sent at vendor bytes 40..63 as 8 × {R,G,B}).
+ *
+ * @note Per §3.10 line 452, vendor byte 63 (the BIT7 checksum slot) collides
+ *       with the 8th stage's B-channel — UI editors must surface this
+ *       limitation (8th stage colour swatch greyed out) or the firmware will
+ *       see a checksum byte instead of the user's blue value.
+ *
+ * Reuses the @ref DpiStage struct already declared above (dpi + indicator)
+ * rather than introducing a sibling type so the host-side cache stays
+ * coherent with @ref IMouseCapable::getDpiStages().
+ */
+struct DpiTable {
+    std::uint8_t profile{0};     ///< Target onboard profile slot (0..7).
+    std::uint8_t activeStage{0}; ///< Currently-active stage index (0..7).
+    std::uint8_t stageCount{8};  ///< Number of enabled stages (1..8).
+    std::array<DpiStage, 8> stages{}; ///< 8 DPI presets (value + indicator RGB).
+};
+
+/**
+ * @class IDpiTableCapable
+ * @brief Optional capability exposing per-profile 8-stage DPI tables.
+ *
+ * Distinct from the legacy @ref IMouseCapable DPI surface (which targets
+ * whichever profile is currently active and silently uses profile 0 as the
+ * implicit slot): this capability lets callers atomically upload the full
+ * @ref DpiTable to an arbitrary profile slot, mirroring the vendor utility's
+ * per-profile DPI editor.
+ *
+ * Currently implemented by @c AjSeriesMouse via @c
+ * ajazz::mouse::aj_series::buildDpiTable, which emits opcode 0x54 with the
+ * profile byte at vendor byte 1, active stage at vendor byte 2, stage count
+ * at vendor byte 3, 8 × uint16-LE DPI values at vendor bytes 8..23, and 8 ×
+ * {R,G,B} indicator colours at vendor bytes 40..63.
+ *
+ * Firmware does not advertise a synchronous read-back path; backends keep a
+ * host-side cache of the last pushed table per profile.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see docs/protocols/mouse/aj_series_opcode_table.md §3.10
+ */
+class IDpiTableCapable {
+public:
+    virtual ~IDpiTableCapable() = default;
+
+    /**
+     * @brief Push a full DPI table to the device for the supplied profile slot.
+     *
+     * @param table Field values; @c activeStage clamped to 0..7,
+     *              @c stageCount clamped to 1..8, @c profile clamped to 0..7.
+     *              DPI values outside the firmware's accepted 50..42000 range
+     *              are passed through unclamped (the wire format is uint16-LE,
+     *              so callers are responsible for sensor-specific bounds).
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool setDpiTable(DpiTable const& table) = 0;
+
+    /**
+     * @brief Last-known DPI table cache (no synchronous device read).
+     *
+     * Firmware does not advertise an authoritative read-back path for the
+     * DPI table; backends keep a host-side cache of the last pushed value
+     * normalised post-clamp.
+     */
+    [[nodiscard]] virtual DpiTable dpiTable() const = 0;
+};
+
+// -----------------------------------------------------------------------------
+// Mouse Fn-layer rebind capability (AJ-series opcode 0x51)
+// -----------------------------------------------------------------------------
+/**
+ * @class IMouseFnRemappable
+ * @brief Optional capability exposing the AJ-series mouse Fn-layer key
+ *        rebinder (opcode 0x51 — @c FEA_CMD_MOUSE_SET_FNMATRIX).
+ *
+ * Distinct from @ref IMouseCapable::setButtonBinding (opcode 0x50) which
+ * targets the primary key matrix: this surface writes into the Fn-layer
+ * key matrix, addressed by a layer index (vendor byte 1) and a button index
+ * (vendor byte 2). The 4-byte action descriptor lands at vendor bytes 8..11
+ * with identical semantics to the primary layer per §3.6 (`type`/`subtype`/
+ * `keyA`/`keyB`).
+ *
+ * Mirrors the keyboard's @ref IKeyRemappable layered-key-matrix model but
+ * stays mouse-specific because the address shape differs: keyboards use
+ * (layer, row, col, keycode); mouse Fn-layer uses (layer, button, action).
+ *
+ * Firmware does not advertise a synchronous read-back path for the Fn-layer
+ * key matrix; the host should treat the binding the same way the primary
+ * matrix is treated (write-only, callers track desired state themselves).
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see docs/protocols/mouse/aj_series_opcode_table.md §3.8
+ */
+class IMouseFnRemappable {
+public:
+    virtual ~IMouseFnRemappable() = default;
+
+    /// @return Number of Fn-layer slots the firmware supports (typical 1..3).
+    [[nodiscard]] virtual std::uint8_t fnLayerCount() const noexcept = 0;
+
+    /// @return Number of physical mouse buttons rebindable on each Fn-layer.
+    [[nodiscard]] virtual std::uint8_t fnButtonCount() const noexcept = 0;
+
+    /**
+     * @brief Rebind a button on the Fn-layer to a 4-byte action descriptor.
+     *
+     * @param fnLayer    Fn-layer index; clamped to 0..@ref fnLayerCount()-1.
+     * @param buttonIndex Physical button index; clamped to 0..@ref fnButtonCount()-1.
+     * @param action     4-byte action descriptor (big-endian on the wire) per
+     *                   §3.6 — byte 0 = action type, bytes 1..3 = type-specific.
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool setFnLayerBinding(std::uint8_t fnLayer,
+                                   std::uint8_t buttonIndex,
+                                   std::uint32_t action) = 0;
 };
 
 // -----------------------------------------------------------------------------

@@ -57,6 +57,13 @@ add_executable(
     # switch at 60, 5 named flag bits across bytes 12..13) plus clamping
     # + cache normalisation contract.
     test_aj_series_omnibus_settings.cpp
+    # 2026-05-18 capability-mixin pair: AJ-series IFactoryResettable
+    # (opcode 0x02 / FEA_CMD_SET_RESERT per aj_series_opcode_table.md sec
+    # 3.2 - no-payload BIT7-checksummed packet) and AKP05 IBootLogoCapable
+    # (CRT LOG opcode per akp05_vendor.md sec 2 row 188 - BE16 size header
+    # plus 512-byte JPEG chunks plus ULEND commit sentinel). Both pin the
+    # exact wire-byte layout end-to-end via MockTransport.
+    test_factory_reset_and_logo.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

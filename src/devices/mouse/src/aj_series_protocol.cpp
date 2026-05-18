@@ -76,6 +76,12 @@ std::array<std::uint8_t, kReportSize> buildSetReset() {
     return pkt;
 }
 
+std::array<std::uint8_t, kReportSize> buildFactoryReset() {
+    // §3.2 FEA_CMD_SET_RESERT: opcode 0x02, no payload, BIT7 checksum.
+    // Delegates to buildSetReset() so the byte layout lives in one place.
+    return buildSetReset();
+}
+
 std::array<std::uint8_t, kReportSize> buildSetProfile(std::uint8_t profile) {
     auto pkt = startReport(FeaCmd::SetProfile);
     pkt[2] = std::min<std::uint8_t>(profile, 7); // 8 profiles per AJ159 device matrix
@@ -145,6 +151,15 @@ buildMouseSetFnMatrix(std::uint8_t fnLayer, std::uint8_t button, std::uint32_t a
 }
 
 std::array<std::uint8_t, kReportSize>
+buildFnLayerRemap(std::uint8_t fnLayer, std::uint8_t buttonIndex, std::uint32_t actionBE) {
+    // Thin alias over the low-level builder so the new IMouseFnRemappable
+    // surface can dispatch under the spelling the capability mix-in uses.
+    // Fn-layer index clamped to 0..7 to match the envelope's profile-slot
+    // semantics on opcode 0x50 (vendor byte 1, same byte position).
+    return buildMouseSetFnMatrix(std::min<std::uint8_t>(fnLayer, 7), buttonIndex, actionBE);
+}
+
+std::array<std::uint8_t, kReportSize>
 buildMouseSetOption1(std::uint8_t activeIdx,
                      std::uint8_t stageCount,
                      std::span<std::uint16_t const> dpiValues,
@@ -170,6 +185,41 @@ buildMouseSetOption1(std::uint8_t activeIdx,
         // accept that stampBit7Checksum() will overwrite for stage 7.
         if (base + 2 < kReportSize)
             pkt[base + 2] = colours[i][2];
+    }
+    stampBit7Checksum(pkt);
+    return pkt;
+}
+
+std::array<std::uint8_t, kReportSize> buildDpiTable(ajazz::core::DpiTable const& table) {
+    // Spec-correct §3.10 envelope (companion to buildMouseSetOption1, which
+    // omits the per-profile slot byte). Byte map: pkt[2]=profile,
+    // pkt[3]=activeStage, pkt[4]=stageCount, pkt[9..24]=8×uint16-LE DPI,
+    // pkt[41..64]=8×{R,G,B} indicator colours. See aj_series_protocol.hpp
+    // doc-comment for the full vendor-byte → pkt index mapping.
+    auto pkt = startReport(FeaCmd::MouseSetOption1);
+    pkt[2] = std::min<std::uint8_t>(table.profile, 7);     // vendor byte 1
+    pkt[3] = std::min<std::uint8_t>(table.activeStage, 7); // vendor byte 2
+    // stageCount: vendor docs say 1..8 enabled stages; clamp to 8 (upper),
+    // leave 0 alone — callers may legitimately disable every stage.
+    pkt[4] = std::min<std::uint8_t>(table.stageCount, 8);  // vendor byte 3
+    // bytes 5..8 stay zero (vendor "bytes 4..7" reserved).
+    // 8 × uint16-LE DPI values at vendor "bytes 8..23" = our pkt[9..24].
+    for (std::size_t i = 0; i < table.stages.size(); ++i) {
+        writeUInt16LE(pkt, 9 + i * 2, table.stages[i].dpi);
+    }
+    // 8 × {R,G,B} indicator colours at vendor "bytes 40..63" = pkt[41..64].
+    // Stage 7 B-channel at pkt[64] = checksum slot — stampBit7Checksum()
+    // overwrites it on the wire. Same vendor bug as buildMouseSetOption1.
+    for (std::size_t i = 0; i < table.stages.size(); ++i) {
+        std::size_t const base = 41 + i * 3;
+        if (base < kReportSize)
+            pkt[base + 0] = table.stages[i].indicator.r;
+        if (base + 1 < kReportSize)
+            pkt[base + 1] = table.stages[i].indicator.g;
+        // base+2 may reach pkt[64] which is the checksum slot — write it,
+        // accept that stampBit7Checksum() will overwrite for stage 7.
+        if (base + 2 < kReportSize)
+            pkt[base + 2] = table.stages[i].indicator.b;
     }
     stampBit7Checksum(pkt);
     return pkt;

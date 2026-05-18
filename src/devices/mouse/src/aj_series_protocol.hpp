@@ -125,6 +125,13 @@ void stampBit7Checksum(std::array<std::uint8_t, kReportSize>& pkt) noexcept;
 /// §3.2 SetReset — `[0x05, 0x02, 0, …, 0, checksum]`. Factory reset (destructive!).
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetReset();
 
+/// §3.2 FEA_CMD_SET_RESERT — destructive "Restore defaults" packet.
+///
+/// Convenience alias over @ref buildSetReset that names the user-visible
+/// semantics (factory reset). Wire body identical: opcode 0x02, no payload,
+/// BIT7 checksum at pkt[64].
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildFactoryReset();
+
 /// §3.3 SetProfile — switches the active configuration slot.
 /// pkt[1]=0x05 (opcode), pkt[2]=profile (0..7).
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetProfile(std::uint8_t profile);
@@ -161,6 +168,24 @@ buildMouseSetKeyMatrix(std::uint8_t profile, std::uint8_t button, std::uint32_t 
 [[nodiscard]] std::array<std::uint8_t, kReportSize>
 buildMouseSetFnMatrix(std::uint8_t fnLayer, std::uint8_t button, std::uint32_t actionBE);
 
+/**
+ * @brief §3.8 thin alias for @ref buildMouseSetFnMatrix using the host-facing
+ *        @ref ajazz::core::IMouseFnRemappable naming.
+ *
+ * Surfaces the Fn-layer rebind builder under the spelling the capability
+ * mix-in uses (@c setFnLayerBinding → @c buildFnLayerRemap) without losing
+ * the existing low-level builder name that other code already calls.
+ * Clamps the Fn-layer index to 0..7 (same envelope shape as opcode 0x50,
+ * whose profile slot is similarly clamped).
+ *
+ * @param fnLayer     Fn-layer index (clamped to 0..7 inside the builder).
+ * @param buttonIndex Physical button index (vendor byte 2).
+ * @param actionBE    4-byte action descriptor; emitted big-endian at vendor
+ *                    bytes 8..11 per §3.6 (type / subtype / keyA / keyB).
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildFnLayerRemap(std::uint8_t fnLayer, std::uint8_t buttonIndex, std::uint32_t actionBE);
+
 /// §3.10 MouseSetOption1 — DPI table. Up to 8 stages, atomic upload.
 /// pkt[1]=0x54, pkt[2]=activeIdx, pkt[3]=stageCount,
 /// pkt[9..24]=8×uint16-LE DPI values, pkt[41..63]=8×{R,G,B} colour table.
@@ -180,6 +205,37 @@ buildMouseSetOption1(std::uint8_t activeIdx,
                      std::uint8_t stageCount,
                      std::span<std::uint16_t const> dpiValues,
                      std::span<std::array<std::uint8_t, 3> const> colours);
+
+/**
+ * @brief §3.10 spec-correct DPI table builder — carries the per-profile slot
+ *        byte that @ref buildMouseSetOption1 omits.
+ *
+ * Companion to the legacy @ref buildMouseSetOption1 (which leaves the profile
+ * slot implicit at 0 to preserve existing test wire bytes). The new
+ * @ref ajazz::core::IDpiTableCapable surface carries a @c profile field on
+ * @ref ajazz::core::DpiTable; this builder honours it at vendor byte 1 per
+ * §3.10 line 442. Wire layout (our @c pkt[N+1] convention vs vendor byte N):
+ *
+ *   - pkt[1]      = 0x54 (FEA_CMD_MOUSE_SET_OPTIONPARAM1, vendor byte 0)
+ *   - pkt[2]      = profile (clamped 0..7,                vendor byte 1)
+ *   - pkt[3]      = activeStage (clamped 0..7,            vendor byte 2)
+ *   - pkt[4]      = stageCount (clamped 1..8,             vendor byte 3)
+ *   - pkt[5..8]   = 0 reserved                            (vendor bytes 4..7)
+ *   - pkt[9..24]  = 8 × uint16-LE DPI values              (vendor bytes 8..23)
+ *   - pkt[25..40] = 0 reserved (X/Y split future use)     (vendor bytes 24..39)
+ *   - pkt[41..64] = 8 × {R,G,B} indicator colours         (vendor bytes 40..63)
+ *   - pkt[64]     = BIT7 checksum (stamps over stage-7 B  per §3.10 line 452)
+ *
+ * Out-of-range scalars (@c profile/activeStage > 7, @c stageCount > 8) are
+ * clamped inside the builder so the firmware always sees an acceptable wire
+ * byte. DPI values are passed through unclamped — the wire format is uint16
+ * and callers know their sensor's accepted bound (50..42000 on AJ159 APEX).
+ *
+ * @note Per §3.10 line 452, the 8th stage B-channel (pkt[64]) is overwritten
+ *       by the BIT7 checksum stamp. Same vendor bug as @ref buildMouseSetOption1.
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildDpiTable(ajazz::core::DpiTable const& table);
 
 /**
  * @brief §3.9 MouseSetOption0 — omnibus settings packet.

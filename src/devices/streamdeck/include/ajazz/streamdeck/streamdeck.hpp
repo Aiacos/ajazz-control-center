@@ -14,6 +14,7 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
+#include "ajazz/core/transport.hpp"
 
 #include <memory>
 
@@ -80,6 +81,18 @@ void registerAll(core::DeviceRegistry& registry);
  *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id);
+
+/**
+ * @brief Test-only factory: construct an AKP05 device with an injected
+ *        @c ITransport. Parallels @ref ajazz::mouse::makeAjSeriesWithTransport.
+ *
+ * Production code uses @ref makeAkp05 above; tests use this overload to
+ * substitute a mock that records every write for byte-level wire-format
+ * assertions.
+ */
+[[nodiscard]] core::DevicePtr makeAkp05WithTransport(core::DeviceDescriptor const& d,
+                                                     core::DeviceId id,
+                                                     core::TransportPtr transport);
 
 /**
  * @brief Factory for the AJAZZ AKP815 backend.

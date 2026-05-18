@@ -79,7 +79,8 @@ class AjSeriesMouse final : public IDevice,
                             public IClockCapable,
                             public IPollingRateCapable,
                             public IProfileSelectCapable,
-                            public IMouseSettingsCapable {
+                            public IMouseSettingsCapable,
+                            public IFactoryResettable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -428,6 +429,34 @@ public:
 
     [[nodiscard]] core::MouseSettings mouseSettings() const override {
         return m_mouseSettings;
+    }
+
+    // ---- IFactoryResettable (§3.2 — FEA_CMD_SET_RESERT 0x02) --------------
+    //
+    // Destructive: firmware reverts every persisted setting (key bindings,
+    // macros, DPI table, lighting, sleep timers, battery LED colours, …) to
+    // vendor defaults. WARN-log every emission so the destructive action is
+    // traceable in the journal — this method is NEVER auto-called by the
+    // backend, only from a user-confirmed UI surface.
+    //
+    // Wire packet shape per aj_series_opcode_table.md §3.2:
+    //   pkt[0] = 0x05 (HID Report ID)
+    //   pkt[1] = 0x02 (FeaCmd::SetReset)
+    //   pkt[2..63] = 0
+    //   pkt[64] = BIT7 checksum (sum(pkt[1..63]) & 0x7F)
+    bool factoryReset() override {
+        AJAZZ_LOG_WARN("mouse.aj_series",
+                       "factoryReset: emitting destructive opcode 0x02 — every "
+                       "persisted setting will revert to vendor defaults");
+        auto const pkt = buildFactoryReset();
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "factoryReset: HID write failed: {}", e.what());
+            return false;
+        }
+        return true;
     }
 
 private:

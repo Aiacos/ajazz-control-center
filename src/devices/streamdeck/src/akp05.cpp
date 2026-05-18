@@ -198,6 +198,26 @@ std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize
     return pkt;
 }
 
+/** @brief Build the header packet for a firmware boot-logo upload.
+ *
+ *  Per vendor RE (akp05_vendor.md §2 row 188, SDDevice::sendLogoSizeCommand at
+ *  0x180023a70): emits the "LOG" command word with the total JPEG size at
+ *  bytes 10..11 as BE16, mirroring buildKeyImageHeader. The JPEG payload
+ *  follows in 512-byte chunks through the normal sendImage() path, then the
+ *  ULEND commit sentinel.
+ *
+ *  @param jpegSize  Total byte length of the JPEG payload (capped at 0xFFFF;
+ *                   the on-wire size field is 16 bits).
+ *  @return          Ready-to-send 512-byte header packet.
+ */
+std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize) {
+    auto pkt = buildCmdHeader(CmdLogo);
+    auto const capped = std::min<std::uint32_t>(jpegSize, 0xFFFFu);
+    pkt[10] = static_cast<std::uint8_t>((capped >> 8) & 0xffu);
+    pkt[11] = static_cast<std::uint8_t>(capped & 0xffu);
+    return pkt;
+}
+
 /** @brief Decode one raw HID input report into a structured @ref InputEvent.
  *
  *  The AKP05 multiplexes keys, encoders, and touch-strip events over a single
@@ -360,7 +380,8 @@ inline ImageTransform akp05MainTransform() noexcept {
 class Akp05Device final : public IDevice,
                           public IDisplayCapable,
                           public IEncoderCapable,
-                          public IClockCapable {
+                          public IClockCapable,
+                          public IBootLogoCapable {
 public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
         : Akp05Device(std::move(descriptor),
@@ -594,6 +615,32 @@ public:
         sendImage(header, jpeg);
     }
 
+    // ---- IBootLogoCapable (CRT LOG — akp05_vendor.md §2 row 188) ----------
+    //
+    // Vendor's "Custom boot logo / screensaver" feature. The boot logo lives
+    // in device flash and renders at firmware power-on; this is distinct from
+    // the live LCD-strip path which is volatile across reboot.
+    //
+    // We follow the main-strip dimensions per akp05::MainDisplay{Width,Height}Px
+    // because the vendor doc names no specific boot-logo size, and the strip
+    // geometry is the natural full-frame image the firmware paints at boot.
+    void setBootLogo(std::span<std::uint8_t const> rgba,
+                     std::uint16_t width,
+                     std::uint16_t height) override {
+        ImageTransform const transform{
+            .targetWidth = akp05::MainDisplayWidthPx,
+            .targetHeight = akp05::MainDisplayHeightPx,
+            .format = ImageFormat::Jpeg,
+            .rotationDegrees = 0,
+            .mirror = false,
+            .jpegQuality = 85,
+        };
+        auto const jpeg = encodeForDevice(rgba, width, height, transform);
+        auto const header =
+            akp05::buildLogoSizeHeader(static_cast<std::uint32_t>(jpeg.size()));
+        sendImage(header, jpeg);
+    }
+
     // ---- IClockCapable ------------------------------------------------------
     //
     // Scaffolded stub — no AJAZZ firmware exposes a host-settable RTC over HID
@@ -666,6 +713,22 @@ private:
  */
 core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_shared<Akp05Device>(d, std::move(id));
+}
+
+/**
+ * @brief Test-only factory exposing the @c Akp05Device COD-026 DI constructor
+ *        across translation-unit boundaries (parallels @c makeAjSeriesWithTransport).
+ *
+ * Production code uses @ref makeAkp05 above; this overload exposes the same
+ * backend with a substitutable transport so unit tests can assert byte-level
+ * wire-format equality via @c MockTransport::writes() without touching real
+ * HID hardware. Used by @c test_factory_reset_and_logo.cpp to pin the
+ * boot-logo (LOG opcode) upload sequence.
+ */
+core::DevicePtr makeAkp05WithTransport(core::DeviceDescriptor const& d,
+                                       core::DeviceId id,
+                                       core::TransportPtr transport) {
+    return std::make_shared<Akp05Device>(d, std::move(id), std::move(transport));
 }
 
 } // namespace ajazz::streamdeck
