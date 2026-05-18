@@ -98,6 +98,13 @@ jobs:
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
         with:
           python-version: "3.11"
+          # Cache the pip wheel store keyed on pyproject.toml so the
+          # `pip install -e .[dev]` step below restores `cryptography`,
+          # `pytest`, `mypy` etc from cache on consecutive runs instead
+          # of re-resolving + re-downloading every time. Saves ~30s per
+          # matrix leg.
+          cache: pip
+          cache-dependency-path: pyproject.toml
 
       # Install the Python package + dev deps BEFORE the C++ test step. The
       # `test_manifest_signer.cpp` Catch2 cases exec `python3 scripts/sign-plugin-manifest.py`
