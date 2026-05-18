@@ -49,8 +49,12 @@ QtObject {
     /// Muted foreground (secondary labels, captions).
     /// WCAG 2.1 AA: "#aaaaaa" on "#1e1e23" sidebar = 7.5:1; on "#14141a" base = 9.0:1.
     readonly property color fgMuted:    Branding.fgMuted
-    /// Tertiary foreground for de-emphasized helper text — ≥4.5:1 on dark surfaces.
-    readonly property color fgFaint:    "#bdbdbd"
+    /// Tertiary foreground for de-emphasized helper text — derived from
+    /// `fgPrimary` at 55% opacity so it follows theme polarity (dark themes
+    /// get a lightened tone, light themes get a darkened tone). Pre-2026-05
+    /// this was a hardcoded "#bdbdbd" which inverted polarity in light mode.
+    readonly property color fgFaint:
+        Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.55)
 
     /// Brand accent (primary CTAs, focus rings, key indicators).
     readonly property color accent:     Branding.accent
@@ -60,6 +64,33 @@ QtObject {
     /// failures). Not part of the branding contract — the same
     /// medium-red works on both light and dark surfaces.
     readonly property color errorAccent: "#e34c4c"
+    /// Warning accent (signed-but-untrusted plugins, deprecated APIs,
+    /// reversible-but-unusual operations). Amber 500 — works on both
+    /// themes by sitting in the same value/saturation band as
+    /// `errorAccent`.
+    readonly property color warningAccent: "#f59e0b"
+
+    // ---- Semantic chip tokens (status badges) ----------------------------
+    // Used by trust-status chips (unsigned / self-signed plugins), validation
+    // badges, deprecated-API tooltips. The "bg" tint of the accent gives a
+    // soft pill background that reads on both dark and light surfaces;
+    // "fg" is the accent itself (high-contrast text), and "border" is a
+    // saturated variant for definition.
+
+    /// Background for `errorAccent` chips — bgBase tinted ~15% with the accent.
+    readonly property color chipBgError:
+        Qt.tint(bgBase, Qt.rgba(errorAccent.r, errorAccent.g, errorAccent.b, 0.15))
+    /// Foreground (text) for `errorAccent` chips.
+    readonly property color chipFgError: errorAccent
+    /// Border for `errorAccent` chips.
+    readonly property color chipBorderError: errorAccent
+    /// Background for `warningAccent` chips.
+    readonly property color chipBgWarning:
+        Qt.tint(bgBase, Qt.rgba(warningAccent.r, warningAccent.g, warningAccent.b, 0.15))
+    /// Foreground for `warningAccent` chips.
+    readonly property color chipFgWarning: warningAccent
+    /// Border for `warningAccent` chips.
+    readonly property color chipBorderWarning: warningAccent
 
     // ---- Derived semantic tokens -------------------------------------------
     // These are not part of the branding contract; they are derived from

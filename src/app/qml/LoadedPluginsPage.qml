@@ -155,14 +155,16 @@ Page {
                         Layout.preferredWidth: chipText.implicitWidth + Theme.spacingMd * 2
                         radius: 12
 
-                        // Amber for self-signed (verifies but unknown key),
-                        // red for unsigned / tampered (the dangerous case).
+                        // Theme-aware semantic colors so the chip stays
+                        // readable in light mode too (pre-2026-05 these were
+                        // Tailwind literals - dark red/amber bg + bright
+                        // text - which inverted contrast on light surfaces).
                         color: row.trustLevel === "unsigned"
-                            ? "#7f1d1d"  // dark red 800
-                            : "#78350f"  // amber 800
+                            ? Theme.chipBgError
+                            : Theme.chipBgWarning
                         border.color: row.trustLevel === "unsigned"
-                            ? "#ef4444"  // red 500
-                            : "#f59e0b"  // amber 500
+                            ? Theme.chipBorderError
+                            : Theme.chipBorderWarning
                         border.width: 1
 
                         Text {
@@ -172,8 +174,8 @@ Page {
                                 ? qsTr("unsigned")
                                 : qsTr("self-signed")
                             color: row.trustLevel === "unsigned"
-                                ? "#fecaca"  // red 200
-                                : "#fde68a"  // amber 200
+                                ? Theme.chipFgError
+                                : Theme.chipFgWarning
                             font.pixelSize: Theme.fontXs
                             font.weight: Font.DemiBold
                         }
