@@ -201,6 +201,8 @@ ships `.deb`, `.rpm`, `.flatpak`, `.msi` and a universal `.dmg`.
 
 ## Build from source (developers)
 
+### Happy path — `make bootstrap`
+
 ```bash
 git clone https://github.com/Aiacos/ajazz-control-center.git
 cd ajazz-control-center
@@ -210,11 +212,113 @@ make run                # launches the app
 
 `make bootstrap` detects Fedora / RHEL / openSUSE / Debian / Ubuntu /
 Arch / macOS and installs every build dependency via the native package
-manager. After that, `make build` / `make test` / `make package` do the
-obvious thing. Run `make help` for the full list.
+manager. After that, `make build` / `make test` / `make package` /
+`make doctor` do the obvious thing. Run `make help` for the full list.
 
-Prefer pure CMake? `cmake --preset dev && cmake --build --preset dev`
-works too. Full reference in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
+### Per-platform CMake recipes
+
+If you'd rather drive CMake directly (Windows, custom toolchain, IDE
+integration), each platform has a dedicated preset already wired in
+[`CMakePresets.json`](CMakePresets.json). All recipes assume Qt 6.7+
+with `qtwebsockets` and `qtshadertools` modules installed.
+
+#### Linux (Ubuntu 24.04 / Fedora 40+ / Arch)
+
+```bash
+# 1. Install system deps (Ubuntu/Debian)
+sudo apt install -y build-essential cmake ninja-build pkg-config \
+    libudev-dev libusb-1.0-0-dev libhidapi-dev \
+    libgl1-mesa-dev libxkbcommon-dev libxcb1-dev libxcb-cursor-dev \
+    libxkbcommon-x11-dev python3-dev python3-pip
+
+#    Fedora/RHEL equivalent: sudo dnf install gcc-c++ cmake ninja-build \
+#    systemd-devel libusb1-devel hidapi-devel mesa-libGL-devel libxkbcommon-devel
+
+# 2. Install Qt 6.7+ via aqtinstall (cross-distro) OR your distro's qt6-base
+pip install aqtinstall
+aqt install-qt linux desktop 6.8.3 gcc_64 -m qtwebsockets qtshadertools
+
+# 3. Configure + build (Release)
+cmake --preset linux-release
+cmake --build --preset linux-release
+
+# 4. Test
+ctest --preset linux-release --output-on-failure
+
+# 5. Package (.deb / .rpm / .flatpak)
+cmake --build --preset linux-release --target package    # CPack → .deb + .rpm
+make flatpak                                              # → .flatpak (uses flatpak-builder)
+```
+
+The udev rule at `resources/linux/99-ajazz.rules` uses `TAG+="uaccess"`
+so systemd-logind grants your user device access automatically — no
+`plugdev` group, no logout, no replug. `make udev` installs it without
+a full build.
+
+#### macOS (14+, Apple Silicon or Intel)
+
+```bash
+# 1. Install Xcode CLT + Homebrew deps
+xcode-select --install
+brew install cmake ninja hidapi pkg-config
+
+# 2. Install Qt 6.7+ (universal binary)
+brew install qt@6
+#    or:  aqt install-qt mac desktop 6.8.3 clang_64 -m qtwebsockets qtshadertools
+
+# 3. Configure + build
+cmake --preset macos-release
+cmake --build --preset macos-release
+
+# 4. Test
+ctest --preset macos-release --output-on-failure
+
+# 5. Package universal .dmg (arm64 + x86_64)
+cmake --build --preset macos-release --target package
+```
+
+The release pipeline produces a universal binary via two single-arch
+builds + `lipo`; CI runs on `macos-14` (Apple Silicon) and `macos-13`
+(Intel) and merges. For local development a single-arch build is fine.
+
+#### Windows (10/11, MSVC 2022)
+
+```powershell
+# 1. Open "x64 Native Tools Command Prompt for VS 2022" so cl.exe is on PATH
+# 2. Install Qt 6.7+ (via the official online installer's MaintenanceTool,
+#    OR via aqtinstall)
+pip install aqtinstall
+aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qtwebsockets qtshadertools
+$env:Path = "C:\Qt\6.8.3\msvc2022_64\bin;$env:Path"
+
+# 3. Configure + build (Release)
+cmake --preset windows-release
+cmake --build --preset windows-release
+
+# 4. Test
+ctest --preset windows-release --output-on-failure
+
+# 5. Package .msi + portable .zip
+cmake --build --preset windows-release --target package    # CPack → WiX .msi
+```
+
+**Qt 6.11.1 dev-box gotcha**: Qt 6.11 headers emit `C4702` (unreachable
+code) warnings that fail `/WX`. Until upstream fixes it or our matrix
+adds `/wd4702`, configure with `-DAJAZZ_ENABLE_WERROR=OFF` for local
+Qt 6.11+ builds. CI uses Qt 6.8.3 where the warnings don't fire, so
+`/WX` stays on.
+
+### Useful debug builds
+
+```bash
+cmake --preset dev                                    # Debug + sanitizers
+cmake --build --preset dev
+cmake --preset coverage                               # gcov instrumentation
+ctest --test-dir build-cov && lcov --capture ...      # see Makefile `make coverage`
+```
+
+The full reference (every preset, every `-D` option, every CPack
+generator) lives in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
 
 ### Platform support matrix
 
