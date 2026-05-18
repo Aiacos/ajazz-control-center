@@ -120,7 +120,7 @@ either a `SET = N` or `GET = N | 0x80` pair.
 | `0x0c` | `FEA_CMD_SET_USERPIC`            | feature SET | no — mouse uses `0x52`                                             | —                     |
 | `0x8c` | `FEA_CMD_GET_USERPIC`            | feature GET | no                                                                 | —                     |
 | `0x0d` | `FEA_CMD_SET_AUDIO`              | feature SET | no                                                                 | —                     |
-| `0x0e` | `FEA_CMD_SET_WINDOS`             | feature SET | no                                                                 | —                     |
+| `0x0e` | `FEA_CMD_SET_WINDOWS`            | feature SET | no                                                                 | —                     |
 | `0x10` | `FEA_CMD_SET_FN`                 | feature SET | no                                                                 | —                     |
 | `0x90` | `FEA_CMD_GET_FN`                 | feature GET | no                                                                 | —                     |
 | `0x11` | `FEA_CMD_SET_DEBOUNCE` (kb)      | feature SET | no — mouse uses byte 10 of `0x53` omnibus                          | —                     |
@@ -167,7 +167,7 @@ either a `SET = N` or `GET = N | 0x80` pair.
 | `0xb0` | `FEA_CMD_GET_OLED_BOOT`          | feature GET | no                                                                 | —                     |
 | `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`     | feature SET | no                                                                 | —                     |
 | `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`     | feature GET | no                                                                 | —                     |
-| `0x8f` | `FEA_CMD_GET_INFOR`              | feature GET | yes (initial probe)                                                | —                     |
+| `0x8f` | `FEA_CMD_GET_INFO`               | feature GET | yes (initial probe)                                                | —                     |
 
 ### 2.2 Mouse class extensions (`0x50..0x60`)
 
@@ -207,7 +207,7 @@ byte 1..62 : 0
 byte 63 : checksum (filled by iot_driver, BIT7)
 ```
 
-Response (read via `commomFeature(req, 0)` → `readFeatureCmd`):
+Response (read via `commonFeature(req, 0)` → `readFeatureCmd`):
 
 ```
 byte 0  : 0x80 (echo)
@@ -914,7 +914,7 @@ ______________________________________________________________________
 | `_setMacro` (0x16 chunked upload)         | `dist/static/js/main_beautified.js:922079` |
 | `getFirmwareVersion` (0x80)               | `dist/static/js/main_beautified.js:921258` |
 | `writeFeatureCmd` (transport wrapper)     | `dist/static/js/main_beautified.js:726774` |
-| `commomFeature` (write+read helper)       | `dist/static/js/main_beautified.js:726843` |
+| `commonFeature` (write+read helper)       | `dist/static/js/main_beautified.js:726843` |
 | `no`/`oo`/`uo`/`io` gRPC wrappers         | `dist/static/js/main_beautified.js:56600`  |
 | `CheckSumType` enum                       | `dist/static/js/main_beautified.js:51245`  |
 | Device proto `Device.battery` field       | `dist/static/js/main_beautified.js:50798`  |

@@ -50,9 +50,15 @@ inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Cl
 // Vendor-RE-discovered opcodes (akp05_vendor.md §3, 2026-05-17). Same wire
 // format applies across the whole AKP family per SDLibrary1.dll Ghidra audit.
 // See clean-reimplementation-roadmap.md §11.3 carry-over + P3.7.
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
+                                                        0x45,
+                                                        0x52}; ///< Firmware version "VER".
 inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+    0x55,
+    0x4c,
+    0x45,
+    0x4e,
+    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
 
 /**
  * @brief Build the firmware-version probe (CRT VER, no payload).

@@ -56,16 +56,15 @@ qt_add_executable(
     src/pi_url_policy.cpp
     src/qt_executor.cpp
     src/hotplug_debouncer.cpp
-    # P3.16: Phase C QML UX — battery query service singleton (mirrors
-    # TimeSyncService design). Wires the IBatteryCapable mix-in from
-    # ARCH-05.1 / commit eea50a5 to a 15-s polling QTimer + QML-bindable
-    # signals (batteryQueried / batteryUnavailable).
+    # P3.16: Phase C QML UX — battery query service singleton (mirrors TimeSyncService design).
+    # Wires the IBatteryCapable mix-in from ARCH-05.1 / commit eea50a5 to a 15-s polling QTimer +
+    # QML-bindable signals (batteryQueried / batteryUnavailable).
     src/battery_service.cpp
 )
 
-# P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only).
-# Conditional on Qt6::WebSockets availability — when the module is missing the
-# app still builds; plugin host functionality is disabled at runtime.
+# P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
+# Qt6::WebSockets availability — when the module is missing the app still builds; plugin host
+# functionality is disabled at runtime.
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz-control-center PRIVATE src/sd_plugin_server.cpp)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebSockets)

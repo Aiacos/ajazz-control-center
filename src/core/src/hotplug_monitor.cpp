@@ -412,8 +412,7 @@ void HotplugMonitor::injectEvent(HotplugEvent const& ev) {
 }
 
 #if defined(_WIN32)
-HotplugEvent HotplugMonitor::parseDevicePathW(wchar_t const* path,
-                                              HotplugAction action) noexcept {
+HotplugEvent HotplugMonitor::parseDevicePathW(wchar_t const* path, HotplugAction action) noexcept {
     // Mirrors the parseVidPid + ev-build sequence from `wndProc()`'s
     // _WIN32 branch. Pure function — no side effects, no hidapi, no
     // window-message dependencies. The serial substring is extracted

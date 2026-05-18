@@ -9,14 +9,13 @@
  * exercise the codec magic-byte invariants, dimension validation, and the rotation/mirror
  * transforms used by the AKP153 (Rot90+mirror) and AKP815 (Rot180) backends.
  */
-#include "image_pipeline.hpp"
-
 #include "ajazz/core/capabilities.hpp"
-
-#include <catch2/catch_test_macros.hpp>
+#include "image_pipeline.hpp"
 
 #include <cstdint>
 #include <vector>
+
+#include <catch2/catch_test_macros.hpp>
 
 using namespace ajazz::streamdeck;
 using ajazz::core::Rgb;

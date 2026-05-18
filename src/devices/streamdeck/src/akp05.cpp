@@ -102,13 +102,12 @@ std::array<std::uint8_t, PacketSize> buildVersionRequest() {
     return buildCmdHeader(CmdVersion);
 }
 
-std::array<std::uint8_t, PacketSize>
-buildSecondaryScreenHeader(std::uint8_t location,
-                           std::uint16_t width,
-                           std::uint16_t height,
-                           std::uint16_t x,
-                           std::uint16_t y,
-                           std::uint32_t jpegSize) {
+std::array<std::uint8_t, PacketSize> buildSecondaryScreenHeader(std::uint8_t location,
+                                                                std::uint16_t width,
+                                                                std::uint16_t height,
+                                                                std::uint16_t x,
+                                                                std::uint16_t y,
+                                                                std::uint32_t jpegSize) {
     auto pkt = buildCmdHeader(CmdSecondaryScreen);
     // BE32 JPEG payload size at bytes 8..11.
     pkt[8] = static_cast<std::uint8_t>((jpegSize >> 24) & 0xffu);

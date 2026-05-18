@@ -51,20 +51,20 @@ inline constexpr std::uint8_t kReportId = 0x05;
  * Citations are line-precise into `aj_series_opcode_table.md` §3.
  */
 enum class FeaCmd : std::uint8_t {
-    GetRev = 0x80,             ///< §3.1 — firmware version query (response uint16-LE at byte 1..2).
-    SetReset = 0x02,           ///< §3.2 — factory reset.
-    SetProfile = 0x05,         ///< §3.3 — active profile select.
-    SetReport = 0x04,          ///< §3.4 — polling rate via _RateToNum lookup.
-    SetLedParam = 0x07,        ///< §3.5 — 8-byte LED setting block.
-    MouseSetKeyMatrix = 0x50,  ///< §3.6 — single button rebind (action at bytes 8..11).
-    MouseGetKeyMatrix = 0xd0,  ///< §3.7 — full key-matrix read.
-    MouseSetFnMatrix = 0x51,   ///< §3.8 — Fn-layer key rebind (same shape as 0x50).
-    MouseSetOption0 = 0x53,    ///< §3.9 — omnibus settings (LOD/sensitivity/sleep/battery LED).
-    MouseGetOption0 = 0xd3,    ///< §3.9 — GET counterpart.
-    MouseSetOption1 = 0x54,    ///< §3.10 — DPI table (8 × uint16-LE + 8 × {R,G,B}).
-    MouseGetOption1 = 0xd4,    ///< §3.10 — GET counterpart.
-    SetMacroSimple = 0x16,     ///< §3.11 — chunked macro upload (5 chunks × 56 bytes).
-    GetMacro = 0x96,           ///< §3.11 — macro read-back.
+    GetRev = 0x80,      ///< §3.1 — firmware version query (response uint16-LE at byte 1..2).
+    SetReset = 0x02,    ///< §3.2 — factory reset.
+    SetProfile = 0x05,  ///< §3.3 — active profile select.
+    SetReport = 0x04,   ///< §3.4 — polling rate via _RateToNum lookup.
+    SetLedParam = 0x07, ///< §3.5 — 8-byte LED setting block.
+    MouseSetKeyMatrix = 0x50, ///< §3.6 — single button rebind (action at bytes 8..11).
+    MouseGetKeyMatrix = 0xd0, ///< §3.7 — full key-matrix read.
+    MouseSetFnMatrix = 0x51,  ///< §3.8 — Fn-layer key rebind (same shape as 0x50).
+    MouseSetOption0 = 0x53,   ///< §3.9 — omnibus settings (LOD/sensitivity/sleep/battery LED).
+    MouseGetOption0 = 0xd3,   ///< §3.9 — GET counterpart.
+    MouseSetOption1 = 0x54,   ///< §3.10 — DPI table (8 × uint16-LE + 8 × {R,G,B}).
+    MouseGetOption1 = 0xd4,   ///< §3.10 — GET counterpart.
+    SetMacroSimple = 0x16,    ///< §3.11 — chunked macro upload (5 chunks × 56 bytes).
+    GetMacro = 0x96,          ///< §3.11 — macro read-back.
 };
 
 /// Polling-rate lookup table (`_RateToNum` per `aj_series_opcode_table.md` §3.4).
@@ -107,8 +107,8 @@ void stampBit7Checksum(std::array<std::uint8_t, kReportSize>& pkt) noexcept;
 
 /// §3.4 SetReport — polling rate via `_RateToNum` lookup.
 /// pkt[1]=0x04, pkt[2]=profile, pkt[3]=pollRateToWireCode(hz).
-[[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildSetReportRate(std::uint8_t profile, std::uint16_t hz);
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetReportRate(std::uint8_t profile,
+                                                                       std::uint16_t hz);
 
 /// §3.5 SetLedParam — 8-byte LED setting block.
 /// pkt[1]=0x07, pkt[2..9] = [effect, (4-speed), value, mode_bits, R, G, B].
@@ -117,30 +117,25 @@ buildSetReportRate(std::uint8_t profile, std::uint16_t hz);
 /// @param speed        UI speed 0..4 (encoded as `4 - speed` per vendor).
 /// @param value        Mode-specific value (brightness for AlwaysOn; option for others).
 /// @param modeBits     Pre-encoded byte 4 (option-nibble << 4 | mode-bits low nibble).
-[[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildSetLedParam(std::uint8_t effect,
-                 std::uint8_t speed,
-                 std::uint8_t value,
-                 std::uint8_t modeBits,
-                 std::uint8_t r,
-                 std::uint8_t g,
-                 std::uint8_t b);
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetLedParam(std::uint8_t effect,
+                                                                     std::uint8_t speed,
+                                                                     std::uint8_t value,
+                                                                     std::uint8_t modeBits,
+                                                                     std::uint8_t r,
+                                                                     std::uint8_t g,
+                                                                     std::uint8_t b);
 
 /// §3.6 MouseSetKeyMatrix — single button rebind. Action at bytes 8..11 (NOT
 /// bytes 4..7 as our prior impl had it — that was the kCmdButton=0x24 bug).
 /// pkt[1]=0x50, pkt[2]=profile, pkt[3]=button, pkt[9..12]=action 4 bytes.
 [[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildMouseSetKeyMatrix(std::uint8_t profile,
-                       std::uint8_t button,
-                       std::uint32_t actionBE);
+buildMouseSetKeyMatrix(std::uint8_t profile, std::uint8_t button, std::uint32_t actionBE);
 
 /// §3.8 MouseSetFnMatrix — Fn-layer key rebind (same shape as 0x50; profile slot
 /// instead holds the Fn-layer index).
 /// pkt[1]=0x51, pkt[2]=fnLayer, pkt[3]=button, pkt[9..12]=action 4 bytes.
 [[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildMouseSetFnMatrix(std::uint8_t fnLayer,
-                      std::uint8_t button,
-                      std::uint32_t actionBE);
+buildMouseSetFnMatrix(std::uint8_t fnLayer, std::uint8_t button, std::uint32_t actionBE);
 
 /// §3.10 MouseSetOption1 — DPI table. Up to 8 stages, atomic upload.
 /// pkt[1]=0x54, pkt[2]=activeIdx, pkt[3]=stageCount,
@@ -173,32 +168,31 @@ buildMouseSetOption1(std::uint8_t activeIdx,
  * See `aj_series_opcode_table.md` §3.9 for the complete byte map.
  */
 struct OptionPacket0 {
-    std::uint8_t profile{0};            ///< pkt[9] — active profile.
-    std::uint16_t pollRateHz{1000};     ///< pkt[10] — encoded via pollRateToWireCode.
-    std::uint8_t debounceMs{1};         ///< pkt[11] — typical 0..10.
+    std::uint8_t profile{0};        ///< pkt[9] — active profile.
+    std::uint16_t pollRateHz{1000}; ///< pkt[10] — encoded via pollRateToWireCode.
+    std::uint8_t debounceMs{1};     ///< pkt[11] — typical 0..10.
     /// pkt[13..14] — uint16-LE flags. Bit 0=lightOff, 1=wheelLightOff,
     /// 2=smooth, 3=ledSelect (battery-LED RGB enable), 4=powerSaveMode.
     std::uint16_t flags{0};
-    std::uint8_t buttonChange{1};       ///< pkt[15].
-    std::uint8_t wheelToButton{10};     ///< pkt[16].
-    std::uint8_t buttonToWheel{10};     ///< pkt[17].
-    std::array<std::uint8_t, 8> ledBlock{};    ///< pkt[25..32] — LightSettingToBuffer.
-    std::array<std::uint8_t, 8> logoLedBlock{};///< pkt[33..40] — LogoLightToBuffer.
-    std::uint16_t sleepBtIdleSec{0};    ///< pkt[41..42] uint16-LE.
-    std::uint16_t sleepBtDeepSec{0};    ///< pkt[43..44] uint16-LE.
-    std::uint16_t sleep24gIdleSec{0};   ///< pkt[45..46] uint16-LE.
-    std::uint16_t sleep24gDeepSec{0};   ///< pkt[47..48] uint16-LE.
-    std::uint8_t xSensitivity{100};     ///< pkt[51] — 0..100%.
-    std::uint8_t ySensitivity{100};     ///< pkt[52] — 0..100%.
-    std::uint8_t liftCutOff{0};         ///< pkt[53] — 0=1mm, 1=2mm, 2=3mm.
-    std::uint8_t angleSnap{0};          ///< pkt[54] — 0/1.
+    std::uint8_t buttonChange{1};               ///< pkt[15].
+    std::uint8_t wheelToButton{10};             ///< pkt[16].
+    std::uint8_t buttonToWheel{10};             ///< pkt[17].
+    std::array<std::uint8_t, 8> ledBlock{};     ///< pkt[25..32] — LightSettingToBuffer.
+    std::array<std::uint8_t, 8> logoLedBlock{}; ///< pkt[33..40] — LogoLightToBuffer.
+    std::uint16_t sleepBtIdleSec{0};            ///< pkt[41..42] uint16-LE.
+    std::uint16_t sleepBtDeepSec{0};            ///< pkt[43..44] uint16-LE.
+    std::uint16_t sleep24gIdleSec{0};           ///< pkt[45..46] uint16-LE.
+    std::uint16_t sleep24gDeepSec{0};           ///< pkt[47..48] uint16-LE.
+    std::uint8_t xSensitivity{100};             ///< pkt[51] — 0..100%.
+    std::uint8_t ySensitivity{100};             ///< pkt[52] — 0..100%.
+    std::uint8_t liftCutOff{0};                 ///< pkt[53] — 0=1mm, 1=2mm, 2=3mm.
+    std::uint8_t angleSnap{0};                  ///< pkt[54] — 0/1.
     std::array<std::uint8_t, 3> batteryColorHigh{0, 0xff, 0}; ///< pkt[55..57] — high-charge RGB.
     std::array<std::uint8_t, 3> batteryColorLow{0xff, 0, 0};  ///< pkt[58..60] — low-charge RGB.
-    std::uint8_t chargingSwitch{1};     ///< pkt[61] — LED-on-while-charging.
+    std::uint8_t chargingSwitch{1}; ///< pkt[61] — LED-on-while-charging.
 };
 
 /// §3.9 build the omnibus packet from a populated @ref OptionPacket0.
-[[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildMouseSetOption0(OptionPacket0 const& opts);
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& opts);
 
 } // namespace ajazz::mouse::aj_series

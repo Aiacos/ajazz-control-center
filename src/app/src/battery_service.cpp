@@ -17,7 +17,7 @@ namespace {
 
 // gitleaks fires `generic-api-key` on "Word/Word" string literals when the
 // entropy crosses ~3.5 (rule defaults). Our QSettings key is plain "Battery/
-// PollEnabled" but renderered as `kSettingsKey = "..."` it pattern-matches
+// PollEnabled" but rendered as `kSettingsKey = "..."` it pattern-matches
 // the API-key heuristic. Switch to a dotted lower-case form (lower entropy)
 // to bypass the false-positive; QSettings tolerates any printable key string.
 constexpr char const* kSettingsKey = "battery/poll-enabled";

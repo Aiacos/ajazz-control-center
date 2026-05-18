@@ -68,7 +68,7 @@ com.hotspot.streamdock.system.volume
 com.hotspot.streamdock.vmix                    (vMix integration)
 com.hotspot.streamdock.youtube                 (YouTube integration)
 com.hotspot.streamdock.pageindicatororgoto
-com.hotspot.streamdock.pagebackorforword       (note: 'forword' is the actual vendor typo)
+com.hotspot.streamdock.pagebackorforword       (note: 'forward' is the actual vendor typo)
 ```
 
 ## 2. Plugin manifest schema

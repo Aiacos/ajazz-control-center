@@ -79,11 +79,11 @@ TEST_CASE("MockTransport captures setActiveDpiStage envelope on AjSeriesMouse",
     // via opcode 0x54 (FEA_CMD_MOUSE_SET_OPTIONPARAM1, vendor pattern). The
     // packet is a 65-byte HID OUTPUT REPORT (writeFeature → write), checksum
     // is BIT7 (& 0x7F), 8 stages of DPI/colour.
-    REQUIRE(observer->writeCount() == 1);                // OUTPUT report, NOT feature
-    REQUIRE(observer->writeFeatureCount() == 0);         // confirms transport correction
+    REQUIRE(observer->writeCount() == 1);        // OUTPUT report, NOT feature
+    REQUIRE(observer->writeFeatureCount() == 0); // confirms transport correction
     REQUIRE(observer->writes().size() == 1);
     auto const& pkt = observer->writes().at(0);
-    REQUIRE(pkt.size() == 65);                            // 1 ReportId + 64 vendor envelope bytes
+    REQUIRE(pkt.size() == 65); // 1 ReportId + 64 vendor envelope bytes
 
     CHECK(pkt[0] == 0x05); // ReportId
     CHECK(pkt[1] == 0x54); // FeaCmd::MouseSetOption1 (was 0x21, wrong)

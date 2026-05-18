@@ -127,7 +127,7 @@ Every mouse-class UI action results in one of these transport calls:
 | Wrapper                                                | Underlying gRPC               | Checksum default  | Used by                                                                                                         |
 | ------------------------------------------------------ | ----------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------- |
 | `writeFeatureCmd(buf, BIT7)`                           | `sendMsg` (interrupt-OUT)     | BIT7 by call site | every mouse setter + macro chunks + OTA chunks                                                                  |
-| `commomFeature(buf, BIT7)` (sic — "common" misspelled) | write then read               | BIT7 by call site | every mouse getter (`getMouseOption0`, `getMouseOption1`, `getReportRate`, `getMacro`, `getFirmwareVersion`, …) |
+| `commonFeature(buf, BIT7)` (sic — "common" misspelled) | write then read               | BIT7 by call site | every mouse getter (`getMouseOption0`, `getMouseOption1`, `getReportRate`, `getMacro`, `getFirmwareVersion`, …) |
 | `writeRawFeatureCmd(buf, BIT7)`                        | `sendRawFeature` (SET_REPORT) | BIT7 by call site | currently UNUSED on the AJ159 mouse path; reserved for raw feature reports                                      |
 
 > **`writeFeatureCmd` uses `sendMsg` (interrupt-OUT), NOT `sendRawFeature`

@@ -146,9 +146,9 @@ hid_get_manufacturer_string(this->_handle, buf, 256);
 hid_get_product_string     (this->_handle, buf, 256);
 hid_get_serial_number_string(this->_handle, buf, 256);
 hid_get_indexed_string     (this->_handle, 1, buf);
-hid_get_output_report_lenght(this->_handle);   // typo "lenght" in vendor src
-hid_get_input_report_lenght (this->_handle);
-hid_get_feature_report_lenght(this->_handle);
+hid_get_output_report_length(this->_handle);   // typo "length" in vendor src
+hid_get_input_report_length (this->_handle);
+hid_get_feature_report_length(this->_handle);
 ```
 
 There is also a 6-argument overload at RVA `0x20200` that takes

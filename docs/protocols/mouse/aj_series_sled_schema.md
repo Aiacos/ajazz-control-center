@@ -203,7 +203,7 @@ Value (JSON, for `option0`):
     "xSensitivity": 100, "ySensitivity": 100,
     "liftCutOff": 0, "angelSnap": false
   },
-  "batteyColorArr": [                // sic — typo in vendor JS
+  "batteryColorArr": [                // sic — typo in vendor JS
     { "r": 0, "g": 255, "b": 0 },    // high-charge
     { "r": 255, "g": 0,   "b": 0 }   // low-charge
   ],

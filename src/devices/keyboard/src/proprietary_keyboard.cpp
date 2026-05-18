@@ -230,14 +230,14 @@ std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless) {
 
 std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
     return {
-        static_cast<std::uint8_t>(chunkIdx & 0xffu),                        // byte 1: low 8 bits
-        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)),      // byte 2: 0x80 | high 7 bits
-        static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),                 // byte 3: middle 8 bits
+        static_cast<std::uint8_t>(chunkIdx & 0xffu),                   // byte 1: low 8 bits
+        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)), // byte 2: 0x80 | high 7 bits
+        static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),            // byte 3: middle 8 bits
     };
 }
 
-std::array<std::uint8_t, ReportSize>
-buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks) {
+std::array<std::uint8_t, ReportSize> buildScreenBulkBegin(std::uint8_t lcdSelect,
+                                                          std::uint16_t total4kChunks) {
     auto pkt = makeReport(CmdScreenBulkBegin);
     pkt[2] = 0x00;
     pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u); // LCD-select index + 1
@@ -581,8 +581,8 @@ public:
             }
             return std::min<std::uint8_t>(pct, 100); // clamp out-of-range readings
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("keyboard.ak980", "batteryPercent: HID feature I/O failed: {}",
-                           e.what());
+            AJAZZ_LOG_WARN(
+                "keyboard.ak980", "batteryPercent: HID feature I/O failed: {}", e.what());
             return std::nullopt;
         }
     }
@@ -616,8 +616,7 @@ public:
     // Vendor app sends LOCAL time (KyleBoyer + gohv both pass through local
     // Date components without UTC normalisation), so we convert from
     // std::chrono::system_clock::time_point via localtime_s/localtime_r.
-    [[nodiscard]] TimeSyncResult
-    setTime(std::chrono::system_clock::time_point tp) override {
+    [[nodiscard]] TimeSyncResult setTime(std::chrono::system_clock::time_point tp) override {
         auto const tt = std::chrono::system_clock::to_time_t(tp);
         std::tm local{};
 #ifdef _WIN32
@@ -656,7 +655,12 @@ public:
 
         AJAZZ_LOG_INFO("keyboard.ak980",
                        "setTime → device clock set to {:04}-{:02}-{:02} {:02}:{:02}:{:02} (local)",
-                       year, month, day, hour, minute, second);
+                       year,
+                       month,
+                       day,
+                       hour,
+                       minute,
+                       second);
         return TimeSyncResult::Ok;
     }
 

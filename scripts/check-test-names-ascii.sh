@@ -21,7 +21,7 @@ for path in "$@"; do
     # this when invoked as a hook, but keep a defensive guard for direct
     # CLI use. Bash regex match (=~) handles the recursive pattern that
     # POSIX `case` globs cannot express portably.
-    [[ "$path" =~ ^tests/.*\.cpp$ ]] || continue
+    [[ $path =~ ^tests/.*\.cpp$ ]] || continue
     [ -f "$path" ] || continue
     # awk: emit one line per offending TEST_CASE/SECTION row with file:line:context.
     # Match only the actual Catch2 invocations (TEST_CASE( or SECTION() at the

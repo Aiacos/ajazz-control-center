@@ -278,8 +278,7 @@ TEST_CASE("akp03 parser drops unknown action codes", "[akp03][protocol]") {
 // Vendor-RE-discovered opcodes (akp05_vendor.md §3, shared AKP-family wire).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("akp03 version request uses CRT prefix + VER command",
-          "[akp03][protocol][vendor-re]") {
+TEST_CASE("akp03 version request uses CRT prefix + VER command", "[akp03][protocol][vendor-re]") {
     auto const pkt = buildVersionRequest();
     REQUIRE(pkt.size() == PacketSize);
     REQUIRE(pkt[0] == 0x43); // C
@@ -293,8 +292,7 @@ TEST_CASE("akp03 version request uses CRT prefix + VER command",
     }
 }
 
-TEST_CASE("akp03 upload-finished encodes ULEND at 5..9",
-          "[akp03][protocol][vendor-re]") {
+TEST_CASE("akp03 upload-finished encodes ULEND at 5..9", "[akp03][protocol][vendor-re]") {
     auto const pkt = buildUploadFinished();
     REQUIRE(pkt.size() == PacketSize);
     REQUIRE(pkt[0] == 0x43); // C

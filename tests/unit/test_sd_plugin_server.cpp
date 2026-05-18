@@ -131,8 +131,8 @@ TEST_CASE("SdPluginServer registerPlugin handshake emits pluginRegistered",
     REQUIRE(waitForSpy(clientConnectedSpy));
 
     constexpr char const* kPluginUuid = "com.test.myplugin.action1";
-    QString const registerMsg = QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})")
-                                    .arg(QLatin1String(kPluginUuid));
+    QString const registerMsg =
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})").arg(QLatin1String(kPluginUuid));
     client.sendTextMessage(registerMsg);
     REQUIRE(waitForSpy(registeredSpy));
 
@@ -153,8 +153,7 @@ TEST_CASE("SdPluginServer action message emits actionReceived with parsed JSON",
     QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
     REQUIRE(waitForSpy(clientConnectedSpy));
-    client.sendTextMessage(
-        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
     REQUIRE(waitForSpy(registeredSpy));
     // setTitle is one of the 13 standard Elgato actions.
     client.sendTextMessage(
@@ -181,14 +180,12 @@ TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
     QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
     client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
     REQUIRE(waitForSpy(clientConnectedSpy));
-    client.sendTextMessage(
-        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
     REQUIRE(waitForSpy(registeredSpy));
     // setBG is an AJAZZ-only extension - MVP doesn't implement it, but the
     // server must surface it via the unhandled signal so the app layer can
     // log / extend without losing the event.
-    client.sendTextMessage(
-        QStringLiteral(R"({"event":"setBG","payload":{"color":"#FF0000"}})"));
+    client.sendTextMessage(QStringLiteral(R"({"event":"setBG","payload":{"color":"#FF0000"}})"));
     REQUIRE(waitForSpy(unhandledSpy));
 
     REQUIRE(unhandledSpy.count() == 1);

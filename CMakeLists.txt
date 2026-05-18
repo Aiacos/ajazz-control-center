@@ -61,12 +61,11 @@ find_package(
                Svg
     REQUIRED
 )
-# P3.16 — Qt6::WebSockets is OPTIONAL. When present, SdPluginServer
-# (Elgato Stream Deck v6-compatible WebSocket plugin host) is built into
-# the app + tests. When absent (common on minimal Qt installs that ship
-# only the default modules), the build still succeeds and plugin host
-# functionality is disabled at runtime — mirrors the AJAZZ_BUILD_PROPERTY_INSPECTOR
-# fallback pattern in src/app/CMakeLists.txt.
+# P3.16 — Qt6::WebSockets is OPTIONAL. When present, SdPluginServer (Elgato Stream Deck
+# v6-compatible WebSocket plugin host) is built into the app + tests. When absent (common on minimal
+# Qt installs that ship only the default modules), the build still succeeds and plugin host
+# functionality is disabled at runtime — mirrors the AJAZZ_BUILD_PROPERTY_INSPECTOR fallback pattern
+# in src/app/CMakeLists.txt.
 find_package(Qt6 QUIET COMPONENTS WebSockets)
 if(Qt6WebSockets_FOUND)
     set(AJAZZ_HAVE_WEBSOCKETS TRUE)
@@ -74,7 +73,8 @@ if(Qt6WebSockets_FOUND)
 else()
     set(AJAZZ_HAVE_WEBSOCKETS FALSE)
     message(STATUS "Qt6::WebSockets NOT found — SdPluginServer disabled "
-                   "(install qt.qt6.<ver>.qtwebsockets via MaintenanceTool to enable)")
+                   "(install qt.qt6.<ver>.qtwebsockets via MaintenanceTool to enable)"
+    )
 endif()
 qt_standard_project_setup(REQUIRES 6.7)
 

@@ -28,14 +28,11 @@ constexpr char const* kServerName = "Stream Dock";
 } // namespace
 
 SdPluginServer::SdPluginServer(QObject* parent)
-    : QObject(parent)
-    , m_server(std::make_unique<QWebSocketServer>(kServerName,
-                                                   QWebSocketServer::NonSecureMode,
-                                                   this)) {
-    connect(m_server.get(),
-            &QWebSocketServer::newConnection,
-            this,
-            &SdPluginServer::onNewConnection);
+    : QObject(parent),
+      m_server(
+          std::make_unique<QWebSocketServer>(kServerName, QWebSocketServer::NonSecureMode, this)) {
+    connect(
+        m_server.get(), &QWebSocketServer::newConnection, this, &SdPluginServer::onNewConnection);
 }
 
 SdPluginServer::~SdPluginServer() {
@@ -47,8 +44,8 @@ SdPluginServer::~SdPluginServer() {
 
 bool SdPluginServer::start(std::uint16_t port) {
     if (isListening()) {
-        AJAZZ_LOG_WARN("plugin-server", "start() called while already listening on port {}",
-                       serverPort());
+        AJAZZ_LOG_WARN(
+            "plugin-server", "start() called while already listening on port {}", serverPort());
         return true;
     }
     // SECURITY-CRITICAL invariant: loopback-only binding. Vendor uses
@@ -114,9 +111,10 @@ QHostAddress SdPluginServer::bindAddress() const noexcept {
 }
 
 int SdPluginServer::connectedPluginCount() const noexcept {
-    return static_cast<int>(std::count_if(
-        m_connections.begin(), m_connections.end(),
-        [](auto const& c) { return c.socket != nullptr && !c.uuid.isEmpty(); }));
+    return static_cast<int>(
+        std::count_if(m_connections.begin(), m_connections.end(), [](auto const& c) {
+            return c.socket != nullptr && !c.uuid.isEmpty();
+        }));
 }
 
 void SdPluginServer::onNewConnection() {
@@ -128,14 +126,9 @@ void SdPluginServer::onNewConnection() {
         // Parent the socket to the server so it shares lifetime; we drop our
         // reference cleanly via deleteLater() at disconnect time.
         client->setParent(this);
-        connect(client,
-                &QWebSocket::textMessageReceived,
-                this,
-                &SdPluginServer::onClientTextMessage);
-        connect(client,
-                &QWebSocket::disconnected,
-                this,
-                &SdPluginServer::onClientDisconnected);
+        connect(
+            client, &QWebSocket::textMessageReceived, this, &SdPluginServer::onClientTextMessage);
+        connect(client, &QWebSocket::disconnected, this, &SdPluginServer::onClientDisconnected);
         // Empty UUID until the first registerPlugin message arrives.
         m_connections.push_back({QString{}, client});
         AJAZZ_LOG_INFO("plugin-server",
@@ -150,8 +143,9 @@ void SdPluginServer::onClientDisconnected() {
         return;
     }
     QString const uuid = uuidForClient(client);
-    auto it = std::find_if(m_connections.begin(), m_connections.end(),
-                            [client](auto const& c) { return c.socket == client; });
+    auto it = std::find_if(m_connections.begin(), m_connections.end(), [client](auto const& c) {
+        return c.socket == client;
+    });
     if (it != m_connections.end()) {
         it->socket = nullptr;
     }
@@ -195,13 +189,16 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
             return;
         }
         // Bind this WebSocket to the supplied plugin UUID.
-        auto it = std::find_if(m_connections.begin(), m_connections.end(),
-                                [client](auto const& c) { return c.socket == client; });
+        auto it = std::find_if(m_connections.begin(), m_connections.end(), [client](auto const& c) {
+            return c.socket == client;
+        });
         if (it != m_connections.end()) {
             it->uuid = uuid;
         }
-        AJAZZ_LOG_INFO("plugin-server", "plugin registered: uuid={} event={}",
-                       uuid.toStdString(), eventName.toStdString());
+        AJAZZ_LOG_INFO("plugin-server",
+                       "plugin registered: uuid={} event={}",
+                       uuid.toStdString(),
+                       eventName.toStdString());
         emit pluginRegistered(uuid);
         return;
     }
@@ -210,11 +207,19 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
     // akp_plugin_sdk.md §4) the app layer wires emit-target lookups based on
     // the action's "context" field. MVP just surfaces the JSON for the app
     // layer; full dispatch tables land in follow-up commits.
-    static constexpr std::array<char const*, 13> kStandardActions = {
-        "setTitle",        "setImage",      "showAlert",       "showOk",
-        "getSettings",     "setSettings",   "getGlobalSettings",
-        "setGlobalSettings", "switchToProfile", "openUrl",
-        "logMessage",      "registerPlugin", "registerPropertyInspector"};
+    static constexpr std::array<char const*, 13> kStandardActions = {"setTitle",
+                                                                     "setImage",
+                                                                     "showAlert",
+                                                                     "showOk",
+                                                                     "getSettings",
+                                                                     "setSettings",
+                                                                     "getGlobalSettings",
+                                                                     "setGlobalSettings",
+                                                                     "switchToProfile",
+                                                                     "openUrl",
+                                                                     "logMessage",
+                                                                     "registerPlugin",
+                                                                     "registerPropertyInspector"};
     bool isAction = false;
     for (auto const* known : kStandardActions) {
         if (eventName == QLatin1String(known)) {
@@ -238,8 +243,9 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
 }
 
 QString SdPluginServer::uuidForClient(QWebSocket* client) const {
-    auto it = std::find_if(m_connections.begin(), m_connections.end(),
-                            [client](auto const& c) { return c.socket == client; });
+    auto it = std::find_if(m_connections.begin(), m_connections.end(), [client](auto const& c) {
+        return c.socket == client;
+    });
     if (it == m_connections.end()) {
         return {};
     }

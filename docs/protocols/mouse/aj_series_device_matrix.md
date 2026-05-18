@@ -166,7 +166,7 @@ light.isRgb       : false        // AJ159 has NO per-key RGB (battery LED only)
 dpi.count         : 8
 dpi.max           : 42000
 dpi.min           : 50
-dpi.delt          : 50           // step size
+dpi.dealt          : 50           // step size
 reportRate        : [125, 250, 500, 1000, 2000, 4000, 8000]   // Hz (wired only)
                   : [125, 250, 500, 1000]                     // (Hi layout — wireless)
 layer             : 8            // onboard profile count

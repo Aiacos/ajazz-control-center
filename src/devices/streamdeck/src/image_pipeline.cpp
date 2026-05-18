@@ -93,11 +93,10 @@ void validateTarget(ImageTransform const& transform) {
 
 } // namespace
 
-std::vector<std::uint8_t>
-encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
-                std::uint16_t srcWidth,
-                std::uint16_t srcHeight,
-                ImageTransform const& transform) {
+std::vector<std::uint8_t> encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
+                                          std::uint16_t srcWidth,
+                                          std::uint16_t srcHeight,
+                                          ImageTransform const& transform) {
     validateTarget(transform);
     if (srcWidth == 0 || srcHeight == 0) {
         throw std::invalid_argument("image_pipeline: source dimensions must be non-zero");
@@ -133,11 +132,11 @@ encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
     return encodeImage(final, transform);
 }
 
-std::vector<std::uint8_t>
-encodeSolid(core::Rgb color, ImageTransform const& transform) {
+std::vector<std::uint8_t> encodeSolid(core::Rgb color, ImageTransform const& transform) {
     validateTarget(transform);
 
-    QImage img(transform.targetWidth, transform.targetHeight,
+    QImage img(transform.targetWidth,
+               transform.targetHeight,
                transform.format == ImageFormat::Jpeg ? QImage::Format_RGB888
                                                      : QImage::Format_RGBA8888);
     img.fill(qRgb(color.r, color.g, color.b));

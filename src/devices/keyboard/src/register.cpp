@@ -58,7 +58,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .model = "AJAZZ AK980 PRO",
             .codename = "ak980pro",
             .hasRgb = true,
-            .hasClock = true, // ARCH-05.1: real 4-packet 0x28 firmware RTC envelope.
+            .hasClock = true,   // ARCH-05.1: real 4-packet 0x28 firmware RTC envelope.
             .hasBattery = true, // Roadmap §11.2: opcode 0x20 sub 0x01 charge query.
         },
         &makeProprietaryKeyboard);

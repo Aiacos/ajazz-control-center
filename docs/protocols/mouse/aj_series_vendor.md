@@ -146,7 +146,7 @@ ______________________________________________________________________
 | ------ | ------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | `0x00` | `FEA_CMD_SET_REV`                     | host→dev feature                                     | none                                             | (vendor unused on mouse path)                                                                                          | gap                                                                               |
 | `0x80` | `FEA_CMD_GET_REV`                     | host→dev feature, response read via `readRawFeature` | none → uint16 LE @ byte 1 = firmware version     | "About" dialog, version banner                                                                                         | **gap** (we hardcode `"unknown"`)                                                 |
-| `0x8f` | `FEA_CMD_GET_INFOR`                   | feature                                              | none                                             | initial device probe                                                                                                   | gap                                                                               |
+| `0x8f` | `FEA_CMD_GET_INFO`                    | feature                                              | none                                             | initial device probe                                                                                                   | gap                                                                               |
 | `0x02` | `FEA_CMD_SET_RESERT`                  | feature                                              | empty                                            | **"Restore defaults"** button (line 921730)                                                                            | gap                                                                               |
 | `0x83` | `FEA_CMD_GET_BATTERY`                 | feature                                              | none                                             | (declared but **NOT** used on mouse path; mouse battery is pushed via `Device.battery` field in `watchDevList` stream) | partial — we use 0x40 instead, which doesn't match vendor                         |
 | `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`           | feature                                              | (unknown sub-fields)                             | wireless re-pair handshake                                                                                             | gap                                                                               |
@@ -365,7 +365,7 @@ the first 0x10000 bytes of the firmware image (boot header).
 | `0x14`       | `FEA_CMD_SET_USERPIC_SIMPLE`                                  | per-key picture (n/a for mouse)            |
 | `0x13`       | `FEA_CMD_SET_AUDIO`                                           | media-key audio settings (n/a here)        |
 | `0x0e`       | `FEA_CMD_SET_AUDIO` (alt class)                               |                                            |
-| `0x0f`       | `FEA_CMD_SET_WINDOS`                                          | Windows-specific quirks                    |
+| `0x0f`       | `FEA_CMD_SET_WINDOWS`                                         | Windows-specific quirks                    |
 | `0x11`       | `FEA_CMD_SET_DEBOUNCE` (keyboard)                             | mouse uses byte 10 of OPTIONPARAM0 instead |
 | `0x12`       | `FEA_CMD_SET_SLEEPTIME` (keyboard)                            | mouse uses bytes 40..47 of OPTIONPARAM0    |
 | `0x7a..0x7d` | `G_CMD_TEST_MODE / CHECK_STUTAS / GET_READY / SET_BOOTLOATER` | factory commands; do NOT expose            |
@@ -445,7 +445,7 @@ ______________________________________________________________________
 1. **TFT LCD** image / GIF upload (AJ159 has a tiny screen).
 1. **Factory reset** (`FEA_CMD_SET_RESERT = 0x02`).
 1. **Fn-layer key-matrix** (`0x51` / `0xd1`).
-1. **Audio / "WINDOS" platform-quirk flags** (n/a for our scope).
+1. **Audio / "WINDOWS" platform-quirk flags** (n/a for our scope).
 1. **Light effect catalogue** (10 effect types beyond just "static" and
    a single "effect" enum we expose).
 1. **Wireless re-pair / clear-BLE-info** (`0x01`, `0xe1`).
@@ -636,7 +636,7 @@ All paths relative to
 | `mledUpgrade` (firmware OTA flow)                                 | …:817368–~817500                                                                              |
 | TFT LCD upload (0x25 / 0x29)                                      | …:817181                                                                                      |
 | `writeFeatureCmd` (transport wrapper)                             | …:726774–726816                                                                               |
-| `commomFeature` (write+read helper)                               | …:726843–726874                                                                               |
+| `commonFeature` (write+read helper)                               | …:726843–726874                                                                               |
 | `writeRawFeatureCmd`                                              | …:726899–726929                                                                               |
 | `readRawFeatureCmd`                                               | …:726930+                                                                                     |
 | gRPC client construction (host = `http://127.0.0.1:3814`)         | …:56600                                                                                       |

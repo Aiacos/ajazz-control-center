@@ -85,7 +85,7 @@ via `CLE`; flush via `STP`.
 | `KB8IN1` / `KB8IN1-1` / `KB8IN1_1`                            | ?               | "Keyboard 8-in-1"                 | Multi-function keyboard                                             |
 | `IYUT_D15` / `Womier_D15`                                     | ?               | Womier D15 (keyboard rebadge)     |                                                                     |
 | `KB-1` / `KB-2`                                               | ?               | KB-1 / KB-2                       |                                                                     |
-| `K-992` / `K992` / `MKE992`                                   | ?               | K-992 / MK992 keyboard            |                                                                     |
+| `K-992` / `K992` / `MAKE992`                                  | ?               | K-992 / MK992 keyboard            |                                                                     |
 | `DK01`                                                        | ?               | DK01                              |                                                                     |
 | `DR21`                                                        | ?               | DR21                              |                                                                     |
 | `SMP_V1_2_4`                                                  | ?               | SMP V1.2.4                        |                                                                     |

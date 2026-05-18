@@ -37,14 +37,22 @@ std::uint8_t pollRateToWireCode(std::uint16_t hz) noexcept {
     // High bit set in the wire code distinguishes 2/4/8 KHz from lower rates
     // (firmware uses bit 7 as "high-rate enable").
     switch (hz) {
-    case 125:  return 0x08;
-    case 250:  return 0x04;
-    case 500:  return 0x02;
-    case 1000: return 0x01;
-    case 2000: return 0x84;
-    case 4000: return 0x82;
-    case 8000: return 0x81;
-    default:   return 0x01; // unknown → fall back to 1 KHz (sane default)
+    case 125:
+        return 0x08;
+    case 250:
+        return 0x04;
+    case 500:
+        return 0x02;
+    case 1000:
+        return 0x01;
+    case 2000:
+        return 0x84;
+    case 4000:
+        return 0x82;
+    case 8000:
+        return 0x81;
+    default:
+        return 0x01; // unknown → fall back to 1 KHz (sane default)
     }
 }
 
@@ -75,8 +83,7 @@ std::array<std::uint8_t, kReportSize> buildSetProfile(std::uint8_t profile) {
     return pkt;
 }
 
-std::array<std::uint8_t, kReportSize>
-buildSetReportRate(std::uint8_t profile, std::uint16_t hz) {
+std::array<std::uint8_t, kReportSize> buildSetReportRate(std::uint8_t profile, std::uint16_t hz) {
     auto pkt = startReport(FeaCmd::SetReport);
     pkt[2] = std::min<std::uint8_t>(profile, 7);
     pkt[3] = pollRateToWireCode(hz);
@@ -84,21 +91,20 @@ buildSetReportRate(std::uint8_t profile, std::uint16_t hz) {
     return pkt;
 }
 
-std::array<std::uint8_t, kReportSize>
-buildSetLedParam(std::uint8_t effect,
-                 std::uint8_t speed,
-                 std::uint8_t value,
-                 std::uint8_t modeBits,
-                 std::uint8_t r,
-                 std::uint8_t g,
-                 std::uint8_t b) {
+std::array<std::uint8_t, kReportSize> buildSetLedParam(std::uint8_t effect,
+                                                       std::uint8_t speed,
+                                                       std::uint8_t value,
+                                                       std::uint8_t modeBits,
+                                                       std::uint8_t r,
+                                                       std::uint8_t g,
+                                                       std::uint8_t b) {
     auto pkt = startReport(FeaCmd::SetLedParam);
     constexpr std::uint8_t kMaxUiSpeed = 4;
     auto const uiSpeed = std::min<std::uint8_t>(speed, kMaxUiSpeed);
-    pkt[2] = effect;                             // byte 1 in vendor numbering
+    pkt[2] = effect;                                           // byte 1 in vendor numbering
     pkt[3] = static_cast<std::uint8_t>(kMaxUiSpeed - uiSpeed); // byte 2: 4-speed
-    pkt[4] = value;                              // byte 3: brightness or option
-    pkt[5] = modeBits;                           // byte 4: option-nibble | mode-bits
+    pkt[4] = value;                                            // byte 3: brightness or option
+    pkt[5] = modeBits;                                         // byte 4: option-nibble | mode-bits
     // LED-off sentinel: renderer rewrites pure white 0xFFFFFF to 0xFAFAFA on
     // the wire (`aj_series_opcode_table.md` §3.5). Replicate here so the
     // firmware does not interpret 0xFF/0xFF/0xFF as "lights off".
@@ -111,9 +117,7 @@ buildSetLedParam(std::uint8_t effect,
 }
 
 std::array<std::uint8_t, kReportSize>
-buildMouseSetKeyMatrix(std::uint8_t profile,
-                       std::uint8_t button,
-                       std::uint32_t actionBE) {
+buildMouseSetKeyMatrix(std::uint8_t profile, std::uint8_t button, std::uint32_t actionBE) {
     auto pkt = startReport(FeaCmd::MouseSetKeyMatrix);
     pkt[2] = std::min<std::uint8_t>(profile, 7);
     pkt[3] = button;
@@ -128,9 +132,7 @@ buildMouseSetKeyMatrix(std::uint8_t profile,
 }
 
 std::array<std::uint8_t, kReportSize>
-buildMouseSetFnMatrix(std::uint8_t fnLayer,
-                      std::uint8_t button,
-                      std::uint32_t actionBE) {
+buildMouseSetFnMatrix(std::uint8_t fnLayer, std::uint8_t button, std::uint32_t actionBE) {
     auto pkt = startReport(FeaCmd::MouseSetFnMatrix);
     pkt[2] = fnLayer;
     pkt[3] = button;
@@ -160,47 +162,49 @@ buildMouseSetOption1(std::uint8_t activeIdx,
     // the limitation to users (8th-stage colour swatch greyed out).
     for (std::size_t i = 0; i < 8 && i < colours.size(); ++i) {
         std::size_t const base = 41 + i * 3;
-        if (base < kReportSize)     pkt[base + 0] = colours[i][0];
-        if (base + 1 < kReportSize) pkt[base + 1] = colours[i][1];
+        if (base < kReportSize)
+            pkt[base + 0] = colours[i][0];
+        if (base + 1 < kReportSize)
+            pkt[base + 1] = colours[i][1];
         // base+2 may reach pkt[64] which is the checksum slot — write it,
         // accept that stampBit7Checksum() will overwrite for stage 7.
-        if (base + 2 < kReportSize) pkt[base + 2] = colours[i][2];
+        if (base + 2 < kReportSize)
+            pkt[base + 2] = colours[i][2];
     }
     stampBit7Checksum(pkt);
     return pkt;
 }
 
-std::array<std::uint8_t, kReportSize>
-buildMouseSetOption0(OptionPacket0 const& opts) {
+std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& opts) {
     auto pkt = startReport(FeaCmd::MouseSetOption0);
     // bytes 2..8 stay zero (vendor "bytes 1..7")
-    pkt[9] = std::min<std::uint8_t>(opts.profile, 7);          // vendor byte 8
-    pkt[10] = pollRateToWireCode(opts.pollRateHz);             // vendor byte 9
-    pkt[11] = opts.debounceMs;                                  // vendor byte 10
+    pkt[9] = std::min<std::uint8_t>(opts.profile, 7); // vendor byte 8
+    pkt[10] = pollRateToWireCode(opts.pollRateHz);    // vendor byte 9
+    pkt[11] = opts.debounceMs;                        // vendor byte 10
     // pkt[12] zero
-    writeUInt16LE(pkt, 13, opts.flags);                         // vendor bytes 12..13
-    pkt[15] = opts.buttonChange;                                // vendor byte 14
-    pkt[16] = opts.wheelToButton;                               // vendor byte 15
-    pkt[17] = opts.buttonToWheel;                               // vendor byte 16
+    writeUInt16LE(pkt, 13, opts.flags); // vendor bytes 12..13
+    pkt[15] = opts.buttonChange;        // vendor byte 14
+    pkt[16] = opts.wheelToButton;       // vendor byte 15
+    pkt[17] = opts.buttonToWheel;       // vendor byte 16
     // pkt[18..24] zero (vendor bytes 17..23)
-    std::memcpy(&pkt[25], opts.ledBlock.data(), 8);             // vendor bytes 24..31
-    std::memcpy(&pkt[33], opts.logoLedBlock.data(), 8);         // vendor bytes 32..39
-    writeUInt16LE(pkt, 41, opts.sleepBtIdleSec);                // vendor bytes 40..41
-    writeUInt16LE(pkt, 43, opts.sleepBtDeepSec);                // vendor bytes 42..43
-    writeUInt16LE(pkt, 45, opts.sleep24gIdleSec);               // vendor bytes 44..45
-    writeUInt16LE(pkt, 47, opts.sleep24gDeepSec);               // vendor bytes 46..47
+    std::memcpy(&pkt[25], opts.ledBlock.data(), 8);     // vendor bytes 24..31
+    std::memcpy(&pkt[33], opts.logoLedBlock.data(), 8); // vendor bytes 32..39
+    writeUInt16LE(pkt, 41, opts.sleepBtIdleSec);        // vendor bytes 40..41
+    writeUInt16LE(pkt, 43, opts.sleepBtDeepSec);        // vendor bytes 42..43
+    writeUInt16LE(pkt, 45, opts.sleep24gIdleSec);       // vendor bytes 44..45
+    writeUInt16LE(pkt, 47, opts.sleep24gDeepSec);       // vendor bytes 46..47
     // pkt[49..50] zero (vendor bytes 48..49)
-    pkt[51] = std::min<std::uint8_t>(opts.xSensitivity, 100);   // vendor byte 50
-    pkt[52] = std::min<std::uint8_t>(opts.ySensitivity, 100);   // vendor byte 51
-    pkt[53] = std::min<std::uint8_t>(opts.liftCutOff, 2);       // vendor byte 52
-    pkt[54] = opts.angleSnap ? 1 : 0;                           // vendor byte 53
-    pkt[55] = opts.batteryColorHigh[0];                         // vendor byte 54
-    pkt[56] = opts.batteryColorHigh[1];                         // vendor byte 55
-    pkt[57] = opts.batteryColorHigh[2];                         // vendor byte 56
-    pkt[58] = opts.batteryColorLow[0];                          // vendor byte 57
-    pkt[59] = opts.batteryColorLow[1];                          // vendor byte 58
-    pkt[60] = opts.batteryColorLow[2];                          // vendor byte 59
-    pkt[61] = opts.chargingSwitch ? 1 : 0;                      // vendor byte 60
+    pkt[51] = std::min<std::uint8_t>(opts.xSensitivity, 100); // vendor byte 50
+    pkt[52] = std::min<std::uint8_t>(opts.ySensitivity, 100); // vendor byte 51
+    pkt[53] = std::min<std::uint8_t>(opts.liftCutOff, 2);     // vendor byte 52
+    pkt[54] = opts.angleSnap ? 1 : 0;                         // vendor byte 53
+    pkt[55] = opts.batteryColorHigh[0];                       // vendor byte 54
+    pkt[56] = opts.batteryColorHigh[1];                       // vendor byte 55
+    pkt[57] = opts.batteryColorHigh[2];                       // vendor byte 56
+    pkt[58] = opts.batteryColorLow[0];                        // vendor byte 57
+    pkt[59] = opts.batteryColorLow[1];                        // vendor byte 58
+    pkt[60] = opts.batteryColorLow[2];                        // vendor byte 59
+    pkt[61] = opts.chargingSwitch ? 1 : 0;                    // vendor byte 60
     // pkt[62] zero (vendor byte 61)
     stampBit7Checksum(pkt);
     return pkt;

@@ -79,18 +79,18 @@ inline constexpr std::uint8_t TimeDataReportId =
 // map wrong (claimed fn/sleep/delay at 5/6/7); deep RE corrected to the
 // layout below. Constants only here — wiring deferred to a follow-up.
 // ---------------------------------------------------------------------------
-inline constexpr std::uint8_t CmdSettingsBatch = 0x07;   ///< Settings batch opcode.
-inline constexpr std::uint8_t SettingsBatchSub = 0x10;   ///< Sub-cmd for save-batch.
-inline constexpr std::uint8_t SettingsBatchTrailerHi = 0xaa; ///< Trailer high (byte 18).
-inline constexpr std::uint8_t SettingsBatchTrailerLo = 0x55; ///< Trailer low  (byte 19).
-inline constexpr std::size_t kSettingsByteDisableWinKey = 6;     ///< Bool: disable Windows key.
-inline constexpr std::size_t kSettingsByteDisableAltF4 = 7;      ///< Bool: disable Alt+F4.
-inline constexpr std::size_t kSettingsByteDisableAltTab = 8;     ///< Bool: disable Alt+Tab.
-inline constexpr std::size_t kSettingsByteFnSwitch = 9;          ///< Fn-layer switch.
-inline constexpr std::size_t kSettingsByteSleepTime = 10;        ///< Sleep timer (enum).
-inline constexpr std::size_t kSettingsByteKeyResponseTime = 12;  ///< Key response level (1..5).
-inline constexpr std::size_t kSettingsByteTrailerHi = 18;        ///< Trailer high offset.
-inline constexpr std::size_t kSettingsByteTrailerLo = 19;        ///< Trailer low offset.
+inline constexpr std::uint8_t CmdSettingsBatch = 0x07;          ///< Settings batch opcode.
+inline constexpr std::uint8_t SettingsBatchSub = 0x10;          ///< Sub-cmd for save-batch.
+inline constexpr std::uint8_t SettingsBatchTrailerHi = 0xaa;    ///< Trailer high (byte 18).
+inline constexpr std::uint8_t SettingsBatchTrailerLo = 0x55;    ///< Trailer low  (byte 19).
+inline constexpr std::size_t kSettingsByteDisableWinKey = 6;    ///< Bool: disable Windows key.
+inline constexpr std::size_t kSettingsByteDisableAltF4 = 7;     ///< Bool: disable Alt+F4.
+inline constexpr std::size_t kSettingsByteDisableAltTab = 8;    ///< Bool: disable Alt+Tab.
+inline constexpr std::size_t kSettingsByteFnSwitch = 9;         ///< Fn-layer switch.
+inline constexpr std::size_t kSettingsByteSleepTime = 10;       ///< Sleep timer (enum).
+inline constexpr std::size_t kSettingsByteKeyResponseTime = 12; ///< Key response level (1..5).
+inline constexpr std::size_t kSettingsByteTrailerHi = 18;       ///< Trailer high offset.
+inline constexpr std::size_t kSettingsByteTrailerLo = 19;       ///< Trailer low offset.
 
 // ---------------------------------------------------------------------------
 // TFT screen image-upload opcodes (240x135 RGB565 — AK980 PRO 1.14" TFT).
@@ -105,20 +105,21 @@ inline constexpr std::size_t kSettingsByteTrailerLo = 19;        ///< Trailer lo
 // 24-bit chunk index for (a) is split across bytes 1 / 3 / low-7-bits of
 // byte 2 with the 0x80 marker. RGB565 big-endian, row-major top-down.
 // ---------------------------------------------------------------------------
-inline constexpr std::uint8_t CmdScreenHeader = 0x7f;     ///< Chunked path begin.
-inline constexpr std::uint8_t CmdScreenSubBegin = 0x03;   ///< Sub-cmd for chunked begin.
-inline constexpr std::uint8_t CmdScreenChunkMarker = 0x80;///< OR-mask for chunk index byte.
-inline constexpr std::uint8_t CmdScreenBulkBegin = 0x72;  ///< 4 KiB bulk path begin (143× faster).
-inline constexpr std::uint8_t CmdScreenSave = 0x02; ///< Persist screen state (semantic alias for CmdSaveRtc).
+inline constexpr std::uint8_t CmdScreenHeader = 0x7f;      ///< Chunked path begin.
+inline constexpr std::uint8_t CmdScreenSubBegin = 0x03;    ///< Sub-cmd for chunked begin.
+inline constexpr std::uint8_t CmdScreenChunkMarker = 0x80; ///< OR-mask for chunk index byte.
+inline constexpr std::uint8_t CmdScreenBulkBegin = 0x72; ///< 4 KiB bulk path begin (143× faster).
+inline constexpr std::uint8_t CmdScreenSave =
+    0x02; ///< Persist screen state (semantic alias for CmdSaveRtc).
 
-inline constexpr std::uint16_t kTftWidth = 240;         ///< TFT panel width in pixels.
-inline constexpr std::uint16_t kTftHeight = 135;        ///< TFT panel height in pixels.
-inline constexpr std::size_t kTftFrameBytes = 240u * 135u * 2u;  ///< RGB565 frame size (64 800 B).
-inline constexpr std::size_t kTftChunkPayload = 28;     ///< Payload bytes per 64-byte chunked report.
-inline constexpr std::size_t kTftBulkChunkSize = 4096;  ///< Bulk-path chunk size (4 KiB).
-inline constexpr std::size_t kTftMaxFrames = 140;       ///< Max GIF frames the firmware accepts.
-inline constexpr std::size_t kTftGifHeader = 256;       ///< GIF89a header byte count.
-inline constexpr std::size_t kTftInterChunkMs = 2;      ///< Inter-chunk delay (ms).
+inline constexpr std::uint16_t kTftWidth = 240;                 ///< TFT panel width in pixels.
+inline constexpr std::uint16_t kTftHeight = 135;                ///< TFT panel height in pixels.
+inline constexpr std::size_t kTftFrameBytes = 240u * 135u * 2u; ///< RGB565 frame size (64 800 B).
+inline constexpr std::size_t kTftChunkPayload = 28; ///< Payload bytes per 64-byte chunked report.
+inline constexpr std::size_t kTftBulkChunkSize = 4096; ///< Bulk-path chunk size (4 KiB).
+inline constexpr std::size_t kTftMaxFrames = 140;      ///< Max GIF frames the firmware accepts.
+inline constexpr std::size_t kTftGifHeader = 256;      ///< GIF89a header byte count.
+inline constexpr std::size_t kTftInterChunkMs = 2;     ///< Inter-chunk delay (ms).
 
 // ---------------------------------------------------------------------------
 // Wireless macro upload (cmd 0x19 0x04 + cmd 0x15 0x04 — DIFFERENT transport
@@ -129,24 +130,38 @@ inline constexpr std::size_t kTftInterChunkMs = 2;      ///< Inter-chunk delay (
 // constant is documented for future investigation whether the LCD variant
 // drives a richer display-side clock animation.
 // ---------------------------------------------------------------------------
-inline constexpr std::uint8_t CmdSetRgbMode = 0x13;             ///< Firmware RGB lighting mode (opcode in 5-packet envelope; see ak980_lighting.hpp for the 20-mode enum).
-inline constexpr std::uint8_t CmdFinish = 0xf0;                 ///< End-of-envelope sentinel (vendor sends after every multi-packet commit; not yet emitted by us — see ak980pro_vendor.md §13.7).
+inline constexpr std::uint8_t CmdSetRgbMode =
+    0x13; ///< Firmware RGB lighting mode (opcode in 5-packet envelope; see ak980_lighting.hpp for
+          ///< the 20-mode enum).
+inline constexpr std::uint8_t CmdFinish =
+    0xf0; ///< End-of-envelope sentinel (vendor sends after every multi-packet commit; not yet
+          ///< emitted by us — see ak980pro_vendor.md §13.7).
 // Per-key RGB upload — opcode 0x20 multiplexed with battery query (sub 0x01)
 // via the sub-cmd byte. See ak980pro_perkey_rgb_protocol.md §§1-3 for the
 // full envelope (write header → RGB blob chunks → save). NOTE: wired path is
 // MONOCHROMATIC ONLY (1 byte per LED, firmware limitation per §3.1); only the
 // wireless path supports full per-key RGB color.
-inline constexpr std::uint8_t kCmdPerKeyRgbWrite = 0x20;        ///< Per-key RGB write opcode (same as CmdBatteryQuery; discriminated by sub).
-inline constexpr std::uint8_t kPerKeyRgbSub = 0x04;             ///< Sub-cmd for per-key RGB write.
-inline constexpr std::uint8_t kCmdPerKeyRgbReadback = 0xf5;     ///< Per-key RGB read-back opcode (cmd 0xF5).
-inline constexpr std::uint8_t kPerKeyReadbackWiredSub = 0x03;   ///< Read-back sub for wired path.
-inline constexpr std::uint8_t kPerKeyReadbackWirelessSub = 0x09;///< Read-back sub for 2.4 G wireless path.
-inline constexpr std::uint8_t kPerKeyModeWired = 0x03;          ///< Mode-byte value at packet offset 9 (wired).
-inline constexpr std::uint8_t kPerKeyModeWireless = 0x08;       ///< Mode-byte value at packet offset 9 (2.4 G wireless).
-inline constexpr std::size_t kPerKeyWiredBlobSize = 0xc0;       ///< 192 B — 1 byte/LED × 192 LEDs (MONOCHROME).
-inline constexpr std::size_t kPerKeyWirelessBlobSize = 0x200;   ///< 512 B — 4 byte/LED [reserved=0, R, G, B] × 128 LEDs.
-inline constexpr std::size_t kPerKeyWiredChunkCount = 3;        ///< 192 B / 64 B chunks = 3 chunks (wired).
-inline constexpr std::size_t kPerKeyWirelessChunkCount = 8;     ///< 512 B / 64 B chunks = 8 chunks (NOT 6 as prior doc — corrected by deep RE per ak980pro_perkey_rgb_protocol.md §2).
+inline constexpr std::uint8_t kCmdPerKeyRgbWrite =
+    0x20; ///< Per-key RGB write opcode (same as CmdBatteryQuery; discriminated by sub).
+inline constexpr std::uint8_t kPerKeyRgbSub = 0x04; ///< Sub-cmd for per-key RGB write.
+inline constexpr std::uint8_t kCmdPerKeyRgbReadback =
+    0xf5; ///< Per-key RGB read-back opcode (cmd 0xF5).
+inline constexpr std::uint8_t kPerKeyReadbackWiredSub = 0x03; ///< Read-back sub for wired path.
+inline constexpr std::uint8_t kPerKeyReadbackWirelessSub =
+    0x09; ///< Read-back sub for 2.4 G wireless path.
+inline constexpr std::uint8_t kPerKeyModeWired =
+    0x03; ///< Mode-byte value at packet offset 9 (wired).
+inline constexpr std::uint8_t kPerKeyModeWireless =
+    0x08; ///< Mode-byte value at packet offset 9 (2.4 G wireless).
+inline constexpr std::size_t kPerKeyWiredBlobSize =
+    0xc0; ///< 192 B — 1 byte/LED × 192 LEDs (MONOCHROME).
+inline constexpr std::size_t kPerKeyWirelessBlobSize =
+    0x200; ///< 512 B — 4 byte/LED [reserved=0, R, G, B] × 128 LEDs.
+inline constexpr std::size_t kPerKeyWiredChunkCount =
+    3; ///< 192 B / 64 B chunks = 3 chunks (wired).
+inline constexpr std::size_t kPerKeyWirelessChunkCount =
+    8; ///< 512 B / 64 B chunks = 8 chunks (NOT 6 as prior doc — corrected by deep RE per
+       ///< ak980pro_perkey_rgb_protocol.md §2).
 
 inline constexpr std::uint8_t CmdMacroBeginWireless = 0x19;     ///< Wireless macro upload begin.
 inline constexpr std::uint8_t MacroBeginWirelessSub = 0x04;     ///< Sub-cmd for wireless begin.
@@ -299,15 +314,14 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  *
  * @see ak980_lighting.hpp for the mode enum, ak980pro_vendor.md §3.4.1.
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize>
-buildSetRgbModeData(std::uint8_t modeId,
-                    std::uint8_t r,
-                    std::uint8_t g,
-                    std::uint8_t b,
-                    std::uint8_t rainbow,
-                    std::uint8_t brightness,
-                    std::uint8_t speed,
-                    std::uint8_t direction);
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetRgbModeData(std::uint8_t modeId,
+                                                                       std::uint8_t r,
+                                                                       std::uint8_t g,
+                                                                       std::uint8_t b,
+                                                                       std::uint8_t rainbow,
+                                                                       std::uint8_t brightness,
+                                                                       std::uint8_t speed,
+                                                                       std::uint8_t direction);
 
 /**
  * @brief Build the per-key RGB WRITE-HEADER packet (opcode 0x20 0x04).
@@ -445,14 +459,13 @@ buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks);
  * @param minute 0..59.
  * @param second 0..59.
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize>
-buildSetTimeData(std::uint16_t year,
-                 std::uint8_t month,
-                 std::uint8_t day,
-                 std::uint8_t hour,
-                 std::uint8_t minute,
-                 std::uint8_t second,
-                 std::uint8_t dayOfWeek = 0);
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
+                                                                    std::uint8_t month,
+                                                                    std::uint8_t day,
+                                                                    std::uint8_t hour,
+                                                                    std::uint8_t minute,
+                                                                    std::uint8_t second,
+                                                                    std::uint8_t dayOfWeek = 0);
 
 /**
  * @brief Build the time-sync save packet (ReportId=0x04, opcode 0x02).

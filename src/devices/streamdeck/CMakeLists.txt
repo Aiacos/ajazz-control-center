@@ -23,8 +23,8 @@ target_link_libraries(
     PRIVATE ajazz::warnings
             ajazz::sanitizers
             Qt6::Core
-            # Qt6::Gui carries QImage / QImageWriter / QBuffer used by image_pipeline.cpp.
-            # PRIVATE so consumers of ajazz::streamdeck don't inherit a Qt::Gui dependency
-            # they don't need (matches the PRIVATE discipline for Qt6::Core above).
+            # Qt6::Gui carries QImage / QImageWriter / QBuffer used by image_pipeline.cpp. PRIVATE
+            # so consumers of ajazz::streamdeck don't inherit a Qt::Gui dependency they don't need
+            # (matches the PRIVATE discipline for Qt6::Core above).
             Qt6::Gui
 )

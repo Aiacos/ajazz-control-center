@@ -88,8 +88,7 @@ TEST_CASE("parser rejects frames shorter than 16 bytes", "[akp153][protocol]") {
 // P3.7 propagates CRT VER + CRT ULEND from AKP03/AKP05 to AKP153 / AKP815.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("akp153 version request uses CRT prefix + VER command",
-          "[akp153][protocol][vendor-re]") {
+TEST_CASE("akp153 version request uses CRT prefix + VER command", "[akp153][protocol][vendor-re]") {
     auto const pkt = buildVersionRequest();
     REQUIRE(pkt.size() == PacketSize);
     REQUIRE(pkt[0] == 0x43); // C
@@ -103,8 +102,7 @@ TEST_CASE("akp153 version request uses CRT prefix + VER command",
     }
 }
 
-TEST_CASE("akp153 upload-finished encodes ULEND at 5..9",
-          "[akp153][protocol][vendor-re]") {
+TEST_CASE("akp153 upload-finished encodes ULEND at 5..9", "[akp153][protocol][vendor-re]") {
     auto const pkt = buildUploadFinished();
     REQUIRE(pkt.size() == PacketSize);
     REQUIRE(pkt[0] == 0x43); // C

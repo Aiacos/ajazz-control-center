@@ -10,21 +10,20 @@
  */
 #include "aj_series_protocol.hpp"
 
-#include <catch2/catch_test_macros.hpp>
-
 #include <algorithm>
 #include <array>
 #include <cstdint>
 #include <numeric>
 #include <span>
 
+#include <catch2/catch_test_macros.hpp>
+
 using namespace ajazz::mouse::aj_series;
 
 namespace {
 
 /// Independent BIT7 checksum verifier - sums payload range pkt[1..62] & 0x7F.
-[[nodiscard]] std::uint8_t expectedBit7Checksum(
-    std::array<std::uint8_t, kReportSize> const& pkt) {
+[[nodiscard]] std::uint8_t expectedBit7Checksum(std::array<std::uint8_t, kReportSize> const& pkt) {
     auto const sum = std::accumulate(pkt.begin() + 1, pkt.end() - 1, std::uint32_t{0});
     return static_cast<std::uint8_t>(sum & 0x7fu);
 }
@@ -59,10 +58,10 @@ TEST_CASE("AJ series checksum range is pkt[1..63] (63 bytes, opcode included)",
           "[mouse][aj_series][wire][checksum]") {
     std::array<std::uint8_t, kReportSize> a{};
     a[0] = kReportId;
-    a[1] = 0x42;        // opcode contributes to checksum
+    a[1] = 0x42; // opcode contributes to checksum
     std::array<std::uint8_t, kReportSize> b = a;
     a[1] = 0x42;
-    b[1] = 0x43;        // different opcode -> different checksum
+    b[1] = 0x43; // different opcode -> different checksum
     stampBit7Checksum(a);
     stampBit7Checksum(b);
     REQUIRE(a[kReportSize - 1] != b[kReportSize - 1]);
@@ -93,8 +92,8 @@ TEST_CASE("AJ series setReportRate 8000 Hz emits byte 3 = 0x81",
     auto const pkt = buildSetReportRate(/*profile=*/0, /*hz=*/8000);
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetReport)); // 0x04
-    REQUIRE(pkt[2] == 0);                                             // profile
-    REQUIRE(pkt[3] == 0x81);                                          // 8K wire code
+    REQUIRE(pkt[2] == 0);                                            // profile
+    REQUIRE(pkt[3] == 0x81);                                         // 8K wire code
     // Tail must be zero up to checksum.
     for (std::size_t i = 4; i < kReportSize - 1; ++i) {
         REQUIRE(pkt[i] == 0x00);
@@ -109,23 +108,35 @@ TEST_CASE("AJ series setReportRate 8000 Hz emits byte 3 = 0x81",
 TEST_CASE("AJ series setOption1 - DPI table at bytes 9..24 LE + colours at 41..63",
           "[mouse][aj_series][wire][dpi]") {
     std::array<std::uint16_t, 8> dpis{400, 800, 1600, 3200, 6400, 12800, 25600, 42000};
-    std::array<std::array<std::uint8_t, 3>, 8> colours{{
-        {0xff, 0, 0}, {0, 0xff, 0}, {0, 0, 0xff}, {0xff, 0xff, 0},
-        {0xff, 0, 0xff}, {0, 0xff, 0xff}, {0xff, 0xff, 0xff}, {0x80, 0x80, 0x80}
-    }};
+    std::array<std::array<std::uint8_t, 3>, 8> colours{{{0xff, 0, 0},
+                                                        {0, 0xff, 0},
+                                                        {0, 0, 0xff},
+                                                        {0xff, 0xff, 0},
+                                                        {0xff, 0, 0xff},
+                                                        {0, 0xff, 0xff},
+                                                        {0xff, 0xff, 0xff},
+                                                        {0x80, 0x80, 0x80}}};
     auto const pkt = buildMouseSetOption1(/*activeIdx=*/3, /*stageCount=*/8, dpis, colours);
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetOption1)); // 0x54
-    REQUIRE(pkt[2] == 3); // activeIdx
-    REQUIRE(pkt[3] == 8); // stageCount
+    REQUIRE(pkt[2] == 3);                                                  // activeIdx
+    REQUIRE(pkt[3] == 8);                                                  // stageCount
     // DPI uint16-LE values at pkt[9..24].
-    REQUIRE(pkt[9] == 0x90);  REQUIRE(pkt[10] == 0x01); // 400 = 0x0190
-    REQUIRE(pkt[11] == 0x20); REQUIRE(pkt[12] == 0x03); // 800 = 0x0320
-    REQUIRE(pkt[13] == 0x40); REQUIRE(pkt[14] == 0x06); // 1600 = 0x0640
-    REQUIRE(pkt[23] == 0x10); REQUIRE(pkt[24] == 0xa4); // 42000 = 0xA410
+    REQUIRE(pkt[9] == 0x90);
+    REQUIRE(pkt[10] == 0x01); // 400 = 0x0190
+    REQUIRE(pkt[11] == 0x20);
+    REQUIRE(pkt[12] == 0x03); // 800 = 0x0320
+    REQUIRE(pkt[13] == 0x40);
+    REQUIRE(pkt[14] == 0x06); // 1600 = 0x0640
+    REQUIRE(pkt[23] == 0x10);
+    REQUIRE(pkt[24] == 0xa4); // 42000 = 0xA410
     // Colour table at pkt[41..64] (8 × 3 bytes).
-    REQUIRE(pkt[41] == 0xff); REQUIRE(pkt[42] == 0x00); REQUIRE(pkt[43] == 0x00); // stage 0 red
-    REQUIRE(pkt[44] == 0x00); REQUIRE(pkt[45] == 0xff); REQUIRE(pkt[46] == 0x00); // stage 1 green
+    REQUIRE(pkt[41] == 0xff);
+    REQUIRE(pkt[42] == 0x00);
+    REQUIRE(pkt[43] == 0x00); // stage 0 red
+    REQUIRE(pkt[44] == 0x00);
+    REQUIRE(pkt[45] == 0xff);
+    REQUIRE(pkt[46] == 0x00); // stage 1 green
     // Stage 7 B at pkt[64] is OVERWRITTEN by checksum on the wire - vendor
     // limitation per §3.10 edge case. We do NOT pin the byte's input value;
     // UI must surface this constraint to users.
@@ -164,11 +175,14 @@ TEST_CASE("AJ series setKeyMatrix - action 4 bytes at pkt[9..12] not pkt[5..8]",
     auto const pkt = buildMouseSetKeyMatrix(/*profile=*/2, /*button=*/5, kAction);
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetKeyMatrix)); // 0x50
-    REQUIRE(pkt[2] == 2);  // profile
-    REQUIRE(pkt[3] == 5);  // button
+    REQUIRE(pkt[2] == 2);                                                    // profile
+    REQUIRE(pkt[3] == 5);                                                    // button
     // Bytes 4..8 must be zero (vendor "bytes 3..7" reserved).
-    REQUIRE(pkt[4] == 0); REQUIRE(pkt[5] == 0); REQUIRE(pkt[6] == 0);
-    REQUIRE(pkt[7] == 0); REQUIRE(pkt[8] == 0);
+    REQUIRE(pkt[4] == 0);
+    REQUIRE(pkt[5] == 0);
+    REQUIRE(pkt[6] == 0);
+    REQUIRE(pkt[7] == 0);
+    REQUIRE(pkt[8] == 0);
     // Action big-endian at pkt[9..12].
     REQUIRE(pkt[9] == 0xde);
     REQUIRE(pkt[10] == 0xad);
@@ -196,14 +210,21 @@ TEST_CASE("AJ series setLedParam - basic AlwaysOn red with speed encoding",
           "[mouse][aj_series][wire][led]") {
     // Effect=1 (AlwaysOn), UI speed=3 -> wire (4-3)=1, value=brightness=5,
     // modeBits=0x07 (NORMAL, no dazzle), RGB=red.
-    auto const pkt = buildSetLedParam(/*effect=*/1, /*speed=*/3, /*value=*/5,
-                                      /*modeBits=*/0x07, 0xff, 0x00, 0x00);
+    auto const pkt = buildSetLedParam(/*effect=*/1,
+                                      /*speed=*/3,
+                                      /*value=*/5,
+                                      /*modeBits=*/0x07,
+                                      0xff,
+                                      0x00,
+                                      0x00);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetLedParam)); // 0x07
-    REQUIRE(pkt[2] == 1);    // effect AlwaysOn
-    REQUIRE(pkt[3] == 1);    // 4 - UI speed (3) = 1
-    REQUIRE(pkt[4] == 5);    // brightness
-    REQUIRE(pkt[5] == 0x07); // mode bits NORMAL
-    REQUIRE(pkt[6] == 0xff); REQUIRE(pkt[7] == 0x00); REQUIRE(pkt[8] == 0x00);
+    REQUIRE(pkt[2] == 1);                                              // effect AlwaysOn
+    REQUIRE(pkt[3] == 1);                                              // 4 - UI speed (3) = 1
+    REQUIRE(pkt[4] == 5);                                              // brightness
+    REQUIRE(pkt[5] == 0x07);                                           // mode bits NORMAL
+    REQUIRE(pkt[6] == 0xff);
+    REQUIRE(pkt[7] == 0x00);
+    REQUIRE(pkt[8] == 0x00);
 }
 
 TEST_CASE("AJ series setLedParam - pure-white 0xFFFFFF rewrites to 0xFAFAFA on the wire",
@@ -220,8 +241,7 @@ TEST_CASE("AJ series setLedParam - pure-white 0xFFFFFF rewrites to 0xFAFAFA on t
 // §3.1 GetRev + §3.2 SetReset
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series getRev - opcode 0x80 only, no payload",
-          "[mouse][aj_series][wire][firmware]") {
+TEST_CASE("AJ series getRev - opcode 0x80 only, no payload", "[mouse][aj_series][wire][firmware]") {
     auto const pkt = buildGetRev();
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == 0x80);
@@ -240,8 +260,7 @@ TEST_CASE("AJ series setReset - opcode 0x02 only, no payload (factory reset)",
     REQUIRE(pkt[kReportSize - 1] == 0x02);
 }
 
-TEST_CASE("AJ series setProfile - clamps profile index to 7",
-          "[mouse][aj_series][wire][profile]") {
+TEST_CASE("AJ series setProfile - clamps profile index to 7", "[mouse][aj_series][wire][profile]") {
     auto const pkt = buildSetProfile(99);
     REQUIRE(pkt[1] == 0x05);
     REQUIRE(pkt[2] == 7); // clamped from 99 to 7
@@ -263,13 +282,13 @@ TEST_CASE("AJ series setOption0 - omnibus byte layout (profile, sensitivity, LOD
     opts.angleSnap = 1;
     auto const pkt = buildMouseSetOption0(opts);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetOption0)); // 0x53
-    REQUIRE(pkt[9] == 2);     // profile
-    REQUIRE(pkt[10] == 0x82); // 4 KHz wire code
-    REQUIRE(pkt[11] == 3);    // debounce ms
-    REQUIRE(pkt[51] == 75);   // X sensitivity (clamped to 100)
-    REQUIRE(pkt[52] == 100);  // Y sensitivity
-    REQUIRE(pkt[53] == 1);    // LOD = 2mm
-    REQUIRE(pkt[54] == 1);    // angle snap on
+    REQUIRE(pkt[9] == 2);                                                  // profile
+    REQUIRE(pkt[10] == 0x82);                                              // 4 KHz wire code
+    REQUIRE(pkt[11] == 3);                                                 // debounce ms
+    REQUIRE(pkt[51] == 75);  // X sensitivity (clamped to 100)
+    REQUIRE(pkt[52] == 100); // Y sensitivity
+    REQUIRE(pkt[53] == 1);   // LOD = 2mm
+    REQUIRE(pkt[54] == 1);   // angle snap on
 }
 
 TEST_CASE("AJ series setOption0 - clamps sensitivities to 100% and LOD to 2",
@@ -293,18 +312,21 @@ TEST_CASE("AJ series setOption0 - sleep timers as LE uint16 at vendor bytes 40..
     opts.sleep24gDeepSec = 0xdef0;
     auto const pkt = buildMouseSetOption0(opts);
     // Vendor "bytes 40..41" = our pkt[41..42].
-    REQUIRE(pkt[41] == 0x34); REQUIRE(pkt[42] == 0x12);
-    REQUIRE(pkt[43] == 0x78); REQUIRE(pkt[44] == 0x56);
-    REQUIRE(pkt[45] == 0xbc); REQUIRE(pkt[46] == 0x9a);
-    REQUIRE(pkt[47] == 0xf0); REQUIRE(pkt[48] == 0xde);
+    REQUIRE(pkt[41] == 0x34);
+    REQUIRE(pkt[42] == 0x12);
+    REQUIRE(pkt[43] == 0x78);
+    REQUIRE(pkt[44] == 0x56);
+    REQUIRE(pkt[45] == 0xbc);
+    REQUIRE(pkt[46] == 0x9a);
+    REQUIRE(pkt[47] == 0xf0);
+    REQUIRE(pkt[48] == 0xde);
 }
 
 // ---------------------------------------------------------------------------
 // Opcode-table invariants - pitfall guards
 // ---------------------------------------------------------------------------
 
-TEST_CASE("AJ series opcode table - values match vendor RE",
-          "[mouse][aj_series][wire][opcodes]") {
+TEST_CASE("AJ series opcode table - values match vendor RE", "[mouse][aj_series][wire][opcodes]") {
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetRev) == 0x80);
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetReset) == 0x02);
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetProfile) == 0x05);
@@ -323,11 +345,16 @@ TEST_CASE("AJ series no-standalone-battery-opcode regression guard",
     // mouse path. Battery is push-streamed from the dongle via gRPC; our prior
     // kCmdBattery=0x40 was nonexistent. The new FeaCmd enum MUST NOT contain
     // a 0x40 value - guard against future re-introduction.
-    for (auto const cmd : {FeaCmd::GetRev, FeaCmd::SetReset, FeaCmd::SetProfile,
-                            FeaCmd::SetReport, FeaCmd::SetLedParam,
-                            FeaCmd::MouseSetKeyMatrix, FeaCmd::MouseSetFnMatrix,
-                            FeaCmd::MouseSetOption0, FeaCmd::MouseSetOption1,
-                            FeaCmd::SetMacroSimple}) {
+    for (auto const cmd : {FeaCmd::GetRev,
+                           FeaCmd::SetReset,
+                           FeaCmd::SetProfile,
+                           FeaCmd::SetReport,
+                           FeaCmd::SetLedParam,
+                           FeaCmd::MouseSetKeyMatrix,
+                           FeaCmd::MouseSetFnMatrix,
+                           FeaCmd::MouseSetOption0,
+                           FeaCmd::MouseSetOption1,
+                           FeaCmd::SetMacroSimple}) {
         REQUIRE(static_cast<std::uint8_t>(cmd) != 0x40);
     }
 }

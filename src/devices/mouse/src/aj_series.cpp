@@ -59,11 +59,11 @@
  * @endcode
  */
 //
+#include "aj_series_protocol.hpp"
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/hid_transport.hpp"
 #include "ajazz/mouse/mouse.hpp"
-#include "aj_series_protocol.hpp"
 
 #include <algorithm>
 #include <array>
@@ -252,9 +252,8 @@ private:
         std::uint8_t stageCount = 0;
         for (std::size_t i = 0; i < 8 && i < m_dpiStages.size(); ++i) {
             dpis[i] = m_dpiStages[i].dpi;
-            colours[i] = {m_dpiStages[i].indicator.r,
-                           m_dpiStages[i].indicator.g,
-                           m_dpiStages[i].indicator.b};
+            colours[i] = {
+                m_dpiStages[i].indicator.r, m_dpiStages[i].indicator.g, m_dpiStages[i].indicator.b};
             if (m_dpiStages[i].dpi != 0) {
                 ++stageCount;
             }
@@ -266,31 +265,39 @@ private:
     /// Emit the cached LED packet via opcode 0x07.
     void emitLedPacket() {
         auto const pkt = buildSetLedParam(m_lastLed.effect,
-                                           m_lastLed.speed,
-                                           m_lastLed.brightness,
-                                           m_lastLed.modeBits,
-                                           m_lastLed.r,
-                                           m_lastLed.g,
-                                           m_lastLed.b);
+                                          m_lastLed.speed,
+                                          m_lastLed.brightness,
+                                          m_lastLed.modeBits,
+                                          m_lastLed.r,
+                                          m_lastLed.g,
+                                          m_lastLed.b);
         (void)m_transport->write(pkt);
     }
 
     /// Translate float mm → vendor's 3-step lift-cut-off enum (0=1mm, 1=2mm, 2=3mm).
     static std::uint8_t mmToLiftCutOffCode(float mm) noexcept {
-        if (mm < 1.5f) return 0;
-        if (mm < 2.5f) return 1;
+        if (mm < 1.5f)
+            return 0;
+        if (mm < 2.5f)
+            return 1;
         return 2;
     }
 
     /// Map our generic RgbEffect to vendor's 1..10 effect ID enum.
     static std::uint8_t mapEffectToVendor(RgbEffect effect) noexcept {
         switch (effect) {
-        case RgbEffect::Static:         return 1; // AlwaysOn
-        case RgbEffect::Breathing:      return 2; // Breath
-        case RgbEffect::Wave:           return 4; // Wave
-        case RgbEffect::ColorCycle:     return 3; // Neon (rainbow cycle)
-        case RgbEffect::ReactiveRipple: return 5; // Dazzle (closest equivalent)
-        case RgbEffect::Custom:         return 1; // fall back to AlwaysOn
+        case RgbEffect::Static:
+            return 1; // AlwaysOn
+        case RgbEffect::Breathing:
+            return 2; // Breath
+        case RgbEffect::Wave:
+            return 4; // Wave
+        case RgbEffect::ColorCycle:
+            return 3; // Neon (rainbow cycle)
+        case RgbEffect::ReactiveRipple:
+            return 5; // Dazzle (closest equivalent)
+        case RgbEffect::Custom:
+            return 1; // fall back to AlwaysOn
         }
         return 1;
     }
@@ -299,10 +306,10 @@ private:
     /// colour updates this struct, then `emitLedPacket()` writes the full 8-byte
     /// 0x07 packet to keep all fields in sync with vendor semantics.
     struct CachedLedState {
-        std::uint8_t effect{1};       // AlwaysOn
+        std::uint8_t effect{1}; // AlwaysOn
         std::uint8_t speed{0};
         std::uint8_t brightness{5};
-        std::uint8_t modeBits{0x07};  // NORMAL, no dazzle
+        std::uint8_t modeBits{0x07}; // NORMAL, no dazzle
         std::uint8_t r{0xff};
         std::uint8_t g{0xff};
         std::uint8_t b{0xff};

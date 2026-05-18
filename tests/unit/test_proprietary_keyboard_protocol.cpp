@@ -114,8 +114,7 @@ TEST_CASE("ak980 setTime start packet carries ReportId=0x04 + opcode 0x18 + mark
     }
 }
 
-TEST_CASE("ak980 setTime opcodes are mutually distinct",
-          "[proprietary][protocol][clock]") {
+TEST_CASE("ak980 setTime opcodes are mutually distinct", "[proprietary][protocol][clock]") {
     // Pitfall guard: future contributors must not coalesce the 4 opcodes into
     // shared constants. START / TIME / SAVE / EEPROM-commit all touch different
     // firmware state.
@@ -232,9 +231,9 @@ TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 
           "[proprietary][protocol][battery]") {
     auto const pkt = buildBatteryQuery();
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);         // 0x04
-    REQUIRE(pkt[1] == CmdBatteryQuery);  // 0x20
-    REQUIRE(pkt[2] == BatteryQuerySub);  // 0x01 - discriminates from per-key RGB (sub 0x04)
+    REQUIRE(pkt[0] == ReportId);        // 0x04
+    REQUIRE(pkt[1] == CmdBatteryQuery); // 0x20
+    REQUIRE(pkt[2] == BatteryQuerySub); // 0x01 - discriminates from per-key RGB (sub 0x04)
     // All other bytes must be zero.
     for (std::size_t i = 3; i < ReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
@@ -251,7 +250,9 @@ TEST_CASE("ak980 setRgbMode data packet byte layout - Static + tint + flags",
     // Mode 0x06 (Breath) with red tint, no rainbow, brightness 3, speed 4,
     // direction Up (2).
     auto const pkt = buildSetRgbModeData(/*modeId=*/0x06,
-                                         /*r=*/0xff, /*g=*/0x00, /*b=*/0x00,
+                                         /*r=*/0xff,
+                                         /*g=*/0x00,
+                                         /*b=*/0x00,
                                          /*rainbow=*/0,
                                          /*brightness=*/3,
                                          /*speed=*/4,
@@ -280,8 +281,7 @@ TEST_CASE("ak980 setRgbMode data packet byte layout - Static + tint + flags",
     }
 }
 
-TEST_CASE("ak980 setRgbMode rainbow flag normalises to 0/1",
-          "[proprietary][protocol][lighting]") {
+TEST_CASE("ak980 setRgbMode rainbow flag normalises to 0/1", "[proprietary][protocol][lighting]") {
     auto const pkt = buildSetRgbModeData(0x07, 0, 0, 0, /*rainbow=*/123, 5, 5, 0);
     REQUIRE(pkt[8] == 0x01); // any non-zero rainbow input normalises to 0x01
 }
@@ -291,9 +291,9 @@ TEST_CASE("ak980 setRgbMode clamps brightness / speed / direction",
     // brightness_max = 5, speed_max = 5, direction range 0..3.
     auto const clamped =
         buildSetRgbModeData(0x06, 0, 0, 0, 0, /*brightness=*/250, /*speed=*/99, /*direction=*/9);
-    REQUIRE(clamped[9] == 5);   // brightness clamp
-    REQUIRE(clamped[10] == 5);  // speed clamp
-    REQUIRE(clamped[11] == 3);  // direction clamp
+    REQUIRE(clamped[9] == 5);  // brightness clamp
+    REQUIRE(clamped[10] == 5); // speed clamp
+    REQUIRE(clamped[11] == 3); // direction clamp
 }
 
 TEST_CASE("ak980 lighting enum range covers all 20 firmware modes",
@@ -328,9 +328,9 @@ TEST_CASE("ak980 per-key RGB write header - wired mode byte at offset 9 is 0x03"
     auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/false);
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == ReportId);
-    REQUIRE(pkt[1] == kCmdPerKeyRgbWrite);  // 0x20
-    REQUIRE(pkt[2] == kPerKeyRgbSub);        // 0x04
-    REQUIRE(pkt[9] == kPerKeyModeWired);     // 0x03
+    REQUIRE(pkt[1] == kCmdPerKeyRgbWrite); // 0x20
+    REQUIRE(pkt[2] == kPerKeyRgbSub);      // 0x04
+    REQUIRE(pkt[9] == kPerKeyModeWired);   // 0x03
     // All other bytes must be zero.
     for (std::size_t i = 3; i < ReportSize; ++i) {
         if (i == 9) {
@@ -345,19 +345,19 @@ TEST_CASE("ak980 per-key RGB write header - wireless mode byte at offset 9 is 0x
     auto const pkt = buildPerKeyRgbWriteHeader(/*isWireless=*/true);
     REQUIRE(pkt[0] == ReportId);
     REQUIRE(pkt[1] == kCmdPerKeyRgbWrite);  // 0x20
-    REQUIRE(pkt[2] == kPerKeyRgbSub);        // 0x04
-    REQUIRE(pkt[9] == kPerKeyModeWireless);  // 0x08 (not 0x03)
+    REQUIRE(pkt[2] == kPerKeyRgbSub);       // 0x04
+    REQUIRE(pkt[9] == kPerKeyModeWireless); // 0x08 (not 0x03)
 }
 
 TEST_CASE("ak980 per-key RGB readback - wired uses sub 0x03, wireless sub 0x09",
           "[proprietary][protocol][perkey-rgb]") {
     auto const wired = buildPerKeyRgbReadback(/*isWireless=*/false);
     REQUIRE(wired[0] == ReportId);
-    REQUIRE(wired[1] == kCmdPerKeyRgbReadback); // 0xF5
+    REQUIRE(wired[1] == kCmdPerKeyRgbReadback);   // 0xF5
     REQUIRE(wired[2] == kPerKeyReadbackWiredSub); // 0x03
 
     auto const wireless = buildPerKeyRgbReadback(/*isWireless=*/true);
-    REQUIRE(wireless[1] == kCmdPerKeyRgbReadback); // 0xF5
+    REQUIRE(wireless[1] == kCmdPerKeyRgbReadback);      // 0xF5
     REQUIRE(wireless[2] == kPerKeyReadbackWirelessSub); // 0x09 (NOT 0x03)
 }
 
@@ -396,8 +396,7 @@ TEST_CASE("ak980 per-key RGB opcode 0x20 sub 0x04 != battery query opcode 0x20 s
 TEST_CASE("ak980 TFT chunk-index encoder - round-trip for canonical values",
           "[proprietary][protocol][tft]") {
     auto decode = [](std::array<std::uint8_t, 3> const& enc) -> std::uint32_t {
-        return static_cast<std::uint32_t>(enc[0]) |
-               (static_cast<std::uint32_t>(enc[2]) << 8) |
+        return static_cast<std::uint32_t>(enc[0]) | (static_cast<std::uint32_t>(enc[2]) << 8) |
                ((static_cast<std::uint32_t>(enc[1]) & 0x7fu) << 16);
     };
     // 0 - first chunk of first frame.
@@ -457,12 +456,12 @@ TEST_CASE("ak980 TFT bulk-begin packet - opcode 0x72 + LCD-select + total chunks
     // 240×135 RGB565 single frame = 64 800 B / 4 096 B = 16 chunks (rounded up).
     auto const pkt = buildScreenBulkBegin(/*lcdSelect=*/0, /*total4kChunks=*/16);
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);            // 0x04
-    REQUIRE(pkt[1] == CmdScreenBulkBegin);  // 0x72
+    REQUIRE(pkt[0] == ReportId);           // 0x04
+    REQUIRE(pkt[1] == CmdScreenBulkBegin); // 0x72
     REQUIRE(pkt[2] == 0x00);
-    REQUIRE(pkt[3] == 0x01);                // lcdSelect 0 -> wire 1
-    REQUIRE(pkt[4] == 0x10);                // total_4k_chunks low (16)
-    REQUIRE(pkt[5] == 0x00);                // total_4k_chunks high
+    REQUIRE(pkt[3] == 0x01); // lcdSelect 0 -> wire 1
+    REQUIRE(pkt[4] == 0x10); // total_4k_chunks low (16)
+    REQUIRE(pkt[5] == 0x00); // total_4k_chunks high
     // Trailing pad.
     for (std::size_t i = 6; i < ReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);

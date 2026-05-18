@@ -39,12 +39,12 @@ enum class ImageFormat : std::uint8_t {
  * AKP153 keys are 85×85 Rot90+mirror JPEG. AKP815 keys are 100×100 Rot180 JPEG.
  */
 struct ImageTransform {
-    std::uint16_t targetWidth{0};       ///< Output width in pixels.
-    std::uint16_t targetHeight{0};      ///< Output height in pixels.
+    std::uint16_t targetWidth{0};  ///< Output width in pixels.
+    std::uint16_t targetHeight{0}; ///< Output height in pixels.
     ImageFormat format{ImageFormat::Jpeg};
-    int rotationDegrees{0};             ///< 0 / 90 / 180 / 270; other values rounded to nearest.
-    bool mirror{false};                 ///< Horizontal mirror (applied AFTER rotation).
-    int jpegQuality{85};                ///< 1..100; ignored for PNG. 85 matches vendor defaults.
+    int rotationDegrees{0}; ///< 0 / 90 / 180 / 270; other values rounded to nearest.
+    bool mirror{false};     ///< Horizontal mirror (applied AFTER rotation).
+    int jpegQuality{85};    ///< 1..100; ignored for PNG. 85 matches vendor defaults.
 };
 
 /**
@@ -62,11 +62,10 @@ struct ImageTransform {
  * @throws std::invalid_argument on dimension mismatch or zero-area target.
  * @throws std::runtime_error on QImageWriter encode failure.
  */
-[[nodiscard]] std::vector<std::uint8_t>
-encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
-                std::uint16_t srcWidth,
-                std::uint16_t srcHeight,
-                ImageTransform const& transform);
+[[nodiscard]] std::vector<std::uint8_t> encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
+                                                        std::uint16_t srcWidth,
+                                                        std::uint16_t srcHeight,
+                                                        ImageTransform const& transform);
 
 /**
  * @brief Synthesise a solid-color encoded image at the target geometry.
@@ -82,7 +81,7 @@ encodeForDevice(std::span<std::uint8_t const> rgbaBytes,
  * @throws std::invalid_argument on zero-area target.
  * @throws std::runtime_error on QImageWriter encode failure.
  */
-[[nodiscard]] std::vector<std::uint8_t>
-encodeSolid(core::Rgb color, ImageTransform const& transform);
+[[nodiscard]] std::vector<std::uint8_t> encodeSolid(core::Rgb color,
+                                                    ImageTransform const& transform);
 
 } // namespace ajazz::streamdeck

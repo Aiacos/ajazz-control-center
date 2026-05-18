@@ -96,10 +96,19 @@ inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Cl
 // 5-byte "ULEND" commit-after-image-burst sentinel that the vendor sends
 // after every chunked image upload (we previously only emitted STP, which
 // per the vendor RE may explain occasional firmware desync on large bursts).
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
+                                                        0x45,
+                                                        0x52}; ///< Firmware version "VER".
 inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
-inline constexpr std::array<std::uint8_t, 3> CmdSecondaryScreen{0x44, 0x52, 0x41}; ///< Touch-strip rect-addressable image "DRA".
+    0x55,
+    0x4c,
+    0x45,
+    0x4e,
+    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+inline constexpr std::array<std::uint8_t, 3> CmdSecondaryScreen{
+    0x44,
+    0x52,
+    0x41}; ///< Touch-strip rect-addressable image "DRA".
 
 /**
  * @brief Build the zero-padded 512-byte base packet for any command word.

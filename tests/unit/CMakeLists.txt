@@ -203,13 +203,12 @@ target_link_libraries(
             Qt6::Test # QSignalSpy
 )
 
-# P3.16 — SdPluginServer tests gated on Qt6::WebSockets availability (same
-# fallback discipline as the app target).
+# P3.16 — SdPluginServer tests gated on Qt6::WebSockets availability (same fallback discipline as
+# the app target).
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(
-        ajazz_unit_tests
-        PRIVATE test_sd_plugin_server.cpp
-                ${CMAKE_SOURCE_DIR}/src/app/src/sd_plugin_server.cpp
+        ajazz_unit_tests PRIVATE test_sd_plugin_server.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/sd_plugin_server.cpp
     )
     target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)

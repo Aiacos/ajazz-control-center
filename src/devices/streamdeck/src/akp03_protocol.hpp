@@ -101,14 +101,20 @@ inline constexpr std::array<std::uint8_t, 3> CmdImage{0x42,
 /// @deprecated Kept as an alias for the old `CmdImagePng` name; remove once
 ///             callers migrate to @ref CmdImage.
 inline constexpr std::array<std::uint8_t, 3> CmdImagePng = CmdImage;
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  ///< Flush / stop "STP".
+inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50}; ///< Flush / stop "STP".
 
 // Vendor-RE-discovered opcodes (akp05_vendor.md §3, 2026-05-17). Same wire
 // format applies to the whole AKP family (AKP03/AKP05/AKP153/AKP815) per
 // the SDLibrary1.dll Ghidra audit. See roadmap §11.3.
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
+                                                        0x45,
+                                                        0x52}; ///< Firmware version "VER".
 inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+    0x55,
+    0x4c,
+    0x45,
+    0x4e,
+    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
 inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Clear key(s) "CLE".
 inline constexpr std::array<std::uint8_t, 3> CmdInit{0x44, 0x49, 0x53};  ///< Display init "DIS".
 inline constexpr std::array<std::uint8_t, 3> CmdSleep{0x48, 0x41, 0x4e}; ///< Sleep "HAN".
