@@ -126,6 +126,8 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.hasClock;
     case HasBatteryRole:
         return d.hasBattery;
+    case HasSettingsRole:
+        return d.hasSettings;
     case MaturityRole:
         return maturityFor(d.codename);
     default:
@@ -149,6 +151,7 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
         {HasTouchStripRole, "hasTouchStrip"},
         {HasClockRole, "deviceHasClock"},
         {HasBatteryRole, "deviceHasBattery"},
+        {HasSettingsRole, "deviceHasSettings"},
         {MaturityRole, "maturity"},
     };
 }
@@ -314,6 +317,7 @@ QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
     m.insert(QStringLiteral("hasTouchStrip"), it->hasTouchStrip);
     m.insert(QStringLiteral("hasClock"), it->hasClock);
     m.insert(QStringLiteral("hasBattery"), it->hasBattery);
+    m.insert(QStringLiteral("hasSettings"), it->hasSettings);
     return m;
 }
 

@@ -97,6 +97,26 @@ Application::Application(QObject* parent)
               return nullptr;
           },
           this)),
+      // 2026-05-18 issue #57: SettingsService bridges the AK-series
+      // settings batch (opcode 0x07 sub 0x10) to QML. Same DeviceLookup
+      // pattern as LightingService / TimeSyncService — codename →
+      // shared_ptr<IDevice> via DeviceRegistry::open, with the cap
+      // dynamic_cast happening inside the service so unknown / wired
+      // devices return the vendor-default tuple instead of crashing.
+      m_settings(std::make_unique<SettingsService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          },
+          this)),
       // 2026-05-18 P3.d: BatteryService gets the same DeviceLookup pattern
       // (codename -> shared_ptr<IDevice>) used by TimeSyncService and
       // LightingService. The enumerator returns the codenames of currently-
@@ -257,6 +277,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());
     LightingService::registerInstance(m_lighting.get());
+    SettingsService::registerInstance(m_settings.get());
     BatteryService::registerInstance(m_battery.get());
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer

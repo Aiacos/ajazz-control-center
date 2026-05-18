@@ -21,6 +21,7 @@
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
+#include "settings_service.hpp"
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
 #include "tray_controller.hpp"
@@ -141,6 +142,12 @@ private:
                     ///< picker. Same DeviceLookup pattern as TimeSyncService;
                     ///< dynamic_cast to IFirmwareLightingCapable inside the
                     ///< service to enumerate / activate modes.
+    std::unique_ptr<SettingsService>
+        m_settings; ///< 2026-05-18: AK980 PRO ISettingsCapable bridge
+                    ///< (issue #57). Same DeviceLookup pattern as
+                    ///< LightingService; dynamic_cast to ISettingsCapable
+                    ///< inside the service to push / read the AK-series
+                    ///< settings batch (fn-layer / sleep / response).
     std::unique_ptr<BatteryService>
         m_battery; ///< 2026-05-18: per-device battery polling for wireless
                    ///< IBatteryCapable devices (AK980 PRO today). Owns a

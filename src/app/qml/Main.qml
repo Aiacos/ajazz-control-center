@@ -77,6 +77,20 @@ ApplicationWindow {
         }
     }
 
+    // Surface SettingsService outcomes (issue #57 — AK-series settings batch).
+    // The per-device SettingsRow fires SettingsService.setSettings on Apply;
+    // the success/failure signals bubble here so the toast is always anchored
+    // at the bottom of the main window regardless of which drawer / tab is open.
+    Connections {
+        target: SettingsService
+        function onSettingsApplied(codename) {
+            toast.show(qsTr("Settings applied to %1").arg(codename), "success");
+        }
+        function onSettingsFailed(codename, message) {
+            toast.show(qsTr("Settings failed for %1: %2").arg(codename).arg(message), "error");
+        }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0

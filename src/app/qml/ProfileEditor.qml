@@ -46,11 +46,13 @@ Rectangle {
     readonly property int  _encoderCount:  capabilities && capabilities.encoderCount  ? capabilities.encoderCount  : 0
     readonly property int  _dpiStageCount: capabilities && capabilities.dpiStageCount ? capabilities.dpiStageCount : 0
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
+    readonly property bool _hasSettings:   capabilities && capabilities.hasSettings   ? capabilities.hasSettings   : false
 
     readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
     readonly property bool _showEncoders:  _encoderCount > 0
     readonly property bool _showMouse:     _dpiStageCount > 0
+    readonly property bool _showSettings:  _hasSettings
 
     ColumnLayout {
         anchors.fill: parent
@@ -100,6 +102,11 @@ Rectangle {
                 visible: root._showMouse
                 width: visible ? implicitWidth : 0
             }
+            TabButton {
+                text: qsTr("Settings")
+                visible: root._showSettings
+                width: visible ? implicitWidth : 0
+            }
         }
 
         // Each Loader's `active` property is bound so only the visible panel
@@ -126,6 +133,10 @@ Rectangle {
             Loader {
                 active: stack.currentIndex === 3 && root._showMouse
                 sourceComponent: mousePanelComp
+            }
+            Loader {
+                active: stack.currentIndex === 4 && root._showSettings
+                sourceComponent: settingsRowComp
             }
         }
 
@@ -165,7 +176,8 @@ Rectangle {
 
     // ---- Component definitions for the Loaders ----------------------------
     Component { id: keyDesignerComp; KeyDesigner  { keyCount: root._keyCount; gridColumns: root._gridColumns } }
-    Component { id: rgbPickerComp;   RgbPicker    { } }
+    Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
     Component { id: encoderPanelComp; EncoderPanel { encoderCount: root._encoderCount } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
+    Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename } }
 }

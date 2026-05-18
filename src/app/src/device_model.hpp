@@ -77,6 +77,9 @@ public:
                         ///< with a host-readable charge level — see IBatteryCapable). Used by
                         ///< the QML BatteryIndicator to gate per-row visibility so wired devices
                         ///< don't render a meaningless "--%" chip.
+        HasSettingsRole, ///< True when the device advertises ISettingsCapable (AK-series
+                         ///< settings batch — issue #57). Used by the QML SettingsRow to
+                         ///< gate per-device visibility of the Fn-layer/sleep/response tab.
         MaturityRole, ///< Maturity tier from devices.yaml:
                       ///< scaffolded/probed/partial/functional/verified (Phase 8 DEVICES-02).
     };

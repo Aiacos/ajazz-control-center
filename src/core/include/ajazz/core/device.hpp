@@ -71,6 +71,10 @@ struct DeviceDescriptor {
                             ///< IClockCapable).
     bool hasBattery{false}; ///< True if the device advertises Capability::Battery (wireless devices
                             ///< with a host-readable charge level — see IBatteryCapable).
+    bool hasSettings{false}; ///< True if the device advertises ISettingsCapable (AK-series
+                             ///< settings batch — issue #57). UI uses this to gate the
+                             ///< per-device Settings tab so non-capable devices don't render
+                             ///< empty fake-functional rows.
 };
 
 /**

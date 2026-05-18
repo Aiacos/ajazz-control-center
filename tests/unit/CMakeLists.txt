@@ -113,6 +113,15 @@ add_executable(
     # initial state.
     test_battery_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/battery_service.cpp
+    # SettingsService (2026-05-18 issue #57 / QML wire-up): pins the
+    # clampResponseLevel helper that QML uses to preview the persisted
+    # response-time level without a HID round-trip. The wider service
+    # surface (DeviceLookup resolution, signal emission) is covered
+    # through the live AK980 PRO path + the existing
+    # test_ak980_settings_batch.cpp byte-level coverage; this test
+    # isolates the small helper added in the QML wire-up commit.
+    test_settings_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/settings_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.

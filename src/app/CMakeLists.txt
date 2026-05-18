@@ -50,6 +50,12 @@ qt_add_executable(
     # IFirmwareLightingCapable so any future keyboard that ships a fixed
     # effect catalogue gets a QML picker for free.
     src/lighting_service.cpp
+    # 2026-05-18 issue #57: AK980 PRO settings batch QML bridge
+    # (opcode 0x07 sub 0x10 — fn-layer / sleep timer / response time).
+    # Same DeviceLookup pattern as LightingService; dynamic_cast to
+    # ISettingsCapable inside the service so non-capable devices return
+    # the vendor-default tuple instead of crashing.
+    src/settings_service.cpp
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
@@ -233,6 +239,8 @@ qt_add_qml_module(
             src/time_sync_service.hpp
             src/lighting_service.cpp
             src/lighting_service.hpp
+            src/settings_service.cpp
+            src/settings_service.hpp
             src/battery_service.cpp
             src/battery_service.hpp
             src/property_inspector_controller.cpp
@@ -242,6 +250,7 @@ qt_add_qml_module(
               qml/DeviceList.qml
               qml/ProfileEditor.qml
               qml/RgbPicker.qml
+              qml/SettingsRow.qml
               qml/KeyDesigner.qml
               qml/EncoderPanel.qml
               qml/MousePanel.qml
