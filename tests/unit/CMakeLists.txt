@@ -10,6 +10,12 @@ add_executable(
     # contracts (zero-area, dim mismatch).
     test_image_pipeline.cpp
     test_proprietary_keyboard_protocol.cpp
+    # Audit follow-up (2026-05-18): end-to-end byte-level coverage of the
+    # AK980 PRO firmware-RTC sync envelope (ARCH-05.1). Pins the orchestration
+    # in ProprietaryKeyboard::setTime() that the per-packet builder tests
+    # alone could not catch (writeFeature vs write, packet order, tm_wday
+    # propagation, byte-8 marker, 0xAA/0x55 tail).
+    test_ak980_clock_sync_e2e.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`
     # into AjSeriesMouse via the public `makeAjSeriesWithTransport` factory

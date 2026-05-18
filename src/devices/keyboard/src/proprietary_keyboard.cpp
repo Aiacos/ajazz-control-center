@@ -678,4 +678,10 @@ core::DevicePtr makeProprietaryKeyboard(core::DeviceDescriptor const& d, core::D
     return std::make_shared<ProprietaryKeyboard>(d, std::move(id));
 }
 
+core::DevicePtr makeProprietaryKeyboardWithTransport(core::DeviceDescriptor const& d,
+                                                     core::DeviceId id,
+                                                     core::TransportPtr transport) {
+    return std::make_shared<ProprietaryKeyboard>(d, std::move(id), std::move(transport));
+}
+
 } // namespace ajazz::keyboard

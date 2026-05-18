@@ -11,6 +11,7 @@
 #pragma once
 
 #include "ajazz/core/device.hpp"
+#include "ajazz/core/transport.hpp"
 
 namespace ajazz::core {
 class DeviceRegistry;
@@ -67,5 +68,26 @@ void registerAll(core::DeviceRegistry& registry);
  */
 [[nodiscard]] core::DevicePtr makeProprietaryKeyboard(core::DeviceDescriptor const& d,
                                                       core::DeviceId id);
+
+/**
+ * @brief Create a proprietary AJAZZ keyboard backend with an injected transport.
+ *
+ * Test/CAPTURE-04 seam: same surface as @ref makeProprietaryKeyboard but the
+ * caller supplies the @ref core::ITransport implementation. Production code
+ * should call the two-arg overload; unit tests inject a
+ * `ajazz::tests::MockTransport` to assert byte-level wire-format envelopes
+ * (clock-sync 4-packet HID Feature sequence, battery query, per-key RGB, etc.)
+ * without touching real hardware.
+ *
+ * @param d         Descriptor for the matched device.
+ * @param id        Runtime identity including the USB serial string.
+ * @param transport Owned `ITransport` implementation. Ownership transfers
+ *                  to the returned device.
+ * @return          Heap-allocated IDevice with the same capability mix as
+ *                  @ref makeProprietaryKeyboard.
+ */
+[[nodiscard]] core::DevicePtr
+makeProprietaryKeyboardWithTransport(core::DeviceDescriptor const& d, core::DeviceId id,
+                                     core::TransportPtr transport);
 
 } // namespace ajazz::keyboard
