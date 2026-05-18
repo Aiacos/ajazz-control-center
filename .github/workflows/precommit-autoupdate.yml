@@ -21,6 +21,17 @@ on:
     - cron: "0 6 * * 1"
   workflow_dispatch: {}
 
+# Serialise scheduled + manual runs on the same branch so two concurrent
+# invocations don't race on `chore/precommit-autoupdate` (the second
+# `peter-evans/create-pull-request` invocation would force-update the
+# branch underneath the first one and the PR creation API call would
+# return a 422). `cancel-in-progress: false` because cancelling a
+# half-finished autoupdate would leave the branch in an inconsistent
+# state — better to let the first run finish.
+concurrency:
+  group: precommit-autoupdate
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -58,6 +69,26 @@ jobs:
           pre-commit run --all-files || true
 
       - name: Open pull request
+        id: open_pr
+        # NOTE: when running with `secrets.GITHUB_TOKEN`, this step will
+        # fail at the "Create or update the pull request" stage with:
+        #   ##[error]GitHub Actions is not permitted to create or approve
+        #   pull requests.
+        # if the repo setting
+        #   Settings → Actions → General → Workflow permissions
+        #   → "Allow GitHub Actions to create and approve pull requests"
+        # is NOT enabled. The push of the branch itself succeeds (so the
+        # autoupdate work is preserved) — only the PR open is blocked.
+        # To allow autonomous opening, EITHER:
+        #   1. Enable the repo setting above (one-time, repo admin), OR
+        #   2. Replace `secrets.GITHUB_TOKEN` with a PAT secret
+        #      (e.g. `secrets.PRECOMMIT_AUTOUPDATE_PAT`) that has
+        #      `repo` + `pull_request: write` scopes.
+        # The `continue-on-error` keeps the workflow green when the
+        # setting is off so the branch update isn't reported as a
+        # blocking failure — the maintainer can open the PR by hand
+        # from the pushed branch.
+        continue-on-error: true
         uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1  # v8.1.1
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -77,3 +108,24 @@ jobs:
             automation
             dependencies
           delete-branch: true
+
+      - name: Notice if PR creation was blocked
+        # Surface a clear summary entry when the PR open step soft-fails
+        # so the run page makes the cause obvious without needing to dig
+        # through the action's own logs.
+        if: steps.open_pr.outcome == 'failure'
+        run: |
+          {
+            echo "## :warning: pre-commit autoupdate PR not opened"
+            echo
+            echo "The branch \`chore/precommit-autoupdate\` was pushed"
+            echo "with the bumped hook revisions, but \`peter-evans/"
+            echo "create-pull-request\` could not open the matching PR."
+            echo
+            echo "Most common cause: **Settings → Actions → General →"
+            echo "Workflow permissions → \"Allow GitHub Actions to"
+            echo "create and approve pull requests\"** is OFF."
+            echo
+            echo "Fix: either flip that setting on, or wire a PAT"
+            echo "secret as documented in the workflow file."
+          } >> "$GITHUB_STEP_SUMMARY"
