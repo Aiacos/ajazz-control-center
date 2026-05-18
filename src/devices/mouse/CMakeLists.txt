@@ -18,11 +18,8 @@ target_include_directories(
     ajazz_mouse PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# Qt6::Gui is PRIVATE: ajazz_mouse's public surface (mouse.hpp factories)
-# is Qt-free; only the .cpp implementation needs QImage / QPainter for the
-# TFT clock+DPI face renderer.
+# Qt6::Gui is PRIVATE: ajazz_mouse's public surface (mouse.hpp factories) is Qt-free; only the .cpp
+# implementation needs QImage / QPainter for the TFT clock+DPI face renderer.
 target_link_libraries(
-    ajazz_mouse
-    PUBLIC ajazz::core
-    PRIVATE ajazz::warnings ajazz::sanitizers Qt6::Gui
+    ajazz_mouse PUBLIC ajazz::core PRIVATE ajazz::warnings ajazz::sanitizers Qt6::Gui
 )

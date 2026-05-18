@@ -180,7 +180,7 @@ private:
     QString m_latestReleaseNotes;
     QUrl m_latestReleaseUrl;
     QString m_etag;                         ///< Cached If-None-Match value.
-    QNetworkAccessManager* m_nam = nullptr; ///< Lazily allocated on first checkNow().
+    QNetworkAccessManager* m_name = nullptr; ///< Lazily allocated on first checkNow().
     QTimer* m_pollTimer = nullptr;          ///< 24-hour periodic check; nullptr on Flatpak.
 };
 

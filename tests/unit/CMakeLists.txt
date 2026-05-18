@@ -312,10 +312,9 @@ target_link_libraries(
             # used by the rest of the test binary (COD-031 invariant).
             nlohmann_json::nlohmann_json
             Qt6::Core
-            # CorePrivate exposes QZipReader / QZipWriter. plugin_catalog_model.cpp uses
-            # QZipReader to extract `.sdPlugin` archives (issue #62); the matching test
-            # builds a synthetic archive via QZipWriter and round-trips it through the
-            # extractor.
+            # CorePrivate exposes QZipReader / QZipWriter. plugin_catalog_model.cpp uses QZipReader
+            # to extract `.sdPlugin` archives (issue #62); the matching test builds a synthetic
+            # archive via QZipWriter and round-trips it through the extractor.
             Qt6::CorePrivate
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network

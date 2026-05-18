@@ -981,7 +981,7 @@ public:
             // P1: HEADER (opcode 0x7F sub 0x03, total chunk count uint32-LE).
             (void)m_transport->writeFeature(
                 buildTftChunkedHeader(/*lcdSelect=*/0, static_cast<std::uint32_t>(totalChunks)));
-            // P2..PN: chunk PAYLOADs (28-byte RGB565 slices).
+            // P2..ON: chunk PAYLOADs (28-byte RGB565 slices).
             std::array<std::uint8_t, kTftChunkPayload> slice{};
             for (std::size_t i = 0; i < totalChunks; ++i) {
                 std::size_t const off = i * kTftChunkPayload;

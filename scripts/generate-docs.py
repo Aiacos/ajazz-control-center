@@ -343,10 +343,7 @@ def render_maturity_map_header(data: Data) -> str:
                 f"{sorted(valid_tiers)}\n"
             )
             continue
-        entries.append(
-            f"        {{QStringLiteral(\"{codename}\"), "
-            f"QStringLiteral(\"{status}\")}},"
-        )
+        entries.append(f'        {{QStringLiteral("{codename}"), ' f'QStringLiteral("{status}")}},')
     body = "\n".join(entries)
     return (
         "// SPDX-License-Identifier: GPL-3.0-or-later\n"
@@ -357,7 +354,7 @@ def render_maturity_map_header(data: Data) -> str:
         "// the pre-commit hook installed) after editing devices.yaml.\n"
         "//\n"
         "// The map's only consumer is src/app/src/device_model.cpp;\n"
-        "// callers there fall back to \"scaffolded\" for unknown codenames\n"
+        '// callers there fall back to "scaffolded" for unknown codenames\n'
         "// so a stale generated header degrades gracefully but loudly\n"
         "// (the QML sidebar shows the device as scaffolded instead of\n"
         "// its real maturity).\n"

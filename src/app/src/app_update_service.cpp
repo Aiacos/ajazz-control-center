@@ -289,8 +289,8 @@ void AppUpdateService::performCheck() {
     }
     setStatus(Status::Checking);
 
-    if (m_nam == nullptr) {
-        m_nam = new QNetworkAccessManager(this);
+    if (m_name == nullptr) {
+        m_name = new QNetworkAccessManager(this);
     }
 
     QNetworkRequest req{QUrl{QString::fromLatin1(kLatestEndpoint)}};
@@ -301,7 +301,7 @@ void AppUpdateService::performCheck() {
         req.setRawHeader("If-None-Match", m_etag.toUtf8());
     }
 
-    auto* const reply = m_nam->get(req);
+    auto* const reply = m_name->get(req);
     QObject::connect(
         reply, &QNetworkReply::finished, this, [this, reply]() { onLatestReplyFinished(reply); });
 }
@@ -366,7 +366,7 @@ void AppUpdateService::onLatestReplyFinished(QNetworkReply* reply) {
         req.setRawHeader("Accept", "application/vnd.github+json");
         req.setRawHeader("User-Agent",
                          "ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)");
-        auto* const nightlyReply = m_nam->get(req);
+        auto* const nightlyReply = m_name->get(req);
         QObject::connect(nightlyReply, &QNetworkReply::finished, this, [this, nightlyReply]() {
             onNightlyReplyFinished(nightlyReply);
         });

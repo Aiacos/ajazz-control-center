@@ -39,22 +39,19 @@ qt_add_executable(
     src/application.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
-    # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans
-    # an expanded directory tree (issue #62). Used by the install path and a
-    # first-launch sweep.
+    # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded
+    # directory tree (issue #62). Used by the install path and a first-launch sweep.
     src/sdplugin_extractor.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
-    # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13).
-    # Mirrors TimeSyncService DI shape; dynamic_cast to
-    # IFirmwareLightingCapable so any future keyboard that ships a fixed
+    # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13). Mirrors TimeSyncService
+    # DI shape; dynamic_cast to IFirmwareLightingCapable so any future keyboard that ships a fixed
     # effect catalogue gets a QML picker for free.
     src/lighting_service.cpp
-    # 2026-05-18 issue #57: AK980 PRO settings batch QML bridge
-    # (opcode 0x07 sub 0x10 — fn-layer / sleep timer / response time).
-    # Same DeviceLookup pattern as LightingService; dynamic_cast to
-    # ISettingsCapable inside the service so non-capable devices return
-    # the vendor-default tuple instead of crashing.
+    # 2026-05-18 issue #57: AK980 PRO settings batch QML bridge (opcode 0x07 sub 0x10 — fn-layer /
+    # sleep timer / response time). Same DeviceLookup pattern as LightingService; dynamic_cast to
+    # ISettingsCapable inside the service so non-capable devices return the vendor-default tuple
+    # instead of crashing.
     src/settings_service.cpp
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
@@ -76,8 +73,8 @@ qt_add_executable(
     # QML-bindable signals (batteryQueried / batteryUnavailable).
     src/battery_service.cpp
     # 2026-05-18 / docs/architecture/APP-AUTO-UPDATE.md: in-app GitHub-Releases-driven update
-    # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables
-    # under Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
+    # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables under
+    # Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
     src/app_update_service.cpp
 )
 
@@ -307,10 +304,9 @@ target_link_libraries(
             ajazz::warnings
             ajazz::sanitizers
             Qt6::Core
-            # CorePrivate exposes QZipReader / QZipWriter — the only Qt zip API
-            # short of pulling in QuaZip. PluginCatalogModel uses it to extract
-            # downloaded `.sdPlugin` archives (issue #62). Stable since Qt 4.7;
-            # API has not changed across the Qt 6 series.
+            # CorePrivate exposes QZipReader / QZipWriter — the only Qt zip API short of pulling in
+            # QuaZip. PluginCatalogModel uses it to extract downloaded `.sdPlugin` archives (issue
+            # #62). Stable since Qt 4.7; API has not changed across the Qt 6 series.
             Qt6::CorePrivate
             Qt6::Gui
             Qt6::Network
