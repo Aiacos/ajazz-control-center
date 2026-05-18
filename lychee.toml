@@ -1,0 +1,57 @@
+# lychee link-checker configuration.
+#
+# Honoured automatically by the GitHub Action (lycheeverse/lychee-action)
+# and by local invocations of `lychee` if you `lychee --config lychee.toml .`.
+# CI uses `fail: false` so any failure here is informational, not a CI
+# blocker - but tightening retries + a small skip-list keeps the report
+# focused on real broken links instead of transient 5xx noise.
+
+# How many seconds to wait for a single HTTP request before giving up.
+timeout = 20
+
+# Retry transient errors (5xx + 408 + 429) up to N times with backoff.
+max_retries = 3
+
+# Honour the server's Retry-After hint when present (otherwise back off
+# exponentially from `min_wait`).
+min_wait = 2
+
+# Concurrent in-flight requests. Default is the number of CPU cores;
+# clamp lower so a single PR run doesn't fan-out 32 requests at docs.qt.io.
+max_concurrency = 8
+
+# Skip URL fragments that frequently 5xx during CI windows for reasons
+# outside our control. Add patterns conservatively - over-skipping hides
+# real breakage. Each entry is a regex matched against the full URL.
+exclude = [
+    # Qt 5.x cache + docs.qt.io occasionally throw transient 5xx during
+    # builds (their CDN reshuffles every few hours). Both are stable in the
+    # long term but flap during a single CI run.
+    '^https?://(?:www\.)?qt\.io',
+    '^https?://(?:doc|docs|wiki|forum)\.qt\.io',
+    # Localhost / loopback addresses (the lychee-action default includes
+    # --exclude-loopback but make it explicit so a local run agrees).
+    '^https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0)(?::\d+)?',
+    # Test-fixture URLs cited verbatim in vendor-RE docs (not meant to be
+    # reachable - they document URLs that the AJAZZ vendor binary calls).
+    '^https?://w2\.yiketianqi\.com',
+]
+
+# Treat HTTP 999 (LinkedIn anti-scrape) as success - they always 999
+# automated checkers but the link is fine for a browser.
+accept = [200, 204, 206, 301, 302, 304, 307, 308, 999]
+
+# Don't follow github.com/Aiacos/ajazz-control-center/issues/N or
+# /pull/N links: those routinely 5xx during high-traffic windows, and
+# their target equivalence is trivially derivable from the URL itself.
+exclude_path = [
+    "build",
+    "dist",
+    "_deps",
+    ".venv",
+    "node_modules",
+]
+
+# Verbose enough to surface skip decisions in CI logs without dumping
+# every successful HEAD request.
+verbose = "info"

@@ -182,7 +182,12 @@ jobs:
       - name: Lychee (link checker)
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0
         with:
-          args: --verbose --no-progress --exclude-loopback --exclude-mail .
+          # Config picks up retry/timeout/skip rules from lychee.toml so
+          # the report stays focused on real breakage instead of
+          # transient 5xx noise (docs.qt.io reshuffles its CDN every
+          # few hours; vendor-RE doc URLs intentionally point at
+          # non-reachable services).
+          args: --verbose --no-progress --exclude-mail --config lychee.toml .
           fail: false   # Reports broken links as a warning, does not fail CI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
