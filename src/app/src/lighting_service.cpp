@@ -24,7 +24,8 @@ LightingService* g_instance = nullptr;
 /// Caller owns the returned shared_ptr lifetime; pin it in a local for
 /// the duration of any call into the cap interface (A-04 / D-01).
 [[nodiscard]] core::IFirmwareLightingCapable*
-resolveCap(LightingService::DeviceLookup const& lookup, QString const& codename,
+resolveCap(LightingService::DeviceLookup const& lookup,
+           QString const& codename,
            std::shared_ptr<core::IDevice>& keepAlive) {
     if (!lookup) {
         return nullptr;

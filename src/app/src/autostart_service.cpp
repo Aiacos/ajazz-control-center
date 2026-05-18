@@ -113,31 +113,30 @@ namespace {
 
 [[nodiscard]] QString launchAgentContents(bool startMinimised) {
     QString const path = QCoreApplication::applicationFilePath();
-    QString const arg = startMinimised ? QStringLiteral("        <string>--minimized</string>\n")
-                                       : QString{};
+    QString const arg =
+        startMinimised ? QStringLiteral("        <string>--minimized</string>\n") : QString{};
     // Conservative XML: only the keys we need (Label / ProgramArguments /
     // RunAtLoad / ProcessType / KeepAlive false). Encoded as UTF-8.
-    return QStringLiteral(
-               "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
-               "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\""
-               " \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
-               "<plist version=\"1.0\">\n"
-               "<dict>\n"
-               "    <key>Label</key>\n"
-               "    <string>%1</string>\n"
-               "    <key>ProgramArguments</key>\n"
-               "    <array>\n"
-               "        <string>%2</string>\n"
-               "%3"
-               "    </array>\n"
-               "    <key>RunAtLoad</key>\n"
-               "    <true/>\n"
-               "    <key>KeepAlive</key>\n"
-               "    <false/>\n"
-               "    <key>ProcessType</key>\n"
-               "    <string>Interactive</string>\n"
-               "</dict>\n"
-               "</plist>\n")
+    return QStringLiteral("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                          "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\""
+                          " \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+                          "<plist version=\"1.0\">\n"
+                          "<dict>\n"
+                          "    <key>Label</key>\n"
+                          "    <string>%1</string>\n"
+                          "    <key>ProgramArguments</key>\n"
+                          "    <array>\n"
+                          "        <string>%2</string>\n"
+                          "%3"
+                          "    </array>\n"
+                          "    <key>RunAtLoad</key>\n"
+                          "    <true/>\n"
+                          "    <key>KeepAlive</key>\n"
+                          "    <false/>\n"
+                          "    <key>ProcessType</key>\n"
+                          "    <string>Interactive</string>\n"
+                          "</dict>\n"
+                          "</plist>\n")
         .arg(QStringLiteral(AJAZZ_APP_ID), path, arg);
 }
 #endif
@@ -149,8 +148,7 @@ namespace {
 /// writes the actual registry (not a flat INI), and quote the .exe path
 /// to survive spaces.
 [[nodiscard]] QString runKey() {
-    return QStringLiteral(
-        "HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run");
+    return QStringLiteral("HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run");
 }
 
 [[nodiscard]] QString runValueName() {
@@ -244,8 +242,10 @@ void AutostartService::applyToOs() {
     if (launchOnLogin_) {
         QFile file(path);
         if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-            AJAZZ_LOG_WARN("autostart", "cannot write {}: {}",
-                           path.toStdString(), file.errorString().toStdString());
+            AJAZZ_LOG_WARN("autostart",
+                           "cannot write {}: {}",
+                           path.toStdString(),
+                           file.errorString().toStdString());
             return;
         }
         QTextStream out(&file);
@@ -264,21 +264,21 @@ void AutostartService::applyToOs() {
         if (reg.status() != QSettings::NoError) {
             AJAZZ_LOG_WARN("autostart",
                            "failed to write HKCU Run value '{}': QSettings status {}",
-                           runValueName().toStdString(), static_cast<int>(reg.status()));
+                           runValueName().toStdString(),
+                           static_cast<int>(reg.status()));
             return;
         }
-        AJAZZ_LOG_INFO("autostart", "registered HKCU Run value '{}'",
-                       runValueName().toStdString());
+        AJAZZ_LOG_INFO("autostart", "registered HKCU Run value '{}'", runValueName().toStdString());
     } else {
         reg.remove(runValueName());
         reg.sync();
-        AJAZZ_LOG_INFO("autostart", "removed HKCU Run value '{}'",
-                       runValueName().toStdString());
+        AJAZZ_LOG_INFO("autostart", "removed HKCU Run value '{}'", runValueName().toStdString());
     }
 #else
     // Other UNIX (BSD etc) without freedesktop / launchd / Windows
     // surface — log and persist the user preference only.
-    AJAZZ_LOG_INFO("autostart", "OS back-end not available on this platform; preference saved only");
+    AJAZZ_LOG_INFO("autostart",
+                   "OS back-end not available on this platform; preference saved only");
 #endif
 }
 

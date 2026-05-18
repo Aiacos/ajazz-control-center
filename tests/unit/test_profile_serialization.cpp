@@ -93,7 +93,8 @@ TEST_CASE("profile JSON reader round-trips writer output", "[profile][roundtrip]
 }
 
 /// profileFromJson() must tolerate extra whitespace and unknown keys.
-TEST_CASE("profile reader skips unknown keys and tolerates whitespace", "[profile][forward-compat]") {
+TEST_CASE("profile reader skips unknown keys and tolerates whitespace",
+          "[profile][forward-compat]") {
     using namespace ajazz::core;
     constexpr char const* kJson = R"({
         "id" : "x" ,

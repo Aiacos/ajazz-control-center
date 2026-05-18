@@ -307,8 +307,7 @@ std::optional<CatalogEntry> translateRecord(QJsonObject const& obj) {
     QString const downloadStr = obj.value(QStringLiteral("download")).toString().trimmed();
     if (!downloadStr.isEmpty()) {
         QUrl const downloadUrl{downloadStr};
-        if (downloadUrl.isValid() &&
-            downloadUrl.scheme().toLower() == QStringLiteral("https")) {
+        if (downloadUrl.isValid() && downloadUrl.scheme().toLower() == QStringLiteral("https")) {
             entry.downloadUrl = downloadUrl;
         }
     }

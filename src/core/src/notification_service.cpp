@@ -160,11 +160,10 @@ public:
         // gives a proper toast in the Action Center; otherwise we degrade to
         // a balloon via `msg.exe`. We try BurntToast first.
         auto const toWide = [](std::string_view s) -> std::wstring {
-            int const n = ::MultiByteToWideChar(
-                CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
+            int const n =
+                ::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), nullptr, 0);
             std::wstring out(static_cast<std::size_t>(n), L'\0');
-            ::MultiByteToWideChar(
-                CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), n);
+            ::MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), out.data(), n);
             return out;
         };
         std::wstring const titleW = toWide(title);
@@ -180,7 +179,8 @@ public:
             L" $n=New-Object System.Windows.Forms.NotifyIcon;"
             L" $n.Icon=[System.Drawing.SystemIcons]::Information;"
             L" $n.Visible=$true;"
-            L" $n.ShowBalloonTip(5000," + quoteForCmd(titleW) + L"," + quoteForCmd(bodyW) +
+            L" $n.ShowBalloonTip(5000," +
+            quoteForCmd(titleW) + L"," + quoteForCmd(bodyW) +
             L",[System.Windows.Forms.ToolTipIcon]::Info);"
             L" Start-Sleep -Seconds 5;"
             L" $n.Dispose() }\"";
@@ -199,7 +199,8 @@ public:
                               nullptr,
                               &si,
                               &pi)) {
-            AJAZZ_LOG_WARN("notifications", "CreateProcessW(powershell) failed: {}",
+            AJAZZ_LOG_WARN("notifications",
+                           "CreateProcessW(powershell) failed: {}",
                            static_cast<unsigned long>(::GetLastError()));
             (void)level;
             return;

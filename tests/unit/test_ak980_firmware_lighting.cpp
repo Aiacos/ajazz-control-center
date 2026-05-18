@@ -50,8 +50,8 @@ TEST_CASE("AK980 PRO advertises IFirmwareLightingCapable with 20 vendor modes",
           "[ak980][lighting][CAPTURE-04][vendor-re]") {
     auto transport = std::make_unique<tests::MockTransport>();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     REQUIRE(device != nullptr);
 
     auto* lighting = dynamic_cast<core::IFirmwareLightingCapable*>(device.get());
@@ -62,10 +62,8 @@ TEST_CASE("AK980 PRO advertises IFirmwareLightingCapable with 20 vendor modes",
 
     // First entry is Static = 0x00; last is LedOff = 0x13 (per
     // ak980_lighting.hpp enum order).
-    REQUIRE(modes.front().id ==
-            static_cast<std::uint8_t>(keyboard::AK980LightingMode::Static));
-    REQUIRE(modes.back().id ==
-            static_cast<std::uint8_t>(keyboard::AK980LightingMode::LedOff));
+    REQUIRE(modes.front().id == static_cast<std::uint8_t>(keyboard::AK980LightingMode::Static));
+    REQUIRE(modes.back().id == static_cast<std::uint8_t>(keyboard::AK980LightingMode::LedOff));
 
     REQUIRE(lighting->brightnessMax() == keyboard::kAK980LightingBrightnessMax);
     REQUIRE(lighting->speedMax() == keyboard::kAK980LightingSpeedMax);
@@ -76,14 +74,15 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 5-packet envelope",
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* lighting = dynamic_cast<core::IFirmwareLightingCapable*>(device.get());
     REQUIRE(lighting != nullptr);
 
     bool const ok = lighting->setFirmwareLightingMode(
         static_cast<std::uint8_t>(keyboard::AK980LightingMode::Breath),
-        /*brightness*/ 3, /*speed*/ 2);
+        /*brightness*/ 3,
+        /*speed*/ 2);
     REQUIRE(ok);
 
     auto const& writes = observer->writes();
@@ -136,15 +135,16 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode clamps brightness/speed beyond ceil
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* lighting = dynamic_cast<core::IFirmwareLightingCapable*>(device.get());
     REQUIRE(lighting != nullptr);
 
     // Pass huge values; buildSetRgbModeData internally clamps to 5.
     REQUIRE(lighting->setFirmwareLightingMode(
         static_cast<std::uint8_t>(keyboard::AK980LightingMode::Rotating),
-        /*brightness*/ 200, /*speed*/ 200));
+        /*brightness*/ 200,
+        /*speed*/ 200));
 
     auto const& writes = observer->writes();
     REQUIRE(writes.size() == 5);

@@ -68,8 +68,8 @@ Fixture buildFixture() {
     auto owned = std::make_unique<tests::MockTransport>();
     auto* observer = owned.get();
     owned->open();
-    auto dev = streamdeck::makeAkp05WithTransport(makeAkp05Descriptor(), makeAkp05Id(),
-                                                  std::move(owned));
+    auto dev =
+        streamdeck::makeAkp05WithTransport(makeAkp05Descriptor(), makeAkp05Id(), std::move(owned));
     return Fixture{std::move(dev), observer};
 }
 
@@ -91,8 +91,7 @@ std::vector<std::uint8_t> gradientRgba(std::uint16_t width, std::uint16_t height
 
 } // namespace
 
-TEST_CASE("akp05 touchStripInfo reports 800x480 panel and 4 zones",
-          "[akp05][touch-strip]") {
+TEST_CASE("akp05 touchStripInfo reports 800x480 panel and 4 zones", "[akp05][touch-strip]") {
     tests::qtGuiApp();
     auto fx = buildFixture();
     auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(fx.device.get());
@@ -104,8 +103,7 @@ TEST_CASE("akp05 touchStripInfo reports 800x480 panel and 4 zones",
     CHECK(info.zoneCount == 4);
 }
 
-TEST_CASE("akp05 setTouchStripImage emits DRA header + chunks + ULEND",
-          "[akp05][touch-strip]") {
+TEST_CASE("akp05 setTouchStripImage emits DRA header + chunks + ULEND", "[akp05][touch-strip]") {
     tests::qtGuiApp();
     auto fx = buildFixture();
     auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(fx.device.get());
@@ -114,7 +112,9 @@ TEST_CASE("akp05 setTouchStripImage emits DRA header + chunks + ULEND",
     auto const rgba = gradientRgba(64, 64);
     // Target zone 0 at offset (100, 200) inside a 200x100 rect — host-side
     // resize scales the 64x64 source up to fill that rect before JPEG encode.
-    REQUIRE(strip->setTouchStripImage(rgba, 64, 64,
+    REQUIRE(strip->setTouchStripImage(rgba,
+                                      64,
+                                      64,
                                       /*location=*/0,
                                       /*x=*/100,
                                       /*y=*/200,
@@ -137,11 +137,10 @@ TEST_CASE("akp05 setTouchStripImage emits DRA header + chunks + ULEND",
     CHECK(header[6] == 0x52); // R
     CHECK(header[7] == 0x41); // A
     // BE32 JPEG size at bytes 8..11 (non-zero — exact bytes depend on encoder).
-    std::uint32_t const jpegSize =
-        (static_cast<std::uint32_t>(header[8]) << 24) |
-        (static_cast<std::uint32_t>(header[9]) << 16) |
-        (static_cast<std::uint32_t>(header[10]) << 8) |
-        static_cast<std::uint32_t>(header[11]);
+    std::uint32_t const jpegSize = (static_cast<std::uint32_t>(header[8]) << 24) |
+                                   (static_cast<std::uint32_t>(header[9]) << 16) |
+                                   (static_cast<std::uint32_t>(header[10]) << 8) |
+                                   static_cast<std::uint32_t>(header[11]);
     CHECK(jpegSize > 0);
     // Location at byte 12.
     CHECK(header[12] == 0x00);
@@ -190,7 +189,9 @@ TEST_CASE("akp05 setTouchStripImage rejects out-of-range location with no writes
     // location=99 is well outside the AKP05 4-zone range; the capability
     // surface must refuse cleanly and emit zero wire packets so a buggy
     // caller cannot poke an unrelated firmware surface.
-    REQUIRE_FALSE(strip->setTouchStripImage(rgba, 64, 64,
+    REQUIRE_FALSE(strip->setTouchStripImage(rgba,
+                                            64,
+                                            64,
                                             /*location=*/99,
                                             /*x=*/0,
                                             /*y=*/0,
@@ -199,8 +200,7 @@ TEST_CASE("akp05 setTouchStripImage rejects out-of-range location with no writes
     CHECK(fx.transport->writes().empty());
 }
 
-TEST_CASE("akp05 clearTouchStrip emits a DRA header + chunks + ULEND",
-          "[akp05][touch-strip]") {
+TEST_CASE("akp05 clearTouchStrip emits a DRA header + chunks + ULEND", "[akp05][touch-strip]") {
     tests::qtGuiApp();
     auto fx = buildFixture();
     auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(fx.device.get());

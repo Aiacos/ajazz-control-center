@@ -19,9 +19,8 @@
 #include <QString>
 #include <QTemporaryDir>
 
-#include <private/qzipwriter_p.h>
-
 #include <catch2/catch_test_macros.hpp>
+#include <private/qzipwriter_p.h>
 
 using namespace ajazz::app;
 
@@ -147,8 +146,8 @@ TEST_CASE("extractSdPluginArchive fails gracefully on a non-zip input",
     f.write("definitely not zip bytes");
     f.close();
 
-    REQUIRE_FALSE(extractSdPluginArchive(bogus, scratch.path(),
-                                         QStringLiteral("not-a-zip.sdPlugin")));
+    REQUIRE_FALSE(
+        extractSdPluginArchive(bogus, scratch.path(), QStringLiteral("not-a-zip.sdPlugin")));
     // Failure path leaves the source archive untouched and the target dir absent.
     REQUIRE(QFileInfo::exists(bogus));
     REQUIRE_FALSE(QDir(scratch.filePath(QStringLiteral("not-a-zip.sdPlugin"))).exists());

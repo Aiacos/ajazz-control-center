@@ -286,8 +286,8 @@ public:
  * AK980 PRO ships 20 of them addressable via opcode 0x13.
  */
 struct FirmwareLightingMode {
-    std::uint8_t id{0};   ///< Wire byte 1 of the DATA packet (vendor mode id).
-    std::string name;     ///< Human label (caller-localised; defaults to vendor's English).
+    std::uint8_t id{0}; ///< Wire byte 1 of the DATA packet (vendor mode id).
+    std::string name;   ///< Human label (caller-localised; defaults to vendor's English).
 };
 
 /**
@@ -319,9 +319,8 @@ public:
      * @param speed      0..max (device-defined; clamped to @c speedMax()).
      * @return true if the wire packet went out; false on transport error.
      */
-    virtual bool setFirmwareLightingMode(std::uint8_t modeId,
-                                         std::uint8_t brightness,
-                                         std::uint8_t speed) = 0;
+    virtual bool
+    setFirmwareLightingMode(std::uint8_t modeId, std::uint8_t brightness, std::uint8_t speed) = 0;
 
     /// @return Maximum brightness level this firmware accepts (typically 5).
     [[nodiscard]] virtual std::uint8_t brightnessMax() const noexcept = 0;
@@ -452,8 +451,8 @@ public:
  *     higher = faster (snappier) but more battery on wireless.
  */
 struct KeyboardSettings {
-    std::uint8_t fnLayerSwitch{0};       ///< 0=hold, 1=toggle (vendor enum).
-    std::uint8_t sleepTimerMinutes{0};   ///< Minutes; 0 = never sleep.
+    std::uint8_t fnLayerSwitch{0};        ///< 0=hold, 1=toggle (vendor enum).
+    std::uint8_t sleepTimerMinutes{0};    ///< Minutes; 0 = never sleep.
     std::uint8_t keyResponseTimeLevel{3}; ///< 1..5; vendor default is 3.
 };
 
@@ -534,9 +533,8 @@ public:
      *
      * @pre rgba.size() == width * height * 4u
      */
-    virtual void setBootLogo(std::span<std::uint8_t const> rgba,
-                             std::uint16_t width,
-                             std::uint16_t height) = 0;
+    virtual void
+    setBootLogo(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint16_t height) = 0;
 };
 
 // -----------------------------------------------------------------------------
@@ -632,13 +630,13 @@ enum class LiftOffDistance : std::uint8_t {
  * NOT exposed on this struct — the prompt's "no guess" guidance applies.
  */
 struct MouseSettings {
-    std::uint8_t debounceMs{1};      ///< Byte 10 — debounce time (0..10 typical).
+    std::uint8_t debounceMs{1}; ///< Byte 10 — debounce time (0..10 typical).
 
-    bool lightOff{false};          ///< Bit 0 of bytes 12..13 — master LED off.
-    bool wheelLightOff{false};     ///< Bit 1 — scroll-wheel LED off.
-    bool motionSmoothing{false};   ///< Bit 2 — sensor motion smoothing.
-    bool batteryLedSelect{false};  ///< Bit 3 — enable battery-state RGB indicator.
-    bool powerSaveMode{false};     ///< Bit 4 — aggressive power saving.
+    bool lightOff{false};         ///< Bit 0 of bytes 12..13 — master LED off.
+    bool wheelLightOff{false};    ///< Bit 1 — scroll-wheel LED off.
+    bool motionSmoothing{false};  ///< Bit 2 — sensor motion smoothing.
+    bool batteryLedSelect{false}; ///< Bit 3 — enable battery-state RGB indicator.
+    bool powerSaveMode{false};    ///< Bit 4 — aggressive power saving.
 
     std::uint16_t sleepBtIdleSec{0};  ///< Bytes 40..41 — BT idle seconds.
     std::uint16_t sleepBtDeepSec{0};  ///< Bytes 42..43 — BT deep-sleep seconds.
@@ -651,8 +649,12 @@ struct MouseSettings {
     LiftOffDistance liftOffDistance{LiftOffDistance::Mm1}; ///< Byte 52 — LOD enum.
     bool angleSnap{false};                                 ///< Byte 53 — angle-snap on/off.
 
-    Rgb batteryLedHigh{0, 0xff, 0}; ///< Bytes 54..56 — high-charge indicator RGB (vendor default green).
-    Rgb batteryLedLow{0xff, 0, 0};  ///< Bytes 57..59 — low-charge indicator RGB (vendor default red).
+    Rgb batteryLedHigh{0,
+                       0xff,
+                       0}; ///< Bytes 54..56 — high-charge indicator RGB (vendor default green).
+    Rgb batteryLedLow{0xff,
+                      0,
+                      0}; ///< Bytes 57..59 — low-charge indicator RGB (vendor default red).
 
     bool chargingSwitch{true}; ///< Byte 60 — keep LED lit while charging.
 };
@@ -965,9 +967,9 @@ public:
  * coherent with @ref IMouseCapable::getDpiStages().
  */
 struct DpiTable {
-    std::uint8_t profile{0};     ///< Target onboard profile slot (0..7).
-    std::uint8_t activeStage{0}; ///< Currently-active stage index (0..7).
-    std::uint8_t stageCount{8};  ///< Number of enabled stages (1..8).
+    std::uint8_t profile{0};          ///< Target onboard profile slot (0..7).
+    std::uint8_t activeStage{0};      ///< Currently-active stage index (0..7).
+    std::uint8_t stageCount{8};       ///< Number of enabled stages (1..8).
     std::array<DpiStage, 8> stages{}; ///< 8 DPI presets (value + indicator RGB).
 };
 
@@ -1064,9 +1066,8 @@ public:
      *                   §3.6 — byte 0 = action type, bytes 1..3 = type-specific.
      * @return true when the wire packet went out; false on transport error.
      */
-    virtual bool setFnLayerBinding(std::uint8_t fnLayer,
-                                   std::uint8_t buttonIndex,
-                                   std::uint32_t action) = 0;
+    virtual bool
+    setFnLayerBinding(std::uint8_t fnLayer, std::uint8_t buttonIndex, std::uint32_t action) = 0;
 };
 
 // -----------------------------------------------------------------------------
@@ -1245,8 +1246,8 @@ struct MouseMacroEvent {
         KeyUp = 1,   ///< Release: HID usage byte emitted with bit 7 clear.
         Delay = 2,   ///< Wait: ms delay, 1-byte if <=127 else uint16-LE.
     };
-    Kind kind{Kind::KeyDown};   ///< Event discriminant.
-    std::uint16_t value{0};     ///< HID usage (KeyDown/Up) or delay ms (Delay).
+    Kind kind{Kind::KeyDown}; ///< Event discriminant.
+    std::uint16_t value{0};   ///< HID usage (KeyDown/Up) or delay ms (Delay).
 };
 
 /**
@@ -1293,8 +1294,7 @@ public:
      * @return true when every chunk's wire packet went out; false on
      *         transport error at any chunk.
      */
-    virtual bool uploadMacro(std::uint8_t slot,
-                             std::vector<MouseMacroEvent> const& events) = 0;
+    virtual bool uploadMacro(std::uint8_t slot, std::vector<MouseMacroEvent> const& events) = 0;
 
     /// @return Number of macro slots the firmware persists (AJ159 APEX = 20 per §3.11).
     [[nodiscard]] virtual std::uint8_t macroSlotCount() const noexcept = 0;

@@ -31,11 +31,10 @@
 
 #include "ajazz/core/device.hpp"
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QtQmlIntegration>
-
-#include <QHash>
 
 #include <chrono>
 #include <functional>

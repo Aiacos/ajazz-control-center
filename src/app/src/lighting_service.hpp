@@ -19,8 +19,8 @@
 
 #include <QObject>
 #include <QString>
-#include <QVariantList>
 #include <QtQmlIntegration>
+#include <QVariantList>
 
 #include <functional>
 #include <memory>

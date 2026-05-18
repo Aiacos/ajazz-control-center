@@ -374,19 +374,19 @@ TEST_CASE("AJ series buildSetTftLcdData - byte layout matches vendor RE",
                                         /*chunkIndex*/ 0x0102,
                                         payload);
     REQUIRE(pkt[0] == kReportId);
-    REQUIRE(pkt[1] == 0x25);              // FEA_CMD_SETTFTLCDDATA
-    REQUIRE(pkt[2] == 0);                 // currentFrame
-    REQUIRE(pkt[3] == 1);                 // frameNum
-    REQUIRE(pkt[4] == 0);                 // frameDelay
-    REQUIRE(pkt[5] == 0x02);              // chunkIndex LE lo
-    REQUIRE(pkt[6] == 0x01);              // chunkIndex LE hi
-    REQUIRE(pkt[7] == 4);                 // chunkLen == payload.size()
-    REQUIRE(pkt[8] == 0);                 // reserved
-    REQUIRE(pkt[9] == 0xAB);              // payload byte 0
+    REQUIRE(pkt[1] == 0x25); // FEA_CMD_SETTFTLCDDATA
+    REQUIRE(pkt[2] == 0);    // currentFrame
+    REQUIRE(pkt[3] == 1);    // frameNum
+    REQUIRE(pkt[4] == 0);    // frameDelay
+    REQUIRE(pkt[5] == 0x02); // chunkIndex LE lo
+    REQUIRE(pkt[6] == 0x01); // chunkIndex LE hi
+    REQUIRE(pkt[7] == 4);    // chunkLen == payload.size()
+    REQUIRE(pkt[8] == 0);    // reserved
+    REQUIRE(pkt[9] == 0xAB); // payload byte 0
     REQUIRE(pkt[10] == 0xCD);
     REQUIRE(pkt[11] == 0xEF);
-    REQUIRE(pkt[12] == 0x12);             // payload byte 3
-    REQUIRE(pkt[13] == 0);                // first padding byte
+    REQUIRE(pkt[12] == 0x12); // payload byte 3
+    REQUIRE(pkt[13] == 0);    // first padding byte
     // pkt[63] is the last payload slot (we sent only 4 bytes so it pads to 0).
     REQUIRE(pkt[63] == 0);
     // BIT7 checksum lands at pkt[64] == pkt[kReportSize - 1] per

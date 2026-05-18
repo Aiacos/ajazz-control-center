@@ -76,9 +76,8 @@ TEST_CASE("BatteryService: lastKnownPercent caches successes and resets on unava
 
     ajazz::app::BatteryService svc(
         [mock](QString const& cn) -> std::shared_ptr<ajazz::core::IDevice> {
-            return cn == QStringLiteral("ak980pro")
-                       ? std::shared_ptr<ajazz::core::IDevice>(mock)
-                       : nullptr;
+            return cn == QStringLiteral("ak980pro") ? std::shared_ptr<ajazz::core::IDevice>(mock)
+                                                    : nullptr;
         },
         []() -> std::vector<QString> { return {}; },
         nullptr);

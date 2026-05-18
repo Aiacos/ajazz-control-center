@@ -47,14 +47,12 @@ constexpr std::chrono::milliseconds kAutoSyncInterval{15 * 60 * 1000};
 } // namespace
 
 TimeSyncService::TimeSyncService(DeviceLookup lookup, QObject* parent)
-    : QObject(parent), m_lookup(std::move(lookup)),
-      m_autoSyncTimer(new QTimer(this)) {
+    : QObject(parent), m_lookup(std::move(lookup)), m_autoSyncTimer(new QTimer(this)) {
     m_autoSyncTimer->setInterval(kAutoSyncInterval);
     m_autoSyncTimer->setTimerType(Qt::CoarseTimer); // millisecond accuracy
                                                     // is fine; we don't
                                                     // need wake-up cost.
-    connect(m_autoSyncTimer, &QTimer::timeout,
-            this, &TimeSyncService::periodicAutoSyncTick);
+    connect(m_autoSyncTimer, &QTimer::timeout, this, &TimeSyncService::periodicAutoSyncTick);
     QSettings settings;
     m_autoSync = settings.value(QString::fromLatin1(kSettingsKey), false).toBool();
     validatePersistedAutoSync();
@@ -108,7 +106,8 @@ void TimeSyncService::reconcileAutoSyncTimer() {
     bool const wantRunning = m_autoSync && static_cast<bool>(m_enumerator);
     if (wantRunning && !m_autoSyncTimer->isActive()) {
         m_autoSyncTimer->start();
-        AJAZZ_LOG_INFO("time-sync", "periodic auto-sync timer started ({} ms interval)",
+        AJAZZ_LOG_INFO("time-sync",
+                       "periodic auto-sync timer started ({} ms interval)",
                        static_cast<long long>(kAutoSyncInterval.count()));
     } else if (!wantRunning && m_autoSyncTimer->isActive()) {
         m_autoSyncTimer->stop();
@@ -137,8 +136,10 @@ void TimeSyncService::periodicAutoSyncTick() {
         } else {
             // Auto-sync failures stay silent (no syncFailed signal); a
             // device without IClockCapable is expected and not actionable.
-            AJAZZ_LOG_INFO("time-sync", "periodic auto-sync skipped {}: {}",
-                           codename.toStdString(), reason.toStdString());
+            AJAZZ_LOG_INFO("time-sync",
+                           "periodic auto-sync skipped {}: {}",
+                           codename.toStdString(),
+                           reason.toStdString());
         }
     }
 }

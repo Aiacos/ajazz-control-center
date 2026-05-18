@@ -191,9 +191,12 @@ TEST_CASE("AJ-series encodeMouseMacro pins KeyDown bit7-set and KeyUp bit7-clear
     // Sec 3.11 line 510: "byte = HID usage; bit7 = down flag".
     // Test boundary HID usages 0x00, 0x01, 0x7F to confirm the bit-7 split.
     std::vector<MouseMacroEvent> const events{
-        kd(0x00), ku(0x00),
-        kd(0x01), ku(0x01),
-        kd(0x7F), ku(0x7F),
+        kd(0x00),
+        ku(0x00),
+        kd(0x01),
+        ku(0x01),
+        kd(0x7F),
+        ku(0x7F),
     };
     auto const bytes = encodeMouseMacro(events);
     REQUIRE(bytes.size() == 2 + 6);
@@ -213,12 +216,12 @@ TEST_CASE("AJ-series buildMacroHeader pins opcode 0x16 + slot + chunkIdx 0",
           "[aj_series][macro][wire]") {
     std::array<std::uint8_t, 4> const payload{0xDE, 0xAD, 0xBE, 0xEF};
     auto const pkt = buildMacroHeader(/*slot=*/7,
-                                       /*lastNonZeroPos=*/3,
-                                       /*isFinal=*/true,
-                                       std::span<std::uint8_t const>(payload));
+                                      /*lastNonZeroPos=*/3,
+                                      /*isFinal=*/true,
+                                      std::span<std::uint8_t const>(payload));
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetMacroSimple)); // 0x16
-    CHECK(pkt[2] == 7); // slot
+    CHECK(pkt[2] == 7);                                                   // slot
     CHECK(pkt[3] == 0); // chunkIdx (header = chunk 0)
     CHECK(pkt[4] == 3); // lastNonZeroPos
     CHECK(pkt[5] == 1); // isFinal
@@ -238,19 +241,18 @@ TEST_CASE("AJ-series buildMacroChunk pins monotonic chunkIdx + isFinal",
           "[aj_series][macro][wire]") {
     std::array<std::uint8_t, 4> const payload{0x01, 0x02, 0x03, 0x04};
     auto const pkt = buildMacroChunk(/*slot=*/3,
-                                      /*chunkIdx=*/4,
-                                      /*lastNonZeroPos=*/200,
-                                      /*isFinal=*/false,
-                                      std::span<std::uint8_t const>(payload));
+                                     /*chunkIdx=*/4,
+                                     /*lastNonZeroPos=*/200,
+                                     /*isFinal=*/false,
+                                     std::span<std::uint8_t const>(payload));
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetMacroSimple)); // 0x16
-    CHECK(pkt[2] == 3);   // slot
-    CHECK(pkt[3] == 4);   // chunkIdx
+    CHECK(pkt[2] == 3);                                                   // slot
+    CHECK(pkt[3] == 4);                                                   // chunkIdx
     CHECK(pkt[4] == 200); // lastNonZeroPos (same as header)
     CHECK(pkt[5] == 0);   // isFinal=false
 }
 
-TEST_CASE("AJ-series buildMacroHeader clamps slot >= 20 to 19",
-          "[aj_series][macro][clamp]") {
+TEST_CASE("AJ-series buildMacroHeader clamps slot >= 20 to 19", "[aj_series][macro][clamp]") {
     auto const pkt = buildMacroHeader(/*slot=*/99, 0, true, {});
     CHECK(pkt[2] == 19); // clamped from 99 to macroSlotCount-1
 }
@@ -275,9 +277,9 @@ TEST_CASE("AJ-series uploadMacro empty events still emits one header chunk",
     REQUIRE(pkt.size() == kReportSize);
 
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetMacroSimple)); // 0x16
-    CHECK(pkt[2] == 0); // slot
-    CHECK(pkt[3] == 0); // chunkIdx
-    CHECK(pkt[5] == 1); // isFinal
+    CHECK(pkt[2] == 0);                                                 // slot
+    CHECK(pkt[3] == 0);                                                 // chunkIdx
+    CHECK(pkt[5] == 1);                                                 // isFinal
     CHECK(pkt[kReportSize - 1] == expectedBit7Checksum(pkt));
 }
 
@@ -296,9 +298,9 @@ TEST_CASE("AJ-series uploadMacro single-chunk small macro emits 1 packet",
     auto const& pkt = writes.back();
 
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetMacroSimple)); // 0x16
-    CHECK(pkt[2] == 2); // slot
-    CHECK(pkt[3] == 0); // chunkIdx
-    CHECK(pkt[5] == 1); // isFinal
+    CHECK(pkt[2] == 2);                                                 // slot
+    CHECK(pkt[3] == 0);                                                 // chunkIdx
+    CHECK(pkt[5] == 1);                                                 // isFinal
     // Encoded payload at pkt[9..13] (matches the encode round-trip test).
     CHECK(pkt[9] == 0x01);  // repeatCount LO
     CHECK(pkt[10] == 0x00); // repeatCount HI

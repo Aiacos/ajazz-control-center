@@ -151,8 +151,8 @@ TEST_CASE("AJ-series setMouseSettings emits opcode 0x53 with every documented by
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetOption0)); // 0x53
 
     // Profile + poll-rate context (vendor bytes 8..9 = our pkt[9..10]).
-    CHECK(pkt[9] == 0);             // active profile defaults to 0
-    CHECK(pkt[10] == 0x01);         // _RateToNum[1000] (default cache)
+    CHECK(pkt[9] == 0);     // active profile defaults to 0
+    CHECK(pkt[10] == 0x01); // _RateToNum[1000] (default cache)
 
     // Debounce at vendor byte 10 = pkt[11].
     CHECK(pkt[11] == 4);
@@ -169,14 +169,14 @@ TEST_CASE("AJ-series setMouseSettings emits opcode 0x53 with every documented by
     CHECK(pkt[17] == 10);
 
     // Sleep block at vendor bytes 40..47 = pkt[41..48], all uint16-LE.
-    CHECK(pkt[41] == static_cast<std::uint8_t>(300 & 0xff));  // BT idle lo
-    CHECK(pkt[42] == static_cast<std::uint8_t>(300 >> 8));    // BT idle hi
-    CHECK(pkt[43] == static_cast<std::uint8_t>(900 & 0xff));  // BT deep lo
-    CHECK(pkt[44] == static_cast<std::uint8_t>(900 >> 8));    // BT deep hi
-    CHECK(pkt[45] == 60);                                     // 2.4G idle lo
-    CHECK(pkt[46] == 0);                                      // 2.4G idle hi
-    CHECK(pkt[47] == static_cast<std::uint8_t>(600 & 0xff));  // 2.4G deep lo
-    CHECK(pkt[48] == static_cast<std::uint8_t>(600 >> 8));    // 2.4G deep hi
+    CHECK(pkt[41] == static_cast<std::uint8_t>(300 & 0xff)); // BT idle lo
+    CHECK(pkt[42] == static_cast<std::uint8_t>(300 >> 8));   // BT idle hi
+    CHECK(pkt[43] == static_cast<std::uint8_t>(900 & 0xff)); // BT deep lo
+    CHECK(pkt[44] == static_cast<std::uint8_t>(900 >> 8));   // BT deep hi
+    CHECK(pkt[45] == 60);                                    // 2.4G idle lo
+    CHECK(pkt[46] == 0);                                     // 2.4G idle hi
+    CHECK(pkt[47] == static_cast<std::uint8_t>(600 & 0xff)); // 2.4G deep lo
+    CHECK(pkt[48] == static_cast<std::uint8_t>(600 >> 8));   // 2.4G deep hi
 
     // Sensitivity at vendor bytes 50..51 = pkt[51..52].
     CHECK(pkt[51] == 75);

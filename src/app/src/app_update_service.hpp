@@ -32,8 +32,8 @@
 
 #include <QObject>
 #include <QString>
-#include <QUrl>
 #include <QtQmlIntegration>
+#include <QUrl>
 
 #include <type_traits>
 
@@ -179,9 +179,9 @@ private:
     QString m_latestVersion;
     QString m_latestReleaseNotes;
     QUrl m_latestReleaseUrl;
-    QString m_etag;                          ///< Cached If-None-Match value.
-    QNetworkAccessManager* m_nam = nullptr;  ///< Lazily allocated on first checkNow().
-    QTimer* m_pollTimer = nullptr;           ///< 24-hour periodic check; nullptr on Flatpak.
+    QString m_etag;                         ///< Cached If-None-Match value.
+    QNetworkAccessManager* m_nam = nullptr; ///< Lazily allocated on first checkNow().
+    QTimer* m_pollTimer = nullptr;          ///< 24-hour periodic check; nullptr on Flatpak.
 };
 
 // Pitfall 4 build-break lock — co-located with QML_SINGLETON.

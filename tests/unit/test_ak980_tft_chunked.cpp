@@ -62,8 +62,7 @@ core::DeviceId makeId() {
 
 /// Build a synthetic RGBA8 gradient image of arbitrary size. Caller chooses
 /// dimensions; the test then feeds the resulting bytes to uploadTftImage.
-std::vector<std::uint8_t>
-gradientRgba(std::uint16_t width, std::uint16_t height) {
+std::vector<std::uint8_t> gradientRgba(std::uint16_t width, std::uint16_t height) {
     std::vector<std::uint8_t> rgba;
     rgba.resize(static_cast<std::size_t>(width) * height * 4u);
     for (std::uint16_t y = 0; y < height; ++y) {
@@ -89,14 +88,14 @@ TEST_CASE("ak980 TFT chunk packet has 0x80 marker and 28-byte RGB565 payload",
     }
 
     SECTION("chunk index 0 sets only the marker bit") {
-        auto const pkt = buildTftChunkedPayload(
-            0u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
+        auto const pkt =
+            buildTftChunkedPayload(0u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
         REQUIRE(pkt.size() == ReportSize);
-        REQUIRE(pkt[0] == 0x00);   // TFT path uses ReportId 0x00, NOT 0x04.
-        REQUIRE(pkt[1] == 0x00);   // chunk index low 8 bits = 0.
-        REQUIRE(pkt[2] == 0x80);   // 0x80 marker bit set; high 7 chunk bits = 0.
+        REQUIRE(pkt[0] == 0x00);       // TFT path uses ReportId 0x00, NOT 0x04.
+        REQUIRE(pkt[1] == 0x00);       // chunk index low 8 bits = 0.
+        REQUIRE(pkt[2] == 0x80);       // 0x80 marker bit set; high 7 chunk bits = 0.
         REQUIRE((pkt[2] & 0x80) != 0); // marker bit must be set on every chunk.
-        REQUIRE(pkt[3] == 0x00);   // chunk index middle 8 bits = 0.
+        REQUIRE(pkt[3] == 0x00);       // chunk index middle 8 bits = 0.
         for (std::size_t i = 0; i < kTftChunkPayload; ++i) {
             REQUIRE(pkt[4 + i] == payload[i]);
         }
@@ -106,11 +105,11 @@ TEST_CASE("ak980 TFT chunk packet has 0x80 marker and 28-byte RGB565 payload",
     }
 
     SECTION("chunk index 2314 (last of 240x135 frame) splits across bytes 1+3") {
-        auto const pkt = buildTftChunkedPayload(
-            2314u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
-        REQUIRE(pkt[1] == 0x0a);   // 2314 & 0xFF.
-        REQUIRE(pkt[2] == 0x80);   // marker only; high 7 bits of 2314 = 0.
-        REQUIRE(pkt[3] == 0x09);   // (2314 >> 8) & 0xFF.
+        auto const pkt =
+            buildTftChunkedPayload(2314u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
+        REQUIRE(pkt[1] == 0x0a); // 2314 & 0xFF.
+        REQUIRE(pkt[2] == 0x80); // marker only; high 7 bits of 2314 = 0.
+        REQUIRE(pkt[3] == 0x09); // (2314 >> 8) & 0xFF.
     }
 }
 
@@ -119,20 +118,19 @@ TEST_CASE("ak980 TFT chunked HEADER carries opcode 0x7F sub 0x03 + total chunks"
     auto const pkt = buildTftChunkedHeader(/*lcdSelect=*/0,
                                            /*totalChunks=*/2315u);
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == 0x00);                  // TFT-path ReportId.
-    REQUIRE(pkt[1] == CmdScreenHeader);       // 0x7F.
-    REQUIRE(pkt[2] == CmdScreenSubBegin);     // 0x03 — the discriminator the
-                                              // chunk packets distinguish via
-                                              // their 0x80 marker on byte 2.
-    REQUIRE(pkt[3] == 0x01);                  // lcdSelect + 1.
-    REQUIRE(pkt[4] == 0x0b);                  // 2315 = 0x90b LE -> 0x0b, 0x09.
+    REQUIRE(pkt[0] == 0x00);              // TFT-path ReportId.
+    REQUIRE(pkt[1] == CmdScreenHeader);   // 0x7F.
+    REQUIRE(pkt[2] == CmdScreenSubBegin); // 0x03 — the discriminator the
+                                          // chunk packets distinguish via
+                                          // their 0x80 marker on byte 2.
+    REQUIRE(pkt[3] == 0x01);              // lcdSelect + 1.
+    REQUIRE(pkt[4] == 0x0b);              // 2315 = 0x90b LE -> 0x0b, 0x09.
     REQUIRE(pkt[5] == 0x09);
     REQUIRE(pkt[6] == 0x00);
     REQUIRE(pkt[7] == 0x00);
 }
 
-TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks",
-          "[ak980][tft][chunked]") {
+TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks", "[ak980][tft][chunked]") {
     tests::qtGuiApp();
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
@@ -172,10 +170,9 @@ TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks",
         auto const& pkt = writes.at(i);
         REQUIRE(pkt.size() == ReportSize);
         REQUIRE((pkt[2] & 0x80u) != 0);
-        std::uint32_t const decoded =
-            static_cast<std::uint32_t>(pkt[1]) |
-            (static_cast<std::uint32_t>(pkt[3]) << 8u) |
-            (static_cast<std::uint32_t>(pkt[2] & 0x7fu) << 16u);
+        std::uint32_t const decoded = static_cast<std::uint32_t>(pkt[1]) |
+                                      (static_cast<std::uint32_t>(pkt[3]) << 8u) |
+                                      (static_cast<std::uint32_t>(pkt[2] & 0x7fu) << 16u);
         REQUIRE(decoded == static_cast<std::uint32_t>(i - 1u));
     }
 }

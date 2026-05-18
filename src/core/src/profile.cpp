@@ -585,7 +585,8 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
 
 /// Read a `{"<uint>":<value>, ...}` map; @p readValue consumes one value.
 template <typename Value, typename ReadValueFn>
-void readUintKeyedMap(JsonReader& r, std::unordered_map<std::uint16_t, Value>& dst,
+void readUintKeyedMap(JsonReader& r,
+                      std::unordered_map<std::uint16_t, Value>& dst,
                       ReadValueFn&& readValue) {
     r.expect('{');
     if (r.tryConsume('}')) {
@@ -668,11 +669,10 @@ Profile profileFromJson(std::string_view json) {
             // Schema wire-key for Profile::deviceCodename (per PROFILE_SCHEMA.md).
             profile.deviceCodename = r.readString();
         } else if (key == "keys") {
-            readUintKeyedMap(r, profile.keys,
-                             [](JsonReader& rr) { return readBinding(rr); });
+            readUintKeyedMap(r, profile.keys, [](JsonReader& rr) { return readBinding(rr); });
         } else if (key == "encoders") {
-            readUintKeyedMap(r, profile.encoders,
-                             [](JsonReader& rr) { return readEncoderBinding(rr); });
+            readUintKeyedMap(
+                r, profile.encoders, [](JsonReader& rr) { return readEncoderBinding(rr); });
         } else if (key == "pages") {
             r.expect('{');
             if (!r.tryConsume('}')) {

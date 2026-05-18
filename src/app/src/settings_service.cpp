@@ -23,9 +23,9 @@ SettingsService* g_instance = nullptr;
 /// the returned shared_ptr lifetime; pin it in a local for the duration
 /// of any call into the cap interface (A-04 / D-01 amendment 3 — the
 /// same UAF discipline as LightingService / TimeSyncService).
-[[nodiscard]] core::ISettingsCapable*
-resolveCap(SettingsService::DeviceLookup const& lookup, QString const& codename,
-           std::shared_ptr<core::IDevice>& keepAlive) {
+[[nodiscard]] core::ISettingsCapable* resolveCap(SettingsService::DeviceLookup const& lookup,
+                                                 QString const& codename,
+                                                 std::shared_ptr<core::IDevice>& keepAlive) {
     if (!lookup) {
         return nullptr;
     }
@@ -75,18 +75,16 @@ bool SettingsService::setSettings(QString const& codename,
     std::shared_ptr<core::IDevice> keepAlive;
     auto* const cap = resolveCap(m_lookup, codename, keepAlive);
     if (cap == nullptr) {
-        AJAZZ_LOG_WARN(
-            "settings-service",
-            "setSettings: device '{}' not connected or not ISettingsCapable",
-            codename.toStdString());
+        AJAZZ_LOG_WARN("settings-service",
+                       "setSettings: device '{}' not connected or not ISettingsCapable",
+                       codename.toStdString());
         emit settingsFailed(codename,
                             tr("Device is not connected or does not support settings batch"));
         return false;
     }
     core::KeyboardSettings batch{};
     batch.fnLayerSwitch = static_cast<std::uint8_t>(std::clamp(fnSwitch, 0, 1));
-    batch.sleepTimerMinutes =
-        static_cast<std::uint8_t>(std::clamp(sleepMinutes, 0, 255));
+    batch.sleepTimerMinutes = static_cast<std::uint8_t>(std::clamp(sleepMinutes, 0, 255));
     batch.keyResponseTimeLevel = clampResponseLevel(responseLevel);
     bool const ok = cap->setKeyboardSettings(batch);
     if (!ok) {
@@ -115,8 +113,7 @@ QVariantMap SettingsService::currentSettings(QString const& codename) const {
     out.insert(QStringLiteral("available"), true);
     out.insert(QStringLiteral("fnSwitch"), static_cast<int>(cached.fnLayerSwitch));
     out.insert(QStringLiteral("sleepMinutes"), static_cast<int>(cached.sleepTimerMinutes));
-    out.insert(QStringLiteral("responseLevel"),
-               static_cast<int>(cached.keyResponseTimeLevel));
+    out.insert(QStringLiteral("responseLevel"), static_cast<int>(cached.keyResponseTimeLevel));
     return out;
 }
 

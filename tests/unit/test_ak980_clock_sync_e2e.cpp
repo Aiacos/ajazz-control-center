@@ -84,8 +84,8 @@ TEST_CASE("AK980 PRO setTime emits the full 4-packet HID Feature envelope",
     auto* observer = transport.get();
     transport->open();
 
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     REQUIRE(device != nullptr);
 
     auto* clock = dynamic_cast<core::IClockCapable*>(device.get());
@@ -125,16 +125,16 @@ TEST_CASE("AK980 PRO setTime emits the full 4-packet HID Feature envelope",
     REQUIRE(p3.size() == 64);
     REQUIRE(p3[0] == 0x00); // TimeDataReportId — NOT the default 0x04
     REQUIRE(p3[1] == 0x01);
-    REQUIRE(p3[2] == 0x5a);                             // magic
-    REQUIRE(p3[3] == static_cast<std::uint8_t>(26));    // 2026 - 2000
-    REQUIRE(p3[4] == static_cast<std::uint8_t>(1));     // January
-    REQUIRE(p3[5] == static_cast<std::uint8_t>(15));    // day
-    REQUIRE(p3[6] == static_cast<std::uint8_t>(12));    // hour
-    REQUIRE(p3[7] == static_cast<std::uint8_t>(34));    // minute
-    REQUIRE(p3[8] == static_cast<std::uint8_t>(56));    // second
+    REQUIRE(p3[2] == 0x5a);                          // magic
+    REQUIRE(p3[3] == static_cast<std::uint8_t>(26)); // 2026 - 2000
+    REQUIRE(p3[4] == static_cast<std::uint8_t>(1));  // January
+    REQUIRE(p3[5] == static_cast<std::uint8_t>(15)); // day
+    REQUIRE(p3[6] == static_cast<std::uint8_t>(12)); // hour
+    REQUIRE(p3[7] == static_cast<std::uint8_t>(34)); // minute
+    REQUIRE(p3[8] == static_cast<std::uint8_t>(56)); // second
     REQUIRE(p3[9] == 0x00);
-    REQUIRE(p3[10] == static_cast<std::uint8_t>(4));    // Thursday (tm_wday)
-    REQUIRE(p3[62] == 0xaa);                            // tail magic
+    REQUIRE(p3[10] == static_cast<std::uint8_t>(4)); // Thursday (tm_wday)
+    REQUIRE(p3[62] == 0xaa);                         // tail magic
     REQUIRE(p3[63] == 0x55);
 
     // --- Packet 4: SAVE control (ReportId=0x04, CMD_SAVE_RTC=0x02) ---
@@ -152,8 +152,8 @@ TEST_CASE("AK980 PRO setTime: tm_wday is not hard-coded to Thursday",
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* clock = dynamic_cast<core::IClockCapable*>(device.get());
     REQUIRE(clock != nullptr);
 
@@ -178,8 +178,8 @@ TEST_CASE("AK980 PRO setTime maps year < 2000 to byte 0 instead of underflowing"
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* clock = dynamic_cast<core::IClockCapable*>(device.get());
     REQUIRE(clock != nullptr);
 

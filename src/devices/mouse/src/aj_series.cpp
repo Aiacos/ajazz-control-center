@@ -295,7 +295,9 @@ public:
         }
         AJAZZ_LOG_INFO("mouse.aj_series",
                        "TFT face uploaded ({} chunks, panel {}x{}, dpi={})",
-                       chunks.size(), panel.width(), panel.height(),
+                       chunks.size(),
+                       panel.width(),
+                       panel.height(),
                        static_cast<unsigned>(activeDpi));
         return TimeSyncResult::Ok;
     }
@@ -324,8 +326,7 @@ public:
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "setPollingRateHz: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "setPollingRateHz: HID write failed: {}", e.what());
             return false;
         }
         m_pollRate = clamped;
@@ -342,14 +343,14 @@ public:
     [[nodiscard]] std::uint8_t onboardProfileCount() const noexcept override { return 8; }
 
     bool setActiveOnboardProfile(std::uint8_t index) override {
-        std::uint8_t const clamped = std::min<std::uint8_t>(
-            index, static_cast<std::uint8_t>(onboardProfileCount() - 1));
+        std::uint8_t const clamped =
+            std::min<std::uint8_t>(index, static_cast<std::uint8_t>(onboardProfileCount() - 1));
         auto const pkt = buildSetProfile(clamped);
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "setActiveOnboardProfile: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN(
+                "mouse.aj_series", "setActiveOnboardProfile: HID write failed: {}", e.what());
             return false;
         }
         m_activeProfile = clamped;
@@ -379,8 +380,7 @@ public:
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "setMouseSettings: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "setMouseSettings: HID write failed: {}", e.what());
             return false;
         }
         // Normalise the cache post-clamp so mouseSettings() mirrors the
@@ -388,8 +388,7 @@ public:
         core::MouseSettings normalised = settings;
         constexpr std::uint8_t kDebounceMaxMs = 10;
         constexpr std::uint8_t kSensitivityMaxPercent = 100;
-        normalised.debounceMs =
-            std::min<std::uint8_t>(normalised.debounceMs, kDebounceMaxMs);
+        normalised.debounceMs = std::min<std::uint8_t>(normalised.debounceMs, kDebounceMaxMs);
         normalised.xSensitivity =
             std::min<std::uint8_t>(normalised.xSensitivity, kSensitivityMaxPercent);
         normalised.ySensitivity =
@@ -404,11 +403,16 @@ public:
         // push and don't clobber unrelated fields on their next re-emit.
         m_options.debounceMs = normalised.debounceMs;
         std::uint16_t flagsBits = 0;
-        if (normalised.lightOff)         flagsBits |= 1u << 0;
-        if (normalised.wheelLightOff)    flagsBits |= 1u << 1;
-        if (normalised.motionSmoothing)  flagsBits |= 1u << 2;
-        if (normalised.batteryLedSelect) flagsBits |= 1u << 3;
-        if (normalised.powerSaveMode)    flagsBits |= 1u << 4;
+        if (normalised.lightOff)
+            flagsBits |= 1u << 0;
+        if (normalised.wheelLightOff)
+            flagsBits |= 1u << 1;
+        if (normalised.motionSmoothing)
+            flagsBits |= 1u << 2;
+        if (normalised.batteryLedSelect)
+            flagsBits |= 1u << 3;
+        if (normalised.powerSaveMode)
+            flagsBits |= 1u << 4;
         m_options.flags = flagsBits;
         m_options.sleepBtIdleSec = normalised.sleepBtIdleSec;
         m_options.sleepBtDeepSec = normalised.sleepBtDeepSec;
@@ -434,9 +438,7 @@ public:
         return true;
     }
 
-    [[nodiscard]] core::MouseSettings mouseSettings() const override {
-        return m_mouseSettings;
-    }
+    [[nodiscard]] core::MouseSettings mouseSettings() const override { return m_mouseSettings; }
 
     // ---- IFactoryResettable (§3.2 — FEA_CMD_SET_RESERT 0x02) --------------
     //
@@ -459,8 +461,7 @@ public:
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "factoryReset: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "factoryReset: HID write failed: {}", e.what());
             return false;
         }
         return true;
@@ -483,8 +484,7 @@ public:
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "setDpiTable: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "setDpiTable: HID write failed: {}", e.what());
             return false;
         }
         // Normalise the cache post-clamp so dpiTable() mirrors the wire bytes.
@@ -539,8 +539,7 @@ public:
         try {
             (void)m_transport->write(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "setFnLayerBinding: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "setFnLayerBinding: HID write failed: {}", e.what());
             return false;
         }
         return true;
@@ -569,15 +568,14 @@ public:
         return aj_series::kMacroSlotCount;
     }
 
-    bool uploadMacro(std::uint8_t slot,
-                     std::vector<core::MouseMacroEvent> const& events) override {
-        auto const encoded = aj_series::encodeMouseMacro(std::span<core::MouseMacroEvent const>(events));
+    bool uploadMacro(std::uint8_t slot, std::vector<core::MouseMacroEvent> const& events) override {
+        auto const encoded =
+            aj_series::encodeMouseMacro(std::span<core::MouseMacroEvent const>(events));
         // Clamp the encoded payload to the §3.11 ceiling so over-budget
         // sequences don't run off the end of the 5-chunk wire envelope.
-        std::size_t const payloadBytes =
-            std::min(encoded.size(), aj_series::kMacroPayloadBytes);
-        std::uint8_t const clampedSlot = std::min<std::uint8_t>(
-            slot, static_cast<std::uint8_t>(aj_series::kMacroSlotCount - 1));
+        std::size_t const payloadBytes = std::min(encoded.size(), aj_series::kMacroPayloadBytes);
+        std::uint8_t const clampedSlot =
+            std::min<std::uint8_t>(slot, static_cast<std::uint8_t>(aj_series::kMacroSlotCount - 1));
 
         // §3.11 line 491: lastNonZeroPos = 56*(u-1) + s where u = highest
         // non-empty chunk index (1-based) and s = position of last non-zero
@@ -596,8 +594,9 @@ public:
         // Always emit at least one chunk so empty events still send a
         // header (firmware interprets as "macro cleared").
         std::size_t const chunkCount =
-            std::max<std::size_t>(1, (payloadBytes + aj_series::kMacroChunkPayloadBytes - 1) /
-                                          aj_series::kMacroChunkPayloadBytes);
+            std::max<std::size_t>(1,
+                                  (payloadBytes + aj_series::kMacroChunkPayloadBytes - 1) /
+                                      aj_series::kMacroChunkPayloadBytes);
 
         for (std::size_t chunkIdx = 0; chunkIdx < chunkCount; ++chunkIdx) {
             std::size_t const offset = chunkIdx * aj_series::kMacroChunkPayloadBytes;
@@ -606,18 +605,20 @@ public:
             std::span<std::uint8_t const> const chunkPayload(encoded.data() + offset, n);
             bool const isFinal = (chunkIdx + 1 == chunkCount);
             auto const pkt = (chunkIdx == 0)
-                ? aj_series::buildMacroHeader(clampedSlot, lastNonZeroPos, isFinal, chunkPayload)
-                : aj_series::buildMacroChunk(clampedSlot,
-                                              static_cast<std::uint8_t>(chunkIdx),
-                                              lastNonZeroPos,
-                                              isFinal,
-                                              chunkPayload);
+                                 ? aj_series::buildMacroHeader(
+                                       clampedSlot, lastNonZeroPos, isFinal, chunkPayload)
+                                 : aj_series::buildMacroChunk(clampedSlot,
+                                                              static_cast<std::uint8_t>(chunkIdx),
+                                                              lastNonZeroPos,
+                                                              isFinal,
+                                                              chunkPayload);
             try {
                 (void)m_transport->write(pkt);
             } catch (std::exception const& e) {
                 AJAZZ_LOG_WARN("mouse.aj_series",
                                "uploadMacro: HID write failed on chunk {}: {}",
-                               chunkIdx, e.what());
+                               chunkIdx,
+                               e.what());
                 return false;
             }
         }
@@ -650,8 +651,7 @@ public:
         try {
             (void)m_transport->write(req);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "readKeyMatrix: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "readKeyMatrix: HID write failed: {}", e.what());
             return std::nullopt;
         }
         // Allocate the larger of the two valid response shapes (64 or 65 B)
@@ -662,17 +662,15 @@ public:
         try {
             bytesRead = m_transport->read(buf, std::chrono::milliseconds{500});
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "readKeyMatrix: HID read failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "readKeyMatrix: HID read failed: {}", e.what());
             return std::nullopt;
         }
         if (bytesRead == 0) {
-            AJAZZ_LOG_WARN("mouse.aj_series",
-                           "readKeyMatrix: read timed out (no response)");
+            AJAZZ_LOG_WARN("mouse.aj_series", "readKeyMatrix: read timed out (no response)");
             return std::nullopt;
         }
-        auto matrix = aj_series::parseKeyMatrixResponse(
-            std::span<std::uint8_t const>(buf.data(), bytesRead));
+        auto matrix =
+            aj_series::parseKeyMatrixResponse(std::span<std::uint8_t const>(buf.data(), bytesRead));
         if (!matrix) {
             AJAZZ_LOG_WARN("mouse.aj_series",
                            "readKeyMatrix: parser rejected response of {} bytes",

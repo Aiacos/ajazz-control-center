@@ -271,9 +271,9 @@ TEST_CASE("AJ-series setActiveOnboardProfile emits opcode 0x05 with slot at byte
     auto const& pkt = writes.back();
     REQUIRE(pkt.size() == kReportSize);
 
-    CHECK(pkt[0] == kReportId);                                    // 0x05
+    CHECK(pkt[0] == kReportId);                                     // 0x05
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::SetProfile)); // 0x05
-    CHECK(pkt[2] == 3);                                            // requested slot
+    CHECK(pkt[2] == 3);                                             // requested slot
     for (std::size_t i = 3; i < kReportSize - 1; ++i) {
         CAPTURE(i);
         CHECK(pkt[i] == 0);

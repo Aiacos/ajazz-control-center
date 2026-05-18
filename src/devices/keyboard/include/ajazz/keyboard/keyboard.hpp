@@ -86,8 +86,8 @@ void registerAll(core::DeviceRegistry& registry);
  * @return          Heap-allocated IDevice with the same capability mix as
  *                  @ref makeProprietaryKeyboard.
  */
-[[nodiscard]] core::DevicePtr
-makeProprietaryKeyboardWithTransport(core::DeviceDescriptor const& d, core::DeviceId id,
-                                     core::TransportPtr transport);
+[[nodiscard]] core::DevicePtr makeProprietaryKeyboardWithTransport(core::DeviceDescriptor const& d,
+                                                                   core::DeviceId id,
+                                                                   core::TransportPtr transport);
 
 } // namespace ajazz::keyboard

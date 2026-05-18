@@ -58,8 +58,8 @@ void registerAll(core::DeviceRegistry& registry) {
             .model = "AJAZZ AK980 PRO",
             .codename = "ak980pro",
             .hasRgb = true,
-            .hasClock = true,   // ARCH-05.1: real 4-packet 0x28 firmware RTC envelope.
-            .hasBattery = true, // Roadmap §11.2: opcode 0x20 sub 0x01 charge query.
+            .hasClock = true,    // ARCH-05.1: real 4-packet 0x28 firmware RTC envelope.
+            .hasBattery = true,  // Roadmap §11.2: opcode 0x20 sub 0x01 charge query.
             .hasSettings = true, // Issue #57 / P3.x: ISettingsCapable settings batch
                                  // (opcode 0x07 sub 0x10) — fn-layer / sleep / response time.
         },

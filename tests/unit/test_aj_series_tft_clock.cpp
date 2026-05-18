@@ -110,17 +110,17 @@ TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
     // frameDelay=0, chunkIndex monotonically increasing.
     std::uint16_t expectedIndex = 0;
     for (auto const& pkt : writes) {
-        REQUIRE(pkt.size() == kReportSize);          // 65 bytes
-        REQUIRE(pkt[0] == kReportId);                // 0x05
-        REQUIRE(pkt[1] == 0x25);                     // FEA_CMD_SETTFTLCDDATA
-        REQUIRE(pkt[2] == 0);                        // currentFrame
-        REQUIRE(pkt[3] == 1);                        // frameNum (still image)
-        REQUIRE(pkt[4] == 0);                        // frameDelay
+        REQUIRE(pkt.size() == kReportSize); // 65 bytes
+        REQUIRE(pkt[0] == kReportId);       // 0x05
+        REQUIRE(pkt[1] == 0x25);            // FEA_CMD_SETTFTLCDDATA
+        REQUIRE(pkt[2] == 0);               // currentFrame
+        REQUIRE(pkt[3] == 1);               // frameNum (still image)
+        REQUIRE(pkt[4] == 0);               // frameDelay
         std::uint16_t const idx =
             static_cast<std::uint16_t>(pkt[5] | (static_cast<std::uint16_t>(pkt[6]) << 8U));
         REQUIRE(idx == expectedIndex);
-        REQUIRE(pkt[7] <= kTftChunkPayloadBytes);    // chunkLen budget
-        REQUIRE(pkt[8] == 0);                        // reserved
+        REQUIRE(pkt[7] <= kTftChunkPayloadBytes); // chunkLen budget
+        REQUIRE(pkt[8] == 0);                     // reserved
         ++expectedIndex;
     }
 }
@@ -129,8 +129,7 @@ TEST_CASE("renderClockDpiFace produces a Format_RGB16 image of the requested siz
           "[mouse][aj_series][tft][render]") {
     tests::qtGuiApp();
     QSize const panel(128, 128);
-    QImage const face =
-        mouse::renderClockDpiFace(panel, referenceTime(), /*activeDpi*/ 1600);
+    QImage const face = mouse::renderClockDpiFace(panel, referenceTime(), /*activeDpi*/ 1600);
     REQUIRE_FALSE(face.isNull());
     REQUIRE(face.size() == panel);
     REQUIRE(face.format() == QImage::Format_RGB16);

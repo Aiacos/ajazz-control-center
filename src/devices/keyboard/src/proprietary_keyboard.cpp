@@ -240,8 +240,8 @@ std::array<std::uint8_t, ReportSize> buildSettingsBatch(std::uint8_t fnLayerSwit
     pkt[kSettingsByteFnSwitch] = fnLayerSwitch;
     pkt[kSettingsByteSleepTime] = sleepTimerMinutes;
     // Vendor clamps response-time to [1..5]; 0 falls back to the default 3.
-    std::uint8_t const responseClamped = std::clamp<std::uint8_t>(
-        keyResponseTimeLevel == 0 ? 3 : keyResponseTimeLevel, 1, 5);
+    std::uint8_t const responseClamped =
+        std::clamp<std::uint8_t>(keyResponseTimeLevel == 0 ? 3 : keyResponseTimeLevel, 1, 5);
     pkt[kSettingsByteKeyResponseTime] = responseClamped;
     pkt[kSettingsByteTrailerHi] = SettingsBatchTrailerHi;
     pkt[kSettingsByteTrailerLo] = SettingsBatchTrailerLo;
@@ -283,9 +283,9 @@ std::array<std::uint8_t, ReportSize> buildTftChunkedHeader(std::uint8_t lcdSelec
     // ReportId; the vendor's FUN_004231c0 fills the local 33-byte buffer
     // with byte 0 = 0x00 before handing it to the feature-report transport).
     pkt[0] = 0x00;
-    pkt[1] = CmdScreenHeader;                                       // 0x7F
-    pkt[2] = CmdScreenSubBegin;                                     // 0x03
-    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u);             // 1-based on the wire
+    pkt[1] = CmdScreenHeader;                           // 0x7F
+    pkt[2] = CmdScreenSubBegin;                         // 0x03
+    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u); // 1-based on the wire
     // Total-chunks count is uint32-LE in bytes 4..7 (only lower 24 bits used
     // in practice — 140-frame GIF caps at 324 100 chunks; see §3.2).
     pkt[4] = static_cast<std::uint8_t>(totalChunks & 0xffu);
@@ -318,8 +318,7 @@ encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint1
     if (width == 0 || height == 0 || rgba.empty()) {
         return {};
     }
-    auto const expected = static_cast<std::size_t>(width) *
-                          static_cast<std::size_t>(height) * 4u;
+    auto const expected = static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
     if (rgba.size() != expected) {
         return {};
     }
@@ -785,35 +784,35 @@ public:
     // (Phase 3 P3.6 pending) - hardware-testing has shown the 4-packet
     // variant works in practice; FINISH is needed only for some other
     // config flows.
-    [[nodiscard]] std::vector<FirmwareLightingMode>
-    availableFirmwareModes() const override {
+    [[nodiscard]] std::vector<FirmwareLightingMode> availableFirmwareModes() const override {
         // Names match the vendor 1033.lan English strings (cross-referenced
         // with the Chinese originals documented in ak980_lighting.hpp).
         return {
-            {static_cast<std::uint8_t>(AK980LightingMode::Static),     "Static"},
-            {static_cast<std::uint8_t>(AK980LightingMode::SingleOn),   "Single light on"},
-            {static_cast<std::uint8_t>(AK980LightingMode::SingleOff),  "Single light off"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Static), "Static"},
+            {static_cast<std::uint8_t>(AK980LightingMode::SingleOn), "Single light on"},
+            {static_cast<std::uint8_t>(AK980LightingMode::SingleOff), "Single light off"},
             {static_cast<std::uint8_t>(AK980LightingMode::Glittering), "Glittering stars"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Falling),    "Falling pixels"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Colourful),  "Rainbow blanket"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Breath),     "Dynamic breath"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Spectrum),   "Spectrum rings"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Outward),    "Outward wave"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Scrolling),  "Horizontal scroll"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Rolling),    "Rolling glow"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Rotating),   "Rotating accents"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Explode),    "Press burst"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Launch),     "Launch trail"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Ripples),    "Ripples"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Flowing),    "Continuous flow"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Pulsating),  "Layered pulse"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Tilt),       "Diagonal sweep"},
-            {static_cast<std::uint8_t>(AK980LightingMode::Shuttle),    "Shuttle"},
-            {static_cast<std::uint8_t>(AK980LightingMode::LedOff),     "LEDs off"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Falling), "Falling pixels"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Colourful), "Rainbow blanket"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Breath), "Dynamic breath"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Spectrum), "Spectrum rings"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Outward), "Outward wave"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Scrolling), "Horizontal scroll"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Rolling), "Rolling glow"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Rotating), "Rotating accents"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Explode), "Press burst"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Launch), "Launch trail"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Ripples), "Ripples"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Flowing), "Continuous flow"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Pulsating), "Layered pulse"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Tilt), "Diagonal sweep"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Shuttle), "Shuttle"},
+            {static_cast<std::uint8_t>(AK980LightingMode::LedOff), "LEDs off"},
         };
     }
 
-    bool setFirmwareLightingMode(std::uint8_t modeId, std::uint8_t brightness,
+    bool setFirmwareLightingMode(std::uint8_t modeId,
+                                 std::uint8_t brightness,
                                  std::uint8_t speed) override {
         try {
             // P1: START (opcode 0x18, marker 0x01)
@@ -824,8 +823,13 @@ public:
             // P3: DATA - colour 0x00ffffff (white tint) by default; future
             // QML enhancement will plumb an RGB picker through.
             auto data = buildSetRgbModeData(modeId,
-                                            /*r*/ 0xff, /*g*/ 0xff, /*b*/ 0xff,
-                                            /*rainbow*/ 0, brightness, speed, /*direction*/ 0);
+                                            /*r*/ 0xff,
+                                            /*g*/ 0xff,
+                                            /*b*/ 0xff,
+                                            /*rainbow*/ 0,
+                                            brightness,
+                                            speed,
+                                            /*direction*/ 0);
             // Re-write byte 0 to the data ReportId variant; vendor uses
             // the default 0x04 for this packet so makeReport already
             // covers us here (matches buildSetRgbModeData internal layout).
@@ -842,8 +846,8 @@ public:
             // exactly to stay safe (issue #58 / P3.6).
             (void)m_transport->writeFeature(makeReport(CmdFinish));
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("keyboard.ak980",
-                           "setFirmwareLightingMode: HID writeFeature failed: {}", e.what());
+            AJAZZ_LOG_WARN(
+                "keyboard.ak980", "setFirmwareLightingMode: HID writeFeature failed: {}", e.what());
             return false;
         }
         AJAZZ_LOG_INFO("keyboard.ak980",
@@ -857,9 +861,7 @@ public:
     [[nodiscard]] std::uint8_t brightnessMax() const noexcept override {
         return kAK980LightingBrightnessMax;
     }
-    [[nodiscard]] std::uint8_t speedMax() const noexcept override {
-        return kAK980LightingSpeedMax;
-    }
+    [[nodiscard]] std::uint8_t speedMax() const noexcept override { return kAK980LightingSpeedMax; }
 
     // ---- ISettingsCapable (settings batch opcode 0x07 sub 0x10) -----------
     // Vendor's "Settings" tab commits fn-switch + sleep-timer +
@@ -873,9 +875,8 @@ public:
             // P1: START
             (void)m_transport->writeFeature(buildSetTimeStart());
             // P2: SETTINGS-DATA (opcode 0x07 sub 0x10)
-            auto data = buildSettingsBatch(settings.fnLayerSwitch,
-                                           settings.sleepTimerMinutes,
-                                           settings.keyResponseTimeLevel);
+            auto data = buildSettingsBatch(
+                settings.fnLayerSwitch, settings.sleepTimerMinutes, settings.keyResponseTimeLevel);
             (void)m_transport->writeFeature(data);
             // P3: SAVE (opcode 0x02)
             (void)m_transport->writeFeature(buildSetTimeSave());
@@ -884,8 +885,8 @@ public:
             // applied to setFirmwareLightingMode).
             (void)m_transport->writeFeature(makeReport(CmdFinish));
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("keyboard.ak980",
-                           "setKeyboardSettings: HID writeFeature failed: {}", e.what());
+            AJAZZ_LOG_WARN(
+                "keyboard.ak980", "setKeyboardSettings: HID writeFeature failed: {}", e.what());
             return false;
         }
         m_settingsCache = settings;
@@ -945,12 +946,13 @@ public:
                            rgba.size());
             return false;
         }
-        auto const expectedBytes = static_cast<std::size_t>(width) *
-                                   static_cast<std::size_t>(height) * 4u;
+        auto const expectedBytes =
+            static_cast<std::size_t>(width) * static_cast<std::size_t>(height) * 4u;
         if (rgba.size() != expectedBytes) {
             AJAZZ_LOG_WARN("keyboard.ak980",
                            "uploadTftImage: rgba size mismatch (got {}, expected {})",
-                           rgba.size(), expectedBytes);
+                           rgba.size(),
+                           expectedBytes);
             return false;
         }
 
@@ -962,7 +964,8 @@ public:
         if (pixelStream.empty() || pixelStream.size() != kTftFrameBytes) {
             AJAZZ_LOG_WARN("keyboard.ak980",
                            "uploadTftImage: encodeRgb565 produced {} bytes (expected {})",
-                           pixelStream.size(), kTftFrameBytes);
+                           pixelStream.size(),
+                           kTftFrameBytes);
             return false;
         }
 
@@ -977,8 +980,7 @@ public:
         try {
             // P1: HEADER (opcode 0x7F sub 0x03, total chunk count uint32-LE).
             (void)m_transport->writeFeature(
-                buildTftChunkedHeader(/*lcdSelect=*/0,
-                                      static_cast<std::uint32_t>(totalChunks)));
+                buildTftChunkedHeader(/*lcdSelect=*/0, static_cast<std::uint32_t>(totalChunks)));
             // P2..PN: chunk PAYLOADs (28-byte RGB565 slices).
             std::array<std::uint8_t, kTftChunkPayload> slice{};
             for (std::size_t i = 0; i < totalChunks; ++i) {
@@ -987,13 +989,13 @@ public:
                     std::min<std::size_t>(kTftChunkPayload, pixelStream.size() - off);
                 slice.fill(0);
                 std::memcpy(slice.data(), pixelStream.data() + off, take);
-                (void)m_transport->writeFeature(buildTftChunkedPayload(
-                    static_cast<std::uint32_t>(i),
-                    std::span<std::uint8_t const, kTftChunkPayload>{slice}));
+                (void)m_transport->writeFeature(
+                    buildTftChunkedPayload(static_cast<std::uint32_t>(i),
+                                           std::span<std::uint8_t const, kTftChunkPayload>{slice}));
             }
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("keyboard.ak980",
-                           "uploadTftImage: HID writeFeature failed: {}", e.what());
+            AJAZZ_LOG_WARN(
+                "keyboard.ak980", "uploadTftImage: HID writeFeature failed: {}", e.what());
             return false;
         }
         AJAZZ_LOG_INFO("keyboard.ak980",

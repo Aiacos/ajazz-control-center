@@ -164,8 +164,8 @@ Akp05Fixture buildAkp05Fixture() {
     auto owned = std::make_unique<tests::MockTransport>();
     auto* observer = owned.get();
     owned->open();
-    auto dev = streamdeck::makeAkp05WithTransport(makeAkp05Descriptor(), makeAkp05Id(),
-                                                  std::move(owned));
+    auto dev =
+        streamdeck::makeAkp05WithTransport(makeAkp05Descriptor(), makeAkp05Id(), std::move(owned));
     return Akp05Fixture{std::move(dev), observer};
 }
 
@@ -223,11 +223,11 @@ TEST_CASE("akp05 setBootLogo emits CRT LOG header + 512-byte chunks + ULEND",
 
     // Push a solid RGBA8 buffer at the main-strip dimensions; the backend
     // host-resizes + JPEG-encodes through the standard image pipeline.
-    auto const rgba =
-        makeSolidRgba(streamdeck::akp05::MainDisplayWidthPx,
-                      streamdeck::akp05::MainDisplayHeightPx, core::Rgb{0x10, 0x20, 0x30});
-    logo->setBootLogo(rgba, streamdeck::akp05::MainDisplayWidthPx,
-                      streamdeck::akp05::MainDisplayHeightPx);
+    auto const rgba = makeSolidRgba(streamdeck::akp05::MainDisplayWidthPx,
+                                    streamdeck::akp05::MainDisplayHeightPx,
+                                    core::Rgb{0x10, 0x20, 0x30});
+    logo->setBootLogo(
+        rgba, streamdeck::akp05::MainDisplayWidthPx, streamdeck::akp05::MainDisplayHeightPx);
 
     auto const& writes = fx.transport->writes();
 

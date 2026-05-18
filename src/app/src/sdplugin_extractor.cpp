@@ -20,7 +20,8 @@
 
 namespace ajazz::app {
 
-bool extractSdPluginArchive(QString const& archivePath, QString const& destDir,
+bool extractSdPluginArchive(QString const& archivePath,
+                            QString const& destDir,
                             QString const& targetSubdir) {
     QZipReader zip(archivePath);
     // QZipReader::isReadable() returned spurious false on Qt 6.11.1 even for
@@ -29,7 +30,8 @@ bool extractSdPluginArchive(QString const& archivePath, QString const& destDir,
     if (zip.status() != QZipReader::NoError || zip.count() == 0) {
         AJAZZ_LOG_WARN("plugin-catalog",
                        "extract '{}': QZipReader rejected archive (status={}, count={})",
-                       archivePath.toStdString(), static_cast<int>(zip.status()),
+                       archivePath.toStdString(),
+                       static_cast<int>(zip.status()),
                        zip.count());
         return false;
     }
@@ -72,7 +74,8 @@ bool extractSdPluginArchive(QString const& archivePath, QString const& destDir,
     if (!extractOk) {
         AJAZZ_LOG_WARN("plugin-catalog",
                        "extract '{}': iteration into '{}' failed",
-                       archivePath.toStdString(), tmpPath.toStdString());
+                       archivePath.toStdString(),
+                       tmpPath.toStdString());
         QDir(tmpPath).removeRecursively();
         return false;
     }
@@ -114,7 +117,8 @@ bool extractSdPluginArchive(QString const& archivePath, QString const& destDir,
     if (!QDir().rename(sourcePath, finalPath)) {
         AJAZZ_LOG_WARN("plugin-catalog",
                        "extract: rename '{}' -> '{}' failed (stripWrapper={})",
-                       sourcePath.toStdString(), finalPath.toStdString(),
+                       sourcePath.toStdString(),
+                       finalPath.toStdString(),
                        stripWrapper);
         QDir(tmpPath).removeRecursively();
         return false;
@@ -130,14 +134,13 @@ void extractStandalonePluginArchives(QString const& pluginsDir) {
     if (!dir.exists()) {
         return;
     }
-    QStringList const archives = dir.entryList(
-        QStringList{QStringLiteral("*.sdPlugin")}, QDir::Files | QDir::NoDotAndDotDot);
+    QStringList const archives = dir.entryList(QStringList{QStringLiteral("*.sdPlugin")},
+                                               QDir::Files | QDir::NoDotAndDotDot);
     for (QString const& name : archives) {
         QString const archivePath = dir.filePath(name);
         if (extractSdPluginArchive(archivePath, dir.absolutePath(), name)) {
             QFile::remove(archivePath);
-            AJAZZ_LOG_INFO("plugin-catalog", "first-launch extract: '{}'",
-                           name.toStdString());
+            AJAZZ_LOG_INFO("plugin-catalog", "first-launch extract: '{}'", name.toStdString());
         } else {
             AJAZZ_LOG_WARN("plugin-catalog",
                            "first-launch extract: cannot read '{}' as zip; left in place",

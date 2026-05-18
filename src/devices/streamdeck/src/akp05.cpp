@@ -654,22 +654,13 @@ public:
                            static_cast<int>(akp05::TouchZoneCount));
             return false;
         }
-        if (rgba.empty() || srcWidth == 0 || srcHeight == 0 || rectWidth == 0 ||
-            rectHeight == 0) {
-            AJAZZ_LOG_WARN("akp05",
-                           "setTouchStripImage: empty input or zero-area rect; refusing");
+        if (rgba.empty() || srcWidth == 0 || srcHeight == 0 || rectWidth == 0 || rectHeight == 0) {
+            AJAZZ_LOG_WARN("akp05", "setTouchStripImage: empty input or zero-area rect; refusing");
             return false;
         }
         // Reuse the existing rect-addressable helper for resize + JPEG encode
         // + DRA header + chunked sendImage + ULEND commit sentinel.
-        setSecondaryScreenImage(location,
-                                rectWidth,
-                                rectHeight,
-                                x,
-                                y,
-                                rgba,
-                                srcWidth,
-                                srcHeight);
+        setSecondaryScreenImage(location, rectWidth, rectHeight, x, y, rgba, srcWidth, srcHeight);
         return true;
     }
 
@@ -717,8 +708,7 @@ public:
             .jpegQuality = 85,
         };
         auto const jpeg = encodeForDevice(rgba, width, height, transform);
-        auto const header =
-            akp05::buildLogoSizeHeader(static_cast<std::uint32_t>(jpeg.size()));
+        auto const header = akp05::buildLogoSizeHeader(static_cast<std::uint32_t>(jpeg.size()));
         sendImage(header, jpeg);
     }
 

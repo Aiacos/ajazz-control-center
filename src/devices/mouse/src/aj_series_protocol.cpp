@@ -201,7 +201,7 @@ std::array<std::uint8_t, kReportSize> buildDpiTable(ajazz::core::DpiTable const&
     pkt[3] = std::min<std::uint8_t>(table.activeStage, 7); // vendor byte 2
     // stageCount: vendor docs say 1..8 enabled stages; clamp to 8 (upper),
     // leave 0 alone — callers may legitimately disable every stage.
-    pkt[4] = std::min<std::uint8_t>(table.stageCount, 8);  // vendor byte 3
+    pkt[4] = std::min<std::uint8_t>(table.stageCount, 8); // vendor byte 3
     // bytes 5..8 stay zero (vendor "bytes 4..7" reserved).
     // 8 × uint16-LE DPI values at vendor "bytes 8..23" = our pkt[9..24].
     for (std::size_t i = 0; i < table.stages.size(); ++i) {
@@ -261,8 +261,8 @@ std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& 
 }
 
 std::array<std::uint8_t, kReportSize> buildMouseSettings(std::uint8_t profile,
-                                                          std::uint16_t pollRate,
-                                                          ajazz::core::MouseSettings const& s) {
+                                                         std::uint16_t pollRate,
+                                                         ajazz::core::MouseSettings const& s) {
     // Clamp scalar fields to their documented valid ranges so the firmware
     // sees only bytes it accepts. Out-of-range inputs MUST produce on-wire
     // bytes the firmware accepts (per task spec). The host-side cache reader
@@ -279,11 +279,16 @@ std::array<std::uint8_t, kReportSize> buildMouseSettings(std::uint8_t profile,
     // Pack five named flag bits per §3.9 (bits 0..4 of bytes 12..13 uint16-LE).
     // Bits 5..15 are reserved/undecoded and intentionally left zero.
     std::uint16_t flags = 0;
-    if (s.lightOff)         flags |= 1u << 0;
-    if (s.wheelLightOff)    flags |= 1u << 1;
-    if (s.motionSmoothing)  flags |= 1u << 2;
-    if (s.batteryLedSelect) flags |= 1u << 3;
-    if (s.powerSaveMode)    flags |= 1u << 4;
+    if (s.lightOff)
+        flags |= 1u << 0;
+    if (s.wheelLightOff)
+        flags |= 1u << 1;
+    if (s.motionSmoothing)
+        flags |= 1u << 2;
+    if (s.batteryLedSelect)
+        flags |= 1u << 3;
+    if (s.powerSaveMode)
+        flags |= 1u << 4;
     opts.flags = flags;
 
     // Vendor defaults for the three undecoded bytes (§3.9: "default 1",
@@ -304,8 +309,7 @@ std::array<std::uint8_t, kReportSize> buildMouseSettings(std::uint8_t profile,
     opts.xSensitivity = std::min<std::uint8_t>(s.xSensitivity, kSensitivityMaxPercent);
     opts.ySensitivity = std::min<std::uint8_t>(s.ySensitivity, kSensitivityMaxPercent);
 
-    opts.liftCutOff =
-        std::min<std::uint8_t>(static_cast<std::uint8_t>(s.liftOffDistance), kLodMax);
+    opts.liftCutOff = std::min<std::uint8_t>(static_cast<std::uint8_t>(s.liftOffDistance), kLodMax);
     opts.angleSnap = s.angleSnap ? 1 : 0;
 
     opts.batteryColorHigh = {s.batteryLedHigh.r, s.batteryLedHigh.g, s.batteryLedHigh.b};
@@ -352,26 +356,23 @@ buildMacroChunkInternal(std::uint8_t slot,
 
 } // namespace
 
-std::array<std::uint8_t, kReportSize>
-buildMacroHeader(std::uint8_t slot,
-                 std::uint8_t lastNonZeroPos,
-                 bool isFinal,
-                 std::span<std::uint8_t const> payload) {
+std::array<std::uint8_t, kReportSize> buildMacroHeader(std::uint8_t slot,
+                                                       std::uint8_t lastNonZeroPos,
+                                                       bool isFinal,
+                                                       std::span<std::uint8_t const> payload) {
     // Header chunk = chunkIdx 0; isFinal true if this is a single-chunk macro.
     return buildMacroChunkInternal(slot, /*chunkIdx=*/0, lastNonZeroPos, isFinal, payload);
 }
 
-std::array<std::uint8_t, kReportSize>
-buildMacroChunk(std::uint8_t slot,
-                std::uint8_t chunkIdx,
-                std::uint8_t lastNonZeroPos,
-                bool isFinal,
-                std::span<std::uint8_t const> payload) {
+std::array<std::uint8_t, kReportSize> buildMacroChunk(std::uint8_t slot,
+                                                      std::uint8_t chunkIdx,
+                                                      std::uint8_t lastNonZeroPos,
+                                                      bool isFinal,
+                                                      std::span<std::uint8_t const> payload) {
     return buildMacroChunkInternal(slot, chunkIdx, lastNonZeroPos, isFinal, payload);
 }
 
-std::vector<std::uint8_t>
-encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events) {
+std::vector<std::uint8_t> encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events) {
     using ajazz::core::MouseMacroEvent;
     std::vector<std::uint8_t> out;
     // Pre-reserve a sensible upper bound: header (2) + worst-case 2 bytes
@@ -447,22 +448,24 @@ parseKeyMatrixResponse(std::span<std::uint8_t const> resp) {
     return matrix;
 }
 
-std::array<std::uint8_t, kReportSize>
-buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
-                   std::uint16_t chunkIndex, std::span<std::uint8_t const> payload) {
+std::array<std::uint8_t, kReportSize> buildSetTftLcdData(std::uint8_t frame,
+                                                         std::uint8_t frameCount,
+                                                         std::uint8_t frameDelayMs,
+                                                         std::uint16_t chunkIndex,
+                                                         std::span<std::uint8_t const> payload) {
     std::array<std::uint8_t, kReportSize> pkt{};
     pkt[0] = kReportId;
-    pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetTftLcdData); // vendor byte 0
-    pkt[2] = frame;                                            // vendor byte 1
-    pkt[3] = frameCount;                                       // vendor byte 2
-    pkt[4] = frameDelayMs;                                     // vendor byte 3
-    pkt[5] = static_cast<std::uint8_t>(chunkIndex & 0xFFU);    // vendor byte 4 (LE lo)
+    pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetTftLcdData);      // vendor byte 0
+    pkt[2] = frame;                                                 // vendor byte 1
+    pkt[3] = frameCount;                                            // vendor byte 2
+    pkt[4] = frameDelayMs;                                          // vendor byte 3
+    pkt[5] = static_cast<std::uint8_t>(chunkIndex & 0xFFU);         // vendor byte 4 (LE lo)
     pkt[6] = static_cast<std::uint8_t>((chunkIndex >> 8U) & 0xFFU); // vendor byte 5 (LE hi)
     auto const n = std::min(payload.size(), kTftChunkPayloadBytes);
-    pkt[7] = static_cast<std::uint8_t>(n);                     // vendor byte 6 (chunkLen)
-    pkt[8] = 0;                                                 // vendor byte 7 (reserved)
+    pkt[7] = static_cast<std::uint8_t>(n); // vendor byte 6 (chunkLen)
+    pkt[8] = 0;                            // vendor byte 7 (reserved)
     for (std::size_t i = 0; i < n; ++i) {
-        pkt[9 + i] = payload[i];                                // vendor bytes 8..(8+n-1)
+        pkt[9 + i] = payload[i]; // vendor bytes 8..(8+n-1)
     }
     // pkt[9 + n .. 63] are left zero so the BIT7 checksum at pkt[64] is
     // deterministic regardless of how many bytes the caller supplied.

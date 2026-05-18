@@ -380,8 +380,8 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  * @param totalChunks Total number of 28-byte chunks the upload will emit
  *                    (for a single 240x135 RGB565 frame = 2 315 chunks).
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize>
-buildTftChunkedHeader(std::uint8_t lcdSelect, std::uint32_t totalChunks);
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildTftChunkedHeader(std::uint8_t lcdSelect,
+                                                                         std::uint32_t totalChunks);
 
 /**
  * @brief Build a single chunked-path TFT upload PAYLOAD packet (28-byte chunk).
@@ -438,9 +438,7 @@ buildTftChunkedPayload(std::uint32_t chunkIdx,
  * @return       64 800-byte big-endian RGB565 stream, or empty on bad input.
  */
 [[nodiscard]] std::vector<std::uint8_t>
-encodeRgb565(std::span<std::uint8_t const> rgba,
-             std::uint16_t width,
-             std::uint16_t height);
+encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint16_t height);
 
 /**
  * @brief Encode a 24-bit chunk index into the three TFT-chunk header bytes.
@@ -517,9 +515,10 @@ buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks);
  * @see ak980pro_vendor.md §13.2 for the full byte map (corrected from
  * the original §11.3 layout which had fn/sleep/delay at 5/6/7).
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSettingsBatch(
-    std::uint8_t fnLayerSwitch, std::uint8_t sleepTimerMinutes,
-    std::uint8_t keyResponseTimeLevel);
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildSettingsBatch(std::uint8_t fnLayerSwitch,
+                   std::uint8_t sleepTimerMinutes,
+                   std::uint8_t keyResponseTimeLevel);
 
 /**
  * @brief Build the time-sync preamble packet (ReportId=0x04, opcode 0x28, byte[8]=0x01).

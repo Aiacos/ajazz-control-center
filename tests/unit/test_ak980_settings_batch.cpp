@@ -49,8 +49,8 @@ TEST_CASE("AK980 PRO advertises ISettingsCapable with vendor-default cache",
           "[ak980][settings][issue-57]") {
     auto transport = std::make_unique<tests::MockTransport>();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     REQUIRE(device != nullptr);
 
     auto* settings = dynamic_cast<core::ISettingsCapable*>(device.get());
@@ -67,8 +67,8 @@ TEST_CASE("AK980 PRO setKeyboardSettings emits the 4-packet envelope",
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* settings = dynamic_cast<core::ISettingsCapable*>(device.get());
     REQUIRE(settings != nullptr);
 
@@ -97,9 +97,9 @@ TEST_CASE("AK980 PRO setKeyboardSettings emits the 4-packet envelope",
     REQUIRE(p2[0] == 0x04);
     REQUIRE(p2[1] == 0x07);
     REQUIRE(p2[2] == 0x10);
-    REQUIRE(p2[9] == 1);    // fnLayerSwitch
-    REQUIRE(p2[10] == 5);   // sleepTimerMinutes
-    REQUIRE(p2[12] == 4);   // keyResponseTimeLevel
+    REQUIRE(p2[9] == 1);  // fnLayerSwitch
+    REQUIRE(p2[10] == 5); // sleepTimerMinutes
+    REQUIRE(p2[12] == 4); // keyResponseTimeLevel
     REQUIRE(p2[18] == 0xaa);
     REQUIRE(p2[19] == 0x55);
 
@@ -127,8 +127,8 @@ TEST_CASE("AK980 PRO setKeyboardSettings clamps response-time + normalises 0 to 
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
-    auto device = keyboard::makeProprietaryKeyboardWithTransport(makeDescriptor(), makeId(),
-                                                                 std::move(transport));
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
     auto* settings = dynamic_cast<core::ISettingsCapable*>(device.get());
     REQUIRE(settings != nullptr);
 

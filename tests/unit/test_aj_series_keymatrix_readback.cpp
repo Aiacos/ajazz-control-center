@@ -121,8 +121,7 @@ std::vector<std::uint8_t> makeSyntheticResponseBody() {
 // IMouseKeyMatrixReadable capability surface
 // ===========================================================================
 
-TEST_CASE("AJ-series exposes IMouseKeyMatrixReadable",
-          "[aj_series][key-matrix]") {
+TEST_CASE("AJ-series exposes IMouseKeyMatrixReadable", "[aj_series][key-matrix]") {
     auto fx = buildFixture();
     auto* km = dynamic_cast<core::IMouseKeyMatrixReadable*>(fx.device.get());
     REQUIRE(km != nullptr);
@@ -307,7 +306,7 @@ TEST_CASE("AJ-series readKeyMatrix round-trips request + queued response into a 
     REQUIRE(req.size() == kReportSize);
     CHECK(req[0] == kReportId);
     CHECK(req[1] == static_cast<std::uint8_t>(FeaCmd::MouseGetKeyMatrix)); // 0xD0
-    CHECK(req[2] == 0); // default profile slot
+    CHECK(req[2] == 0);                                                    // default profile slot
     CHECK(req[kReportSize - 1] == expectedBit7Checksum(req));
 
     // The decoded matrix mirrors the synthetic body slot-for-slot.

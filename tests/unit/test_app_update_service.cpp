@@ -29,9 +29,9 @@
 #include <QString>
 #include <QStringList>
 
-#include <catch2/catch_test_macros.hpp>
-
 #include <cstdlib>
+
+#include <catch2/catch_test_macros.hpp>
 
 namespace {
 
@@ -100,43 +100,34 @@ private:
 
 } // namespace
 
-TEST_CASE("AppUpdateService isNewerThan compares major.minor.patch numerically",
-          "[app-update]") {
+TEST_CASE("AppUpdateService isNewerThan compares major.minor.patch numerically", "[app-update]") {
     using ajazz::app::AppUpdateService;
 
-    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"),
-                                          QStringLiteral("1.2.2")));
-    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("1.2.2"),
-                                                QStringLiteral("1.2.3")));
-    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("2.0.0"),
-                                          QStringLiteral("1.99.99")));
+    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"), QStringLiteral("1.2.2")));
+    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("1.2.2"), QStringLiteral("1.2.3")));
+    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("2.0.0"), QStringLiteral("1.99.99")));
 }
 
 TEST_CASE("AppUpdateService isNewerThan strips leading v prefix", "[app-update]") {
     using ajazz::app::AppUpdateService;
 
     // Equal after the leading 'v' is stripped, so neither is strictly newer.
-    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("v1.2.3"),
-                                                QStringLiteral("1.2.3")));
-    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"),
-                                                QStringLiteral("v1.2.3")));
-    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("v1.2.3"),
-                                                QStringLiteral("v1.2.3")));
+    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("v1.2.3"), QStringLiteral("1.2.3")));
+    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"), QStringLiteral("v1.2.3")));
+    REQUIRE_FALSE(
+        AppUpdateService::isNewerThan(QStringLiteral("v1.2.3"), QStringLiteral("v1.2.3")));
 }
 
-TEST_CASE("AppUpdateService isNewerThan ranks release above release-candidate",
-          "[app-update]") {
+TEST_CASE("AppUpdateService isNewerThan ranks release above release-candidate", "[app-update]") {
     using ajazz::app::AppUpdateService;
 
     // rc < release at equal numeric components.
-    REQUIRE_FALSE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3-rc1"),
-                                                QStringLiteral("1.2.3")));
-    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"),
-                                          QStringLiteral("1.2.3-rc1")));
+    REQUIRE_FALSE(
+        AppUpdateService::isNewerThan(QStringLiteral("1.2.3-rc1"), QStringLiteral("1.2.3")));
+    REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("1.2.3"), QStringLiteral("1.2.3-rc1")));
 }
 
-TEST_CASE("AppUpdateService isNewerThan treats nightly as newer than stable",
-          "[app-update]") {
+TEST_CASE("AppUpdateService isNewerThan treats nightly as newer than stable", "[app-update]") {
     using ajazz::app::AppUpdateService;
 
     REQUIRE(AppUpdateService::isNewerThan(QStringLiteral("nightly-20260601-abcdef0"),
@@ -159,8 +150,7 @@ TEST_CASE("AppUpdateService construction without FLATPAK_ID stays Idle by defaul
     REQUIRE_FALSE(svc.platformLabel() == QStringLiteral("Flatpak"));
 }
 
-TEST_CASE("AppUpdateService construction with FLATPAK_ID set self-disables",
-          "[app-update]") {
+TEST_CASE("AppUpdateService construction with FLATPAK_ID set self-disables", "[app-update]") {
     using ajazz::app::AppUpdateService;
     QSettingsTestScope const settingsScope;
     ScopedEnv const flatpak("FLATPAK_ID", "io.github.Aiacos.AjazzControlCenter");
@@ -175,8 +165,7 @@ TEST_CASE("AppUpdateService construction with FLATPAK_ID set self-disables",
     REQUIRE(svc.status() == AppUpdateService::Disabled);
 }
 
-TEST_CASE("AppUpdateService dismissCurrentUpdate transitions to Idle",
-          "[app-update]") {
+TEST_CASE("AppUpdateService dismissCurrentUpdate transitions to Idle", "[app-update]") {
     using ajazz::app::AppUpdateService;
     QSettingsTestScope const settingsScope;
     ScopedEnv const noFlatpak("FLATPAK_ID", nullptr);
@@ -191,8 +180,7 @@ TEST_CASE("AppUpdateService dismissCurrentUpdate transitions to Idle",
     REQUIRE(svc.status() == AppUpdateService::Idle);
 }
 
-TEST_CASE("AppUpdateService platformLabel returns a known string",
-          "[app-update]") {
+TEST_CASE("AppUpdateService platformLabel returns a known string", "[app-update]") {
     using ajazz::app::AppUpdateService;
     QSettingsTestScope const settingsScope;
     ScopedEnv const noFlatpak("FLATPAK_ID", nullptr);
@@ -210,8 +198,7 @@ TEST_CASE("AppUpdateService platformLabel returns a known string",
     REQUIRE(known.contains(label));
 }
 
-TEST_CASE("AppUpdateService autoCheckEnabled setter flips state in-process",
-          "[app-update]") {
+TEST_CASE("AppUpdateService autoCheckEnabled setter flips state in-process", "[app-update]") {
     using ajazz::app::AppUpdateService;
     QSettingsTestScope const settingsScope;
     ScopedEnv const noFlatpak("FLATPAK_ID", nullptr);
@@ -228,8 +215,7 @@ TEST_CASE("AppUpdateService autoCheckEnabled setter flips state in-process",
     REQUIRE(svc.autoCheckEnabled());
 }
 
-TEST_CASE("AppUpdateService includeNightly setter flips state in-process",
-          "[app-update]") {
+TEST_CASE("AppUpdateService includeNightly setter flips state in-process", "[app-update]") {
     using ajazz::app::AppUpdateService;
     QSettingsTestScope const settingsScope;
     ScopedEnv const noFlatpak("FLATPAK_ID", nullptr);

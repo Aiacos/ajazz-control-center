@@ -302,7 +302,8 @@ struct OptionPacket0 {
  * @param settings Field values; out-of-range entries clamped per byte.
  */
 [[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildMouseSettings(std::uint8_t profile, std::uint16_t pollRate,
+buildMouseSettings(std::uint8_t profile,
+                   std::uint16_t pollRate,
                    ajazz::core::MouseSettings const& settings);
 
 /**
@@ -336,8 +337,11 @@ buildMouseSettings(std::uint8_t profile, std::uint16_t pollRate,
  *         @c stampBit7Checksum() + @c ITransport::write().
  */
 [[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
-                   std::uint16_t chunkIndex, std::span<std::uint8_t const> payload);
+buildSetTftLcdData(std::uint8_t frame,
+                   std::uint8_t frameCount,
+                   std::uint8_t frameDelayMs,
+                   std::uint16_t chunkIndex,
+                   std::span<std::uint8_t const> payload);
 
 // ---------------------------------------------------------------------------
 // §3.11 — SET_MACRO_SIMPLE (opcode 0x16) chunked macro upload
@@ -466,8 +470,7 @@ inline constexpr std::size_t kKeyMatrixSlotCount = 16;
 inline constexpr std::size_t kMouseActionBytes = 4;
 
 /// Total response payload bytes carried by the §3.7 read-back (16 × 4 = 64).
-inline constexpr std::size_t kKeyMatrixResponseBytes =
-    kKeyMatrixSlotCount * kMouseActionBytes;
+inline constexpr std::size_t kKeyMatrixResponseBytes = kKeyMatrixSlotCount * kMouseActionBytes;
 
 /**
  * @brief §3.7 build the FEA_CMD_MOUSE_GET_KEYMATRIX request packet.
@@ -485,8 +488,7 @@ inline constexpr std::size_t kKeyMatrixResponseBytes =
  *
  * @param profile Active onboard profile slot (clamped 0..7).
  */
-[[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildKeyMatrixRequest(std::uint8_t profile);
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildKeyMatrixRequest(std::uint8_t profile);
 
 /**
  * @brief §3.7 parse a key-matrix response packet into a @ref MouseKeyMatrix.

@@ -154,9 +154,9 @@ TEST_CASE("AJ-series buildDpiTable pins profile/active/count at vendor bytes 1/2
     auto const pkt = buildDpiTable(table);
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetOption1)); // 0x54
-    CHECK(pkt[2] == 3); // profile
-    CHECK(pkt[3] == 5); // active stage
-    CHECK(pkt[4] == 7); // stage count
+    CHECK(pkt[2] == 3);                                                    // profile
+    CHECK(pkt[3] == 5);                                                    // active stage
+    CHECK(pkt[4] == 7);                                                    // stage count
     // bytes 5..8 reserved zero (vendor "bytes 4..7").
     for (std::size_t i = 5; i < 9; ++i) {
         CAPTURE(i);
@@ -241,22 +241,19 @@ TEST_CASE("AJ-series buildDpiTable 8th-stage B-channel collides with checksum sl
     CHECK(pkt[kReportSize - 1] == expectedBit7Checksum(pkt));
 }
 
-TEST_CASE("AJ-series buildDpiTable clamps profile > 7 to 7",
-          "[aj_series][dpi-table][clamp]") {
+TEST_CASE("AJ-series buildDpiTable clamps profile > 7 to 7", "[aj_series][dpi-table][clamp]") {
     auto table = makeFilledTable(/*profile=*/99, 0, 8);
     auto const pkt = buildDpiTable(table);
     CHECK(pkt[2] == 7); // clamped from 99
 }
 
-TEST_CASE("AJ-series buildDpiTable clamps activeStage > 7 to 7",
-          "[aj_series][dpi-table][clamp]") {
+TEST_CASE("AJ-series buildDpiTable clamps activeStage > 7 to 7", "[aj_series][dpi-table][clamp]") {
     auto table = makeFilledTable(0, /*active=*/99, 8);
     auto const pkt = buildDpiTable(table);
     CHECK(pkt[3] == 7); // clamped from 99
 }
 
-TEST_CASE("AJ-series buildDpiTable clamps stageCount > 8 to 8",
-          "[aj_series][dpi-table][clamp]") {
+TEST_CASE("AJ-series buildDpiTable clamps stageCount > 8 to 8", "[aj_series][dpi-table][clamp]") {
     auto table = makeFilledTable(0, 0, /*count=*/99);
     auto const pkt = buildDpiTable(table);
     CHECK(pkt[4] == 8); // clamped from 99
@@ -285,9 +282,9 @@ TEST_CASE("AJ-series setDpiTable emits opcode 0x54 through the transport and cac
 
     CHECK(pkt[0] == kReportId);
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetOption1)); // 0x54
-    CHECK(pkt[2] == 4); // profile
-    CHECK(pkt[3] == 2); // active stage
-    CHECK(pkt[4] == 5); // stage count
+    CHECK(pkt[2] == 4);                                                  // profile
+    CHECK(pkt[3] == 2);                                                  // active stage
+    CHECK(pkt[4] == 5);                                                  // stage count
     CHECK(pkt[kReportSize - 1] == expectedBit7Checksum(pkt));
 
     // Cache mirrors the wire after clamping.
@@ -339,8 +336,8 @@ TEST_CASE("AJ-series buildFnLayerRemap emits opcode 0x51 with fnLayer/button at 
     auto const pkt = buildFnLayerRemap(/*fnLayer=*/1, /*button=*/4, kAction);
     REQUIRE(pkt[0] == kReportId);
     REQUIRE(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetFnMatrix)); // 0x51
-    CHECK(pkt[2] == 1); // Fn-layer index
-    CHECK(pkt[3] == 4); // button index
+    CHECK(pkt[2] == 1);                                                     // Fn-layer index
+    CHECK(pkt[3] == 4);                                                     // button index
     // Bytes 4..8 must be zero (vendor "bytes 3..7" reserved).
     for (std::size_t i = 4; i < 9; ++i) {
         CAPTURE(i);
@@ -359,8 +356,7 @@ TEST_CASE("AJ-series buildFnLayerRemap emits opcode 0x51 with fnLayer/button at 
     CHECK(pkt[kReportSize - 1] == expectedBit7Checksum(pkt));
 }
 
-TEST_CASE("AJ-series buildFnLayerRemap clamps fnLayer > 7 to 7",
-          "[aj_series][fn-layer][clamp]") {
+TEST_CASE("AJ-series buildFnLayerRemap clamps fnLayer > 7 to 7", "[aj_series][fn-layer][clamp]") {
     auto const pkt = buildFnLayerRemap(/*fnLayer=*/99, /*button=*/0, /*action=*/0u);
     CHECK(pkt[2] == 7); // clamped from 99
 }
@@ -404,8 +400,8 @@ TEST_CASE("AJ-series setFnLayerBinding emits opcode 0x51 through the transport",
 
     CHECK(pkt[0] == kReportId);
     CHECK(pkt[1] == static_cast<std::uint8_t>(FeaCmd::MouseSetFnMatrix)); // 0x51
-    CHECK(pkt[2] == 0); // Fn-layer
-    CHECK(pkt[3] == 3); // button
+    CHECK(pkt[2] == 0);                                                   // Fn-layer
+    CHECK(pkt[3] == 3);                                                   // button
     CHECK(pkt[9] == 0x01);
     CHECK(pkt[10] == 0x02);
     CHECK(pkt[11] == 0x03);

@@ -9,11 +9,10 @@
  */
 #include "plugin_catalog_model.hpp"
 
+#include "ajazz/core/logger.hpp"
 #include "opendeck_catalog_fetcher.hpp"
 #include "sdplugin_extractor.hpp"
 #include "streamdock_catalog_fetcher.hpp"
-
-#include "ajazz/core/logger.hpp"
 
 #include <QDesktopServices>
 #include <QDir>
@@ -26,8 +25,8 @@
 #include <QPointer>
 #include <QQmlEngine>
 #include <QStandardPaths>
-#include <QUrl>
 #include <QtGlobal>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -406,8 +405,7 @@ namespace {
 bool PluginCatalogModel::install(QString const& uuid) {
     int const row = findRow(m_rows, uuid);
     if (row < 0) {
-        AJAZZ_LOG_WARN("plugin-catalog", "install: uuid '{}' not in catalogue",
-                       uuid.toStdString());
+        AJAZZ_LOG_WARN("plugin-catalog", "install: uuid '{}' not in catalogue", uuid.toStdString());
         return false;
     }
     auto& state = m_install[uuid];
@@ -430,7 +428,8 @@ bool PluginCatalogModel::install(QString const& uuid) {
                        "install: no direct downloadUrl for '{}'; opening upstream page",
                        uuid.toStdString());
         bool const opened = openUpstream(uuid);
-        emit installFinished(uuid, opened,
+        emit installFinished(uuid,
+                             opened,
                              opened ? QString{}
                                     : QStringLiteral("No download URL on file and no "
                                                      "browser-openable fallback."));
@@ -453,13 +452,13 @@ bool PluginCatalogModel::install(QString const& uuid) {
         emit installFinished(uuid, false, err);
         return false;
     }
-    QString const fileBase = entry.streamdockProductId.isEmpty()
-                                 ? uuid
-                                 : entry.streamdockProductId;
+    QString const fileBase = entry.streamdockProductId.isEmpty() ? uuid : entry.streamdockProductId;
     QString const destPath = QDir(destDir).filePath(fileBase + QStringLiteral(".sdPlugin"));
 
-    AJAZZ_LOG_INFO("plugin-catalog", "install: GET {} -> {}",
-                   entry.downloadUrl.toString().toStdString(), destPath.toStdString());
+    AJAZZ_LOG_INFO("plugin-catalog",
+                   "install: GET {} -> {}",
+                   entry.downloadUrl.toString().toStdString(),
+                   destPath.toStdString());
 
     QNetworkRequest req(entry.downloadUrl);
     // Follow CDN redirects (cdn1.key123.vip occasionally 301s to alt mirrors).
@@ -471,7 +470,9 @@ bool PluginCatalogModel::install(QString const& uuid) {
     QString const uuidCopy = uuid;
     QString const destCopy = destPath;
 
-    QObject::connect(reply, &QNetworkReply::downloadProgress, this,
+    QObject::connect(reply,
+                     &QNetworkReply::downloadProgress,
+                     this,
                      [self, uuidCopy](qint64 received, qint64 total) {
                          if (!self || total <= 0) {
                              return;
@@ -481,70 +482,72 @@ bool PluginCatalogModel::install(QString const& uuid) {
                          emit self->installProgressChanged(uuidCopy, pct);
                      });
 
-    QObject::connect(reply, &QNetworkReply::finished, this,
-                     [self, reply, uuidCopy, destCopy]() {
-                         reply->deleteLater();
-                         if (!self) {
-                             return;
-                         }
-                         if (reply->error() != QNetworkReply::NoError) {
-                             QString const err = reply->errorString();
-                             AJAZZ_LOG_WARN("plugin-catalog", "install '{}' failed: {}",
-                                            uuidCopy.toStdString(), err.toStdString());
-                             emit self->installFinished(uuidCopy, false, err);
-                             return;
-                         }
-                         QFile out(destCopy);
-                         if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-                             QString const err = QStringLiteral("Cannot write %1: %2")
-                                                     .arg(destCopy, out.errorString());
-                             AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
-                             emit self->installFinished(uuidCopy, false, err);
-                             return;
-                         }
-                         QByteArray const body = reply->readAll();
-                         if (out.write(body) != body.size()) {
-                             QString const err = QStringLiteral("Short write to %1").arg(destCopy);
-                             AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
-                             out.close();
-                             out.remove();
-                             emit self->installFinished(uuidCopy, false, err);
-                             return;
-                         }
-                         out.close();
+    QObject::connect(reply, &QNetworkReply::finished, this, [self, reply, uuidCopy, destCopy]() {
+        reply->deleteLater();
+        if (!self) {
+            return;
+        }
+        if (reply->error() != QNetworkReply::NoError) {
+            QString const err = reply->errorString();
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "install '{}' failed: {}",
+                           uuidCopy.toStdString(),
+                           err.toStdString());
+            emit self->installFinished(uuidCopy, false, err);
+            return;
+        }
+        QFile out(destCopy);
+        if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+            QString const err =
+                QStringLiteral("Cannot write %1: %2").arg(destCopy, out.errorString());
+            AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
+            emit self->installFinished(uuidCopy, false, err);
+            return;
+        }
+        QByteArray const body = reply->readAll();
+        if (out.write(body) != body.size()) {
+            QString const err = QStringLiteral("Short write to %1").arg(destCopy);
+            AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
+            out.close();
+            out.remove();
+            emit self->installFinished(uuidCopy, false, err);
+            return;
+        }
+        out.close();
 
-                         // Extract the archive in place so the plugin host
-                         // finds an expanded `<id>.sdPlugin/manifest.json`
-                         // tree instead of an opaque zip. On success we
-                         // delete the archive; on failure we leave it so
-                         // the user can retry / inspect (issue #62).
-                         QFileInfo const archiveInfo(destCopy);
-                         QString const archiveDir = archiveInfo.absolutePath();
-                         QString const archiveName = archiveInfo.fileName();
-                         if (extractSdPluginArchive(destCopy, archiveDir, archiveName)) {
-                             QFile::remove(destCopy);
-                         } else {
-                             AJAZZ_LOG_WARN("plugin-catalog",
-                                            "install '{}' extract failed; archive left at {}",
-                                            uuidCopy.toStdString(), destCopy.toStdString());
-                         }
+        // Extract the archive in place so the plugin host
+        // finds an expanded `<id>.sdPlugin/manifest.json`
+        // tree instead of an opaque zip. On success we
+        // delete the archive; on failure we leave it so
+        // the user can retry / inspect (issue #62).
+        QFileInfo const archiveInfo(destCopy);
+        QString const archiveDir = archiveInfo.absolutePath();
+        QString const archiveName = archiveInfo.fileName();
+        if (extractSdPluginArchive(destCopy, archiveDir, archiveName)) {
+            QFile::remove(destCopy);
+        } else {
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "install '{}' extract failed; archive left at {}",
+                           uuidCopy.toStdString(),
+                           destCopy.toStdString());
+        }
 
-                         int const r = findRow(self->m_rows, uuidCopy);
-                         if (r >= 0) {
-                             auto& s = self->m_install[uuidCopy];
-                             s.installed = true;
-                             s.enabled = true;
-                             QModelIndex const idx = self->index(r);
-                             emit self->dataChanged(idx, idx, {InstalledRole, EnabledRole});
-                             emit self->installedCountChanged();
-                         }
-                         AJAZZ_LOG_INFO("plugin-catalog",
-                                        "install '{}' OK ({} bytes) -> {}",
-                                        uuidCopy.toStdString(),
-                                        static_cast<long long>(body.size()),
-                                        destCopy.toStdString());
-                         emit self->installFinished(uuidCopy, true, QString{});
-                     });
+        int const r = findRow(self->m_rows, uuidCopy);
+        if (r >= 0) {
+            auto& s = self->m_install[uuidCopy];
+            s.installed = true;
+            s.enabled = true;
+            QModelIndex const idx = self->index(r);
+            emit self->dataChanged(idx, idx, {InstalledRole, EnabledRole});
+            emit self->installedCountChanged();
+        }
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "install '{}' OK ({} bytes) -> {}",
+                       uuidCopy.toStdString(),
+                       static_cast<long long>(body.size()),
+                       destCopy.toStdString());
+        emit self->installFinished(uuidCopy, true, QString{});
+    });
     return true;
 }
 
@@ -568,8 +571,8 @@ bool PluginCatalogModel::uninstall(QString const& uuid) {
 bool PluginCatalogModel::openUpstream(QString const& uuid) const {
     int const row = findRow(m_rows, uuid);
     if (row < 0) {
-        AJAZZ_LOG_WARN("plugin-catalog", "openUpstream: uuid '{}' not in catalogue",
-                       uuid.toStdString());
+        AJAZZ_LOG_WARN(
+            "plugin-catalog", "openUpstream: uuid '{}' not in catalogue", uuid.toStdString());
         return false;
     }
     auto const& entry = m_rows[static_cast<std::size_t>(row)];
@@ -601,11 +604,12 @@ bool PluginCatalogModel::openUpstream(QString const& uuid) const {
     if (target.isEmpty() || !target.isValid()) {
         AJAZZ_LOG_WARN("plugin-catalog",
                        "openUpstream: no usable URL for uuid '{}' (source='{}')",
-                       uuid.toStdString(), entry.source.toStdString());
+                       uuid.toStdString(),
+                       entry.source.toStdString());
         return false;
     }
-    AJAZZ_LOG_INFO("plugin-catalog", "openUpstream: launching browser to {}",
-                   target.toString().toStdString());
+    AJAZZ_LOG_INFO(
+        "plugin-catalog", "openUpstream: launching browser to {}", target.toString().toStdString());
     return QDesktopServices::openUrl(target);
 }
 

@@ -62,8 +62,7 @@ QImage renderClockDpiFace(QSize panelSize,
     painter.setPen(QColor(240, 240, 246));
 
     auto const timeText = formatTimeLine(now);
-    QString const dpiText =
-        (activeDpi == 0) ? QString{} : QStringLiteral("%1 DPI").arg(activeDpi);
+    QString const dpiText = (activeDpi == 0) ? QString{} : QStringLiteral("%1 DPI").arg(activeDpi);
 
     // Layout: clock takes the top half (large font), DPI label takes the
     // bottom (small font). Font sizes scale with panel height so the
@@ -76,7 +75,9 @@ QImage renderClockDpiFace(QSize panelSize,
     clockFont.setPixelSize(clockPx);
     clockFont.setWeight(QFont::Bold);
     painter.setFont(clockFont);
-    QRect clockRect(0, 0, panelSize.width(),
+    QRect clockRect(0,
+                    0,
+                    panelSize.width(),
                     dpiText.isEmpty() ? panelSize.height() : (2 * panelSize.height() / 3));
     painter.drawText(clockRect, Qt::AlignCenter, timeText);
 
@@ -85,8 +86,7 @@ QImage renderClockDpiFace(QSize panelSize,
         dpiFont.setPixelSize(dpiPx);
         painter.setFont(dpiFont);
         painter.setPen(QColor(160, 200, 255)); // light blue — matches AJAZZ accent
-        QRect dpiRect(0, 2 * panelSize.height() / 3, panelSize.width(),
-                      panelSize.height() / 3);
+        QRect dpiRect(0, 2 * panelSize.height() / 3, panelSize.width(), panelSize.height() / 3);
         painter.drawText(dpiRect, Qt::AlignCenter, dpiText);
     }
     painter.end();
@@ -113,8 +113,8 @@ std::vector<std::vector<std::uint8_t>> encodeRgb565Chunks(QImage const& frame) {
     linearPixels.reserve(totalBytes);
     for (int y = 0; y < frame.height(); ++y) {
         std::uint8_t const* const row = frame.constScanLine(y);
-        linearPixels.insert(linearPixels.end(), row,
-                            row + static_cast<std::ptrdiff_t>(frame.width()) * 2);
+        linearPixels.insert(
+            linearPixels.end(), row, row + static_cast<std::ptrdiff_t>(frame.width()) * 2);
     }
 
     std::size_t offset = 0;
