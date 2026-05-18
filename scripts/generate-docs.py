@@ -44,6 +44,12 @@ TARGETS = [
     ROOT / "docs" / "wiki" / "Supported-Devices.md",
     ROOT / "docs" / "wiki" / "Home.md",
 ]
+# Generated C++ header that mirrors the maturity tier of every codename
+# in devices.yaml. Lets DeviceModel avoid a hand-edited fallback map and
+# closes a hidden touch point when contributors add a new device (audit
+# finding 2026-05-18: "device_model.cpp:41-79 HIDDEN — silent fallback
+# to scaffolded if you forget to add the entry").
+GENERATED_HEADER = ROOT / "src" / "app" / "src" / "device_maturity_map.generated.hpp"
 
 BLOCK_RE = re.compile(
     r"(<!--\s*BEGIN AUTOGEN:\s*(?P<name>[a-z0-9_-]+)\s*-->)"
@@ -306,6 +312,72 @@ RENDERERS = {
 # ---------------------------------------------------------------------------
 # Core in-place rewrite
 # ---------------------------------------------------------------------------
+def render_maturity_map_header(data: Data) -> str:
+    """Emit a generated C++ header mapping device codename -> maturity tier.
+
+    The output is consumed by ``src/app/src/device_model.cpp`` so the QML
+    sidebar can render the right glyph for each device WITHOUT requiring
+    a contributor to hand-edit a second map every time a device is added
+    to ``docs/_data/devices.yaml``.
+
+    Args:
+        data: Parsed devices.yaml content.
+
+    Returns:
+        Full C++ header text (UTF-8, LF line endings, no trailing whitespace).
+    """
+    valid_tiers = {"scaffolded", "probed", "partial", "functional", "verified"}
+    entries: list[str] = []
+    for dev in data.devices:
+        codename = dev.get("codename", "")
+        # YAML key is `maturity:` (Phase 8 DEVICES-01 rename from `status`).
+        # Older YAML files used `status:` so accept both for backwards compat.
+        status = dev.get("maturity") or dev.get("status") or "scaffolded"
+        if not codename:
+            continue
+        if status not in valid_tiers:
+            # Defensive: skip rather than silently emit junk into C++.
+            sys.stderr.write(
+                f"::warning::devices.yaml: codename={codename} has unknown status "
+                f"'{status}'; skipping in maturity map. Valid tiers: "
+                f"{sorted(valid_tiers)}\n"
+            )
+            continue
+        entries.append(
+            f"        {{QStringLiteral(\"{codename}\"), "
+            f"QStringLiteral(\"{status}\")}},"
+        )
+    body = "\n".join(entries)
+    return (
+        "// SPDX-License-Identifier: GPL-3.0-or-later\n"
+        "// AUTO-GENERATED FILE - DO NOT EDIT.\n"
+        "//\n"
+        "// Regenerated from docs/_data/devices.yaml by\n"
+        "// scripts/generate-docs.py. Re-run that script (or commit with\n"
+        "// the pre-commit hook installed) after editing devices.yaml.\n"
+        "//\n"
+        "// The map's only consumer is src/app/src/device_model.cpp;\n"
+        "// callers there fall back to \"scaffolded\" for unknown codenames\n"
+        "// so a stale generated header degrades gracefully but loudly\n"
+        "// (the QML sidebar shows the device as scaffolded instead of\n"
+        "// its real maturity).\n"
+        "#pragma once\n"
+        "\n"
+        "#include <QHash>\n"
+        "#include <QString>\n"
+        "\n"
+        "namespace ajazz::app::generated {\n"
+        "\n"
+        "inline QHash<QString, QString> deviceMaturityByCodename() {\n"
+        "    return QHash<QString, QString>{\n"
+        f"{body}\n"
+        "    };\n"
+        "}\n"
+        "\n"
+        "} // namespace ajazz::app::generated\n"
+    )
+
+
 def rewrite_file(path: Path, data: Data) -> tuple[str, str]:
     """Rewrite all AUTOGEN blocks in a single file.
 
@@ -380,6 +452,32 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 path.write_text(updated, encoding="utf-8")
                 print(f"updated: {path.relative_to(ROOT)}")
+
+    # Generated C++ header for the device-maturity map. Kept LF-only and
+    # without a trailing whitespace to match clang-format / pre-commit
+    # expectations; the existing /// rules in .pre-commit-config.yaml
+    # exclude the file from mdformat (it's .hpp, not .md) so no need to
+    # special-case it there.
+    header_updated = render_maturity_map_header(data)
+    try:
+        header_original = GENERATED_HEADER.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        header_original = ""
+    if header_original != header_updated:
+        any_changed = True
+        if args.check:
+            sys.stderr.write(
+                f"::error file={GENERATED_HEADER.relative_to(ROOT)}::"
+                "Generated maturity-map header is out of date — run "
+                "`python3 scripts/generate-docs.py`.\n"
+            )
+        else:
+            GENERATED_HEADER.parent.mkdir(parents=True, exist_ok=True)
+            # newline="" + "\n" line endings keep generated headers LF on
+            # Windows (autocrlf normalisation would otherwise produce
+            # CRLF in the working tree).
+            GENERATED_HEADER.write_text(header_updated, encoding="utf-8", newline="\n")
+            print(f"updated: {GENERATED_HEADER.relative_to(ROOT)}")
 
     if args.check and any_changed:
         return 1
