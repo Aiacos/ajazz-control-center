@@ -149,13 +149,6 @@ private:
                     ///< LightingService; dynamic_cast to ISettingsCapable
                     ///< inside the service to push / read the AK-series
                     ///< settings batch (fn-layer / sleep / response).
-    std::unique_ptr<AppUpdateService>
-        m_appUpdate; ///< 2026-05-18: GitHub-Releases-driven in-app update checker
-                     ///< (notify-only per docs/architecture/APP-AUTO-UPDATE.md).
-                     ///< Self-disables when FLATPAK_ID is set; otherwise polls
-                     ///< the api.github.com /releases/latest endpoint every 24 h
-                     ///< and surfaces a Material banner in Main.qml when a newer
-                     ///< tag is observed.
     std::unique_ptr<BatteryService>
         m_battery; ///< 2026-05-18: per-device battery polling for wireless
                    ///< IBatteryCapable devices (AK980 PRO today). Owns a
@@ -164,6 +157,16 @@ private:
                    ///< Surfaces results to QML via batteryQueried /
                    ///< batteryUnavailable; QML BatteryIndicator mounts in
                    ///< DeviceRow.
+    std::unique_ptr<AppUpdateService>
+        m_appUpdate; ///< 2026-05-18: GitHub-Releases-driven in-app update checker
+                     ///< (notify-only per docs/architecture/APP-AUTO-UPDATE.md).
+                     ///< Self-disables when FLATPAK_ID is set; otherwise polls
+                     ///< the api.github.com /releases/latest endpoint every 24 h
+                     ///< and surfaces a Material banner in Main.qml when a newer
+                     ///< tag is observed. Declared after m_battery so the init
+                     ///< list (constructed after m_battery in application.cpp)
+                     ///< stays in member-declaration order, satisfying GCC's
+                     ///< -Wreorder on the Linux CI matrix.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).
