@@ -30,10 +30,12 @@
 #include <cstring>
 #include <ctime>
 #include <mutex>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <thread>
+#include <vector>
 
 namespace ajazz::keyboard {
 
@@ -273,6 +275,84 @@ std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
     };
 }
 
+std::array<std::uint8_t, ReportSize> buildTftChunkedHeader(std::uint8_t lcdSelect,
+                                                           std::uint32_t totalChunks) {
+    std::array<std::uint8_t, ReportSize> pkt{};
+    // ReportId byte 0 stays 0x00 per ak980pro_tft_protocol.md §2 (the TFT
+    // path is the one AK980 PRO surface that does NOT use the default 0x04
+    // ReportId; the vendor's FUN_004231c0 fills the local 33-byte buffer
+    // with byte 0 = 0x00 before handing it to the feature-report transport).
+    pkt[0] = 0x00;
+    pkt[1] = CmdScreenHeader;                                       // 0x7F
+    pkt[2] = CmdScreenSubBegin;                                     // 0x03
+    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u);             // 1-based on the wire
+    // Total-chunks count is uint32-LE in bytes 4..7 (only lower 24 bits used
+    // in practice — 140-frame GIF caps at 324 100 chunks; see §3.2).
+    pkt[4] = static_cast<std::uint8_t>(totalChunks & 0xffu);
+    pkt[5] = static_cast<std::uint8_t>((totalChunks >> 8) & 0xffu);
+    pkt[6] = static_cast<std::uint8_t>((totalChunks >> 16) & 0xffu);
+    pkt[7] = static_cast<std::uint8_t>((totalChunks >> 24) & 0xffu);
+    return pkt;
+}
+
+std::array<std::uint8_t, ReportSize>
+buildTftChunkedPayload(std::uint32_t chunkIdx,
+                       std::span<std::uint8_t const, kTftChunkPayload> payload) {
+    std::array<std::uint8_t, ReportSize> pkt{};
+    // ReportId byte 0 stays 0x00 (same rule as the chunked header — §2).
+    pkt[0] = 0x00;
+    auto const idx = encodeTftChunkIndex(chunkIdx);
+    pkt[1] = idx[0]; // chunk index low 8 bits
+    pkt[2] = idx[1]; // 0x80 marker | high 7 bits of chunk index
+    pkt[3] = idx[2]; // chunk index middle 8 bits
+    // 28-byte RGB565 payload at bytes 4..31 (§3.3). Bytes 32..63 stay zero
+    // from value-init — the TFT path does not stamp the BIT7 checksum slot
+    // that other AK980 PRO opcodes use (§2 note: firmware does not validate
+    // a checksum for this opcode based on observed behavior).
+    std::memcpy(pkt.data() + 4, payload.data(), kTftChunkPayload);
+    return pkt;
+}
+
+std::vector<std::uint8_t>
+encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint16_t height) {
+    if (width == 0 || height == 0 || rgba.empty()) {
+        return {};
+    }
+    auto const expected = static_cast<std::size_t>(width) *
+                          static_cast<std::size_t>(height) * 4u;
+    if (rgba.size() != expected) {
+        return {};
+    }
+    std::vector<std::uint8_t> out;
+    out.reserve(kTftFrameBytes);
+    // Nearest-neighbour resample to the panel's native 240x135 + per-pixel
+    // BE RGB565 pack, fused into a single top-down row-major walk so we
+    // only allocate the output buffer once. Source coordinates are computed
+    // with the half-pixel offset (+0.5 then floor) so a 1:1 source maps
+    // exactly without an off-by-one bias on the right/bottom edges.
+    auto const srcW = static_cast<std::size_t>(width);
+    auto const srcH = static_cast<std::size_t>(height);
+    for (std::size_t dy = 0; dy < kTftHeight; ++dy) {
+        // sy = floor((dy + 0.5) * srcH / kTftHeight) without floats:
+        //     = ((dy * 2 + 1) * srcH) / (2 * kTftHeight)
+        std::size_t const sy =
+            std::min<std::size_t>(((dy * 2u + 1u) * srcH) / (2u * kTftHeight), srcH - 1u);
+        for (std::size_t dx = 0; dx < kTftWidth; ++dx) {
+            std::size_t const sx =
+                std::min<std::size_t>(((dx * 2u + 1u) * srcW) / (2u * kTftWidth), srcW - 1u);
+            std::size_t const pix = (sy * srcW + sx) * 4u;
+            auto const r = static_cast<std::uint16_t>((rgba[pix + 0] >> 3) & 0x1fu);
+            auto const g = static_cast<std::uint16_t>((rgba[pix + 1] >> 2) & 0x3fu);
+            auto const b = static_cast<std::uint16_t>((rgba[pix + 2] >> 3) & 0x1fu);
+            auto const rgb565 = static_cast<std::uint16_t>((r << 11) | (g << 5) | b);
+            // Big-endian on the wire per §6: high byte first, low byte second.
+            out.push_back(static_cast<std::uint8_t>((rgb565 >> 8) & 0xffu));
+            out.push_back(static_cast<std::uint8_t>(rgb565 & 0xffu));
+        }
+    }
+    return out;
+}
+
 std::array<std::uint8_t, ReportSize> buildScreenBulkBegin(std::uint8_t lcdSelect,
                                                           std::uint16_t total4kChunks) {
     auto pkt = makeReport(CmdScreenBulkBegin);
@@ -373,7 +453,8 @@ class ProprietaryKeyboard final : public IDevice,
                                   public IClockCapable,
                                   public IBatteryCapable,
                                   public IFirmwareLightingCapable,
-                                  public ISettingsCapable {
+                                  public ISettingsCapable,
+                                  public ITftDisplayCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
@@ -825,6 +906,103 @@ public:
 
     [[nodiscard]] core::KeyboardSettings keyboardSettings() const override {
         return m_settingsCache;
+    }
+
+    // ---- ITftDisplayCapable (chunked 240x135 RGB565 path, opcode 0x7F) ----
+    //
+    // Slow-but-universal upload path for the 1.14" TFT panel on AK980 PRO and
+    // siblings. Per docs/protocols/keyboard/ak980pro_tft_protocol.md §3 the
+    // sequence is: HEADER (opcode 0x7F sub 0x03 with total chunk count) +
+    // N chunk PAYLOADs (each 28 bytes of RGB565 pixel data, big-endian, with
+    // the 24-bit chunk index split across bytes 1/2/3 + the 0x80 marker on
+    // byte 2). All packets go via writeFeature() — the AK980 PRO control
+    // packets uniformly use the feature-report transport per the §2 doc
+    // (vendor disassembly: FUN_004231c0 -> FUN_0044f5f0). Inter-chunk Sleep
+    // is intentionally omitted in this implementation — the vendor's 2 ms
+    // pace is a USB-side rate-limit that hidapi already handles via the
+    // OS-level write queue; adding host-side sleeps would multiply the
+    // ~10-minute baseline upload time without measurable benefit.
+    //
+    // The bulk path (opcode 0x72, 143x faster) is the preferred upload
+    // mechanism but requires a bulk-write transport surface that ITransport
+    // does not yet expose; it is documented + scaffolded
+    // (buildScreenBulkBegin) but not wired here — see v1.2.x devices.yaml.
+    [[nodiscard]] core::TftPanelInfo tftPanelInfo() const noexcept override {
+        return core::TftPanelInfo{
+            .widthPx = static_cast<std::uint16_t>(kTftWidth),
+            .heightPx = static_cast<std::uint16_t>(kTftHeight),
+        };
+    }
+
+    bool uploadTftImage(std::span<std::uint8_t const> rgba,
+                        std::uint16_t width,
+                        std::uint16_t height) override {
+        if (width == 0 || height == 0 || rgba.empty()) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "uploadTftImage: empty/zero-dim image ignored ({}x{}, {} bytes)",
+                           static_cast<unsigned>(width),
+                           static_cast<unsigned>(height),
+                           rgba.size());
+            return false;
+        }
+        auto const expectedBytes = static_cast<std::size_t>(width) *
+                                   static_cast<std::size_t>(height) * 4u;
+        if (rgba.size() != expectedBytes) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "uploadTftImage: rgba size mismatch (got {}, expected {})",
+                           rgba.size(), expectedBytes);
+            return false;
+        }
+
+        // Pure-C++ nearest-neighbour resize + big-endian RGB565 pack. Keeps
+        // the keyboard backend Qt-free (proprietary_protocol.hpp / .cpp do
+        // not depend on Qt6::Gui — only the test fixture uses QImage to
+        // construct the source pixel buffer).
+        auto const pixelStream = encodeRgb565(rgba, width, height);
+        if (pixelStream.empty() || pixelStream.size() != kTftFrameBytes) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "uploadTftImage: encodeRgb565 produced {} bytes (expected {})",
+                           pixelStream.size(), kTftFrameBytes);
+            return false;
+        }
+
+        // Slice into ceil(64800 / 28) = 2 315 chunks. Last chunk is the same
+        // 28-byte fixed size; any tail shorter than 28 bytes is zero-padded
+        // so the wire format stays uniform (vendor white-fills the scratch
+        // buffer with 0xFF before copying pixel data — we use 0x00 because
+        // the firmware doesn't render the trailing slack region anyway).
+        std::size_t const totalChunks =
+            (pixelStream.size() + kTftChunkPayload - 1) / kTftChunkPayload;
+
+        try {
+            // P1: HEADER (opcode 0x7F sub 0x03, total chunk count uint32-LE).
+            (void)m_transport->writeFeature(
+                buildTftChunkedHeader(/*lcdSelect=*/0,
+                                      static_cast<std::uint32_t>(totalChunks)));
+            // P2..PN: chunk PAYLOADs (28-byte RGB565 slices).
+            std::array<std::uint8_t, kTftChunkPayload> slice{};
+            for (std::size_t i = 0; i < totalChunks; ++i) {
+                std::size_t const off = i * kTftChunkPayload;
+                std::size_t const take =
+                    std::min<std::size_t>(kTftChunkPayload, pixelStream.size() - off);
+                slice.fill(0);
+                std::memcpy(slice.data(), pixelStream.data() + off, take);
+                (void)m_transport->writeFeature(buildTftChunkedPayload(
+                    static_cast<std::uint32_t>(i),
+                    std::span<std::uint8_t const, kTftChunkPayload>{slice}));
+            }
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "uploadTftImage: HID writeFeature failed: {}", e.what());
+            return false;
+        }
+        AJAZZ_LOG_INFO("keyboard.ak980",
+                       "uploadTftImage: {}x{} pushed as {} chunks ({} bytes)",
+                       static_cast<unsigned>(width),
+                       static_cast<unsigned>(height),
+                       totalChunks,
+                       pixelStream.size());
+        return true;
     }
 
 private:

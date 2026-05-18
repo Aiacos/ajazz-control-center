@@ -25,6 +25,13 @@ add_executable(
     # (opcode 0x07 sub 0x10, ISettingsCapable). Pins the 4-packet
     # START/SETTINGS/SAVE/FINISH sequence + byte map + host cache.
     test_ak980_settings_batch.cpp
+    # 2026-05-18 (Pass 5) — AK980 PRO TFT chunked image-upload path
+    # (opcode 0x7F sub 0x03 + 28-byte chunk packets with the 0x80 marker
+    # on byte 2, ITftDisplayCapable). Pins the §3 wire format from
+    # docs/protocols/keyboard/ak980pro_tft_protocol.md: header + 2 315
+    # chunks per 240x135 RGB565 frame, BE pixel pack, nearest-neighbour
+    # resize for sub-native sources, empty-image graceful no-op.
+    test_ak980_tft_chunked.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`
     # into AjSeriesMouse via the public `makeAjSeriesWithTransport` factory

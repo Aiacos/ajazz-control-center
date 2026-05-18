@@ -1300,4 +1300,87 @@ public:
     [[nodiscard]] virtual std::uint8_t macroSlotCount() const noexcept = 0;
 };
 
+// -----------------------------------------------------------------------------
+// TFT display capability (chunked image upload — AK980 PRO 240x135 panel)
+// -----------------------------------------------------------------------------
+/**
+ * @struct TftPanelInfo
+ * @brief Pixel geometry of a device's full-screen TFT/LCD panel.
+ *
+ * Returned by @ref ITftDisplayCapable::tftPanelInfo(). Callers may use these
+ * dimensions to pre-scale a host image to native resolution before passing it
+ * to @ref ITftDisplayCapable::uploadTftImage; backends will also normalise
+ * internally if the supplied image differs from the panel size.
+ *
+ * Distinct from @ref DisplayInfo (which describes per-key LCDs on Stream Deck
+ * family devices). This struct addresses the single full-frame TFT panel some
+ * AJAZZ keyboards ship with (e.g. the AK980 PRO 1.14-inch 240x135 RGB565 TFT).
+ */
+struct TftPanelInfo {
+    std::uint16_t widthPx{0};  ///< Panel width in pixels (e.g. 240 on AK980 PRO).
+    std::uint16_t heightPx{0}; ///< Panel height in pixels (e.g. 135 on AK980 PRO).
+};
+
+/**
+ * @class ITftDisplayCapable
+ * @brief Optional capability exposing a device's full-screen TFT/LCD image
+ *        upload surface (single-frame still image; GIF playback is a future
+ *        extension layered on the same wire path).
+ *
+ * Mirrors the vendor utility's "Custom screen image" feature on keyboards
+ * that ship with a small full-frame TFT panel — currently @c ProprietaryKeyboard
+ * (AK980 PRO and siblings sharing the SN32F299 wire format) via the chunked
+ * upload path documented at @c docs/protocols/keyboard/ak980pro_tft_protocol.md
+ * §3 (opcode @c 0x7F sub @c 0x03 header + 28-byte chunk packets with a 0x80
+ * marker on the chunk-index byte).
+ *
+ * The interface is intentionally Qt-free so it stays inside @c ajazz_core's
+ * public-header surface (COD-031 boundary): callers hand the backend an RGBA8
+ * byte span + dimensions, the backend performs any required resize and RGB565
+ * conversion in its private translation unit (where Qt6::Gui is permitted).
+ *
+ * The chunked path is *slow* (~2 315 chunks per 240x135 frame, ~10 min for a
+ * 140-frame GIF on the firmware's 2 ms inter-chunk pacing) but works on every
+ * AK980 PRO firmware revision. A faster bulk path (opcode @c 0x72, 143x
+ * speedup) coexists in the protocol doc and will be wired in a follow-up
+ * commit once a `write_bulk`-equivalent transport surface is available.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see TftPanelInfo, Capability::MainDisplay
+ * @see docs/protocols/keyboard/ak980pro_tft_protocol.md
+ */
+class ITftDisplayCapable {
+public:
+    virtual ~ITftDisplayCapable() = default;
+
+    /**
+     * @brief Return the native pixel geometry of the device's TFT panel.
+     * @return Immutable @ref TftPanelInfo for this device model.
+     */
+    [[nodiscard]] virtual TftPanelInfo tftPanelInfo() const noexcept = 0;
+
+    /**
+     * @brief Upload an RGBA8 image to the device's full-screen TFT panel.
+     *
+     * Backends resize to the panel's native dimensions and convert to the
+     * device-specific pixel format (RGB565 big-endian on AK980 PRO) before
+     * slicing into wire-protocol chunks. Callers may pass any non-empty
+     * resolution; an empty image (zero @p width, zero @p height, or
+     * zero-length @p rgba) returns @c false without emitting any packets.
+     *
+     * @param rgba   Tightly packed RGBA8 pixels, length == width * height * 4.
+     * @param width  Source image width in pixels (> 0).
+     * @param height Source image height in pixels (> 0).
+     *
+     * @return @c true when every chunk packet went out; @c false on transport
+     *         error or empty / mismatched input. Transport errors are logged
+     *         at WARN level so the failure is traceable in the journal.
+     *
+     * @pre rgba.size() == width * height * 4u
+     */
+    virtual bool uploadTftImage(std::span<std::uint8_t const> rgba,
+                                std::uint16_t width,
+                                std::uint16_t height) = 0;
+};
+
 } // namespace ajazz::core

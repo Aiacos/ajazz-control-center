@@ -15,7 +15,9 @@
 
 #include <array>
 #include <cstdint>
+#include <span>
 #include <string_view>
+#include <vector>
 
 namespace ajazz::keyboard::proprietary {
 
@@ -355,6 +357,90 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  * @param isWireless Pick the wireless read-back sub (0x09) instead of wired (0x03).
  */
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless);
+
+/**
+ * @brief Build the chunked-path TFT upload HEADER packet (opcode 0x7F sub 0x03).
+ *
+ * Per `ak980pro_tft_protocol.md` §3.2: sent once at the start of a chunked
+ * TFT upload to tell the firmware "the next @p totalChunks packets carry a
+ * 240x135 RGB565 frame stream".
+ *
+ * Byte layout (64-byte feature report; pad to 0 from byte 8):
+ *   byte 0:  0x00                  (HID Report ID — NOT 0x04; see §2 note)
+ *   byte 1:  0x7F                  (CmdScreenHeader)
+ *   byte 2:  0x03                  (CmdScreenSubBegin)
+ *   byte 3:  lcdSelect + 1         (single-LCD models pass 0 -> wire 1)
+ *   bytes 4..7: totalChunks (uint32 little-endian; lower 24 bits used)
+ *   bytes 8..63: 0x00
+ *
+ * The 0x80 marker bit on byte 2 of subsequent chunk packets distinguishes
+ * those chunks from this header (whose byte 2 is the literal sub-cmd 0x03).
+ *
+ * @param lcdSelect 0-based LCD index (AK980 PRO has 1 LCD -> pass 0).
+ * @param totalChunks Total number of 28-byte chunks the upload will emit
+ *                    (for a single 240x135 RGB565 frame = 2 315 chunks).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildTftChunkedHeader(std::uint8_t lcdSelect, std::uint32_t totalChunks);
+
+/**
+ * @brief Build a single chunked-path TFT upload PAYLOAD packet (28-byte chunk).
+ *
+ * Per `ak980pro_tft_protocol.md` §3.3: every chunk packet carries 28 bytes of
+ * RGB565 pixel data plus the 24-bit chunk index split across bytes 1/2/3 with
+ * the 0x80 marker on byte 2 (distinguishes a chunk from the header).
+ *
+ * Byte layout (64-byte feature report; pad to 0 from byte 32):
+ *   byte 0:  0x00                       (HID Report ID — NOT 0x04)
+ *   byte 1:  chunkIdx & 0xFF            (low 8 bits)
+ *   byte 2:  0x80 | ((chunkIdx >> 16) & 0x7F) (marker + high 7 bits)
+ *   byte 3:  (chunkIdx >> 8) & 0xFF     (middle 8 bits)
+ *   bytes 4..31: 28 bytes of RGB565 pixel data (big-endian per pixel)
+ *   bytes 32..63: 0x00
+ *
+ * The pixel payload is consumed verbatim — callers are responsible for any
+ * endian-flip (RGB565 is big-endian on the wire per §6); see @ref encodeRgb565.
+ *
+ * @param chunkIdx Chunk index in `[0..0xFFFFFF]`; encoded via @ref encodeTftChunkIndex.
+ * @param payload  28-byte RGB565 chunk; placed at @c pkt[4..31] verbatim.
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize>
+buildTftChunkedPayload(std::uint32_t chunkIdx,
+                       std::span<std::uint8_t const, kTftChunkPayload> payload);
+
+/**
+ * @brief Convert an arbitrary RGBA8 image into a 240x135 big-endian RGB565 stream.
+ *
+ * Per `ak980pro_tft_protocol.md` §6: the AK980 PRO TFT firmware expects
+ * **big-endian RGB565** on the wire (`0xRRRR_RGGG_GGGB_BBBB` with the high
+ * byte first), top-down row-major. The output is the exact concatenation of
+ * all chunk payloads — the caller slices it into 28-byte chunks via
+ * @ref buildTftChunkedPayload.
+ *
+ * Pipeline (pure C++, no Qt dependency so this header stays inside the
+ * keyboard backend's Qt-free contract):
+ *   1. Reject empty / zero-dim input (returns empty vector).
+ *   2. Nearest-neighbour resample to the panel's native @ref kTftWidth x
+ *      @ref kTftHeight. Nearest-neighbour (not bilinear) keeps the helper
+ *      pure C++; the visible quality cost on a 240x135 panel is negligible
+ *      because the source is typically a UI icon that already targets a
+ *      small dimension. A bilinear pass can be added later behind a host-
+ *      side QImage path in a dedicated pipeline TU (mirror the
+ *      `src/devices/mouse/src/aj_series_tft_pipeline.cpp` shape) without
+ *      touching the wire-format contract.
+ *   3. Walk the 240x135 = 32 400 pixels row-major top-down, emit each as a
+ *      big-endian uint16 RGB565 (high byte first), producing exactly
+ *      @ref kTftFrameBytes = 64 800 bytes.
+ *
+ * @param rgba   Tightly packed RGBA8 pixels, length == width * height * 4u.
+ * @param width  Source image width in pixels (> 0).
+ * @param height Source image height in pixels (> 0).
+ * @return       64 800-byte big-endian RGB565 stream, or empty on bad input.
+ */
+[[nodiscard]] std::vector<std::uint8_t>
+encodeRgb565(std::span<std::uint8_t const> rgba,
+             std::uint16_t width,
+             std::uint16_t height);
 
 /**
  * @brief Encode a 24-bit chunk index into the three TFT-chunk header bytes.
