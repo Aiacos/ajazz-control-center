@@ -43,6 +43,12 @@ add_executable(
     # invokes IClockCapable::setTime(), and asserts every chunk's
     # envelope. Pins the OLED basetta code path against regression.
     test_aj_series_tft_clock.cpp
+    # 2026-05-18 settings surface: byte-level tests for the two new
+    # AJ-series mouse capabilities — IPollingRateCapable (opcode 0x04,
+    # _RateToNum lookup, 0x80-MSB high-rate encoding) and
+    # IProfileSelectCapable (opcode 0x05, 8 onboard slots persistent
+    # across power-cycle) per aj_series_opcode_table.md sec 3.3 + 3.4.
+    test_aj_series_settings.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

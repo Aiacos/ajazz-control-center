@@ -76,7 +76,9 @@ constexpr std::uint8_t kDefaultProfile = 0;
 class AjSeriesMouse final : public IDevice,
                             public IMouseCapable,
                             public IRgbCapable,
-                            public IClockCapable {
+                            public IClockCapable,
+                            public IPollingRateCapable,
+                            public IProfileSelectCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -151,11 +153,11 @@ public:
     }
 
     void setPollRateHz(std::uint16_t hz) override {
-        // Opcode 0x04 (FEA_CMD_SET_REPORT), single-byte from _RateToNum lookup
-        // at pkt[3]. Replaces our prior uint16-BE encoding which was wrong.
-        auto const pkt = buildSetReportRate(kDefaultProfile, hz);
-        (void)m_transport->write(pkt);
-        m_pollRate = hz;
+        // Legacy IMouseCapable convenience — delegates to the canonical
+        // IPollingRateCapable path so the cache and wire byte stay in sync
+        // and out-of-table values get clamped instead of silently falling
+        // back to 1 KHz via pollRateToWireCode.
+        (void)setPollingRateHz(hz);
     }
 
     [[nodiscard]] std::uint16_t pollRateHz() const noexcept override { return m_pollRate; }
@@ -171,8 +173,10 @@ public:
 
     void setButtonBinding(std::uint8_t button, std::uint32_t action) override {
         // Opcode 0x50 (FEA_CMD_MOUSE_SET_KEYMATRIX). Action at bytes 8..11
-        // (our prior buggy offset was bytes 4..7).
-        auto const pkt = buildMouseSetKeyMatrix(kDefaultProfile, button, action);
+        // (our prior buggy offset was bytes 4..7). Binds against the
+        // currently-active onboard profile so the QML profile picker
+        // (IProfileSelectCapable) and per-button rebinds stay coherent.
+        auto const pkt = buildMouseSetKeyMatrix(m_activeProfile, button, action);
         (void)m_transport->write(pkt);
     }
 
@@ -287,6 +291,66 @@ public:
         return TimeSyncResult::Ok;
     }
 
+    // ---- IPollingRateCapable -----------------------------------------------
+    //
+    // Vendor `_RateToNum` table per `aj_series_opcode_table.md` §3.4:
+    //   125 -> 0x08, 250 -> 0x04, 500 -> 0x02, 1000 -> 0x01,
+    //   2000 -> 0x84, 4000 -> 0x82, 8000 -> 0x81.
+    // The high-bit-set encoding for >=2000 Hz means a naive sum checksum
+    // would set bit 7; BIT7 masking (§5) clears it before transmission.
+    //
+    // No synchronous read-back from firmware — host caches the last pushed
+    // value in @c m_pollRate (shared with the legacy IMouseCapable getter).
+    [[nodiscard]] std::vector<std::uint16_t> supportedPollingRatesHz() const override {
+        return {125, 250, 500, 1000, 2000, 4000, 8000};
+    }
+
+    bool setPollingRateHz(std::uint16_t hz) override {
+        auto const supported = supportedPollingRatesHz();
+        // Clamp to nearest supported rate; falls back to 1000 Hz default for
+        // pathological inputs (matches pollRateToWireCode()'s unknown-input
+        // behaviour so wire byte and cache stay in sync).
+        std::uint16_t const clamped = clampToSupportedRate(hz, supported);
+        auto const pkt = buildSetReportRate(m_activeProfile, clamped);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "setPollingRateHz: HID write failed: {}", e.what());
+            return false;
+        }
+        m_pollRate = clamped;
+        return true;
+    }
+
+    [[nodiscard]] std::uint16_t pollingRateHz() const override { return m_pollRate; }
+
+    // ---- IProfileSelectCapable ---------------------------------------------
+    //
+    // 8 onboard slots per `aj_series_opcode_table.md` §3.3 (FEA_CMD_SET_PROFILE
+    // 0x05). Firmware persists the active slot across power-cycle. The wire
+    // byte at pkt[2] is the profile index (0..7); the builder clamps.
+    [[nodiscard]] std::uint8_t onboardProfileCount() const noexcept override { return 8; }
+
+    bool setActiveOnboardProfile(std::uint8_t index) override {
+        std::uint8_t const clamped = std::min<std::uint8_t>(
+            index, static_cast<std::uint8_t>(onboardProfileCount() - 1));
+        auto const pkt = buildSetProfile(clamped);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "setActiveOnboardProfile: HID write failed: {}", e.what());
+            return false;
+        }
+        m_activeProfile = clamped;
+        return true;
+    }
+
+    [[nodiscard]] std::uint8_t activeOnboardProfile() const noexcept override {
+        return m_activeProfile;
+    }
+
 private:
     /// Re-upload the full 8-stage DPI table atomically via opcode 0x54.
     void uploadDpiTableAtomic() {
@@ -315,6 +379,27 @@ private:
                                           m_lastLed.g,
                                           m_lastLed.b);
         (void)m_transport->write(pkt);
+    }
+
+    /// Clamp an arbitrary Hz value to the nearest entry in @p supported.
+    /// Used by setPollingRateHz so out-of-table values don't silently fall
+    /// back to 1 KHz via pollRateToWireCode (which would desync the host
+    /// cache from the wire byte).
+    static std::uint16_t
+    clampToSupportedRate(std::uint16_t hz, std::vector<std::uint16_t> const& supported) noexcept {
+        if (supported.empty()) {
+            return hz;
+        }
+        std::uint16_t best = supported.front();
+        std::uint32_t bestDelta = (hz > best) ? (hz - best) : (best - hz);
+        for (auto const candidate : supported) {
+            std::uint32_t const delta = (hz > candidate) ? (hz - candidate) : (candidate - hz);
+            if (delta < bestDelta) {
+                best = candidate;
+                bestDelta = delta;
+            }
+        }
+        return best;
     }
 
     /// Translate float mm → vendor's 3-step lift-cut-off enum (0=1mm, 1=2mm, 2=3mm).
@@ -371,6 +456,10 @@ private:
     std::mutex m_mutex;
     std::uint16_t m_pollRate{1000};
     std::uint8_t m_activeDpiStage{0};
+    /// Last-known active onboard profile (cached host-side; firmware does not
+    /// expose a synchronous read-back path). 0..7 per
+    /// `aj_series_opcode_table.md` §3.3.
+    std::uint8_t m_activeProfile{kDefaultProfile};
     std::vector<DpiStage> m_dpiStages{dpiStageCount(),
                                       DpiStage{}}; ///< Host-side cache of the on-device DPI table.
     /// TFT basetta pixel resolution. Default 128x128 — small enough that

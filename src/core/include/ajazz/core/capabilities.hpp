@@ -329,6 +329,113 @@ public:
     [[nodiscard]] virtual std::uint8_t speedMax() const noexcept = 0;
 };
 
+// -----------------------------------------------------------------------------
+// Polling-rate capability (mice / wireless dongles with multi-rate firmware)
+// -----------------------------------------------------------------------------
+/**
+ * @class IPollingRateCapable
+ * @brief Optional capability exposing a device's USB polling-rate picker.
+ *
+ * Distinct from the legacy @ref IMouseCapable::setPollRateHz convenience: this
+ * is the canonical surface that the QML poll-rate picker queries, and it is
+ * implementable by any device family with a multi-rate firmware menu (gaming
+ * mice, wireless dongles, future game-pads, ...). Backends advertise the
+ * device-supported Hz values rather than a fixed 125/500/1000 ladder; this
+ * matters for AJ-series mice that ship a 125 / 250 / 500 / 1000 / 2000 /
+ * 4000 / 8000 Hz menu where the 2/4/8 KHz entries use a high-bit-set wire
+ * encoding (`0x80`-MSB) per
+ * `docs/protocols/mouse/aj_series_opcode_table.md` §3.4.
+ *
+ * Firmware does not advertise a synchronous read-back path for the active
+ * rate; backends keep a host-side cache of the last pushed value so callers
+ * can display it without a round-trip.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ */
+class IPollingRateCapable {
+public:
+    virtual ~IPollingRateCapable() = default;
+
+    /**
+     * @brief Hz values this firmware accepts on the wire.
+     *
+     * Ordered ascending. Callers should treat the list as authoritative —
+     * passing a value outside this set to @ref setPollingRateHz clamps to
+     * the nearest supported entry rather than emitting a malformed packet.
+     */
+    [[nodiscard]] virtual std::vector<std::uint16_t> supportedPollingRatesHz() const = 0;
+
+    /**
+     * @brief Push a new polling rate to the device.
+     *
+     * @param hz Desired rate; values not in @ref supportedPollingRatesHz are
+     *           clamped to the nearest supported entry.
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool setPollingRateHz(std::uint16_t hz) = 0;
+
+    /**
+     * @brief Last-known polling rate (no synchronous device read).
+     *
+     * Firmware does not advertise an authoritative read-back path; backends
+     * cache the last pushed value. Returns the vendor default before any
+     * push lands (typically 1000 Hz).
+     */
+    [[nodiscard]] virtual std::uint16_t pollingRateHz() const = 0;
+};
+
+// -----------------------------------------------------------------------------
+// Onboard profile-select capability (devices with N firmware-resident slots)
+// -----------------------------------------------------------------------------
+/**
+ * @class IProfileSelectCapable
+ * @brief Optional capability exposing a device's onboard profile picker.
+ *
+ * Many AJAZZ peripherals store N independent configuration slots (DPI table,
+ * key bindings, lighting) in flash and persist the active slot across power
+ * cycles. This capability is the canonical surface for switching between
+ * those slots — distinct from the host-side @c Profile JSON file the app
+ * uses for its own preset library.
+ *
+ * AJ-series mice expose 8 onboard slots (`0..7`) selected via opcode
+ * `FEA_CMD_SET_PROFILE` 0x05 per
+ * `docs/protocols/mouse/aj_series_opcode_table.md` §3.3. Other future
+ * families (keyboards with onboard layers, dock-mode encoders, ...) can
+ * implement the same interface so the QML profile picker stays uniform.
+ *
+ * Firmware does not advertise a synchronous read-back path for the active
+ * profile; backends keep a host-side cache of the last pushed value.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ */
+class IProfileSelectCapable {
+public:
+    virtual ~IProfileSelectCapable() = default;
+
+    /// @return Number of onboard profile slots the firmware persists (typical 8).
+    [[nodiscard]] virtual std::uint8_t onboardProfileCount() const noexcept = 0;
+
+    /**
+     * @brief Switch the active onboard profile slot.
+     *
+     * The new slot is persisted across power-cycle by the firmware.
+     *
+     * @param index Slot index in `[0, onboardProfileCount())`; out-of-range
+     *              values are clamped to the last slot.
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool setActiveOnboardProfile(std::uint8_t index) = 0;
+
+    /**
+     * @brief Last-known active profile (no synchronous device read).
+     *
+     * Firmware does not advertise an authoritative read-back path; backends
+     * cache the last pushed value. Returns 0 before any push lands (vendor
+     * default: profile slot 0).
+     */
+    [[nodiscard]] virtual std::uint8_t activeOnboardProfile() const noexcept = 0;
+};
+
 /**
  * @struct KeyboardSettings
  * @brief Single-shot configuration carried by the AK-series settings
