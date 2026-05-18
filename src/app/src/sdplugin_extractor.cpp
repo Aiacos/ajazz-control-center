@@ -38,9 +38,40 @@ bool extractSdPluginArchive(QString const& archivePath, QString const& destDir,
     // on Win32). The leading dot keeps it out of any plugin-host scan.
     QString const tmpPath = destDir + QStringLiteral("/.tmp_") + targetSubdir;
     QDir().mkpath(tmpPath);
-    if (!zip.extractAll(tmpPath)) {
+    // Iterate the central directory ourselves instead of relying on
+    // QZipReader::extractAll. On Qt 6.8.3 (CI baseline) extractAll fails
+    // when an archive omits explicit directory entries — a common shape
+    // for zips produced by tools like Python's zipfile and (per local
+    // testing) by QZipWriter itself when only addFile() is used. Qt
+    // 6.11.1's extractAll silently mkpath()s missing parents, but we
+    // can't rely on that. Mkpath every file's parent dir before writing.
+    bool extractOk = true;
+    for (auto const& info : zip.fileInfoList()) {
+        QString const outPath = tmpPath + QStringLiteral("/") + info.filePath;
+        if (info.isDir) {
+            QDir().mkpath(outPath);
+        } else if (info.isFile) {
+            QDir().mkpath(QFileInfo(outPath).absolutePath());
+            QFile out(outPath);
+            if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                extractOk = false;
+                break;
+            }
+            QByteArray const data = zip.fileData(info.filePath);
+            if (out.write(data) != data.size()) {
+                extractOk = false;
+                out.close();
+                break;
+            }
+            out.close();
+        }
+        // Symlinks intentionally skipped: vendor `.sdPlugin` payloads
+        // are flat HTML/JS/PNG trees, never symlinked, and honouring
+        // symlinks from an untrusted archive is a security hazard.
+    }
+    if (!extractOk) {
         AJAZZ_LOG_WARN("plugin-catalog",
-                       "extract '{}': extractAll to '{}' failed",
+                       "extract '{}': iteration into '{}' failed",
                        archivePath.toStdString(), tmpPath.toStdString());
         QDir(tmpPath).removeRecursively();
         return false;
