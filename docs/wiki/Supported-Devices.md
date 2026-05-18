@@ -60,7 +60,7 @@ each release. See [CHANGELOG.md](https://github.com/Aiacos/ajazz-control-center/
 ## By family
 
 <!-- BEGIN AUTOGEN: devices-by-family -->
-### Stream decks
+### Stream Dock macropads
 
 | Device | USB | Status | Features | Notes |
 |--------|-----|--------|----------|-------|

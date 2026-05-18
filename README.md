@@ -14,7 +14,7 @@
 [![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python)](https://www.python.org/)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
 
-<p align="center">A modern, open, cross-platform control center for AJAZZ devices — stream decks, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.</p>
+<p align="center">A modern, open, cross-platform control center for AJAZZ devices — Stream Dock macropads, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.</p>
 
 <p align="center">
   <img alt="AJAZZ Control Center — Plugin Store with three connected devices in the sidebar" src="docs/screenshots/main-dark.png" width="900">
@@ -62,7 +62,7 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 **AJAZZ Control Center** unifies these efforts under one roof:
 
 - A single desktop application on **Linux, Windows and macOS**.
-- **Modular device backends**: each product family (stream deck, keyboard, mouse) is an independent C++ module loaded at runtime.
+- **Modular device backends**: each product family (Stream Dock macropad, keyboard, mouse) is an independent C++ module loaded at runtime.
 - **Hybrid Qt 6 stack**: performance-critical code in C++20, extensibility in Python 3.11+ via an embedded interpreter.
 - **Legally clean-room** approach: protocols are documented from USB captures and reimplemented in-house; open-source references are cited but not vendored.
 - **First-class developer experience**: CMake presets, CI matrix on three OSes, packaged releases.
@@ -75,7 +75,7 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 -->
 
 <!-- BEGIN AUTOGEN: devices-by-family -->
-### Stream decks
+### Stream Dock macropads
 
 | Device | USB | Status | Features | Notes |
 |--------|-----|--------|----------|-------|

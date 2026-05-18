@@ -176,7 +176,10 @@ def render_devices_by_family(d: Data) -> str:
         families.setdefault(dev["family"], []).append(dev)
 
     titles = {
-        "streamdeck": "Stream decks",
+        # "Stream Dock" is the AJAZZ-brand name for the macropad family;
+        # spell it as a proper noun to avoid confusion with Elgato's
+        # unrelated "Stream Deck" product line.
+        "streamdeck": "Stream Dock macropads",
         "keyboard": "Keyboards",
         "mouse": "Mice",
         "dongle": "Dongles",
