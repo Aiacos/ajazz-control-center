@@ -37,13 +37,28 @@ TimeSyncService* g_instance = nullptr;
 
 constexpr char kSettingsKey[] = "Time/AutoSync";
 
+/// Interval for the periodic auto-sync push. 15 minutes is long enough
+/// that the firmware RTC drift stays within a second and short enough
+/// to catch DST transitions within a quarter of a minute. Vendor app
+/// has no periodic sync at all, so any non-zero cadence is an
+/// improvement; 15 min is the round number the audit recommended.
+constexpr std::chrono::milliseconds kAutoSyncInterval{15 * 60 * 1000};
+
 } // namespace
 
 TimeSyncService::TimeSyncService(DeviceLookup lookup, QObject* parent)
-    : QObject(parent), m_lookup(std::move(lookup)) {
+    : QObject(parent), m_lookup(std::move(lookup)),
+      m_autoSyncTimer(new QTimer(this)) {
+    m_autoSyncTimer->setInterval(kAutoSyncInterval);
+    m_autoSyncTimer->setTimerType(Qt::CoarseTimer); // millisecond accuracy
+                                                    // is fine; we don't
+                                                    // need wake-up cost.
+    connect(m_autoSyncTimer, &QTimer::timeout,
+            this, &TimeSyncService::periodicAutoSyncTick);
     QSettings settings;
     m_autoSync = settings.value(QString::fromLatin1(kSettingsKey), false).toBool();
     validatePersistedAutoSync();
+    reconcileAutoSyncTimer();
 }
 
 TimeSyncService::~TimeSyncService() = default;
@@ -72,7 +87,60 @@ void TimeSyncService::setAutoSync(bool enabled) {
     m_autoSync = enabled;
     QSettings settings;
     settings.setValue(QString::fromLatin1(kSettingsKey), enabled);
+    reconcileAutoSyncTimer();
     emit autoSyncChanged(enabled);
+}
+
+void TimeSyncService::setConnectedCodenameEnumerator(ConnectedCodenameEnumerator enumerator) {
+    m_enumerator = std::move(enumerator);
+    reconcileAutoSyncTimer();
+}
+
+void TimeSyncService::reconcileAutoSyncTimer() {
+    // Only run the periodic push when (a) the user wants auto-sync AND
+    // (b) Application has wired an enumerator. Without the enumerator
+    // we have no way to find IClockCapable devices on a recurring
+    // basis (the per-codename lookup alone is not enough), so we stay
+    // dormant. Hot-plug arrivals still drive onDeviceArrived as before.
+    if (m_autoSyncTimer == nullptr) {
+        return; // construction-time guard for moved-from / partial-init.
+    }
+    bool const wantRunning = m_autoSync && static_cast<bool>(m_enumerator);
+    if (wantRunning && !m_autoSyncTimer->isActive()) {
+        m_autoSyncTimer->start();
+        AJAZZ_LOG_INFO("time-sync", "periodic auto-sync timer started ({} ms interval)",
+                       static_cast<long long>(kAutoSyncInterval.count()));
+    } else if (!wantRunning && m_autoSyncTimer->isActive()) {
+        m_autoSyncTimer->stop();
+        AJAZZ_LOG_INFO("time-sync", "periodic auto-sync timer stopped");
+    }
+}
+
+void TimeSyncService::periodicAutoSyncTick() {
+    if (!m_autoSync || !m_enumerator) {
+        // Defensive: setAutoSync(false) / setConnectedCodenameEnumerator(nullptr)
+        // already stopped the timer, but if a slot fires between the stop
+        // request and the next event-loop iteration we still bail cleanly.
+        return;
+    }
+    auto const codenames = m_enumerator();
+    if (codenames.empty()) {
+        AJAZZ_LOG_INFO("time-sync", "periodic auto-sync tick: no connected devices");
+        return;
+    }
+    for (auto const& codename : codenames) {
+        QString const reason = doPush(codename);
+        if (reason.isEmpty()) {
+            // Per D-02: auto-sync surface is glyph-only, but we still
+            // emit syncSucceeded so the QML glyph can transition green.
+            emit syncSucceeded(codename);
+        } else {
+            // Auto-sync failures stay silent (no syncFailed signal); a
+            // device without IClockCapable is expected and not actionable.
+            AJAZZ_LOG_INFO("time-sync", "periodic auto-sync skipped {}: {}",
+                           codename.toStdString(), reason.toStdString());
+        }
+    }
 }
 
 void TimeSyncService::setSystemTimeOn(QString const& codename) {

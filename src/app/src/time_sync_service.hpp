@@ -44,9 +44,11 @@
 #include <functional>
 #include <memory>
 #include <type_traits>
+#include <vector>
 
 class QJSEngine;
 class QQmlEngine;
+class QTimer;
 
 namespace ajazz::core {
 class IDevice;
@@ -90,6 +92,21 @@ public:
      */
     using DeviceLookup = std::function<std::shared_ptr<core::IDevice>(QString const&)>;
 
+    /**
+     * @brief Caller-supplied enumerator: list every currently-connected
+     *        device codename so the periodic auto-sync can iterate over
+     *        them.
+     *
+     * Optional — when unset, the auto-sync timer never finds work to do
+     * (unit tests can leave it null). In production Application wires
+     * this to @c DeviceModel::connectedCodenames or equivalent.
+     *
+     * The enumerator returns codenames only (not @c shared_ptr<IDevice>);
+     * the service then resolves each via the existing @c DeviceLookup
+     * seam, preserving the A-04 / D-01 amendment 3 lifetime guarantee.
+     */
+    using ConnectedCodenameEnumerator = std::function<std::vector<QString>()>;
+
     // No default on `parent`: see BrandingService — a default-constructible
     // QML_SINGLETON makes Qt 6 pick `Constructor` mode and silently bypass
     // the static `create()` factory, spawning a duplicate QML-side instance
@@ -108,6 +125,22 @@ public:
 
     /// Set the autoSync flag and persist it to @c QSettings.
     void setAutoSync(bool enabled);
+
+    /**
+     * @brief Wire the connected-codename enumerator used by the periodic
+     *        auto-sync timer.
+     *
+     * Optional; pass nullptr to disable the periodic timer (unit tests
+     * leave it null). When set AND @c autoSync is true, the service
+     * starts a recurring 15-minute QTimer that calls the enumerator,
+     * resolves each codename via the existing @c DeviceLookup, and
+     * pushes the current host time to every @c IClockCapable device.
+     * Failures are log-only per D-02 (auto-sync surface = glyph only).
+     *
+     * @param enumerator Callable returning the list of currently
+     *                   connected codenames; or empty/nullptr to disable.
+     */
+    void setConnectedCodenameEnumerator(ConnectedCodenameEnumerator enumerator);
 
     /**
      * @brief Push the current host time to the device with this codename.
@@ -173,7 +206,20 @@ private:
     /// silent-disabled, never silent-fired.
     void validatePersistedAutoSync();
 
+    /// Drive the periodic auto-sync push (15 min) when @c m_autoSync is
+    /// true AND an enumerator is wired. See @c setConnectedCodenameEnumerator.
+    /// Defined inline to keep this class self-contained and unit-testable
+    /// (the QTimer is created on construction; tests can intercept by
+    /// stopping the timer or by leaving the enumerator unset).
+    void periodicAutoSyncTick();
+
+    /// Apply current settings to the auto-sync QTimer: start it when both
+    /// @c m_autoSync is true AND an enumerator is wired; stop it otherwise.
+    void reconcileAutoSyncTimer();
+
     DeviceLookup m_lookup;
+    ConnectedCodenameEnumerator m_enumerator;
+    QTimer* m_autoSyncTimer{nullptr};
     bool m_autoSync{false};
 };
 
