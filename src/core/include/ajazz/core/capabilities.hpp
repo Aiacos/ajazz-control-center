@@ -1301,6 +1301,99 @@ public:
 };
 
 // -----------------------------------------------------------------------------
+// Mouse key-matrix read-back capability (AJ-series opcode 0xD0)
+// -----------------------------------------------------------------------------
+/**
+ * @struct MouseAction
+ * @brief 4-byte action descriptor for a single mouse-button slot.
+ *
+ * Mirrors the @c changeArr record produced by the vendor renderer's
+ * @c configToChangeArr() helper at @c js:921952 per
+ * @c docs/protocols/mouse/aj_series_opcode_table.md §3.6. The four bytes
+ * are device-defined; their semantics depend on the type byte (@c bytes[0]):
+ *
+ *   - @c bytes[0] == 0 — combo / forbidden / unknown
+ *     (@c bytes[1] = skey, @c bytes[2] = key, @c bytes[3] = key2).
+ *   - @c bytes[0] == 1 — mouse-button (@c bytes[2] = OF[key][2]).
+ *   - @c bytes[0] in {2,3,6,8,10,11,13,14,18,19,20,22} — system function.
+ *   - @c bytes[0] == 9 — macro (@c bytes[1] = mode, @c bytes[2] = macro idx).
+ *   - All-zero record (@c [0,0,0,0]) — "forbidden" / unbound per §3.6 line 350.
+ *
+ * Kept as a transparent 4-byte tuple rather than a tagged-union so the
+ * round-trip through @ref IMouseKeyMatrixReadable::readKeyMatrix preserves
+ * the exact wire bytes even when the type byte is one the host does not
+ * yet decode. Callers wishing to inspect specific fields cast through the
+ * type byte themselves.
+ */
+struct MouseAction {
+    std::array<std::uint8_t, 4> bytes{}; ///< 4-byte action record (type, then 3 sub-bytes).
+
+    [[nodiscard]] constexpr bool operator==(MouseAction const&) const noexcept = default;
+};
+
+/**
+ * @struct MouseKeyMatrix
+ * @brief Full 16-slot key-matrix read-back returned by the AJ-series mouse
+ *        @c FEA_CMD_MOUSE_GET_KEYMATRIX opcode (0xD0).
+ *
+ * Wire shape per @c docs/protocols/mouse/aj_series_opcode_table.md §3.7
+ * line 363: "Response: 64 bytes = 16 × 4-byte action records (one per
+ * button)." Slot 0 is the leftmost / lowest-indexed physical button per
+ * the vendor's @c findIndexInDefaultMatrix() mapping (§3.6 line 326);
+ * SKUs with fewer than 16 physical buttons leave the trailing slots at
+ * all-zero (the "forbidden" sentinel).
+ */
+struct MouseKeyMatrix {
+    /// 16 × 4-byte action records, one per physical button slot.
+    std::array<MouseAction, 16> bindings{};
+
+    [[nodiscard]] constexpr bool operator==(MouseKeyMatrix const&) const noexcept = default;
+};
+
+/**
+ * @class IMouseKeyMatrixReadable
+ * @brief Optional capability exposing the AJ-series mouse key-matrix
+ *        read-back op (opcode 0xD0 — @c FEA_CMD_MOUSE_GET_KEYMATRIX).
+ *
+ * Companion read op to @ref IMouseCapable::setButtonBinding (opcode 0x50,
+ * single-slot SET): this surface returns the full 16-slot key matrix for
+ * the currently-active onboard profile in one round-trip, mirroring the
+ * vendor app's @c _getKeyMatrix(profile) helper at @c js:921420. Each
+ * slot is a 4-byte @ref MouseAction record decoded per §3.6's action-byte
+ * table.
+ *
+ * Currently implemented by @c AjSeriesMouse via the
+ * @c ajazz::mouse::aj_series::buildKeyMatrixRequest +
+ * @c ajazz::mouse::aj_series::parseKeyMatrixResponse helpers — the
+ * request packet carries the profile byte at vendor byte 1 and no further
+ * payload, then the device responds with 16 × 4 = 64 bytes of action
+ * records which the parser unpacks into the @ref MouseKeyMatrix.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see docs/protocols/mouse/aj_series_opcode_table.md §3.7
+ */
+class IMouseKeyMatrixReadable {
+public:
+    virtual ~IMouseKeyMatrixReadable() = default;
+
+    /**
+     * @brief Round-trip the key-matrix read-back op.
+     *
+     * Sends the opcode 0xD0 request packet to the device, waits for the
+     * 64-byte response, and parses it into a @ref MouseKeyMatrix. Returns
+     * @c std::nullopt on any transport / parse failure (HID write error,
+     * read timeout, malformed response, …) so callers can treat
+     * "unavailable" uniformly without having to differentiate exception
+     * paths.
+     *
+     * @return The current 16-slot key matrix for the active profile, or
+     *         @c std::nullopt on any failure (logged at WARN level by the
+     *         backend so the failure is traceable in the journal).
+     */
+    [[nodiscard]] virtual std::optional<MouseKeyMatrix> readKeyMatrix() = 0;
+};
+
+// -----------------------------------------------------------------------------
 // TFT display capability (chunked image upload — AK980 PRO 240x135 panel)
 // -----------------------------------------------------------------------------
 /**
@@ -1381,6 +1474,114 @@ public:
     virtual bool uploadTftImage(std::span<std::uint8_t const> rgba,
                                 std::uint16_t width,
                                 std::uint16_t height) = 0;
+};
+
+// -----------------------------------------------------------------------------
+// Touch-strip display capability (rect-addressable secondary screen — AKP05 DRA)
+// -----------------------------------------------------------------------------
+/**
+ * @struct TouchStripInfo
+ * @brief Pixel geometry + zone layout of a device's auxiliary touch-strip
+ *        display.
+ *
+ * Returned by @ref ITouchStripDisplayCapable::touchStripInfo(). Describes the
+ * panel dimensions and the vendor's zone-partitioning convention: the AKP05 /
+ * Mirabox N4 strip is 800x480 split into 4 vertical zones of 200x480 aligned
+ * to the four rotary encoders above the strip.
+ *
+ * Distinct from @ref DisplayInfo (per-key LCDs) and @ref TftPanelInfo
+ * (full-frame keyboard TFT): this struct addresses a rect-addressable
+ * secondary screen that accepts partial-update uploads, so an encoder-overlay
+ * redraw only ships one zone's worth of bytes rather than the whole panel.
+ */
+struct TouchStripInfo {
+    std::uint16_t widthPx{0};  ///< Full panel width in pixels (e.g. 800 on AKP05).
+    std::uint16_t heightPx{0}; ///< Full panel height in pixels (e.g. 480 on AKP05).
+    std::uint8_t zoneCount{0}; ///< Vendor-defined zone count (e.g. 4 on AKP05; one per encoder).
+};
+
+/**
+ * @class ITouchStripDisplayCapable
+ * @brief Optional capability exposing a device's auxiliary touch-strip display
+ *        with rect-addressable partial-update image upload (AKP05 "DRA" path).
+ *
+ * Mirrors the vendor utility's per-encoder-overlay redraw — a single rect of
+ * pixels lands at @c (x, y) on the strip, sized @c (rectWidth, rectHeight),
+ * tagged with a vendor zone-id @c location. The 800x480 strip is divided into
+ * 4 zones of 200x480 (one per encoder); a typical caller scales an icon to
+ * 200x100 and uploads it at @c (x=zoneIndex*200, y=0, rectWidth=200,
+ * rectHeight=100). Avoids re-uploading the whole 800x480 panel on every
+ * redraw — massive bandwidth win when only one zone changed.
+ *
+ * Currently implemented by @c Akp05Device via the "DRA" opcode per
+ * @c docs/protocols/streamdeck/akp05_vendor.md sec 3 row 190 (BE32 JPEG size
+ * at bytes 8..11, location at byte 12, BE16 width/height/x/y at bytes 13..20),
+ * reusing the chunked-upload + ULEND commit sentinel pipeline shared with
+ * @ref IBootLogoCapable and the per-key/encoder/main image paths.
+ *
+ * The interface is intentionally Qt-free so it stays inside @c ajazz_core's
+ * public-header surface (COD-031 boundary): callers hand the backend an RGBA8
+ * byte span + dimensions, the backend performs any required resize and JPEG
+ * encoding in its private translation unit (where Qt6::Gui is permitted).
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see TouchStripInfo, Capability::TouchStrip
+ * @see docs/protocols/streamdeck/akp05_vendor.md
+ */
+class ITouchStripDisplayCapable {
+public:
+    virtual ~ITouchStripDisplayCapable() = default;
+
+    /**
+     * @brief Return the strip's pixel geometry and zone layout.
+     * @return Immutable @ref TouchStripInfo for this device model.
+     */
+    [[nodiscard]] virtual TouchStripInfo touchStripInfo() const noexcept = 0;
+
+    /**
+     * @brief Upload an RGBA8 image to a rectangular region of the touch strip.
+     *
+     * Backends resize @p rgba to @c (rectWidth, rectHeight) using a smooth
+     * transformation, JPEG-encode host-side, then ship the encoded payload to
+     * the vendor's rect-addressable upload op (AKP05 "DRA"). The @p location
+     * byte selects the vendor zone-id (typically @c 0..zoneCount-1); out-of-
+     * range values are rejected with a WARN log + @c false return so callers
+     * cannot accidentally route through a reserved variant (the AKP05 reserves
+     * @c 0x12 for the boot-logo M_V packet shape — see the backend impl).
+     *
+     * @param rgba       Tightly packed RGBA8 pixels, length == srcWidth * srcHeight * 4.
+     * @param srcWidth   Source image width in pixels (> 0).
+     * @param srcHeight  Source image height in pixels (> 0).
+     * @param location   Vendor zone-id byte; must be < @ref TouchStripInfo::zoneCount.
+     * @param x          Rect x origin in pixels within the strip.
+     * @param y          Rect y origin in pixels within the strip.
+     * @param rectWidth  Rect width in pixels (the image is scaled to this).
+     * @param rectHeight Rect height in pixels (the image is scaled to this).
+     *
+     * @return @c true when every wire packet went out; @c false on transport
+     *         error, empty input, or out-of-range @p location.
+     *
+     * @pre rgba.size() == srcWidth * srcHeight * 4u
+     */
+    virtual bool setTouchStripImage(std::span<std::uint8_t const> rgba,
+                                    std::uint16_t srcWidth,
+                                    std::uint16_t srcHeight,
+                                    std::uint8_t location,
+                                    std::uint16_t x,
+                                    std::uint16_t y,
+                                    std::uint16_t rectWidth,
+                                    std::uint16_t rectHeight) = 0;
+
+    /**
+     * @brief Clear the entire touch strip to solid black.
+     *
+     * Convenience helper that uploads a full-panel black image to zone 0 with
+     * @c (x=0, y=0, rectWidth=widthPx, rectHeight=heightPx). Useful for
+     * device-close cleanup and reset-to-default UI buttons.
+     *
+     * @return @c true when the wire packets all went out; @c false on transport error.
+     */
+    virtual bool clearTouchStrip() = 0;
 };
 
 } // namespace ajazz::core

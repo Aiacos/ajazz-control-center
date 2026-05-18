@@ -381,7 +381,8 @@ class Akp05Device final : public IDevice,
                           public IDisplayCapable,
                           public IEncoderCapable,
                           public IClockCapable,
-                          public IBootLogoCapable {
+                          public IBootLogoCapable,
+                          public ITouchStripDisplayCapable {
 public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
         : Akp05Device(std::move(descriptor),
@@ -579,9 +580,12 @@ public:
     // touch strip without re-uploading the whole panel. Massive bandwidth win
     // for per-encoder overlay redraws (4 × 200×100 vs the whole 800×100/480).
     //
-    // Not exposed via a capability mix-in yet (YAGNI — AKP05 is the only
-    // device family in our catalogue with a rect-addressable strip; promote
-    // to ISecondaryScreenCapable when AKP815/v3 captures motivate it).
+    // Shared helper invoked by the public ITouchStripDisplayCapable surface
+    // above (setTouchStripImage). Held distinct from that override because
+    // the M_V boot-logo variant uses the same rect-shape wire format with a
+    // sentinel location=0x12 — the capability-level entry point rejects 0x12
+    // outright (location-range check), while this helper carries an internal
+    // guard so a future M_V wire-up doesn't accidentally route through here.
     //
     // Caller is responsible for keeping `srcWidth × srcHeight` aligned to the
     // intended zone, and for picking a sane `location` id (DO NOT pass 0x12 —
@@ -613,6 +617,83 @@ public:
         auto const header = akp05::buildSecondaryScreenHeader(
             location, zoneWidth, zoneHeight, zoneX, zoneY, static_cast<std::uint32_t>(jpeg.size()));
         sendImage(header, jpeg);
+    }
+
+    // ---- ITouchStripDisplayCapable (CRT DRA — akp05_vendor.md §3 row 190) --
+    //
+    // Public capability surface over the rect-addressable strip-update path
+    // (formerly only reachable via the package-private setSecondaryScreenImage
+    // method below). Validates the vendor zone-id, then delegates to the
+    // shared helper so the chunked-upload + ULEND sentinel discipline lives
+    // in one place. Distinct from setMainImage (whole-strip BAT-style upload)
+    // because DRA only redraws ONE rect and leaves the rest of the strip
+    // intact — massive bandwidth win on per-encoder overlay redraws.
+    [[nodiscard]] TouchStripInfo touchStripInfo() const noexcept override {
+        return TouchStripInfo{
+            .widthPx = akp05::TouchStripWidthPx,
+            .heightPx = akp05::TouchStripHeightPx,
+            .zoneCount = akp05::TouchZoneCount,
+        };
+    }
+
+    bool setTouchStripImage(std::span<std::uint8_t const> rgba,
+                            std::uint16_t srcWidth,
+                            std::uint16_t srcHeight,
+                            std::uint8_t location,
+                            std::uint16_t x,
+                            std::uint16_t y,
+                            std::uint16_t rectWidth,
+                            std::uint16_t rectHeight) override {
+        // Range-check the zone-id BEFORE reaching the lower-level helper so
+        // callers see a clean false-return instead of a silent WARN-and-no-op
+        // refusal on the reserved 0x12 boot-logo variant.
+        if (location >= akp05::TouchZoneCount) {
+            AJAZZ_LOG_WARN("akp05",
+                           "setTouchStripImage: location={} >= zoneCount={}; refusing",
+                           static_cast<int>(location),
+                           static_cast<int>(akp05::TouchZoneCount));
+            return false;
+        }
+        if (rgba.empty() || srcWidth == 0 || srcHeight == 0 || rectWidth == 0 ||
+            rectHeight == 0) {
+            AJAZZ_LOG_WARN("akp05",
+                           "setTouchStripImage: empty input or zero-area rect; refusing");
+            return false;
+        }
+        // Reuse the existing rect-addressable helper for resize + JPEG encode
+        // + DRA header + chunked sendImage + ULEND commit sentinel.
+        setSecondaryScreenImage(location,
+                                rectWidth,
+                                rectHeight,
+                                x,
+                                y,
+                                rgba,
+                                srcWidth,
+                                srcHeight);
+        return true;
+    }
+
+    bool clearTouchStrip() override {
+        // Simplest path: full-panel black image at zone 0, origin (0,0). Uses
+        // the encodeSolid helper to skip allocating a 1.5 MB RGBA8 buffer.
+        ImageTransform const transform{
+            .targetWidth = akp05::TouchStripWidthPx,
+            .targetHeight = akp05::TouchStripHeightPx,
+            .format = ImageFormat::Jpeg,
+            .rotationDegrees = 0,
+            .mirror = false,
+            .jpegQuality = 85,
+        };
+        auto const jpeg = encodeSolid(Rgb{0, 0, 0}, transform);
+        auto const header = akp05::buildSecondaryScreenHeader(
+            /*location=*/0,
+            /*width=*/akp05::TouchStripWidthPx,
+            /*height=*/akp05::TouchStripHeightPx,
+            /*x=*/0,
+            /*y=*/0,
+            static_cast<std::uint32_t>(jpeg.size()));
+        sendImage(header, jpeg);
+        return true;
     }
 
     // ---- IBootLogoCapable (CRT LOG — akp05_vendor.md §2 row 188) ----------

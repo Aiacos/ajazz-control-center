@@ -71,6 +71,14 @@ add_executable(
     # plus 512-byte JPEG chunks plus ULEND commit sentinel). Both pin the
     # exact wire-byte layout end-to-end via MockTransport.
     test_factory_reset_and_logo.cpp
+    # 2026-05-18 ITouchStripDisplayCapable: byte-level tests for the public
+    # AKP05 touch-strip capability mixin over the existing "DRA" rect-
+    # addressable strip-update path (akp05_vendor.md sec 3 row 190). Pins
+    # touchStripInfo() (800x480, 4 zones), setTouchStripImage() envelope
+    # (DRA header + BE32 size + location + BE16 width/height/x/y + chunks +
+    # ULEND), out-of-range location refusal (zero writes), and
+    # clearTouchStrip() full-panel black-fill envelope.
+    test_akp05_touch_strip.cpp
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
     # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and
