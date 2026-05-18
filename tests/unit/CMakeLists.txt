@@ -64,6 +64,17 @@ add_executable(
     # plus 512-byte JPEG chunks plus ULEND commit sentinel). Both pin the
     # exact wire-byte layout end-to-end via MockTransport.
     test_factory_reset_and_logo.cpp
+    # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
+    # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
+    # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and
+    # IMouseFnRemappable (opcode 0x51, FEA_CMD_MOUSE_SET_FNMATRIX, Fn-layer
+    # key rebind). Pins every documented byte slot in aj_series_opcode_table.md
+    # sec 3.8 (Fn-matrix shape: layer/button at vendor bytes 1/2, action big-
+    # endian at 8..11) and sec 3.10 (DPI table: profile/active/count at vendor
+    # bytes 1/2/3, 8 x uint16-LE DPI at 8..23, 8 x {R,G,B} colours at 40..63,
+    # 8th-stage B-channel collision with checksum slot). Includes clamp +
+    # cache normalisation contract.
+    test_aj_series_dpi_fn.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

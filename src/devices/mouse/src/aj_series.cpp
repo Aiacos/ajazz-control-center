@@ -80,7 +80,9 @@ class AjSeriesMouse final : public IDevice,
                             public IPollingRateCapable,
                             public IProfileSelectCapable,
                             public IMouseSettingsCapable,
-                            public IFactoryResettable {
+                            public IFactoryResettable,
+                            public IDpiTableCapable,
+                            public IMouseFnRemappable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -459,6 +461,86 @@ public:
         return true;
     }
 
+    // ---- IDpiTableCapable (§3.10 — FEA_CMD_MOUSE_SET_OPTIONPARAM1 0x54) ----
+    //
+    // Per-profile DPI table push. Distinct from the legacy IMouseCapable
+    // setDpiStages path, which implicitly targets profile 0 and re-emits
+    // via buildMouseSetOption1 (no profile byte). This surface honours
+    // the profile slot at vendor byte 1 via the new buildDpiTable builder.
+    //
+    // Cache normalisation: the host-side m_dpiTableCache is updated
+    // post-clamp so dpiTable() reflects what landed on the wire (profile
+    // 0..7, activeStage 0..7, stageCount 0..8). DPI values pass through
+    // unclamped — the wire format is uint16-LE and callers know the
+    // sensor's accepted bound (50..42000 on AJ159 APEX).
+    bool setDpiTable(core::DpiTable const& table) override {
+        auto const pkt = buildDpiTable(table);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "setDpiTable: HID write failed: {}", e.what());
+            return false;
+        }
+        // Normalise the cache post-clamp so dpiTable() mirrors the wire bytes.
+        core::DpiTable normalised = table;
+        normalised.profile = std::min<std::uint8_t>(normalised.profile, 7);
+        normalised.activeStage = std::min<std::uint8_t>(normalised.activeStage, 7);
+        normalised.stageCount = std::min<std::uint8_t>(normalised.stageCount, 8);
+        m_dpiTableCache = normalised;
+        AJAZZ_LOG_INFO("mouse.aj_series",
+                       "DPI table pushed: profile={}, active={}, stages={}",
+                       static_cast<unsigned>(normalised.profile),
+                       static_cast<unsigned>(normalised.activeStage),
+                       static_cast<unsigned>(normalised.stageCount));
+        return true;
+    }
+
+    [[nodiscard]] core::DpiTable dpiTable() const override { return m_dpiTableCache; }
+
+    // ---- IMouseFnRemappable (§3.8 — FEA_CMD_MOUSE_SET_FNMATRIX 0x51) -------
+    //
+    // Fn-layer key rebind. Same envelope shape as opcode 0x50 (primary
+    // matrix) but the vendor byte 1 carries the Fn-layer index instead
+    // of the profile slot, and addressing is (fnLayer, buttonIndex) per
+    // §3.8. Mirrors IKeyRemappable's layered-keymap model but kept
+    // mouse-specific because the address shape differs (no rows/cols).
+    //
+    // Firmware does not advertise a read-back path for the Fn-layer
+    // matrix — write-only surface, no host-side cache beyond what
+    // callers track themselves.
+    [[nodiscard]] std::uint8_t fnLayerCount() const noexcept override {
+        // Vendor AJ159 APEX firmware exposes a single Fn-layer (vendor byte
+        // 1 is technically 0..7, but the UI only surfaces one Fn key). The
+        // 0..7 range stays available via the clamp in buildFnLayerRemap for
+        // future SKUs that may extend it.
+        return 1;
+    }
+
+    [[nodiscard]] std::uint8_t fnButtonCount() const noexcept override {
+        // 16-button max per §3.7 (full key-matrix read returns 16 × 4-byte
+        // action records). AJ159 APEX exposes 7 physical buttons; the wider
+        // 16-slot range stays accessible for future SKUs.
+        return 16;
+    }
+
+    bool setFnLayerBinding(std::uint8_t fnLayer,
+                           std::uint8_t buttonIndex,
+                           std::uint32_t action) override {
+        // Per-spec clamp: fnLayer at vendor byte 1 (same slot semantics as
+        // profile on opcode 0x50), buttonIndex at vendor byte 2, action
+        // big-endian at vendor bytes 8..11.
+        auto const pkt = buildFnLayerRemap(fnLayer, buttonIndex, action);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "setFnLayerBinding: HID write failed: {}", e.what());
+            return false;
+        }
+        return true;
+    }
+
 private:
     /// Re-upload the full 8-stage DPI table atomically via opcode 0x54.
     void uploadDpiTableAtomic() {
@@ -563,6 +645,12 @@ private:
     /// 100%, battery LED green/red, chargingSwitch=true) so the cache reader
     /// returns sensible values before any push lands. See §3.9.
     core::MouseSettings m_mouseSettings{};
+
+    /// Host-side cache of the last @ref core::DpiTable push, normalised
+    /// post-clamp. Default-constructed entries (profile=0, activeStage=0,
+    /// stageCount=8, all stages zero) are returned before any push lands so
+    /// the @ref dpiTable() reader stays well-defined. See §3.10.
+    core::DpiTable m_dpiTableCache{};
 
     DeviceDescriptor m_descriptor;
     DeviceId m_id;
