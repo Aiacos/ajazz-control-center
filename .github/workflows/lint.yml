@@ -171,6 +171,22 @@ jobs:
       - name: README + wiki AUTOGEN blocks are in sync
         run: python3 scripts/generate-docs.py --check
 
+      - name: Install Python dev tooling
+        run: pip install -e .[dev]
+
+      - name: mypy (strict, --config-file pyproject.toml)
+        # pyproject.toml declares [tool.mypy] strict = true. This step
+        # surfaces Python type errors before they ship; the C++ Lint job
+        # ran for months without this gate, so plenty of plugin / signer
+        # code was landing untyped.
+        run: mypy python/ajazz_plugins scripts/sign-plugin-manifest.py
+
+      - name: pytest (Python plugin + signer unit tests)
+        # python/ajazz_plugins/tests covers the plugin SDK surface;
+        # scripts/sign-plugin-manifest.py has its own coverage in
+        # tests/. Same as `pyproject.toml [tool.pytest.ini_options]`.
+        run: pytest -ra --strict-markers
+
       - name: Check Markdown formatting (via pre-commit, single source of truth)
         # Delegate to the pre-commit mdformat hook so the exclude list
         # stays in lockstep with .pre-commit-config.yaml and contributors
