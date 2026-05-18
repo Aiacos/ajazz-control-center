@@ -83,7 +83,7 @@ VersionParts parseVersion(QString const& raw) {
         out.suffix = core;
         return out;
     }
-    int const dashIdx = core.indexOf(QLatin1Char('-'));
+    qsizetype const dashIdx = core.indexOf(QLatin1Char('-'));
     QString head = core;
     if (dashIdx >= 0) {
         head = core.left(dashIdx);
@@ -259,9 +259,11 @@ bool AppUpdateService::isNewerThan(QString const& candidate, QString const& curr
     }
 
     // Numeric component compare. Treat missing trailing components as 0
-    // so "1.2" < "1.2.1" and "1.2.0" == "1.2".
-    int const n = std::max(cand.components.size(), curr.components.size());
-    for (int i = 0; i < n; ++i) {
+    // so "1.2" < "1.2.1" and "1.2.0" == "1.2". Use qsizetype throughout
+    // because Qt 6 containers return qsizetype (signed long long on 64-bit
+    // Linux); narrowing to int trips GCC's -Wconversion under CI -Werror.
+    qsizetype const n = std::max(cand.components.size(), curr.components.size());
+    for (qsizetype i = 0; i < n; ++i) {
         int const a = i < cand.components.size() ? cand.components[i] : 0;
         int const b = i < curr.components.size() ? curr.components[i] : 0;
         if (a != b) {
