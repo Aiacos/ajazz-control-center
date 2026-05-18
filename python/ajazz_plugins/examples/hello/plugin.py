@@ -11,10 +11,11 @@ The plugin exposes two actions:
 
 from typing import ClassVar
 
-from ajazz_plugins import ActionContext, Plugin, action
+from ajazz_plugins import ActionContext, action
+from ajazz_plugins import Plugin as _PluginBase
 
 
-class Hello(Plugin):
+class Hello(_PluginBase):
     """Minimal example plugin demonstrating the AJAZZ plugin SDK surface."""
 
     id = "com.example.hello"
@@ -51,4 +52,8 @@ class Hello(Plugin):
         ctx.notify(f"count: {state['count']}")
 
 
-Plugin = Hello  # expected by the plugin loader
+# The loader expects a top-level `Plugin` attribute on the module bound
+# to the plugin class. The base class is imported as `_PluginBase` so
+# this top-level alias is the only public `Plugin` symbol in this
+# module — mypy is happy and the loader finds it by name.
+Plugin: type[_PluginBase] = Hello

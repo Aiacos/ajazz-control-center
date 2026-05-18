@@ -21,7 +21,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 SCRIPT = REPO_ROOT / "scripts" / "sign-plugin-manifest.py"
 
 
-def _minimal_manifest() -> dict:
+def _minimal_manifest() -> dict[str, object]:
     return {
         "UUID": "com.example.unit-test",
         "Name": "Unit-test plugin",
@@ -44,7 +44,7 @@ def _minimal_manifest() -> dict:
     }
 
 
-def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess:
+def _run(*args: str, cwd: Path | None = None) -> subprocess.CompletedProcess[str]:
     # S603: invocation is a fixed-path script we ship in the repo with
     # caller-controlled arguments — no untrusted input on the path.
     return subprocess.run(  # noqa: S603
@@ -154,7 +154,8 @@ def _public_key_of(keys_dir: Path, tmp_path: Path) -> str:
     throwaway = tmp_path / f"throwaway-{keys_dir.name}.json"
     throwaway.write_text(json.dumps(_minimal_manifest()), encoding="utf-8")
     _run("sign", "--manifest", str(throwaway), "--priv-key", str(keys_dir / "priv.pem"))
-    return json.loads(throwaway.read_text())["Ajazz"]["Signing"]["Ed25519PublicKey"]
+    pub_key: str = json.loads(throwaway.read_text())["Ajazz"]["Signing"]["Ed25519PublicKey"]
+    return pub_key
 
 
 def test_swapping_publisher_key_breaks_verification(tmp_path: Path) -> None:

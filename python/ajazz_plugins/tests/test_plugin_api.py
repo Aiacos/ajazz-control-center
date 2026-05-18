@@ -21,7 +21,7 @@ class MyPlugin(Plugin):
     name = "Test plugin"
 
     def __init__(self) -> None:
-        self.calls: list[tuple[str, dict]] = []
+        self.calls: list[tuple[str, dict[str, object]]] = []
 
     @action(id="hello", label="Hello")
     def _hello(self, ctx: ActionContext) -> None:

@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import sys
 from pathlib import Path
@@ -49,7 +50,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import (
 )
 
 
-def _canonical_bytes(manifest: dict) -> bytes:
+def _canonical_bytes(manifest: dict[str, object]) -> bytes:
     """Return the deterministic byte string the signature covers.
 
     Removes ``Ajazz.Signing.Ed25519Signature`` (we cannot include the
@@ -151,7 +152,7 @@ def cmd_verify(args: argparse.Namespace) -> int:
     try:
         sig = base64.standard_b64decode(sig_b64)
         pub_raw = base64.standard_b64decode(pub_b64)
-    except (ValueError, base64.binascii.Error) as exc:
+    except (ValueError, binascii.Error) as exc:
         print(f"::error::Bad base64: {exc}", file=sys.stderr)
         return 1
 

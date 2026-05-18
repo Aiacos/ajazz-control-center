@@ -74,7 +74,11 @@ from typing import Any
 # the output during local runs) without polluting the wire protocol.
 # ---------------------------------------------------------------------------
 
-_ipc: io.TextIOWrapper = sys.stdout
+# Captured before the redirect below so the wire channel keeps the original
+# stdout handle even after we rebind sys.stdout to stderr. Typed as the
+# generic io.TextIOBase so it accepts both the real stdout and any TextIO
+# stand-in that test rigs might inject.
+_ipc: io.TextIOBase = sys.stdout  # type: ignore[assignment]
 sys.stdout = sys.stderr  # plugin-side print() goes to host's stderr now
 
 
