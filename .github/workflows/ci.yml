@@ -235,13 +235,22 @@ jobs:
             # rationale + complete entry list). Suppressing only
             # specific symbols keeps real leak detection in
             # non-Qt code intact.
-            lsan_options: "suppressions=tests/sanitizers/lsan_suppressions.txt:print_suppressions=0"
+            #
+            # The path is interpolated as $GITHUB_WORKSPACE-rooted in the
+            # `Run unit + integration tests` step below: ctest sets the
+            # test-binary CWD to the per-target build dir (e.g.
+            # build-san/tests/unit/), so a relative path here resolves
+            # to the wrong file and ASan exits non-zero with "failed to
+            # read suppressions file". The absolute substitution keeps
+            # the file readable regardless of which sub-binary ctest is
+            # currently driving.
+            lsan_options_relative: "tests/sanitizers/lsan_suppressions.txt"
             tsan_options: ""
           - flavour: TSan
             cmake_flags: -DAJAZZ_ENABLE_TSAN=ON
             asan_options: ""
             ubsan_options: ""
-            lsan_options: ""
+            lsan_options_relative: ""
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -282,6 +291,9 @@ jobs:
         env:
           ASAN_OPTIONS: ${{ matrix.asan_options }}
           UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
-          LSAN_OPTIONS: ${{ matrix.lsan_options }}
+          # Absolute path to the suppressions file so it resolves regardless
+          # of which sub-binary ctest is currently driving. Empty when the
+          # matrix entry didn't request suppressions (TSan flavour).
+          LSAN_OPTIONS: ${{ matrix.lsan_options_relative && format('suppressions={0}/{1}:print_suppressions=0', github.workspace, matrix.lsan_options_relative) || '' }}
           TSAN_OPTIONS: ${{ matrix.tsan_options }}
         run: ctest --test-dir build-san --output-on-failure
