@@ -329,6 +329,71 @@ public:
     [[nodiscard]] virtual std::uint8_t speedMax() const noexcept = 0;
 };
 
+/**
+ * @struct KeyboardSettings
+ * @brief Single-shot configuration carried by the AK-series settings
+ *        batch envelope (opcode 0x07 sub 0x10).
+ *
+ * Three fields, all device-defined enums. Out-of-range values are clamped
+ * by the backend; callers can pass the raw vendor scale directly without
+ * range-checking themselves.
+ *
+ *   - @c fnLayerSwitch — Fn-layer behaviour (0 = hold-only, 1 = toggle).
+ *   - @c sleepTimerMinutes — minutes of idle before the firmware halts
+ *     the backlight controller. Vendor's UI exposes 0/1/3/5/10/30; 0 = never.
+ *   - @c keyResponseTimeLevel — debounce / scan-rate level in [1..5];
+ *     higher = faster (snappier) but more battery on wireless.
+ */
+struct KeyboardSettings {
+    std::uint8_t fnLayerSwitch{0};       ///< 0=hold, 1=toggle (vendor enum).
+    std::uint8_t sleepTimerMinutes{0};   ///< Minutes; 0 = never sleep.
+    std::uint8_t keyResponseTimeLevel{3}; ///< 1..5; vendor default is 3.
+};
+
+/**
+ * @class ISettingsCapable
+ * @brief Optional capability exposing the AK-series "settings batch"
+ *        wire-format (opcode 0x07 sub 0x10) — a single-shot commit of
+ *        Fn-layer / sleep-timer / key-response-time.
+ *
+ * Mirrors the vendor utility's "Settings" tab. Three fields land in one
+ * 33-byte short report with a 0xAA 0x55 trailer; the firmware persists
+ * them to EEPROM so they survive power-cycle.
+ *
+ * Currently implemented by ProprietaryKeyboard (AK980 PRO and siblings
+ * sharing the SN32F299 wire format, issue #57). Stream Deck / mouse
+ * backends do not implement it — their settings live elsewhere.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ */
+class ISettingsCapable {
+public:
+    virtual ~ISettingsCapable() = default;
+
+    /**
+     * @brief Push a new @ref KeyboardSettings batch to the device.
+     *
+     * Builds the 33-byte settings packet (opcode 0x07 sub 0x10) and
+     * sends it through the standard 5-packet envelope used by other
+     * non-RTC commits (START 0x18 / DATA / SAVE 0x02 / FINISH 0xF0).
+     *
+     * @param settings Field values; out-of-range entries are clamped.
+     * @return true when the wire packets all went out; false on
+     *         transport error or unsupported field combination.
+     */
+    virtual bool setKeyboardSettings(KeyboardSettings const& settings) = 0;
+
+    /**
+     * @brief Last-known settings cache (no synchronous device read).
+     *
+     * Firmware does not advertise an authoritative read-back path for
+     * the batch fields; backends keep a host-side cache of the last
+     * pushed values so UI can display them without a round-trip.
+     * Returns the vendor defaults (0 / 0 / 3) before any push lands.
+     */
+    [[nodiscard]] virtual KeyboardSettings keyboardSettings() const = 0;
+};
+
 // -----------------------------------------------------------------------------
 // Encoder / dial capability (stream deck plus / AKP05)
 // -----------------------------------------------------------------------------

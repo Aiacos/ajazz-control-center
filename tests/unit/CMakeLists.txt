@@ -21,6 +21,10 @@ add_executable(
     # Pins the 4-packet START/MODE_BEGIN/DATA/SAVE sequence and the
     # 20-mode catalogue the QML LightingService surfaces.
     test_ak980_firmware_lighting.cpp
+    # Issue #57 / P3.x — AK980 PRO settings batch envelope
+    # (opcode 0x07 sub 0x10, ISettingsCapable). Pins the 4-packet
+    # START/SETTINGS/SAVE/FINISH sequence + byte map + host cache.
+    test_ak980_settings_batch.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`
     # into AjSeriesMouse via the public `makeAjSeriesWithTransport` factory

@@ -210,6 +210,42 @@ std::array<std::uint8_t, ReportSize> buildSetTimeSave() {
     return makeReport(CmdSaveRtc);
 }
 
+/**
+ * @brief Build the AK980 PRO settings-batch DATA packet (opcode 0x07 sub 0x10).
+ *
+ * Byte layout per ak980pro_vendor.md §13.2 (Ghidra decompile of
+ * DeviceDriver.exe FUN_0044eed0 callers):
+ *
+ *   [0]  ReportId 0x04
+ *   [1]  CmdSettingsBatch 0x07
+ *   [2]  SettingsBatchSub 0x10
+ *   [6]  disableWinKey  (0/1)
+ *   [7]  disableAltF4   (0/1)
+ *   [8]  disableAltTab  (0/1)
+ *   [9]  fnLayerSwitch  (0=hold, 1=toggle)
+ *   [10] sleepTimerMinutes (vendor enum: 0/1/3/5/10/30)
+ *   [12] keyResponseTimeLevel (1..5)
+ *   [18] SettingsBatchTrailerHi 0xAA
+ *   [19] SettingsBatchTrailerLo 0x55
+ *
+ * All other bytes are zero-initialised. Issue #57 / P3.x.
+ */
+std::array<std::uint8_t, ReportSize> buildSettingsBatch(std::uint8_t fnLayerSwitch,
+                                                        std::uint8_t sleepTimerMinutes,
+                                                        std::uint8_t keyResponseTimeLevel) {
+    auto pkt = makeReport(CmdSettingsBatch);
+    pkt[2] = SettingsBatchSub;
+    pkt[kSettingsByteFnSwitch] = fnLayerSwitch;
+    pkt[kSettingsByteSleepTime] = sleepTimerMinutes;
+    // Vendor clamps response-time to [1..5]; 0 falls back to the default 3.
+    std::uint8_t const responseClamped = std::clamp<std::uint8_t>(
+        keyResponseTimeLevel == 0 ? 3 : keyResponseTimeLevel, 1, 5);
+    pkt[kSettingsByteKeyResponseTime] = responseClamped;
+    pkt[kSettingsByteTrailerHi] = SettingsBatchTrailerHi;
+    pkt[kSettingsByteTrailerLo] = SettingsBatchTrailerLo;
+    return pkt;
+}
+
 std::array<std::uint8_t, ReportSize> buildBatteryQuery() {
     auto pkt = makeReport(CmdBatteryQuery);
     pkt[2] = BatteryQuerySub; // 0x01 — discriminates battery from per-key RGB (sub 0x04)
@@ -336,7 +372,8 @@ class ProprietaryKeyboard final : public IDevice,
                                   public IFirmwareCapable,
                                   public IClockCapable,
                                   public IBatteryCapable,
-                                  public IFirmwareLightingCapable {
+                                  public IFirmwareLightingCapable,
+                                  public ISettingsCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
@@ -743,12 +780,62 @@ public:
         return kAK980LightingSpeedMax;
     }
 
+    // ---- ISettingsCapable (settings batch opcode 0x07 sub 0x10) -----------
+    // Vendor's "Settings" tab commits fn-switch + sleep-timer +
+    // key-response-time in one 33-byte short report. Same 5-packet
+    // envelope as setFirmwareLightingMode (START / DATA / SAVE / FINISH);
+    // the wire format is documented in ak980pro_vendor.md §13.2 and the
+    // byte map lives in proprietary_protocol.hpp Settings constants
+    // (issue #57 / P3.x).
+    bool setKeyboardSettings(core::KeyboardSettings const& settings) override {
+        try {
+            // P1: START
+            (void)m_transport->writeFeature(buildSetTimeStart());
+            // P2: SETTINGS-DATA (opcode 0x07 sub 0x10)
+            auto data = buildSettingsBatch(settings.fnLayerSwitch,
+                                           settings.sleepTimerMinutes,
+                                           settings.keyResponseTimeLevel);
+            (void)m_transport->writeFeature(data);
+            // P3: SAVE (opcode 0x02)
+            (void)m_transport->writeFeature(buildSetTimeSave());
+            // P4: FINISH (opcode 0xF0) - end-of-envelope sentinel per
+            // ak980pro_vendor.md §13.7 (same rule that issue #58 / P3.6
+            // applied to setFirmwareLightingMode).
+            (void)m_transport->writeFeature(makeReport(CmdFinish));
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "setKeyboardSettings: HID writeFeature failed: {}", e.what());
+            return false;
+        }
+        m_settingsCache = settings;
+        // Normalise the cached entry so subsequent reads see the clamped
+        // values the device actually persisted (response-time in [1..5];
+        // 0 → vendor default 3 per buildSettingsBatch).
+        m_settingsCache.keyResponseTimeLevel =
+            settings.keyResponseTimeLevel == 0
+                ? static_cast<std::uint8_t>(3)
+                : std::clamp<std::uint8_t>(settings.keyResponseTimeLevel, 1, 5);
+        AJAZZ_LOG_INFO("keyboard.ak980",
+                       "settings batch sent: fn={}, sleep={}min, response={}",
+                       static_cast<unsigned>(settings.fnLayerSwitch),
+                       static_cast<unsigned>(settings.sleepTimerMinutes),
+                       static_cast<unsigned>(m_settingsCache.keyResponseTimeLevel));
+        return true;
+    }
+
+    [[nodiscard]] core::KeyboardSettings keyboardSettings() const override {
+        return m_settingsCache;
+    }
+
 private:
     DeviceDescriptor m_descriptor;
     DeviceId m_id;
     TransportPtr m_transport;
     EventCallback m_callback;
     std::mutex m_mutex;
+    /// Last-known settings cache. Initialised to vendor defaults so
+    /// keyboardSettings() returns sensible values before any push.
+    core::KeyboardSettings m_settingsCache{};
 };
 
 } // namespace

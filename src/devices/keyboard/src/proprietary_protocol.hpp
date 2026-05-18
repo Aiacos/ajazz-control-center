@@ -422,6 +422,20 @@ buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks);
 [[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeStart();
 
 /**
+ * @brief Build the AK-series settings-batch DATA packet (opcode 0x07 sub 0x10).
+ *
+ * Carries the three @ref ajazz::core::KeyboardSettings fields (fn-switch +
+ * sleep + key-response) into one 33-byte report; the firmware persists
+ * the values to EEPROM so they survive power-cycle. Issue #57 / P3.x.
+ *
+ * @see ak980pro_vendor.md §13.2 for the full byte map (corrected from
+ * the original §11.3 layout which had fn/sleep/delay at 5/6/7).
+ */
+[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSettingsBatch(
+    std::uint8_t fnLayerSwitch, std::uint8_t sleepTimerMinutes,
+    std::uint8_t keyResponseTimeLevel);
+
+/**
  * @brief Build the time-sync preamble packet (ReportId=0x04, opcode 0x28, byte[8]=0x01).
  *
  * Second of the 4-packet envelope. Sent AFTER buildSetTimeStart() and BEFORE
