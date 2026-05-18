@@ -8,9 +8,13 @@
  * JSON-serialisable and can auto-activate when a particular application
  * comes into focus.
  *
- * The core library ships a JSON writer (profileToJson()) and a stub reader;
- * the full reader is implemented in the app layer using QJsonDocument so it
- * can interoperate with the Qt UI model.
+ * The core library ships a self-contained JSON writer (profileToJson()) and
+ * reader (profileFromJson()) that operate on std::string_view and have no
+ * Qt dependency, so they can be unit-tested without an event loop and reused
+ * from CLI / plugin-host contexts. The hand-rolled parser is narrow on
+ * purpose: it accepts the exact format the writer produces (plus arbitrary
+ * whitespace and unknown keys for forward compatibility), and rejects
+ * anything else with a descriptive std::runtime_error.
  *
  * @see profileToJson, profileFromJson, Binding, Profile
  */
@@ -183,13 +187,13 @@ struct Profile {
 /**
  * @brief Deserialise a Profile from a JSON string.
  *
- * @note The core implementation always throws std::logic_error; the
- *       real reader lives in `src/app/profile_io.cpp` and is built on
- *       QJsonDocument. Do not call this directly from core code.
+ * Round-trip safe with profileToJson(): every field that the writer emits is
+ * round-tripped back to the same value. Unknown keys are skipped silently
+ * (forward compatibility with future schema additions).
  *
- * @param json UTF-8 JSON string produced by profileToJson().
+ * @param json UTF-8 JSON string produced by profileToJson() (or compatible).
  * @return Deserialised Profile.
- * @throws std::logic_error always, unless overridden at link time.
+ * @throws std::runtime_error on malformed input, with a byte-offset hint.
  */
 [[nodiscard]] Profile profileFromJson(std::string_view json);
 
