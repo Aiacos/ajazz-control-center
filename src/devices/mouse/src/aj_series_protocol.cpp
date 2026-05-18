@@ -319,6 +319,94 @@ std::array<std::uint8_t, kReportSize> buildMouseSettings(std::uint8_t profile,
     return buildMouseSetOption0(opts);
 }
 
+namespace {
+
+/// Shared envelope for §3.11 header + continuation chunks. The two are
+/// byte-identical except for the chunkIdx + isFinal bytes, so we keep one
+/// helper that both builders call into to ensure the layout never drifts.
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildMacroChunkInternal(std::uint8_t slot,
+                        std::uint8_t chunkIdx,
+                        std::uint8_t lastNonZeroPos,
+                        bool isFinal,
+                        std::span<std::uint8_t const> payload) {
+    auto pkt = startReport(FeaCmd::SetMacroSimple);
+    pkt[2] = std::min<std::uint8_t>(slot, static_cast<std::uint8_t>(kMacroSlotCount - 1));
+    pkt[3] = chunkIdx;
+    pkt[4] = lastNonZeroPos;
+    pkt[5] = isFinal ? std::uint8_t{1} : std::uint8_t{0};
+    // pkt[6..8] stay zero (vendor bytes 5..7 reserved per §3.11).
+    auto const n = std::min(payload.size(), kMacroChunkPayloadBytes);
+    for (std::size_t i = 0; i < n; ++i) {
+        pkt[9 + i] = payload[i];
+    }
+    // pkt[9 + n .. 63] left zero so the BIT7 checksum at pkt[64] stays
+    // deterministic regardless of how many bytes the caller supplied. Note
+    // that pkt[64] is BOTH the last payload byte (per the 56-byte chunk
+    // layout) AND the BIT7 checksum slot — stampBit7Checksum overwrites,
+    // which is the documented §3.11 behaviour ("byte 63 ... overwritten by
+    // checksum on the wire").
+    stampBit7Checksum(pkt);
+    return pkt;
+}
+
+} // namespace
+
+std::array<std::uint8_t, kReportSize>
+buildMacroHeader(std::uint8_t slot,
+                 std::uint8_t lastNonZeroPos,
+                 bool isFinal,
+                 std::span<std::uint8_t const> payload) {
+    // Header chunk = chunkIdx 0; isFinal true if this is a single-chunk macro.
+    return buildMacroChunkInternal(slot, /*chunkIdx=*/0, lastNonZeroPos, isFinal, payload);
+}
+
+std::array<std::uint8_t, kReportSize>
+buildMacroChunk(std::uint8_t slot,
+                std::uint8_t chunkIdx,
+                std::uint8_t lastNonZeroPos,
+                bool isFinal,
+                std::span<std::uint8_t const> payload) {
+    return buildMacroChunkInternal(slot, chunkIdx, lastNonZeroPos, isFinal, payload);
+}
+
+std::vector<std::uint8_t>
+encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events) {
+    using ajazz::core::MouseMacroEvent;
+    std::vector<std::uint8_t> out;
+    // Pre-reserve a sensible upper bound: header (2) + worst-case 2 bytes
+    // per event (long-delay encoding). Keeps the encoder allocation-free
+    // for the typical sub-100-event sequence vendor utility produces.
+    out.reserve(2 + events.size() * 2);
+    // §3.11 line 506: bytes 0..1 = uint16-LE repeatCount. The capability
+    // surface does not expose loop counts so we always emit 1 (single-shot).
+    out.push_back(0x01);
+    out.push_back(0x00);
+    for (auto const& ev : events) {
+        switch (ev.kind) {
+        case MouseMacroEvent::Kind::Delay:
+            if (ev.value <= 127) {
+                // §3.11 line 508: bit7=0, low 7 bits = delay ms (<=127).
+                out.push_back(static_cast<std::uint8_t>(ev.value & 0x7Fu));
+            } else {
+                // §3.11 line 509: "if delay > 127: uint16-LE for longer delays".
+                out.push_back(static_cast<std::uint8_t>(ev.value & 0xFFu));
+                out.push_back(static_cast<std::uint8_t>((ev.value >> 8) & 0xFFu));
+            }
+            break;
+        case MouseMacroEvent::Kind::KeyDown:
+            // §3.11 line 510 "byte = HID usage; bit7 = down flag" — set bit 7.
+            out.push_back(static_cast<std::uint8_t>((ev.value & 0x7Fu) | 0x80u));
+            break;
+        case MouseMacroEvent::Kind::KeyUp:
+            // §3.11 line 510 inverse — bit 7 cleared = release.
+            out.push_back(static_cast<std::uint8_t>(ev.value & 0x7Fu));
+            break;
+        }
+    }
+    return out;
+}
+
 std::array<std::uint8_t, kReportSize>
 buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
                    std::uint16_t chunkIndex, std::span<std::uint8_t const> payload) {

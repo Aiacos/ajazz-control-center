@@ -21,6 +21,8 @@
  *   - @ref IClockCapable      — clock + DPI face on the dock TFT (opcode
  *                               0x25 chunked RGB565 per
  *                               `aj_series_tft_pipeline`)
+ *   - @ref IMouseMacroCapable — 256-byte macro upload (opcode 0x16 chunked,
+ *                               20 slots) per `aj_series_opcode_table.md` §3.11
  *
  * Battery is intentionally NOT exposed via @ref IBatteryCapable: the
  * vendor RE confirmed there is no standalone battery-query opcode on the
@@ -82,7 +84,8 @@ class AjSeriesMouse final : public IDevice,
                             public IMouseSettingsCapable,
                             public IFactoryResettable,
                             public IDpiTableCapable,
-                            public IMouseFnRemappable {
+                            public IMouseFnRemappable,
+                            public IMouseMacroCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -538,6 +541,89 @@ public:
                            "setFnLayerBinding: HID write failed: {}", e.what());
             return false;
         }
+        return true;
+    }
+
+    // ---- IMouseMacroCapable (§3.11 — FEA_CMD_SET_MACRO_SIMPLE 0x16) --------
+    //
+    // Chunked macro upload. Encodes the @ref MouseMacroEvent sequence to
+    // the §3.11 256-byte payload format via aj_series::encodeMouseMacro,
+    // then splits into 56-byte chunks per vendor pattern (line 487 — "For
+    // each chunk c in 0..(chunkCount-1)") and emits one opcode 0x16 packet
+    // per chunk through the transport. Slot clamps to 0..19.
+    //
+    // The lastNonZeroPos header byte is computed once over the FULL
+    // encoded payload and stamped identically on every chunk so the
+    // firmware sees a coherent "where the data truly ends" marker
+    // regardless of chunk ordering on the wire. The isFinal flag is set
+    // ONLY on the trailing chunk.
+    //
+    // Empty events still emit one header-only chunk with isFinal=true and
+    // lastNonZeroPos=1 (covering the repeatCount uint16-LE bytes 0..1 the
+    // encoder always emits). This advertises "macro cleared" intent to the
+    // firmware rather than no-op'ing silently — important so a user-
+    // confirmed "Clear macro" UI button actually lands a wire packet.
+    [[nodiscard]] std::uint8_t macroSlotCount() const noexcept override {
+        return aj_series::kMacroSlotCount;
+    }
+
+    bool uploadMacro(std::uint8_t slot,
+                     std::vector<core::MouseMacroEvent> const& events) override {
+        auto const encoded = aj_series::encodeMouseMacro(std::span<core::MouseMacroEvent const>(events));
+        // Clamp the encoded payload to the §3.11 ceiling so over-budget
+        // sequences don't run off the end of the 5-chunk wire envelope.
+        std::size_t const payloadBytes =
+            std::min(encoded.size(), aj_series::kMacroPayloadBytes);
+        std::uint8_t const clampedSlot = std::min<std::uint8_t>(
+            slot, static_cast<std::uint8_t>(aj_series::kMacroSlotCount - 1));
+
+        // §3.11 line 491: lastNonZeroPos = 56*(u-1) + s where u = highest
+        // non-empty chunk index (1-based) and s = position of last non-zero
+        // byte within that chunk. We compute over the full encoded payload
+        // (1-based byte position of the last non-zero byte). For an empty
+        // payload the encoder still wrote the 2-byte repeatCount header
+        // (0x01, 0x00), so payloadBytes >= 2 in practice and the last
+        // non-zero byte is at position 1 (the 0x01 repeatCount low byte).
+        std::uint8_t lastNonZeroPos = 0;
+        for (std::size_t i = 0; i < payloadBytes; ++i) {
+            if (encoded[i] != 0) {
+                lastNonZeroPos = static_cast<std::uint8_t>(i);
+            }
+        }
+
+        // Always emit at least one chunk so empty events still send a
+        // header (firmware interprets as "macro cleared").
+        std::size_t const chunkCount =
+            std::max<std::size_t>(1, (payloadBytes + aj_series::kMacroChunkPayloadBytes - 1) /
+                                          aj_series::kMacroChunkPayloadBytes);
+
+        for (std::size_t chunkIdx = 0; chunkIdx < chunkCount; ++chunkIdx) {
+            std::size_t const offset = chunkIdx * aj_series::kMacroChunkPayloadBytes;
+            std::size_t const remaining = (offset < payloadBytes) ? (payloadBytes - offset) : 0;
+            std::size_t const n = std::min(aj_series::kMacroChunkPayloadBytes, remaining);
+            std::span<std::uint8_t const> const chunkPayload(encoded.data() + offset, n);
+            bool const isFinal = (chunkIdx + 1 == chunkCount);
+            auto const pkt = (chunkIdx == 0)
+                ? aj_series::buildMacroHeader(clampedSlot, lastNonZeroPos, isFinal, chunkPayload)
+                : aj_series::buildMacroChunk(clampedSlot,
+                                              static_cast<std::uint8_t>(chunkIdx),
+                                              lastNonZeroPos,
+                                              isFinal,
+                                              chunkPayload);
+            try {
+                (void)m_transport->write(pkt);
+            } catch (std::exception const& e) {
+                AJAZZ_LOG_WARN("mouse.aj_series",
+                               "uploadMacro: HID write failed on chunk {}: {}",
+                               chunkIdx, e.what());
+                return false;
+            }
+        }
+        AJAZZ_LOG_INFO("mouse.aj_series",
+                       "macro uploaded: slot={}, chunks={}, payload_bytes={}",
+                       static_cast<unsigned>(clampedSlot),
+                       chunkCount,
+                       payloadBytes);
         return true;
     }
 

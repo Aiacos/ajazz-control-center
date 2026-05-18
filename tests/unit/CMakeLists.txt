@@ -75,6 +75,15 @@ add_executable(
     # 8th-stage B-channel collision with checksum slot). Includes clamp +
     # cache normalisation contract.
     test_aj_series_dpi_fn.cpp
+    # 2026-05-18 macro upload: byte-level tests for the AJ-series mouse
+    # IMouseMacroCapable surface (opcode 0x16 FEA_CMD_SET_MACRO_SIMPLE).
+    # Pins the sec 3.11 chunked-upload envelope (slot/chunkIdx/lastNonZeroPos/
+    # isFinal header bytes, 56-byte payload window) plus the event-stream
+    # encoder (KeyDown bit7-set, KeyUp bit7-clear, 1-byte delay <=127,
+    # uint16-LE delay > 127). Empty-events and out-of-range slot clamp
+    # behaviours are covered too so destructive caller bugs cannot poke
+    # an unrelated firmware slot.
+    test_aj_series_mouse_macros.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

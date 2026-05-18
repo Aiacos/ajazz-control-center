@@ -1206,4 +1206,98 @@ public:
     [[nodiscard]] virtual TimeSyncResult setTime(std::chrono::system_clock::time_point tp) = 0;
 };
 
+// -----------------------------------------------------------------------------
+// Mouse macro capability (AJ-series chunked macro upload — opcode 0x16)
+// -----------------------------------------------------------------------------
+/**
+ * @struct MouseMacroEvent
+ * @brief One step in a mouse-side on-device macro sequence.
+ *
+ * Plain POD encoding of the three event kinds the AJ-series macro byte
+ * stream encodes per @c docs/protocols/mouse/aj_series_opcode_table.md
+ * §3.11. The @ref value field's semantics depend on @ref kind:
+ *
+ *   - @c Kind::KeyDown / @c Kind::KeyUp — @c value is the USB HID usage
+ *     code for the key being pressed or released (one byte on the wire,
+ *     with bit 7 = down-flag set for KeyDown and cleared for KeyUp per
+ *     §3.11 line 510 — "byte = HID usage; bit7 = down flag"). Mouse
+ *     buttons share the same kind (the high byte of @c value distinguishes
+ *     them only for callers; on the wire it is the same single byte the
+ *     firmware looks up in its OF[] table per §3.11 line 511).
+ *   - @c Kind::Delay — @c value is the inter-event delay in milliseconds.
+ *     Delays @>= 128 ms emit as a uint16-LE pair per §3.11 line 509
+ *     ("if delay > 127: uint16-LE for longer delays"); shorter delays
+ *     emit as a single byte with bit 7 cleared so the firmware can
+ *     distinguish them from key events (which always set bit 7).
+ *
+ * Held intentionally minimal: this struct is wire-encoding-adjacent, not
+ * a UI model. The mouse-move marker event (0xF9 + dx + dy per §3.11 line
+ * 512) is NOT exposed here because the @c MouseMacroEvent.value field is
+ * only 16 bits — adding a third int8/int8 pair would balloon the POD or
+ * force a tagged-union. Callers needing mouse-move macros should use the
+ * lower-level @c encodeMouseMacro byte-stream builder directly once a
+ * follow-up commit adds a richer event-record type.
+ */
+struct MouseMacroEvent {
+    /// Event kind. Drives the encoder branch in @c encodeMouseMacro per §3.11.
+    enum class Kind : std::uint8_t {
+        KeyDown = 0, ///< Press: HID usage byte emitted with bit 7 set.
+        KeyUp = 1,   ///< Release: HID usage byte emitted with bit 7 clear.
+        Delay = 2,   ///< Wait: ms delay, 1-byte if <=127 else uint16-LE.
+    };
+    Kind kind{Kind::KeyDown};   ///< Event discriminant.
+    std::uint16_t value{0};     ///< HID usage (KeyDown/Up) or delay ms (Delay).
+};
+
+/**
+ * @class IMouseMacroCapable
+ * @brief Optional capability exposing the AJ-series mouse on-device
+ *        macro upload surface (opcode 0x16 — @c FEA_CMD_SET_MACRO_SIMPLE).
+ *
+ * Mirrors the vendor utility's "Macro recorder" tab. Each macro is a
+ * sequence of @ref MouseMacroEvent records (key-down / key-up / inter-
+ * event delays) which the backend serialises to the 256-byte payload
+ * format per @c docs/protocols/mouse/aj_series_opcode_table.md §3.11
+ * and uploads in 5 chunks of 56 bytes via opcode 0x16. The firmware
+ * persists the macros to flash so they survive power-cycle and can be
+ * triggered by a button bound to action type 9 (macro) per §3.6.
+ *
+ * Distinct from @ref IKeyRemappable::setMacro (raw-bytes / keyboard
+ * surface) because mouse macros need a typed event encoder for KeyDown /
+ * KeyUp / Delay; the keyboard backend already has its own representation.
+ *
+ * Firmware does not advertise a synchronous read-back path; callers
+ * should track desired state themselves. See @c GetMacro 0x96 for the
+ * companion read opcode (not yet wired into this capability).
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see docs/protocols/mouse/aj_series_opcode_table.md §3.11
+ */
+class IMouseMacroCapable {
+public:
+    virtual ~IMouseMacroCapable() = default;
+
+    /**
+     * @brief Upload an event sequence to an on-device macro slot.
+     *
+     * Encodes @p events to the §3.11 256-byte payload format, then splits
+     * into 56-byte chunks and emits one opcode 0x16 packet per chunk via
+     * the device's transport. The header bytes (slot, chunkIdx, last-non-
+     * zero position, isFinal) are stamped on each packet so the firmware
+     * can reassemble + persist atomically.
+     *
+     * @param slot   Target macro slot; clamped to 0..@ref macroSlotCount()-1.
+     * @param events Event sequence; an empty sequence still emits one
+     *               header-only chunk so the firmware sees a "macro
+     *               cleared" intent rather than silently no-op.
+     * @return true when every chunk's wire packet went out; false on
+     *         transport error at any chunk.
+     */
+    virtual bool uploadMacro(std::uint8_t slot,
+                             std::vector<MouseMacroEvent> const& events) = 0;
+
+    /// @return Number of macro slots the firmware persists (AJ159 APEX = 20 per §3.11).
+    [[nodiscard]] virtual std::uint8_t macroSlotCount() const noexcept = 0;
+};
+
 } // namespace ajazz::core

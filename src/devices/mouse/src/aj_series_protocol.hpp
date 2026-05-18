@@ -337,4 +337,115 @@ buildMouseSettings(std::uint8_t profile, std::uint16_t pollRate,
 buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
                    std::uint16_t chunkIndex, std::span<std::uint8_t const> payload);
 
+// ---------------------------------------------------------------------------
+// §3.11 — SET_MACRO_SIMPLE (opcode 0x16) chunked macro upload
+// ---------------------------------------------------------------------------
+//
+// Vendor's `_setMacro(buf256, slotIdx)` at js:922079. Each macro carries a
+// fixed 256-byte payload split across 5 chunks of 56 bytes (last chunk is
+// partial — 256 / 56 = 4 remainder 32). Every chunk shares the same per-
+// macro header (slot, last-non-zero byte position, isFinal); the chunkIdx
+// byte is monotonically increasing 0..N-1.
+//
+// Wire layout (our pkt[N+1] convention vs vendor byte N from §3.11):
+//   - pkt[1]      = 0x16 (FEA_CMD_SET_MACRO_SIMPLE, vendor byte 0)
+//   - pkt[2]      = macro slot idx 0..19           (vendor byte 1)
+//   - pkt[3]      = chunk idx 0..N-1               (vendor byte 2)
+//   - pkt[4]      = last-non-zero byte position    (vendor byte 3)
+//   - pkt[5]      = isFinal (1 on last chunk, 0)   (vendor byte 4)
+//   - pkt[6..8]   = 0 reserved                     (vendor bytes 5..7)
+//   - pkt[9..64]  = 56 bytes of macro payload      (vendor bytes 8..63)
+//   - pkt[64]     = BIT7 checksum (overwrites last payload byte per §3.11)
+//
+// Max macro slots per §3.11 line 488 ("byte 1 : macro slot idx (0..19)").
+inline constexpr std::uint8_t kMacroSlotCount = 20;
+
+/// Fixed payload length the §3.11 wire format reserves per macro (256 B).
+inline constexpr std::size_t kMacroPayloadBytes = 256;
+
+/// Payload bytes carried per chunk (vendor bytes 8..63 = 56 bytes).
+inline constexpr std::size_t kMacroChunkPayloadBytes = 56;
+
+/**
+ * @brief §3.11 build the macro upload header packet (first chunk).
+ *
+ * Stamps the per-macro header bytes (opcode 0x16, slot, chunkIdx=0,
+ * lastNonZeroPos, isFinal) and copies the first @ref kMacroChunkPayloadBytes
+ * of @p payload into vendor bytes 8..63. The caller computes
+ * @p lastNonZeroPos once per macro and passes the SAME value to every
+ * chunk so the firmware sees a consistent "where the payload truly ends"
+ * marker regardless of chunk order on the wire.
+ *
+ * @param slot           Macro slot idx (clamped 0..@ref kMacroSlotCount - 1).
+ * @param lastNonZeroPos Position of the last non-zero byte across the full
+ *                       256-byte payload, encoded per §3.11 line 491 as
+ *                       @c 56*(u-1) + s where @c u is the highest non-empty
+ *                       chunk index and @c s is the position of the last
+ *                       non-zero byte within that chunk. The builder takes
+ *                       this pre-computed value verbatim — it does NOT
+ *                       re-scan @p payload — so callers can stay in control
+ *                       of the encoding when the payload contains
+ *                       intentional zero bytes (e.g. KeyUp of HID usage 0x00).
+ * @param isFinal        true when this is the only / last chunk being sent.
+ * @param payload        First (up to) 56 bytes of the 256-byte payload.
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildMacroHeader(std::uint8_t slot,
+                 std::uint8_t lastNonZeroPos,
+                 bool isFinal,
+                 std::span<std::uint8_t const> payload);
+
+/**
+ * @brief §3.11 build a continuation chunk of the macro upload.
+ *
+ * Same envelope shape as @ref buildMacroHeader, but the chunkIdx byte
+ * carries the supplied @p chunkIdx (1, 2, 3, ...) and the isFinal flag
+ * is set only on the trailing chunk. The lastNonZeroPos byte must be the
+ * SAME value as in the header chunk (so the firmware sees a consistent
+ * marker across the whole upload).
+ *
+ * @param slot           Macro slot idx (clamped 0..@ref kMacroSlotCount - 1).
+ * @param chunkIdx       Monotonically increasing chunk index (>= 1).
+ * @param lastNonZeroPos Same value as in @ref buildMacroHeader.
+ * @param isFinal        true on the trailing chunk.
+ * @param payload        Up to @ref kMacroChunkPayloadBytes payload bytes.
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildMacroChunk(std::uint8_t slot,
+                std::uint8_t chunkIdx,
+                std::uint8_t lastNonZeroPos,
+                bool isFinal,
+                std::span<std::uint8_t const> payload);
+
+/**
+ * @brief §3.11 encode a @ref ajazz::core::MouseMacroEvent sequence to the
+ *        macro payload byte stream the firmware expects.
+ *
+ * Implements the encoding spec at §3.11 lines 504..513:
+ *   - bytes 0..1 = uint16-LE @c repeatCount (always emitted as 1 since the
+ *     @ref ajazz::core::IMouseMacroCapable surface does not expose loop
+ *     counts; future revs may surface this).
+ *   - bytes 2..N = packed action records:
+ *       * @c Kind::Delay with value @<= 127 → 1 byte, bit 7 cleared, low
+ *         7 bits = delay ms.
+ *       * @c Kind::Delay with value @> 127 → 2 bytes, uint16-LE delay
+ *         (per §3.11 line 509 "if delay > 127: uint16-LE for longer delays").
+ *       * @c Kind::KeyDown → 1 byte = (HID usage | 0x80) per §3.11 line 510
+ *         ("byte = HID usage; bit7 = down flag").
+ *       * @c Kind::KeyUp   → 1 byte = (HID usage & 0x7F).
+ *
+ * Mouse-button events are encoded with the same wire shape as keyboard
+ * key events (§3.11 line 511 "byte = OF[key][2]; bit7 = down flag");
+ * callers pass the resolved OF[] table byte as @c value.
+ *
+ * @param events Source event sequence.
+ * @return Encoded byte stream. Length is bounded by the inputs but the
+ *         host-side caller should clamp / chunk for the wire — the
+ *         encoder itself does NOT enforce the §3.11 @ref kMacroPayloadBytes
+ *         (256-byte) ceiling because we want callers to be able to
+ *         introspect over-budget encodings before truncation.
+ */
+[[nodiscard]] std::vector<std::uint8_t>
+encodeMouseMacro(std::span<ajazz::core::MouseMacroEvent const> events);
+
 } // namespace ajazz::mouse::aj_series
