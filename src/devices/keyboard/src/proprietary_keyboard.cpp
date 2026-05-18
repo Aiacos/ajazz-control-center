@@ -319,14 +319,6 @@ namespace {
 using namespace ajazz::core;
 using namespace ajazz::keyboard::proprietary;
 
-// File-static once_flag (Pitfall 14): legacy WARN-once flag used by the v1.1
-// scaffolding stub. Retained in case a future regression demotes setTime back
-// to NotImplemented for this backend — the WARN payload would surface the same
-// log line shape that v1.1 dashboards alerted on. Currently UNUSED in code
-// (post-ARCH-05 amendment 2026-05-17, setTime() actually writes the 3-packet
-// 0x28 envelope and returns Ok / IoError).
-[[maybe_unused]] std::once_flag s_warned_akb980;
-
 /**
  * @brief IDevice backend for proprietary-protocol AJAZZ keyboards.
  *

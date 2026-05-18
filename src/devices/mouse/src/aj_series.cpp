@@ -1,64 +1,37 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file aj_series.cpp
- * @brief IDevice backend for AJAZZ AJ-series gaming mice (P3.12.2 migrated).
+ * @brief IDevice backend for AJAZZ AJ-series gaming mice.
  *
- * Setters now dispatch through the vendor-correct `aj_series_protocol`
- * primitives (P3.12.1 commit 656fb1c) using the AJ159 APEX wire format
- * documented in `docs/protocols/mouse/aj_series_opcode_table.md`. The
- * prior all-wrong CommandId enum + makeEnvelope helper are removed.
+ * Wire format: vendor-correct AJ159 APEX byte layout per
+ * `docs/protocols/mouse/aj_series_opcode_table.md` and
+ * `docs/protocols/mouse/aj_series_vendor.md`. Setters dispatch through
+ * the `aj_series_protocol` builder library (`buildSetReportRate`,
+ * `buildMouseSetOption0/1`, `buildMouseSetKeyMatrix`, `buildSetLedParam`,
+ * `buildSetTftLcdData`); this file only owns lifecycle + caching.
  *
- * **Transport correction** (per AJ159 deep RE): mouse uses HID OUTPUT
- * REPORTS (`m_transport->write()`, interrupt-OUT) — NOT feature reports
- * (`writeFeature()`, SET_REPORT control transfer). Confirmed by Ghidra
- * audit of vendor iot_driver.exe (FUN_00702e40 = hid_write wrapper,
- * called via gRPC sendMsg, not sendRawFeature).
+ * Transport: HID OUTPUT REPORTS (`m_transport->write()`, interrupt-OUT).
+ * NOT feature reports — confirmed by Ghidra audit of `iot_driver.exe`
+ * (vendor's Rust gRPC daemon dispatches via the `sendMsg` path, which
+ * wraps `hid_write`, not `sendRawFeature`).
  *
- * The wire format ships byte-precise per the vendor spec but is UNTESTED
- * against real AJ-series hardware. Hardware witness required per
- * `docs/research/phase3-patch-sequence.md` §P3.12 before promoting any
- * AJ-series device's `devices.yaml` row from `scaffolded` to `partial`.
+ * Capabilities implemented:
+ *   - @ref IMouseCapable      — DPI stages, poll rate, LOD, button bind
+ *   - @ref IRgbCapable        — 8-byte 0x07 LED packet (single virtual zone)
+ *   - @ref IClockCapable      — clock + DPI face on the dock TFT (opcode
+ *                               0x25 chunked RGB565 per
+ *                               `aj_series_tft_pipeline`)
  *
- * Specifically, the vendor app:
- *   - uses opcode 0x54 (not 0x21) for the omnibus DPI-table write
- *   - uses opcode 0x04 (not 0x22) for poll-rate via _RateToNum lookup
- *   - rides LOD inside byte 52 of the 0x53 omnibus packet (not standalone 0x23)
- *   - uses opcode 0x50 (not 0x24) for button binding, payload at byte 8
- *   - uses opcode 0x07 (not 0x30) for an 8-byte light packet (no standalone
- *     brightness opcode — brightness is byte 3 of that packet)
- *   - pulls battery from the dongle's gRPC watchDevList stream — there is
- *     NO standalone 0x40 query opcode
- *   - computes checksum as `sum & 0x7F` (BIT7), NOT `sum & 0xFF` (BIT8) we
- *     hard-code at line ~82
+ * Battery is intentionally NOT exposed via @ref IBatteryCapable: the
+ * vendor RE confirmed there is no standalone battery-query opcode on the
+ * mouse HID path. Vendor pulls battery from the dongle's gRPC
+ * `watchDevList` stream (out of scope for our in-process design).
  *
- * **DAMAGING bug isolated in the same RE:** our former `commit()` helper
- * wrote opcode `kCmdCommit = 0x50` which is `FEA_CMD_MOUSE_SET_KEYMATRIX`
- * in vendor speak — every commit call silently corrupted button slot 0
- * with a malformed keymap. The `commit()` helper and its two call sites
- * have been **REMOVED** as a P0 safety guard (this file); the other wrong
- * opcodes degrade gracefully to silent no-ops until the §11.5 rewrite
- * lands. Risk currently contained because AJ159 family PIDs
- * (0x3151:0x5008 wired / 0x3151:0x4026 wireless) are NOT registered in
- * register.cpp — only 0x3151:0x5007 (ajazz_24g_8k) is, and per the
- * vendor RE its wire format is likely the same broken set.
- *
- * Reverse-engineered from the official Windows utility (Wireshark + USBPcap
- * captures of @c ajazz-aj199-official-software).  Byte-level vendor reference
- * in docs/protocols/mouse/aj_series_vendor.md (vendor RE doc, authoritative).
- * docs/protocols/mouse/aj_series.md (clean-room doc) is now STALE pending
- * the §11.5 rewrite.
- *
- * Feature-report envelope (64 bytes, our current implementation):
- * @code
- *   byte  0 : report id (0x05)
- *   byte  1 : command id (CommandId enum)         ← WRONG opcodes per §11.5
- *   byte  2 : sub-command
- *   byte  3 : payload length
- *   byte 4…N: payload
- *   byte 63 : checksum = sum(bytes 1..62) & 0xFF  ← WRONG (should be & 0x7F)
- * @endcode
+ * Maturity: `scaffolded` -> `partial` for SKUs with a TFT basetta
+ * (ajazz_24g_8k, aj199_family, aj199_family_dongle, aj159_apex_*) per
+ * `devices.yaml`. Hardware round-trip witness is still pending for the
+ * setter envelopes (see HANDOFF "Hardware witnesses").
  */
-//
 #include "aj_series_protocol.hpp"
 #include "aj_series_tft_pipeline.hpp"
 #include "ajazz/core/capabilities.hpp"
@@ -89,13 +62,16 @@ constexpr std::uint8_t kDefaultProfile = 0;
 /**
  * @brief IDevice backend for AJAZZ AJ-series gaming mice.
  *
- * Implements IDevice, IMouseCapable, and IRgbCapable using 64-byte HID
- * feature reports on the configuration interface.  All configuration
- * commands use writeFeature(); battery reads use writeFeature + readFeature.
+ * Implements IDevice, IMouseCapable, IRgbCapable, IClockCapable using
+ * 65-byte HID OUTPUT reports (interrupt-OUT endpoint) on the
+ * configuration interface. Every setter dispatches through the
+ * `aj_series_protocol` builder library — this class only owns the
+ * lifecycle, the host-side caches for the omnibus 0x53/0x54 packets,
+ * and the IClockCapable TFT face renderer pipeline.
  *
  * @note The mutex guards only @c m_callback; configuration setters are not
  *       internally serialised and should be called from a single thread.
- * @see makeAjSeries()
+ * @see makeAjSeries(), aj_series_protocol.hpp, aj_series_tft_pipeline.hpp
  */
 class AjSeriesMouse final : public IDevice,
                             public IMouseCapable,

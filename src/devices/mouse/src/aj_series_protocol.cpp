@@ -227,7 +227,7 @@ buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t fra
     for (std::size_t i = 0; i < n; ++i) {
         pkt[9 + i] = payload[i];                                // vendor bytes 8..(8+n-1)
     }
-    // pkt[9 + n .. 62] are left zero so the BIT7 checksum at pkt[63] is
+    // pkt[9 + n .. 63] are left zero so the BIT7 checksum at pkt[64] is
     // deterministic regardless of how many bytes the caller supplied.
     stampBit7Checksum(pkt);
     return pkt;
