@@ -9,6 +9,16 @@ on:
         description: Tag to publish (e.g. v0.1.0)
         required: true
 
+# Serialise per-tag so a `push: tags` event and a manual
+# `workflow_dispatch` re-trigger for the same tag don't race each other
+# trying to publish the same GitHub Release. `cancel-in-progress: false`
+# because cancelling halfway through a 60-min platform build (and the
+# subsequent code-sign + notarize) would waste runner minutes and leave
+# the release in a half-published state.
+concurrency:
+  group: release-${{ github.ref_name || github.event.inputs.tag }}
+  cancel-in-progress: false
+
 permissions:
   contents: read           # least privilege; the publish job overrides to write
 
