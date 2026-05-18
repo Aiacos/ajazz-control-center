@@ -71,12 +71,23 @@ enum class FeaCmd : std::uint8_t {
     GetScreen24Bit = 0xa9,    ///< §3.12 — RGB888 TFT readback.
 };
 
-/// Max payload bytes per TFT chunk. The vendor envelope reserves byte 8..62
-/// for pixel data; byte 63 holds the BIT7 checksum stamped by the transport
-/// after the builder returns. 55 bytes / 2 = 27 RGB565 pixels per packet
-/// (with byte 8..62 = 55 contiguous bytes). The 8th byte (pkt[63]) doc'd as
-/// "up to 56" in vendor RE is functionally a typo: byte 63 is checksum.
-inline constexpr std::size_t kTftChunkPayloadBytes = 54;
+/// Max payload bytes per TFT chunk. Wire layout (our `pkt[]` indexing,
+/// which is vendor "byte N" -> `pkt[N+1]` because pkt[0] is the HID
+/// Report ID prefix):
+///   - pkt[1]      vendor 0 = opcode 0x25
+///   - pkt[2]      vendor 1 = currentFrame
+///   - pkt[3]      vendor 2 = frameNum
+///   - pkt[4]      vendor 3 = frameDelay
+///   - pkt[5..6]   vendor 4..5 = chunkIndex (uint16-LE)
+///   - pkt[7]      vendor 6 = chunkLen
+///   - pkt[8]      vendor 7 = reserved
+///   - pkt[9..63]  vendor 8..62 = up to 55 bytes of RGB565 pixel data
+///   - pkt[64]     vendor 63 = BIT7 checksum (stamped after build by
+///                              stampBit7Checksum; kReportSize-1)
+/// 55 bytes / 2 = 27.5 RGB565 pixels per packet; the vendor pipeline
+/// is byte-oriented (chunk_index drives reassembly), so pixels can
+/// straddle packet boundaries.
+inline constexpr std::size_t kTftChunkPayloadBytes = 55;
 
 /// Polling-rate lookup table (`_RateToNum` per `aj_series_opcode_table.md` §3.4).
 /// Maps Hz value → wire byte code. Returns 0x01 (1000 Hz default) for unknown
@@ -224,8 +235,8 @@ struct OptionPacket0 {
  *   - pkt[5..6] = uint16-LE chunkIndex
  *   - pkt[7]  = chunkLen (bytes of valid data in this packet, <= kTftChunkPayloadBytes)
  *   - pkt[8]  = reserved (0)
- *   - pkt[9..62] = up to 54 bytes of RGB565 (little-endian uint16 per pixel)
- *   - pkt[63] = BIT7 checksum (stamped by stampBit7Checksum after build)
+ *   - pkt[9..63] = up to 55 bytes of RGB565 (little-endian uint16 per pixel)
+ *   - pkt[64] = BIT7 checksum (stamped by stampBit7Checksum after build)
  *
  * @param frame      Animation frame index (0-based; pass 0 for static images).
  * @param frameCount Total frames (>= 1; pass 1 for static images).

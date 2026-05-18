@@ -99,10 +99,10 @@ TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
     auto const& writes = observer->writes();
     REQUIRE_FALSE(writes.empty());
 
-    // Default panel is 128x128 RGB565 = 32 KiB, chunked at 54 bytes/packet
-    // = 32768/54 = 607 chunks. Pin a lower bound that survives layout
-    // tweaks without becoming flaky.
-    REQUIRE(writes.size() >= 600);
+    // Default panel is 128x128 RGB565 = 32 KiB, chunked at 55 bytes/packet
+    // = ceil(32768/55) = 596 chunks. Pin a lower bound that survives
+    // layout tweaks without becoming flaky.
+    REQUIRE(writes.size() >= 590);
 
     // Every uploaded packet is a TFT chunk: opcode 0x25, frameCount=1,
     // frameDelay=0, chunkIndex monotonically increasing.
@@ -133,7 +133,7 @@ TEST_CASE("renderClockDpiFace produces a Format_RGB16 image of the requested siz
     REQUIRE(face.format() == QImage::Format_RGB16);
 }
 
-TEST_CASE("encodeRgb565Chunks slices the framebuffer into <= 54-byte payloads",
+TEST_CASE("encodeRgb565Chunks slices the framebuffer into <= 55-byte payloads",
           "[mouse][aj_series][tft][render]") {
     QImage const face =
         mouse::renderClockDpiFace(QSize(64, 64), referenceTime(), /*activeDpi*/ 800);

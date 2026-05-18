@@ -387,25 +387,26 @@ TEST_CASE("AJ series buildSetTftLcdData - byte layout matches vendor RE",
     REQUIRE(pkt[11] == 0xEF);
     REQUIRE(pkt[12] == 0x12);             // payload byte 3
     REQUIRE(pkt[13] == 0);                // first padding byte
-    // pkt[62] is also pad (we sent only 4 bytes; kTftChunkPayloadBytes=54).
-    REQUIRE(pkt[62] == 0);
-    // Checksum is BIT7 over pkt[1..62].
-    REQUIRE(pkt[63] == expectedBit7Checksum(pkt));
+    // pkt[63] is the last payload slot (we sent only 4 bytes so it pads to 0).
+    REQUIRE(pkt[63] == 0);
+    // BIT7 checksum lands at pkt[64] == pkt[kReportSize - 1] per
+    // stampBit7Checksum() in aj_series_protocol.cpp.
+    REQUIRE(pkt[64] == expectedBit7Checksum(pkt));
 }
 
 TEST_CASE("AJ series buildSetTftLcdData - chunkLen clamps to kTftChunkPayloadBytes",
           "[mouse][aj_series][wire][tft]") {
-    // Caller-provided 60-byte payload exceeds the 54-byte per-packet budget;
+    // Caller-provided 60-byte payload exceeds the 55-byte per-packet budget;
     // the builder must truncate (not crash or write past the buffer).
     std::array<std::uint8_t, 60> oversized{};
     oversized.fill(0xFF);
     auto const pkt = buildSetTftLcdData(0, 1, 0, 0, oversized);
-    REQUIRE(pkt[7] == kTftChunkPayloadBytes); // == 54
+    REQUIRE(pkt[7] == kTftChunkPayloadBytes); // == 55
     for (std::size_t i = 0; i < kTftChunkPayloadBytes; ++i) {
         REQUIRE(pkt[9 + i] == 0xFF);
     }
-    // pkt[9 + 54] == pkt[63] is the checksum slot, NOT data.
-    REQUIRE(pkt[63] == expectedBit7Checksum(pkt));
+    // pkt[9 + 55 - 1] == pkt[63] is the LAST data slot, pkt[64] is checksum.
+    REQUIRE(pkt[64] == expectedBit7Checksum(pkt));
 }
 
 TEST_CASE("AJ series buildSetTftLcdData - chunkIndex is little-endian",
@@ -424,6 +425,8 @@ TEST_CASE("AJ series TFT opcode constants - 0x25 (RGB565) and 0x29 (24-bit) dist
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetTftLcdData) == 0xa5);
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetScreen24Bit) == 0x29);
     REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetScreen24Bit) == 0xa9);
-    // The chunk payload budget must leave room for the checksum byte.
-    REQUIRE(kTftChunkPayloadBytes + 9 + 1 == kReportSize); // 9 header + payload + checksum == 65
+    // The chunk payload budget must leave room for the checksum byte:
+    //   ReportId(1) + header(8: opcode/frame/frameNum/delay/idxLE/chunkLen/reserved)
+    //   + payload(55) + checksum(1) = 65 = kReportSize.
+    REQUIRE(kTftChunkPayloadBytes + 9 + 1 == kReportSize);
 }

@@ -7,7 +7,7 @@
  * The AJ-series wireless mice (2.4G 8K, AJ159 APEX, AJ199 family, ...) ship
  * with a small TFT LCD on the dock / base. The vendor app renders the
  * current time + active DPI value as a bitmap and uploads it via opcode
- * 0x25 `FEA_CMD_SETTFTLCDDATA` chunked at 54 bytes RGB565 per packet
+ * 0x25 `FEA_CMD_SETTFTLCDDATA` chunked at 55 bytes RGB565 per packet
  * (`aj_series_opcode_table.md` §3.12, vendor doc line 326).
  *
  * Architecture mirrors `src/devices/streamdeck/src/image_pipeline.hpp`:
@@ -63,7 +63,7 @@ namespace ajazz::mouse {
  * @brief Pack a Format_RGB16 QImage into the chunked envelope payload
  *        bytes expected by @ref buildSetTftLcdData.
  *
- * Each chunk is `<= aj_series::kTftChunkPayloadBytes` (54) bytes. Pixel
+ * Each chunk is `<= aj_series::kTftChunkPayloadBytes` (55) bytes. Pixel
  * order is row-major (top-left first), matching how the vendor's
  * `_oledUpgrade` loop walks the framebuffer.
  *
@@ -78,7 +78,7 @@ namespace ajazz::mouse {
  *               converts via @c QImage::convertedTo(Format_RGB16) before
  *               passing.
  * @return Vector of byte vectors; outer index = chunk index, inner
- *         length is <= 54 bytes (the last chunk may be shorter).
+ *         length is <= 55 bytes (the last chunk may be shorter).
  */
 [[nodiscard]] std::vector<std::vector<std::uint8_t>> encodeRgb565Chunks(QImage const& frame);
 
