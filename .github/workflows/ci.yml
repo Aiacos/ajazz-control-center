@@ -222,11 +222,19 @@ jobs:
             cmake_flags: -DAJAZZ_ENABLE_SANITIZERS=ON
             asan_options: detect_leaks=1:strict_string_checks=1:check_initialization_order=1
             ubsan_options: print_stacktrace=1:halt_on_error=1
+            # LSan suppression list for known-narrow Qt6 + fontconfig
+            # init leaks (QGuiApplication's static-destructor fiasco
+            # path; see tests/sanitizers/lsan_suppressions.txt for the
+            # rationale + complete entry list). Suppressing only
+            # specific symbols keeps real leak detection in
+            # non-Qt code intact.
+            lsan_options: "suppressions=tests/sanitizers/lsan_suppressions.txt:print_suppressions=0"
             tsan_options: ""
           - flavour: TSan
             cmake_flags: -DAJAZZ_ENABLE_TSAN=ON
             asan_options: ""
             ubsan_options: ""
+            lsan_options: ""
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
@@ -267,5 +275,6 @@ jobs:
         env:
           ASAN_OPTIONS: ${{ matrix.asan_options }}
           UBSAN_OPTIONS: ${{ matrix.ubsan_options }}
+          LSAN_OPTIONS: ${{ matrix.lsan_options }}
           TSAN_OPTIONS: ${{ matrix.tsan_options }}
         run: ctest --test-dir build-san --output-on-failure

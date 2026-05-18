@@ -1,0 +1,60 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# LeakSanitizer suppressions for the unit-test binary.
+#
+# Format: `leak:<substring>` - the substring is matched against function
+# names AND library paths in every leak's stack trace. The first match
+# wins; suppress as narrowly as possible to avoid masking real leaks.
+#
+# Wire-in: `.github/workflows/ci.yml` sanitizers job sets
+#   LSAN_OPTIONS=suppressions=$(pwd)/tests/sanitizers/lsan_suppressions.txt
+#
+# Local repro:
+#   LSAN_OPTIONS=suppressions=$PWD/tests/sanitizers/lsan_suppressions.txt \
+#     ctest --test-dir build-san -R "tft|firmware_lighting" --output-on-failure
+#
+# Re-review whenever Qt is bumped: a Qt minor-version bump may rename
+# the suppressed symbols, in which case LSan will reintroduce the
+# "leak" without matching here. The CI failure will be loud; just add
+# the new symbol names below.
+
+# ---------------------------------------------------------------------------
+# Qt 6 font + GUI subsystem initialisation leaks
+# ---------------------------------------------------------------------------
+# QGuiApplication is intentionally leaked by qt_app_fixture.hpp (Qt's
+# static-destructor fiasco with the QtWebSockets thread pool, mirrored
+# from the canonical Qt test-helper idiom). The fontconfig / freetype
+# allocations live below it and inherit the same intent.
+leak:QGuiApplicationPrivate
+leak:QGuiApplication
+leak:QFontDatabase
+leak:QFontEngine
+leak:QFontconfigDatabase
+leak:QFontconfigEngine
+leak:QPlatformIntegration
+leak:QPlatformFontDatabase
+leak:QImageData::create
+
+# ---------------------------------------------------------------------------
+# fontconfig + freetype: leaked transitively by Qt's first QPainter::drawText
+# ---------------------------------------------------------------------------
+leak:libfontconfig
+leak:FcConfig
+leak:FcInit
+leak:FcPattern
+leak:FcDefault
+leak:libfreetype
+leak:FT_Init
+leak:FT_New_Face
+leak:FT_Load_Sfnt_Table
+
+# ---------------------------------------------------------------------------
+# Pixman / cairo (sometimes pulled in by font rendering on minimal Linux)
+# ---------------------------------------------------------------------------
+leak:libpixman
+
+# ---------------------------------------------------------------------------
+# Qt offscreen platform plugin (loaded by QT_QPA_PLATFORM=offscreen in tests)
+# ---------------------------------------------------------------------------
+leak:QOffscreenIntegration
+leak:libqoffscreen
