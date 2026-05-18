@@ -10,6 +10,7 @@
 #include "plugin_catalog_model.hpp"
 
 #include "opendeck_catalog_fetcher.hpp"
+#include "sdplugin_extractor.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
 #include "ajazz/core/logger.hpp"
@@ -17,6 +18,7 @@
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QMetaEnum>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -35,6 +37,11 @@ namespace {
 
 /// Pointer set by PluginCatalogModel::registerInstance, consumed by ::create.
 PluginCatalogModel* s_pluginCatalogInstance = nullptr;
+
+/// Forward declaration for the constructor sweep — the body lives in the
+/// install-path helpers namespace further down because that's where the
+/// install() codepath also calls it.
+[[nodiscard]] QString userPluginsDir();
 
 } // namespace
 
@@ -94,6 +101,15 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     : QAbstractListModel(parent),
       m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)),
       m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)) {
+    // First-launch (or post-upgrade) sweep: convert any `.sdPlugin`
+    // archive files left in the user plugins directory by older code
+    // (the install path in df01d3b wrote zips without extracting them)
+    // into the new extracted-directory layout the plugin host expects.
+    // Safe to run on every launch; an already-extracted install ends up
+    // as a directory and is skipped by the file-only entry filter
+    // inside the extractor (issue #62).
+    extractStandalonePluginArchives(userPluginsDir());
+
     // Wire the upstream fetcher: each successful snapshot replaces the
     // streamdock-sourced rows in place. Local / community rows are
     // unaffected so install state survives a network refresh.
@@ -496,6 +512,22 @@ bool PluginCatalogModel::install(QString const& uuid) {
                              return;
                          }
                          out.close();
+
+                         // Extract the archive in place so the plugin host
+                         // finds an expanded `<id>.sdPlugin/manifest.json`
+                         // tree instead of an opaque zip. On success we
+                         // delete the archive; on failure we leave it so
+                         // the user can retry / inspect (issue #62).
+                         QFileInfo const archiveInfo(destCopy);
+                         QString const archiveDir = archiveInfo.absolutePath();
+                         QString const archiveName = archiveInfo.fileName();
+                         if (extractSdPluginArchive(destCopy, archiveDir, archiveName)) {
+                             QFile::remove(destCopy);
+                         } else {
+                             AJAZZ_LOG_WARN("plugin-catalog",
+                                            "install '{}' extract failed; archive left at {}",
+                                            uuidCopy.toStdString(), destCopy.toStdString());
+                         }
 
                          int const r = findRow(self->m_rows, uuidCopy);
                          if (r >= 0) {

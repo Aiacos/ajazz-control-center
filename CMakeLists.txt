@@ -52,6 +52,12 @@ include(Sanitizers)
 find_package(
     Qt6 6.7
     COMPONENTS Core
+               # CorePrivate exposes QZipReader / QZipWriter (`<private/qzipreader_p.h>`),
+               # the only Qt zip API short of bundling QuaZip. PluginCatalogModel uses
+               # QZipReader to extract `.sdPlugin` archives in place at install time
+               # (issue #62 / `src/app/src/sdplugin_extractor.cpp`); the matching unit
+               # test uses QZipWriter to build a synthetic archive for the round-trip.
+               CorePrivate
                Gui
                Network
                Quick

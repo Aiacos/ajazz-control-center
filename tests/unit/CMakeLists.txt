@@ -62,6 +62,9 @@ add_executable(
     test_plugin_catalog_proxy_model.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/plugin_catalog_proxy_model.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/plugin_catalog_model.cpp
+    # Issue #62: .sdPlugin archive extractor with round-trip via QZipWriter.
+    test_sdplugin_extractor.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/sdplugin_extractor.cpp
     # QtExecutor: pins the A2 audit-finding contract — non-blocking
     # scheduling, parent-thread dispatch, null-safe, drop-on-destroy.
     # Q_OBJECT in the header so AUTOMOC has to scan it.
@@ -214,6 +217,11 @@ target_link_libraries(
             # used by the rest of the test binary (COD-031 invariant).
             nlohmann_json::nlohmann_json
             Qt6::Core
+            # CorePrivate exposes QZipReader / QZipWriter. plugin_catalog_model.cpp uses
+            # QZipReader to extract `.sdPlugin` archives (issue #62); the matching test
+            # builds a synthetic archive via QZipWriter and round-trips it through the
+            # extractor.
+            Qt6::CorePrivate
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration

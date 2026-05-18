@@ -39,6 +39,10 @@ qt_add_executable(
     src/application.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
+    # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans
+    # an expanded directory tree (issue #62). Used by the install path and a
+    # first-launch sweep.
+    src/sdplugin_extractor.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
     # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13).
@@ -282,6 +286,11 @@ target_link_libraries(
             ajazz::warnings
             ajazz::sanitizers
             Qt6::Core
+            # CorePrivate exposes QZipReader / QZipWriter — the only Qt zip API
+            # short of pulling in QuaZip. PluginCatalogModel uses it to extract
+            # downloaded `.sdPlugin` archives (issue #62). Stable since Qt 4.7;
+            # API has not changed across the Qt 6 series.
+            Qt6::CorePrivate
             Qt6::Gui
             Qt6::Network
             Qt6::Widgets
