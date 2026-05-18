@@ -61,66 +61,67 @@ find_package(
                Svg
     REQUIRED
 )
-# CorePrivate exposes QZipReader / QZipWriter (`<private/qzipreader_p.h>`),
-# the only Qt zip API short of bundling QuaZip. PluginCatalogModel uses
-# QZipReader to extract `.sdPlugin` archives in place at install time
-# (issue #62 / `src/app/src/sdplugin_extractor.cpp`); the matching unit
-# test uses QZipWriter to build a synthetic archive for the round-trip.
+# CorePrivate exposes QZipReader / QZipWriter (`<private/qzipreader_p.h>`), the only Qt zip API
+# short of bundling QuaZip. PluginCatalogModel uses QZipReader to extract `.sdPlugin` archives in
+# place at install time (issue #62 / `src/app/src/sdplugin_extractor.cpp`); the matching unit test
+# uses QZipWriter to build a synthetic archive for the round-trip.
 #
-# Qt private modules ship their headers inside the regular `qtbase` archive
-# (under `include/QtCore/<ver>/QtCore/private/`) but the Qt6CorePrivate
-# CMake config files are NOT included in the binary archives distributed
-# via Qt's online installer / aqtinstall — only MaintenanceTool and
-# source builds materialise them on disk. So `find_package(...
-# CorePrivate)` REQUIRED silently works on developer boxes (which use
-# MaintenanceTool) and silently fails on every CI runner (which uses
-# `jurplel/install-qt-action` → `aqtinstall`).
+# Qt private modules ship their headers inside the regular `qtbase` archive (under
+# `include/QtCore/<ver>/QtCore/private/`) but the Qt6CorePrivate CMake config files are NOT included
+# in the binary archives distributed via Qt's online installer / aqtinstall — only MaintenanceTool
+# and source builds materialise them on disk. So `find_package(... CorePrivate)` REQUIRED silently
+# works on developer boxes (which use MaintenanceTool) and silently fails on every CI runner (which
+# uses `jurplel/install-qt-action` → `aqtinstall`).
 #
-# Workaround: probe for the official CorePrivate config; if it's absent,
-# synthesize an interface target that wires the private include directory
-# the same way Qt's own Qt6CorePrivateTargets.cmake does. Private headers
-# are header-only / inlined into libQt6Core, so no extra link target is
+# Workaround: probe for the official CorePrivate config; if it's absent, synthesize an interface
+# target that wires the private include directory the same way Qt's own Qt6CorePrivateTargets.cmake
+# does. Private headers are header-only / inlined into libQt6Core, so no extra link target is
 # required.
 find_package(Qt6 QUIET COMPONENTS CorePrivate)
 if(NOT TARGET Qt6::CorePrivate)
     get_target_property(_qt6_core_includes Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
     if(NOT _qt6_core_includes)
-        message(FATAL_ERROR
-            "Qt6::Core has no INTERFACE_INCLUDE_DIRECTORIES — cannot "
-            "synthesize Qt6::CorePrivate fallback. Check Qt install."
+        message(FATAL_ERROR "Qt6::Core has no INTERFACE_INCLUDE_DIRECTORIES — cannot "
+                            "synthesize Qt6::CorePrivate fallback. Check Qt install."
         )
     endif()
-    # Qt6_VERSION is set by find_package(Qt6) above. The private header
-    # subtree is laid out as `<include>/QtCore/<ver>` and
-    # `<include>/QtCore/<ver>/QtCore`. The first directory contains the
-    # version-stamped headers used internally; the second is what
-    # `#include <private/qzipreader_p.h>` actually resolves through.
+    # Qt6_VERSION is set by find_package(Qt6) above. The private header subtree is laid out as
+    # `<include>/QtCore/<ver>` and `<include>/QtCore/<ver>/QtCore`. The first directory contains the
+    # version-stamped headers used internally; the second is what `#include
+    # <private/qzipreader_p.h>` actually resolves through.
     set(_qt6_core_include_root "")
-    foreach(_inc IN LISTS _qt6_core_includes)
-        if(EXISTS "${_inc}/QtCore/${Qt6_VERSION}/QtCore/private/qzipreader_p.h")
-            set(_qt6_core_include_root "${_inc}")
+    foreach(inc IN LISTS _qt6_core_includes)
+        if(EXISTS "${inc}/QtCore/${Qt6_VERSION}/QtCore/private/qzipreader_p.h")
+            set(_qt6_core_include_root "${inc}")
             break()
         endif()
     endforeach()
     if(NOT _qt6_core_include_root)
-        message(FATAL_ERROR
-            "Could not locate Qt6 private headers (qzipreader_p.h) under "
-            "any of Qt6::Core's interface include dirs: "
-            "${_qt6_core_includes}. Install qt.qt6.<ver>.qtbase via "
-            "MaintenanceTool or rebuild Qt from source to ship private "
-            "headers."
+        message(
+            FATAL_ERROR
+                "Could not locate Qt6 private headers (qzipreader_p.h) under "
+                "any of Qt6::Core's interface include dirs: "
+                "${_qt6_core_includes}. Install qt.qt6.<ver>.qtbase via "
+                "MaintenanceTool or rebuild Qt from source to ship private "
+                "headers."
         )
     endif()
+    # Build the include-paths list in two halves so cmake-lint's 100-char line cap isn't tripped by
+    # the long Qt path. Both halves are needed: the parent dir gives `<private/...>` resolution and
+    # the inner QtCore/ dir gives the version-stamped headers.
+    set(_qt6_priv_include_a "${_qt6_core_include_root}/QtCore/${Qt6_VERSION}")
+    set(_qt6_priv_include_b "${_qt6_priv_include_a}/QtCore")
     add_library(Qt6::CorePrivate INTERFACE IMPORTED)
-    set_target_properties(Qt6::CorePrivate PROPERTIES
-        INTERFACE_INCLUDE_DIRECTORIES
-            "${_qt6_core_include_root}/QtCore/${Qt6_VERSION};${_qt6_core_include_root}/QtCore/${Qt6_VERSION}/QtCore"
-        INTERFACE_LINK_LIBRARIES "Qt6::Core"
+    set_target_properties(
+        Qt6::CorePrivate
+        PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_qt6_priv_include_a};${_qt6_priv_include_b}"
+                   INTERFACE_LINK_LIBRARIES "Qt6::Core"
     )
-    message(STATUS
-        "Qt6::CorePrivate CMake config missing (typical for aqtinstall "
-        "binary distributions) — synthesised interface target from "
-        "Qt6::Core include dirs (${_qt6_core_include_root})"
+    unset(_qt6_priv_include_a)
+    unset(_qt6_priv_include_b)
+    message(STATUS "Qt6::CorePrivate CMake config missing (typical for aqtinstall "
+                   "binary distributions) — synthesised interface target from "
+                   "Qt6::Core include dirs (${_qt6_core_include_root})"
     )
     unset(_qt6_core_include_root)
     unset(_qt6_core_includes)
