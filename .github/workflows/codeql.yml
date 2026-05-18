@@ -61,7 +61,16 @@ jobs:
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730 # v4.3.1
         with:
           version: '6.8.3'
-          modules: 'qtshadertools'
+          # qtwebsockets matches the CI/Nightly/Lint installs so the
+          # SdPluginServer (Elgato plugin host) gets analysed by CodeQL
+          # too — otherwise the entire `src/app/src/sd_plugin_server.cpp`
+          # translation unit is compiled-out (AJAZZ_HAVE_WEBSOCKETS=OFF)
+          # and a whole subsystem ships unanalysed.
+          modules: 'qtshadertools qtwebsockets'
+          # Cache the Qt install across CodeQL runs (~1.3 GB, ~2 min to
+          # download). The cache is shared with the other Qt installs in
+          # this repo via the `install-qt-action` default cache prefix.
+          cache: true
 
       - name: Build (C++)
         if: matrix.language == 'cpp'
