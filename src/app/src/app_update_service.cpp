@@ -105,10 +105,8 @@ AppUpdateService::AppUpdateService(QObject* parent) : QObject(parent) {
     // Load user prefs first so the auto-check timer wiring below respects
     // a previously-set autoCheckEnabled = false.
     QSettings settings;
-    m_autoCheckEnabled =
-        settings.value(QString::fromLatin1(kAutoCheckKey), true).toBool();
-    m_includeNightly =
-        settings.value(QString::fromLatin1(kIncludeNightlyKey), false).toBool();
+    m_autoCheckEnabled = settings.value(QString::fromLatin1(kAutoCheckKey), true).toBool();
+    m_includeNightly = settings.value(QString::fromLatin1(kIncludeNightlyKey), false).toBool();
 
     // Flatpak self-disable: Flathub manages updates via GNOME Software /
     // KDE Discover. Setting Status::Disabled here AND not allocating the
@@ -133,8 +131,8 @@ AppUpdateService::AppUpdateService(QObject* parent) : QObject(parent) {
     m_pollTimer = new QTimer(this);
     m_pollTimer->setInterval(kPollIntervalMs);
     QObject::connect(m_pollTimer, &QTimer::timeout, this, &AppUpdateService::performCheck);
-    bool const haveEventLoop = QCoreApplication::instance() != nullptr &&
-                               QCoreApplication::eventDispatcher() != nullptr;
+    bool const haveEventLoop =
+        QCoreApplication::instance() != nullptr && QCoreApplication::eventDispatcher() != nullptr;
     if (m_autoCheckEnabled && haveEventLoop) {
         m_pollTimer->start();
         // First check 5 s after construction so the splash isn't blocked.
@@ -297,28 +295,27 @@ void AppUpdateService::performCheck() {
 
     QNetworkRequest req{QUrl{QString::fromLatin1(kLatestEndpoint)}};
     req.setRawHeader("Accept", "application/vnd.github+json");
-    req.setRawHeader("User-Agent", "ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)");
+    req.setRawHeader("User-Agent",
+                     "ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)");
     if (!m_etag.isEmpty()) {
         req.setRawHeader("If-None-Match", m_etag.toUtf8());
     }
 
     auto* const reply = m_nam->get(req);
-    QObject::connect(reply, &QNetworkReply::finished, this,
-                     [this, reply]() { onLatestReplyFinished(reply); });
+    QObject::connect(
+        reply, &QNetworkReply::finished, this, [this, reply]() { onLatestReplyFinished(reply); });
 }
 
 void AppUpdateService::onLatestReplyFinished(QNetworkReply* reply) {
     reply->deleteLater();
 
-    int const httpStatus =
-        reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    int const httpStatus = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
 
     // 304 Not Modified — the cached ETag is still valid. Don't churn the
     // status; remain UpToDate (or whatever the previous state was).
     if (httpStatus == 304) {
         if (m_status == Status::Checking) {
-            setStatus(m_latestVersion.isEmpty() ? Status::UpToDate
-                                                : Status::UpdateAvailable);
+            setStatus(m_latestVersion.isEmpty() ? Status::UpToDate : Status::UpdateAvailable);
         }
         return;
     }
@@ -367,12 +364,12 @@ void AppUpdateService::onLatestReplyFinished(QNetworkReply* reply) {
         applyRelease(tag, notes, url);
         QNetworkRequest req{QUrl{QString::fromLatin1(kNightlyEndpoint)}};
         req.setRawHeader("Accept", "application/vnd.github+json");
-        req.setRawHeader(
-            "User-Agent",
-            "ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)");
+        req.setRawHeader("User-Agent",
+                         "ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)");
         auto* const nightlyReply = m_nam->get(req);
-        QObject::connect(nightlyReply, &QNetworkReply::finished, this,
-                         [this, nightlyReply]() { onNightlyReplyFinished(nightlyReply); });
+        QObject::connect(nightlyReply, &QNetworkReply::finished, this, [this, nightlyReply]() {
+            onNightlyReplyFinished(nightlyReply);
+        });
         return;
     }
 
@@ -424,8 +421,7 @@ void AppUpdateService::applyRelease(QString const& tag, QString const& notes, QU
     // this exact release in a prior session, stay Idle until a newer
     // release lands.
     QSettings settings;
-    QString const dismissedTag =
-        settings.value(QString::fromLatin1(kDismissedTagKey)).toString();
+    QString const dismissedTag = settings.value(QString::fromLatin1(kDismissedTagKey)).toString();
 
     if (isNewerThan(tag, currentVersion())) {
         if (tag == dismissedTag) {
