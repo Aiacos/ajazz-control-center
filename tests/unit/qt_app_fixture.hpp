@@ -28,10 +28,12 @@
 #pragma once
 
 #include <QCoreApplication>
+#include <QGuiApplication>
 #include <QStandardPaths>
 #include <QString>
 
 #include <array>
+#include <cstdlib>
 
 #ifdef _WIN32
 #include <process.h>
@@ -68,6 +70,46 @@ inline QCoreApplication& qtApp() {
         QStringLiteral("ajazz-control-center-tests-%1").arg(AJAZZ_TEST_GETPID()));
     QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
     return *QCoreApplication::instance();
+}
+
+/// Boot (or reuse) a QGuiApplication for tests that need QPainter /
+/// QFont / QFontMetrics (the mouse TFT clock+DPI face renderer is the
+/// current consumer).
+///
+/// We force `QT_QPA_PLATFORM=offscreen` before constructing the
+/// application so the test process runs without a display — no xvfb
+/// dependency, no Wayland/X11 setup required on CI. The instance must
+/// be GuiApplication (not CoreApplication) for QFontDatabase to load
+/// the platform fonts; on macOS that's why earlier QCoreApplication-only
+/// tests SIGABRT'd inside QPainter::drawText.
+///
+/// Like `qtApp()`, the singleton is constructed on the first call and
+/// reused thereafter. The two helpers are mutually exclusive — call
+/// only one per binary; subsequent calls to the other reuse whichever
+/// landed first via `QCoreApplication::instance()`.
+inline QGuiApplication& qtGuiApp() {
+    if (QCoreApplication::instance() == nullptr) {
+        // Force offscreen platform so QPainter works without a display.
+        // Setting before construction is load-bearing: Qt reads
+        // QT_QPA_PLATFORM exactly once when the platform plugin loads.
+#ifdef _WIN32
+        _putenv_s("QT_QPA_PLATFORM", "offscreen");
+#else
+        ::setenv("QT_QPA_PLATFORM", "offscreen", /*overwrite*/ 1);
+#endif
+        static int argc = 0;
+        static std::array<char*, 1> argv{nullptr};
+        static QGuiApplication app{argc, argv.data()};
+        QStandardPaths::setTestModeEnabled(true);
+    }
+    QCoreApplication::setApplicationName(
+        QStringLiteral("ajazz-control-center-tests-%1").arg(AJAZZ_TEST_GETPID()));
+    QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
+    // Static_cast is safe: we constructed a QGuiApplication above OR
+    // some other TU did. If a TU mixed qtApp() + qtGuiApp() the cast
+    // returns nullptr deref on the first QPainter call — diagnose by
+    // running ctest with --output-on-failure.
+    return *static_cast<QGuiApplication*>(QCoreApplication::instance());
 }
 
 } // namespace ajazz::tests

@@ -28,6 +28,7 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/mouse/mouse.hpp"
 #include "fixtures/mock_transport.hpp"
+#include "qt_app_fixture.hpp"
 
 #include <QImage>
 
@@ -82,6 +83,7 @@ std::chrono::system_clock::time_point referenceTime() {
 
 TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
           "[mouse][aj_series][tft][clock][CAPTURE-04][vendor-re]") {
+    tests::qtGuiApp(); // QPainter / QFont need a QGuiApplication; offscreen platform.
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
@@ -125,6 +127,7 @@ TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
 
 TEST_CASE("renderClockDpiFace produces a Format_RGB16 image of the requested size",
           "[mouse][aj_series][tft][render]") {
+    tests::qtGuiApp();
     QSize const panel(128, 128);
     QImage const face =
         mouse::renderClockDpiFace(panel, referenceTime(), /*activeDpi*/ 1600);
@@ -135,6 +138,7 @@ TEST_CASE("renderClockDpiFace produces a Format_RGB16 image of the requested siz
 
 TEST_CASE("encodeRgb565Chunks slices the framebuffer into <= 55-byte payloads",
           "[mouse][aj_series][tft][render]") {
+    tests::qtGuiApp();
     QImage const face =
         mouse::renderClockDpiFace(QSize(64, 64), referenceTime(), /*activeDpi*/ 800);
     auto const chunks = mouse::encodeRgb565Chunks(face);
@@ -150,6 +154,7 @@ TEST_CASE("encodeRgb565Chunks slices the framebuffer into <= 55-byte payloads",
 
 TEST_CASE("AjSeriesMouse setTime tolerates renderer edge cases",
           "[mouse][aj_series][tft][robustness]") {
+    tests::qtGuiApp();
     // activeDpi == 0 -> renderer omits the DPI line (mouse without DPI
     // introspection); the upload still happens with the clock-only face.
     auto transport = std::make_unique<tests::MockTransport>();
