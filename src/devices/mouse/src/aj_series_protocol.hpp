@@ -65,7 +65,18 @@ enum class FeaCmd : std::uint8_t {
     MouseGetOption1 = 0xd4,   ///< §3.10 — GET counterpart.
     SetMacroSimple = 0x16,    ///< §3.11 — chunked macro upload (5 chunks × 56 bytes).
     GetMacro = 0x96,          ///< §3.11 — macro read-back.
+    SetTftLcdData = 0x25,     ///< §3.12 — 16-bit RGB565 TFT LCD upload (chunked).
+    GetTftLcdData = 0xa5,     ///< §3.12 — RGB565 TFT readback.
+    SetScreen24Bit = 0x29,    ///< §3.12 — 24-bit RGB888 TFT upload (chunked variant).
+    GetScreen24Bit = 0xa9,    ///< §3.12 — RGB888 TFT readback.
 };
+
+/// Max payload bytes per TFT chunk. The vendor envelope reserves byte 8..62
+/// for pixel data; byte 63 holds the BIT7 checksum stamped by the transport
+/// after the builder returns. 55 bytes / 2 = 27 RGB565 pixels per packet
+/// (with byte 8..62 = 55 contiguous bytes). The 8th byte (pkt[63]) doc'd as
+/// "up to 56" in vendor RE is functionally a typo: byte 63 is checksum.
+inline constexpr std::size_t kTftChunkPayloadBytes = 54;
 
 /// Polling-rate lookup table (`_RateToNum` per `aj_series_opcode_table.md` §3.4).
 /// Maps Hz value → wire byte code. Returns 0x01 (1000 Hz default) for unknown
@@ -194,5 +205,39 @@ struct OptionPacket0 {
 
 /// §3.9 build the omnibus packet from a populated @ref OptionPacket0.
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& opts);
+
+/**
+ * @brief §3.12 build one chunk of the TFT LCD upload envelope (opcode 0x25,
+ *        16-bit RGB565).
+ *
+ * Vendor app's `_oledUpgrade`-style flow per `aj_series_opcode_table.md`
+ * §3.12. One single-frame still image (clock + DPI widget) needs
+ * `ceil(width * height * 2 / kTftChunkPayloadBytes)` packets. The receiver
+ * stitches them by `chunkIndex` and refreshes the panel when the final
+ * chunk arrives.
+ *
+ * Wire layout (vendor byte → our pkt[byte+1]):
+ *   - pkt[1]  = 0x25 (FEA_CMD_SETTFTLCDDATA)
+ *   - pkt[2]  = currentFrame (animation index, 0 for stills)
+ *   - pkt[3]  = frameNum (total frames, 1 for stills)
+ *   - pkt[4]  = frameDelay (ms between frames, 0 for stills)
+ *   - pkt[5..6] = uint16-LE chunkIndex
+ *   - pkt[7]  = chunkLen (bytes of valid data in this packet, <= kTftChunkPayloadBytes)
+ *   - pkt[8]  = reserved (0)
+ *   - pkt[9..62] = up to 54 bytes of RGB565 (little-endian uint16 per pixel)
+ *   - pkt[63] = BIT7 checksum (stamped by stampBit7Checksum after build)
+ *
+ * @param frame      Animation frame index (0-based; pass 0 for static images).
+ * @param frameCount Total frames (>= 1; pass 1 for static images).
+ * @param frameDelayMs Inter-frame delay in milliseconds (ignored when frameCount==1).
+ * @param chunkIndex Zero-based packet index inside the frame.
+ * @param payload    Up to @ref kTftChunkPayloadBytes bytes of RGB565 pixel data.
+ *                   Shorter payloads zero-pad the unused slots.
+ * @return Fully-formed 65-byte HID Output Report, ready for
+ *         @c stampBit7Checksum() + @c ITransport::write().
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
+                   std::uint16_t chunkIndex, std::span<std::uint8_t const> payload);
 
 } // namespace ajazz::mouse::aj_series

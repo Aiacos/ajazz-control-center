@@ -210,4 +210,27 @@ std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& 
     return pkt;
 }
 
+std::array<std::uint8_t, kReportSize>
+buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
+                   std::uint16_t chunkIndex, std::span<std::uint8_t const> payload) {
+    std::array<std::uint8_t, kReportSize> pkt{};
+    pkt[0] = kReportId;
+    pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetTftLcdData); // vendor byte 0
+    pkt[2] = frame;                                            // vendor byte 1
+    pkt[3] = frameCount;                                       // vendor byte 2
+    pkt[4] = frameDelayMs;                                     // vendor byte 3
+    pkt[5] = static_cast<std::uint8_t>(chunkIndex & 0xFFU);    // vendor byte 4 (LE lo)
+    pkt[6] = static_cast<std::uint8_t>((chunkIndex >> 8U) & 0xFFU); // vendor byte 5 (LE hi)
+    auto const n = std::min(payload.size(), kTftChunkPayloadBytes);
+    pkt[7] = static_cast<std::uint8_t>(n);                     // vendor byte 6 (chunkLen)
+    pkt[8] = 0;                                                 // vendor byte 7 (reserved)
+    for (std::size_t i = 0; i < n; ++i) {
+        pkt[9 + i] = payload[i];                                // vendor bytes 8..(8+n-1)
+    }
+    // pkt[9 + n .. 62] are left zero so the BIT7 checksum at pkt[63] is
+    // deterministic regardless of how many bytes the caller supplied.
+    stampBit7Checksum(pkt);
+    return pkt;
+}
+
 } // namespace ajazz::mouse::aj_series

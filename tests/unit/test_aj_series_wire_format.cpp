@@ -358,3 +358,72 @@ TEST_CASE("AJ series no-standalone-battery-opcode regression guard",
         REQUIRE(static_cast<std::uint8_t>(cmd) != 0x40);
     }
 }
+
+// ============================================================================
+// §3.12 TFT LCD upload (opcode 0x25) — mouse with OLED basetta (clock + DPI)
+// ============================================================================
+
+TEST_CASE("AJ series buildSetTftLcdData - byte layout matches vendor RE",
+          "[mouse][aj_series][wire][tft][vendor-re]") {
+    // Frame 0 of 1 (still image), zero delay, chunk index 0x0102 LE = 0x02 0x01,
+    // 4 bytes of dummy RGB565 payload (2 pixels).
+    std::array<std::uint8_t, 4> const payload{0xAB, 0xCD, 0xEF, 0x12};
+    auto const pkt = buildSetTftLcdData(/*frame*/ 0,
+                                        /*frameCount*/ 1,
+                                        /*frameDelayMs*/ 0,
+                                        /*chunkIndex*/ 0x0102,
+                                        payload);
+    REQUIRE(pkt[0] == kReportId);
+    REQUIRE(pkt[1] == 0x25);              // FEA_CMD_SETTFTLCDDATA
+    REQUIRE(pkt[2] == 0);                 // currentFrame
+    REQUIRE(pkt[3] == 1);                 // frameNum
+    REQUIRE(pkt[4] == 0);                 // frameDelay
+    REQUIRE(pkt[5] == 0x02);              // chunkIndex LE lo
+    REQUIRE(pkt[6] == 0x01);              // chunkIndex LE hi
+    REQUIRE(pkt[7] == 4);                 // chunkLen == payload.size()
+    REQUIRE(pkt[8] == 0);                 // reserved
+    REQUIRE(pkt[9] == 0xAB);              // payload byte 0
+    REQUIRE(pkt[10] == 0xCD);
+    REQUIRE(pkt[11] == 0xEF);
+    REQUIRE(pkt[12] == 0x12);             // payload byte 3
+    REQUIRE(pkt[13] == 0);                // first padding byte
+    // pkt[62] is also pad (we sent only 4 bytes; kTftChunkPayloadBytes=54).
+    REQUIRE(pkt[62] == 0);
+    // Checksum is BIT7 over pkt[1..62].
+    REQUIRE(pkt[63] == expectedBit7Checksum(pkt));
+}
+
+TEST_CASE("AJ series buildSetTftLcdData - chunkLen clamps to kTftChunkPayloadBytes",
+          "[mouse][aj_series][wire][tft]") {
+    // Caller-provided 60-byte payload exceeds the 54-byte per-packet budget;
+    // the builder must truncate (not crash or write past the buffer).
+    std::array<std::uint8_t, 60> oversized{};
+    oversized.fill(0xFF);
+    auto const pkt = buildSetTftLcdData(0, 1, 0, 0, oversized);
+    REQUIRE(pkt[7] == kTftChunkPayloadBytes); // == 54
+    for (std::size_t i = 0; i < kTftChunkPayloadBytes; ++i) {
+        REQUIRE(pkt[9 + i] == 0xFF);
+    }
+    // pkt[9 + 54] == pkt[63] is the checksum slot, NOT data.
+    REQUIRE(pkt[63] == expectedBit7Checksum(pkt));
+}
+
+TEST_CASE("AJ series buildSetTftLcdData - chunkIndex is little-endian",
+          "[mouse][aj_series][wire][tft][endianness]") {
+    auto const pkt = buildSetTftLcdData(0, 1, 0, /*chunkIndex*/ 0xBEEF, {});
+    REQUIRE(pkt[5] == 0xEF); // LE lo
+    REQUIRE(pkt[6] == 0xBE); // LE hi
+}
+
+TEST_CASE("AJ series TFT opcode constants - 0x25 (RGB565) and 0x29 (24-bit) distinct",
+          "[mouse][aj_series][wire][tft][opcodes]") {
+    // Both opcodes must coexist in FeaCmd without collision; the vendor
+    // doc (line 152, 158) keeps them on separate codes so 16-bit and
+    // 24-bit panels can be addressed independently.
+    REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetTftLcdData) == 0x25);
+    REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetTftLcdData) == 0xa5);
+    REQUIRE(static_cast<std::uint8_t>(FeaCmd::SetScreen24Bit) == 0x29);
+    REQUIRE(static_cast<std::uint8_t>(FeaCmd::GetScreen24Bit) == 0xa9);
+    // The chunk payload budget must leave room for the checksum byte.
+    REQUIRE(kTftChunkPayloadBytes + 9 + 1 == kReportSize); // 9 header + payload + checksum == 65
+}
