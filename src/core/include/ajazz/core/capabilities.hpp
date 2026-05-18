@@ -272,6 +272,64 @@ public:
 };
 
 // -----------------------------------------------------------------------------
+// Firmware-built-in lighting mode (AK980 PRO 20-effect picker, opcode 0x13)
+// -----------------------------------------------------------------------------
+
+/**
+ * @struct FirmwareLightingMode
+ * @brief Single entry in the firmware-built-in lighting picker.
+ *
+ * Distinct from the generic @ref RgbEffect enum: those are *categories*
+ * (Static/Breathing/Wave/Cycle/...) that any RGB-capable device can map
+ * to its own effects. `FirmwareLightingMode` enumerates the *exact*
+ * vendor-defined firmware modes the device knows by id — e.g. the
+ * AK980 PRO ships 20 of them addressable via opcode 0x13.
+ */
+struct FirmwareLightingMode {
+    std::uint8_t id{0};   ///< Wire byte 1 of the DATA packet (vendor mode id).
+    std::string name;     ///< Human label (caller-localised; defaults to vendor's English).
+};
+
+/**
+ * @class IFirmwareLightingCapable
+ * @brief Optional capability exposing a device's firmware-built-in
+ *        lighting modes (as opposed to host-rendered effects).
+ *
+ * AK980 PRO implements this with its 20-mode 0x13 envelope; future
+ * keyboards / mice that ship a fixed-effect catalogue should implement
+ * it the same way so the QML lighting picker can list them without
+ * special-casing per codename.
+ *
+ * The mode id semantics are device-defined; callers walk
+ * @ref availableFirmwareModes() to discover the legal range.
+ */
+class IFirmwareLightingCapable {
+public:
+    virtual ~IFirmwareLightingCapable() = default;
+
+    /// @return Ordered catalogue of firmware modes this device ships.
+    [[nodiscard]] virtual std::vector<FirmwareLightingMode> availableFirmwareModes() const = 0;
+
+    /**
+     * @brief Activate a firmware-built-in lighting mode.
+     *
+     * @param modeId     Mode id from @ref availableFirmwareModes(); out-of-range
+     *                   values are clamped to the LedOff sentinel by the backend.
+     * @param brightness 0..max (device-defined; clamped to @c brightnessMax()).
+     * @param speed      0..max (device-defined; clamped to @c speedMax()).
+     * @return true if the wire packet went out; false on transport error.
+     */
+    virtual bool setFirmwareLightingMode(std::uint8_t modeId,
+                                         std::uint8_t brightness,
+                                         std::uint8_t speed) = 0;
+
+    /// @return Maximum brightness level this firmware accepts (typically 5).
+    [[nodiscard]] virtual std::uint8_t brightnessMax() const noexcept = 0;
+    /// @return Maximum animation speed level (typically 5).
+    [[nodiscard]] virtual std::uint8_t speedMax() const noexcept = 0;
+};
+
+// -----------------------------------------------------------------------------
 // Encoder / dial capability (stream deck plus / AKP05)
 // -----------------------------------------------------------------------------
 /**

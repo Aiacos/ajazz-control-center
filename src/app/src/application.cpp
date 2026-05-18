@@ -82,6 +82,21 @@ Application::Application(QObject* parent)
               return nullptr;
           },
           this)),
+      m_lighting(std::make_unique<LightingService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              // Same DeviceLookup pattern as TimeSyncService above.
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          },
+          this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -198,6 +213,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());
+    LightingService::registerInstance(m_lighting.get());
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable

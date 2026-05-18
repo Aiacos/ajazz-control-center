@@ -41,6 +41,11 @@ qt_add_executable(
     src/plugin_catalog_model.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
+    # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13).
+    # Mirrors TimeSyncService DI shape; dynamic_cast to
+    # IFirmwareLightingCapable so any future keyboard that ships a fixed
+    # effect catalogue gets a QML picker for free.
+    src/lighting_service.cpp
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp

@@ -19,6 +19,7 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/hid_transport.hpp"
 #include "ajazz/core/logger.hpp"
+#include "ajazz/keyboard/ak980_lighting.hpp"
 #include "ajazz/keyboard/keyboard.hpp"
 #include "proprietary_protocol.hpp"
 
@@ -342,7 +343,8 @@ class ProprietaryKeyboard final : public IDevice,
                                   public IRgbCapable,
                                   public IFirmwareCapable,
                                   public IClockCapable,
-                                  public IBatteryCapable {
+                                  public IBatteryCapable,
+                                  public IFirmwareLightingCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
@@ -662,6 +664,83 @@ public:
                        minute,
                        second);
         return TimeSyncResult::Ok;
+    }
+
+    // ---- IFirmwareLightingCapable (20 built-in modes via opcode 0x13) -----
+    //
+    // 4-packet envelope per ak980pro_vendor.md §3.4: CMD_START (0x18) ->
+    // CMD_MODE_BEGIN (0x13) -> DATA (mode_id, RGB, brightness, speed) ->
+    // CMD_SAVE (0x02). The 5th packet CMD_FINISH (0xF0) is part of the
+    // standard vendor envelope but our project does not yet ship it
+    // (Phase 3 P3.6 pending) - hardware-testing has shown the 4-packet
+    // variant works in practice; FINISH is needed only for some other
+    // config flows.
+    [[nodiscard]] std::vector<FirmwareLightingMode>
+    availableFirmwareModes() const override {
+        // Names match the vendor 1033.lan English strings (cross-referenced
+        // with the Chinese originals documented in ak980_lighting.hpp).
+        return {
+            {static_cast<std::uint8_t>(AK980LightingMode::Static),     "Static"},
+            {static_cast<std::uint8_t>(AK980LightingMode::SingleOn),   "Single light on"},
+            {static_cast<std::uint8_t>(AK980LightingMode::SingleOff),  "Single light off"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Glittering), "Glittering stars"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Falling),    "Falling pixels"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Colourful),  "Rainbow blanket"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Breath),     "Dynamic breath"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Spectrum),   "Spectrum rings"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Outward),    "Outward wave"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Scrolling),  "Horizontal scroll"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Rolling),    "Rolling glow"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Rotating),   "Rotating accents"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Explode),    "Press burst"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Launch),     "Launch trail"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Ripples),    "Ripples"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Flowing),    "Continuous flow"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Pulsating),  "Layered pulse"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Tilt),       "Diagonal sweep"},
+            {static_cast<std::uint8_t>(AK980LightingMode::Shuttle),    "Shuttle"},
+            {static_cast<std::uint8_t>(AK980LightingMode::LedOff),     "LEDs off"},
+        };
+    }
+
+    bool setFirmwareLightingMode(std::uint8_t modeId, std::uint8_t brightness,
+                                 std::uint8_t speed) override {
+        try {
+            // P1: START (opcode 0x18, marker 0x01)
+            (void)m_transport->writeFeature(buildSetTimeStart());
+            // P2: MODE_BEGIN (opcode 0x13)
+            auto modeBegin = makeReport(CmdSetRgbMode);
+            (void)m_transport->writeFeature(modeBegin);
+            // P3: DATA - colour 0x00ffffff (white tint) by default; future
+            // QML enhancement will plumb an RGB picker through.
+            auto data = buildSetRgbModeData(modeId,
+                                            /*r*/ 0xff, /*g*/ 0xff, /*b*/ 0xff,
+                                            /*rainbow*/ 0, brightness, speed, /*direction*/ 0);
+            // Re-write byte 0 to the data ReportId variant; vendor uses
+            // the default 0x04 for this packet so makeReport already
+            // covers us here (matches buildSetRgbModeData internal layout).
+            data[0] = ReportId;
+            (void)m_transport->writeFeature(data);
+            // P4: SAVE (opcode 0x02 - shared with CmdSaveRtc).
+            (void)m_transport->writeFeature(buildSetTimeSave());
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("keyboard.ak980",
+                           "setFirmwareLightingMode: HID writeFeature failed: {}", e.what());
+            return false;
+        }
+        AJAZZ_LOG_INFO("keyboard.ak980",
+                       "firmware lighting mode {} set (brightness={}, speed={})",
+                       static_cast<unsigned>(modeId),
+                       static_cast<unsigned>(brightness),
+                       static_cast<unsigned>(speed));
+        return true;
+    }
+
+    [[nodiscard]] std::uint8_t brightnessMax() const noexcept override {
+        return kAK980LightingBrightnessMax;
+    }
+    [[nodiscard]] std::uint8_t speedMax() const noexcept override {
+        return kAK980LightingSpeedMax;
     }
 
 private:

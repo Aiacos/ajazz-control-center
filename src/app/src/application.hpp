@@ -15,6 +15,7 @@
 #include "autostart_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
+#include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
@@ -134,6 +135,11 @@ private:
                     ///< reference and (per A-04 / D-01 amendment 3) holds the
                     ///< shared_ptr<IDevice> in its own stack frame across the
                     ///< dynamic_cast → setTime sequence.
+    std::unique_ptr<LightingService>
+        m_lighting; ///< 2026-05-18: AK980 PRO 20-mode firmware lighting
+                    ///< picker. Same DeviceLookup pattern as TimeSyncService;
+                    ///< dynamic_cast to IFirmwareLightingCapable inside the
+                    ///< service to enumerate / activate modes.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).
