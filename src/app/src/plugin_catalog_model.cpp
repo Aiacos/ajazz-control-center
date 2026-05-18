@@ -12,8 +12,12 @@
 #include "opendeck_catalog_fetcher.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
+#include "ajazz/core/logger.hpp"
+
+#include <QDesktopServices>
 #include <QMetaEnum>
 #include <QQmlEngine>
+#include <QUrl>
 #include <QtGlobal>
 
 #include <algorithm>
@@ -385,6 +389,50 @@ bool PluginCatalogModel::uninstall(QString const& uuid) {
     emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
     emit installedCountChanged();
     return true;
+}
+
+bool PluginCatalogModel::openUpstream(QString const& uuid) const {
+    int const row = findRow(m_rows, uuid);
+    if (row < 0) {
+        AJAZZ_LOG_WARN("plugin-catalog", "openUpstream: uuid '{}' not in catalogue",
+                       uuid.toStdString());
+        return false;
+    }
+    auto const& entry = m_rows[static_cast<std::size_t>(row)];
+
+    QUrl target;
+    if (entry.source == QStringLiteral("streamdock")) {
+        // Stream Dock store URL pattern per the vendor's published web
+        // catalogue. Falls through to the store landing page when no
+        // product id is on file (still better than nothing).
+        if (!entry.streamdockProductId.isEmpty()) {
+            target = QUrl(QStringLiteral("https://stream-dock.com/store/product?id=%1")
+                              .arg(entry.streamdockProductId));
+        } else {
+            target = QUrl(QStringLiteral("https://stream-dock.com/store"));
+        }
+    } else if (entry.source == QStringLiteral("community") ||
+               entry.compatibility == QStringLiteral("opendeck")) {
+        // OpenDeck has no per-plugin URL contract; landing page lists
+        // every catalogue entry alphabetically.
+        target = QUrl(QStringLiteral("https://opendeck.app/plugins"));
+    } else if (!entry.iconUrl.isEmpty() && entry.iconUrl.isValid()) {
+        // Last-resort heuristic: the icon usually lives on the same
+        // origin as the plugin listing page, so opening the icon URL
+        // lands the user "near" the right page even when no canonical
+        // URL is on file. Better than a silent failure.
+        target = entry.iconUrl;
+    }
+
+    if (target.isEmpty() || !target.isValid()) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "openUpstream: no usable URL for uuid '{}' (source='{}')",
+                       uuid.toStdString(), entry.source.toStdString());
+        return false;
+    }
+    AJAZZ_LOG_INFO("plugin-catalog", "openUpstream: launching browser to {}",
+                   target.toString().toStdString());
+    return QDesktopServices::openUrl(target);
 }
 
 bool PluginCatalogModel::toggleEnabled(QString const& uuid) {

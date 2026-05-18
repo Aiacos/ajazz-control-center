@@ -221,6 +221,31 @@ public:
     /// Mark a plugin as removed. Returns true on success.
     Q_INVOKABLE bool uninstall(QString const& uuid);
 
+    /**
+     * @brief Open the plugin's upstream catalogue page in the user's
+     *        default web browser.
+     *
+     * Bridge to the upstream Stream Dock / OpenDeck stores while the
+     * inline-download flow (P3.17 + P3.18) is still scaffolded. URL
+     * construction follows the public catalogue conventions:
+     *
+     *   - `source="streamdock"` + non-empty `streamdockProductId` →
+     *     `https://stream-dock.com/store/product?id=<productId>`
+     *     (vendor's published URL pattern).
+     *   - `source="streamdock"` without product id → fall back to the
+     *     store landing page.
+     *   - Any other source → open `iconUrl` (best-effort: the icon URL
+     *     usually lives on the same origin as the plugin's listing
+     *     page so the user lands "near" the right page even without
+     *     a specific browse URL).
+     *
+     * @param uuid Catalogue UUID.
+     * @return true if a browser-open request was issued, false when
+     *         the UUID is unknown or no reasonable URL could be derived.
+     * @invokable Callable from QML as `PluginCatalogModel.openUpstream(uuid)`.
+     */
+    Q_INVOKABLE bool openUpstream(QString const& uuid) const;
+
     /// Toggle the enabled flag for an installed plugin. Returns the new value.
     Q_INVOKABLE bool toggleEnabled(QString const& uuid);
 

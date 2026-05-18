@@ -678,26 +678,53 @@ Page {
                         elide: Text.ElideRight
                     }
 
-                    // Action button: switches between Install / Installed
-                    // depending on the current row state. The Material
-                    // accent makes it stand out without an explicit icon.
-                    Button {
-                        text: tile.installed ? qsTr("Installed") : qsTr("Install")
-                        flat: tile.installed
-                        Material.foreground: tile.installed ? Theme.fgMuted : "white"
-                        Material.background: tile.installed ? "transparent" : Theme.accent
-                        onClicked: {
-                            if (!PluginCatalog) return;
-                            if (tile.installed) {
-                                PluginCatalog.uninstall(tile.uuid);
-                            } else {
-                                PluginCatalog.install(tile.uuid);
+                    // Action row: Install / Installed toggle alongside an
+                    // "Open in browser" button that hands the user to the
+                    // upstream catalogue (Stream Dock store, OpenDeck list)
+                    // so they can download the plugin manually while the
+                    // inline-download pipeline (P3.17/P3.18) is still
+                    // scaffolded. Bookmark-quality bridge — better than
+                    // showing a tile we can never install.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spacingSm
+
+                        Button {
+                            text: tile.installed ? qsTr("Installed") : qsTr("Install")
+                            flat: tile.installed
+                            Material.foreground: tile.installed ? Theme.fgMuted : "white"
+                            Material.background: tile.installed ? "transparent" : Theme.accent
+                            onClicked: {
+                                if (!PluginCatalog) return;
+                                if (tile.installed) {
+                                    PluginCatalog.uninstall(tile.uuid);
+                                } else {
+                                    PluginCatalog.install(tile.uuid);
+                                }
                             }
+                            Accessible.role: Accessible.Button
+                            Accessible.name: tile.installed
+                                ? qsTr("Uninstall %1").arg(tile.name)
+                                : qsTr("Install %1").arg(tile.name)
                         }
-                        Accessible.role: Accessible.Button
-                        Accessible.name: tile.installed
-                            ? qsTr("Uninstall %1").arg(tile.name)
-                            : qsTr("Install %1").arg(tile.name)
+
+                        Button {
+                            text: qsTr("Open in browser")
+                            flat: true
+                            Material.foreground: Theme.fgMuted
+                            ToolTip.visible: hovered
+                            ToolTip.text:
+                                qsTr("Open the upstream catalogue page so you can download " +
+                                     "this plugin manually. Inline install lands in a " +
+                                     "future release (P3.17/P3.18).")
+                            onClicked: {
+                                if (!PluginCatalog) return;
+                                PluginCatalog.openUpstream(tile.uuid);
+                            }
+                            Accessible.role: Accessible.Button
+                            Accessible.name:
+                                qsTr("Open %1 on the upstream catalogue").arg(tile.name)
+                        }
                     }
                 }
             }
