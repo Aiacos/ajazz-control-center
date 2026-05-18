@@ -300,6 +300,18 @@ std::optional<CatalogEntry> translateRecord(QJsonObject const& obj) {
     entry.verified = false;
     entry.source = QStringLiteral("streamdock");
     entry.streamdockProductId = id;
+    // 2026-05-18: extract the `download` field per PLUGIN-SDK.md upstream
+    // schema. Populates CatalogEntry::downloadUrl so install() can issue
+    // a real HTTPS GET against cdn1.key123.vip instead of falling back
+    // to the open-in-browser bridge.
+    QString const downloadStr = obj.value(QStringLiteral("download")).toString().trimmed();
+    if (!downloadStr.isEmpty()) {
+        QUrl const downloadUrl{downloadStr};
+        if (downloadUrl.isValid() &&
+            downloadUrl.scheme().toLower() == QStringLiteral("https")) {
+            entry.downloadUrl = downloadUrl;
+        }
+    }
     return entry;
 }
 

@@ -536,6 +536,12 @@ Page {
             required property bool installed
             required property bool enabled
             required property string source
+            // In-flight install state: set by the action button onClick,
+            // cleared by the Connections block listening on
+            // PluginCatalogModel::installFinished. Drives the inline
+            // ProgressBar + the "Installing… NN%" button label.
+            property bool installing: false
+            property int installProgress: 0
             // Filtering is now done in C++ by `catalogProxy`
             // (PluginCatalogProxyModel). The GridView only sees rows that
             // should render, so every delegate is unconditionally visible
@@ -678,19 +684,28 @@ Page {
                         elide: Text.ElideRight
                     }
 
-                    // Action row: Install / Installed toggle alongside an
-                    // "Open in browser" button that hands the user to the
-                    // upstream catalogue (Stream Dock store, OpenDeck list)
-                    // so they can download the plugin manually while the
-                    // inline-download pipeline (P3.17/P3.18) is still
-                    // scaffolded. Bookmark-quality bridge — better than
-                    // showing a tile we can never install.
-                    RowLayout {
+                    // Action row + inline download progress.
+                    //
+                    // Single primary button: Install / Installed / "x %"
+                    // depending on the row state. Real in-app download:
+                    // PluginCatalogModel.install() issues an HTTPS GET
+                    // against the upstream catalogue's `download` URL
+                    // (Streamdock: cdn1.key123.vip; OpenDeck: GitHub
+                    // release asset) and saves the .sdPlugin archive
+                    // under the user plugins directory so the plugin
+                    // host picks it up on next start. installProgress
+                    // updates a per-tile property; installFinished
+                    // resets it.
+                    ColumnLayout {
                         Layout.fillWidth: true
-                        spacing: Theme.spacingSm
+                        spacing: Theme.spacingXs
 
                         Button {
-                            text: tile.installed ? qsTr("Installed") : qsTr("Install")
+                            Layout.fillWidth: true
+                            text: tile.installing
+                                ? qsTr("Installing… %1%").arg(tile.installProgress)
+                                : tile.installed ? qsTr("Installed") : qsTr("Install")
+                            enabled: !tile.installing
                             flat: tile.installed
                             Material.foreground: tile.installed ? Theme.fgMuted : "white"
                             Material.background: tile.installed ? "transparent" : Theme.accent
@@ -699,6 +714,8 @@ Page {
                                 if (tile.installed) {
                                     PluginCatalog.uninstall(tile.uuid);
                                 } else {
+                                    tile.installing = true;
+                                    tile.installProgress = 0;
                                     PluginCatalog.install(tile.uuid);
                                 }
                             }
@@ -708,22 +725,29 @@ Page {
                                 : qsTr("Install %1").arg(tile.name)
                         }
 
-                        Button {
-                            text: qsTr("Open in browser")
-                            flat: true
-                            Material.foreground: Theme.fgMuted
-                            ToolTip.visible: hovered
-                            ToolTip.text:
-                                qsTr("Open the upstream catalogue page so you can download " +
-                                     "this plugin manually. Inline install lands in a " +
-                                     "future release (P3.17/P3.18).")
-                            onClicked: {
-                                if (!PluginCatalog) return;
-                                PluginCatalog.openUpstream(tile.uuid);
+                        ProgressBar {
+                            Layout.fillWidth: true
+                            visible: tile.installing
+                            from: 0
+                            to: 100
+                            value: tile.installProgress
+                        }
+
+                        Connections {
+                            target: PluginCatalog
+                            function onInstallProgressChanged(uuid, percent) {
+                                if (uuid === tile.uuid) {
+                                    tile.installProgress = percent;
+                                }
                             }
-                            Accessible.role: Accessible.Button
-                            Accessible.name:
-                                qsTr("Open %1 on the upstream catalogue").arg(tile.name)
+                            function onInstallFinished(uuid, success, error) {
+                                if (uuid !== tile.uuid) return;
+                                tile.installing = false;
+                                tile.installProgress = 0;
+                                if (!success && error.length > 0) {
+                                    console.warn("Install failed for", tile.name, "-", error);
+                                }
+                            }
                         }
                     }
                 }

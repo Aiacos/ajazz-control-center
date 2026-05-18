@@ -15,8 +15,15 @@
 #include "ajazz/core/logger.hpp"
 
 #include <QDesktopServices>
+#include <QDir>
+#include <QFile>
 #include <QMetaEnum>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
+#include <QPointer>
 #include <QQmlEngine>
+#include <QStandardPaths>
 #include <QUrl>
 #include <QtGlobal>
 
@@ -357,20 +364,155 @@ int findRow(std::vector<CatalogEntry> const& rows, QString const& uuid) {
 
 } // namespace
 
+namespace {
+
+/// Per-user plugin directory.
+///
+/// We park downloaded `.sdPlugin` archives here so the Stream Deck
+/// runtime + the AJAZZ plugin host can pick them up on next start. The
+/// path follows the platform's standard data-location convention so it
+/// survives an app upgrade and respects each OS's XDG / AppData rules:
+///
+///   - Linux:   `~/.local/share/AJAZZ Control Center/plugins`
+///   - macOS:   `~/Library/Application Support/AJAZZ Control Center/plugins`
+///   - Windows: `%APPDATA%/AJAZZ Control Center/plugins`
+[[nodiscard]] QString userPluginsDir() {
+    QString const base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir const dir(base + QStringLiteral("/plugins"));
+    if (!dir.exists()) {
+        dir.mkpath(QStringLiteral("."));
+    }
+    return dir.absolutePath();
+}
+
+} // namespace
+
 bool PluginCatalogModel::install(QString const& uuid) {
     int const row = findRow(m_rows, uuid);
     if (row < 0) {
+        AJAZZ_LOG_WARN("plugin-catalog", "install: uuid '{}' not in catalogue",
+                       uuid.toStdString());
         return false;
     }
     auto& state = m_install[uuid];
     if (state.installed) {
-        return false; // idempotent — already installed.
+        // Idempotent: surface a successful "already installed" outcome
+        // so the QML button binding can flip without ambiguity.
+        emit installFinished(uuid, true, QString{});
+        return true;
     }
-    state.installed = true;
-    state.enabled = true;
-    QModelIndex const idx = index(row);
-    emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
-    emit installedCountChanged();
+
+    auto const& entry = m_rows[static_cast<std::size_t>(row)];
+    if (!entry.downloadUrl.isValid() || entry.downloadUrl.isEmpty() ||
+        entry.downloadUrl.scheme().toLower() != QStringLiteral("https")) {
+        // No direct download URL on file: fall back to the browser
+        // bridge so the user can still grab the plugin from the
+        // upstream catalogue. This is the legitimate path for
+        // OpenDeck (no per-plugin API) and any local/community row
+        // that ships only a landing page.
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "install: no direct downloadUrl for '{}'; opening upstream page",
+                       uuid.toStdString());
+        bool const opened = openUpstream(uuid);
+        emit installFinished(uuid, opened,
+                             opened ? QString{}
+                                    : QStringLiteral("No download URL on file and no "
+                                                     "browser-openable fallback."));
+        return opened;
+    }
+
+    // Real in-app install path: HTTPS GET against the upstream CDN, save
+    // the .sdPlugin archive under userPluginsDir() so the plugin host
+    // can pick it up on next start. Extraction of the .sdPlugin
+    // (which is a zip per the Elgato Stream Deck SDK) is deferred to
+    // the plugin host's first-launch scan — the archive landing on
+    // disk is the load-bearing signal that the install succeeded.
+    if (m_downloader == nullptr) {
+        m_downloader = new QNetworkAccessManager(this);
+    }
+    QString const destDir = userPluginsDir();
+    if (destDir.isEmpty()) {
+        QString const err = QStringLiteral("Cannot resolve user plugins directory.");
+        AJAZZ_LOG_WARN("plugin-catalog", "install: {}", err.toStdString());
+        emit installFinished(uuid, false, err);
+        return false;
+    }
+    QString const fileBase = entry.streamdockProductId.isEmpty()
+                                 ? uuid
+                                 : entry.streamdockProductId;
+    QString const destPath = QDir(destDir).filePath(fileBase + QStringLiteral(".sdPlugin"));
+
+    AJAZZ_LOG_INFO("plugin-catalog", "install: GET {} -> {}",
+                   entry.downloadUrl.toString().toStdString(), destPath.toStdString());
+
+    QNetworkRequest req(entry.downloadUrl);
+    // Follow CDN redirects (cdn1.key123.vip occasionally 301s to alt mirrors).
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    QNetworkReply* const reply = m_downloader->get(req);
+
+    QPointer<PluginCatalogModel> self(this);
+    QString const uuidCopy = uuid;
+    QString const destCopy = destPath;
+
+    QObject::connect(reply, &QNetworkReply::downloadProgress, this,
+                     [self, uuidCopy](qint64 received, qint64 total) {
+                         if (!self || total <= 0) {
+                             return;
+                         }
+                         int const pct =
+                             static_cast<int>(std::clamp<qint64>((received * 100) / total, 0, 100));
+                         emit self->installProgressChanged(uuidCopy, pct);
+                     });
+
+    QObject::connect(reply, &QNetworkReply::finished, this,
+                     [self, reply, uuidCopy, destCopy]() {
+                         reply->deleteLater();
+                         if (!self) {
+                             return;
+                         }
+                         if (reply->error() != QNetworkReply::NoError) {
+                             QString const err = reply->errorString();
+                             AJAZZ_LOG_WARN("plugin-catalog", "install '{}' failed: {}",
+                                            uuidCopy.toStdString(), err.toStdString());
+                             emit self->installFinished(uuidCopy, false, err);
+                             return;
+                         }
+                         QFile out(destCopy);
+                         if (!out.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
+                             QString const err = QStringLiteral("Cannot write %1: %2")
+                                                     .arg(destCopy, out.errorString());
+                             AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
+                             emit self->installFinished(uuidCopy, false, err);
+                             return;
+                         }
+                         QByteArray const body = reply->readAll();
+                         if (out.write(body) != body.size()) {
+                             QString const err = QStringLiteral("Short write to %1").arg(destCopy);
+                             AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
+                             out.close();
+                             out.remove();
+                             emit self->installFinished(uuidCopy, false, err);
+                             return;
+                         }
+                         out.close();
+
+                         int const r = findRow(self->m_rows, uuidCopy);
+                         if (r >= 0) {
+                             auto& s = self->m_install[uuidCopy];
+                             s.installed = true;
+                             s.enabled = true;
+                             QModelIndex const idx = self->index(r);
+                             emit self->dataChanged(idx, idx, {InstalledRole, EnabledRole});
+                             emit self->installedCountChanged();
+                         }
+                         AJAZZ_LOG_INFO("plugin-catalog",
+                                        "install '{}' OK ({} bytes) -> {}",
+                                        uuidCopy.toStdString(),
+                                        static_cast<long long>(body.size()),
+                                        destCopy.toStdString());
+                         emit self->installFinished(uuidCopy, true, QString{});
+                     });
     return true;
 }
 

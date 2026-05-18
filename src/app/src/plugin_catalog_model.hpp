@@ -32,6 +32,8 @@
 #include <QUrl>
 #include <QVariantMap>
 
+class QNetworkAccessManager;
+
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -81,6 +83,18 @@ struct CatalogEntry {
     /// so callers can keep the historical positional-initialization style
     /// without listing every trailing optional field explicitly.
     QString streamdockProductId = {};
+    /**
+     * @brief Direct download URL for the plugin archive (.sdPlugin /
+     *        .acplugin.zip).
+     *
+     * Populated by the catalogue fetchers from the upstream `download`
+     * (Streamdock) or `releaseAsset.browserDownloadUrl` (OpenDeck)
+     * fields. Empty when the source feed does not surface a direct
+     * download (e.g. a community page that only exposes a landing-page
+     * URL). When empty, @ref PluginCatalogModel::install falls back to
+     * the @ref openUpstream browser bridge.
+     */
+    QUrl downloadUrl = {};
 };
 
 /**
@@ -207,14 +221,29 @@ public:
     [[nodiscard]] int opendeckCount() const;
 
     /**
-     * @brief Mark a plugin as installed and enabled.
-     * @param uuid Catalogue UUID; no-op if the row does not exist.
-     * @return True when the row was found and updated.
+     * @brief Install a plugin from its catalogue entry.
      *
-     * Installation is mocked: we flip the local install bit and emit
-     * `dataChanged` for the affected row. The real installer will
-     * download, verify and unpack the `.acplugin.zip` archive (see
-     * docs/architecture/PLUGIN-SDK.md, section "Sandboxing").
+     * Behaviour by source:
+     *
+     *   - If the row's @ref CatalogEntry::downloadUrl is non-empty:
+     *     issue an HTTPS GET, save the downloaded `.sdPlugin` archive
+     *     under the user plugins directory
+     *     (`QStandardPaths::AppDataLocation/plugins/<uuid>.sdPlugin`),
+     *     extract its top-level entries via Qt's QZipReader, then flip
+     *     the local install bit and emit `dataChanged`. Progress is
+     *     reported via @ref installProgressChanged. The terminal
+     *     outcome is delivered via @ref installFinished.
+     *
+     *   - If the row has no downloadUrl (e.g. a community entry that
+     *     only surfaces a landing page): fall back to the
+     *     @ref openUpstream browser bridge so the user can still grab
+     *     the plugin from the upstream source.
+     *
+     * @param uuid Catalogue UUID; no-op when the row does not exist.
+     * @return True when an install operation was started (download
+     *         queued, or browser bridge opened); false on lookup
+     *         failure. The actual outcome arrives asynchronously via
+     *         the @ref installFinished signal.
      */
     Q_INVOKABLE bool install(QString const& uuid);
 
@@ -269,6 +298,27 @@ signals:
     /// Emitted whenever @ref opendeckState changes.
     void opendeckStateChanged();
 
+    /**
+     * @brief Per-row download progress in [0, 100].
+     *
+     * Emitted while an install is in flight; QML tile delegates can
+     * bind a QProgressBar / ProgressBar to this signal so users see
+     * the download advance. Not emitted for instant-installs (mock
+     * rows without a downloadUrl).
+     */
+    void installProgressChanged(QString const& uuid, int percent);
+
+    /**
+     * @brief Install operation terminal state.
+     *
+     * Fires exactly once per @ref install call when the operation
+     * finishes (success: downloaded + saved + activated; failure:
+     * network/IO/parse error). @p error is empty on success and
+     * carries a human-readable message otherwise (safe to surface
+     * in a toast).
+     */
+    void installFinished(QString const& uuid, bool success, QString const& error);
+
 private:
     /// Per-row install bookkeeping kept outside @ref CatalogEntry so the
     /// catalogue feed (which is read-only) and the local user state stay
@@ -295,6 +345,12 @@ private:
 
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
+
+    /// Shared QNetworkAccessManager for plugin downloads (install path).
+    /// Created lazily on the first `install()` call so the cheap mock
+    /// catalogue tests don't drag in the network stack. Owned and
+    /// parented to this model.
+    QNetworkAccessManager* m_downloader = nullptr;
 
     /// Owns the upstream HTTP fetch + on-disk cache. Created lazily so
     /// unit tests that exercise just the install bookkeeping don't need
