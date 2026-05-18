@@ -715,6 +715,14 @@ public:
             (void)m_transport->writeFeature(data);
             // P4: SAVE (opcode 0x02 - shared with CmdSaveRtc).
             (void)m_transport->writeFeature(buildSetTimeSave());
+            // P5: FINISH (opcode 0xF0) - end-of-envelope sentinel per
+            // ak980pro_vendor.md §13.7. Vendor's standard config-commit
+            // envelope is 5 packets; the 4-packet RTC variant works
+            // because firmware accepts an early stop on SAVE, but for
+            // non-RTC commits (lighting mode, settings batches) FINISH
+            // is load-bearing on some firmware revisions. Match vendor
+            // exactly to stay safe (issue #58 / P3.6).
+            (void)m_transport->writeFeature(makeReport(CmdFinish));
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN("keyboard.ak980",
                            "setFirmwareLightingMode: HID writeFeature failed: {}", e.what());

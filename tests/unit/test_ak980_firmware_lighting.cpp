@@ -4,9 +4,9 @@
  * @brief End-to-end byte-level test of the AK980 PRO 20-mode firmware
  *        lighting picker (opcode 0x13 envelope, IFirmwareLightingCapable).
  *
- * Pins the 4-packet envelope `setFirmwareLightingMode()` emits
- * (START 0x18 -> MODE_BEGIN 0x13 -> DATA -> SAVE 0x02), plus the 20
- * vendor-defined mode catalogue exposed via
+ * Pins the 5-packet envelope `setFirmwareLightingMode()` emits
+ * (START 0x18 -> MODE_BEGIN 0x13 -> DATA -> SAVE 0x02 -> FINISH 0xF0),
+ * plus the 20 vendor-defined mode catalogue exposed via
  * `availableFirmwareModes()`. Catches regressions in either the wire
  * format or the QML-facing service contract.
  */
@@ -71,7 +71,7 @@ TEST_CASE("AK980 PRO advertises IFirmwareLightingCapable with 20 vendor modes",
     REQUIRE(lighting->speedMax() == keyboard::kAK980LightingSpeedMax);
 }
 
-TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 4-packet envelope",
+TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 5-packet envelope",
           "[ak980][lighting][CAPTURE-04][vendor-re]") {
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
@@ -87,8 +87,8 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 4-packet envelope",
     REQUIRE(ok);
 
     auto const& writes = observer->writes();
-    REQUIRE(writes.size() == 4);
-    REQUIRE(observer->writeFeatureCount() == 4);
+    REQUIRE(writes.size() == 5);
+    REQUIRE(observer->writeFeatureCount() == 5);
 
     // Packet 1: START control (ReportId=0x04, opcode 0x18, marker 0x01).
     auto const& p1 = writes.at(0);
@@ -122,6 +122,13 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 4-packet envelope",
     REQUIRE(p4.size() == 64);
     REQUIRE(p4[0] == 0x04);
     REQUIRE(p4[1] == 0x02);
+
+    // Packet 5: FINISH (opcode 0xF0) - end-of-envelope sentinel per
+    // ak980pro_vendor.md §13.7 (issue #58 / P3.6).
+    auto const& p5 = writes.at(4);
+    REQUIRE(p5.size() == 64);
+    REQUIRE(p5[0] == 0x04);
+    REQUIRE(p5[1] == 0xf0);
 }
 
 TEST_CASE("AK980 PRO setFirmwareLightingMode clamps brightness/speed beyond ceiling",
@@ -140,7 +147,7 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode clamps brightness/speed beyond ceil
         /*brightness*/ 200, /*speed*/ 200));
 
     auto const& writes = observer->writes();
-    REQUIRE(writes.size() == 4);
+    REQUIRE(writes.size() == 5);
     auto const& dataPkt = writes.at(2);
     REQUIRE(dataPkt[9] == keyboard::kAK980LightingBrightnessMax);
     REQUIRE(dataPkt[10] == keyboard::kAK980LightingSpeedMax);

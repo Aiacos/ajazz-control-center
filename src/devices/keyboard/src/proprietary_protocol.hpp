@@ -134,8 +134,9 @@ inline constexpr std::uint8_t CmdSetRgbMode =
     0x13; ///< Firmware RGB lighting mode (opcode in 5-packet envelope; see ak980_lighting.hpp for
           ///< the 20-mode enum).
 inline constexpr std::uint8_t CmdFinish =
-    0xf0; ///< End-of-envelope sentinel (vendor sends after every multi-packet commit; not yet
-          ///< emitted by us — see ak980pro_vendor.md §13.7).
+    0xf0; ///< End-of-envelope sentinel emitted as the 5th packet after SAVE on non-RTC commits
+          ///< (lighting mode, settings batches) per ak980pro_vendor.md §13.7. RTC sync stays on
+          ///< the 4-packet form because firmware accepts an early stop on SAVE for time-data.
 // Per-key RGB upload — opcode 0x20 multiplexed with battery query (sub 0x01)
 // via the sub-cmd byte. See ak980pro_perkey_rgb_protocol.md §§1-3 for the
 // full envelope (write header → RGB blob chunks → save). NOTE: wired path is
