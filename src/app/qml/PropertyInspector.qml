@@ -92,6 +92,17 @@ ColumnLayout {
             // turn into a "module has no file PIWebView" compile error in
             // builds where Qt WebEngine is absent.
             source: "PIWebView.qml"
+            // If the WebEngine-backed view fails to materialise (file
+            // missing, QML parse error, plugin not present), surface it
+            // in the log instead of silently rendering an empty area.
+            // Without this the symptom is "the Property Inspector pane
+            // is blank" with no diagnostic - hard to debug in the field.
+            onStatusChanged: {
+                if (status === Loader.Error) {
+                    console.error("PropertyInspector: failed to load PIWebView.qml -",
+                                  sourceComponent ? "component error" : "source missing")
+                }
+            }
         }
     }
 }

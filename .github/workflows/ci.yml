@@ -170,6 +170,12 @@ jobs:
         run: pip install -e .[dev]
 
       - name: Configure
+        # AJAZZ_ENABLE_WERROR=OFF for the coverage build only because
+        # `--coverage -O0 -g` (see cmake/Sanitizers.cmake) makes GCC emit
+        # benign -Wmaybe-uninitialized warnings against gcov instrumentation
+        # output. Promoting those to errors blocks the lcov report without
+        # adding any code-quality signal — every other CI build still runs
+        # with -Werror via the default preset.
         run: |
           cmake -S . -B build-cov -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \

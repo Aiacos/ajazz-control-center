@@ -32,7 +32,19 @@ if(AJAZZ_ENABLE_TSAN)
         )
         target_link_options(ajazz_sanitizers INTERFACE -fsanitize=thread)
     else()
-        message(WARNING "AJAZZ_ENABLE_TSAN: thread sanitizer not supported by this compiler")
+        # MSVC has no /fsanitize=thread equivalent. Previously this was a
+        # WARNING which let the configure succeed and silently produced a
+        # binary with NO TSan instrumentation — defeating the purpose of
+        # explicitly opting in. Fail fast instead so contributors aren't
+        # surprised by green-but-meaningless TSan CI runs on Windows.
+        message(
+            FATAL_ERROR
+                "AJAZZ_ENABLE_TSAN is set but the current compiler "
+                "(${CMAKE_CXX_COMPILER_ID}) has no thread-sanitizer equivalent. "
+                "TSan is supported only on GNU / Clang / AppleClang. "
+                "Run TSan in a separate Linux or macOS CI job; use "
+                "AJAZZ_ENABLE_SANITIZERS=ON for ASan/UBSan on MSVC instead."
+        )
     endif()
 endif()
 
