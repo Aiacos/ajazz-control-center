@@ -13,6 +13,7 @@
 
 #include "ajazz/core/device_registry.hpp"
 #include "autostart_service.hpp"
+#include "battery_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
 #include "lighting_service.hpp"
@@ -140,6 +141,14 @@ private:
                     ///< picker. Same DeviceLookup pattern as TimeSyncService;
                     ///< dynamic_cast to IFirmwareLightingCapable inside the
                     ///< service to enumerate / activate modes.
+    std::unique_ptr<BatteryService>
+        m_battery; ///< 2026-05-18: per-device battery polling for wireless
+                   ///< IBatteryCapable devices (AK980 PRO today). Owns a
+                   ///< 15-s QTimer that calls a per-codename query lambda
+                   ///< filtered by descriptor.hasBattery && connected.
+                   ///< Surfaces results to QML via batteryQueried /
+                   ///< batteryUnavailable; QML BatteryIndicator mounts in
+                   ///< DeviceRow.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

@@ -97,6 +97,49 @@ Application::Application(QObject* parent)
               return nullptr;
           },
           this)),
+      // 2026-05-18 P3.d: BatteryService gets the same DeviceLookup pattern
+      // (codename -> shared_ptr<IDevice>) used by TimeSyncService and
+      // LightingService. The enumerator returns the codenames of currently-
+      // connected devices whose descriptor advertises Capability::Battery,
+      // so the 15-s poll only touches devices that can actually respond
+      // (AK980 PRO today). m_deviceModel is constructed before this member
+      // per the declaration order in application.hpp, so capturing it by
+      // pointer is safe; the model itself is single-threaded (GUI thread)
+      // and so is BatteryService's QTimer callback.
+      m_battery(std::make_unique<BatteryService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          },
+          [this]() -> std::vector<QString> {
+              // Intersect "connected codenames" (live HID enumeration) with
+              // "descriptor.hasBattery" (advertised capability). This keeps
+              // the poll loop O(N) over the small registry rather than
+              // chasing every codename through DeviceRegistry::open().
+              auto const connected = m_deviceModel->connectedCodenames();
+              std::vector<QString> out;
+              out.reserve(connected.size());
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& codename : connected) {
+                  auto const target = codename.toStdString();
+                  for (auto const& d : descriptors) {
+                      if (d.codename == target && d.hasBattery) {
+                          out.push_back(codename);
+                          break;
+                      }
+                  }
+              }
+              return out;
+          },
+          this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -214,6 +257,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());
     LightingService::registerInstance(m_lighting.get());
+    BatteryService::registerInstance(m_battery.get());
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable

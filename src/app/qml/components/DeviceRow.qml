@@ -41,6 +41,15 @@ ItemDelegate {
     // this property's own default (false) instead of the model role.
     // Same naming convention rationale as deviceCodename / deviceConnected.
     property bool hasClockCapability: false
+    // 2026-05-18 P3.d: gates the per-row BatteryIndicator chip. Bound by
+    // DeviceList.qml from the DeviceModel role `deviceHasBattery` (which
+    // mirrors DeviceDescriptor::hasBattery). Same self-binding-trap
+    // naming pattern as `hasClockCapability` above: the role name
+    // (`deviceHasBattery`) intentionally differs from this property
+    // (`hasBatteryCapability`) so the consumer's
+    // `hasBatteryCapability: deviceHasBattery` binding does not
+    // self-reference.
+    property bool hasBatteryCapability: false
     // Maturity tier from DeviceModel.MaturityRole (Phase 8 DEVICES-02). String
     // value from the 5-tier vocabulary: scaffolded / probed / partial / functional
     // / verified. Surfaced as a tooltip on the row (NOT a visible badge — per the
@@ -166,6 +175,28 @@ ItemDelegate {
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton // tooltip only
             }
+        }
+
+        // Battery indicator chip (2026-05-18 P3.d).
+        //
+        // Only mounted for rows whose device advertises Capability::Battery
+        // (descriptor.hasBattery == true). The chip itself self-collapses
+        // when no reading has been observed (percent < 0) or when the
+        // device explicitly reports unavailable, so the row's right-side
+        // stack stays uncluttered for devices that are battery-capable
+        // but momentarily silent. Wired devices never see this branch
+        // at all because their descriptor sets hasBattery=false.
+        //
+        // We keep the chip mounted (not just gated by `connected`) for
+        // a battery-capable device that is currently offline so that, if
+        // a future reconnect arrives, the chip's existing Connections
+        // block is already wired and can paint on the next signal
+        // without a re-creation hiccup. The chip's own `visible: percent
+        // >= 0 && !unavailable` keeps the visual surface clean.
+        BatteryIndicator {
+            visible: root.hasBatteryCapability
+            Layout.alignment: Qt.AlignVCenter
+            codename: root.deviceCodename
         }
 
         // Offline pill (HOTPLUG-02 + D-01 silent-badge policy).

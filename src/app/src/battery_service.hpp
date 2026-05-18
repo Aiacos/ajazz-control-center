@@ -35,6 +35,8 @@
 #include <QString>
 #include <QtQmlIntegration>
 
+#include <QHash>
+
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -116,6 +118,23 @@ public:
     /// Test-only: number of completed queries since construction (manual + auto).
     [[nodiscard]] int totalQueryCount() const noexcept;
 
+    /**
+     * @brief Last successful battery reading for a codename, or -1 if no
+     *        reading has been observed since construction (or the most
+     *        recent query returned @ref batteryUnavailable).
+     *
+     * Lets the QML @c BatteryIndicator seed its initial state without
+     * waiting for the next 15 s poll tick — when a row is mounted, the
+     * indicator queries this once and renders the cached value (or
+     * @c "--%" when the cache returns -1). The cache is updated on every
+     * @ref batteryQueried signal and cleared on every
+     * @ref batteryUnavailable signal.
+     *
+     * @param codename Device codename.
+     * @return 0..100 percent, or -1 if unknown / unavailable.
+     */
+    [[nodiscard]] Q_INVOKABLE int lastKnownPercent(QString const& codename) const;
+
 signals:
     /// Battery query succeeded; @p percent is the charge level (0..100).
     /// QML BatteryIndicator binds to this signal to refresh per-row state.
@@ -137,6 +156,10 @@ private:
     QTimer* m_pollTimer{nullptr};
     bool m_pollEnabled{true};
     int m_totalQueries{0};
+    /// Codename -> last successful reading (0..100). Absent / -1 means unknown.
+    /// Populated on every @ref batteryQueried, cleared on every
+    /// @ref batteryUnavailable. Surfaced to QML via @ref lastKnownPercent.
+    QHash<QString, int> m_lastKnown;
 };
 
 // Pitfall 4 build-break: BatteryService MUST NOT be default-constructible so

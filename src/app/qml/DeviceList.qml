@@ -99,12 +99,20 @@ Rectangle {
                     required property int    family
                     required property bool   connected
                     required property bool   deviceHasClock
+                    // 2026-05-18 P3.d: gates the BatteryIndicator chip mounted
+                    // inside DeviceRow. Role name (`deviceHasBattery`) mirrors
+                    // DeviceModel::roleNames(); consumer property uses the
+                    // de-collided name `hasBatteryCapability` to dodge the
+                    // QML self-binding trap (same pattern as deviceHasClock /
+                    // hasClockCapability above).
+                    required property bool   deviceHasBattery
 
                     Layout.fillWidth: true
                     modelName: model
                     deviceCodename: codename
                     deviceConnected: connected
                     hasClockCapability: deviceHasClock
+                    hasBatteryCapability: deviceHasBattery
                     // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.
                     // Bound from DeviceModel.MaturityRole (`maturity` role name).
                     // Same QML self-binding trap naming pattern as

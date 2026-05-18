@@ -73,6 +73,10 @@ public:
         HasRgbRole,                   ///< True when the device exposes RGB lighting.
         HasTouchStripRole,            ///< True when the device exposes a touch strip.
         HasClockRole, ///< True when the device advertises Capability::Clock (scaffolded; Phase 5).
+        HasBatteryRole, ///< True when the device advertises Capability::Battery (wireless devices
+                        ///< with a host-readable charge level — see IBatteryCapable). Used by
+                        ///< the QML BatteryIndicator to gate per-row visibility so wired devices
+                        ///< don't render a meaningless "--%" chip.
         MaturityRole, ///< Maturity tier from devices.yaml:
                       ///< scaffolded/probed/partial/functional/verified (Phase 8 DEVICES-02).
     };

@@ -231,6 +231,10 @@ qt_add_qml_module(
             src/loaded_plugins_model.hpp
             src/time_sync_service.cpp
             src/time_sync_service.hpp
+            src/lighting_service.cpp
+            src/lighting_service.hpp
+            src/battery_service.cpp
+            src/battery_service.hpp
             src/property_inspector_controller.cpp
             src/property_inspector_controller.hpp
     QML_FILES qml/Main.qml
@@ -248,6 +252,7 @@ qt_add_qml_module(
               qml/NativePropertyInspector.qml
               qml/SettingsPage.qml
               qml/components/AppHeader.qml
+              qml/components/BatteryIndicator.qml
               qml/components/Card.qml
               qml/components/DeviceRow.qml
               qml/components/EmptyState.qml

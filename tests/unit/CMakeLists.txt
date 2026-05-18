@@ -97,6 +97,14 @@ add_executable(
     # to pull the full app target (Q_OBJECT runs through AUTOMOC here).
     test_time_sync_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/time_sync_service.cpp
+    # BatteryService (2026-05-18 P3.d / QML wire-up): pins lastKnownPercent
+    # cache semantics (positive reading stored, unavailable clears, unknown
+    # codenames return -1). The wider signal-emission surface is covered
+    # implicitly through the live-device path on AK980 PRO; this test
+    # isolates the small helper added to seed the QML BatteryIndicator's
+    # initial state.
+    test_battery_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/battery_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.

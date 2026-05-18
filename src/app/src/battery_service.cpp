@@ -101,6 +101,14 @@ int BatteryService::totalQueryCount() const noexcept {
     return m_totalQueries;
 }
 
+int BatteryService::lastKnownPercent(QString const& codename) const {
+    auto const it = m_lastKnown.constFind(codename);
+    if (it == m_lastKnown.constEnd()) {
+        return -1;
+    }
+    return it.value();
+}
+
 void BatteryService::doQuery(QString const& codename) {
     ++m_totalQueries;
     if (!m_lookup) {
@@ -112,23 +120,27 @@ void BatteryService::doQuery(QString const& codename) {
     // disconnect). Matches TimeSyncService::doPush convention.
     auto device = m_lookup(codename);
     if (!device) {
+        m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
         return;
     }
     // Pitfall 2: dynamic_cast + null-check inline.
     auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
     if (!battery) {
+        m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
         return;
     }
     auto const result = battery->batteryPercent();
     if (!result.has_value()) {
         // Wired / no battery / I/O failure — honest "unavailable" advertisement.
+        m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
         return;
     }
     int const percent = static_cast<int>(*result);
     AJAZZ_LOG_INFO("battery", "queried {}: {}%", codename.toStdString(), percent);
+    m_lastKnown.insert(codename, percent);
     emit batteryQueried(codename, percent);
 }
 
