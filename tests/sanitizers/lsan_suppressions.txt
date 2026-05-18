@@ -31,9 +31,21 @@ leak:QFontDatabase
 leak:QFontEngine
 leak:QFontconfigDatabase
 leak:QFontconfigEngine
+leak:QFontCache
 leak:QPlatformIntegration
 leak:QPlatformFontDatabase
 leak:QImageData::create
+
+# Library-path catch-all for QtGui/QtCore allocations whose stack
+# frames don't resolve to a function name on aqtinstall-distributed
+# binaries (CI uses Qt 6.8.3 from jurplel/install-qt-action, which
+# ships stripped libraries — LSan sees `libQt6Gui.so.6+0xNNNNNN`
+# with no symbolised function name to match the rules above against).
+# LSan's match strategy ANDs against both function names AND library
+# paths in every frame, so these substrings catch the same intent
+# without depending on debug-symbol availability.
+leak:libQt6Gui.so
+leak:libQt6Core.so
 
 # ---------------------------------------------------------------------------
 # fontconfig + freetype: leaked transitively by Qt's first QPainter::drawText
