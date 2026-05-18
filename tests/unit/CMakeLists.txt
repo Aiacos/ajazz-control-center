@@ -175,6 +175,13 @@ add_executable(
     # isolates the small helper added in the QML wire-up commit.
     test_settings_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/settings_service.cpp
+    # AppUpdateService (2026-05-18, docs/architecture/APP-AUTO-UPDATE.md):
+    # pins the pure-logic semver helper (isNewerThan) + the construction-
+    # time FLATPAK_ID self-disable contract + the dismissCurrentUpdate
+    # state transition. The real HTTP path is intentionally NOT covered
+    # here -- it needs a mock QNetworkAccessManager seam (TODO).
+    test_app_update_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/app_update_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.

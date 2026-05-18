@@ -95,6 +95,17 @@ ApplicationWindow {
         anchors.fill: parent
         spacing: 0
 
+        // 2026-05-18 / docs/architecture/APP-AUTO-UPDATE.md: in-app update
+        // banner. Visibility is bound to AppUpdate.status so the banner
+        // appears only when a strictly-newer GitHub release is observed
+        // (and only on non-Flatpak builds; Flatpak self-disables and the
+        // status pins to Disabled). The banner row collapses to height 0
+        // when hidden so it doesn't reserve layout space.
+        UpdateBanner {
+            Layout.fillWidth: true
+            visible: AppUpdate.status === AppUpdate.UpdateAvailable
+        }
+
         AppHeader {
             Layout.fillWidth: true
             onMinimizeRequested: root.hide()

@@ -160,6 +160,13 @@ Application::Application(QObject* parent)
               return out;
           },
           this)),
+      // 2026-05-18 / docs/architecture/APP-AUTO-UPDATE.md: AppUpdateService
+      // bridges GitHub Releases to the QML banner. It self-disables when
+      // FLATPAK_ID is set (Flathub owns updates), otherwise polls every
+      // 24 h with a 5 s initial debounce so the splash isn't blocked.
+      // Owned here so its QTimer / QNetworkAccessManager live on the GUI
+      // thread for the same lifetime as the other QML singletons.
+      m_appUpdate(std::make_unique<AppUpdateService>(this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -279,6 +286,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     LightingService::registerInstance(m_lighting.get());
     SettingsService::registerInstance(m_settings.get());
     BatteryService::registerInstance(m_battery.get());
+    AppUpdateService::registerInstance(m_appUpdate.get());
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable

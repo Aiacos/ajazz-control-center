@@ -75,6 +75,10 @@ qt_add_executable(
     # Wires the IBatteryCapable mix-in from ARCH-05.1 / commit eea50a5 to a 15-s polling QTimer +
     # QML-bindable signals (batteryQueried / batteryUnavailable).
     src/battery_service.cpp
+    # 2026-05-18 / docs/architecture/APP-AUTO-UPDATE.md: in-app GitHub-Releases-driven update
+    # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables
+    # under Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
+    src/app_update_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -243,6 +247,8 @@ qt_add_qml_module(
             src/settings_service.hpp
             src/battery_service.cpp
             src/battery_service.hpp
+            src/app_update_service.cpp
+            src/app_update_service.hpp
             src/property_inspector_controller.cpp
             src/property_inspector_controller.hpp
     QML_FILES qml/Main.qml
@@ -272,6 +278,7 @@ qt_add_qml_module(
               qml/components/Ripple.qml
               qml/components/SecondaryButton.qml
               qml/components/Toast.qml
+              qml/components/UpdateBanner.qml
     RESOURCES ${ACC_APP_ICON}
               ${ACC_BRAND_APP}
               ${ACC_BRAND_TRAY}

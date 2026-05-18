@@ -227,6 +227,105 @@ Page {
             }
 
             // --------------------------------------------------------------
+            // About / Updates (2026-05-18, docs/architecture/APP-AUTO-UPDATE.md)
+            //
+            // Notify-only GitHub-Releases-driven update checker. The toggles
+            // bind to AppUpdate (QML singleton, AppUpdateService). The "Check
+            // now" button is disabled while a request is in flight so the
+            // user can't queue duplicates. The Label below the controls is
+            // ASCII-only and surfaces the version + platform label so the
+            // user can spot a "Source build" / "Flatpak" / "Windows MSI"
+            // mismatch at a glance.
+            // --------------------------------------------------------------
+            Label {
+                text: qsTr("About and updates")
+                color: Theme.fgPrimary
+                font.pixelSize: Theme.typeTitleMedium.pixelSize
+                font.weight: Theme.typeTitleMedium.weight
+                font.letterSpacing: Theme.typeTitleMedium.letterSpacing
+                Accessible.role: Accessible.Heading
+            }
+
+            Frame {
+                Layout.fillWidth: true
+                background: Rectangle {
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+                    radius: Theme.radiusMd
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    SwitchDelegate {
+                        Layout.fillWidth: true
+                        text: qsTr("Check for updates on launch")
+                        checked: AppUpdate.autoCheckEnabled
+                        onToggled: AppUpdate.autoCheckEnabled = checked
+                        Accessible.role: Accessible.Button
+                        Accessible.name: text
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Theme.borderSubtle
+                    }
+
+                    SwitchDelegate {
+                        Layout.fillWidth: true
+                        text: qsTr("Include pre-release / nightly builds")
+                        checked: AppUpdate.includeNightly
+                        onToggled: AppUpdate.includeNightly = checked
+                        Accessible.role: Accessible.Button
+                        Accessible.name: text
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Theme.borderSubtle
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Theme.spacingMd
+                        Layout.rightMargin: Theme.spacingMd
+                        Layout.topMargin: Theme.spacingSm
+                        Layout.bottomMargin: Theme.spacingSm
+                        spacing: Theme.spacingMd
+
+                        Button {
+                            text: qsTr("Check now")
+                            enabled: AppUpdate.status !== AppUpdate.Checking
+                                  && AppUpdate.status !== AppUpdate.Disabled
+                            onClicked: AppUpdate.checkNow()
+                            Accessible.role: Accessible.Button
+                            Accessible.name: text
+                        }
+
+                        Item { Layout.fillWidth: true }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: Theme.spacingMd
+                        Layout.rightMargin: Theme.spacingMd
+                        Layout.bottomMargin: Theme.spacingSm
+                        text: qsTr("Version %1 - %2").arg(AppUpdate.currentVersion)
+                                                     .arg(AppUpdate.platformLabel)
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        font.weight: Theme.typeBodySmall.weight
+                        font.letterSpacing: Theme.typeBodySmall.letterSpacing
+                        wrapMode: Text.WordWrap
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------
             // About / version footer (read-only)
             // --------------------------------------------------------------
             Label {
