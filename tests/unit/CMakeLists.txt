@@ -16,6 +16,11 @@ add_executable(
     # alone could not catch (writeFeature vs write, packet order, tm_wday
     # propagation, byte-8 marker, 0xAA/0x55 tail).
     test_ak980_clock_sync_e2e.cpp
+    # 2026-05-18 audit-3: byte-level test for the 20-mode firmware
+    # RGB picker (IFirmwareLightingCapable, opcode 0x13 envelope).
+    # Pins the 4-packet START/MODE_BEGIN/DATA/SAVE sequence and the
+    # 20-mode catalogue the QML LightingService surfaces.
+    test_ak980_firmware_lighting.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`
     # into AjSeriesMouse via the public `makeAjSeriesWithTransport` factory
