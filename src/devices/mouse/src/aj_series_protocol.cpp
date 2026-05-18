@@ -210,6 +210,65 @@ std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& 
     return pkt;
 }
 
+std::array<std::uint8_t, kReportSize> buildMouseSettings(std::uint8_t profile,
+                                                          std::uint16_t pollRate,
+                                                          ajazz::core::MouseSettings const& s) {
+    // Clamp scalar fields to their documented valid ranges so the firmware
+    // sees only bytes it accepts. Out-of-range inputs MUST produce on-wire
+    // bytes the firmware accepts (per task spec). The host-side cache reader
+    // mirrors this clamping in AjSeriesMouse::setMouseSettings().
+    constexpr std::uint8_t kDebounceMaxMs = 10; // §3.9: "0..10 typical".
+    constexpr std::uint8_t kSensitivityMaxPercent = 100;
+    constexpr std::uint8_t kLodMax = 2; // 0=1mm, 1=2mm, 2=3mm.
+
+    OptionPacket0 opts{};
+    opts.profile = profile;
+    opts.pollRateHz = pollRate;
+    opts.debounceMs = std::min<std::uint8_t>(s.debounceMs, kDebounceMaxMs);
+
+    // Pack five named flag bits per §3.9 (bits 0..4 of bytes 12..13 uint16-LE).
+    // Bits 5..15 are reserved/undecoded and intentionally left zero.
+    std::uint16_t flags = 0;
+    if (s.lightOff)         flags |= 1u << 0;
+    if (s.wheelLightOff)    flags |= 1u << 1;
+    if (s.motionSmoothing)  flags |= 1u << 2;
+    if (s.batteryLedSelect) flags |= 1u << 3;
+    if (s.powerSaveMode)    flags |= 1u << 4;
+    opts.flags = flags;
+
+    // Vendor defaults for the three undecoded bytes (§3.9: "default 1",
+    // "default 10", "default 10"). Exposed on OptionPacket0 already so we
+    // simply mirror its defaults verbatim — no MouseSettings field decoded.
+    opts.buttonChange = 1;
+    opts.wheelToButton = 10;
+    opts.buttonToWheel = 10;
+
+    // LED + logo-LED sub-blocks intentionally zero — see header doc; the
+    // AjSeriesMouse setter wires its cached blocks back in before send.
+
+    opts.sleepBtIdleSec = s.sleepBtIdleSec;
+    opts.sleepBtDeepSec = s.sleepBtDeepSec;
+    opts.sleep24gIdleSec = s.sleep24gIdleSec;
+    opts.sleep24gDeepSec = s.sleep24gDeepSec;
+
+    opts.xSensitivity = std::min<std::uint8_t>(s.xSensitivity, kSensitivityMaxPercent);
+    opts.ySensitivity = std::min<std::uint8_t>(s.ySensitivity, kSensitivityMaxPercent);
+
+    opts.liftCutOff =
+        std::min<std::uint8_t>(static_cast<std::uint8_t>(s.liftOffDistance), kLodMax);
+    opts.angleSnap = s.angleSnap ? 1 : 0;
+
+    opts.batteryColorHigh = {s.batteryLedHigh.r, s.batteryLedHigh.g, s.batteryLedHigh.b};
+    opts.batteryColorLow = {s.batteryLedLow.r, s.batteryLedLow.g, s.batteryLedLow.b};
+
+    opts.chargingSwitch = s.chargingSwitch ? 1 : 0;
+
+    // Delegate to the existing low-level builder so the byte layout +
+    // BIT7 checksum stay defined in one place (§3.9). Any future tweak
+    // to the byte map need only land in buildMouseSetOption0().
+    return buildMouseSetOption0(opts);
+}
+
 std::array<std::uint8_t, kReportSize>
 buildSetTftLcdData(std::uint8_t frame, std::uint8_t frameCount, std::uint8_t frameDelayMs,
                    std::uint16_t chunkIndex, std::span<std::uint8_t const> payload) {

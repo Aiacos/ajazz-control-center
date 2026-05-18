@@ -23,6 +23,8 @@
  */
 #pragma once
 
+#include "ajazz/core/capabilities.hpp"
+
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -216,6 +218,34 @@ struct OptionPacket0 {
 
 /// §3.9 build the omnibus packet from a populated @ref OptionPacket0.
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildMouseSetOption0(OptionPacket0 const& opts);
+
+/**
+ * @brief §3.9 build the omnibus packet from a user-facing @ref ajazz::core::MouseSettings.
+ *
+ * High-level convenience over @ref buildMouseSetOption0: maps the semantic
+ * @c MouseSettings fields (LOD enum, sleep timeouts, named flag bits,
+ * sensitivity, battery LED colours, charging-LED master switch) onto the
+ * vendor byte layout per `aj_series_opcode_table.md` §3.9, clamping each
+ * field to its documented valid range so the firmware always sees an
+ * acceptable wire byte. Fields the §3.9 byte map lists but does not
+ * decode (@c buttonChange / @c wheelToButton / @c buttonToWheel at bytes
+ * 14/15/16) are emitted at vendor defaults (1 / 10 / 10).
+ *
+ * The LED + logo-LED sub-blocks (bytes 24..31 and 32..39) are NOT carried
+ * by @ref ajazz::core::MouseSettings — those live in @ref IRgbCapable and
+ * propagate through this packet only via the host-side @ref OptionPacket0
+ * cache. The builder leaves both sub-blocks zero so this entry point can
+ * be called in isolation; the @c AjSeriesMouse setter wires the cached
+ * blocks back in to keep the LED state coherent across commits.
+ *
+ * @param profile  Active profile slot (clamped to 0..7).
+ * @param pollRate Poll rate in Hz; out-of-table values fall back to 1 KHz
+ *                 via @ref pollRateToWireCode.
+ * @param settings Field values; out-of-range entries clamped per byte.
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildMouseSettings(std::uint8_t profile, std::uint16_t pollRate,
+                   ajazz::core::MouseSettings const& settings);
 
 /**
  * @brief §3.12 build one chunk of the TFT LCD upload envelope (opcode 0x25,

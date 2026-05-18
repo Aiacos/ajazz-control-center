@@ -501,6 +501,139 @@ public:
     [[nodiscard]] virtual KeyboardSettings keyboardSettings() const = 0;
 };
 
+/**
+ * @enum LiftOffDistance
+ * @brief Vendor 3-step lift-off-distance enum carried by byte 52 of the
+ *        AJ-series mouse omnibus settings packet (opcode 0x53).
+ *
+ * Maps to the wire byte exactly per
+ * @c docs/protocols/mouse/aj_series_opcode_table.md §3.9 (byte 52 = "LOD:
+ * 0 = 1 mm, 1 = 2 mm, 2 = 3 mm"). The doc lists three levels; there is no
+ * "OFF" sentinel on this wire format — disabling LOD requires a separate
+ * firmware command not exposed here.
+ */
+enum class LiftOffDistance : std::uint8_t {
+    Mm1 = 0, ///< 1 mm — most aggressive (vendor default).
+    Mm2 = 1, ///< 2 mm — middle setting.
+    Mm3 = 2, ///< 3 mm — least aggressive.
+};
+
+/**
+ * @struct MouseSettings
+ * @brief Single-shot configuration carried by the AJ-series mouse omnibus
+ *        settings envelope (opcode 0x53 — @c FEA_CMD_MOUSE_SET_OPTIONPARAM0).
+ *
+ * This is the canonical "everything in one packet" command per
+ * @c docs/protocols/mouse/aj_series_opcode_table.md §3.9 — the vendor app's
+ * single "save" button assembles all of these fields into one 64-byte HID
+ * output report. The firmware persists the values to flash so they survive
+ * power-cycle.
+ *
+ * Fields below are listed in vendor-byte order so the struct doubles as a
+ * cheat-sheet for the wire format. Out-of-range inputs are clamped by the
+ * builder to bytes the firmware accepts; the host-side cache is normalised
+ * post-clamp so subsequent reads see what landed on the wire.
+ *
+ *   - @c debounceMs — debounce time in ms (0..10 typical; byte 10).
+ *   - @c lightOff / @c wheelLightOff / @c motionSmoothing /
+ *     @c batteryLedSelect / @c powerSaveMode — five flag bits packed into
+ *     bytes 12..13 as uint16-LE per §3.9 (only the 5 named bits decoded).
+ *   - @c sleepBtIdleSec / @c sleepBtDeepSec — BT idle and deep-sleep
+ *     timeouts in seconds (bytes 40..43, both uint16-LE).
+ *   - @c sleep24gIdleSec / @c sleep24gDeepSec — 2.4 GHz idle and deep
+ *     timeouts (bytes 44..47).
+ *   - @c xSensitivity / @c ySensitivity — per-axis sensitivity 0..100%
+ *     (bytes 50..51; clamped to 100).
+ *   - @c liftOffDistance — 3-step LOD enum (byte 52).
+ *   - @c angleSnap — 0/1 flag (byte 53).
+ *   - @c batteryLedHigh / @c batteryLedLow — RGB indicator colours for
+ *     high-charge and low-charge states (bytes 54..56 and 57..59).
+ *   - @c chargingSwitch — true keeps the indicator LED on while charging
+ *     (byte 60; default true).
+ *
+ * Fields the §3.9 byte map lists but whose semantics are NOT decoded
+ * (@c buttonChange byte 14, @c wheelToButton byte 15, @c buttonToWheel
+ * byte 16) are emitted at vendor-default values inside the builder and are
+ * NOT exposed on this struct — the prompt's "no guess" guidance applies.
+ */
+struct MouseSettings {
+    std::uint8_t debounceMs{1};      ///< Byte 10 — debounce time (0..10 typical).
+
+    bool lightOff{false};          ///< Bit 0 of bytes 12..13 — master LED off.
+    bool wheelLightOff{false};     ///< Bit 1 — scroll-wheel LED off.
+    bool motionSmoothing{false};   ///< Bit 2 — sensor motion smoothing.
+    bool batteryLedSelect{false};  ///< Bit 3 — enable battery-state RGB indicator.
+    bool powerSaveMode{false};     ///< Bit 4 — aggressive power saving.
+
+    std::uint16_t sleepBtIdleSec{0};  ///< Bytes 40..41 — BT idle seconds.
+    std::uint16_t sleepBtDeepSec{0};  ///< Bytes 42..43 — BT deep-sleep seconds.
+    std::uint16_t sleep24gIdleSec{0}; ///< Bytes 44..45 — 2.4 GHz idle seconds.
+    std::uint16_t sleep24gDeepSec{0}; ///< Bytes 46..47 — 2.4 GHz deep-sleep seconds.
+
+    std::uint8_t xSensitivity{100}; ///< Byte 50 — X-axis sensitivity (clamped 0..100%).
+    std::uint8_t ySensitivity{100}; ///< Byte 51 — Y-axis sensitivity (clamped 0..100%).
+
+    LiftOffDistance liftOffDistance{LiftOffDistance::Mm1}; ///< Byte 52 — LOD enum.
+    bool angleSnap{false};                                 ///< Byte 53 — angle-snap on/off.
+
+    Rgb batteryLedHigh{0, 0xff, 0}; ///< Bytes 54..56 — high-charge indicator RGB (vendor default green).
+    Rgb batteryLedLow{0xff, 0, 0};  ///< Bytes 57..59 — low-charge indicator RGB (vendor default red).
+
+    bool chargingSwitch{true}; ///< Byte 60 — keep LED lit while charging.
+};
+
+/**
+ * @class IMouseSettingsCapable
+ * @brief Optional capability exposing the AJ-series mouse omnibus settings
+ *        envelope (opcode 0x53 — @c FEA_CMD_MOUSE_SET_OPTIONPARAM0).
+ *
+ * Mirrors the vendor utility's single "save" button: lift-off distance,
+ * sleep timeouts (BT idle/deep + 2.4 GHz idle/deep), per-axis sensitivity,
+ * the five documented sensor / LED flags, the battery-LED RGB indicator
+ * colours, and the charging-LED master switch all commit in one 64-byte
+ * HID output report. Firmware persists the values to flash.
+ *
+ * Currently implemented by @c AjSeriesMouse (AJ159 APEX and siblings
+ * sharing the AJ-series wire format). Stream Deck / keyboard backends
+ * do not implement it — their settings live elsewhere
+ * (e.g. @ref ISettingsCapable for AK980 PRO).
+ *
+ * Firmware does not advertise a synchronous read-back path for these
+ * fields; the vendor app caches the host side too, so backends mirror
+ * that pattern via @ref mouseSettings() returning the last pushed values.
+ *
+ * @note Thread-affine: must be called from the device's I/O thread.
+ * @see docs/protocols/mouse/aj_series_opcode_table.md §3.9
+ */
+class IMouseSettingsCapable {
+public:
+    virtual ~IMouseSettingsCapable() = default;
+
+    /**
+     * @brief Push a new @ref MouseSettings omnibus packet to the device.
+     *
+     * Builds the 65-byte HID output report carrying opcode 0x53 with all
+     * fields packed into bytes 8..60 per §3.9, stamped with the BIT7
+     * checksum at byte 64. Out-of-range fields are clamped to bytes the
+     * firmware accepts; the host-side cache is updated post-clamp so the
+     * @ref mouseSettings() getter mirrors what landed on the wire.
+     *
+     * @param settings Field values; out-of-range entries are clamped.
+     * @return true when the wire packet went out; false on transport error.
+     */
+    virtual bool setMouseSettings(MouseSettings const& settings) = 0;
+
+    /**
+     * @brief Last-known settings cache (no synchronous device read).
+     *
+     * Firmware does not advertise an authoritative read-back path for the
+     * omnibus fields; backends keep a host-side cache of the last pushed
+     * (and clamp-normalised) values. Returns the vendor defaults before
+     * any push lands.
+     */
+    [[nodiscard]] virtual MouseSettings mouseSettings() const = 0;
+};
+
 // -----------------------------------------------------------------------------
 // Encoder / dial capability (stream deck plus / AKP05)
 // -----------------------------------------------------------------------------

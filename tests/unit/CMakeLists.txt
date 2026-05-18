@@ -49,6 +49,14 @@ add_executable(
     # IProfileSelectCapable (opcode 0x05, 8 onboard slots persistent
     # across power-cycle) per aj_series_opcode_table.md sec 3.3 + 3.4.
     test_aj_series_settings.cpp
+    # 2026-05-18 omnibus settings: byte-level tests for the AJ-series
+    # mouse IMouseSettingsCapable surface (opcode 0x53
+    # FEA_CMD_MOUSE_SET_OPTIONPARAM0). Pins every documented byte slot
+    # in aj_series_opcode_table.md sec 3.9 (LOD at 52, sensitivity at
+    # 50/51, sleep timers at 40..47, battery LED RGB at 54..59, charging
+    # switch at 60, 5 named flag bits across bytes 12..13) plus clamping
+    # + cache normalisation contract.
+    test_aj_series_omnibus_settings.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
     test_event_bus.cpp

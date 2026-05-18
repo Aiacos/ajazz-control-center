@@ -78,7 +78,8 @@ class AjSeriesMouse final : public IDevice,
                             public IRgbCapable,
                             public IClockCapable,
                             public IPollingRateCapable,
-                            public IProfileSelectCapable {
+                            public IProfileSelectCapable,
+                            public IMouseSettingsCapable {
 public:
     /** Production constructor — creates a real HID transport. */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
@@ -351,6 +352,84 @@ public:
         return m_activeProfile;
     }
 
+    // ---- IMouseSettingsCapable (omnibus 0x53 — §3.9) ----------------------
+    //
+    // Vendor's "single save" omnibus packet. Maps the user-facing
+    // MouseSettings struct (LOD enum, sleep timeouts, sensor flags,
+    // battery LED RGB, charging-LED switch, per-axis sensitivity) onto the
+    // §3.9 byte layout via aj_series::buildMouseSettings, clamping each
+    // field to its documented valid range so the firmware always sees an
+    // acceptable wire byte.
+    //
+    // The host-side cache (m_mouseSettings) is normalised post-clamp so
+    // subsequent reads via mouseSettings() reflect what landed on the wire,
+    // not the raw caller input. m_options is also refreshed so the next
+    // setLiftOffDistanceMm / future per-field setter doesn't undo this push
+    // by overwriting on its own cached snapshot.
+    bool setMouseSettings(core::MouseSettings const& settings) override {
+        auto const pkt = buildMouseSettings(m_activeProfile, m_pollRate, settings);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series",
+                           "setMouseSettings: HID write failed: {}", e.what());
+            return false;
+        }
+        // Normalise the cache post-clamp so mouseSettings() mirrors the
+        // wire bytes the firmware actually saw.
+        core::MouseSettings normalised = settings;
+        constexpr std::uint8_t kDebounceMaxMs = 10;
+        constexpr std::uint8_t kSensitivityMaxPercent = 100;
+        normalised.debounceMs =
+            std::min<std::uint8_t>(normalised.debounceMs, kDebounceMaxMs);
+        normalised.xSensitivity =
+            std::min<std::uint8_t>(normalised.xSensitivity, kSensitivityMaxPercent);
+        normalised.ySensitivity =
+            std::min<std::uint8_t>(normalised.ySensitivity, kSensitivityMaxPercent);
+        std::uint8_t const lodRaw = static_cast<std::uint8_t>(normalised.liftOffDistance);
+        normalised.liftOffDistance =
+            static_cast<core::LiftOffDistance>(std::min<std::uint8_t>(lodRaw, 2));
+        m_mouseSettings = normalised;
+
+        // Mirror into m_options so granular per-field setters (e.g. the
+        // legacy setLiftOffDistanceMm) stay consistent with the omnibus
+        // push and don't clobber unrelated fields on their next re-emit.
+        m_options.debounceMs = normalised.debounceMs;
+        std::uint16_t flagsBits = 0;
+        if (normalised.lightOff)         flagsBits |= 1u << 0;
+        if (normalised.wheelLightOff)    flagsBits |= 1u << 1;
+        if (normalised.motionSmoothing)  flagsBits |= 1u << 2;
+        if (normalised.batteryLedSelect) flagsBits |= 1u << 3;
+        if (normalised.powerSaveMode)    flagsBits |= 1u << 4;
+        m_options.flags = flagsBits;
+        m_options.sleepBtIdleSec = normalised.sleepBtIdleSec;
+        m_options.sleepBtDeepSec = normalised.sleepBtDeepSec;
+        m_options.sleep24gIdleSec = normalised.sleep24gIdleSec;
+        m_options.sleep24gDeepSec = normalised.sleep24gDeepSec;
+        m_options.xSensitivity = normalised.xSensitivity;
+        m_options.ySensitivity = normalised.ySensitivity;
+        m_options.liftCutOff = static_cast<std::uint8_t>(normalised.liftOffDistance);
+        m_options.angleSnap = normalised.angleSnap ? 1 : 0;
+        m_options.batteryColorHigh = {
+            normalised.batteryLedHigh.r, normalised.batteryLedHigh.g, normalised.batteryLedHigh.b};
+        m_options.batteryColorLow = {
+            normalised.batteryLedLow.r, normalised.batteryLedLow.g, normalised.batteryLedLow.b};
+        m_options.chargingSwitch = normalised.chargingSwitch ? 1 : 0;
+
+        AJAZZ_LOG_INFO("mouse.aj_series",
+                       "settings omnibus sent: lod={}, sleep_bt={}s, sleep_24g={}s, sens={}/{}",
+                       static_cast<unsigned>(normalised.liftOffDistance),
+                       static_cast<unsigned>(normalised.sleepBtIdleSec),
+                       static_cast<unsigned>(normalised.sleep24gIdleSec),
+                       static_cast<unsigned>(normalised.xSensitivity),
+                       static_cast<unsigned>(normalised.ySensitivity));
+        return true;
+    }
+
+    [[nodiscard]] core::MouseSettings mouseSettings() const override {
+        return m_mouseSettings;
+    }
+
 private:
     /// Re-upload the full 8-stage DPI table atomically via opcode 0x54.
     void uploadDpiTableAtomic() {
@@ -448,6 +527,13 @@ private:
     /// setSleepTimer / etc. — every setOption0-class setter mutates this struct
     /// then re-emits the full 0x53 packet (vendor's canonical pattern).
     aj_series::OptionPacket0 m_options{};
+
+    /// Host-side cache of the last @ref core::MouseSettings push, normalised
+    /// post-clamp. Initialised to the vendor defaults baked into the struct's
+    /// in-class member initialisers (LOD=1mm, sleeps=0, flags off, sensitivity
+    /// 100%, battery LED green/red, chargingSwitch=true) so the cache reader
+    /// returns sensible values before any push lands. See §3.9.
+    core::MouseSettings m_mouseSettings{};
 
     DeviceDescriptor m_descriptor;
     DeviceId m_id;
