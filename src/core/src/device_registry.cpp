@@ -17,6 +17,7 @@
 #include "ajazz/core/logger.hpp"
 
 #include <algorithm>
+#include <exception>
 
 #include <hidapi.h>
 
@@ -95,6 +96,27 @@ DeviceRegistry::enumerateConnectedHidKeys() const {
     return keys;
 }
 
+namespace {
+// A device returned by open() must have its transport opened, otherwise every
+// capability call (batteryPercent, setTime, setKeyImage, lighting, …) fails
+// with "device is not open". Backends' open() is idempotent (no-op if already
+// open) and best-effort here: an I/O failure is logged and the (unopened)
+// device is still returned so the caller surfaces an honest failure (D-02)
+// rather than the registry throwing across the lookup boundary.
+void ensureTransportOpen(DevicePtr const& device) {
+    if (!device) {
+        return;
+    }
+    try {
+        if (!device->isOpen()) {
+            device->open();
+        }
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("registry", "open transport failed: {}", e.what());
+    }
+}
+} // namespace
+
 DevicePtr DeviceRegistry::open(DeviceId const& id) const {
     // Cache-aware flyweight per D-06: if a previous shared_ptr returned for
     // the same (vid, pid) is still alive, return that same instance —
@@ -120,6 +142,7 @@ DevicePtr DeviceRegistry::open(DeviceId const& id) const {
             if (auto cached = it->second.lock()) {
                 AJAZZ_LOG_INFO(
                     "registry", "cache hit for VID={:04x} PID={:04x}", id.vendorId, id.productId);
+                ensureTransportOpen(cached);
                 return cached;
             }
             // Expired — fall through; the slot will be overwritten below.
@@ -153,8 +176,11 @@ DevicePtr DeviceRegistry::open(DeviceId const& id) const {
     AJAZZ_LOG_INFO("registry", "cache miss for VID={:04x} PID={:04x}", id.vendorId, id.productId);
     DevicePtr fresh = factory(descriptor, id);
     if (fresh) {
-        std::lock_guard const cacheLock(m_open_mutex);
-        m_open_devices[key] = fresh; // implicit shared_ptr->weak_ptr.
+        {
+            std::lock_guard const cacheLock(m_open_mutex);
+            m_open_devices[key] = fresh; // implicit shared_ptr->weak_ptr.
+        }
+        ensureTransportOpen(fresh);
     }
     return fresh;
 }
