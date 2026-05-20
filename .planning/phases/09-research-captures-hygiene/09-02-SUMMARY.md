@@ -47,6 +47,9 @@ duration: ~12min
 completed: 2026-05-15
 ---
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
+
 # Phase 9 Plan 02: Wireshark + usbmon + dumpcap Capture Runbook Summary
 
 **`docs/protocols/CAPTURING.md` — a 486-line per-device USB-capture runbook for the 4 connected v1.2 devices, built on top of the CAPTURE-01 hygiene boundary and forward-referencing the CAPTURE-03 conversion pipeline. Doc-only deliverable, no system commands executed by the agent.**

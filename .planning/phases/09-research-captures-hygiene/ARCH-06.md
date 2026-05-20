@@ -29,6 +29,8 @@ The user's machine on 2026-05-15 reports four AJAZZ-relevant USB devices
 plugged in simultaneously, surfaced by live `lsusb` and the v1.1 hot-plug
 arrival path:
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
 - `0300:3004` (`akp03_variant_3004`, catalogued, Stream Dock 6-key)
 - `0c45:8009` (`ak980pro`, catalogued, AK980 PRO keyboard 2.4G dongle)
 - `3151:5007` (`ajazz_24g_8k`, catalogued, AJAZZ 2.4G 8K mouse)

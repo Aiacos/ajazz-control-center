@@ -197,7 +197,7 @@ ______________________________________________________________________
 
 | Codename               | VID:PID   | Wireshark display filter                                                           | Notes                                                                                                                                                                                                                                                                                           |
 | ---------------------- | --------- | ---------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `akp03_variant_3004`   | 0300:3004 | `usb.idVendor == 0x0300 && usb.idProduct == 0x3004`                                | Pitfall 22: capture one image-upload-first-chunk + one brightness change + one encoder rotate; diff against AKP03 OSS-corpus baseline (mirajazz / opendeck-akp03 / ajazz-sdk). 1024-byte chunks with last-chunk `0x01` flag is the mirajazz convention.                                         |
+| `akp05e`   | 0300:3004 | `usb.idVendor == 0x0300 && usb.idProduct == 0x3004`                                | AKP05E Stream Dock Plus (10 LCD keys / 4 endless encoders / LCD touch strip, protocol_version 3). Pitfall 22: capture one image-upload-first-chunk + one brightness change + one encoder rotate; diff against the Stream Dock OSS-corpus baseline (mirajazz / opendeck-akp03 / ajazz-sdk). 1024-byte chunks with last-chunk `0x01` flag is the mirajazz convention.                                         |
 | `ak980pro`             | 0c45:8009 | `usb.idVendor == 0x0c45 && usb.idProduct == 0x8009 && usb.bInterfaceProtocol != 1` | Pitfall 17: filter out boot-keyboard reports with `usb.bInterfaceProtocol != 1` to keep only the vendor-control interface. Pitfall 24: the RGB transition sweep is the natural control-channel event window.                                                                                    |
 | `ajazz_24g_8k`         | 3151:5007 | `usb.idVendor == 0x3151 && usb.idProduct == 0x5007`                                | Pitfall 21: cap capture file at 50 MB. Capture only during control-channel events (DPI button press, polling-rate change, LOD change, RGB mode change), NOT during sustained movement — 8 kHz polling fills capture buffers in single-digit seconds.                                            |
 | `microdia_dongle_7016` | 0c45:7016 | `usb.idVendor == 0x0c45 && usb.idProduct == 0x7016 && usb.bInterfaceProtocol != 1` | Pitfall 17: drop boot-keyboard reports — Microdia dongles expose a HID-boot-keyboard interface even when they relay a non-keyboard device. Pitfall 20: confirm this is a SEPARATE dongle by unplugging `ak980pro` and verifying `0c45:7016` does NOT disappear; capture each PID independently. |
@@ -263,7 +263,7 @@ tshark -i usbmon1 -w /tmp/cap.pcapng -a filesize:51200 -a duration:30
 While the capture is running, **manually trigger the one specific
 device action you want to study**:
 
-- For `akp03_variant_3004`: push an image from a parallel boot of the
+- For `akp05e`: push an image from a parallel boot of the
   vendor app, OR change brightness, OR rotate one encoder click. ONE
   action per capture.
 - For `ak980pro`: change one RGB mode (Pitfall 24 transition sweep is
@@ -354,9 +354,9 @@ The next plan in this phase (09-03) lands
 
 ```text
 scripts/hex-to-cpparray.py /tmp/cap.json \
-    --device akp03_variant_3004 \
+    --device akp05e \
     --capture image-upload-first-chunk \
-  > tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+  > tests/integration/fixtures/akp05e/image_upload_first_chunk.h
 ```
 
 - `--device` is the codename from `docs/_data/devices.yaml`.
@@ -386,7 +386,7 @@ Open the `.h` file. Confirm:
 ### 5.5 Commit ONLY the header
 
 ```text
-git add tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+git add tests/integration/fixtures/akp05e/image_upload_first_chunk.h
 git commit -m "test(fixtures): add AKP03 image-upload-first-chunk capture"
 ```
 
@@ -529,7 +529,7 @@ When you're done capturing, leave the device passed through if you plan to captu
 
    In Wireshark GUI: Capture → Options → check each `USBPcap<N>` to see which device list contains the AJAZZ VID:PID. Use the matching interface index.
 
-1. Capture via tshark (CLI, scripted) — example for AKP03 0x3004 image upload, 10-second window:
+1. Capture via tshark (CLI, scripted) — example for AKP05E 0x3004 image upload, 10-second window:
 
    ```cmd
    "C:\Program Files\Wireshark\tshark.exe" -i USBPcap1 ^
@@ -551,8 +551,8 @@ When you're done capturing, leave the device passed through if you plan to captu
    ```bash
    usbrply -j akp03_image_upload.pcapng > /tmp/cap.json
    scripts/hex-to-cpparray.py /tmp/cap.json \
-       --device akp03_variant_3004 --capture image_upload_first_chunk \
-       > tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+       --device akp05e --capture image_upload_first_chunk \
+       > tests/integration/fixtures/akp05e/image_upload_first_chunk.h
    ```
 
    `usbrply` handles both `DLT_USB_LINUX_MMAPPED` (Linux usbmon) and `DLT_USBPCAP` (Windows USBPcap) link-layer formats transparently — no separate decode path. All subsequent extraction steps are identical.

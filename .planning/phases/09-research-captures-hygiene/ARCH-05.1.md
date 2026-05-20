@@ -9,6 +9,9 @@ flipped_for: ak980pro (Sonix SN32F299 family, VID:PID 0x0c45:0x8009)
 ratified: 2026-05-17
 ---
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
+
 # ARCH-05.1: AK980 PRO firmware RTC — amendment to ARCH-05 default verdict
 
 **Status:** FINAL — amends ARCH-05 (2026-05-15 default verdict) per the D-05

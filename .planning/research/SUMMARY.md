@@ -30,14 +30,14 @@ The principal risks are **capture privacy** (raw `usbmon` `.pcap` files recover 
 
 - `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` — PRIVATE-linked to `ajazz_devices_streamdeck`; reuses existing `Qt6::Gui`.
 - `tests/unit/fixtures/mock_transport.hpp` (NEW ~80 LoC) — pre-condition for every capability test (ARCHITECTURE §"Test strategy / New test infrastructure").
-- Per-device fixture directories under `tests/integration/fixtures/{akp03_variant_3004,ak980pro,ajazz_24g_8k,0c45_7016}/`.
+- Per-device fixture directories under `tests/integration/fixtures/{akp05e,ak980pro,ajazz_24g_8k,0c45_7016}/`.
 - `docs/protocols/CAPTURING.md` — runbook companion to existing `REVERSE_ENGINEERING.md`.
 
 **COD-031 verified preserved:** `grep -rn nlohmann src/core/include/` = 0 hits at HEAD; every recommended addition lives in `ajazz_devices_*` (PRIVATE) or `tests/` (header-only fixtures) or `scripts/` (not installed).
 
 ### Expected Features (per device)
 
-**`akp03_variant_3004` (0300:3004) — caps `[display, encoder, clock]` — LOW risk:**
+**`akp05e` (0300:3004) — caps `[display, encoder, clock]` — LOW risk:**
 Current state: scaffolded with `512-byte` packet framing (legacy AKP153 v1). v1.2 delivers: AKP03 v2 framing migration (PacketSize `512 → 1024` in `akp03_protocol.hpp` — **one-line load-bearing fix that simultaneously unblocks 13 sibling SKUs** per FEATURES §1 / Dependencies); per-key 60×60 `Rot0` JPEG upload via `BAT` opcode (encoded host-side, AKP03R rev. 2 lineage uses 64×64 `Rot90` — descriptor-parameterised); brightness via `LIG`; encoder events via `parseInputReport()` already in tree; `EncoderReleased` proper core event (replaces the `value=0` half-step workaround at akp03.cpp:289-293); `clock` demoted to `hasClock=false` (no RTC opcode in mirajazz/opendeck-akp03/ajazz-sdk corpora). **Expected maturity: `functional` for display + encoder; `clock` row removed honestly.**
 
 **`ak980pro` (0c45:8009) — caps `[rgb, macros, layers, clock]` — MEDIUM-HIGH risk:**
@@ -102,7 +102,7 @@ Current state: NOT in `devices.yaml`, NOT in any `register.cpp`. **Cross-researc
 1. **`docs/policies/capture-data-hygiene.md`** + `.planning/research/captures/.gitignore` + pre-commit hook rejecting `*.pcap`/`*.pcapng`. MUST land before first capture (Pitfall 17).
 1. **`docs/protocols/CAPTURING.md`** — Wireshark + `usbmon` runbook, capture-time filtering, USB-side only (Pitfall 21), per-device commands.
 1. **Per-device captures (SHA-256-indexed, sanitised):**
-   - **AKP03 0x3004:** image upload (first + last chunk), `CLE`, `LIG`, encoder rotate per encoder, encoder/side-button press, `HAN`, negative test on hypothetical `TIM` opcode.
+   - **AKP05E 0x3004:** image upload (first + last chunk), `CLE`, `LIG`, encoder rotate per encoder, encoder/side-button press, `HAN`, negative test on hypothetical `TIM` opcode.
    - **AK980 PRO:** 20 RGB modes (cmd 0x13), sleep-timer (cmd 0x17), TFT chunked send (close TaxMachine TODO), per-key RGB / macro / layer / battery attempts (SPECULATIVE), vendor-control interface ID via `udevadm`.
    - **8K mouse:** DPI cycle (operator-driven event window, NOT sustained movement), DPI stage set, polling-rate dropdown, LOD, button bind, RGB per zone, battery, flash commit. Probe AJ199 V1.0 vs Max.
    - **0c45:7016:** `lsusb -v`, `udevadm info -a /dev/hidraw{5,6}`, report descriptor dump, paired-input identification (user-driven `evtest`).
@@ -114,7 +114,7 @@ Current state: NOT in `devices.yaml`, NOT in any `register.cpp`. **Cross-researc
 
 **Avoids:** Pitfalls 17, 19, 21, 22, 32.
 
-### Phase 10: AKP03 variant_3004 promotion (FIRST — lowest risk)
+### Phase 10: AKP05E (0x3004) promotion (FIRST — lowest risk)
 
 **Rationale:** Best OSS corpus (three-way agreement); one-line PacketSize fix unblocks 13 sibling SKUs; establishes canonical "device-promotion phase" template for Phases 11-12.
 
@@ -180,7 +180,7 @@ Phases with standard patterns (skip research):
 
 ### Gaps to Address
 
-- **AKP03 0x3004 specific wire format vs canonical AKP03 (0x1001)**: 0x3004 is "HOTSPOTEKUSB HID DEMO" likely pre-production. Resolution: Phase 9 first-party capture; descriptor-parameterise deltas (Pitfall 22, 30).
+- **AKP05E 0x3004 specific wire format vs canonical AKP03 (0x1001)**: 0x3004 is "HOTSPOTEKUSB HID DEMO" likely pre-production. Resolution: Phase 9 first-party capture; descriptor-parameterise deltas (Pitfall 22, 30).
 - **AK980 PRO chipset family confirmation**: Microdia 0c45 fronts multiple families; cannot assume Sonix SN32. Resolution: Phase 9 `lsusb -v -d 0c45:8009` HID descriptor capture; SonixQMK relevance conditional.
 - **AJAZZ 2.4G 8K wire-format envelope (V1.0 vs Max)**: Zero 3rd-party OSS corpus. Resolution: Phase 11 probe-and-confirm; possible factory split; promotion gated on capture coverage.
 - **0c45:7016 paired downstream device**: Topology proves separate dongle. Paired wireless input unknown. Resolution: Phase 9 user-driven `evtest`/`hexdump < /dev/hidraw5`. If no input ever arrives, stays at `probed`-tier indefinitely.

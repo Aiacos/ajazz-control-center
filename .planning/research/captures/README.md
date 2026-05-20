@@ -35,10 +35,10 @@ keyboard reports, no mouse coordinates, no wall-clock timestamps).
 tshark -i usbmonN -w cap.pcap -a duration:5
 usbrply -j cap.pcap > cap.json
 scripts/hex-to-cpparray.py cap.json \
-    --device akp03_variant_3004 \
+    --device akp05e \
     --capture image-upload-first-chunk \
-  > tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
-git add tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+  > tests/integration/fixtures/akp05e/image_upload_first_chunk.h
+git add tests/integration/fixtures/akp05e/image_upload_first_chunk.h
 rm cap.pcap cap.json
 ```
 

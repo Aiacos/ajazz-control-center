@@ -89,6 +89,8 @@ incompleteness.
 This plan is the non-capture half of Phase 9 (`partial_scope: true`). It
 closes ROADMAP success criterion D-01/CAPTURE-01. The remaining
 criterion — sanitised capture fixtures for all 4 connected devices
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
 (`akp03_variant_3004`, `ak980pro`, `ajazz_24g_8k`, `0c45_7016`) — requires
 physical hardware + USB captures and is deferred to a Phase 9.x follow-up,
 which consumes this hygiene boundary as a hard precondition.

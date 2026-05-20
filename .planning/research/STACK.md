@@ -63,7 +63,7 @@ sudo usermod -aG wireshark $USER  # logout/login OR newgrp wireshark
 # Optionally relax /dev/usbmonN: a udev rule is the long-term answer; this is dev-box scope.
 
 # Identify the bus for a given AJAZZ device
-lsusb -d 0300:3004  # AKP03 variant — outputs "Bus 001 Device 018: ..."
+lsusb -d 0300:3004  # AKP05E (Stream Dock Plus) — outputs "Bus 001 Device 018: ..."
 # -> usbmon1 captures bus 001 (the entire bus; per-device filter applied in display)
 
 # Headless capture, 60-second slice exercising one feature at a time
@@ -128,11 +128,11 @@ These are **READ-ONLY reference implementations** that the team uses to *cross-r
 AKP03 image upload prefix (output report, 512B per chunk on proto v1, 1024B on v2+):
   00 43 52 54 00 00 42 41 54 00 00 [sz_hi] [sz_lo] [key+1] <payload> <pad to N>
                 "CRT"              "BAT"              ^ key index is 1-based
-                                                       ^ 0x3004 is "AKP03 rev. 2"
-                                                         per mirajazz proto_v3 -> 1024B + Rot90 64x64
+                                                       ^ 0x3004 is firmware-confirmed AKP05E
+                                                         (Stream Dock Plus, proto_v3 -> 1024B)
 AKP03 image format:
   proto v2 (AKP03 canonical PID 0x1001/0x3002/0x1003): JPEG 60x60 Rot0
-  proto v3 (AKP03 rev. 2 PID 0x3003 / 0x3004 candidate):  JPEG 64x64 Rot90
+  proto v3 (PID 0x3003 / 0x3004 = AKP05E):  per-device key geometry; confirm image size by capture
 AKP03 input report (encoder):
   EncoderTwist  -> i8 per encoder, signed delta (+/- ticks since last poll)
   EncoderStateChange -> bool per encoder, press state
@@ -200,7 +200,7 @@ AKP03 input report (encoder):
 ```
 AKP153 / AKP153e (proto v1, in-tree functional):  85x85 JPEG, Rot90 + mirror — wire path EXISTS
 AKP03 canonical / AKP03E (proto v2):              60x60 JPEG, Rot0,  no mirror
-AKP03R rev. 2 / candidate 0x3004 (proto v3):      64x64 JPEG, Rot90, no mirror
+AKP03R rev. 2 / AKP05E 0x3004 (proto v3):         JPEG Rot90, no mirror (image size per capture)
 AKP815 (proto v1 reuse, in-tree probed):          100x100 JPEG, Rot180
 AKP815 LCD strip (probed pending):                800x480 JPEG, separate upload command
 ```
@@ -465,7 +465,7 @@ The existing `resources/linux/99-ajazz.rules` (read 2026-05-15) **already covers
 - `CLAUDE.md` — hard rules (no system-level mutations, no `nlohmann::json` in `ajazz_core`, hidapi_hidraw only, clean-room reverse engineering)
 - `.planning/PROJECT.md` (read 2026-05-15) — v1.2 milestone definition, ARCH-04 candidate flag for `IClockCapable::setTime`
 - `.planning/milestones/v1.1-research/STACK.md` (read 2026-05-15) — v1.1 stack delta, COD-031 boundary rationale
-- `docs/_data/devices.yaml` (read 2026-05-15) — all 4 connected devices' catalogued entries including `akp03_variant_3004`, `ak980pro`, `ajazz_24g_8k`; 0c45:7016 NOT in catalogue
+- `docs/_data/devices.yaml` (read 2026-05-15) — all 4 connected devices' catalogued entries including `akp05e`, `ak980pro`, `ajazz_24g_8k`; 0c45:7016 NOT in catalogue
 - `docs/protocols/REVERSE_ENGINEERING.md` (read 2026-05-15) — clean-room workflow §1-5 (Capture / Annotate / Document / Implement / Verify)
 - `docs/protocols/streamdeck/akp03.md` (read 2026-05-15) — existing AKP03 protocol doc with PID 0x3004 noted as new sibling; mirajazz/opendeck-akp03/ajazz-sdk citations pre-existing
 - `resources/linux/99-ajazz.rules` (read 2026-05-15) — udev rules already cover all 4 device VIDs (no rule change needed)

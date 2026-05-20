@@ -33,6 +33,8 @@ VERDICT); real-hardware wireless-stall verification (needs the device).
   `devices.yaml`. DEVICES-06 is therefore **NOT** a clock demotion — it is the
   honest `partial`-tier record; clock `partial` → `functional` gates on the
   Phase 9.x physical round-trip witness. (Contrast DEVICES-05: ARCH-05 stands
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
   for the Stream Dock family, so `akp03_variant_3004` removes `clock`.)
 
 ### Accepted grey-area defaults (2026-05-20)

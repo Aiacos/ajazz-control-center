@@ -1,4 +1,4 @@
-# Phase 10: AKP03 variant_3004 Promotion - Context
+# Phase 10: AKP05E (0x3004) Promotion - Context
 
 **Gathered:** 2026-05-20
 **Status:** Ready for planning
@@ -7,14 +7,15 @@
 <domain>
 ## Phase Boundary
 
-Promote the `0300:3004` Stream Dock 6-key backend from `scaffolded` to
-`functional`: a user with the device plugged in can push `QImage`s to any
+Promote the `0300:3004` AKP05E Stream Dock Plus backend (10 LCD keys / 4
+endless encoders / LCD touch strip, routed via `makeAkp05`) from `scaffolded`
+to `functional`: a user with the device plugged in can push `QImage`s to any
 LCD key, see real encoder rotate/press/release events, set per-key colour,
 set global brightness, clear the device, and flush pending writes. The
 `devices.yaml` row stops falsely advertising `clock`.
 
 **Out of this phase:** the per-device USB capture that *confirms* the wire
-format (deferred to Phase 9.x) and any non-AKP03 SKU work. This phase
+format (deferred to Phase 9.x) and any non-Stream-Dock SKU work. This phase
 implements against the documented protocol + the Phase 9 default-verdict
 ADRs; real-hardware verification is gated behind `AJAZZ_REAL_HARDWARE`.
 
@@ -33,14 +34,15 @@ ADRs; real-hardware verification is gated behind `AJAZZ_REAL_HARDWARE`.
   matrix (1024-byte chunks + last-chunk Transfer-Done `0x01` + 60×60 JPEG
   Rot0).
 - **Clock capability (ARCH-05):** no RTC opcode exists in any AJAZZ corpus
-  → `hasClock=false` on `akp03_variant_3004`; `setTime` stays
+  → `hasClock=false` on `akp05e`; `setTime` stays
   `NotImplemented` (v1.1 D-02 honesty contract preserved). Remove `clock`
   from the `devices.yaml` row with a `notes:` line citing ARCH-05.
 
 ### Accepted grey-area defaults (2026-05-20)
 
-- JPEG: 60×60, Rot0, quality ~85, `Qt::SmoothTransformation` resize.
-  (64×64 Rot90 only applies to the AKP03R rev. 2 lineage — not this SKU.)
+- JPEG: per-key image size + rotation table-driven for AKP05E, quality ~85,
+  `Qt::SmoothTransformation` resize — confirm the exact key dimensions by
+  capture (the 64×64 Rot90 lineage is AKP03R rev. 2, a different SKU).
 - `setKeyColor`: short-circuit by pushing a 1×1 solid-colour JPEG through
   the same image path (no dedicated solid-colour opcode until a capture
   confirms one exists).
@@ -69,12 +71,12 @@ conventions.
 - `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` — already present
   (ARCH-04 Option C target); needs to be the home of the resize+encode+chunk
   logic `setKeyImage` calls.
-- `akp03_protocol.hpp` — `PacketSize` migrates 512 → 1024 in one
-  load-bearing commit that unblocks the 13 AKP03 sibling SKUs (per-codename
-  framing test must cover both sizes during the transition).
-- `docs/protocols/streamdeck/akp03.md` — documented wire format (60×60 JPEG
-  Rot0 lineage vs 64×64 Rot90 AKP03R r2).
-- `docs/_data/devices.yaml` — `akp03_variant_3004` row currently lists
+- `akp03_protocol.hpp` — `PacketSize` is 1024 (the AKP05E 0x3004 device uses
+  protocol_version 3, 1024-byte packets); this also covers the Stream Dock
+  sibling SKUs (per-codename framing test must cover the relevant sizes).
+- `docs/protocols/streamdeck/akp03.md` — documented Stream Dock family wire
+  format (60×60 JPEG Rot0 lineage vs 64×64 Rot90 AKP03R r2).
+- `docs/_data/devices.yaml` — `akp05e` row currently lists
   `capabilities: [display, encoder, clock]`; `clock` is removed here.
 
 **Build precondition:** the C++ build currently fails to configure (Qt6

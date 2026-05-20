@@ -73,12 +73,12 @@ usbrply -j /tmp/cap.pcap > /tmp/cap.json
 #    The script filters by --device codename and labels the capture; the
 #    output is a plain-text std::array<uint8_t> ready to feed MockTransport.
 scripts/hex-to-cpparray.py /tmp/cap.json \
-    --device akp03_variant_3004 \
+    --device akp05e \
     --capture image-upload-first-chunk \
-  > tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+  > tests/integration/fixtures/akp05e/image_upload_first_chunk.h
 
 # 4. Commit ONLY the header file.
-git add tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h
+git add tests/integration/fixtures/akp05e/image_upload_first_chunk.h
 
 # 5. Delete the raw + intermediate immediately. There is no reason to keep
 #    them around once the fixture is committed and reviewable.
@@ -138,7 +138,7 @@ those cases:
 
   | SHA-256 (full)      | Device codename    | Label                    | Date       | Researcher | Fixture path                                                             |
   | ------------------- | ------------------ | ------------------------ | ---------- | ---------- | ------------------------------------------------------------------------ |
-  | abc123…64-char-hex… | akp03_variant_3004 | image-upload-first-chunk | 2026-05-15 | (initials) | tests/integration/fixtures/akp03_variant_3004/image_upload_first_chunk.h |
+  | abc123…64-char-hex… | akp05e | image-upload-first-chunk | 2026-05-15 | (initials) | tests/integration/fixtures/akp05e/image_upload_first_chunk.h |
 
 - The sanitised hex fixture MUST land in the same commit as the index
   row. An index row without a fixture is not reviewable and gets the

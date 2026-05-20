@@ -56,6 +56,9 @@ duration: 3min
 completed: 2026-05-15
 ---
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
+
 # Phase 9 Plan 06: ARCH-05 per-device setTime default-verdict ratification Summary
 
 **Single-file ADR at `.planning/phases/09-research-captures-hygiene/ARCH-05.md` ratifying the per-device `IClockCapable::setTime` outcome at default verdict: NO RTC opcode in any of the four reference corpora (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro); `hasClock=false` on `akp03_variant_3004` and `ak980pro`; `setTime` stays `NotImplemented` across all functional Stream-Dock backends; PROJECT.md Out-of-Scope row preserved unchanged; D-05 honesty contract preserved via explicit "DEFAULT VERDICT (PENDING CAPTURE CONFIRMATION)" labeling in title + frontmatter `status` + bold Status line; v1.1 D-02 honesty contract reinforced.**

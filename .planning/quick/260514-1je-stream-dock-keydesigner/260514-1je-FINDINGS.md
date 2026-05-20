@@ -17,6 +17,8 @@ from the protocol headers (`akp153_protocol.hpp:34`, `akp03_protocol.hpp:32`,
 `akp05_protocol.hpp:33`) and the runtime `IDisplayCapable::displayInfo()` returns
 (`akp03.cpp:312`, etc.).
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
 | Codename             | VID:PID   | Keys (grid)     | Key image           | Encoders           | Touch strip | RGB (per-key) | Firmware query | Notes / closest Elgato analog                                                     |
 | -------------------- | --------- | --------------- | ------------------- | ------------------ | ----------- | ------------- | -------------- | --------------------------------------------------------------------------------- |
 | `akp153`             | 0300:1001 | 15 (5×3)        | JPEG 85×85          | 0                  | no          | no            | yes (stub)     | International AKP153 / Mirabox HSV293S. Equivalent of Stream Deck **MK.2**.       |

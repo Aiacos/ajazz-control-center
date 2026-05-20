@@ -1000,7 +1000,7 @@ These are advisory — actual edits should land via amendment commits to
 | `aj_series_wired_primary` (and the 5 sibling rows) | scaffolded | unchanged                     | Same backend, same bug surface. After §5 rewrite they all promote together.                                                                                                                                                                                                                                                                                                                                                                  |
 | `ak980pro`                                         | partial    | **partial** (unchanged)       | ARCH-05.1 promoted scaffolded → partial. Per [STATE.md §2026-05-17](../../.planning/STATE.md) commit `9787962` already records the 18-opcode gap as `pending` items; this synthesis adds 8 more opcodes (per-key RGB, settings batch, sleep timer, battery query, RGB mode, key remap chunked, macro upload, macro assign) that should be appended to `feature_summary.pending`. Full promotion to `functional` requires §2.6-§2.11 to land. |
 | `akp05` / `mirabox_n4`                             | scaffolded | scaffolded                    | Now document the missing V25 device codename variants from vendor binary: `AKP05V25`, `AKP05EV25`, `AKP05RV25`, `N4Pro`, `N4ProE`, `N4V25`, `SD14N4V25`, `TS10N4V25`, `VSDN4`. Add a `feature_summary.pending` line: "register V25 sibling PIDs once AKP05 backend reaches partial — vendor SDK recognises 9 sibling codenames at the same wire protocol".                                                                                   |
-| `akp03_variant_3004`                               | scaffolded | scaffolded                    | Add sibling V25 codenames: `AKP03V25`, `AKP03EV25`, `AKP03RV25`, `SD12N3V25`, `TS16N3V25`, `VSDN3`. Note that vendor strings index from [`akp05_vendor.md` §1.3](../protocols/streamdeck/akp05_vendor.md).                                                                                                                                                                                                                                   |
+| `akp05e`                               | scaffolded | scaffolded                    | Add sibling V25 codenames: `AKP03V25`, `AKP03EV25`, `AKP03RV25`, `SD12N3V25`, `TS16N3V25`, `VSDN3`. Note that vendor strings index from [`akp05_vendor.md` §1.3](../protocols/streamdeck/akp05_vendor.md).                                                                                                                                                                                                                                   |
 
 ______________________________________________________________________
 
@@ -1063,7 +1063,7 @@ questions. Captures still have residual value for:
   → §9.2's witness 3).
 - USB-side latency profiling (how slow IS chunked upload on a real
   device?).
-- Per-byte JPEG quality tuning for the AKP03 0x3004 variant.
+- Per-byte JPEG quality tuning for the AKP05E 0x3004 variant.
 
 But none of these block the next 5 commits in §11.
 

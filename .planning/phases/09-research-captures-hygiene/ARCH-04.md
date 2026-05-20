@@ -23,6 +23,8 @@ ratified: 2026-05-15
 
 ## Context
 
+> (NOTE 2026-05-20: the `akp03_variant_3004` device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
 The AKP03 family Stream Dock backend at `src/devices/streamdeck/src/akp03.cpp`
 advertises the `display` capability, but the body of `setKeyImage` is currently
 `NotImplemented`. The wire format is documented in `docs/protocols/streamdeck/akp03.md`:

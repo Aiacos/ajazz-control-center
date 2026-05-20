@@ -53,7 +53,7 @@ The AKP03 wire protocol uses 1024-byte HID output reports for image chunks (`doc
 
 **Why it happens:**
 
-- The AKP03 backend shares `akp03.cpp` family code with `akp03_variant_3004` (`mirabox_n3`, `akp03e`, etc.) — see `docs/_data/devices.yaml:264-274`. A bug in chunk size affects all 6 family members.
+- The AKP03 backend shares `akp03.cpp` family code with `akp05e` (`mirabox_n3`, `akp03e`, etc.) — see `docs/_data/devices.yaml:264-274`. A bug in chunk size affects all 6 family members.
 - The "Transfer is Done" flag at the last chunk is easy to forget — it's a single byte change relative to non-terminal chunks. The chunked-upload helper in [python-elgato-streamdeck (StreamDeck.py)](https://github.com/abcminiuser/python-elgato-streamdeck/blob/master/src/StreamDeck/Devices/StreamDeck.py) makes this explicit; a hand-rolled C++ version may not.
 - AKP03R rev. 2 uses 64×64 `Rot90` images (`docs/protocols/streamdeck/akp03.md:178`) while AKP03 / AKP03E / AKP03R use 60×60 `Rot0` — wrong image dimensions cause the chunk count to mismatch the firmware's expectation, surfacing the same hang shape.
 - The encoder of the JPEG (Pillow default vs `libjpeg-turbo` default) affects compressed size — too-large images can exceed the firmware's per-key buffer and silently truncate. Image-side validation belongs in the backend, not the QML layer.
@@ -91,7 +91,7 @@ A researcher annotating a `usbmon` capture from the native AJAZZ app sees a byte
 CRT...TIM 65 e8 18 67 ...   ← could be 1985-... no wait, 2024-...
 ```
 
-— a 4-byte little-endian Unix-ish epoch in a packet whose 3-byte ASCII command word is `TIM` (or any other plausible mnemonic). They conclude "AKP03 variant 0x3004 supports clock!" and implement `Akp03Device::setTime` to send that byte sequence. The device accepts the packet (firmware doesn't STALL — it just discards unknown commands or treats them as a brightness write that happens to compute a no-op for in-range values). User sees the per-row glyph flip from exclamation to ok. UI now lies: device clock is *not* being set; the per-row glyph claims it is. PROJECT.md's explicit "no AJAZZ device exposes a host-settable RTC" non-goal (`Out of Scope` table, line 68) is silently broken.
+— a 4-byte little-endian Unix-ish epoch in a packet whose 3-byte ASCII command word is `TIM` (or any other plausible mnemonic). They conclude "AKP05E 0x3004 supports clock!" and implement `Akp03Device::setTime` to send that byte sequence. The device accepts the packet (firmware doesn't STALL — it just discards unknown commands or treats them as a brightness write that happens to compute a no-op for in-range values). User sees the per-row glyph flip from exclamation to ok. UI now lies: device clock is *not* being set; the per-row glyph claims it is. PROJECT.md's explicit "no AJAZZ device exposes a host-settable RTC" non-goal (`Out of Scope` table, line 68) is silently broken.
 
 **Why it happens:**
 
@@ -203,7 +203,7 @@ ______________________________________________________________________
 ### Pitfall 22: OSS corpus is for a different firmware revision — silent wire-format drift
 
 **What goes wrong:**
-`opendeck-akp03` (and the [4ndv/opendeck-akp03](https://github.com/4ndv/opendeck-akp03) Rust source, and the [mirajazz crate](https://crates.io/crates/mirajazz) referenced in `docs/_data/devices.yaml:262`) targets specific firmware revisions of AKP03 / Mirabox N3 family devices. The user's `0300:3004` device (codename `akp03_variant_3004`, `devices.yaml:264-274`) is registered as "Ajazz HOTSPOTEKUSB HID DEMO" — a string that suggests pre-production / dev firmware. Wire format on a dev/HID-demo firmware can differ in subtle ways: chunk size off-by-one, command-word case (`TIM` vs `tim`), `is_v2_api` flag location, last-chunk-flag bit position, image-format-Rot value. Implementation pulled verbatim from `opendeck-akp03` works on production AKP03 / N3 / N3EN but silently corrupts uploads on `0300:3004`: device displays garbled image fragments, or last upload appears to "stick" to the wrong key, or brightness command is interpreted as "set sleep timer."
+`opendeck-akp03` (and the [4ndv/opendeck-akp03](https://github.com/4ndv/opendeck-akp03) Rust source, and the [mirajazz crate](https://crates.io/crates/mirajazz) referenced in `docs/_data/devices.yaml:262`) targets specific firmware revisions of AKP03 / Mirabox N3 family devices. The user's `0300:3004` device (codename `akp05e`, `devices.yaml:264-274`) is registered as "Ajazz HOTSPOTEKUSB HID DEMO" — a string that suggests pre-production / dev firmware. Wire format on a dev/HID-demo firmware can differ in subtle ways: chunk size off-by-one, command-word case (`TIM` vs `tim`), `is_v2_api` flag location, last-chunk-flag bit position, image-format-Rot value. Implementation pulled verbatim from `opendeck-akp03` works on production AKP03 / N3 / N3EN but silently corrupts uploads on `0300:3004`: device displays garbled image fragments, or last upload appears to "stick" to the wrong key, or brightness command is interpreted as "set sleep timer."
 
 **Why it happens:**
 
@@ -215,7 +215,7 @@ ______________________________________________________________________
 **How to avoid:**
 
 - **Phase 9 deliverable per device: a wire-format diff doc.** For each connected device, capture a baseline interaction (one image upload + one brightness change + one event) and compare byte-for-byte against the OSS corpus's predicted output. Document deltas. If zero deltas: corpus applies. If 1+ deltas: per-deviation-explained protocol delta in the device's protocol .md.
-- **Always parameterise the wire-format constants** (chunk size, last-chunk flag offset, image-Rot value, command-word case) as fields on `Akp03Descriptor` rather than hard-coded. Variants `akp03_variant_3004` get their own descriptor row; the impl reads from the descriptor.
+- **Always parameterise the wire-format constants** (chunk size, last-chunk flag offset, image-Rot value, command-word case) as fields on `Akp03Descriptor` rather than hard-coded. Variants `akp05e` get their own descriptor row; the impl reads from the descriptor.
 - **Test pattern:** `tests/unit/test_akp03_descriptor_variant.cpp` — table-driven test with one row per AKP03 family member, asserting the descriptor's chunk size + image format + Rot match the protocol .md table. Catches drift if someone adds a new family member without updating the descriptor.
 - **Pessimistic default for `0300:3004`:** until a real-device capture confirms wire format, the descriptor copies AKP03 (60×60 Rot0, 1024-byte v2 packets) and the maturity stays `scaffolded`. Phase 10's first commit is the capture-driven descriptor update.
 
@@ -451,7 +451,7 @@ ______________________________________________________________________
 ### Pitfall 30: AKP03 family-shared code — cross-family regression risk
 
 **What goes wrong:**
-AKP03 variant `0x3004` shares backend code with akp03 / akp03e / akp03r / akp03_legacy / mirabox_n3 / mirabox_n3_rev3 / mirabox_n3en (per `docs/_data/devices.yaml:134-238`). A fix for `0300:3004` that lives in `akp03.cpp` ships to all 7 other PIDs simultaneously. A wire-format delta that's correct for `0300:3004` may break the canonical AKP03 (`0x1001`).
+AKP05E (`0x3004`) shares Stream Dock backend code with akp03 / akp03e / akp03r / akp03_legacy / mirabox_n3 / mirabox_n3_rev3 / mirabox_n3en (per `docs/_data/devices.yaml:134-238`). A fix for `0300:3004` that lives in `akp03.cpp` ships to all 7 other PIDs simultaneously. A wire-format delta that's correct for `0300:3004` may break the canonical AKP03 (`0x1001`).
 
 **How to avoid:**
 
@@ -480,7 +480,7 @@ ______________________________________________________________________
 ### Pitfall 32: ASCII-only test names — new device codenames check
 
 **What goes wrong:**
-v1.1 Phase 4 hit "test names must be ASCII-only" because em-dash / right-arrow Unicode characters got mangled by the Win32 CMD codepage (CLAUDE.md "Cross-platform build strictness"). v1.2 will add tests that name devices like `akp03_variant_3004`, `ak980pro`, `ajazz_24g_8k`. All current codenames are ASCII (verified by grep against `devices.yaml`). If the unknown `0c45:7016` gets a codename when identified, it must also be ASCII.
+v1.1 Phase 4 hit "test names must be ASCII-only" because em-dash / right-arrow Unicode characters got mangled by the Win32 CMD codepage (CLAUDE.md "Cross-platform build strictness"). v1.2 will add tests that name devices like `akp05e`, `ak980pro`, `ajazz_24g_8k`. All current codenames are ASCII (verified by grep against `devices.yaml`). If the unknown `0c45:7016` gets a codename when identified, it must also be ASCII.
 
 **How to avoid:**
 

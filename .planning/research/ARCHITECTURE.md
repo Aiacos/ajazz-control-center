@@ -161,7 +161,7 @@ for explicit ratification in Phase 9:
 | `DeviceRegistry::open` flyweight              | `src/core/include/ajazz/core/device_registry.hpp`   | 130-196     |
 | `HotplugMonitor::injectEvent` test seam       | `src/core/include/ajazz/core/hotplug_monitor.hpp`   | 96-139      |
 | Streamdock register (AKP03 family + 0x3004)   | `src/devices/streamdeck/src/register.cpp`           | 238-250     |
-| Akp03Device backend (variant_3004 hosts here) | `src/devices/streamdeck/src/akp03.cpp`              | 274-521     |
+| Stream Dock backend (akp05e routes via makeAkp05) | `src/devices/streamdeck/src/akp03.cpp`              | 274-521     |
 | Keyboard register (AK980 PRO = 0x0c45:0x8009) | `src/devices/keyboard/src/register.cpp`             | 53-63       |
 | ProprietaryKeyboard backend (ak980pro)        | `src/devices/keyboard/src/proprietary_keyboard.cpp` | 204-437     |
 | Mouse register (2.4G 8K = 0x3151:0x5007)      | `src/devices/mouse/src/register.cpp`                | 67          |
@@ -240,10 +240,18 @@ implementing `ITransport`** that captures `write()` calls and replays canned
 
 ## Integration points per connected device
 
-### 1. AKP03 variant_3004 (Stream Dock 0x0300:0x3004, scaffolded → functional)
+### 1. AKP05E (Stream Dock Plus 0x0300:0x3004, scaffolded → functional)
 
-**Routes through:** `Akp03Device` factory `makeAkp03`
-(`src/devices/streamdeck/src/akp03.cpp:532-534`).
+> NOTE 2026-05-20: this device — USB 0x3004 — was firmware-confirmed to be an
+> AKP05E "Stream Dock Plus" (10 LCD keys / 4 endless encoders / LCD touch
+> strip / protocol_version 3, firmware "V3.AKP05E.01.007"), codename `akp05e`.
+> It was previously mis-filed in this research doc as a 6-key AKP03 variant
+> routed through `makeAkp03`; the geometry and factory below have been
+> corrected. See STATE.md.
+
+**Routes through:** the shared Stream Dock backend via the `makeAkp05` factory
+in `src/devices/streamdeck/src/register.cpp` (1024-byte packets,
+protocol_version 3).
 
 **Inheritance graph today:**
 
@@ -253,7 +261,7 @@ Akp03Device : IDevice, IDisplayCapable, IEncoderCapable, IClockCapable
 
 This **single class serves every AKP03 sibling** including `akp03`,
 `akp03_legacy`, `akp03e`, `akp03r`, `akp03r_rev2`, all Mirabox N3 rebrands,
-and **`akp03_variant_3004`**. There is no per-codename subclass — the
+and **`akp05e`**. There is no per-codename subclass — the
 descriptor's `model` / `codename` field carries the SKU identity. v1.2 work
 on the 0x3004 PID landing real wire formats **automatically applies to every
 sibling**, modulo per-revision firmware quirks documented in `akp03.md`.
@@ -266,10 +274,10 @@ sibling**, modulo per-revision firmware quirks documented in `akp03.md`.
 | `encoder`  | Read path complete via `poll()` → `parseInputReport()` (akp03.cpp:328-398)            | Verify against real captures; possibly add decimation if 8KHz mouse-like reports show up. Currently no rate-limit; budget = 60fps QML refresh.          |
 | `clock`    | `setTime` returns `NotImplemented` + WARN-once (akp03.cpp:474-480)                    | **Phase 9 captures-driven decision** (ARCH-05 candidate). If no RTC, leave `NotImplemented`; if RTC found, replace body with wire-format write.         |
 
-**Wire-format constants already present** in `akp03_protocol.hpp:53-58`:
-`DisplayKeyCount=6, KeyCount=9, EncoderCount=3, KeyWidthPx=60, KeyHeightPx=60`.
-The 0x3004 variant inherits these (NOT 64×64 like `akp03r_rev2` v3 firmware) —
-captures should confirm.
+**Wire-format constants** for AKP05E: 10 LCD keys, 4 endless encoders, plus an
+LCD touch strip — NOT the 6-key / 3-encoder geometry of the base AKP03. The
+AKP05 backend carries the AKP05E geometry; image-key size and rotation are
+confirmed by captures.
 
 ### 2. AK980 PRO (Keyboard 0x0c45:0x8009, scaffolded → functional/partial)
 
@@ -404,7 +412,7 @@ groupings; the 1:1 mapping in the table above is the authoritative cross-walk.
 
 ## Data flow per capability
 
-### Image push (display capability) — AKP03 variant_3004
+### Image push (display capability) — AKP05E (0x3004)
 
 ```
 [User selects key 3, drops a PNG file in KeyDesigner.qml]
@@ -435,8 +443,8 @@ through `Q_INVOKABLE` with `QByteArray` value parameter is a copy that survives
 the call boundary. The shared_ptr<IDevice> held in the local closes the UAF
 window on the device side. No raw pointer crosses the boundary.
 
-**Latency budget:** AKP03 6-key full refresh = 6 keys × (1 header + 5-10 chunks)
-× 512B writes ≈ ~30 writes × ~1ms hidraw latency = ~30ms. Acceptable for a
+**Latency budget:** AKP05E 10-key full refresh = 10 keys × (1 header + 5-10 chunks)
+× 1024B writes ≈ ~50 writes × ~1ms hidraw latency = ~50ms. Acceptable for a
 non-realtime UX (profile switch). The 60fps animation budget is **out of
 reach today** and not part of v1.2 scope.
 
@@ -514,7 +522,7 @@ linearly per consumer and is fine at N=2-3 consumers.
 | Type                           | Path                                                   | Purpose                                                                                                                                  |
 | ------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Test fixture                   | `tests/unit/fixtures/mock_transport.hpp` (NEW)         | Thin ITransport mock that captures `write` calls + replays canned `read` responses. ~80 LoC. Pre-condition for every capability test.    |
-| Test fixture dir               | `tests/integration/fixtures/akp03_variant_3004/` (NEW) | hex-format capture fixtures per the `akp153/` precedent.                                                                                 |
+| Test fixture dir               | `tests/integration/fixtures/akp05e/` (NEW) | hex-format capture fixtures per the `akp153/` precedent.                                                                                 |
 | Test fixture dir               | `tests/integration/fixtures/ak980pro/` (NEW)           | hex-format capture fixtures.                                                                                                             |
 | Test fixture dir               | `tests/integration/fixtures/ajazz_24g_8k/` (NEW)       | hex-format capture fixtures.                                                                                                             |
 | Test fixture dir               | `tests/integration/fixtures/0c45_7016/` (NEW)          | Identification capture (`lsusb -v`, `udevadm`), then either deletion (Scenario B = secondary interface) or wire-format hex (Scenario A). |
@@ -640,8 +648,8 @@ For each device codename promoted in v1.2, add:
    class with `MockTransport`. Asserts wire-format byte sequences against
    captured ground truth. Example test cases:
 
-   - `"akp03_variant_3004 setKeyImage encodes 60x60 JPEG at offset 12"`
-   - `"akp03_variant_3004 setBrightness clamps at 100 (byte 10)"`
+   - `"akp05e setKeyImage encodes 60x60 JPEG at offset 12"`
+   - `"akp05e setBrightness clamps at 100 (byte 10)"`
    - `"ak980pro setRgbStatic on logo zone emits CmdSetRgbStatic with zone=0x02"`
    - `"ajazz_24g_8k setDpiStage 0 emits envelope with checksum at byte 63"`
 
@@ -757,7 +765,7 @@ based on these trade-offs:
 ### Option A — Device-clustered phases (RECOMMENDED)
 
 - Phase 9: Research (this milestone; 4 parallel researchers)
-- Phase 10: AKP03 variant_3004 promotion (display + encoder + clock decision)
+- Phase 10: AKP05E (0x3004) promotion (display + encoder + clock decision)
 - Phase 11: AK980 PRO promotion (rgb + macros + layers + clock decision)
 - Phase 12: AJAZZ 2.4G 8K promotion (dpi + rgb)
 - Phase 13: 0c45:7016 identification + integration (Scenario A | Scenario B)
@@ -796,7 +804,7 @@ instead of a parallel fan-out.
 If the Roadmapper proposes 4 device-clustered phases after Phase 9 research,
 order them by **decreasing capture-availability confidence**:
 
-1. **AKP03 variant_3004 first** — Best OSS corpus (`mishamyrt/ajazz-sdk`,
+1. **AKP05E (0x3004) first** — Best OSS corpus (`mishamyrt/ajazz-sdk`,
    `4ndv/opendeck-akp03`, `naerschhersch/opendeck-akp05`). Existing Akp03
    backend most mature. Lowest research risk.
 1. **AJAZZ 2.4G 8K second** — Zero OSS corpus, but existing AjSeries impl
@@ -826,7 +834,7 @@ GSD workflow config" or later).
 - `src/core/include/ajazz/core/transport.hpp` (lines 46-118 — ITransport)
 - `src/core/include/ajazz/core/hid_transport.hpp` (lines 39-40 —
   makeHidTransport factory)
-- `src/devices/streamdeck/src/register.cpp` (lines 238-250 — akp03_variant_3004
+- `src/devices/streamdeck/src/register.cpp` (lines 238-250 — akp05e
   registration)
 - `src/devices/streamdeck/src/akp03.cpp` (lines 274-521 — Akp03Device class)
 - `src/devices/streamdeck/src/akp03_protocol.hpp` (lines 53-58 — wire-format

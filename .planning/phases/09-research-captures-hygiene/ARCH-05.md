@@ -10,6 +10,9 @@ confidence: 'HIGH (four-corpus convergence: mirajazz, opendeck-akp03, ajazz-sdk,
 ratified: 2026-05-15
 ---
 
+> (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
+
+
 # ARCH-05: IClockCapable::setTime wire-format outcome per device (DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION)
 
 **Status:** DEFAULT VERDICT (PENDING CAPTURE CONFIRMATION) - ratified 2026-05-15
