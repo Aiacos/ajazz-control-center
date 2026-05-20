@@ -72,6 +72,7 @@
 // in sandbox.hpp is insufficient for member access.
 #include "process_attributes_impl_win32.hpp"
 #include "win32_env_block.hpp"
+#include "win32_python_resolve.hpp"
 #include "wire_protocol.hpp"
 
 #include <chrono>
@@ -387,6 +388,11 @@ OutOfProcessPluginHost::OutOfProcessPluginHost(OutOfProcessHostConfig config)
         // so this is the consistent choice.
         m_impl->config.pythonExecutable = "python3";
     }
+    // Resolve the interpreter to a concrete path, skipping the Microsoft Store
+    // App Execution Alias stub (see win32_python_resolve.hpp). Without this a
+    // default "python3" launches the WindowsApps stub on a python.org install
+    // (which ships python.exe but no python3.exe) and the child never starts.
+    m_impl->config.pythonExecutable = win32::resolveRealPython(m_impl->config.pythonExecutable);
     if (m_impl->config.childScript.empty()) {
         throw std::runtime_error("OutOfProcessPluginHost: childScript must be set in the config");
     }

@@ -31,6 +31,7 @@
 #include <vector>
 
 #ifdef _WIN32
+#include <cwctype>
 #include <process.h>
 #include <windows.h>
 #else
@@ -80,6 +81,42 @@ int runChild(std::vector<std::string> argv) {
             MultiByteToWideChar(CP_UTF8, 0, s.data(), static_cast<int>(s.size()), w.data(), size);
         }
         wide.push_back(std::move(w));
+    }
+    // Resolve a bare "python"/"python3" interpreter past the Microsoft Store
+    // App Execution Alias stub (cf. src/plugins/src/win32_python_resolve.hpp):
+    // on a default python.org install only python.exe exists, so a literal
+    // "python3" otherwise launches the WindowsApps stub and exits 9009.
+    if (!wide.empty() && wide[0].find(L'\\') == std::wstring::npos &&
+        wide[0].rfind(L"python", 0) == 0) {
+        auto isStub = [](std::wstring const& p) {
+            std::wstring lower;
+            lower.reserve(p.size());
+            for (wchar_t const c : p) {
+                lower.push_back(static_cast<wchar_t>(std::towlower(c)));
+            }
+            return lower.find(L"\\windowsapps\\") != std::wstring::npos;
+        };
+        std::wstring fallback;
+        for (auto const* name : {L"python3.exe", L"python.exe"}) {
+            wchar_t buf[MAX_PATH] = {0};
+            DWORD const got = SearchPathW(nullptr, name, nullptr, MAX_PATH, buf, nullptr);
+            if (got == 0 || got >= MAX_PATH) {
+                continue;
+            }
+            std::wstring path{buf};
+            if (isStub(path)) {
+                if (fallback.empty()) {
+                    fallback = path;
+                }
+                continue;
+            }
+            wide[0] = path;
+            fallback.clear();
+            break;
+        }
+        if (!fallback.empty()) {
+            wide[0] = fallback;
+        }
     }
     std::vector<wchar_t const*> rawArgv;
     rawArgv.reserve(wide.size() + 1);

@@ -32,6 +32,7 @@
 
 #include <array>
 #include <atomic>
+#include <cwctype>
 #include <map>
 #include <string>
 #include <thread>
@@ -49,20 +50,39 @@
 
 namespace {
 
-// Resolve python3.exe (or python.exe) on PATH using SearchPathW.
-// Returns the wide path on success, empty string on miss. The integration
-// tests use this rather than relying on shell resolution.
+// Resolve a real python interpreter on PATH using SearchPathW, preferring any
+// candidate that is NOT the Microsoft Store "App Execution Alias" stub under
+// `%LOCALAPPDATA%\Microsoft\WindowsApps` (a reparse-point that prints "Python
+// was not found" and exits 9009 when no Store Python is installed). On a
+// default python.org install only `python.exe` exists, so a naive
+// `python3.exe`-first search picks the stub. Mirrors the production resolver in
+// `src/plugins/src/win32_python_resolve.hpp`.
 std::wstring locatePython() {
-    wchar_t buf[MAX_PATH] = {0};
-    DWORD const got = SearchPathW(nullptr, L"python3.exe", nullptr, MAX_PATH, buf, nullptr);
-    if (got > 0 && got < MAX_PATH) {
-        return std::wstring{buf};
+    auto isStub = [](std::wstring const& p) {
+        std::wstring lower;
+        lower.reserve(p.size());
+        for (wchar_t const c : p) {
+            lower.push_back(static_cast<wchar_t>(std::towlower(c)));
+        }
+        return lower.find(L"\\windowsapps\\") != std::wstring::npos;
+    };
+    std::wstring fallback;
+    for (auto const* name : {L"python3.exe", L"python.exe"}) {
+        wchar_t buf[MAX_PATH] = {0};
+        DWORD const got = SearchPathW(nullptr, name, nullptr, MAX_PATH, buf, nullptr);
+        if (got == 0 || got >= MAX_PATH) {
+            continue;
+        }
+        std::wstring path{buf};
+        if (isStub(path)) {
+            if (fallback.empty()) {
+                fallback = path;
+            }
+            continue;
+        }
+        return path;
     }
-    DWORD const got2 = SearchPathW(nullptr, L"python.exe", nullptr, MAX_PATH, buf, nullptr);
-    if (got2 > 0 && got2 < MAX_PATH) {
-        return std::wstring{buf};
-    }
-    return {};
+    return fallback;
 }
 
 // Trim trailing whitespace/newlines so child stdout comparisons are robust to

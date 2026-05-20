@@ -36,6 +36,7 @@
 // shared definition in `manifest_signer_common.cpp` — the mini-grep body
 // that used to live here was deleted in the same atomic commit.
 #include "manifest_signer_common.hpp"
+#include "win32_python_resolve.hpp"
 #include "wire_protocol.hpp"
 
 #include <cstdio>
@@ -135,8 +136,11 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
         return result;
     }
 
+    // Resolve "python3" to a real interpreter, skipping the Microsoft Store
+    // App Execution Alias stub (see win32_python_resolve.hpp) so verification
+    // works on a default python.org install (python.exe, no python3.exe).
     std::vector<std::string> const argv = {
-        config.pythonExecutable,
+        win32::resolveRealPython(config.pythonExecutable),
         config.verifierScript.string(),
         "verify",
         "--manifest",
