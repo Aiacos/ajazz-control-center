@@ -31,7 +31,7 @@ namespace akp05 {
 // Protocol helpers — pure functions, covered by unit tests.
 // -----------------------------------------------------------------------------
 
-/** @brief Construct a zero-initialised 512-byte command packet with the
+/** @brief Construct a zero-initialised 1024-byte command packet with the
  *         standard AKP prefix and the given three-byte ASCII command word.
  *
  *  The AKP framing layout is:
@@ -61,7 +61,7 @@ std::array<std::uint8_t, PacketSize> buildCmdHeader(std::array<std::uint8_t, 3> 
  *
  *  @param percent  Desired brightness in the range 0–100; values above 100
  *                  are silently clamped to 100.
- *  @return         Ready-to-send 512-byte packet.
+ *  @return         Ready-to-send 1024-byte packet.
  */
 std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent) {
     auto pkt = buildCmdHeader(CmdLight);
@@ -74,7 +74,7 @@ std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent) {
  *  Instructs the firmware to black-out every key LCD simultaneously.
  *  Byte 10 = 0x00, byte 11 = 0xFF (broadcast sentinel).
  *
- *  @return Ready-to-send 512-byte packet.
+ *  @return Ready-to-send 1024-byte packet.
  */
 std::array<std::uint8_t, PacketSize> buildClearAll() {
     auto pkt = buildCmdHeader(CmdClear);
@@ -89,7 +89,7 @@ std::array<std::uint8_t, PacketSize> buildClearAll() {
  *  Byte 10 = 0x00, byte 11 = @p keyIndex.
  *
  *  @param keyIndex  1-based key index (1..KeyCount).
- *  @return          Ready-to-send 512-byte packet.
+ *  @return          Ready-to-send 1024-byte packet.
  */
 std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex) {
     auto pkt = buildCmdHeader(CmdClear);
@@ -146,13 +146,13 @@ std::array<std::uint8_t, PacketSize> buildUploadFinished() {
 /** @brief Build the header packet for a key-image transfer.
  *
  *  The firmware expects one header packet followed immediately by one or more
- *  512-byte raw JPEG data packets.  The header encodes:
+ *  1024-byte raw JPEG data packets.  The header encodes:
  *  - Bytes 10–11: big-endian total JPEG byte count
  *  - Byte 12:     1-based key index
  *
  *  @param keyIndex  Destination key index (1..KeyCount).
  *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
- *  @return          Ready-to-send 512-byte header packet.
+ *  @return          Ready-to-send 1024-byte header packet.
  */
 std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
                                                          std::uint16_t jpegSize) {
@@ -171,7 +171,7 @@ std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
  *
  *  @param encoderIndex  0-based encoder index (0..EncoderCount-1).
  *  @param jpegSize      Total byte length of the JPEG payload (≤ 0xFFFF).
- *  @return              Ready-to-send 512-byte header packet.
+ *  @return              Ready-to-send 1024-byte header packet.
  */
 std::array<std::uint8_t, PacketSize> buildEncoderImageHeader(std::uint8_t encoderIndex,
                                                              std::uint16_t jpegSize) {
@@ -189,7 +189,7 @@ std::array<std::uint8_t, PacketSize> buildEncoderImageHeader(std::uint8_t encode
  *  Bytes 10–11 carry the big-endian JPEG size.
  *
  *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
- *  @return          Ready-to-send 512-byte header packet.
+ *  @return          Ready-to-send 1024-byte header packet.
  */
 std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize) {
     auto pkt = buildCmdHeader(CmdMainImage);
@@ -203,12 +203,12 @@ std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize
  *  Per vendor RE (akp05_vendor.md §2 row 188, SDDevice::sendLogoSizeCommand at
  *  0x180023a70): emits the "LOG" command word with the total JPEG size at
  *  bytes 10..11 as BE16, mirroring buildKeyImageHeader. The JPEG payload
- *  follows in 512-byte chunks through the normal sendImage() path, then the
+ *  follows in 1024-byte chunks through the normal sendImage() path, then the
  *  ULEND commit sentinel.
  *
  *  @param jpegSize  Total byte length of the JPEG payload (capped at 0xFFFF;
  *                   the on-wire size field is 16 bits).
- *  @return          Ready-to-send 512-byte header packet.
+ *  @return          Ready-to-send 1024-byte header packet.
  */
 std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize) {
     auto pkt = buildCmdHeader(CmdLogo);
@@ -728,7 +728,7 @@ private:
     /** @brief Transmit an image to any display surface on the device.
      *
      *  Sends the pre-built @p header packet first, then streams @p payload
-     *  in 512-byte chunks.  Partial trailing chunks are zero-padded by the
+     *  in 1024-byte chunks.  Partial trailing chunks are zero-padded by the
      *  zero-initialised @c chunk array before each write.
      *
      *  @param header   Pre-built command header (key, encoder, or main LCD).

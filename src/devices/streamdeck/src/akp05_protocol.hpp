@@ -17,10 +17,17 @@
  * Framing reuses the AKP family `CRT` prefix + 3-byte command word.
  * Per `[mirajazz]`'s protocol-version table the AKP05 family is a
  * **protocol_version 3** device: 1024-byte packets, native press/release
- * states. We currently send 512-byte packets to remain backward-
- * compatible with the older firmware revisions we shipped against; a
- * follow-up will detect protocol version at open-time
- * (`TODO.md` → "AKP05 v3 framing migration").
+ * states. We send 1024-byte output reports accordingly. This is
+ * firmware-confirmed: a live `CRT VER` handshake against an AKP05E
+ * (USB 0x0300:0x3004) on 2026-05-20 returned "V3.AKP05E.01.007", and the
+ * RE corpus shows every AKP05 / Mirabox N4 SKU is protocol_version 3
+ * (see `akp_device_matrix.md` — no 512-byte AKP05 variant exists).
+ *
+ * NOTE the endpoint asymmetry: the vendor control OUT endpoint is 1024
+ * bytes, but the IN endpoint is 512 bytes. `PacketSize` sizes the OUT
+ * reports (and their zero-padding); input reports are parsed from a span
+ * sized to the bytes actually read, so `PacketSize` is merely a safe upper
+ * bound for the read buffer on the input side.
  *
  * @see akp153_protocol.hpp (shared framing conventions)
  * @see akp03_protocol.hpp  (sister v2 device on the AKP family)
@@ -71,8 +78,10 @@ inline constexpr std::uint16_t TouchStripRangeX = 640;    ///< Touch X coordinat
 inline constexpr std::uint16_t EncoderScreenWidthPx = 100;
 inline constexpr std::uint16_t EncoderScreenHeightPx = 100;
 
-/// All output and input reports are padded to this size.
-inline constexpr std::size_t PacketSize = 512;
+/// Output reports are padded to this size. The protocol_version 3 AKP05
+/// family uses a 1024-byte vendor OUT endpoint (the IN endpoint is 512 B;
+/// see the file header note on the OUT/IN asymmetry).
+inline constexpr std::size_t PacketSize = 1024;
 
 // Command words: bytes 0..2 = "CRT" prefix, bytes 5..7 = command.
 inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; ///< Packet header "CRT".
@@ -114,12 +123,12 @@ inline constexpr std::array<std::uint8_t, 3> CmdLogo{0x4c,
                                                      0x47}; ///< Firmware boot-logo upload "LOG".
 
 /**
- * @brief Build the zero-padded 512-byte base packet for any command word.
+ * @brief Build the zero-padded 1024-byte base packet for any command word.
  *
  * Bytes 0..2 = CmdPrefix ("CRT"), 3..4 = 0x00, 5..7 = `cmd`, 8..511 = 0x00.
  *
  * @param cmd 3-byte ASCII command identifier.
- * @return Zero-initialised 512-byte packet.
+ * @return Zero-initialised 1024-byte packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
 buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
@@ -127,20 +136,20 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
 /**
  * @brief Build a `Set Brightness` report; byte 10 = percent (clamped 0..100).
  * @param percent Target brightness.
- * @return 512-byte report.
+ * @return 1024-byte report.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildSetBrightness(std::uint8_t percent);
 
 /**
  * @brief Build the `Clear all keys` report (byte 10 = 0, byte 11 = 0xFF).
- * @return 512-byte report.
+ * @return 1024-byte report.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildClearAll();
 
 /**
  * @brief Build the `Clear single key` report.
  * @param keyIndex 1-based key index, 1..KeyCount.
- * @return 512-byte report.
+ * @return 1024-byte report.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex);
 
@@ -148,11 +157,11 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
  * @brief Build the first packet of a `Set key image` transfer.
  *
  * Offsets 10..11 = big-endian JPEG size, offset 12 = keyIndex. The JPEG
- * payload follows in 512-byte chunks (identical format to AKP153).
+ * payload follows in 1024-byte chunks (identical format to AKP153).
  *
  * @param keyIndex  1-based key index, 1..KeyCount.
  * @param jpegSize  Total JPEG payload size in bytes.
- * @return 512-byte header packet.
+ * @return 1024-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildKeyImageHeader(std::uint8_t keyIndex,
                                                                        std::uint16_t jpegSize);
@@ -164,7 +173,7 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
  *
  * @param encoderIndex 0-based encoder index, 0..EncoderCount-1.
  * @param jpegSize     Total JPEG payload size in bytes.
- * @return 512-byte header packet.
+ * @return 1024-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
 buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
@@ -201,7 +210,7 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
  * re-encoding+re-uploading the whole 800×480 panel on every redraw. Massive
  * bandwidth win when only one encoder's overlay zone changed.
  *
- * Wire layout (single 512-byte header packet):
+ * Wire layout (single 1024-byte header packet):
  *  - bytes 0..2:  "CRT" prefix
  *  - bytes 3..4:  0x00 0x00
  *  - bytes 5..7:  "DRA" (CmdSecondaryScreen)
@@ -216,7 +225,7 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
  *  - bytes 19..20: BE16 rect y origin
  *  - bytes 21..511: 0x00 padding
  *
- * Followed by JPEG payload in 512-byte chunks via the standard sendImage()
+ * Followed by JPEG payload in 1024-byte chunks via the standard sendImage()
  * path, then the ULEND commit sentinel (buildUploadFinished()).
  *
  * @param location  Zone id / location discriminator. 0x12 triggers vendor's
@@ -230,7 +239,7 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
  * @param y         Rect y origin in pixels (BE16).
  * @param jpegSize  Total JPEG payload size in bytes (BE32; max 0xFFFFFFFF
  *                  but practically capped by HID transfer rate).
- * @return 512-byte header packet.
+ * @return 1024-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize>
 buildSecondaryScreenHeader(std::uint8_t location,
@@ -244,10 +253,10 @@ buildSecondaryScreenHeader(std::uint8_t location,
  * @brief Build the first packet of a main-LCD image transfer.
  *
  * Offsets 10..11 = big-endian JPEG size. The 800×100 JPEG payload follows
- * in 512-byte chunks.
+ * in 1024-byte chunks.
  *
  * @param jpegSize Total JPEG payload size in bytes.
- * @return 512-byte header packet.
+ * @return 1024-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildMainImageHeader(std::uint16_t jpegSize);
 
@@ -258,11 +267,11 @@ buildSecondaryScreenHeader(std::uint8_t location,
  * 0x180023a70): the AKP05/Mirabox N4 accepts a custom "boot logo / splash"
  * JPEG that the firmware displays at power-on. The header carries the total
  * JPEG byte count at bytes 10..11 (BE16, mirroring the buildKeyImageHeader
- * shape); the JPEG itself follows in 512-byte chunks through the standard
+ * shape); the JPEG itself follows in 1024-byte chunks through the standard
  * sendImage() path, then the ULEND commit sentinel.
  *
  * @param jpegSize Total JPEG payload size in bytes (BE16; capped at 0xFFFF).
- * @return 512-byte header packet.
+ * @return 1024-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize);
 
