@@ -224,6 +224,41 @@ of the buffer; the binary writes them as little-endian: `byte1 = 0x7F`,
 
 ### 3.1 Time-sync 4-packet envelope (already in our backend — corroborates ARCH-05)
 
+> **⚠️ HARDWARE-VERIFIED CORRECTION (2026-05-21) — this supersedes the byte
+> offsets in the rest of §3.1 and §13.8.** The static-decompile byte map below
+> (and §13.8's "0x0C/0x10 LCD-aware variant") were **off by one** on the HID
+> Report ID and the firmware silently ignored our packets. Verified against a
+> physical AK980 PRO by hooking `DeviceDriver.exe`'s HID calls with **Frida**
+> (`frida.spawn` + `Interceptor.attach` on `DeviceIoControl`) and replaying the
+> captured bytes back via `hid_send_feature_report` — the TFT clock followed an
+> injected distinct time only with the layout below.
+>
+> - **Transport:** `DeviceIoControl(IOCTL_HID_SET_FEATURE = 0xB0191)` (== hidapi
+>   `hid_send_feature_report`), each followed by a `0xB0192` (GET) ACK read.
+> - **HID Report ID = 0x00** (unnumbered), NOT 0x04. The 0x04 we treated as the
+>   report id is actually the **first data byte** of control packets.
+> - **Report length = 65 bytes** (not 64).
+> - **Interface:** the vendor control collection — HID usage page **0xFF13**
+>   (MI_03 in Windows PnP enumeration); set `DeviceDescriptor::controlUsagePage`.
+> - The runtime time-sync is the **0x18 / 0x28 / 0x02 envelope** (below), NOT the
+>   `0x0C/0x10` single-packet from §13.8 — that opcode was tried on hardware and
+>   did **not** move the TFT clock.
+>
+> Exact captured + replay-verified 65-byte SET_FEATURE buffers (report id byte 0):
+>
+> ```
+> START    : 00 04 18 00 ... 00                                  (opcode 0x18 @ byte 2)
+> PREAMBLE : 00 04 28 00 00 00 00 00 00 01 00 ... 00             (opcode 0x28 @ 2; marker 0x01 @ 9)
+> DATA     : 00 00 01 5A YY MM DD hh mm ss 00 dow 00 ... AA 55   (magic 0x5A @ 3; trailer @ 63,64)
+> SAVE     : 00 04 02 00 ... 00                                  (opcode 0x02 @ byte 2)
+> ```
+>
+> Implemented in `proprietary_keyboard.cpp` (`buildSetTime*`, 65-byte,
+> `TimeReportSize`) + `register.cpp` (`controlUsagePage = 0xFF13`). The same
+> report-id-0x00 / 65-byte correction very likely applies to ALL proprietary
+> commands (RGB, settings) but only time-sync is hardware-verified — verify each
+> via the same Frida method before changing `makeReport`.
+
 Source: `FUN_004238e0` (time-sync) and `FUN_00423a10` (LCD-aware variant).
 
 Byte-for-byte identical to the gohv/KyleBoyer specs we already implement,

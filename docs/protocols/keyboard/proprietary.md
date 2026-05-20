@@ -10,12 +10,21 @@ The backend in `src/devices/keyboard/src/proprietary_keyboard.cpp` is a clean-ro
 | ---------- | ------------------- |
 | Vendor ID  | `0x3151`            |
 | Product ID | `0x4024`–`0x4029`   |
-| Interface  | `usage_page=0xFF00` |
-| Report ID  | `0x04`              |
+| Interface  | `usage_page=0xFF00` (provisional / family default) |
+| Report ID  | `0x04` (provisional — see correction below)        |
+
+> **HARDWARE NOTE (AK980 PRO, 2026-05-21):** the provisional values above were
+> wrong for the AK980 PRO. Its vendor control collection is usage page **0xFF13**
+> (not 0xFF00), and the time-sync feature reports use HID Report ID **0x00**
+> (the 0x04 is the first *data* byte), 65 bytes long. Verified by Frida-hooking
+> the vendor app + replaying the bytes (TFT clock followed an injected time).
+> See `ak980pro_vendor.md` §3.1. The same report-id-0x00 correction probably
+> applies to the other proprietary commands too, but only time-sync is
+> hardware-verified so far.
 
 ## Report layout (host → device)
 
-All output reports are 64 bytes. Byte 0 is the report id (`0x04`), byte 1 is the command id, bytes 2..63 carry the payload.
+All output reports are 64 bytes. Byte 0 is the report id (`0x04`), byte 1 is the command id, bytes 2..63 carry the payload. (Exception: the AK980 PRO time-sync reports are 65 bytes with report id `0x00` — see the hardware note above.)
 
 ```
 byte 0     : 0x04                 (report id)

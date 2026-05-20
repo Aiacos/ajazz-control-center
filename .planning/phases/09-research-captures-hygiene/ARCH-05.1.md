@@ -256,3 +256,40 @@ to confirm the absence of a setTime byte sequence in vendor-app captures).
   canonical mix-in consumer pattern).
 - Phase 9 D-05 honesty contract (default verdicts are PRO-FORMA; flips via
   amendment-ADR, never in-place edit).
+
+______________________________________________________________________
+
+## AMENDMENT 2026-05-21 — round-trip witness CONFIRMED on real hardware (with a wire-format correction)
+
+Status: **FINAL — CONFIRMED.** The Phase 9.x physical round-trip witness this
+ADR deferred ("the TFT clock widget shows the time we sent") has now been run
+against a physical AK980 PRO and **passes** — but only after correcting two
+errors in the original ARCH-05.1 wire format that the static decompile missed.
+
+**Method (per the CLAUDE.md "always cross-check the RE / hardware wins" rule):**
+hooked `DeviceDriver.exe`'s HID calls with **Frida** (`frida.spawn` +
+`Interceptor.attach` on `DeviceIoControl`/`WriteFile`), captured the vendor's
+real time-sync transaction, then replayed it via `hid_send_feature_report`. The
+keyboard's TFT clock followed a deliberately-distinct injected time (2031-12-25
+11:11:11) only with the corrected layout, and stayed unchanged with the original.
+
+**Corrections (now implemented + unit-pinned):**
+
+1. **HID Report ID is 0x00, not 0x04.** The original layout put 0x04 at byte 0
+   as the report id; the vendor uses report id **0x00** (unnumbered), and the
+   0x04 is the *first data byte*. Every byte was off by one (opcode at byte 2,
+   marker at byte 9, magic 0x5A at byte 3, day-of-week at byte 11, trailer
+   0xAA/0x55 at bytes 63/64). The original report-id-0x04 / 64-byte packets were
+   accepted at the HID layer but **silently ignored** by the firmware.
+2. **Reports are 65 bytes** (`TimeReportSize`), not 64.
+3. **Interface:** the control channel is the vendor HID collection at usage page
+   **0xFF13** (MI_03), selected via the new `DeviceDescriptor::controlUsagePage`
+   + `HidTransport` usage-page filter. `hid_open(vid,pid)` had bound the boot
+   keyboard, where the feature reports failed.
+
+The transport (HID SET_FEATURE / `writeFeature`) and the 0x18/0x28/0x02 opcodes
+were already correct. The byte-level spec + the Frida method are documented in
+`docs/protocols/keyboard/ak980pro_vendor.md` §3.1. The same report-id-0x00
+correction very likely applies to all proprietary commands (RGB, settings); only
+time-sync is hardware-verified so far. Implementation: commits on 2026-05-21
+(`buildSetTime*` 65-byte rewrite + `controlUsagePage` interface selection).
