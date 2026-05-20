@@ -96,7 +96,12 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 1. A user spinning an encoder sees rotation events delivered with a proper `EncoderReleased(int encoderIndex)` event (replacing the `value=0` half-step workaround at `src/devices/streamdeck/src/akp03.cpp:289-293`); rotation events are coalesced at the QML observer layer with a 16 ms `QTimer` so fast spin produces one signal per repaint frame (total delta accumulated and emitted once — Pitfall 23 signal-storm closed) (INPUT-01 + INPUT-02).
 1. `docs/_data/devices.yaml` row for `akp03_variant_3004` removes `clock` from `capabilities:` with a `notes:` line citing ARCH-05 ("no RTC opcode in mirajazz/opendeck-akp03/ajazz-sdk; LCD clock widgets are host-rendered images via the `display` capability, not firmware time"); maturity promotes `scaffolded` → `functional` (DEVICES-05).
 
-**Plans**: TBD
+**Plans**: 3 plans (3 waves)
+
+- [ ] 10-01-PLAN.md — DISPLAY-01/02/03: PacketSize 512→1024 + setKeyImage/setKeyColor via image_pipeline + MockTransport wire tests (wave 1)
+- [ ] 10-02-PLAN.md — INPUT-01/02 + DEVICES-05: genuine EncoderReleased + 16ms encoder coalescer + devices.yaml clock demotion to functional (wave 2)
+- [ ] 10-03-PLAN.md — DISPLAY-04: real-hardware 100-image power-cycle smoke test, AJAZZ_REAL_HARDWARE-gated + operator runbook (wave 3)
+
 **Phase notes**:
 
 - This phase establishes the canonical "device-promotion phase" template (`MockTransport` consumption, `static_assert(!is_base_of_v<QObject, IDisplayCapable>)` mix-in lock, descriptor-parameterisation, three-witness rule for any capability promotion) that Phases 11-12 reuse verbatim.
