@@ -92,54 +92,26 @@ ______________________________________________________________________
       Layout-managed items in SettingsPage / ProfileEditor /
       RgbPicker → switched to `Layout.preferredWidth/Height`.
 
-### Quick wins (≤ 1 hour each)
+- [ ] Replace all undefined Qt.tint calls in Theme.qml with Qt.lighter/darker or a custom tint helper to avoid runtime errors on all platforms
+  — **VALIDATION 2026-05-20: premise looks INVALID.** `Qt.tint(color, tint)` is a documented Qt 6 QML global, used 10× in `Theme.qml`, and the shipped light-theme contrast fix relies on it (it cleared the zero-`qmllint`-warnings bar and the 105/105 test run). No evidence of a runtime error. Close unless a concrete failure is reproduced.
 
-- [x] **Wire AJAZZ banner into AppHeader.qml** — done. The wordmark image is
-  rendered with PreserveAspectFit at 32 px height; the redundant text label
-  is hidden when the image loads. Tray and app icons stay placeholder until
-  a square variant exists.
-- [x] **`app.ico` + `app.icns` + multi-size hicolor ONGs** generated from
-  `resources/branding/app.svg`. Windows `.exe` now embeds the icon via a
-  generated `.rc` file; macOS bundle picks up `app.icns` via
-  `MACOSX_BUNDLE_ICON_FILE`; Linux installs PNG + scalable variants under
-  `share/icons/hicolor/<size>x<size>/apps/`.
-- [x] **README + wiki screenshots** of the Material UI in light and dark
-  mode — done in this cycle. Captured via `niri msg action screenshot-window` against the running app with `Appearance/Mode = light` / `dark` preset in `~/.config/Aiacos/AjazzControlCenter.conf`,
-  saved at `docs/screenshots/main-{dark,light}.png` (full HiDPI 3792 ×
-  2061 each, ~170 KB). README hero block uses a `<picture>` with
-  `prefers-color-scheme` so the GitHub README adapts to the visitor's
-  theme automatically; `docs/wiki/Home.md` shows both side by side
-  under a new `## Screenshots` section.
-- [x] **Hicolor PNG install rule** — done in `2486662`. The Linux install
-  block in `src/app/CMakeLists.txt` now publishes the brand-aligned SVG
-  (sourced from `resources/branding/app.svg`) under
-  `share/icons/hicolor/scalable/apps/ajazz-control-center.svg` and a full
-  pre-rasterised PNG ladder under `share/icons/hicolor/<sz>/apps/` for
-  every size `makeAppIcon()` consumes (16/22/24/32/48/64/128/256/512). The
-  legacy 3x3 macropad-grid placeholder at `resources/icons/app.svg` was
-  also replaced with a verbatim copy of `resources/branding/app.svg` so
-  every fallback path renders the brand mark.
-- [x] **Logger `CapturingSink` test fixture** — done in this cycle.
-  `tests/unit/test_logger.cpp` ships a reusable `CapturingSink` (records
-  every accepted call with level/module/message under an internal mutex
-  for thread-safety with the `LogSink::write` contract) and a `ScopedSink`
-  RAII helper that installs the sink + restores the previous level on
-  destruction. Two new cases pin the contract: `[logger][sink] captures accepted records` exercises both the macro path and the std::format
-  substitution at `LogLevel::Trace`; `[logger][sink] respects level filter` verifies that records below the active filter never reach
-  `write()` (the filter is enforced in `log()` itself, not delegated to
-  the sink).
+- [ ] Implement a timeout or explicit reset for the syncGlyphState property in DeviceRow.qml after a successful sync to prevent stale success icons persisting in the UI
+
+- [ ] Add proper error handling and logging for sandbox.decorate failures in out_of_process_plugin_host.cpp (POSIX) and out_of_process_plugin_host_win32.cpp (Windows) to abort launch when sandboxing cannot be applied
+
+- [ ] Verify that the Windows AppContainer sandbox destructor always runs and guard the FreeSid call against null pointers to prevent resource leaks or crashes
+  — **VALIDATION 2026-05-20: already satisfied.** `~Impl()` in `src/plugins/src/process_attributes_impl_win32.hpp` guards every `FreeSid` (`if (sid != nullptr)`, `if (appContainerSid != nullptr)`) and the token handle (`if (restrictedToken != nullptr)`); it is RAII so it runs deterministically on scope exit. The "verify" is done — keep only as a tracking note, or close.
+
+- [ ] Create integration tests that spawn a child process under each sandbox implementation (AppContainer, bwrap, macOS exec) and assert that the intended isolation constraints are enforced
+
+- [ ] Implement per-LED RGB buffer support in via_keyboard.cpp (currently throws runtime_error) or document the limitation
+
+- [ ] Introduce feature‑flags or compile‑time guards around plugin code that depends on optional vendor libraries (QtSerialPort, OpenCV, libusb) to prevent crashes when those libraries are absent
+
+- [ ] Clamp Theme.surfaceAt level argument to a minimum of zero and add documentation to avoid negative level misuse
 
 ### User actions (out-of-code, one-time)
 
-- [x] **Enable GitHub Wiki**: done by the maintainer this cycle
-  (initial page saved with placeholder content "VOID" — the
-  `wiki-sync.yml` workflow overwrites every page from `docs/wiki/` on
-  every push to `main`, so the placeholder content is replaced
-  automatically on the next push).
-- [x] **Enable Dependency Graph**: done by the maintainer this cycle.
-  `dependency-review.yml` is now effective on dependabot PRs (the
-  `continue-on-error: true` shim can be removed in a follow-up cleanup
-  commit once a green run confirms the action works).
 - [ ] **AK 980 ACL — physical replug**: `setfacl` workaround was applied
   this session, but is reset at the next boot. After replugging the
   AK 980 PRO once, systemd-logind picks up the `TAG+="uaccess"` from the
@@ -235,24 +207,6 @@ ______________________________________________________________________
   geometric placeholder. Either ask AJAZZ for a square logo or design a
   custom monogram inspired by the wordmark.
 
-- [x] **`make test` Windows fixture for `concurrent writers`** — switched
-  to `ReplaceFileW` for the existing-destination case (the common path
-  under contention) and widened the retry set to also catch
-  `ERROR_LOCK_VIOLATION` and `ERROR_USER_MAPPED_FILE`. `MoveFileExW` is
-  kept as the no-destination-yet fallback. Should eliminate the residual
-  ~1/100 flake on windows-2022.
-
-- [x] **Audit finding S8 — narrow udev rules** (`resources/linux/99-ajazz.rules`):
-  done this cycle. The four `SUBSYSTEM=="usb"` lines were dropped; only
-  the matching `KERNEL=="hidraw*"` rules remain. **Validation**:
-  `ajazz_core` links the `hidapi::hidapi` umbrella target, which on
-  Linux resolves to `hidapi_hidraw` (the `/dev/hidraw*` kernel-native
-  backend) whenever `HIDAPI_WITH_HIDRAW` is built — verified at
-  `dev/_deps/hidapi-src/src/CMakeLists.txt:137-156` (EXPORT_ALIAS=hidraw
-  takes precedence over libusb when both are available). The libusb
-  backend is built but not linked into our binary, so the dropped USB
-  rules covered a code path we never enter at runtime.
-
 - [ ] **profile-buttons — wire Apply / Revert / Restore defaults to real
   paths** (surfaced by source-level `TODO(profile-buttons)` at
   `src/app/qml/Main.qml:111`). Today the three ProfileEditor buttons
@@ -340,24 +294,6 @@ ______________________________________________________________________
 > protocols may live in the repo, but no vendor binary, decompiled
 > source, or copyrighted asset ever lands in version control.
 
-- [x] **Acquire the official AJAZZ software for the Maude keyboard and
-  the Stream Dock line of products** — first pass landed. Inventory
-  shipped at `docs/research/vendor-software-inventory.md` with the
-  Stream Dock AJAZZ-branded Windows + macOS installers (Aliyun OSS,
-  Content-MD5 verified at HEAD without burning bandwidth on the
-  full 121 / 282 MB downloads), 17 keyboard models (AK680/820/870
-  families + AKS / AKP / NK SKUs) and 15 mouse models (AJ199/159
-  families + AJ039/129/139/179/358/52 + AM3) with URL, file size,
-  Last-Modified, and Content-MD5 where the CDN exposes it. Open
-  items recorded in the doc: Mirabox-branded Stream Dock builds
-  (JS-rendered portal returns 500 on a single-shot fetch — needs a
-  real browser session); Maude keyboard (not on either EN or UK
-  download page — likely a regional / internal name, action item to
-  confirm via `support@a-jazz.com`); AJ339/AJ380 driver download
-  (probably folded into AJ199 family — needs report-descriptor
-  comparison); SHA-256 archival pass to the encrypted out-of-repo
-  vault.
-
 - 🟡 **Decompile / disassemble the AJAZZ desktop apps under a clean-
   room policy**: run the installers in a disposable VM, extract the
   Electron / .NET / Qt payloads, decompile with the appropriate
@@ -394,18 +330,6 @@ ______________________________________________________________________
   up Phase B without re-discovering the toolchain. ≈ 2-3 days
   remaining once a person + hardware are scheduled.
 
-- [x] **Vendor feature inventory → gap analysis** — scaffold landed
-  this cycle at
-  [`docs/research/vendor-feature-matrix.md`](docs/research/vendor-feature-matrix.md).
-  Stream Dock / keyboard / mouse / cross-cutting infrastructure
-  rows seeded from `docs/_data/devices.yaml` and the public AJAZZ
-  feature sheets, with our coverage marked ✅ / 🟡 / ❌ / ❓ where
-  evidence is in hand and ❓ where the vendor "claimed" capability
-  awaits the recon pass. The doc is goal-backwards: ❓ entries
-  flip to ✅ / ❌ only when a `capture-id` from
-  `vendor-protocol-notes.md` lands. Open work — populate the
-  Vendor column with verified behavior as recon ships.
-
 - 🟡 **Protocol parity backlog** (un-blocked 2026-04-29): the Phase A
   static pass flipped four ❓ rows in `vendor-feature-matrix.md` to
   verified-vendor (mouse polling rate, button remap / macros, lift-
@@ -424,17 +348,6 @@ ______________________________________________________________________
   - [ ] **Stream Dock firmware update via QtSerialPort handoff** — `FirmwareUpgradeTool.exe` is a separate process linked against `Qt5SerialPort.dll`, suggesting a USB-CDC bootloader handoff. Wire-capture the boot-into-bootloader command + the subsequent serial flash protocol. Implements the AKP153 / AKP03 / AKP05 firmware-update parity gap.
   - [ ] **Stream Dock Property Inspector HTML compat** — vendor ships ~11 `index.html_*` PI pages bundled in the MSI (per Finding 3); confirm via § 3.2 of the recon runbook (admin-extract). Cross-check what `$SD` events the JS calls; PI compat is required for plugin parity. Implementer is not the same as the runbook operator (clean-room split).
   - [ ] **Audio-reactive RGB on AK820 Max RGB** — vendor driver bundles `fftreal.dll` (real-input FFT). Likely powers an audio-reactive lighting mode that maps mic input spectrum to per-key RGB. New feature surface for our AK820 backend. Wire-capture the FFT mode toggle + observe whether it streams real-time updates over HID Feature Reports or is a fire-and-forget mode-switch.
-
-- 🟢 **AJ-series VID:PID enumeration drift** ✅ shipped 2026-04-29 (data layer): the validation cross-check pass found that `docs/_data/devices.yaml`, `src/devices/mouse/src/register.cpp`, and `resources/linux/99-ajazz.rules` enumerated AJ-series mice under VID `0x3554` with sequential PIDs `0xF51A/B/C/D`. The vendor's own driver `app/config.xml` (Finding 8 in `docs/research/vendor-protocol-notes.md`) maps AJ159 / AJ139 / AJ179 to **VID `0x248A` (USB) and `0x249A` (2.4G dongle)** with PID range `0x5C2E/0x5D2E/0x5E2E/0x5C2F`; AJ199 family is on VID `0x3554` but with PID range `0xF500-0xF5D5` (none of which is the `0xF51A-D` we previously enumerated).
-
-  - [x] Updated `docs/_data/devices.yaml` with 6 AJ-series entries covering both VID spaces.
-  - [x] Updated `src/devices/mouse/src/register.cpp` to enumerate the corrected `(VID, PID)` tuples.
-  - [x] Widened `resources/linux/99-ajazz.rules` to cover `idVendor==248a`, `249a`, and `3554`.
-  - [x] Ran `make docs` (`scripts/generate-docs.py`) — README + wiki + AppStream regenerated from corrected YAML.
-  - [x] AJ339 / AJ380 removed from active registry until real-device VID:PID is captured (vendor driver download not located).
-  - [x] Clean-room: the data fix is derived from vendor `config.xml` / `Config.ini` (CONFIG-only files, explicitly clean-room safe per `docs/research/README.md` § 1) and from our own code, NOT from disassembly. Apply only the data; the wire-format reconciliation (next entry) is the part that requires a clean engineer.
-
-- 🟢 **Apple VID placeholder in keyboard registration** ✅ shipped 2026-04-29: `src/devices/keyboard/src/register.cpp` no longer registers the Apple-VID placeholder (`0x05AC:0x024F`). The entry was deleted along with a comment block noting why. AK820 / AK820 Pro / AK820 Max keyboards continue to be reachable via the VIA entry (SONiX prefix `0x3151`); the proprietary backend's per-model coverage will follow the device database wire-up.
 
 - 🟥 **AJ-series wire format reconciliation** (filed 2026-04-29; refined 2026-04-30 with full opcode tables; **P0 — likely-broken AJ199 V1.0 impl, possibly-broken AJ199 Max impl**): the 2026-04-30 disassembly pass (Findings 11–14 in `docs/research/vendor-protocol-notes.md`) confirms the AJAZZ vendor stack speaks **three distinct wire-format dialects**, generation-stratified by device-firmware vintage:
 
@@ -473,34 +386,6 @@ ______________________________________________________________________
 
 > Findings from the architectural review pass earlier in the session.
 > Each one is a self-contained milestone; pick by current pain.
-
-- [x] **A1 — DeviceRegistry singleton → DI** ✅ shipped. `Application`
-  now owns a `core::DeviceRegistry m_deviceRegistry` member and threads
-  it through `streamdeck::registerAll(reg)` / `keyboard::registerAll(reg)`
-  / `mouse::registerAll(reg)` plus the `DeviceModel(registry, parent)`
-  constructor. The Meyers-singleton `DeviceRegistry::instance()` is kept
-  as a `[[deprecated]]` transition shim (audit-finding label baked into
-  the attribute) so any future backend that still needs it keeps
-  compiling. `tests/unit/test_device_registry.cpp` builds its own local
-  registries and gains an isolation case proving two instances don't
-  share state.
-
-- [x] **A2 — ActionEngine threading model** ✅ shipped. `ActionEngine`
-  now accepts a pluggable `core::Executor`; on `Sleep` (and on any
-  non-zero post-step `delayMs`) it defers the chain continuation via
-  `executor->scheduleAfter(delay, ...)` instead of calling
-  `std::this_thread::sleep_for` on the caller. Default is `BlockingExecutor`
-  (legacy semantics, kept for tests and headless callers); the GUI app
-  ships `QtExecutor` (backed by `QTimer::singleShot`) so the HID poll
-  thread / Qt main thread is freed immediately. Existing 3 ActionEngine
-  tests still pass; 3 new tests cover the executor abstraction.
-
-- [x] **A3 — EventBus per-event allocation** ✅ shipped. `event_bus.cpp`
-  now holds the subscribers in a `std::atomic<std::shared_ptr<vector<…> const>>`
-  swapped via copy-on-write on subscribe / unsubscribe; `publish()` is
-  lock-free (atomic-load + iterate immutable snapshot). Writers
-  serialise on a write-only mutex; readers don't take a mutex.
-  Existing 4/4 EventBus tests still pass under TSan.
 
 - 🟡 **A4 — PluginHost out-of-process** — slices 1 + 2 + 2.5 + 3a + 3b
   (Linux) + 3c (macOS) + 3d (Windows port, runtime-validated on CI in
@@ -687,33 +572,8 @@ ______________________________________________________________________
     of which mach-equivalent services each Windows permission
     actually contacts.
 
-- [x] **A5 — Logger global → injectable sink** ✅ shipped. New @c LogSink
-  abstract base in `ajazz/core/logger.hpp`; default `StderrSink`
-  reproduces the legacy formatting. `setLogSink(shared_ptr<LogSink>)`
-  swaps the active sink atomically against concurrent log() calls
-  (slot is `std::atomic<std::shared_ptr<LogSink>>`). All AJAZZ_LOG\_\*
-  macros unchanged; call sites untouched. Tests can now install a
-  capturing sink and assert on what subsystems logged.
-
-- [x] **A6 — Application destructor drain** ✅ shipped in `0ca47c6`.
-
 ### Security hardening
 
-- [x] **S2 — Plugin module name shadowing** — done. `loadAll()` calls
-  `sys.stdlib_module_names` (Python 3.10+) before importing any plugin
-  directory and rejects directories whose basename collides with a stdlib
-  module name. Pre-3.10 best-effort: relies on `isSafePluginId`.
-- [x] **S3 — `sys.path` accumulation** — done. `loadAll()` snapshots the
-  current `sys.path` into an unordered_set and appends only paths not yet
-  present.
-- [x] **S4 — Profile-IO TOCTOU / symlink follow / parent-dir fsync** —
-  done. Switched the Linux/macOS write path from `std::ofstream` to POSIX
-  `::open(O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW|O_CLOEXEC, 0600)`, fsync the
-  parent directory after the rename, and let `O_EXCL` reject any racing
-  symlink.
-- [x] **S6 — `syncFile` reopen** — done. The new POSIX write path
-  fsyncs the *original* fd before close; no reopen, no buffered-stdio
-  loss window.
 - [ ] **S7 — Substring-only profile validator** (LOW, intentional —
   `src/core/src/profile_io.cpp:123-153`): the in-tree `containsKey`
   scanner is documented as a tiny shim; replace with the Qt-side
@@ -725,22 +585,6 @@ ______________________________________________________________________
 > User-requested in this session. **Not autonomous-feasible** end-to-end;
 > document and break down so the work can be parallelized.
 
-- [x] **Manifest schema** (`docs/schemas/plugin_manifest.schema.json`):
-  JSON Schema Draft 2020-12 describing `UUID`, `Name`, `Version`,
-  `SDKVersion`, `Actions[]`, `PropertyInspectorPath`, `OS`, `Software`,
-  `CodePath` / `CodePathLin` / `CodePaths` (OpenDeck-compatible) plus
-  the `Ajazz` namespace (`Sandbox`, `Permissions`, `Signing`,
-  `Compatibility`, `SupportedDevices`). Hooked into pre-commit via
-  check-jsonschema so every committed `manifest.json` is validated
-  automatically.
-- [x] **Architecture doc** (`docs/architecture/PLUGIN-SDK.md`):
-  language-agnostic out-of-process SDK; WebSocket JSON protocol that is
-  a strict superset of the Stream Deck SDK-2 wire format and accepts
-  OpenDeck plugins unchanged; lifecycle (discovery → negotiation →
-  spawn → register → steady-state → shutdown); per-OS sandbox
-  strategy (bwrap + seccomp / sandbox-exec / AppContainer /
-  flatpak-spawn); permission model; Sigstore-based signing; Plugin
-  Store catalogue shape; CLI workflow (`acc plugin scaffold/run/pack/lint`).
 - [ ] **Plugin process spawner** (sandboxed sub-processes, stdio or
   Unix-socket transport). ≈ 3-4 days.
 - [ ] **WebSocket protocol bridge** (Stream Deck-compatible JSON event
@@ -769,107 +613,10 @@ ______________________________________________________________________
   - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
     over the plugin-host WebSocket. Depends on **Plugin process spawner**
     - **WebSocket protocol bridge** below.
-- [x] **Property Inspector security hardening pass** — shipped. New
-  `PIUrlRequestInterceptor` (`src/app/src/pi_url_request_interceptor.{hpp,cpp}`)
-  is installed on every per-plugin `QWebEngineProfile` at the moment
-  `loadInspector` constructs the profile, scoped to the PI directory
-  (parent of `htmlAbsPath`); the allow/deny policy lives in pure C++ at
-  `src/app/src/pi_url_policy.{hpp,cpp}` so it is unit-testable without
-  booting QtWebEngine. The decision tree allows file:// only inside the
-  PI dir (with traversal blocked via cleaned-path comparison), https://
-  only to the Phase 1 CDN allowlist (`cdn.jsdelivr.net`, `unpkg.com` —
-  pinned in a `static constexpr std::array` so it is grep-able), qrc /
-  blob / data for Qt-internals, and rejects http:// + every other scheme
-  with a logged `AJAZZ_LOG_WARN("plugin-pi", ...)`. `\$SD.openUrl(url)`
-  is now wired through `QDesktopServices::openUrl` after an https-only
-  validation (rejects `javascript:`, `file:`, `mailto:`, `http:`); the
-  per-plugin first-call confirmation prompt is flagged with
-  `// TODO(pi-prompt)` for the next pass. Manual smoke test page at
-  `resources/dev/pi/index.html`. 12 unit tests under
-  `tests/unit/test_pi_bridge.cpp` cover the load policy + the openUrl
-  policy. M5 plugin-host wiring remains the next milestone.
-- [x] **Plugin Store UI** (`src/app/qml/PluginStore.qml`,
-  Material-styled, virtualized `GridView`, live search/filter, install /
-  uninstall / enable-toggle per-plugin, side-sheet details pane). Mounted
-  in a right-edge modal `Drawer` opened from a new “Plugins” button in
-  `AppHeader`. Source-switcher tabs scope the catalogue to All /
-  Installed / AJAZZ Streamdock / Community; an info banner on the
-  Streamdock tab clarifies the upstream origin. Backed by the
-  `PluginCatalogModel` C++ list model exposed as the `pluginCatalog` QML
-  context property. Networked catalogue fetch + Sigstore verification
-  still mocked — next milestone.
 - [ ] **Catalog backend** (registry, ratings, version pins, Sigstore
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
 - [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
   - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
-- [x] **OpenDeck store integration — first-class tab** (user request,
-  2026-04-26). Done. New `OpenDeckCatalogFetcher`
-  (`src/app/src/opendeck_catalog_fetcher.{hpp,cpp}`) GETs
-  `https://plugins.amankhanna.me/catalogue.json` (the OpenDeck
-  community mirror of the archived Elgato Stream Deck App Store —
-  per the OpenDeck Wiki "0. Elgato Marketplace" page), parses the
-  flat JSON array of plugin entries, translates each to a
-  `CatalogEntry` with `source = "opendeck"` and
-  `compatibility = "opendeck"`. Same three-layer (live → cache →
-  bundled fallback) resolution as the Streamdock fetcher, atomic
-  `QSaveFile` mirror at
-  `<XDG_CACHE_HOME>/ajazz-control-center/opendeck-catalog.json`,
-  endpoint overridable via `ACC_OPENDECK_CATALOG_URL=` (set to
-  `disabled` to skip live fetch on air-gapped builds). Plumbed
-  through `PluginCatalogModel` with parallel `replaceOpendeckRows`
-  plus three new Q_PROPERTY entries (`opendeckState`,
-  `opendeckFetchedAtUnixMs`, `opendeckCount`) and a matching
-  `opendeckStateChanged` signal. New "OpenDeck" tab in
-  `PluginStore.qml` (index 3,
-  between Streamdock and Community) with its own status-pill banner
-  attributing the upstream and explaining the SDK-2 compat shim.
-  `resources/opendeck-fallback.json` ships 3 representative entries
-  so the tab is never empty in dev / CI / air-gapped builds.
-  One-click install through the shared lifecycle manager still
-  depends on the **Plugin lifecycle manager** milestone.
-- [x] **AJAZZ Streamdock as the default Plugin Store tab** (user
-  request, 2026-04-26). Done — `src/app/qml/PluginStore.qml`
-  initialises `property int activeTab: 2` so first-time users land
-  on the AJAZZ-curated catalogue (live mirror of
-  `https://space.key123.vip/interface/user/productInfo/list`,
-  confirmed via web search to be the official AJAZZ Streamdock
-  plugin store) rather than the noisy union under "All".
-- [x] **QSettings-backed Plugin Store tab persistence** — done.
-  `src/app/qml/PluginStore.qml` now imports `QtCore` and wires
-  `activeTab` through a `Settings { category: "PluginStore"; property alias activeTab: root.activeTab }` block. The AJAZZ
-  Streamdock default (index 2) still applies on the very first
-  launch (when QSettings has no stored value yet); subsequent
-  launches restore whatever tab the user last selected. Stored
-  under `[PluginStore]/activeTab` in the existing
-  `Aiacos/AjazzControlCenter.conf` — the `category` keeps it
-  scoped so future page-specific persistence (search query, sort
-  order, etc.) can co-exist without key collisions.
-- [x] **AJAZZ Streamdock store integration — schema + UI scaffolding**:
-  manifest schema now exposes `Ajazz.Compatibility.Mode = "streamdock"`
-  alongside `streamdeck` / `opendeck`, plus an opaque
-  `StreamdockProductId` for catalogue-mirror lookups. The Plugin Store
-  UI surfaces upstream entries under a first-class “AJAZZ Streamdock”
-  tab with a dedicated info banner; `PluginCatalogModel` rows carry a
-  `source` field (`local` / `community` / `streamdock`) used by the tab
-  filter, and the side-sheet details pane labels the source as “AJAZZ
-  Streamdock store” for those rows.
-- [x] **AJAZZ Streamdock store — live catalogue fetch**: shipped. New
-  `StreamdockCatalogFetcher` (`src/app/src/streamdock_catalog_fetcher.{hpp,cpp}`)
-  POSTs to `https://space.key123.vip/interface/user/productInfo/list`
-  page-by-page, accumulates plugin records, translates upstream
-  `deviceUuid`s (293/293E/N3/N4/D92…) to AKP codenames via a curated
-  table, and writes an atomic `QSaveFile` mirror to
-  `<XDG_CACHE_HOME>/ajazz-control-center/streamdock-catalog.json`. Three
-  resolution layers (live → cached → bundled `streamdock-fallback.json`)
-  ensure the AJAZZ Streamdock tab is never empty. The fetcher is wired
-  into `PluginCatalogModel` and surfaces `streamdockState`
-  (`loading`/`online`/`cached`/`offline`) + `streamdockFetchedAtUnixMs`
-  to QML, which renders a live status pill on the tab banner with a
-  rolling relative-time label. Endpoint is overridable via
-  `ACC_STREAMDOCK_CATALOG_URL=` (set to `disabled` to skip the network
-  fetch entirely on air-gapped builds). One-click install through the
-  shared lifecycle manager still depends on **Plugin lifecycle
-  manager**.
 
 **Total realistic estimate**: 6-10 weeks of focused engineering for a
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
@@ -902,64 +649,6 @@ workstreams.
   primary palette, ripple effects on `PrimaryButton` /
   `SecondaryButton`. Pick by visible win when the typography pass
   reaches a page-by-page audit.
-
-- [x] **Empty state polish** for `DeviceList` when zero devices online
-  — done. `src/app/qml/DeviceList.qml` now hides the empty `ListView`
-  and renders the existing `components/EmptyState.qml` centered in the
-  sidebar with a "No devices yet" title and a one-line onboarding hint
-  ("Plug in an AJAZZ device — keyboard, Stream Dock, or mouse — and it
-  will show up here automatically."). Suppressed in the collapsed
-  64 px icon-only layout (`root.width < 200`) so the title doesn't
-  clip on narrow windows. Illustration is the existing typography-
-  only treatment from the EmptyState component; richer artwork
-  belongs to a future Material 3 polish pass.
-
-- [x] **Toast notifications upgrade** to the Material 3 Snackbar
-  pattern — done in this cycle. `components/Toast.qml` is now M3-spec:
-  geometry width clamped 344-672 px (vs. the previous 480-cap), height
-  switches between 48 (text-only) and 56 (with action), corner radius
-  on `Theme.radiusMd`, drop shadow at elevation 3 via
-  `MultiEffect.layer.effect`, motion bound to the new Theme tokens
-  (`durationMedium` + `easingStandard`). API gained an optional
-  trailing action button: `toast.show(message, variant, "Undo", cb)`.
-  Existing 6 call-sites in `Main.qml` keep working unchanged.
-
-- [x] **Light-theme `DeviceList` tile contrast** — fixed in this cycle.
-  Root cause was *not* the `DeviceList`/`DeviceRow` binding (it already
-  read from `Theme.tile`), but `Theme.tile` itself: it (and
-  `Theme.tileHover`/`Theme.borderSubtle`) was a hardcoded dark literal
-  (`#24242a` / `#2a2a32` / `#3a3a44`) that ignored the active branding
-  palette. Every tile/card/border across the app (DeviceRow, KeyCell,
-  EncoderCard, AppHeader search field, Card.qml, PluginStore tiles,
-  Settings page, etc.) painted dark over a light `bgSidebar` when light
-  theme was selected.
-  Fix: derive these tokens from the branding palette via
-  `Qt.tint(bgSidebar, Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, α))`
-  with α=0.03/0.06/0.13. The tint is polarity-agnostic — `fgPrimary` is
-  near-white in dark mode (lightens `bgSidebar`) and near-black in light
-  mode (darkens `bgSidebar`), so elevation always points the right way.
-  α factors were chosen by working backward from the prior dark
-  literals so the dark-theme look is preserved within < 1 %/channel.
-  No QML call-site changes; no `BrandingService` contract changes;
-  no `themeService.mode` plumbing — the `themeChanged` signal already
-  re-emits when the user switches modes and Qt re-evaluates every
-  property that reads a `branding.*` color. Visual regression check
-  against `docs/screenshots/main-light.png` waits for the next
-  screenshots refresh; build + test (105/105) green.
-
-- [x] **Settings page** (`src/app/qml/SettingsPage.qml`) — page +
-  entry-point both shipped. Material-styled page exposes
-  `themeService.mode`, `autostart.launchOnLogin`, and
-  `autostart.startMinimised` / `tray.startMinimized` via RadioButton +
-  SwitchDelegate. AppHeader now hosts a "Settings" ToolButton next to
-  "Plugins" that emits `settingsRequested()`; Main.qml opens a right-edge
-  modal `Drawer` (clamped 360–560 px wide) hosting the page —
-  same pattern as the Plugin Store drawer. The page was renamed from
-  the original `Settings.qml` to `SettingsPage.qml` because
-  `QtCore.Settings` is the QSettings binding type used by PluginStore
-  for tab persistence; sharing the unqualified name caused
-  `[missing-property] category` resolution errors when both modules were
-  imported in the same file.
 
 ______________________________________________________________________
 
