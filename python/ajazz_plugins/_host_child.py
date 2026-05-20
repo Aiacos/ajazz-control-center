@@ -140,6 +140,39 @@ def _is_safe_plugin_id(value: str) -> bool:
     return all(c.isascii() and (c.islower() or c.isdigit() or c in "._-") for c in value)
 
 
+# SEC-S2 (regression fix, 2026-05-20): a plugin directory whose basename
+# collides with a Python stdlib module name would shadow that module for
+# this host-child process. `_load_one_plugin` prepends the plugin's parent
+# directory to `sys.path` and then does `import <pkg>.plugin`, so `<pkg>`
+# resolves from that freshly-prepended directory *ahead of* the stdlib —
+# a plugin shipped in a `json/` or `logging/` directory could hijack the
+# very module the host relies on. `sys.stdlib_module_names` is the
+# authoritative set (Python 3.10+); older interpreters fall back to the
+# always-present builtin set (best-effort, matching the pre-3.10 behaviour
+# of the retired in-process host this guard was ported back from).
+_STDLIB_MODULE_NAMES: frozenset[str] = frozenset(
+    getattr(sys, "stdlib_module_names", None) or sys.builtin_module_names
+)
+
+
+def _shadows_stdlib(name: str) -> bool:
+    """True if @p name collides with a Python stdlib / builtin module name."""
+    return name in _STDLIB_MODULE_NAMES
+
+
+def _dirname_rejection(name: str) -> str | None:
+    """Return why @p name is an unacceptable plugin directory, or None.
+
+    Checked in order: the safe plugin-id grammar (charset / length), then
+    the SEC-S2 stdlib-shadowing guard.
+    """
+    if not _is_safe_plugin_id(name):
+        return "unsafe directory name"
+    if _shadows_stdlib(name):
+        return f"directory name shadows the Python stdlib module '{name}'"
+    return None
+
+
 def _add_search_path(msg: dict[str, Any]) -> None:
     """Add a directory the next `load_all` call should scan.
 
@@ -178,8 +211,9 @@ def _load_one_plugin(plugin_dir: Path) -> tuple[bool, str, str]:
         and ``message`` carries a short description of what went wrong.
     """
     pkg_name = plugin_dir.name
-    if not _is_safe_plugin_id(pkg_name):
-        return False, pkg_name, "unsafe directory name"
+    reason = _dirname_rejection(pkg_name)
+    if reason is not None:
+        return False, pkg_name, reason
 
     parent = str(plugin_dir.parent)
     if parent not in _added_to_sys_path:
