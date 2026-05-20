@@ -609,10 +609,21 @@ subsystems:
   `com.hotspot.streamdock.pageindicatororgoto`,
   `com.hotspot.streamdock.pagebackorforword`) — see
   `akp_plugin_sdk.md` §1 paragraph after the table.
-- **`ProductIdAkp03Demo` PID `0x3004`** is already in our
-  `register.cpp` as `Akp03DemoPid`. The "HOTSPOTEKUSB HID DEMO"
-  string label confirmed the device is an AKP03 sibling on
-  development firmware.
+- **PID `0x3004` is an AKP05E, NOT an AKP03 sibling.** An earlier
+  pass read the "HOTSPOTEKUSB HID DEMO" white-label string and filed
+  `0x3004` as a 6-key AKP03 (`Akp03DemoPid` / `ProductIdAkp03Demo`).
+  That was wrong: a live `CRT VER` handshake against the physical
+  retail unit on 2026-05-20 returned the firmware string
+  **`V3.AKP05E.01.007`** — i.e. an **AKP05E**, protocol_version 3
+  (1024-byte packets), 10 LCD keys (2×5) + 4 encoders + LCD touch
+  strip. `register.cpp` now routes `0x0300:0x3004` to `makeAkp05`
+  under codename `akp05e`. The USB descriptor confirms it: IF0 vendor
+  HID (usage page 0xFFA0, no Report IDs), EP 0x82 IN = 512 B,
+  EP 0x03 OUT = **1024 B**; the `VER` response is pulled via
+  `GET_REPORT` (`HIDIOCGINPUT`/`HIDIOCGFEATURE`), not delivered
+  unsolicited on the interrupt-IN endpoint (cf. §4.2). The
+  white-label "DEMO" product string is therefore NOT a reliable SKU
+  signal — always cross-check the `VER` firmware string.
 
 ### 14.2 Items moved to follow-up captures (still gaps)
 
