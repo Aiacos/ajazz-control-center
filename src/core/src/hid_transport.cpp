@@ -48,8 +48,8 @@ public:
      * @param pid    USB Product ID.
      * @param serial Serial number string; empty means first matching device.
      */
-    HidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial)
-        : m_vid(vid), m_pid(pid), m_serial(std::move(serial)) {}
+    HidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial, std::uint16_t usagePage = 0)
+        : m_vid(vid), m_pid(pid), m_serial(std::move(serial)), m_usagePage(usagePage) {}
 
     ~HidTransport() override { HidTransport::close(); }
 
@@ -61,14 +61,42 @@ public:
         // properly so non-ASCII serials (rare but possible on some firmwares)
         // round-trip correctly. The naive char->wchar_t copy was wrong: it
         // truncated multi-byte sequences and produced unmatched filters.
-        std::wstring const wserial = utf8ToWide(m_serial);
-        m_handle = ::hid_open(m_vid, m_pid, m_serial.empty() ? nullptr : wserial.c_str());
+        // Composite devices (e.g. AK980 PRO) expose several HID interfaces;
+        // hid_open(vid,pid) binds the FIRST one (usually the boot keyboard),
+        // where the vendor feature reports (RTC, battery, RGB) do not exist.
+        // When a control usage page is configured, enumerate and open the
+        // matching interface via hid_open_path instead. Falls back to the
+        // plain hid_open path if no interface matches (e.g. Linux hidraw, where
+        // usage_page may be unpopulated for non-primary collections).
+        if (m_usagePage != 0) {
+            std::string matchPath;
+            if (hid_device_info* head = ::hid_enumerate(m_vid, m_pid)) {
+                for (auto const* p = head; p != nullptr; p = p->next) {
+                    if (p->usage_page == m_usagePage && p->path != nullptr) {
+                        matchPath = p->path;
+                        break;
+                    }
+                }
+                ::hid_free_enumeration(head);
+            }
+            if (!matchPath.empty()) {
+                m_handle = ::hid_open_path(matchPath.c_str());
+            }
+        }
+        if (!m_handle) {
+            std::wstring const wserial = utf8ToWide(m_serial);
+            m_handle = ::hid_open(m_vid, m_pid, m_serial.empty() ? nullptr : wserial.c_str());
+        }
         if (!m_handle) {
             throw std::runtime_error("hid_open failed");
         }
         // Enable non-blocking mode so zero-timeout reads return immediately.
         ::hid_set_nonblocking(m_handle, 1);
-        AJAZZ_LOG_INFO("hid", "opened VID={:04x} PID={:04x}", m_vid, m_pid);
+        AJAZZ_LOG_INFO("hid",
+                       "opened VID={:04x} PID={:04x}{}",
+                       m_vid,
+                       m_pid,
+                       m_usagePage != 0 ? " (usage-page filtered)" : "");
     }
 
     void close() override {
@@ -197,6 +225,7 @@ private:
     std::uint16_t m_vid{0};          ///< USB Vendor ID.
     std::uint16_t m_pid{0};          ///< USB Product ID.
     std::string m_serial;            ///< Serial number filter; empty = first match.
+    std::uint16_t m_usagePage{0};    ///< Vendor control usage page to select (0 = first interface).
     ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
     /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
     std::atomic<std::uint64_t> m_bytesSent{0};
@@ -257,7 +286,8 @@ HidLibraryGuard& hidLibrary() {
  * @param serial Optional serial number; empty means first matching device.
  * @return Closed TransportPtr; call open() before I/O.
  */
-TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial) {
+TransportPtr
+makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial, std::uint16_t usagePage) {
     /**
      * @brief Decorator that holds a HidLibraryGuard reference for the
      *        transport's lifetime, balancing hid_init / hid_exit.
@@ -268,7 +298,7 @@ TransportPtr makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string 
         ~GuardedHidTransport() override { hidLibrary().release(); }
     };
     hidLibrary().acquire();
-    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial));
+    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial), usagePage);
 }
 
 } // namespace ajazz::core

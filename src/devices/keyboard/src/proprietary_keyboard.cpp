@@ -457,9 +457,10 @@ class ProprietaryKeyboard final : public IDevice,
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
-        : ProprietaryKeyboard(std::move(descriptor),
-                              id,
-                              makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+        : ProprietaryKeyboard(
+              descriptor,
+              id,
+              makeHidTransport(id.vendorId, id.productId, id.serial, descriptor.controlUsagePage)) {}
 
     /** Test constructor — accepts an injected transport (DI for unit tests). */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)

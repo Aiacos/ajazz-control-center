@@ -31,12 +31,20 @@ namespace ajazz::core {
  * @param pid    USB Product ID.
  * @param serial Optional serial number string; empty means "any device"
  *               with matching VID/PID.
+ * @param usagePage Optional HID usage page of the vendor control interface,
+ *               for composite devices exposing several HID interfaces (0 =
+ *               default: open the first matching interface via hid_open). When
+ *               non-zero, open() selects the interface whose usage page matches
+ *               via hid_enumerate + hid_open_path, falling back to hid_open if
+ *               no match is found.
  *
  * @return Owning pointer to a closed ITransport backed by libhidapi.
  *
  * @throws std::runtime_error if hidapi itself cannot be initialised.
  */
-[[nodiscard]] TransportPtr
-makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial = {});
+[[nodiscard]] TransportPtr makeHidTransport(std::uint16_t vid,
+                                            std::uint16_t pid,
+                                            std::string serial = {},
+                                            std::uint16_t usagePage = 0);
 
 } // namespace ajazz::core

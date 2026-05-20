@@ -62,6 +62,12 @@ void registerAll(core::DeviceRegistry& registry) {
             .hasBattery = true,  // Roadmap §11.2: opcode 0x20 sub 0x01 charge query.
             .hasSettings = true, // Issue #57 / P3.x: ISettingsCapable settings batch
                                  // (opcode 0x07 sub 0x10) — fn-layer / sleep / response time.
+            // The AK980 PRO is a composite HID device; its vendor control
+            // channel (RTC / battery / RGB feature reports) is the interface
+            // with usage page 0xFF13 (MI_03), NOT the boot keyboard (0x0001)
+            // that hid_open would pick. Empirically pinned 2026-05-20 — only
+            // this collection accepts the control SET_FEATURE write.
+            .controlUsagePage = 0xFF13,
         },
         &makeProprietaryKeyboard);
 }
