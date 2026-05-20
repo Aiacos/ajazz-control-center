@@ -7,7 +7,7 @@
 <domain>
 ## Phase Boundary
 
-Promote the `3151:5007` 8K mouse backend: a user can cycle 6 DPI stages in
+Promote the `3151:5007` 8K mouse backend: a user can cycle 8 DPI stages (field-determined; `devices.yaml dpi_stages: 8`, corrected from the earlier 6 assumption) in
 the firmware-captured cycle order, set per-stage DPI / colour / LOD, set
 polling rate up to 8000 Hz (with an honest USB 2.0 cap warning), and set
 per-zone RGB. The `devices.yaml` row reflects the captured AJ199 V1.0-vs-Max
@@ -71,7 +71,7 @@ blocked until resolved.
 ## Specific Ideas (ROADMAP success criteria)
 
 1. `aj_series.md` extended with the captured AJ199 V1.0-vs-Max reconciliation for `3151:5007`.
-1. 6 DPI stages in firmware-captured cycle order; state persists across power-cycle.
+1. 8 DPI stages (field-determined count) in firmware-captured cycle order; state persists across power-cycle.
 1. Per-stage DPI (`0x21`), colour indicator, LOD (`0x23`) set independently.
 1. Polling 1000/2000/4000/8000 Hz (`0x22`) with honest USB 2.0 cap warning.
 1. Per-zone RGB (`0x30`); zone count/names from capability descriptor.

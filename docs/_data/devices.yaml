@@ -430,7 +430,7 @@ devices:
     capabilities: [dpi, rgb, display, clock]
     protocol_doc: docs/protocols/mouse/aj_series_vendor.md
     dpi_stages: 8
-    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Has TFT LCD basetta showing clock + DPI (2026-05-18 implementation: opcode 0x25 SETTFTLCDDATA chunked RGB565 with host-side QImage renderer, wired to IClockCapable so TimeSyncService drives it). Wire-format rewrite landed in P3.12.1/.2 (656fb1c, 0e9bb04)."
+    notes: "8KHz-polling wireless mouse on SONiX VID prefix. Has TFT LCD basetta showing clock + DPI (2026-05-18 implementation: opcode 0x25 SETTFTLCDDATA chunked RGB565 with host-side QImage renderer, wired to IClockCapable so TimeSyncService drives it — clock surface ratified ARCH-05.2, host-rendered, NOT a firmware RTC). Wire-format rewrite landed in P3.12.1/.2 (656fb1c, 0e9bb04)."
     feature_summary:
       works:
         - "Descriptor + factory wired in register.cpp (3151:5007)"
