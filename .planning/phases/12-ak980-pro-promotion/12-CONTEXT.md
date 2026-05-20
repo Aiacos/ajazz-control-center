@@ -22,11 +22,18 @@ VERDICT); real-hardware wireless-stall verification (needs the device).
 <decisions>
 ## Implementation Decisions
 
-### Locked by Phase 9 ADR (DEFAULT VERDICT — capture-pending)
+### Locked by Phase 9 ADRs
 
-- **Clock (ARCH-05):** no RTC opcode in any AJAZZ corpus → remove `clock`
-  from the `ak980pro` row; `setTime` stays `NotImplemented`. Same reasoning
-  as DEVICES-05. Plan MUST cite the conditional status.
+- **Clock (ARCH-05.1, FINAL — 2026-05-17):** the AK980 PRO has a REAL
+  firmware RTC (opcode `0x28`, 4-packet HID Feature Report envelope), so the
+  ARCH-05 default verdict is FLIPPED for this device. `ak980pro` **keeps**
+  `clock` in `capabilities:`; `setTime` is implemented end-to-end (returns
+  `Ok`/`IoError`, never a no-op `Ok`) — already shipped in
+  `proprietary_keyboard.cpp` + `register.cpp` (`hasClock=true`) +
+  `devices.yaml`. DEVICES-06 is therefore **NOT** a clock demotion — it is the
+  honest `partial`-tier record; clock `partial` → `functional` gates on the
+  Phase 9.x physical round-trip witness. (Contrast DEVICES-05: ARCH-05 stands
+  for the Stream Dock family, so `akp03_variant_3004` removes `clock`.)
 
 ### Accepted grey-area defaults (2026-05-20)
 
@@ -58,12 +65,14 @@ conventions.
 - `ProprietaryKeyboard` backend — implements `IRgbCapable`; `setMode` /
   brightness / speed / direction extensions land here. `writeRgb` gains the
   wireless rate-limit.
-- `IClockCapable::setTime` — stays `NotImplemented` (WARN-once stub already
-  present per v1.1 Time Sync work).
+- `IClockCapable::setTime` — **implemented** per ARCH-05.1 (4-packet `0x28`
+  envelope via `writeFeature()` + 100 ms settle); returns `Ok`/`IoError`. The
+  WARN-once `NotImplemented` stub is the Stream Dock path, not this backend.
 - `docs/protocols/keyboard/` — AK980 PRO / AK820 family protocol docs;
-  cmd `0x13` (RGB), `0x17` (sleep-timer).
-- `docs/_data/devices.yaml` — `ak980pro` row: remove `clock`, promote
-  maturity `scaffolded` → `partial`.
+  cmd `0x13` (RGB), `0x17` (sleep-timer), `0x28` (RTC, ARCH-05.1).
+- `docs/_data/devices.yaml` — `ak980pro` row already KEEPS `clock` with
+  ARCH-05.1 notes + maturity `partial` (shipped). DEVICES-06 work is honesty
+  bookkeeping (works/pending split), not a clock change.
 
 **Build precondition:** C++ build currently fails to configure (Qt6
 CorePrivate / qzipreader_p.h — needs qt6-qtbase-private-devel). Execution
@@ -78,14 +87,14 @@ blocked until resolved.
 1. Brightness/speed/direction via `IRgbCapable` extensions; QML scale-mapped sliders.
 1. Sleep-timer (cmd `0x17`); discrete picker 1/5/10/30 min; persists across reconnect.
 1. **Honesty-critical gate:** `isWireless=true`; `writeRgb` ≤10 writes/sec rate-limit.
-1. `devices.yaml` removes `clock` (ARCH-05); maturity `scaffolded` → `partial`.
+1. `devices.yaml` KEEPS `clock` per ARCH-05.1 (real `0x28` RTC, shipped); maturity `partial` (DEVICES-06 = honesty bookkeeping, not demotion).
 
 </specifics>
 
 <deferred>
 ## Deferred Ideas
 
-- **Capture confirmation** — finalizes ARCH-05 + the RGB byte-level detail.
+- **Capture / physical witness** — finalizes the RGB byte-level detail and promotes the ARCH-05.1 clock `partial` → `functional` (TFT round-trip witness; year-2099 negative witness).
 - **Real-hardware wireless-stall verification** — needs a physical `0c45:8009`
   - its 2.4G dongle.
 - **Build fix** — Qt6 CorePrivate precedes any compile/test step.
