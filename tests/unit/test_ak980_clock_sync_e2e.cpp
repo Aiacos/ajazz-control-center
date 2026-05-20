@@ -102,46 +102,48 @@ TEST_CASE("AK980 PRO setTime emits the full 4-packet HID Feature envelope",
     auto const& writes = observer->writes();
     REQUIRE(writes.size() == 4);
 
-    // --- Packet 1: START control (ReportId=0x04, CMD_START=0x18, byte[8]=0x01) ---
+    // Hardware-verified wire format (Frida capture of DeviceDriver.exe vs a
+    // physical AK980 PRO, 2026-05-21): 65-byte feature reports whose HID Report
+    // ID is 0x00; the 0x04 is the first DATA byte, opcode follows at byte 2.
+    // --- Packet 1: START control (00 04 18 …) ---
     auto const& p1 = writes.at(0);
-    REQUIRE(p1.size() == 64); // ReportSize
-    REQUIRE(p1[0] == 0x04);   // default ReportId
-    REQUIRE(p1[1] == 0x18);   // CMD_START = CmdStartTime
-    REQUIRE(p1[8] == 0x01);   // configure-mode marker
+    REQUIRE(p1.size() == 65); // TimeReportSize
+    REQUIRE(p1[0] == 0x00);   // HID report id (unnumbered)
+    REQUIRE(p1[1] == 0x04);   // first data byte
+    REQUIRE(p1[2] == 0x18);   // CMD_START = CmdStartTime
 
-    // --- Packet 2: PREAMBLE (ReportId=0x04, CMD_TIME=0x28, byte[8]=0x01) ---
+    // --- Packet 2: PREAMBLE (00 04 28 … 01 @ byte[9]) ---
     auto const& p2 = writes.at(1);
-    REQUIRE(p2.size() == 64);
-    REQUIRE(p2[0] == 0x04);
-    REQUIRE(p2[1] == 0x28); // CmdSetTime — the load-bearing opcode
-    REQUIRE(p2[8] == 0x01);
+    REQUIRE(p2.size() == 65);
+    REQUIRE(p2[0] == 0x00);
+    REQUIRE(p2[1] == 0x04);
+    REQUIRE(p2[2] == 0x28); // CmdSetTime — the load-bearing opcode
+    REQUIRE(p2[9] == 0x01); // configure-mode marker
 
-    // --- Packet 3: DATA (ReportId=0x00 - distinct from default 0x04) ---
-    // pkt[0]=0x00 pkt[1]=0x01 pkt[2]=0x5A
-    // pkt[3]=year-2000  pkt[4]=mm pkt[5]=dd pkt[6]=hh pkt[7]=mm pkt[8]=ss
-    // pkt[9]=0x00 pkt[10]=tm_wday
-    // pkt[62]=0xAA pkt[63]=0x55
+    // --- Packet 3: DATA (00 00 01 5A YY MM DD hh mm ss 00 dow … AA 55) ---
     auto const& p3 = writes.at(2);
-    REQUIRE(p3.size() == 64);
-    REQUIRE(p3[0] == 0x00); // TimeDataReportId — NOT the default 0x04
-    REQUIRE(p3[1] == 0x01);
-    REQUIRE(p3[2] == 0x5a);                          // magic
-    REQUIRE(p3[3] == static_cast<std::uint8_t>(26)); // 2026 - 2000
-    REQUIRE(p3[4] == static_cast<std::uint8_t>(1));  // January
-    REQUIRE(p3[5] == static_cast<std::uint8_t>(15)); // day
-    REQUIRE(p3[6] == static_cast<std::uint8_t>(12)); // hour
-    REQUIRE(p3[7] == static_cast<std::uint8_t>(34)); // minute
-    REQUIRE(p3[8] == static_cast<std::uint8_t>(56)); // second
-    REQUIRE(p3[9] == 0x00);
-    REQUIRE(p3[10] == static_cast<std::uint8_t>(4)); // Thursday (tm_wday)
-    REQUIRE(p3[62] == 0xaa);                         // tail magic
-    REQUIRE(p3[63] == 0x55);
+    REQUIRE(p3.size() == 65);
+    REQUIRE(p3[0] == 0x00); // HID report id
+    REQUIRE(p3[1] == 0x00);
+    REQUIRE(p3[2] == 0x01);                          // LCD-select index + 1
+    REQUIRE(p3[3] == 0x5a);                          // magic
+    REQUIRE(p3[4] == static_cast<std::uint8_t>(26)); // 2026 - 2000
+    REQUIRE(p3[5] == static_cast<std::uint8_t>(1));  // January
+    REQUIRE(p3[6] == static_cast<std::uint8_t>(15)); // day
+    REQUIRE(p3[7] == static_cast<std::uint8_t>(12)); // hour
+    REQUIRE(p3[8] == static_cast<std::uint8_t>(34)); // minute
+    REQUIRE(p3[9] == static_cast<std::uint8_t>(56)); // second
+    REQUIRE(p3[10] == 0x00);
+    REQUIRE(p3[11] == static_cast<std::uint8_t>(4)); // Thursday (tm_wday)
+    REQUIRE(p3[63] == 0xaa);                         // tail magic
+    REQUIRE(p3[64] == 0x55);
 
-    // --- Packet 4: SAVE control (ReportId=0x04, CMD_SAVE_RTC=0x02) ---
+    // --- Packet 4: SAVE control (00 04 02 …) ---
     auto const& p4 = writes.at(3);
-    REQUIRE(p4.size() == 64);
-    REQUIRE(p4[0] == 0x04);
-    REQUIRE(p4[1] == 0x02); // CmdSaveRtc — dedicated RTC save opcode (NOT 0x0E EEPROM commit)
+    REQUIRE(p4.size() == 65);
+    REQUIRE(p4[0] == 0x00);
+    REQUIRE(p4[1] == 0x04);
+    REQUIRE(p4[2] == 0x02); // CmdSaveRtc — dedicated RTC save opcode (NOT 0x0E EEPROM commit)
 }
 
 TEST_CASE("AK980 PRO setTime: tm_wday is not hard-coded to Thursday",
@@ -170,7 +172,7 @@ TEST_CASE("AK980 PRO setTime: tm_wday is not hard-coded to Thursday",
 
     REQUIRE(clock->setTime(tp) == core::TimeSyncResult::Ok);
     REQUIRE(observer->writes().size() == 4);
-    REQUIRE(observer->writes().at(2)[10] == 0); // Sunday, not the gohv-hard-coded 4
+    REQUIRE(observer->writes().at(2)[11] == 0); // Sunday, not the gohv-hard-coded 4
 }
 
 TEST_CASE("AK980 PRO setTime maps year < 2000 to byte 0 instead of underflowing",
@@ -184,9 +186,9 @@ TEST_CASE("AK980 PRO setTime maps year < 2000 to byte 0 instead of underflowing"
     REQUIRE(clock != nullptr);
 
     // Year 1970 - if the builder used static_cast<uint8_t>(year - 2000) without
-    // the >= 2000 guard, pkt[3] would wrap to 226. The implementation pins it to 0.
+    // the >= 2000 guard, the year byte would wrap to 226. The implementation pins it to 0.
     auto const epoch = std::chrono::system_clock::from_time_t(0);
     REQUIRE(clock->setTime(epoch) == core::TimeSyncResult::Ok);
     REQUIRE(observer->writes().size() == 4);
-    REQUIRE(observer->writes().at(2)[3] == 0);
+    REQUIRE(observer->writes().at(2)[4] == 0);
 }

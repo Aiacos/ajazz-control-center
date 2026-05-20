@@ -153,63 +153,71 @@ std::array<std::uint8_t, ReportSize> buildCommitEeprom() {
  * byte 8. The firmware reads this as "next packet is a CMD_TIME configuration
  * data block, not a CMD_SAVE acknowledgement".
  */
-std::array<std::uint8_t, ReportSize> buildSetTimeStart() {
-    auto pkt = makeReport(CmdStartTime);
-    pkt[8] = 0x01; // configure-mode marker (gohv control_packet pattern)
+// Time-sync packets are 65-byte feature reports whose HID Report ID is 0x00
+// (pkt[0], from value-init). The 0x04 (ReportId constant) that other commands
+// place at byte 0 is, for these reports, the first *data* byte at pkt[1] —
+// hardware-verified via a Frida capture of DeviceDriver.exe (2026-05-21): only
+// this layout makes the AK980 PRO TFT clock follow an injected time. The earlier
+// ARCH-05.1 layout (report id 0x04, 64-byte) was off by one and silently ignored.
+std::array<std::uint8_t, TimeReportSize> buildSetTimeStart() {
+    std::array<std::uint8_t, TimeReportSize> pkt{};
+    pkt[1] = ReportId;     // 0x04 — first data byte (HID report id is pkt[0]=0x00)
+    pkt[2] = CmdStartTime; // 0x18
     return pkt;
 }
 
-std::array<std::uint8_t, ReportSize> buildSetTimePreamble() {
-    auto pkt = makeReport(CmdSetTime);
-    pkt[8] = 0x01;
+std::array<std::uint8_t, TimeReportSize> buildSetTimePreamble() {
+    std::array<std::uint8_t, TimeReportSize> pkt{};
+    pkt[1] = ReportId;   // 0x04
+    pkt[2] = CmdSetTime; // 0x28
+    pkt[9] = 0x01;       // configure-mode marker
     return pkt;
 }
 
 /**
- * @brief Build the 64-byte time-data packet (ReportId=0x00, magic 0x5A).
+ * @brief Build the 65-byte time-data packet (HID Report ID 0x00, magic 0x5A).
  *
  * See proprietary_protocol.hpp for the full byte spec. Year saturates at the
  * 2000 floor so calling with std::chrono::system_clock epoch (year 1970) does
  * not underflow into a uint8 wrap.
  */
-std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
-                                                      std::uint8_t month,
-                                                      std::uint8_t day,
-                                                      std::uint8_t hour,
-                                                      std::uint8_t minute,
-                                                      std::uint8_t second,
-                                                      std::uint8_t dayOfWeek) {
-    std::array<std::uint8_t, ReportSize> pkt{};
-    pkt[0] = TimeDataReportId; // 0x00 — NOT the default 0x04
-    pkt[1] = 0x01;
-    pkt[2] = 0x5a;
-    pkt[3] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;
-    pkt[4] = month;
-    pkt[5] = day;
-    pkt[6] = hour;
-    pkt[7] = minute;
-    pkt[8] = second;
-    pkt[9] = 0x00;
-    // wDayOfWeek (0=Sunday..6=Saturday). The gohv corpus hard-codes 0x04 here;
-    // Ghidra decompile of DeviceDriver.exe (2026-05-17, ak980pro_vendor.md
-    // §"Time-sync flow" lines 240-244) showed the vendor reads the real
-    // day-of-week. Clamp to 0..6 in case the caller passes an out-of-range
-    // value (tm_wday is guaranteed 0..6 by the C library but defensive).
-    pkt[10] = (dayOfWeek <= 6) ? dayOfWeek : 0;
-    // bytes 11..61 stay 0x00 from value-init.
-    pkt[ReportSize - 2] = 0xaa;
-    pkt[ReportSize - 1] = 0x55;
+std::array<std::uint8_t, TimeReportSize> buildSetTimeData(std::uint16_t year,
+                                                          std::uint8_t month,
+                                                          std::uint8_t day,
+                                                          std::uint8_t hour,
+                                                          std::uint8_t minute,
+                                                          std::uint8_t second,
+                                                          std::uint8_t dayOfWeek) {
+    std::array<std::uint8_t, TimeReportSize> pkt{};
+    // pkt[0] = 0x00 HID report id (value-init).
+    pkt[1] = 0x00;
+    pkt[2] = 0x01; // LCD-select index + 1 (single-LCD device => 1)
+    pkt[3] = 0x5a; // magic
+    pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;
+    pkt[5] = month;
+    pkt[6] = day;
+    pkt[7] = hour;
+    pkt[8] = minute;
+    pkt[9] = second;
+    pkt[10] = 0x00;
+    pkt[11] = (dayOfWeek <= 6) ? dayOfWeek : 0; // 0=Sunday..6=Saturday
+    // bytes 12..62 stay 0x00 from value-init.
+    pkt[TimeReportSize - 2] = 0xaa; // [63]
+    pkt[TimeReportSize - 1] = 0x55; // [64]
     return pkt;
 }
 
 /**
- * @brief Build the time-sync save packet — control packet for opcode 0x02.
+ * @brief Build the time-sync save packet — wire bytes `00 04 02 …`.
  *
  * Distinct from buildCommitEeprom() (opcode 0x0E for keymap / RGB / macro
  * state). The RTC has its own dedicated save opcode 0x02.
  */
-std::array<std::uint8_t, ReportSize> buildSetTimeSave() {
-    return makeReport(CmdSaveRtc);
+std::array<std::uint8_t, TimeReportSize> buildSetTimeSave() {
+    std::array<std::uint8_t, TimeReportSize> pkt{};
+    pkt[1] = ReportId;   // 0x04
+    pkt[2] = CmdSaveRtc; // 0x02
+    return pkt;
 }
 
 /**
@@ -816,8 +824,14 @@ public:
                                  std::uint8_t brightness,
                                  std::uint8_t speed) override {
         try {
-            // P1: START (opcode 0x18, marker 0x01)
-            (void)m_transport->writeFeature(buildSetTimeStart());
+            // P1: START (opcode 0x18, marker 0x01). 64-byte envelope (report id
+            // 0x04) — NOT the 65-byte report-id-0x00 time-sync START. The RGB /
+            // settings envelope wire format is not yet hardware-verified (only
+            // time-sync is, 2026-05-21); kept as-shipped to avoid regressing an
+            // unverified path. See the TimeReportSize note in proprietary_protocol.hpp.
+            auto envStart = makeReport(CmdStartTime);
+            envStart[8] = 0x01;
+            (void)m_transport->writeFeature(envStart);
             // P2: MODE_BEGIN (opcode 0x13)
             auto modeBegin = makeReport(CmdSetRgbMode);
             (void)m_transport->writeFeature(modeBegin);
@@ -836,8 +850,8 @@ public:
             // covers us here (matches buildSetRgbModeData internal layout).
             data[0] = ReportId;
             (void)m_transport->writeFeature(data);
-            // P4: SAVE (opcode 0x02 - shared with CmdSaveRtc).
-            (void)m_transport->writeFeature(buildSetTimeSave());
+            // P4: SAVE (opcode 0x02). 64-byte envelope (see P1 note above).
+            (void)m_transport->writeFeature(makeReport(CmdSaveRtc));
             // P5: FINISH (opcode 0xF0) - end-of-envelope sentinel per
             // ak980pro_vendor.md §13.7. Vendor's standard config-commit
             // envelope is 5 packets; the 4-packet RTC variant works
@@ -873,14 +887,18 @@ public:
     // (issue #57 / P3.x).
     bool setKeyboardSettings(core::KeyboardSettings const& settings) override {
         try {
-            // P1: START
-            (void)m_transport->writeFeature(buildSetTimeStart());
+            // P1: START. 64-byte envelope (report id 0x04) — see the note in
+            // setFirmwareLightingMode; the settings envelope is not yet
+            // hardware-verified, kept as-shipped.
+            auto envStart = makeReport(CmdStartTime);
+            envStart[8] = 0x01;
+            (void)m_transport->writeFeature(envStart);
             // P2: SETTINGS-DATA (opcode 0x07 sub 0x10)
             auto data = buildSettingsBatch(
                 settings.fnLayerSwitch, settings.sleepTimerMinutes, settings.keyResponseTimeLevel);
             (void)m_transport->writeFeature(data);
-            // P3: SAVE (opcode 0x02)
-            (void)m_transport->writeFeature(buildSetTimeSave());
+            // P3: SAVE (opcode 0x02). 64-byte envelope (see P1 note above).
+            (void)m_transport->writeFeature(makeReport(CmdSaveRtc));
             // P4: FINISH (opcode 0xF0) - end-of-envelope sentinel per
             // ak980pro_vendor.md §13.7 (same rule that issue #58 / P3.6
             // applied to setFirmwareLightingMode).

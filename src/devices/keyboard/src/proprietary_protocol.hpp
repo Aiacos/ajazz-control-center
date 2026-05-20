@@ -22,7 +22,24 @@
 namespace ajazz::keyboard::proprietary {
 
 inline constexpr std::size_t ReportSize = 64;  ///< HID output report length in bytes.
-inline constexpr std::uint8_t ReportId = 0x04; ///< HID report ID placed at byte 0.
+inline constexpr std::uint8_t ReportId = 0x04; ///< Leading data byte of control reports (see note).
+
+// HARDWARE-VERIFIED time-sync framing (Frida capture of DeviceDriver.exe vs a
+// physical AK980 PRO, 2026-05-21). The time-sync feature reports are **65 bytes**
+// and their HID Report ID is **0x00** (unnumbered), NOT 0x04 — the 0x04 above is
+// the first *data* byte of control packets, not the report id. The vendor sends
+// them via IOCTL_HID_SET_FEATURE (0xB0191) on the 0xFF13 vendor collection. The
+// earlier ARCH-05.1 layout (report id 0x04, 64-byte) was off by one and the
+// firmware silently ignored it. The 4-packet envelope on the wire is:
+//   START    : 00 04 18 ...
+//   PREAMBLE : 00 04 28 00 00 00 00 00 00 01 ...        (byte[9]=0x01)
+//   DATA     : 00 00 01 5A YY MM DD hh mm ss 00 dow ... AA 55  (trailer [63][64])
+//   SAVE     : 00 04 02 ...
+// NOTE: the same report-id-0x00 / 65-byte framing very likely applies to ALL
+// proprietary commands (makeReport currently emits report id 0x04, 64-byte), but
+// only time-sync is hardware-verified so far — verify each via the Frida method
+// before changing makeReport. See docs/protocols/keyboard/ak980pro_vendor.md.
+inline constexpr std::size_t TimeReportSize = 65; ///< Time-sync feature report length.
 
 // Command ids (host → device), placed at byte 1 of every output report.
 inline constexpr std::uint8_t CmdGetFirmwareVersion =
@@ -68,8 +85,8 @@ inline constexpr std::uint8_t CmdSetTime =
     0x28; ///< Configure RTC opcode (preamble control packet, byte 1).
 inline constexpr std::uint8_t CmdSaveRtc =
     0x02; ///< Persist RTC value to firmware NV-RAM (distinct from CmdCommitEeprom=0x0E).
-inline constexpr std::uint8_t TimeDataReportId =
-    0x00; ///< HID Report ID for the time-data packet (not the default 0x04).
+// (The time-sync reports use HID Report ID 0x00 directly in the builders — see
+// the TimeReportSize note above. The former TimeDataReportId constant was removed.)
 
 // ---------------------------------------------------------------------------
 // Settings batch (cmd 0x07 0x10) — single-shot save of fn / sleep / key-response /
@@ -498,12 +515,13 @@ buildScreenBulkBegin(std::uint8_t lcdSelect, std::uint16_t total4kChunks);
 /**
  * @brief Build the time-sync start packet — first of the 4-packet envelope.
  *
- * ReportId=0x04, opcode 0x18 (CMD_START), byte[8]=0x01. Resets the firmware's
- * time-sync state machine and signals "the next 3 packets are a time-set
- * sequence". Without this packet the firmware ignores the subsequent
- * preamble + data + save (per gohv/EPOMAKER-Ajazz-AK820-Pro USB capture).
+ * Wire bytes `00 04 18 …` (65-byte feature report; HID Report ID 0x00, then the
+ * 0x04 data byte, then opcode 0x18 = CMD_START). Resets the firmware's time-sync
+ * state machine and signals "the next 3 packets are a time-set sequence". Without
+ * it the firmware ignores the subsequent preamble + data + save. Format
+ * hardware-verified via a Frida capture of DeviceDriver.exe (2026-05-21).
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeStart();
+[[nodiscard]] std::array<std::uint8_t, TimeReportSize> buildSetTimeStart();
 
 /**
  * @brief Build the AK-series settings-batch DATA packet (opcode 0x07 sub 0x10).
@@ -521,36 +539,36 @@ buildSettingsBatch(std::uint8_t fnLayerSwitch,
                    std::uint8_t keyResponseTimeLevel);
 
 /**
- * @brief Build the time-sync preamble packet (ReportId=0x04, opcode 0x28, byte[8]=0x01).
+ * @brief Build the time-sync preamble packet. Wire bytes `00 04 28 … 01`
+ *        (65-byte report; Report ID 0x00, data 0x04, opcode 0x28, byte[9]=0x01).
  *
  * Second of the 4-packet envelope. Sent AFTER buildSetTimeStart() and BEFORE
  * buildSetTimeData(). Tells the firmware "next packet is a CMD_TIME configuration
  * data block".
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimePreamble();
+[[nodiscard]] std::array<std::uint8_t, TimeReportSize> buildSetTimePreamble();
 
 /**
- * @brief Build the 64-byte time-data packet (ReportId=0x00, magic 0x5A).
+ * @brief Build the 65-byte time-data packet (HID Report ID 0x00, magic 0x5A).
  *
- * Byte layout:
- *  - byte 0:  0x00 (HID Report ID — NOT the default 0x04 used by other commands)
- *  - byte 1:  0x01 (fixed marker)
- *  - byte 2:  0x5A (magic / firmware discriminator)
- *  - byte 3:  year - 2000 (single byte; years < 2000 saturate to 0)
- *  - byte 4:  month (1..12)
- *  - byte 5:  day (1..31)
- *  - byte 6:  hour (0..23)
- *  - byte 7:  minute (0..59)
- *  - byte 8:  second (0..59)
- *  - byte 9:  0x00
- *  - byte 10: wDayOfWeek (0=Sunday..6=Saturday)
- *             NB: gohv corpus hard-codes 0x04 here; that only matches the
- *             vendor on a Thursday. Ghidra decompile of DeviceDriver.exe
- *             (Agent C, 2026-05-17) confirmed the vendor reads the real
- *             day-of-week. See ARCH-05.2 in docs/protocols/keyboard/ak980pro_vendor.md.
- *  - bytes 11..61: 0x00
- *  - byte 62: 0xAA (delimiter high)
- *  - byte 63: 0x55 (delimiter low)
+ * Byte layout (hardware-verified via Frida capture of DeviceDriver.exe vs a
+ * physical AK980 PRO, 2026-05-21 — the TFT clock updated to a distinct injected
+ * time only with this exact layout):
+ *  - byte 0:  0x00 (HID Report ID — unnumbered)
+ *  - byte 1:  0x00
+ *  - byte 2:  0x01 (LCD-select index + 1; single-LCD => 1)
+ *  - byte 3:  0x5A (magic / firmware discriminator)
+ *  - byte 4:  year - 2000 (single byte; years < 2000 saturate to 0)
+ *  - byte 5:  month (1..12)
+ *  - byte 6:  day (1..31)
+ *  - byte 7:  hour (0..23)
+ *  - byte 8:  minute (0..59)
+ *  - byte 9:  second (0..59)
+ *  - byte 10: 0x00
+ *  - byte 11: wDayOfWeek (0=Sunday..6=Saturday; vendor sends the real value)
+ *  - bytes 12..62: 0x00
+ *  - byte 63: 0xAA (delimiter high)
+ *  - byte 64: 0x55 (delimiter low)
  *
  * @param year   Calendar year (e.g. 2026). Saturates at 2000 floor.
  * @param month  1..12.
@@ -559,16 +577,17 @@ buildSettingsBatch(std::uint8_t fnLayerSwitch,
  * @param minute 0..59.
  * @param second 0..59.
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeData(std::uint16_t year,
-                                                                    std::uint8_t month,
-                                                                    std::uint8_t day,
-                                                                    std::uint8_t hour,
-                                                                    std::uint8_t minute,
-                                                                    std::uint8_t second,
-                                                                    std::uint8_t dayOfWeek = 0);
+[[nodiscard]] std::array<std::uint8_t, TimeReportSize> buildSetTimeData(std::uint16_t year,
+                                                                        std::uint8_t month,
+                                                                        std::uint8_t day,
+                                                                        std::uint8_t hour,
+                                                                        std::uint8_t minute,
+                                                                        std::uint8_t second,
+                                                                        std::uint8_t dayOfWeek = 0);
 
 /**
- * @brief Build the time-sync save packet (ReportId=0x04, opcode 0x02).
+ * @brief Build the time-sync save packet. Wire bytes `00 04 02 …`
+ *        (65-byte report; Report ID 0x00, data 0x04, opcode 0x02).
  *
  * Sent AFTER the time-data packet. Instructs the firmware to persist the RTC
  * value to NV-RAM so it survives a power cycle.
@@ -576,7 +595,7 @@ buildSettingsBatch(std::uint8_t fnLayerSwitch,
  * @note Distinct from buildCommitEeprom() (which uses opcode 0x0E for keymap +
  *       RGB + macro state). The RTC has its own save opcode 0x02.
  */
-[[nodiscard]] std::array<std::uint8_t, ReportSize> buildSetTimeSave();
+[[nodiscard]] std::array<std::uint8_t, TimeReportSize> buildSetTimeSave();
 
 /**
  * @brief Return the LED count for a zone id.

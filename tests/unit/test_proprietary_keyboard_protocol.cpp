@@ -99,17 +99,16 @@ TEST_CASE("ledCountForZone matches documentation", "[proprietary][protocol]") {
 // KyleBoyer/TFTTimeSync-node/src/packets.ts (identical byte layouts).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ak980 setTime start packet carries ReportId=0x04 + opcode 0x18 + marker 0x01",
+TEST_CASE("ak980 setTime start packet: report id 0x00 + data 0x04 + opcode 0x18 (65-byte)",
           "[proprietary][protocol][clock]") {
+    // Hardware-verified format (Frida capture 2026-05-21): HID report id 0x00 at
+    // byte 0, the 0x04 'ReportId' constant is the first DATA byte at byte 1.
     auto const pkt = buildSetTimeStart();
-    REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);     // 0x04 - default report id
-    REQUIRE(pkt[1] == CmdStartTime); // 0x18 - resets firmware time-sync state machine
-    REQUIRE(pkt[8] == 0x01);         // configure-mode marker (gohv control_packet pattern)
-    for (std::size_t i = 0; i < ReportSize; ++i) {
-        if (i == 0 || i == 1 || i == 8) {
-            continue;
-        }
+    REQUIRE(pkt.size() == TimeReportSize);
+    REQUIRE(pkt[0] == 0x00);         // HID report id (unnumbered)
+    REQUIRE(pkt[1] == ReportId);     // 0x04 - first data byte
+    REQUIRE(pkt[2] == CmdStartTime); // 0x18 - resets firmware time-sync state machine
+    for (std::size_t i = 3; i < TimeReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
     }
 }
@@ -129,44 +128,46 @@ TEST_CASE("ak980 setTime opcodes are mutually distinct", "[proprietary][protocol
     REQUIRE(CmdCommitEeprom == 0x0e);
 }
 
-TEST_CASE("ak980 setTime preamble carries ReportId=0x04 + opcode 0x28 + marker 0x01",
+TEST_CASE("ak980 setTime preamble: report id 0x00 + data 0x04 + opcode 0x28 + marker (65-byte)",
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimePreamble();
-    REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);   // 0x04 - default report id
-    REQUIRE(pkt[1] == CmdSetTime); // 0x28
-    REQUIRE(pkt[8] == 0x01);       // configure-mode marker
+    REQUIRE(pkt.size() == TimeReportSize);
+    REQUIRE(pkt[0] == 0x00);
+    REQUIRE(pkt[1] == ReportId);   // 0x04 - first data byte
+    REQUIRE(pkt[2] == CmdSetTime); // 0x28
+    REQUIRE(pkt[9] == 0x01);       // configure-mode marker
     // All other bytes must be zero.
-    for (std::size_t i = 0; i < ReportSize; ++i) {
-        if (i == 0 || i == 1 || i == 8) {
+    for (std::size_t i = 0; i < TimeReportSize; ++i) {
+        if (i == 1 || i == 2 || i == 9) {
             continue;
         }
         REQUIRE(pkt[i] == 0x00);
     }
 }
 
-TEST_CASE("ak980 setTime data packet has report id 0x00 + magic 0x5A + delimiter 0xAA 0x55",
+TEST_CASE("ak980 setTime data packet: report id 0x00 + magic 0x5A + delimiter 0xAA 0x55 (65-byte)",
           "[proprietary][protocol][clock]") {
     // 2026-05-17 14:23:45 - that day was a Sunday (wDayOfWeek=0).
     auto const pkt = buildSetTimeData(2026, 5, 17, 14, 23, 45, /*dayOfWeek=*/0);
-    REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == TimeDataReportId); // 0x00 - distinct from default ReportId=0x04
-    REQUIRE(pkt[1] == 0x01);
-    REQUIRE(pkt[2] == 0x5a);
-    REQUIRE(pkt[3] == 26); // year-2000
-    REQUIRE(pkt[4] == 5);  // month
-    REQUIRE(pkt[5] == 17); // day
-    REQUIRE(pkt[6] == 14); // hour
-    REQUIRE(pkt[7] == 23); // minute
-    REQUIRE(pkt[8] == 45); // second
-    REQUIRE(pkt[9] == 0x00);
-    REQUIRE(pkt[10] == 0x00); // wDayOfWeek (Sunday)
-    // Bytes 11..61 must be zero padding.
-    for (std::size_t i = 11; i <= 61; ++i) {
+    REQUIRE(pkt.size() == TimeReportSize);
+    REQUIRE(pkt[0] == 0x00); // HID report id (unnumbered)
+    REQUIRE(pkt[1] == 0x00);
+    REQUIRE(pkt[2] == 0x01); // LCD-select index + 1
+    REQUIRE(pkt[3] == 0x5a); // magic
+    REQUIRE(pkt[4] == 26);   // year-2000
+    REQUIRE(pkt[5] == 5);    // month
+    REQUIRE(pkt[6] == 17);   // day
+    REQUIRE(pkt[7] == 14);   // hour
+    REQUIRE(pkt[8] == 23);   // minute
+    REQUIRE(pkt[9] == 45);   // second
+    REQUIRE(pkt[10] == 0x00);
+    REQUIRE(pkt[11] == 0x00); // wDayOfWeek (Sunday)
+    // Bytes 12..62 must be zero padding.
+    for (std::size_t i = 12; i <= 62; ++i) {
         REQUIRE(pkt[i] == 0x00);
     }
-    REQUIRE(pkt[62] == 0xaa); // delimiter high
-    REQUIRE(pkt[63] == 0x55); // delimiter low
+    REQUIRE(pkt[63] == 0xaa); // delimiter high
+    REQUIRE(pkt[64] == 0x55); // delimiter low
 }
 
 TEST_CASE("ak980 setTime data packet encodes wDayOfWeek correctly",
@@ -175,50 +176,51 @@ TEST_CASE("ak980 setTime data packet encodes wDayOfWeek correctly",
     // vendor writes the actual day-of-week at byte 10, NOT the hard-coded 0x04
     // that the gohv corpus uses. Default value of 0 must produce Sunday.
     auto const sunday = buildSetTimeData(2026, 1, 4, 0, 0, 0); // default 0
-    REQUIRE(sunday[10] == 0x00);
+    REQUIRE(sunday[11] == 0x00);
 
     for (std::uint8_t dow = 0; dow <= 6; ++dow) {
         auto const pkt = buildSetTimeData(2026, 1, 1, 0, 0, 0, dow);
-        REQUIRE(pkt[10] == dow);
+        REQUIRE(pkt[11] == dow);
     }
 
     // Out-of-range values are clamped to 0 (defensive - tm_wday is guaranteed
     // 0..6 by the C library but a malformed caller must not corrupt the wire).
     auto const bad = buildSetTimeData(2026, 1, 1, 0, 0, 0, 99);
-    REQUIRE(bad[10] == 0x00);
+    REQUIRE(bad[11] == 0x00);
 }
 
 TEST_CASE("ak980 setTime data packet saturates pre-2000 years to floor",
           "[proprietary][protocol][clock]") {
     // 1999 must NOT underflow to 0xFF - it must clamp to year-2000 == 0.
     auto const pkt = buildSetTimeData(1999, 1, 1, 0, 0, 0);
-    REQUIRE(pkt[3] == 0);
+    REQUIRE(pkt[4] == 0);
     // 1970 (unix epoch) likewise clamps.
     auto const pkt2 = buildSetTimeData(1970, 1, 1, 0, 0, 0);
-    REQUIRE(pkt2[3] == 0);
+    REQUIRE(pkt2[4] == 0);
     // Year 2000 itself encodes as 0.
     auto const pkt3 = buildSetTimeData(2000, 1, 1, 0, 0, 0);
-    REQUIRE(pkt3[3] == 0);
+    REQUIRE(pkt3[4] == 0);
     // Year 2001 encodes as 1.
     auto const pkt4 = buildSetTimeData(2001, 1, 1, 0, 0, 0);
-    REQUIRE(pkt4[3] == 1);
+    REQUIRE(pkt4[4] == 1);
 }
 
 TEST_CASE("ak980 setTime data packet encodes max representable year (2255 = 0xFF)",
           "[proprietary][protocol][clock]") {
     // year-2000 is a single byte; the high boundary 0xFF (255) corresponds to year 2255.
     auto const pkt = buildSetTimeData(2255, 12, 31, 23, 59, 59);
-    REQUIRE(pkt[3] == 0xff);
+    REQUIRE(pkt[4] == 0xff);
 }
 
-TEST_CASE("ak980 setTime save packet carries ReportId=0x04 + opcode 0x02",
+TEST_CASE("ak980 setTime save packet: report id 0x00 + data 0x04 + opcode 0x02 (65-byte)",
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimeSave();
-    REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);   // 0x04
-    REQUIRE(pkt[1] == CmdSaveRtc); // 0x02 - distinct from CmdCommitEeprom=0x0E
+    REQUIRE(pkt.size() == TimeReportSize);
+    REQUIRE(pkt[0] == 0x00);
+    REQUIRE(pkt[1] == ReportId);   // 0x04 - first data byte
+    REQUIRE(pkt[2] == CmdSaveRtc); // 0x02 - distinct from CmdCommitEeprom=0x0E
     // All other bytes must be zero.
-    for (std::size_t i = 2; i < ReportSize; ++i) {
+    for (std::size_t i = 3; i < TimeReportSize; ++i) {
         REQUIRE(pkt[i] == 0x00);
     }
 }
