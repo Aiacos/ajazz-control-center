@@ -44,6 +44,20 @@ For full context: `.planning/PROJECT.md`. For current state: `.planning/STATE.md
 - **Cap concurrent execute agents at 2** in autonomous runs. Three or more
   concurrent agents have caused atomic-commit splits and forced `--no-verify`
   workarounds (v1.1 retrospective lesson).
+- **Always cross-check the reverse engineering before touching protocol /
+  wire-format / device code.** Before changing any opcode, packet layout,
+  HID interface/usage-page, report ID, or capability wiring, re-read the
+  relevant RE docs under `docs/protocols/**` (the Ghidra DLL passes +
+  `[mirajazz]` / `[opendeck-*]` / `[ajazz-sdk]` corpora) — ideally via a
+  dedicated sub-agent sweep so family-wide implications aren't missed. The RE
+  is the source of truth for wire formats, but it has **gaps and provisional
+  values**: treat any value the docs flag as "provisional"/"unconfirmed" as a
+  hypothesis to verify against the physical device, not a fact. Real examples
+  (2026-05-20): the `0x0300:0x3004` SKU was mis-filed as a 6-key AKP03 until a
+  live `CRT VER` handshake proved it an AKP05E; `proprietary.md` listed the
+  AK980 control interface as usage page `0xFF00` when the real device uses
+  `0xFF13` (pinned by a hardware probe). When the RE and the hardware
+  disagree, the hardware wins — and update the RE doc.
 
 ## Qt 6 / QML gotchas (verified, recurring)
 
