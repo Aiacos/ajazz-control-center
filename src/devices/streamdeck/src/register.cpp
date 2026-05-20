@@ -54,11 +54,14 @@ inline constexpr std::uint16_t Akp815V1Pid = 0x6672;
 inline constexpr std::uint16_t Akp153EV2Pid = 0x1010;
 inline constexpr std::uint16_t Akp153RV2Pid = 0x1020;
 
-// AKP03 sibling PID for the development-firmware hot-plug capture
-// 2026-05-13 (`HOTSPOTEKUSB HID DEMO`). Other AKP03 / AKP03E / AKP03R /
-// AKP03R rev2 PIDs live in `akp03_protocol.hpp` as `akp03::ProductIdAkp03*`
-// and are referenced directly at the registration sites below.
-inline constexpr std::uint16_t Akp03DemoPid = 0x3004;
+// AJAZZ AKP05E "Stream Dock Plus" retail PID. Surfaced via real-device
+// hot-plug capture 2026-05-13 as "Ajazz HOTSPOTEKUSB HID DEMO"; the
+// white-label DEMO string initially led us to mis-file it as a 6-key AKP03
+// sibling. A live `CRT VER` handshake on 2026-05-20 returned the firmware
+// string "V3.AKP05E.01.007", confirming it is an AKP05E (protocol_version 3,
+// 10 LCD keys + 4 encoders + touch strip). Registered against `makeAkp05`
+// in the AKP05 section below.
+inline constexpr std::uint16_t Akp05ePid = 0x3004;
 
 // Generic AKP153 grid descriptor used by every 15-key variant.
 constexpr auto
@@ -245,20 +248,6 @@ void registerAll(core::DeviceRegistry& registry) {
         reg.registerDevice(d, &makeAkp03);
     }
 
-    // 0x0300:0x3004 — surfaced via real-device hot-plug capture on
-    // 2026-05-13 as "Ajazz HOTSPOTEKUSB HID DEMO". Not present in any
-    // public catalogue; treated as an AKP03 sibling with development
-    // firmware until a retail SKU is confirmed.
-    // Tracking: TODO.md → "Streamdock 0x0300:0x3004 SKU identification".
-    {
-        auto d = akp03_descriptor(akp03::VendorId,
-                                  Akp03DemoPid,
-                                  "AJAZZ Stream Dock (PID 0x3004 / HID DEMO)",
-                                  "akp03_variant_3004");
-        d.hasClock = true;
-        reg.registerDevice(d, &makeAkp03);
-    }
-
     // ---- AKP05 / Mirabox N4 (10 LCD keys + 4 encoders + touch strip) --
 
     // Legacy provisional pair `0x0300:0x5001` — no public source.
@@ -288,6 +277,27 @@ void registerAll(core::DeviceRegistry& registry) {
             .family = core::DeviceFamily::StreamDeck,
             .model = "Mirabox N4 / AJAZZ AKP05 family",
             .codename = "mirabox_n4",
+            .keyCount = akp05::KeyCount,
+            .gridColumns = akp05::KeyCols,
+            .encoderCount = akp05::EncoderCount,
+            .hasTouchStrip = true,
+            .hasClock = true, // A-03 / D-03: shares Akp05Device backend → same IClockCapable.
+        },
+        &makeAkp05);
+
+    // AJAZZ AKP05E retail unit, USB `0x0300:0x3004`. Firmware-confirmed via a
+    // live `CRT VER` handshake 2026-05-20 (response "V3.AKP05E.01.007"). This
+    // was previously mis-filed as `akp03_variant_3004` and routed through
+    // `makeAkp03` (6 keys / 3 encoders), which addressed only 6 of 10 keys,
+    // 3 of 4 encoders, and ignored the touch strip entirely. Now routed to the
+    // AKP05 backend with full 10-key / 4-encoder / touch-strip geometry.
+    reg.registerDevice(
+        core::DeviceDescriptor{
+            .vendorId = akp05::VendorId, // 0x0300
+            .productId = Akp05ePid,      // 0x3004
+            .family = core::DeviceFamily::StreamDeck,
+            .model = "AJAZZ AKP05E (Stream Dock Plus)",
+            .codename = "akp05e",
             .keyCount = akp05::KeyCount,
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,

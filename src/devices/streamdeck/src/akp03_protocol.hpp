@@ -42,8 +42,10 @@ inline constexpr std::uint16_t ProductIdAkp03 = 0x1001;      ///< AJAZZ AKP03.
 inline constexpr std::uint16_t ProductIdAkp03E = 0x3002;     ///< AJAZZ AKP03E.
 inline constexpr std::uint16_t ProductIdAkp03R = 0x1003;     ///< AJAZZ AKP03R.
 inline constexpr std::uint16_t ProductIdAkp03RRev2 = 0x3003; ///< AJAZZ AKP03R rev. 2.
-inline constexpr std::uint16_t ProductIdAkp03Demo = 0x3004;  ///< 'HOTSPOTEKUSB HID DEMO' sibling.
-inline constexpr std::uint16_t ProductId = ProductIdAkp03;   ///< Legacy alias.
+// NOTE: PID 0x3004 ("HOTSPOTEKUSB HID DEMO") was briefly filed here as an AKP03
+// sibling; a 2026-05-20 firmware handshake ("V3.AKP05E.01.007") proved it is an
+// AKP05E. It now lives in the AKP05 family — see register.cpp + akp05_protocol.hpp.
+inline constexpr std::uint16_t ProductId = ProductIdAkp03; ///< Legacy alias.
 
 // Physical geometry.
 // `[ajazz-sdk]/info.rs::Kind::Akp03::key_count == 6 + 3` — 6 LCD keys *plus*

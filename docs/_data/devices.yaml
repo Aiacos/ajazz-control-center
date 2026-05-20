@@ -262,17 +262,17 @@ devices:
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Canonical USB ID from opendeck-akp05. 2x5 LCD keys, 4 encoders with touchscreen-strip overlays (110x14mm physical, 800x480 panel), built-in USB-2 hub (2xUSB-A + 2xUSB-C). Per mirajazz this is a protocol_version 3 device."
 
-  - codename: akp03_variant_3004
+  - codename: akp05e
     family: streamdeck
-    name: "AJAZZ Stream Dock (PID 0x3004)"
+    name: "AJAZZ AKP05E (Stream Dock Plus)"
     vid: "0x0300"
     pid: "0x3004"
-    keys: 6
-    encoders: 3
+    keys: 10
+    encoders: 4
     maturity: scaffolded
-    capabilities: [display, encoder, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO'. Routed through the AKP03 factory; exact retail SKU to confirm against vendor manifests."
+    capabilities: [display, encoder, touch, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "Real retail AKP05E. Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO' (white-label dev string), which led to a brief mis-filing as the 6-key 'akp03_variant_3004'. A live CRT VER handshake on 2026-05-20 returned firmware string 'V3.AKP05E.01.007' — confirming AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Routed through makeAkp05."
 
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
