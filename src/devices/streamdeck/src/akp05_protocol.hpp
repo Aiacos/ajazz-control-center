@@ -39,6 +39,7 @@
 #include <cstdint>
 #include <optional>
 #include <span>
+#include <string>
 
 namespace ajazz::streamdeck::akp05 {
 
@@ -311,5 +312,21 @@ struct InputEvent {
  * @return Parsed InputEvent, or std::nullopt for ACK or unrecognised frames.
  */
 [[nodiscard]] std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame);
+
+/**
+ * @brief Parse the firmware-version string from a CRT VER response.
+ *
+ * The device answers the buildVersionRequest() probe via a HID GET_REPORT
+ * pull (ITransport::readFeature), NOT on the interrupt-IN endpoint. The
+ * response is a leading report-id byte (0x00) followed by an ASCII version
+ * string such as "V3.AKP05E.01.007", NUL-terminated and zero-padded
+ * (confirmed on a physical AKP05E 2026-05-20). Leading non-printable bytes
+ * (the report-id) are skipped; the printable ASCII run is returned trimmed.
+ *
+ * @param frame Raw bytes from ITransport::readFeature().
+ * @return The trimmed ASCII version string, or std::nullopt if the frame
+ *         carries no printable payload.
+ */
+[[nodiscard]] std::optional<std::string> parseVersionResponse(std::span<std::uint8_t const> frame);
 
 } // namespace ajazz::streamdeck::akp05

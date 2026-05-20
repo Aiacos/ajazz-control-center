@@ -32,6 +32,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -237,4 +238,40 @@ TEST_CASE("akp05 clearTouchStrip emits a DRA header + chunks + ULEND", "[akp05][
     CHECK(tail[7] == 0x45); // E
     CHECK(tail[8] == 0x4e); // N
     CHECK(tail[9] == 0x44); // D
+}
+
+// VER-probe at open: the host sends CRT VER first thing after opening, and the
+// AKP05E answers via a HID GET_REPORT (readFeature), not on the interrupt-IN
+// endpoint (akp05_init_sequence.md §3.2; confirmed on real hardware 2026-05-20).
+TEST_CASE("akp05 open() probes and caches the firmware version", "[akp05][open][vendor-re]") {
+    auto owned = std::make_unique<tests::MockTransport>();
+    auto* observer = owned.get();
+    // Queue the GET_REPORT response the real AKP05E returns: a leading report-id
+    // byte followed by the ASCII version string, zero-padded.
+    std::vector<std::uint8_t> verResp{0x00};
+    for (char const c : std::string{"V3.AKP05E.01.007"}) {
+        verResp.push_back(static_cast<std::uint8_t>(c));
+    }
+    verResp.resize(64, 0x00);
+    observer->enqueueReadFeature(verResp);
+
+    auto dev =
+        streamdeck::makeAkp05WithTransport(makeAkp05Descriptor(), makeAkp05Id(), std::move(owned));
+
+    // Transport starts closed, so open() runs the probe.
+    REQUIRE(dev->firmwareVersion() == "unknown");
+    dev->open();
+    CHECK(dev->firmwareVersion() == "V3.AKP05E.01.007");
+
+    // The probe must have emitted a CRT VER request on the OUT channel first.
+    auto const& writes = observer->writes();
+    REQUIRE(!writes.empty());
+    auto const& ver = writes.front();
+    REQUIRE(ver.size() == streamdeck::akp05::PacketSize);
+    CHECK(ver[0] == 0x43); // C
+    CHECK(ver[1] == 0x52); // R
+    CHECK(ver[2] == 0x54); // T
+    CHECK(ver[5] == 0x56); // V
+    CHECK(ver[6] == 0x45); // E
+    CHECK(ver[7] == 0x52); // R
 }

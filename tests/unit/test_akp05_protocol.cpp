@@ -10,6 +10,11 @@
  */
 #include "akp05_protocol.hpp"
 
+#include <array>
+#include <cstdint>
+#include <string>
+#include <vector>
+
 #include <catch2/catch_test_macros.hpp>
 
 using namespace ajazz::streamdeck::akp05;
@@ -237,4 +242,45 @@ TEST_CASE("akp05 parser decodes swipe and long-press", "[akp05][protocol]") {
     auto const longp = parseInputReport(frame);
     REQUIRE(longp.has_value());
     REQUIRE(longp->kind == InputEvent::Kind::TouchLongPress);
+}
+
+/// CRT VER response: leading report-id byte then an ASCII version string,
+/// zero-padded. Confirmed on a physical AKP05E (firmware "V3.AKP05E.01.007").
+TEST_CASE("akp05 parseVersionResponse extracts the firmware string",
+          "[akp05][protocol][vendor-re]") {
+    std::vector<std::uint8_t> frame{0x00}; // GET_REPORT report-id byte
+    for (char const c : std::string{"V3.AKP05E.01.007"}) {
+        frame.push_back(static_cast<std::uint8_t>(c));
+    }
+    frame.resize(64, 0x00); // zero-pad like the real GET_REPORT response
+    auto const v = parseVersionResponse(frame);
+    REQUIRE(v.has_value());
+    REQUIRE(*v == "V3.AKP05E.01.007");
+}
+
+/// A response with no leading report-id byte (string at offset 0) still parses.
+TEST_CASE("akp05 parseVersionResponse handles no leading report-id", "[akp05][protocol]") {
+    std::string const s{"V3.AKP05E.01.007"};
+    std::vector<std::uint8_t> const frame(s.begin(), s.end());
+    auto const v = parseVersionResponse(frame);
+    REQUIRE(v.has_value());
+    REQUIRE(*v == s);
+}
+
+/// An all-zero (or empty) frame carries no printable payload -> nullopt.
+TEST_CASE("akp05 parseVersionResponse returns nullopt for empty payload", "[akp05][protocol]") {
+    std::array<std::uint8_t, 64> const zero{};
+    REQUIRE(!parseVersionResponse(zero).has_value());
+    REQUIRE(!parseVersionResponse({}).has_value());
+}
+
+/// Trailing spaces are trimmed (the vendor pads some version strings with spaces).
+TEST_CASE("akp05 parseVersionResponse trims trailing spaces", "[akp05][protocol]") {
+    std::vector<std::uint8_t> frame{0x00};
+    for (char const c : std::string{"V3.AKP05E.01.007   "}) {
+        frame.push_back(static_cast<std::uint8_t>(c));
+    }
+    auto const v = parseVersionResponse(frame);
+    REQUIRE(v.has_value());
+    REQUIRE(*v == "V3.AKP05E.01.007");
 }

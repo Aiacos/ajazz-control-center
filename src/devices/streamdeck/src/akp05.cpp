@@ -22,6 +22,7 @@
 #include <array>
 #include <cstring>
 #include <mutex>
+#include <string>
 
 namespace ajazz::streamdeck {
 
@@ -316,6 +317,33 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
     return std::nullopt;
 }
 
+std::optional<std::string> parseVersionResponse(std::span<std::uint8_t const> frame) {
+    // The device answers buildVersionRequest() not on the interrupt-IN endpoint
+    // but via a HID GET_REPORT pull (readFeature). The response is a leading
+    // report-id byte (0x00) followed by an ASCII version string such as
+    // "V3.AKP05E.01.007", NUL-terminated and zero-padded. Confirmed on a
+    // physical AKP05E 2026-05-20. Skip leading non-printable bytes (the
+    // report-id), collect the printable ASCII run, and stop at the first
+    // non-printable byte that follows it.
+    std::string out;
+    bool started = false;
+    for (auto const b : frame) {
+        if (b >= 0x20 && b < 0x7f) {
+            out.push_back(static_cast<char>(b));
+            started = true;
+        } else if (started) {
+            break;
+        }
+    }
+    while (!out.empty() && out.back() == ' ') {
+        out.pop_back();
+    }
+    if (out.empty()) {
+        return std::nullopt;
+    }
+    return out;
+}
+
 } // namespace akp05
 
 namespace {
@@ -398,14 +426,15 @@ public:
         return m_descriptor;
     }
     [[nodiscard]] DeviceId id() const noexcept override { return m_id; }
-    [[nodiscard]] std::string firmwareVersion() const override { return "unknown"; }
+    [[nodiscard]] std::string firmwareVersion() const override { return m_firmwareVersion; }
 
     void open() override {
         if (m_transport->isOpen()) {
             return;
         }
         m_transport->open();
-        AJAZZ_LOG_INFO("akp05", "device opened: {}", m_descriptor.model);
+        probeFirmwareVersion();
+        AJAZZ_LOG_INFO("akp05", "device opened: {} (fw {})", m_descriptor.model, m_firmwareVersion);
     }
 
     void close() override {
@@ -725,6 +754,29 @@ public:
     }
 
 private:
+    /** @brief Probe and cache the firmware version at open time.
+     *
+     *  Vendor RE (akp05_init_sequence.md §3.2): the host sends a `CRT VER`
+     *  packet first thing after opening the device. The AKP05E does NOT answer
+     *  on the interrupt-IN endpoint — the response is pulled via a HID
+     *  GET_REPORT (`readFeature`), returning a string like "V3.AKP05E.01.007"
+     *  (confirmed on real hardware 2026-05-20). Best-effort: any failure leaves
+     *  @c m_firmwareVersion at "unknown" rather than aborting @ref open().
+     */
+    void probeFirmwareVersion() {
+        try {
+            (void)m_transport->write(akp05::buildVersionRequest());
+            std::array<std::uint8_t, akp05::PacketSize> resp{};
+            resp[0] = 0; // hid_get_feature_report: report-id byte selects the unnumbered report.
+            auto const n = m_transport->readFeature(resp);
+            if (auto v = akp05::parseVersionResponse({resp.data(), n})) {
+                m_firmwareVersion = std::move(*v);
+            }
+        } catch (...) {
+            // Best-effort probe — leave m_firmwareVersion as "unknown".
+        }
+    }
+
     /** @brief Transmit an image to any display surface on the device.
      *
      *  Sends the pre-built @p header packet first, then streams @p payload
@@ -766,6 +818,7 @@ private:
     DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.
     DeviceId m_id;                 ///< HID bus identity (VID, PID, serial string).
     TransportPtr m_transport;      ///< Underlying HID I/O channel.
+    std::string m_firmwareVersion{"unknown"}; ///< Cached CRT VER response; set by open().
     EventCallback m_callback;      ///< Registered input-event sink (may be null).
     std::mutex m_mutex;            ///< Guards m_callback for thread-safe registration.
 };
