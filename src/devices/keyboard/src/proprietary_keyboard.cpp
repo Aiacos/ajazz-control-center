@@ -794,12 +794,37 @@ public:
         // tm_wday is 0..6 (Sunday..Saturday) per POSIX/Win32.
         auto const dayOfWeek = static_cast<std::uint8_t>(local.tm_wday);
 
+        // HARDWARE-CONFIRMED 2026-05-21 (live AK980 PRO, 0xFF13 collection): the
+        // time-sync is a request/RESPONSE handshake. The vendor's FUN_0044eed0
+        // does Sleep -> SET_REPORT -> GET_REPORT per packet; sending the four
+        // writeFeature()s back-to-back with no readback is a silent no-op on
+        // real hardware (the firmware clock does NOT move). Empirically: a
+        // per-packet settle delay + a readFeature() readback is what actually
+        // commits the new time. readback-only (no delay) and delay-only without
+        // a prior session both failed; delay + readback works. See
+        // docs/protocols/keyboard/proprietary.md and scripts/ak980_tft_probe.py.
         try {
-            (void)m_transport->writeFeature(buildSetTimeStart());
-            (void)m_transport->writeFeature(buildSetTimePreamble());
-            (void)m_transport->writeFeature(
-                buildSetTimeData(year, month, day, hour, minute, second, dayOfWeek));
-            (void)m_transport->writeFeature(buildSetTimeSave());
+            std::array<std::uint8_t, TimeReportSize> ack{};
+            auto const sendWithAck = [&](std::array<std::uint8_t, TimeReportSize> const& pkt) {
+                std::this_thread::sleep_for(std::chrono::milliseconds{30});
+                (void)m_transport->writeFeature(pkt);
+                // Best-effort GET_REPORT handshake — gives the firmware its
+                // inter-packet settle window (mirrors FUN_0044eed0). A readback
+                // failure must NOT fail the sync: the writeFeature above is the
+                // actual command, and on some firmware states (notably right
+                // after SAVE, while the RTC commits to NV-RAM) GET_FEATURE
+                // returns no report. Swallowing it keeps a completed write
+                // sequence reported as success (green toast, not red IoError).
+                try {
+                    (void)m_transport->readFeature(ack);
+                } catch (std::exception const&) {
+                    // handshake-only readback; ignore transport errors here
+                }
+            };
+            sendWithAck(buildSetTimeStart());
+            sendWithAck(buildSetTimePreamble());
+            sendWithAck(buildSetTimeData(year, month, day, hour, minute, second, dayOfWeek));
+            sendWithAck(buildSetTimeSave());
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN("keyboard.ak980", "setTime: HID writeFeature failed: {}", e.what());
             return TimeSyncResult::IoError;

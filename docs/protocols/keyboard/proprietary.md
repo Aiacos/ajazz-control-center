@@ -86,8 +86,9 @@ These map onto `ajazz::core::RgbEffect`:
 
 ## Time sync
 
-**Status:** implemented for AK980 PRO (ARCH-05.1, 2026-05-17) — pending
-physical round-trip witness for `functional` promotion.
+**Status:** HARDWARE-CONFIRMED on a physical AK980 PRO (2026-05-21) — the
+on-device TFT clock follows an injected time, with the per-packet handshake
+described below.
 
 `ProprietaryKeyboard::setTime()` writes a **four-packet HID Feature Report**
 sequence to the device using the firmware RTC opcodes `0x18` + `0x28` + data
@@ -117,6 +118,29 @@ control-endpoint `SET_REPORT`), not via `hid_write` (interrupt OUT).
 
 After packet 4, sleep 100ms (gohv `usb.rs` pattern) so the firmware commits
 before any subsequent HID I/O can race the SAVE.
+
+### Per-packet handshake (REQUIRED — hardware-confirmed 2026-05-21)
+
+Sending the four `writeFeature()`s back-to-back is a **silent no-op** on a
+real AK980 PRO — the firmware clock does not move. The time-sync is a
+request/RESPONSE protocol: the vendor's `FUN_0044eed0` does
+`Sleep -> SET_REPORT -> GET_REPORT` per packet. Empirically (live device,
+0xFF13 collection, `scripts/ak980_tft_probe.py`):
+
+- A **~30 ms inter-packet settle delay** is required. Back-to-back writes
+  (delay 0) do not commit, even with the readback present.
+- A **`readFeature()` (GET_REPORT) readback** after each `writeFeature()`
+  mirrors the vendor handshake. It is **best-effort**: a readback failure
+  (notably the GET right after SAVE, while the RTC commits to NV-RAM) must
+  NOT fail the sync — the `writeFeature` is the actual command. Treating a
+  post-SAVE readback exception as fatal made `setTime` return `IoError` and
+  surfaced a red "failed" toast even though the clock had updated.
+
+`ProprietaryKeyboard::setTime()` implements exactly this: per packet,
+`sleep(30ms)` -> `writeFeature` -> best-effort `readFeature`, then the 100ms
+SAVE settle. The interface is the 0xFF13 vendor collection (MI_03 on the
+hardware sample); the device responds on GET_REPORT (e.g. the preamble
+readback comes back with byte 4 set to `0x01`, a device-computed value).
 
 The data packet uses HID Report ID `0x00` (NOT the default `0x04` used by
 other commands); the firmware's real discriminator is the magic `0x5A` at
