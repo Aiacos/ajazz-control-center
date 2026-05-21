@@ -94,80 +94,80 @@ either a `SET = N` or `GET = N | 0x80` pair.
 
 ### 2.1 Base class (shared with keyboard / OLED)
 
-| Opcode | Mnemonic                         | Direction   | Used on mouse path?                                                | Renderer site         |
-| -----: | -------------------------------- | ----------- | ------------------------------------------------------------------ | --------------------- |
-| `0x00` | `FEA_CMD_SET_REV`                | feature SET | no                                                                 | —                     |
-| `0x80` | `FEA_CMD_GET_REV`                | feature GET | **yes** — `getFirmwareVersion()`                                   | `js:921263`           |
-| `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`      | feature SET | no (handled by dongle)                                             | —                     |
-| `0x02` | `FEA_CMD_SET_RESERT`             | feature SET | **yes** — "Restore defaults"                                       | search for opcode `2` |
-| `0x83` | `FEA_CMD_GET_BATTERY`            | feature GET | **NO** — battery comes from `Device.battery` (gRPC `watchDevList`) | `js:50798`            |
-| `0x04` | `FEA_CMD_SET_REPORT` (poll rate) | feature SET | **yes** — `setReportRate()`                                        | `js:921290`           |
-| `0x84` | `FEA_CMD_GET_REPORT` (poll rate) | feature GET | **yes** — `getReportRate()`                                        | `js:921307`           |
-| `0x05` | `FEA_CMD_SET_PROFILE`            | feature SET | **yes** — `setCurrentProfile()`                                    | `js:921350`           |
-| `0x85` | `FEA_CMD_GET_PROFILE`            | feature GET | **yes** — `getCurrentProfile()`                                    | `js:921331`           |
-| `0x06` | `FEA_CMD_SET_KBOPTION`           | feature SET | no (keyboard)                                                      | —                     |
-| `0x86` | `FEA_CMD_GET_KBOPTION`           | feature GET | no (keyboard)                                                      | —                     |
-| `0x07` | `FEA_CMD_SET_LEDPARAM`           | feature SET | **yes** — `setLightSetting()`                                      | `js:920862`           |
-| `0x87` | `FEA_CMD_GET_LEDPARAM`           | feature GET | **yes** — `getLightSetting()`                                      | —                     |
-| `0x08` | `FEA_CMD_SET_SLEDPARAM`          | feature SET | no                                                                 | —                     |
-| `0x88` | `FEA_CMD_GET_SLEDPARAM`          | feature GET | no                                                                 | —                     |
-| `0x09` | `FEA_CMD_SET_KEYMATRIX`          | feature SET | no (keyboard; mouse uses 0x50)                                     | —                     |
-| `0x89` | `FEA_CMD_GET_KEYMATRIX`          | feature GET | no (keyboard)                                                      | —                     |
-| `0x0a` | `FEA_CMD_SET_KEYENABLE`          | feature SET | no                                                                 | —                     |
-| `0x8a` | `FEA_CMD_GET_KEYENABLE`          | feature GET | no                                                                 | —                     |
-| `0x0b` | `FEA_CMD_SET_MACRO`              | feature SET | no — mouse uses `0x16` SIMPLE form                                 | —                     |
-| `0x8b` | `FEA_CMD_GET_MACRO`              | feature GET | no                                                                 | —                     |
-| `0x0c` | `FEA_CMD_SET_USERPIC`            | feature SET | no — mouse uses `0x52`                                             | —                     |
-| `0x8c` | `FEA_CMD_GET_USERPIC`            | feature GET | no                                                                 | —                     |
-| `0x0d` | `FEA_CMD_SET_AUDIO`              | feature SET | no                                                                 | —                     |
-| `0x0e` | `FEA_CMD_SET_WINDOWS`            | feature SET | no                                                                 | —                     |
-| `0x10` | `FEA_CMD_SET_FN`                 | feature SET | no                                                                 | —                     |
-| `0x90` | `FEA_CMD_GET_FN`                 | feature GET | no                                                                 | —                     |
-| `0x11` | `FEA_CMD_SET_DEBOUNCE` (kb)      | feature SET | no — mouse uses byte 10 of `0x53` omnibus                          | —                     |
-| `0x91` | `FEA_CMD_GET_DEBOUNCE`           | feature GET | no                                                                 | —                     |
-| `0x12` | `FEA_CMD_SET_SLEEPTIME` (kb)     | feature SET | no — mouse uses bytes 40..47 of `0x53`                             | —                     |
-| `0x92` | `FEA_CMD_GET_SLEEPTIME`          | feature GET | no                                                                 | —                     |
-| `0x13` | `FEA_CMD_SET_KEYMATRIX_SIMPLE`   | feature SET | no                                                                 | —                     |
-| `0x93` | `FEA_CMD_GET_KEYMATRIX_SIMPLE`   | feature GET | no                                                                 | —                     |
-| `0x14` | `FEA_CMD_SET_USERPIC_SIMPLE`     | feature SET | no                                                                 | —                     |
-| `0x94` | `FEA_CMD_GET_USERPIC_SIMPLE`     | feature GET | no                                                                 | —                     |
-| `0x15` | `FEA_CMD_SET_FN_SIMPLE`          | feature SET | no                                                                 | —                     |
-| `0x95` | `FEA_CMD_GET_FN_SIMPLE`          | feature GET | no                                                                 | —                     |
-| `0x16` | `FEA_CMD_SET_MACRO_SIMPLE`       | feature SET | **yes** — `_setMacro()` chunked                                    | `js:922079`           |
-| `0x96` | `FEA_CMD_GET_MACRO_SIMPLE`       | feature GET | **yes** — `getMacro()` chunked                                     | `js:921635`           |
-| `0x17` | `FEA_CMD_SET_AUTOOS_EN`          | feature SET | no                                                                 | —                     |
-| `0x97` | `FEA_CMD_GET_AUTOOS_EN`          | feature GET | no                                                                 | —                     |
-| `0x18` | `FEA_CMD_SET_USERGIFSTART`       | feature SET | (mouse with screen)                                                | `js:817098`           |
-| `0x19` | `FEA_CMD_SET_USERGIF`            | feature SET | (mouse with screen)                                                | `js:817119`           |
-| `0x20` | `FEA_CMD_SET_OLEDPICINDEX`       | feature SET | no                                                                 | —                     |
-| `0xa0` | `FEA_CMD_GET_OLEDPICINDEX`       | feature GET | no                                                                 | —                     |
-| `0x21` | `FEA_CMD_SET_OLEDPICDATA`        | feature SET | no                                                                 | —                     |
-| `0xa1` | `FEA_CMD_GET_OLEDPICDATA`        | feature GET | no                                                                 | —                     |
-| `0x22` | `FEA_CMD_SET_OLEDOPTION`         | feature SET | no                                                                 | —                     |
-| `0xa2` | `FEA_CMD_GET_OLEDOPTION`         | feature GET | no                                                                 | —                     |
-| `0x23` | `FEA_CMD_SET_KEYSTROKE`          | feature SET | no                                                                 | —                     |
-| `0xa3` | `FEA_CMD_GET_KEYSTROKE`          | feature GET | no                                                                 | —                     |
-| `0x24` | `FEA_CMD_SET_OLEDGIFDATA`        | feature SET | no                                                                 | —                     |
-| `0xa4` | `FEA_CMD_GET_OLEDGIFDATA`        | feature GET | no                                                                 | —                     |
-| `0x25` | `FEA_CMD_SETTFTLCDDATA`          | feature SET | (mouse with screen)                                                | `js:817196`           |
-| `0xa5` | `FEA_CMD_GETTFTLCDDATA`          | feature GET | (mouse with screen)                                                | `js:736052`           |
-| `0x26` | `FEA_CMD_SET_OLEDGIFINDEX`       | feature SET | no                                                                 | —                     |
-| `0xa6` | `FEA_CMD_GET_OLEDGIFINDEX`       | feature GET | no                                                                 | —                     |
-| `0x27` | `FEA_CMD_SET_OLEDLUANGAGE`       | feature SET | no                                                                 | —                     |
-| `0x28` | `FEA_CMD_SET_OLEDCLOCK`          | feature SET | **yes** — OLED basetta firmware-RTC clock (see §3.15)              | iot_driver (Frida)    |
-| `0x29` | `FEA_CMD_SET_SCREEN_24BITDATA`   | feature SET | (mouse with screen, 24-bit colour)                                 | —                     |
-| `0xa9` | `FEA_CMD_GET_SCREEN_24BITDATA`   | feature GET | (mouse with screen)                                                | —                     |
-| `0x2a` | `FEA_CMD_SET_OLEDWEATHER`        | feature SET | no                                                                 | —                     |
-| `0x2b` | `FEA_CMD_SET_OLEDEFFECT`         | feature SET | no                                                                 | —                     |
-| `0xab` | `FEA_CMD_GET_OLEDEFFECT`         | feature GET | no                                                                 | —                     |
-| `0x2c` | `FEA_CMD_SET_FLASHCHIPERASSE`    | feature SET | (OLED erase)                                                       | `js:735950`           |
-| `0xac` | `FEA_CMD_GET_FLASHCHIPERASSE`    | feature GET | no                                                                 | —                     |
-| `0xad` | `FEA_CMD_GETOLED_VERSION`        | feature GET | no                                                                 | —                     |
-| `0x30` | `FEA_CMD_SET_OLED_BOOT`          | feature SET | no                                                                 | —                     |
-| `0xb0` | `FEA_CMD_GET_OLED_BOOT`          | feature GET | no                                                                 | —                     |
-| `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`     | feature SET | no                                                                 | —                     |
-| `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`     | feature GET | no                                                                 | —                     |
-| `0x8f` | `FEA_CMD_GET_INFO`               | feature GET | yes (initial probe)                                                | —                     |
+| Opcode | Mnemonic                         | Direction                                     | Used on mouse path?                                                                                                                                   | Renderer site                 |
+| -----: | -------------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
+| `0x00` | `FEA_CMD_SET_REV`                | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x80` | `FEA_CMD_GET_REV`                | feature GET                                   | **yes** — `getFirmwareVersion()`                                                                                                                      | `js:921263`                   |
+| `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`      | feature SET                                   | no (handled by dongle)                                                                                                                                | —                             |
+| `0x02` | `FEA_CMD_SET_RESERT`             | feature SET                                   | **yes** — "Restore defaults"                                                                                                                          | search for opcode `2`         |
+| `0x83` | `FEA_CMD_GET_BATTERY`            | **OUTPUT-write + interrupt-IN** (NOT feature) | active query: `getBattery()` → 8-byte `[0x83]` + BIT7 → `sendMsg` (OUTPUT) then `readMsg` (interrupt-IN); percent=`resp[1]`, state=`resp[2]`. See §4. | `js:getBattery/commomFeature` |
+| `0x04` | `FEA_CMD_SET_REPORT` (poll rate) | feature SET                                   | **yes** — `setReportRate()`                                                                                                                           | `js:921290`                   |
+| `0x84` | `FEA_CMD_GET_REPORT` (poll rate) | feature GET                                   | **yes** — `getReportRate()`                                                                                                                           | `js:921307`                   |
+| `0x05` | `FEA_CMD_SET_PROFILE`            | feature SET                                   | **yes** — `setCurrentProfile()`                                                                                                                       | `js:921350`                   |
+| `0x85` | `FEA_CMD_GET_PROFILE`            | feature GET                                   | **yes** — `getCurrentProfile()`                                                                                                                       | `js:921331`                   |
+| `0x06` | `FEA_CMD_SET_KBOPTION`           | feature SET                                   | no (keyboard)                                                                                                                                         | —                             |
+| `0x86` | `FEA_CMD_GET_KBOPTION`           | feature GET                                   | no (keyboard)                                                                                                                                         | —                             |
+| `0x07` | `FEA_CMD_SET_LEDPARAM`           | feature SET                                   | **yes** — `setLightSetting()`                                                                                                                         | `js:920862`                   |
+| `0x87` | `FEA_CMD_GET_LEDPARAM`           | feature GET                                   | **yes** — `getLightSetting()`                                                                                                                         | —                             |
+| `0x08` | `FEA_CMD_SET_SLEDPARAM`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x88` | `FEA_CMD_GET_SLEDPARAM`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x09` | `FEA_CMD_SET_KEYMATRIX`          | feature SET                                   | no (keyboard; mouse uses 0x50)                                                                                                                        | —                             |
+| `0x89` | `FEA_CMD_GET_KEYMATRIX`          | feature GET                                   | no (keyboard)                                                                                                                                         | —                             |
+| `0x0a` | `FEA_CMD_SET_KEYENABLE`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x8a` | `FEA_CMD_GET_KEYENABLE`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x0b` | `FEA_CMD_SET_MACRO`              | feature SET                                   | no — mouse uses `0x16` SIMPLE form                                                                                                                    | —                             |
+| `0x8b` | `FEA_CMD_GET_MACRO`              | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x0c` | `FEA_CMD_SET_USERPIC`            | feature SET                                   | no — mouse uses `0x52`                                                                                                                                | —                             |
+| `0x8c` | `FEA_CMD_GET_USERPIC`            | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x0d` | `FEA_CMD_SET_AUDIO`              | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x0e` | `FEA_CMD_SET_WINDOWS`            | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x10` | `FEA_CMD_SET_FN`                 | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x90` | `FEA_CMD_GET_FN`                 | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x11` | `FEA_CMD_SET_DEBOUNCE` (kb)      | feature SET                                   | no — mouse uses byte 10 of `0x53` omnibus                                                                                                             | —                             |
+| `0x91` | `FEA_CMD_GET_DEBOUNCE`           | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x12` | `FEA_CMD_SET_SLEEPTIME` (kb)     | feature SET                                   | no — mouse uses bytes 40..47 of `0x53`                                                                                                                | —                             |
+| `0x92` | `FEA_CMD_GET_SLEEPTIME`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x13` | `FEA_CMD_SET_KEYMATRIX_SIMPLE`   | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x93` | `FEA_CMD_GET_KEYMATRIX_SIMPLE`   | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x14` | `FEA_CMD_SET_USERPIC_SIMPLE`     | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x94` | `FEA_CMD_GET_USERPIC_SIMPLE`     | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x15` | `FEA_CMD_SET_FN_SIMPLE`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x95` | `FEA_CMD_GET_FN_SIMPLE`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x16` | `FEA_CMD_SET_MACRO_SIMPLE`       | feature SET                                   | **yes** — `_setMacro()` chunked                                                                                                                       | `js:922079`                   |
+| `0x96` | `FEA_CMD_GET_MACRO_SIMPLE`       | feature GET                                   | **yes** — `getMacro()` chunked                                                                                                                        | `js:921635`                   |
+| `0x17` | `FEA_CMD_SET_AUTOOS_EN`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x97` | `FEA_CMD_GET_AUTOOS_EN`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x18` | `FEA_CMD_SET_USERGIFSTART`       | feature SET                                   | (mouse with screen)                                                                                                                                   | `js:817098`                   |
+| `0x19` | `FEA_CMD_SET_USERGIF`            | feature SET                                   | (mouse with screen)                                                                                                                                   | `js:817119`                   |
+| `0x20` | `FEA_CMD_SET_OLEDPICINDEX`       | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa0` | `FEA_CMD_GET_OLEDPICINDEX`       | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x21` | `FEA_CMD_SET_OLEDPICDATA`        | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa1` | `FEA_CMD_GET_OLEDPICDATA`        | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x22` | `FEA_CMD_SET_OLEDOPTION`         | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa2` | `FEA_CMD_GET_OLEDOPTION`         | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x23` | `FEA_CMD_SET_KEYSTROKE`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa3` | `FEA_CMD_GET_KEYSTROKE`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x24` | `FEA_CMD_SET_OLEDGIFDATA`        | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa4` | `FEA_CMD_GET_OLEDGIFDATA`        | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x25` | `FEA_CMD_SETTFTLCDDATA`          | feature SET                                   | (mouse with screen)                                                                                                                                   | `js:817196`                   |
+| `0xa5` | `FEA_CMD_GETTFTLCDDATA`          | feature GET                                   | (mouse with screen)                                                                                                                                   | `js:736052`                   |
+| `0x26` | `FEA_CMD_SET_OLEDGIFINDEX`       | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xa6` | `FEA_CMD_GET_OLEDGIFINDEX`       | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x27` | `FEA_CMD_SET_OLEDLUANGAGE`       | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x28` | `FEA_CMD_SET_OLEDCLOCK`          | feature SET                                   | **yes** — OLED basetta firmware-RTC clock (see §3.15)                                                                                                 | iot_driver (Frida)            |
+| `0x29` | `FEA_CMD_SET_SCREEN_24BITDATA`   | feature SET                                   | (mouse with screen, 24-bit colour)                                                                                                                    | —                             |
+| `0xa9` | `FEA_CMD_GET_SCREEN_24BITDATA`   | feature GET                                   | (mouse with screen)                                                                                                                                   | —                             |
+| `0x2a` | `FEA_CMD_SET_OLEDWEATHER`        | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0x2b` | `FEA_CMD_SET_OLEDEFFECT`         | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xab` | `FEA_CMD_GET_OLEDEFFECT`         | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x2c` | `FEA_CMD_SET_FLASHCHIPERASSE`    | feature SET                                   | (OLED erase)                                                                                                                                          | `js:735950`                   |
+| `0xac` | `FEA_CMD_GET_FLASHCHIPERASSE`    | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0xad` | `FEA_CMD_GETOLED_VERSION`        | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x30` | `FEA_CMD_SET_OLED_BOOT`          | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xb0` | `FEA_CMD_GET_OLED_BOOT`          | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x31` | `FEA_CMD_SET_OLED_BOOTSTART`     | feature SET                                   | no                                                                                                                                                    | —                             |
+| `0xb1` | `FEA_CMD_GET_OLED_BOOTSTART`     | feature GET                                   | no                                                                                                                                                    | —                             |
+| `0x8f` | `FEA_CMD_GET_INFO`               | feature GET                                   | yes (initial probe)                                                                                                                                   | —                             |
 
 ### 2.2 Mouse class extensions (`0x50..0x60`)
 
@@ -607,18 +607,47 @@ a single 2000-offset byte).
 
 ______________________________________________________________________
 
-## 4 — Battery model (HID status report 0x05, byte 3)
+## 4 — Battery model (active 0x83 query: OUTPUT-write + interrupt-IN)
 
-**Status:** HARDWARE-CONFIRMED on a physical AJAZZ 2.4G 8K (`0x3151:0x5007`),
-2026-05-21. The mouse mirrors its charge level into vendor **status report
-`0x05`, byte 3** (range `0..100`; `0x64` = 100%), readable via GET_FEATURE on
-the `0xFFFF` control collection (usage `0x02` — see §1 collection
-disambiguation). `AjSeriesMouse` implements `IBatteryCapable` against this
-report.
+> **⚠️ CORRECTED 2026-05-21 — verified against the REAL vendor app**
+> (`iot_driver.exe` + the Electron renderer
+> `resources/app/dist/static/js/main_ace02afb.js`, AJ159 APEX Win driver).
+> BOTH earlier theories in this section were wrong: there is no `0x40` query,
+> and `GET_FEATURE` on report `0x05` returns **all-zeros** on live hardware even
+> with the link awake (the "byte 3" reading was a stale buffer). The vendor does
+> an **active query**, but NOT over feature reports.
+>
+> **Exact method (re-verified from the bundle by offset, not the .md):**
+>
+> 1. `getBattery()`: `r = alloc(8); r[0] = 0x83` (`FEA_CMD_GET_BATTERY`) — an
+>    **8-byte** buffer, opcode at byte 0, rest zero.
+> 1. `commomFeature(r, BIT7)` = `writeFeatureCmd(r, BIT7)` **then**
+>    `readFeatureCmd()`:
+>    - `writeFeatureCmd → no() → ao.sendMsg` — **`sendMsg` = OUTPUT report /
+>      interrupt-OUT** (confirmed: `no` calls `ao.sendMsg`, `uo` calls
+>      `ao.sendRawFeature`). On the OUT-less vendor interface the kernel emits it
+>      as a control `SET_REPORT(OUTPUT)` — verified to ACK over hidraw.
+>    - `readFeatureCmd → oo() → ao.readMsg` — **`readMsg` = interrupt-IN read**
+>      (`oo`=`readMsg`, `io`=`readRawFeature`/GET_FEATURE — NOT used here).
+>    - So battery is **OUTPUT-write-then-interrupt-IN-read, NOT feature reports**
+>      (the "Feature" in the JS names is misleading).
+> 1. Checksum: **BIT7** (`CheckSumType{BIT7:0,BIT8:1,NONE:2}`), filled
+>    server-side by iot_driver.
+> 1. Response parse: **percent = `resp[1]`**, state = `resp[2]` (1=charging,
+>    2=full, else uncharge), low-power = `resp[3]`.
+> 1. **Interface:** the mouse role is usage `0x2` = interface 2 (`/dev/hidraw9`
+>    on Linux) — see §5 dongle-pairing model in `aj_series_device_matrix.md`.
+>
+> **Hardware status (2026-05-21):** the 8-byte `0x83` OUTPUT query ACKs over
+> hidraw, but an awake-link `0xC0`-style reply has not yet been captured
+> (the 2.4G mouse must be actively in use; an AFK/idle link returns nothing).
+> `AjSeriesMouse::batteryPercent()` still does a cold `GET_FEATURE` (the wrong
+> channel) → always returns "unknown" (`--%`). TODO: reimplement against the
+> OUTPUT+interrupt channel above. NOT a transport/libusb blocker.
 
-> **Supersedes the prior "no HID battery query" claim.** Earlier RE concluded
-> battery was dongle-gRPC-only; on real hardware the value reads directly from
-> status report 0x05.
+**Retracted prior claim (kept for history):** ~~the mouse mirrors its charge
+into status report `0x05` byte 3, read via GET_FEATURE on the `0xFFFF` usage-0x02
+collection.~~ Not reproducible — superseded by the active `0x83` query above.
 
 ### Frame layout + validation (hardware-confirmed 2026-05-21)
 
@@ -636,12 +665,12 @@ byte 4..7 : status flags — 01 01 01 02 when the wireless link/telemetry is up,
 
 Observed states (via `scripts/aj_mouse_probe.py --battery-watch` across a replug):
 
-| Frame                         | Meaning                                  |
-| ----------------------------- | ---------------------------------------- |
-| `05 00 00 64 01 01 01 02`     | stable, 100%                             |
-| `05 00 00 00 00 00 00 00`     | fresh reconnect — link not ready yet     |
-| `05 00 00 00 01 01 01 02`     | link up, charge not reported yet (→ grey)|
-| `05 ad 04 01 00 00 00 00`     | **garbage transient frame** during reconnect |
+| Frame                     | Meaning                                      |
+| ------------------------- | -------------------------------------------- |
+| `05 00 00 64 01 01 01 02` | stable, 100%                                 |
+| `05 00 00 00 00 00 00 00` | fresh reconnect — link not ready yet         |
+| `05 00 00 00 01 01 01 02` | link up, charge not reported yet (→ grey)    |
+| `05 ad 04 01 00 00 00 00` | **garbage transient frame** during reconnect |
 
 The last row is the source of the spurious "1%" that flashed in the UI before
 the value settled. The fix (`batteryPercent()`, commit 1f2be0c): a valid status

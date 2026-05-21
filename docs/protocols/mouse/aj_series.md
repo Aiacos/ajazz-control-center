@@ -48,14 +48,17 @@ device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
 
 Offline device returns `BB = 0xFF`.
 
-> **HARDWARE NOTE (2026-05-21):** the `0x40` query above does not match the
-> shipping firmware. On a live AJAZZ 2.4G 8K the charge level mirrors into
-> vendor **status report `0x05`, byte 3** (`0..100`, `0x64` = 100%), read via
-> GET_FEATURE on the `0xFFFF` (usage `0x02`) control collection — no `0x40`
-> request is needed. `AjSeriesMouse` implements `IBatteryCapable` against this
-> report. See `aj_series_opcode_table.md` §4 and `aj_series_vendor.md` for the
-> hardware-confirmed details. The same correction is expected to apply to the
-> AJ199 family, but only the 2.4G 8K is hardware-verified so far.
+> **HARDWARE NOTE (2026-05-21, corrected):** neither the `0x40` query above NOR
+> the once-claimed "status report `0x05` byte 3 via GET_FEATURE" matches the
+> shipping firmware (`GET_FEATURE 0x05` returns all-zeros on live hardware even
+> with the link awake). Verified against the real vendor app: battery is an
+> **active `0x83` (`FEA_CMD_GET_BATTERY`) query over OUTPUT-write +
+> interrupt-IN** — `getBattery()` → 8-byte `[0x83]` + BIT7 → `sendMsg` (OUTPUT)
+> then `readMsg` (interrupt-IN); parse **percent = `resp[1]`**, state =
+> `resp[2]` (1=charge, 2=full), lp = `resp[3]`; on the mouse vendor interface
+> (usage `0x02` = iface 2). `AjSeriesMouse::batteryPercent()` still uses a cold
+> `GET_FEATURE` (wrong channel) → returns "unknown" until reimplemented. Full
+> detail in `aj_series_opcode_table.md` §4. NOT a libusb blocker.
 
 ## Onboard clock (OLED basetta)
 
