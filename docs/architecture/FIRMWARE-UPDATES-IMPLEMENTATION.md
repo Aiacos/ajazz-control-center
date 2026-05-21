@@ -106,8 +106,9 @@ at once); always re-probe the firmware version after reboot to confirm.
   user downloaded from the vendor (we still deep-link the official download page
   from `FIRMWARE-UPDATES.md`). We validate magic/size/checksum but never host it.
 - **Recovery:** document the vendor-tool recovery path per family; for the
-  keyboard, the SN32 bootloader is re-enterable via a key combo even after a
-  failed flash (a key safety advantage of that chipset).
+  keyboard, the SN32 bootloader is re-enterable via a **physical pin-short under
+  the spacebar** even after a failed flash (DFU PID `0x0C45:0x7140`) — a real
+  safety advantage of that chipset (see §8).
 
 ---
 
@@ -115,21 +116,39 @@ at once); always re-probe the firmware version after reboot to confirm.
 
 ### 3.1 Keyboard AK980 PRO — **best candidate** (Sonix SN32F2xx)
 
-- **Why feasible:** the bootloader protocol is fully public and GPL-documented
-  (SonixFlasherC + SonixQMK). It's HID, so our transport works. The bootloader
-  is hardware-recoverable (re-enter via key combo), which dramatically lowers
-  brick risk.
+- **Why feasible:** the SN32F2xx bootloader protocol is public and GPL-documented
+  (SonixFlasherC supports SN32F22x/23x/24x/26x/28x/**29x**; HID-based, hidapi —
+  so our transport works, no libusb). Online validation (§8) confirms the AK820
+  Pro (the AK980 PRO's direct sibling) is an **HFD80CP100, a SONIX SN32F299
+  clone** using the **`hfd` OEM bootloader variant** that SonixFlasherC handles
+  via `--reboot hfd`. Bootloader entry is a **physical pin-short under the
+  spacebar** during USB connect → DFU enumerates as **VID:PID `0x0C45:0x7140`**;
+  it is therefore hardware-recoverable (you can re-enter the bootloader manually
+  after a bad flash), which lowers brick risk.
 - **What we'd implement (clean-room from the public protocol, not vendoring the
   GPL C):** enter-bootloader handshake, page erase, page write, CRC verify,
-  reboot — against a **user-supplied** firmware binary.
-- **Caveats:** (a) the AK980 PRO ships **vendor** firmware, not QMK — flashing a
-  user-downloaded vendor image is fine, but there's no community firmware to
-  offer; (b) the exact SN32 sub-variant (F299 vs F26x) changes page size /
-  protocol details — confirm against the chip; (c) GPL: a clean C++ reimpl of a
-  documented protocol is fine, but if we lift SonixFlasherC code, the tool
-  inherits GPL-3.0 (acceptable for a `tools/` binary, but a deliberate choice).
-- **Effort:** ~1–2 weeks for the opt-in CLI tool + a capture to confirm the
-  AK980 PRO actually uses the stock SN32 bootloader (vs a vendor-customised one).
+  reboot — against a **user-supplied** firmware binary, scoped to the **SN32
+  main MCU**.
+- **Caveats (sharpened by §8 validation):**
+  (a) the AK980 PRO ships **vendor** firmware and **no QMK port exists** for this
+  family (the community repo is RE-only, "perhaps someone will add QMK") — so we
+  can only flash a user-downloaded *vendor* image, there's no community firmware
+  to offer;
+  (b) it's an HFD-variant SN32F299 **clone**, not the bare stock bootloader —
+  confirm the AK980 PRO's exact DFU PID + page size against the real chip before
+  trusting SonixFlasherC's defaults;
+  (c) **the wireless side is a SEPARATE chip** — a **WCH CH582F** BT/2.4G module
+  (I2C/UART to the SN32), which SonixFlasher/QMK do **not** touch. Flashing the
+  SN32 updates ONLY the wired/main firmware; the 2.4G/BT firmware (the AK980 PRO
+  `0xFEFE` dongle path) is a second, undocumented update problem;
+  (d) bootloader entry needs a **manual pin-short**, so a one-click software flash
+  isn't possible — the UX is "put the board in DFU yourself, then flash";
+  (e) GPL: a clean C++ reimpl of the documented protocol is fine; lifting
+  SonixFlasherC code makes the `tools/` binary GPL-3.0 (acceptable, deliberate).
+- **Effort:** the *flasher itself* is ~1–2 weeks, but it is **gated** on a capture
+  confirming the AK980 PRO uses the stock SN32/HFD bootloader (the AK820 Pro does;
+  the AK980 PRO is not separately documented) and a decision to scope to the
+  wired MCU only.
 
 ### 3.2 Mouse AJ-series — **medium** (in-protocol HID OTA)
 
@@ -230,3 +249,77 @@ answer grounded in the RE:
 Recommended next concrete step: do **P0** now (read-only version + deep-link +
 DFU-detect), and schedule the **keyboard SN32 capture** to decide P1. Everything
 else waits on hardware captures and an explicit maintainer decision.
+
+---
+
+## 8. Online validation (2026-05-21)
+
+The technical claims above were checked against public sources. Net effect:
+the **direction holds** (keyboard best, mouse gated, Stream Dock no), but the
+keyboard path is **more constrained** than the first draft implied.
+
+### Confirmed
+- **SonixFlasherC is real, HID-based (hidapi, no libusb), and covers SN32F29x.**
+  Supported families: SN32F22x/23x/24x/26x/28x/**29x**; firmware is `.bin`;
+  jumploader offset `0x200`; `--reboot` has OEM variants **`sonix`, `evision`,
+  `hfd`**. This validates the "HID, libusb-free, public protocol" basis of P1.
+- **The AK820 Pro (AK980 PRO's direct sibling) is an `HFD80CP100` = a SONIX
+  SN32F299 clone**, using the **`hfd`** bootloader variant. Confirms the dossier's
+  SN32F299 lineage AND that it's an OEM (HFD) variant, not bare stock — and that
+  SonixFlasherC's `--reboot hfd` is the matching path. (Source: the community RE
+  repo `fpb/ajazz-ak820-pro` + SonixQMK Mechanical-Keyboard-Database issue #50.)
+- **Bootloader entry = physical pin-short under the spacebar** during USB connect;
+  DFU enumerates as **`0x0C45:0x7140`**. Hardware-recoverable, but manual (no
+  software-only trigger). Corrected in §3.1/§2.4.
+
+### Refuted / corrected
+- **"Recoverable via key combo"** → it's a **physical pin-short**, not a key
+  combo. Fixed.
+- **"The bootloader is open / low-risk"** is too rosy: the AK820 Pro is an HFD
+  *clone*, **no QMK port exists** (the community repo is RE-only with a
+  "perhaps someone will add QMK support" TODO), and **only stock vendor firmware
+  is archived** — there is no community firmware to flash. So P1 can only flash a
+  *user-supplied vendor* image, and the brick mappings are incompletely documented.
+
+### New constraint discovered (material)
+- **The wireless side is a separate `WCH CH582F` BT/2.4G chip** (I2C/UART to the
+  SN32), which SonixFlasher/QMK do **not** touch. So flashing the SN32 updates
+  ONLY the wired/main firmware; the AK980 PRO's **2.4G/BT firmware** (`0xFEFE`
+  dongle path) is a **second, undocumented chip** — a full "tri-mode firmware
+  update" is a two-MCU problem, and our flasher would honestly cover only the
+  wired MCU.
+
+### Could not confirm (stays RE-derived)
+- **Stream Dock = Allwinner SoC + encrypted Bulk-Only DFU.** No public source
+  corroborated or refuted this; it remains derived from our own RE
+  (`FirmwareUpgradeTool.exe` linking libusb + the `AIC.FW`/`aKDFU` strings). The
+  "do not build" verdict is unchanged and is anyway driven by the libusb + crypto
+  constraints, not by the chip identity.
+- **Mouse HID OTA** (`0x40/0x41/0xc0/0xc1`): no public corroboration; stays
+  decompile-only/uncaptured. Verdict (gate on a capture) unchanged.
+
+### LVFS / fwupd end-state
+- **AJAZZ / A-JAZZ / Mirabox / Microdia are NOT on LVFS** (checked the LVFS
+  device list). So the preferred "thin `fwupd` delegate" end-state from
+  `FIRMWARE-UPDATES.md §When this revisits` is **not available today** and cannot
+  be relied on; it remains a "if AJAZZ ever joins LVFS" hypothetical.
+
+### Official firmware distribution (for the deep-link, confirmed live)
+- AK820 Pro / AK-family: per-model upgrade `.zip` on `ajazzstore.com/blogs/firmware`
+  and `epomaker.com/blogs/firmware`, mirrored at `ajazz.driveall.cn`.
+- Stream Dock: firmware bundled inside the installer from `ajazzstore.com` /
+  `ajazz.driveall.cn` (no standalone firmware URL).
+
+### Adjusted bottom line
+Keyboard remains the only sane in-app candidate, but realistically scoped to the
+**wired SN32/HFD main MCU with a user-supplied vendor image and a manual
+pin-short entry** — and gated on a capture confirming the AK980 PRO matches its
+AK820 Pro sibling. The wireless WCH chip, the mouse OTA, and the Stream Dock are
+all out of reach for now. **P0 stays the right immediate move.**
+
+### Sources
+- [SonixFlasherC](https://github.com/SonixQMK/SonixFlasherC) · [README](https://github.com/SonixQMK/SonixFlasherC/blob/main/README.md)
+- [SonixQMK compatible keyboards](https://sonixqmk.github.io/SonixDocs/compatible_kb/) · [SonixQMK Mechanical-Keyboard-Database #50 (AK820 Pro)](https://github.com/SonixQMK/Mechanical-Keyboard-Database/issues/50)
+- [fpb/ajazz-ak820-pro (community RE of the sibling)](https://github.com/fpb/ajazz-ak820-pro)
+- [LVFS device list](https://fwupd.org/lvfs/devices/) · [fwupd](https://github.com/fwupd/fwupd)
+- [AJAZZ Store firmware](https://ajazzstore.com/blogs/firmware) · [Epomaker AK820 Pro 2.4G upgrade](https://epomaker.com/blogs/firmware/ajazz-ak820-pro-2-4g-upgrade) · [AJAZZ DriveAll portal](https://ajazz.driveall.cn/)
