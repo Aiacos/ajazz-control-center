@@ -98,7 +98,8 @@ public:
                         makeHidTransport(id.vendorId,
                                          id.productId,
                                          id.serial,
-                                         descriptor.controlUsagePage)) {}
+                                         descriptor.controlUsagePage,
+                                         descriptor.controlUsage)) {}
 
     /** Test constructor with injected transport (DI for unit tests). */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)

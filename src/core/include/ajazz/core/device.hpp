@@ -85,6 +85,13 @@ struct DeviceDescriptor {
     /// feature reports (RTC, battery, RGB) live. Verified for the AK980 PRO:
     /// the control channel is usage page 0xFF13 (the boot keyboard is 0x0001).
     std::uint16_t controlUsagePage{0};
+
+    /// HID usage (within @ref controlUsagePage) of the vendor control collection
+    /// (0 = match by usage page only). Needed when a device exposes MULTIPLE
+    /// collections sharing one usage page — e.g. the AJ-series mouse has two
+    /// 0xFFFF collections (usage 2 = control, usage 1 = not), so the usage page
+    /// alone is ambiguous and a re-enumeration can pick the wrong one.
+    std::uint16_t controlUsage{0};
 };
 
 /**

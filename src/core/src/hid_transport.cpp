@@ -48,8 +48,13 @@ public:
      * @param pid    USB Product ID.
      * @param serial Serial number string; empty means first matching device.
      */
-    HidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial, std::uint16_t usagePage = 0)
-        : m_vid(vid), m_pid(pid), m_serial(std::move(serial)), m_usagePage(usagePage) {}
+    HidTransport(std::uint16_t vid,
+                 std::uint16_t pid,
+                 std::string serial,
+                 std::uint16_t usagePage = 0,
+                 std::uint16_t usage = 0)
+        : m_vid(vid), m_pid(pid), m_serial(std::move(serial)), m_usagePage(usagePage),
+          m_usage(usage) {}
 
     ~HidTransport() override { HidTransport::close(); }
 
@@ -71,8 +76,15 @@ public:
         if (m_usagePage != 0) {
             std::string matchPath;
             if (hid_device_info* head = ::hid_enumerate(m_vid, m_pid)) {
+                // Match the usage page, and the usage too when configured
+                // (m_usage != 0). Some composite devices expose SEVERAL
+                // collections sharing one usage page (e.g. the AJ-series mouse
+                // has two 0xFFFF collections — usage 2 is the control channel,
+                // usage 1 is not) so usage_page alone is ambiguous and can pick
+                // the wrong one after a re-enumeration.
                 for (auto const* p = head; p != nullptr; p = p->next) {
-                    if (p->usage_page == m_usagePage && p->path != nullptr) {
+                    if (p->usage_page == m_usagePage && (m_usage == 0 || p->usage == m_usage) &&
+                        p->path != nullptr) {
                         matchPath = p->path;
                         break;
                     }
@@ -226,6 +238,7 @@ private:
     std::uint16_t m_pid{0};          ///< USB Product ID.
     std::string m_serial;            ///< Serial number filter; empty = first match.
     std::uint16_t m_usagePage{0};    ///< Vendor control usage page to select (0 = first interface).
+    std::uint16_t m_usage{0};        ///< Vendor control usage to disambiguate same-page collections (0 = any).
     ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
     /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
     std::atomic<std::uint64_t> m_bytesSent{0};
@@ -286,8 +299,11 @@ HidLibraryGuard& hidLibrary() {
  * @param serial Optional serial number; empty means first matching device.
  * @return Closed TransportPtr; call open() before I/O.
  */
-TransportPtr
-makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial, std::uint16_t usagePage) {
+TransportPtr makeHidTransport(std::uint16_t vid,
+                              std::uint16_t pid,
+                              std::string serial,
+                              std::uint16_t usagePage,
+                              std::uint16_t usage) {
     /**
      * @brief Decorator that holds a HidLibraryGuard reference for the
      *        transport's lifetime, balancing hid_init / hid_exit.
@@ -298,7 +314,7 @@ makeHidTransport(std::uint16_t vid, std::uint16_t pid, std::string serial, std::
         ~GuardedHidTransport() override { hidLibrary().release(); }
     };
     hidLibrary().acquire();
-    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial), usagePage);
+    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial), usagePage, usage);
 }
 
 } // namespace ajazz::core

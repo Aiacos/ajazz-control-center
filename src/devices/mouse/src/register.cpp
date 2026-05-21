@@ -124,8 +124,12 @@ void registerAll(core::DeviceRegistry& registry) {
                 // Vendor control collection is HID usage page 0xFFFF (the JS
                 // driver opens usage:2/usagePage:65535); without this the
                 // transport opens the boot-mouse interface and every feature
-                // report (incl. the battery status read) silently fails.
+                // report (incl. the battery status read) silently fails. The
+                // device exposes TWO 0xFFFF collections, so controlUsage=0x02
+                // disambiguates (usage 1 is not the control channel) — keeps
+                // battery + clock working across a physical re-enumeration.
                 .controlUsagePage = 0xFFFF,
+                .controlUsage = 0x02,
             },
             &makeAjSeries);
     }

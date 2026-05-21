@@ -508,7 +508,11 @@ public:
         : ProprietaryKeyboard(
               descriptor,
               id,
-              makeHidTransport(id.vendorId, id.productId, id.serial, descriptor.controlUsagePage)) {}
+              makeHidTransport(id.vendorId,
+                               id.productId,
+                               id.serial,
+                               descriptor.controlUsagePage,
+                               descriptor.controlUsage)) {}
 
     /** Test constructor — accepts an injected transport (DI for unit tests). */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)

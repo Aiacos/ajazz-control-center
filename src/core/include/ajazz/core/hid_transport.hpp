@@ -45,6 +45,7 @@ namespace ajazz::core {
 [[nodiscard]] TransportPtr makeHidTransport(std::uint16_t vid,
                                             std::uint16_t pid,
                                             std::string serial = {},
-                                            std::uint16_t usagePage = 0);
+                                            std::uint16_t usagePage = 0,
+                                            std::uint16_t usage = 0);
 
 } // namespace ajazz::core
