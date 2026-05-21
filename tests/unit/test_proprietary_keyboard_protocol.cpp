@@ -229,11 +229,11 @@ TEST_CASE("ak980 setTime save packet: report id 0x00 + data 0x04 + opcode 0x02 (
 // Battery query wire format (roadmap §11.2; ak980pro_vendor.md row 0x20 0x01).
 // ---------------------------------------------------------------------------
 
-TEST_CASE("ak980 battery query packet carries ReportId=0x04 + opcode 0x20 + sub 0x01",
+TEST_CASE("ak980 battery query packet carries ReportId=0x00 + opcode 0x20 + sub 0x01",
           "[proprietary][protocol][battery]") {
     auto const pkt = buildBatteryQuery();
     REQUIRE(pkt.size() == ReportSize);
-    REQUIRE(pkt[0] == ReportId);        // 0x04
+    REQUIRE(pkt[0] == 0x00);            // HID report id 0x00 (hardware-confirmed; NOT 0x04)
     REQUIRE(pkt[1] == CmdBatteryQuery); // 0x20
     REQUIRE(pkt[2] == BatteryQuerySub); // 0x01 - discriminates from per-key RGB (sub 0x04)
     // All other bytes must be zero.

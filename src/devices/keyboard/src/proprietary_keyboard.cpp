@@ -257,7 +257,12 @@ std::array<std::uint8_t, ReportSize> buildSettingsBatch(std::uint8_t fnLayerSwit
 }
 
 std::array<std::uint8_t, ReportSize> buildBatteryQuery() {
-    auto pkt = makeReport(CmdBatteryQuery);
+    // byte 0 = 0x00 HID report id (FUN_004358c0:26 leaves it zero), opcode 0x20
+    // at byte 1, sub 0x01 at byte 2. NOT makeReport (which puts 0x04 at byte 0):
+    // hardware-confirmed 2026-05-21 the device only replies when the feature
+    // report carries report id 0x00.
+    std::array<std::uint8_t, ReportSize> pkt{};
+    pkt[1] = CmdBatteryQuery; // 0x20
     pkt[2] = BatteryQuerySub; // 0x01 — discriminates battery from per-key RGB (sub 0x04)
     return pkt;
 }
@@ -724,17 +729,40 @@ public:
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
             (void)m_transport->writeFeature(buildBatteryQuery());
-            std::array<std::uint8_t, ReportSize> resp{};
-            resp[0] = ReportId; // hidapi convention: pre-fill report id for feature read
-            auto const n = m_transport->readFeature(resp);
-            if (n < 4 || resp[0] != CmdBatteryQuery) {
-                return std::nullopt; // no reply / wrong report / wired-no-battery
+            // Request/response handshake (like the time-sync path): the device
+            // needs a settle window before the GET_FEATURE reply is ready, so we
+            // poll. hardware-confirmed 2026-05-21 — a read with no delay returns
+            // no usable data. hidapi's get_feature_report returns the report WITH
+            // the leading report-id byte (0x00) at index 0 (it does NOT strip it
+            // the way the vendor's ReadFile does, FUN_00451300:43-48), so the
+            // opcode echo lands at resp[1] and the charge percent at resp[4] —
+            // the decompile's resp[3] shifted up by one.
+            // 65-byte buffer: hid_get_feature_report on Windows needs at least
+            // the device's FeatureReportByteLength (65) or HidD_GetFeature fails.
+            // A 64-byte buffer was the silent cause of every GET throwing.
+            std::array<std::uint8_t, TimeReportSize> resp{};
+            for (int attempt = 0; attempt < 6; ++attempt) {
+                std::this_thread::sleep_for(std::chrono::milliseconds{30});
+                resp.fill(0); // resp[0]=0x00 = unnumbered feature report id to fetch
+                std::size_t n = 0;
+                try {
+                    n = m_transport->readFeature(resp);
+                } catch (std::exception const&) {
+                    continue; // transient GET failure; retry within the poll budget
+                }
+                if (n < 5 || resp[1] != CmdBatteryQuery) {
+                    continue; // reply not ready yet / wrong report
+                }
+                auto const pct = resp[4];
+                if (pct == 0) {
+                    return std::nullopt; // "no battery" sentinel; do not surface as 0%
+                }
+                // Wired + full reports 0xFF here; the firmware/vendor app clamp
+                // out-of-range readings to 100. Per-percent wireless encoding is
+                // unverified (can't drain over USB) — see ak980pro_vendor.md §13.5.
+                return std::min<std::uint8_t>(pct, 100);
             }
-            auto const pct = resp[3];
-            if (pct == 0) {
-                return std::nullopt; // "no battery" sentinel; do not surface as 0%
-            }
-            return std::min<std::uint8_t>(pct, 100); // clamp out-of-range readings
+            return std::nullopt; // no valid reply within the poll budget
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN(
                 "keyboard.ak980", "batteryPercent: HID feature I/O failed: {}", e.what());

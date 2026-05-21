@@ -287,9 +287,13 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
 /**
  * @brief Build a battery-level query feature report (opcode 0x20, sub 0x01).
  *
- * Sent via @c ITransport::writeFeature(); the response (also a 65-byte feature
- * report) is read via @c readFeature() and carries the charge percentage at
- * byte 3 (0..100; 0 means "no battery" e.g. wired-only operation).
+ * Report id is 0x00 (byte 0), opcode 0x20 at byte 1, sub 0x01 at byte 2 —
+ * hardware-confirmed 2026-05-21 (the device ignores a 0x04 report id here).
+ * Sent via @c ITransport::writeFeature(); after a short settle delay the reply
+ * is read via @c readFeature() (a GET_FEATURE poll). hidapi returns the reply
+ * WITH the leading 0x00 report-id byte, so the opcode echo is at resp[1] and
+ * the charge percent at resp[4] (0..100; 0xFF when wired+full clamps to 100;
+ * 0 means "no battery"). See @c batteryPercent() for the poll/parse.
  *
  * Vendor poll cadence on AK980 PRO is once per 15 s while wireless — see
  * ak980pro_vendor.md §3 (FUN_004358c0) and clean-reimplementation-roadmap.md
