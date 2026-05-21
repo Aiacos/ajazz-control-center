@@ -27,10 +27,11 @@ add_executable(
     test_ak980_settings_batch.cpp
     # 2026-05-18 (Pass 5) — AK980 PRO TFT chunked image-upload path
     # (opcode 0x7F sub 0x03 + 28-byte chunk packets with the 0x80 marker
-    # on byte 2, ITftDisplayCapable). Pins the §3 wire format from
+    # on byte 1, ITftDisplayCapable). Pins the §3 wire format from
     # docs/protocols/keyboard/ak980pro_tft_protocol.md: header + 2 315
     # chunks per 240x135 RGB565 frame, BE pixel pack, nearest-neighbour
-    # resize for sub-native sources, empty-image graceful no-op.
+    # resize for sub-native sources, empty-image graceful no-op. Wire
+    # format rebuilt from the FUN_004231c0 decompile (2026-05-21).
     test_ak980_tft_chunked.cpp
     # CAPTURE-04 (Phase 09 / Plan 09-04): MockTransport smoke test.
     # Wires the new header-only `tests/unit/fixtures/mock_transport.hpp`

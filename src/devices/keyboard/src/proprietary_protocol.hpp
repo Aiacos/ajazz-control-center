@@ -121,8 +121,9 @@ inline constexpr std::size_t kSettingsByteTrailerLo = 19;       ///< Trailer low
 //   (b) 4 KiB bulk path: opcode 0x72 begin + bulk-write — ~4.5 s per frame,
 //       **143× faster**. Preferred when available; fall back to (a) otherwise.
 //
-// 24-bit chunk index for (a) is split across bytes 1 / 3 / low-7-bits of
-// byte 2 with the 0x80 marker. RGB565 big-endian, row-major top-down.
+// 24-bit chunk index for (a) is split across bytes 1 / 2 / 3: byte 1 carries
+// the 0x80 marker OR'd with the high 7 bits, byte 2 the low 8 bits, byte 3 the
+// middle 8 bits (FUN_004231c0:284,287). RGB565 big-endian, row-major top-down.
 // ---------------------------------------------------------------------------
 inline constexpr std::uint8_t CmdScreenHeader = 0x7f;      ///< Chunked path begin.
 inline constexpr std::uint8_t CmdScreenSubBegin = 0x03;    ///< Sub-cmd for chunked begin.
@@ -382,16 +383,17 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  * TFT upload to tell the firmware "the next @p totalChunks packets carry a
  * 240x135 RGB565 frame stream".
  *
- * Byte layout (64-byte feature report; pad to 0 from byte 8):
+ * Byte layout (64-byte output report; rebuilt from FUN_004231c0:250-267):
  *   byte 0:  0x00                  (HID Report ID — NOT 0x04; see §2 note)
  *   byte 1:  0x7F                  (CmdScreenHeader)
  *   byte 2:  0x03                  (CmdScreenSubBegin)
- *   byte 3:  lcdSelect + 1         (single-LCD models pass 0 -> wire 1)
- *   bytes 4..7: totalChunks (uint32 little-endian; lower 24 bits used)
- *   bytes 8..63: 0x00
+ *   byte 3:  0x00
+ *   byte 4:  lcdSelect + 1         (single-LCD models pass 0 -> wire 1)
+ *   bytes 5..7: totalChunks (24-bit little-endian)
+ *   byte 32: transport checksum (sum of bytes mod 256)
  *
- * The 0x80 marker bit on byte 2 of subsequent chunk packets distinguishes
- * those chunks from this header (whose byte 2 is the literal sub-cmd 0x03).
+ * The 0x80 marker on byte 1 of subsequent chunk packets distinguishes those
+ * chunks from this header (whose byte 1 is the literal opcode 0x7F).
  *
  * @param lcdSelect 0-based LCD index (AK980 PRO has 1 LCD -> pass 0).
  * @param totalChunks Total number of 28-byte chunks the upload will emit
@@ -405,15 +407,15 @@ buildSetRgbEffect(std::uint8_t zone, std::uint8_t effectId, std::uint8_t speed);
  *
  * Per `ak980pro_tft_protocol.md` §3.3: every chunk packet carries 28 bytes of
  * RGB565 pixel data plus the 24-bit chunk index split across bytes 1/2/3 with
- * the 0x80 marker on byte 2 (distinguishes a chunk from the header).
+ * the 0x80 marker on byte 1 (distinguishes a chunk from the header).
  *
- * Byte layout (64-byte feature report; pad to 0 from byte 32):
+ * Byte layout (64-byte output report; rebuilt from FUN_004231c0:273-298):
  *   byte 0:  0x00                       (HID Report ID — NOT 0x04)
- *   byte 1:  chunkIdx & 0xFF            (low 8 bits)
- *   byte 2:  0x80 | ((chunkIdx >> 16) & 0x7F) (marker + high 7 bits)
+ *   byte 1:  0x80 | ((chunkIdx >> 16) & 0x7F) (marker + high 7 bits)
+ *   byte 2:  chunkIdx & 0xFF            (low 8 bits)
  *   byte 3:  (chunkIdx >> 8) & 0xFF     (middle 8 bits)
  *   bytes 4..31: 28 bytes of RGB565 pixel data (big-endian per pixel)
- *   bytes 32..63: 0x00
+ *   byte 32: transport checksum (sum of bytes mod 256)
  *
  * The pixel payload is consumed verbatim — callers are responsible for any
  * endian-flip (RGB565 is big-endian on the wire per §6); see @ref encodeRgb565.
@@ -462,20 +464,20 @@ encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint1
  *
  * Per `ak980pro_tft_protocol.md` §3.3: the chunked TFT image upload path
  * (opcode 0x7F + 0x80|chunk-marker) splits a 24-bit chunk index across
- * bytes 1, 2, 3 of the 33-byte feature report, with the MSB of byte 2
+ * bytes 1, 2, 3 of the 33-byte output report, with the MSB of byte 1
  * acting as the "chunk marker" (always set to 0x80 to distinguish a chunk
- * packet from the header packet whose byte 2 = 0x03).
+ * packet from the header packet whose byte 1 = 0x7F).
  *
- * Encoding:
- *   byte 1 = chunkIdx & 0xFF             (low 8 bits)
- *   byte 2 = 0x80 | ((chunkIdx >> 16) & 0x7F)  (high 7 bits + marker)
+ * Encoding (FUN_004231c0:284,287):
+ *   byte 1 = 0x80 | ((chunkIdx >> 16) & 0x7F)  (high 7 bits + marker)
+ *   byte 2 = chunkIdx & 0xFF             (low 8 bits)
  *   byte 3 = (chunkIdx >> 8) & 0xFF      (middle 8 bits)
  *
- * Inverse: `chunkIdx = byte[1] | (byte[3] << 8) | ((byte[2] & 0x7F) << 16)`.
- * 24-bit range supports 16 777 215 chunks (vs practical max 324 100 for a
- * 140-frame GIF; 7-bit upper portion alone covers 8 388 607).
+ * Inverse: `chunkIdx = byte[2] | (byte[3] << 8) | ((byte[1] & 0x7F) << 16)`.
+ * 23-bit range supports 8 388 607 chunks (vs practical max 324 100 for a
+ * 140-frame GIF).
  *
- * @param chunkIdx 0..0xFFFFFF (24-bit unsigned).
+ * @param chunkIdx 0..0x7FFFFF (high bit is the marker, not index).
  * @return {byte1, byte2, byte3} ready for placement in the chunk packet.
  */
 [[nodiscard]] std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx);
@@ -491,14 +493,15 @@ encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint1
  * separate transport channel that our ITransport must expose
  * (write_bulk equivalent — deferred to a future commit).
  *
- * Byte layout:
- *   byte 0: 0x04                    (HID Report ID — default)
- *   byte 1: 0x72                    (CmdScreenBulkBegin)
- *   byte 2: 0x00
+ * Byte layout (feature report; FUN_00422920:267-270 + FUN_0044eed0 report-id
+ * prepend at offset 0):
+ *   byte 0: 0x00                    (HID Report ID)
+ *   byte 1: 0x04                    (frame byte)
+ *   byte 2: 0x72                    (CmdScreenBulkBegin)
  *   byte 3: LCD-select index + 1    (single-LCD models pass 0 → wire 1)
- *   byte 4: total_4k_chunks low byte
- *   byte 5: total_4k_chunks high byte
- *   bytes 6..63: 0x00
+ *   byte 9: total_4k_chunks low byte
+ *   byte 10: total_4k_chunks high byte
+ *   all other bytes: 0x00
  *
  * Once a USB capture confirms the BULK chunk envelope on a real device,
  * the follow-up commit will wire a `sendScreenBulkFrame()` method that

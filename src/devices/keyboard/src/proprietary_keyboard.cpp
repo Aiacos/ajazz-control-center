@@ -275,10 +275,33 @@ std::array<std::uint8_t, ReportSize> buildPerKeyRgbReadback(bool isWireless) {
     return pkt;
 }
 
+// Stamp the chunked-TFT transport checksum at byte 32.
+//
+// The vendor's output-report helper FUN_0044f5f0 sums every byte of its 65-byte
+// report and stores the low 8 bits at `param_1[8]` — byte offset 32 — right
+// before the 33-byte WriteFile (FUN_0044f5f0:43-50,68). The checksum slot is
+// zero at sum time and the report tail is zero, so for our packets this reduces
+// to sum(bytes[0..31]) mod 256. PROVISIONAL: the firmware may ignore it (no
+// hardware capture yet) — see ak980pro_tft_protocol.md §7.
+void stampTftChecksum(std::array<std::uint8_t, ReportSize>& pkt) {
+    constexpr std::size_t kChecksumByte = 32;
+    std::uint32_t sum = 0;
+    for (std::size_t i = 0; i < pkt.size(); ++i) {
+        if (i == kChecksumByte) {
+            continue;
+        }
+        sum += pkt[i];
+    }
+    pkt[kChecksumByte] = static_cast<std::uint8_t>(sum & 0xffu);
+}
+
 std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
+    // Vendor layout (FUN_004231c0:284,287): the 0x80 chunk marker shares byte 1
+    // with the high 7 bits of the index, byte 2 carries the low 8 bits, byte 3
+    // the middle 8 bits. Decoder: idx = byte2 | (byte3<<8) | ((byte1 & 0x7f)<<16).
     return {
-        static_cast<std::uint8_t>(chunkIdx & 0xffu),                   // byte 1: low 8 bits
-        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)), // byte 2: 0x80 | high 7 bits
+        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)), // byte 1: 0x80 marker | high 7 bits
+        static_cast<std::uint8_t>(chunkIdx & 0xffu),                   // byte 2: low 8 bits
         static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),            // byte 3: middle 8 bits
     };
 }
@@ -286,20 +309,21 @@ std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
 std::array<std::uint8_t, ReportSize> buildTftChunkedHeader(std::uint8_t lcdSelect,
                                                            std::uint32_t totalChunks) {
     std::array<std::uint8_t, ReportSize> pkt{};
-    // ReportId byte 0 stays 0x00 per ak980pro_tft_protocol.md §2 (the TFT
-    // path is the one AK980 PRO surface that does NOT use the default 0x04
-    // ReportId; the vendor's FUN_004231c0 fills the local 33-byte buffer
-    // with byte 0 = 0x00 before handing it to the feature-report transport).
+    // ReportId byte 0 stays 0x00 per ak980pro_tft_protocol.md §2 (the TFT path
+    // does NOT use the default 0x04 ReportId; the vendor's FUN_004231c0 fills
+    // the local report buffer with byte 0 = 0x00).
     pkt[0] = 0x00;
-    pkt[1] = CmdScreenHeader;                           // 0x7F
-    pkt[2] = CmdScreenSubBegin;                         // 0x03
-    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u); // 1-based on the wire
-    // Total-chunks count is uint32-LE in bytes 4..7 (only lower 24 bits used
-    // in practice — 140-frame GIF caps at 324 100 chunks; see §3.2).
-    pkt[4] = static_cast<std::uint8_t>(totalChunks & 0xffu);
-    pkt[5] = static_cast<std::uint8_t>((totalChunks >> 8) & 0xffu);
-    pkt[6] = static_cast<std::uint8_t>((totalChunks >> 16) & 0xffu);
-    pkt[7] = static_cast<std::uint8_t>((totalChunks >> 24) & 0xffu);
+    pkt[1] = CmdScreenHeader;   // 0x7F  (FUN_004231c0:252, low byte of 0x037F)
+    pkt[2] = CmdScreenSubBegin; // 0x03  (FUN_004231c0:252, high byte of 0x037F)
+    pkt[3] = 0x00;              // FUN_004231c0:257 (local_58._3_1_ = 0)
+    // LCD-select is 1-based at byte 4 (FUN_004231c0:253-255), NOT byte 3.
+    pkt[4] = static_cast<std::uint8_t>(lcdSelect + 1u);
+    // 24-bit total-chunk count at bytes 5..7 (FUN_004231c0:253-256). A 140-frame
+    // GIF caps at ~324 100 chunks, so 24 bits is ample.
+    pkt[5] = static_cast<std::uint8_t>(totalChunks & 0xffu);
+    pkt[6] = static_cast<std::uint8_t>((totalChunks >> 8) & 0xffu);
+    pkt[7] = static_cast<std::uint8_t>((totalChunks >> 16) & 0xffu);
+    stampTftChecksum(pkt);
     return pkt;
 }
 
@@ -310,14 +334,13 @@ buildTftChunkedPayload(std::uint32_t chunkIdx,
     // ReportId byte 0 stays 0x00 (same rule as the chunked header — §2).
     pkt[0] = 0x00;
     auto const idx = encodeTftChunkIndex(chunkIdx);
-    pkt[1] = idx[0]; // chunk index low 8 bits
-    pkt[2] = idx[1]; // 0x80 marker | high 7 bits of chunk index
+    pkt[1] = idx[0]; // 0x80 marker | high 7 bits of chunk index
+    pkt[2] = idx[1]; // chunk index low 8 bits
     pkt[3] = idx[2]; // chunk index middle 8 bits
-    // 28-byte RGB565 payload at bytes 4..31 (§3.3). Bytes 32..63 stay zero
-    // from value-init — the TFT path does not stamp the BIT7 checksum slot
-    // that other AK980 PRO opcodes use (§2 note: firmware does not validate
-    // a checksum for this opcode based on observed behavior).
+    // 28-byte RGB565 payload at bytes 4..31 (§3.3). Byte 32 then carries the
+    // transport checksum; bytes 33..63 stay zero from value-init.
     std::memcpy(pkt.data() + 4, payload.data(), kTftChunkPayload);
+    stampTftChecksum(pkt);
     return pkt;
 }
 
@@ -362,11 +385,23 @@ encodeRgb565(std::span<std::uint8_t const> rgba, std::uint16_t width, std::uint1
 
 std::array<std::uint8_t, ReportSize> buildScreenBulkBegin(std::uint8_t lcdSelect,
                                                           std::uint16_t total4kChunks) {
-    auto pkt = makeReport(CmdScreenBulkBegin);
-    pkt[2] = 0x00;
-    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u); // LCD-select index + 1
-    pkt[4] = static_cast<std::uint8_t>(total4kChunks & 0xffu);
-    pkt[5] = static_cast<std::uint8_t>((total4kChunks >> 8) & 0xffu);
+    // Bulk-begin is a FEATURE report (FUN_00422920 -> FUN_0044eed0 ->
+    // HidD_SetFeature), unlike the chunked path's output reports. FUN_0044eed0
+    // memsets a 65-byte buffer (byte 0 = report id 0x00) and copies the caller
+    // frame starting at byte 1, so the on-wire layout is:
+    //   [0]=0x00 report id  [1]=0x04 frame byte  [2]=0x72 opcode
+    //   [3]=lcdSelect (1-based)  [9]=count low  [10]=count high
+    // (FUN_00422920:267-270 stores 0x7204 + lcd@offset2 + count@offset8/9 in
+    // the pre-prepend buffer, which the +1 report-id shift maps to wire 3/9/10).
+    // PROVISIONAL: scaffolded, not wired into uploadTftImage — no hardware
+    // capture of the bulk path yet. See ak980pro_tft_protocol.md §4.
+    std::array<std::uint8_t, ReportSize> pkt{};
+    pkt[0] = 0x00;
+    pkt[1] = ReportId;           // 0x04
+    pkt[2] = CmdScreenBulkBegin; // 0x72
+    pkt[3] = static_cast<std::uint8_t>(lcdSelect + 1u);
+    pkt[9] = static_cast<std::uint8_t>(total4kChunks & 0xffu);
+    pkt[10] = static_cast<std::uint8_t>((total4kChunks >> 8) & 0xffu);
     return pkt;
 }
 
@@ -932,16 +967,26 @@ public:
     //
     // Slow-but-universal upload path for the 1.14" TFT panel on AK980 PRO and
     // siblings. Per docs/protocols/keyboard/ak980pro_tft_protocol.md §3 the
-    // sequence is: HEADER (opcode 0x7F sub 0x03 with total chunk count) +
-    // N chunk PAYLOADs (each 28 bytes of RGB565 pixel data, big-endian, with
-    // the 24-bit chunk index split across bytes 1/2/3 + the 0x80 marker on
-    // byte 2). All packets go via writeFeature() — the AK980 PRO control
-    // packets uniformly use the feature-report transport per the §2 doc
-    // (vendor disassembly: FUN_004231c0 -> FUN_0044f5f0). Inter-chunk Sleep
-    // is intentionally omitted in this implementation — the vendor's 2 ms
-    // pace is a USB-side rate-limit that hidapi already handles via the
-    // OS-level write queue; adding host-side sleeps would multiply the
-    // ~10-minute baseline upload time without measurable benefit.
+    // sequence is: HEADER (opcode 0x7F sub 0x03 with the 24-bit chunk count at
+    // bytes 5..7 and LCD-select at byte 4) + N chunk PAYLOADs (each 28 bytes of
+    // RGB565 pixel data at bytes 4..31, big-endian, with the 24-bit chunk index
+    // split across bytes 1/2/3 and the 0x80 marker on byte 1). Byte 32 carries
+    // the transport checksum. The wire layout was rebuilt byte-for-byte from the
+    // vendor decompile FUN_004231c0 (the previous layout had byte 1/2 swapped on
+    // the index and the header fields shifted by one).
+    //
+    // TRANSPORT — PROVISIONAL: the decompile's chunked path is an *output*
+    // report (FUN_004231c0 -> FUN_0044f5f0 -> FUN_00451220 = WriteFile,
+    // length 0x21), so we send via write(), NOT writeFeature(). This differs
+    // from the hardware-verified time-sync path (IOCTL_HID_SET_FEATURE, 65-byte
+    // feature reports on the 0xFF13 collection). The TFT panel is known to
+    // accept feature reports for time-sync, but whether it accepts output
+    // reports for image upload is UNVERIFIED — no USB/Frida capture exists yet.
+    // If a capture shows the device only takes feature reports here, flip this
+    // back to writeFeature() and drop the byte-32 checksum (see §2/§7).
+    //
+    // Inter-chunk Sleep is intentionally omitted — the vendor's 2 ms pace is a
+    // USB-side rate-limit hidapi already handles via the OS write queue.
     //
     // The bulk path (opcode 0x72, 143x faster) is the preferred upload
     // mechanism but requires a bulk-write transport surface that ITransport
@@ -997,8 +1042,9 @@ public:
             (pixelStream.size() + kTftChunkPayload - 1) / kTftChunkPayload;
 
         try {
-            // P1: HEADER (opcode 0x7F sub 0x03, total chunk count uint32-LE).
-            (void)m_transport->writeFeature(
+            // P1: HEADER (opcode 0x7F sub 0x03, 24-bit chunk count at bytes 5..7).
+            // Output report per the decompile (see TRANSPORT note above).
+            (void)m_transport->write(
                 buildTftChunkedHeader(/*lcdSelect=*/0, static_cast<std::uint32_t>(totalChunks)));
             // P2..ON: chunk PAYLOADs (28-byte RGB565 slices).
             std::array<std::uint8_t, kTftChunkPayload> slice{};
@@ -1008,13 +1054,12 @@ public:
                     std::min<std::size_t>(kTftChunkPayload, pixelStream.size() - off);
                 slice.fill(0);
                 std::memcpy(slice.data(), pixelStream.data() + off, take);
-                (void)m_transport->writeFeature(
+                (void)m_transport->write(
                     buildTftChunkedPayload(static_cast<std::uint32_t>(i),
                                            std::span<std::uint8_t const, kTftChunkPayload>{slice}));
             }
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN(
-                "keyboard.ak980", "uploadTftImage: HID writeFeature failed: {}", e.what());
+            AJAZZ_LOG_WARN("keyboard.ak980", "uploadTftImage: HID write failed: {}", e.what());
             return false;
         }
         AJAZZ_LOG_INFO("keyboard.ak980",

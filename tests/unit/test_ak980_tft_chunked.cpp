@@ -6,12 +6,15 @@
  *        the 0x80 marker on the chunk-index byte, ITftDisplayCapable).
  *
  * Pins the wire format defined in
- * `docs/protocols/keyboard/ak980pro_tft_protocol.md` §3:
+ * `docs/protocols/keyboard/ak980pro_tft_protocol.md` §3, rebuilt byte-for-byte
+ * from the vendor decompile FUN_004231c0:
  *
- *   - Header packet (opcode 0x7F sub 0x03, total chunk count uint32-LE at
- *     bytes 4..7, LCD-select + 1 at byte 3).
- *   - Per-chunk packet (24-bit chunk index split across bytes 1/2/3 with
- *     the 0x80 marker on byte 2; 28-byte RGB565 payload at bytes 4..31).
+ *   - Header packet (opcode 0x7F sub 0x03 at bytes 1/2, byte 3 = 0,
+ *     LCD-select + 1 at byte 4, 24-bit chunk count at bytes 5..7).
+ *   - Per-chunk packet (byte 1 = 0x80 marker | high 7 bits, byte 2 = low 8
+ *     bits, byte 3 = middle 8 bits; 28-byte RGB565 payload at bytes 4..31;
+ *     transport checksum at byte 32).
+ *   - Output-report transport (write(), not writeFeature()) per the decompile.
  *
  * Coverage:
  *   - `buildTftChunkedHeader`/`buildTftChunkedPayload` byte layout.
@@ -92,23 +95,30 @@ TEST_CASE("ak980 TFT chunk packet has 0x80 marker and 28-byte RGB565 payload",
             buildTftChunkedPayload(0u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
         REQUIRE(pkt.size() == ReportSize);
         REQUIRE(pkt[0] == 0x00);       // TFT path uses ReportId 0x00, NOT 0x04.
-        REQUIRE(pkt[1] == 0x00);       // chunk index low 8 bits = 0.
-        REQUIRE(pkt[2] == 0x80);       // 0x80 marker bit set; high 7 chunk bits = 0.
-        REQUIRE((pkt[2] & 0x80) != 0); // marker bit must be set on every chunk.
+        REQUIRE(pkt[1] == 0x80);       // 0x80 marker bit set; high 7 chunk bits = 0.
+        REQUIRE((pkt[1] & 0x80) != 0); // marker bit must be set on byte 1 of every chunk.
+        REQUIRE(pkt[2] == 0x00);       // chunk index low 8 bits = 0.
         REQUIRE(pkt[3] == 0x00);       // chunk index middle 8 bits = 0.
         for (std::size_t i = 0; i < kTftChunkPayload; ++i) {
             REQUIRE(pkt[4 + i] == payload[i]);
         }
+        // Byte 32 is the transport checksum = sum(bytes[0..31]) mod 256. For the
+        // index-0 packet the only non-zero bytes are the marker (0x80) and the
+        // 1..28 payload ramp (sum = 28*29/2 = 406), so 0x80 + 406 = 534 -> 0x16.
+        REQUIRE(pkt[32] == 0x16);
         for (std::size_t i = 4 + kTftChunkPayload; i < ReportSize; ++i) {
+            if (i == 32) {
+                continue; // checksum slot, asserted above.
+            }
             REQUIRE(pkt[i] == 0x00); // pad bytes stay zero.
         }
     }
 
-    SECTION("chunk index 2314 (last of 240x135 frame) splits across bytes 1+3") {
+    SECTION("chunk index 2314 (last of 240x135 frame) splits across bytes 1/2/3") {
         auto const pkt =
             buildTftChunkedPayload(2314u, std::span<std::uint8_t const, kTftChunkPayload>{payload});
-        REQUIRE(pkt[1] == 0x0a); // 2314 & 0xFF.
-        REQUIRE(pkt[2] == 0x80); // marker only; high 7 bits of 2314 = 0.
+        REQUIRE(pkt[1] == 0x80); // marker only; high 7 bits of 2314 = 0.
+        REQUIRE(pkt[2] == 0x0a); // 2314 & 0xFF.
         REQUIRE(pkt[3] == 0x09); // (2314 >> 8) & 0xFF.
     }
 }
@@ -120,14 +130,15 @@ TEST_CASE("ak980 TFT chunked HEADER carries opcode 0x7F sub 0x03 + total chunks"
     REQUIRE(pkt.size() == ReportSize);
     REQUIRE(pkt[0] == 0x00);              // TFT-path ReportId.
     REQUIRE(pkt[1] == CmdScreenHeader);   // 0x7F.
-    REQUIRE(pkt[2] == CmdScreenSubBegin); // 0x03 — the discriminator the
-                                          // chunk packets distinguish via
-                                          // their 0x80 marker on byte 2.
-    REQUIRE(pkt[3] == 0x01);              // lcdSelect + 1.
-    REQUIRE(pkt[4] == 0x0b);              // 2315 = 0x90b LE -> 0x0b, 0x09.
-    REQUIRE(pkt[5] == 0x09);
-    REQUIRE(pkt[6] == 0x00);
+    REQUIRE(pkt[2] == CmdScreenSubBegin); // 0x03 — header opcode; chunk packets
+                                          // instead carry the 0x80 marker on byte 1.
+    REQUIRE(pkt[3] == 0x00);              // FUN_004231c0:257 (byte 3 = 0).
+    REQUIRE(pkt[4] == 0x01);              // lcdSelect + 1 (byte 4, NOT byte 3).
+    REQUIRE(pkt[5] == 0x0b);              // 2315 = 0x90b -> bytes 5..7 = 0b 09 00.
+    REQUIRE(pkt[6] == 0x09);
     REQUIRE(pkt[7] == 0x00);
+    // Byte 32 transport checksum = sum(0x7F + 0x03 + 0x01 + 0x0b + 0x09) = 0x97.
+    REQUIRE(pkt[32] == 0x97);
 }
 
 TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks", "[ak980][tft][chunked]") {
@@ -155,7 +166,9 @@ TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks", "[ak980][tft
     // 240x135 RGB565 = 64 800 bytes / 28 bytes-per-chunk = 2 315 chunks
     // (ceil); + 1 header packet = 2 316 wire packets.
     REQUIRE(writes.size() == 1u + 2315u);
-    REQUIRE(observer->writeFeatureCount() == writes.size());
+    // Chunked TFT goes via output reports (write()), NOT feature reports.
+    REQUIRE(observer->writeFeatureCount() == 0u);
+    REQUIRE(observer->writeCount() == writes.size());
 
     // First packet must be the chunked header (opcode 0x7F sub 0x03).
     auto const& header = writes.front();
@@ -164,15 +177,15 @@ TEST_CASE("ak980 TFT full-frame upload emits header + 2315 chunks", "[ak980][tft
     REQUIRE(header[2] == CmdScreenSubBegin);
 
     // Subsequent packets are chunks 0..2314 — each carries the 0x80 marker
-    // on byte 2 and a monotonically increasing chunk index decoded from
-    // bytes 1/2/3 per §3.3.
+    // on byte 1 and a monotonically increasing chunk index decoded from
+    // bytes 1/2/3 per §3.3 (idx = byte2 | byte3<<8 | (byte1 & 0x7f)<<16).
     for (std::size_t i = 1; i < writes.size(); ++i) {
         auto const& pkt = writes.at(i);
         REQUIRE(pkt.size() == ReportSize);
-        REQUIRE((pkt[2] & 0x80u) != 0);
-        std::uint32_t const decoded = static_cast<std::uint32_t>(pkt[1]) |
+        REQUIRE((pkt[1] & 0x80u) != 0);
+        std::uint32_t const decoded = static_cast<std::uint32_t>(pkt[2]) |
                                       (static_cast<std::uint32_t>(pkt[3]) << 8u) |
-                                      (static_cast<std::uint32_t>(pkt[2] & 0x7fu) << 16u);
+                                      (static_cast<std::uint32_t>(pkt[1] & 0x7fu) << 16u);
         REQUIRE(decoded == static_cast<std::uint32_t>(i - 1u));
     }
 }
