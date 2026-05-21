@@ -239,6 +239,59 @@ def sweep_time(pause: float) -> None:
     print("\nSweep done. Which time(s) showed up, and what is on the panel now?")
 
 
+CMD_BATTERY = 0x20
+BATTERY_SUB = 0x01
+
+
+def build_battery_query(report_size: int = 65) -> bytes:
+    """Decompile layout (FUN_004358c0:26-28): byte0=0x00, [1]=0x20, [2]=0x01."""
+    pkt = bytearray(report_size)
+    pkt[1] = CMD_BATTERY
+    pkt[2] = BATTERY_SUB
+    return bytes(pkt)
+
+
+def query_battery() -> None:
+    """Probe the battery read both ways and dump raw replies so we can locate
+    the charge byte. Decompile says OUTPUT report (write) + INPUT read poll;
+    we also try the feature path the current C++ uses, for comparison."""
+    dev = open_control()
+
+    def dump(tag: str, data) -> None:
+        if not data:
+            print(f"  {tag}: <no data>")
+            return
+        b = bytes(data)
+        print(f"  {tag}: len={len(b)} {b[:16].hex(' ')}")
+
+    print("[A] OUTPUT report (write) + INPUT read poll (decompile-faithful):")
+    try:
+        n = dev.write(build_battery_query())
+        print(f"  write -> {n}")
+        got = None
+        for _ in range(20):  # mirror FUN_0044f5f0's 20-iteration poll
+            r = dev.read(65, 5)  # 5 ms timeout per read
+            if r:
+                got = r
+                break
+            time.sleep(0.01)
+        dump("input report", got)
+    except OSError as exc:
+        print(f"  OUTPUT path error: {exc}")
+
+    print("[B] FEATURE report (send_feature + get_feature), report-id 0x00:")
+    try:
+        n = dev.send_feature_report(build_battery_query())
+        print(f"  send_feature_report -> {n}")
+        time.sleep(0.03)
+        dump("get_feature_report", dev.get_feature_report(0x00, 65))
+    except OSError as exc:
+        print(f"  FEATURE path error: {exc}")
+
+    dev.close()
+    print("\nTell me your ACTUAL battery % so we can find which byte/index carries it.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--enumerate", action="store_true", help="list HID collections")
@@ -252,7 +305,11 @@ def main() -> None:
     ap.add_argument("--delay", type=int, default=0, help="ms between time packets")
     ap.add_argument("--readback", action="store_true", help="GET_FEATURE after each packet")
     ap.add_argument("--output", action="store_true", help="use output reports instead of feature")
+    ap.add_argument("--battery", action="store_true", help="probe the battery read both ways")
     args = ap.parse_args()
+    if args.battery:
+        query_battery()
+        return
     if args.sweep:
         sweep_time(args.pause)
         return
