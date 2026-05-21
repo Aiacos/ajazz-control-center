@@ -87,7 +87,7 @@ If `lsusb` returns nothing for any of the three VIDs:
 - The device may be in a USB-mode descriptor not yet enumerated
   — capture the actual VID:PID via `lsusb` (no filter) and add
   to `docs/_data/devices.yaml` + `src/devices/mouse/src/register.cpp`
-  - `resources/linux/99-ajazz.rules`.
+  - `resources/linux/70-ajazz.rules`.
 - Or the device is an AJ339 / AJ380 (which we removed from the
   registry on 2026-04-29 because their VID:PID was a guess —
   this is the runtime capture that confirms the right values).
@@ -96,14 +96,14 @@ Record the VID:PID for the next step.
 
 ## 2. Validate the udev `uaccess` rule
 
-After commit `bef8e26`, `resources/linux/99-ajazz.rules` covers
+After commit `bef8e26`, `resources/linux/70-ajazz.rules` covers
 `248a` / `249a` / `3554`. Install it and verify the ACL fires:
 
 ```bash
 # Install the rule (system-mutation — record this in the recon journal
 # so you remember to remove it at session end if you want a fully clean
 # host afterward).
-sudo install -m 644 resources/linux/99-ajazz.rules /etc/udev/rules.d/
+sudo install -m 644 resources/linux/70-ajazz.rules /etc/udev/rules.d/
 sudo udevadm control --reload-rules
 sudo udevadm trigger --action=change --subsystem-match=hidraw
 
@@ -242,7 +242,7 @@ floor).
 
 ```bash
 sudo rmmod usbmon                                          # unload kernel module
-sudo rm /etc/udev/rules.d/99-ajazz.rules                   # if you want a fully clean host
+sudo rm /etc/udev/rules.d/70-ajazz.rules                   # if you want a fully clean host
 sudo udevadm control --reload-rules
 
 # Vault hygiene: any .tsv with non-trivial bytes goes to the

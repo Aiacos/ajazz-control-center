@@ -200,7 +200,7 @@ endif()
 # Install (shared resources: udev, desktop entry, icon, AppStream)
 # -----------------------------------------------------------------------------
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    install(FILES resources/linux/99-ajazz.rules DESTINATION /usr/lib/udev/rules.d COMPONENT udev)
+    install(FILES resources/linux/70-ajazz.rules DESTINATION /usr/lib/udev/rules.d COMPONENT udev)
     install(FILES resources/linux/ajazz-control-center.desktop DESTINATION share/applications
             COMPONENT desktop
     )

@@ -66,6 +66,10 @@ Vai          = "Vai"
 # the literal token is safer than relying on the per-file exclude in
 # case the pre-commit framework passes explicit paths bypassing it.
 fo           = "fo"
+# Hyphenated "mis-" prefix in the AKP05E device notes (docs/_data/devices.yaml
+# → README / Supported-Devices AUTOGEN): "mis-filing" / "mis-filed". typos
+# splits on the hyphen and flags the bare "mis" as miss/mist.
+mis          = "mis"
 
 [files]
 extend-exclude = [

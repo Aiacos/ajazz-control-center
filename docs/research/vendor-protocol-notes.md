@@ -678,7 +678,7 @@ The AJ-series USB ID space surfaced by Finding 8 contradicted the
 values that were in
 [`docs/_data/devices.yaml`](../_data/devices.yaml),
 [`src/devices/mouse/src/register.cpp`](../../src/devices/mouse/src/register.cpp),
-and [`resources/linux/99-ajazz.rules`](../../resources/linux/99-ajazz.rules)
+and [`resources/linux/70-ajazz.rules`](../../resources/linux/70-ajazz.rules)
 prior to the 2026-04-29 fix. **Status: data layer corrected** — six AJ-series
 mouse entries now enumerate the right `(VID, PID)` tuples (`0x248A` /
 `0x249A` for the AJ139 / AJ159 / AJ179 family; `0x3554` for the AJ199
@@ -700,7 +700,7 @@ fictional**; no equivalent values appear in any vendor manifest /
 config file captured to date. The `AJ159` row is doubly wrong:
 even the VID is for the wrong product line. Real-world impact:
 
-- **Linux**: `99-ajazz.rules` only tags VID `3554` with `uaccess`,
+- **Linux**: `70-ajazz.rules` only tags VID `3554` with `uaccess`,
   so an AJ159 / AJ179 / AJ139 mouse plugged into a Linux host gets
   no ACL and the app cannot open the device. The udev rule needs
   to be widened to `idVendor` ∈ `{248A, 249A, 3554}`.
@@ -721,7 +721,7 @@ operator as the 2026-04-29 recon pass):
    with up to 5 mode entries).
 1. Re-generate `register.cpp` to enumerate every (VID, PID,
    model) tuple per the YAML.
-1. Widen `99-ajazz.rules` to cover `248A`, `249A`, and `3554`.
+1. Widen `70-ajazz.rules` to cover `248A`, `249A`, and `3554`.
 1. Re-run `make docs` to refresh the autogen blocks in README +
    wiki.
 1. Investigate AJ339 / AJ380 separately — vendor driver download

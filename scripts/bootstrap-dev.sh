@@ -110,13 +110,13 @@ install_deps_macos() {
 
 # ---------- udev rule (Linux only) ----------------------------------------
 install_udev() {
-    local rule="$ROOT/resources/linux/99-ajazz.rules"
+    local rule="$ROOT/resources/linux/70-ajazz.rules"
     [[ -f $rule ]] || {
         warn "udev rule not found at $rule, skipping"
         return
     }
     step "Installing udev rule (user-level device access, no logout required)"
-    sudo_cmd install -m 644 "$rule" /etc/udev/rules.d/99-ajazz.rules
+    sudo_cmd install -m 644 "$rule" /etc/udev/rules.d/70-ajazz.rules
     sudo_cmd udevadm control --reload-rules
     sudo_cmd udevadm trigger
     ok "udev configured — replug the device is NOT required"

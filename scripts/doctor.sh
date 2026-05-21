@@ -71,7 +71,7 @@ python3 -c "import pybind11" 2>/dev/null && ok "pybind11 (host)" || warn "pybind
 section "Runtime environment"
 case "$(uname -s)" in
     Linux)
-        [[ -f /etc/udev/rules.d/99-ajazz.rules ]] && ok "udev rule installed" || bad "udev rule missing — run: make udev"
+        [[ -f /etc/udev/rules.d/70-ajazz.rules ]] && ok "udev rule installed" || bad "udev rule missing — run: make udev"
         if command -v systemd-detect-virt >/dev/null 2>&1; then
             ok "logind present (uaccess ACLs will work)"
         else
