@@ -202,43 +202,40 @@ public:
         return std::nullopt;
     }
 
-    // IBatteryCapable — hardware-confirmed 2026-05-21 on a live AJAZZ 2.4G 8K
-    // (VID 0x3151): the mouse mirrors its charge into vendor status report 0x05
-    // at byte 3 (0..100; 0x64 = full pack). Read via GET_FEATURE on the 0xFFFF
-    // control collection. hidapi returns the report WITH the leading report-id
-    // byte at index 0, so the percent sits at resp[3]. This supersedes the old
-    // "no HID battery query, gRPC-only" assumption: the dongle telemetry the
-    // vendor app streams is also exposed in this directly-readable status report
-    // (confirmed with scripts/aj_mouse_probe.py — 0x64 == the device's real 100%).
+    // IBatteryCapable — vendor-faithful implementation (RE'd from the AJ159 APEX
+    // Windows app: `getBattery()` + iot_driver.exe). The mouse battery is an
+    // ACTIVE 0x83 query over the OUTPUT-report channel (gRPC `sendMsg` ⇒ our
+    // m_transport->write / interrupt-OUT), with the reply read back on the
+    // interrupt-IN channel (gRPC `readMsg` ⇒ m_transport->read). It is NOT a
+    // feature read — the prior cold GET_FEATURE on report 0x05 returned all-zeros
+    // on live hardware (the "byte 3" reading was a stale buffer). Reply layout
+    // (vendor getBattery): resp[0]=report id, resp[1]=percent (0..100),
+    // resp[2]=state (1=charging, 2=full), resp[3]=low-power flag.
+    //
+    // The 2.4G dongle only answers while the wireless link is awake; an idle
+    // mouse yields no reply → std::nullopt → the UI shows "--%" (honest), exactly
+    // as before. A short poll covers the 2.4G round-trip the vendor waits on.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
+            auto const query = buildGetBattery(); // [0x05, 0x83, 0…, BIT7]
+            (void)m_transport->write(query);      // OUTPUT report (vendor sendMsg)
+            // Poll the interrupt-IN channel for the reply (vendor readMsg). The
+            // renderer waits ~10–15 ms for the dongle⇄mouse round-trip; retry a
+            // few times to absorb jitter before giving up as "link idle".
             std::array<std::uint8_t, kReportSize> resp{};
-            resp[0] = 0x05; // status report id to fetch (GET_FEATURE)
-            auto const n = m_transport->readFeature(resp);
-            if (n < 4) {
-                return std::nullopt; // short / no reply
+            for (int attempt = 0; attempt < 6; ++attempt) {
+                auto const n = m_transport->read(resp, std::chrono::milliseconds{40});
+                if (n >= 4) {
+                    auto const pct = resp[1]; // vendor getBattery: percent @ resp[1]
+                    if (pct >= 1 && pct <= 100) {
+                        return pct;
+                    }
+                }
             }
-            // Frame validation (hardware-confirmed 2026-05-21 via the replug
-            // watch in scripts/aj_mouse_probe.py --battery-watch): a well-formed
-            // status report has bytes 1 and 2 zero (resp[0]=report id,
-            // resp[3]=percent). Right after a wireless reconnect the GET can
-            // return a garbage frame like `05 ad 04 01 ...` — accepting it
-            // verbatim produced the spurious "1%" flash before the value
-            // settled. Reject any frame whose bytes 1/2 are non-zero.
-            if (resp[1] != 0 || resp[2] != 0) {
-                return std::nullopt; // malformed/transient frame (e.g. reconnect)
-            }
-            auto const pct = resp[3];
-            if (pct == 0) {
-                // Link present but the dongle has not reported a charge yet
-                // (or wired-only): unknown, not 0%. Stays grey until the real
-                // value arrives on the next poll.
-                return std::nullopt;
-            }
-            return std::min<std::uint8_t>(pct, 100);
+            return std::nullopt; // link idle/asleep or no charge reported yet → grey
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN(
-                "mouse.aj_series", "batteryPercent: HID feature read failed: {}", e.what());
+                "mouse.aj_series", "batteryPercent: HID battery query failed: {}", e.what());
             return std::nullopt;
         }
     }
