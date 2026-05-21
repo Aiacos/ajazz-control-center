@@ -184,6 +184,37 @@ ______________________________________________________________________
   key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/
   streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
 
+  **🟢 IMPLEMENTED on branch `feat/linux-device-support` (`db21686`) — pending
+  Fedora hardware confirmation.** The fix landed at the transport (not per
+  backend): `makeHidTransport` gained a `prependReportIdPosix` flag (default
+  false) that the four streamdeck constructors (`akp03/akp05/akp153/akp815.cpp`)
+  set to `true`; `HidTransport::write()` prepends a single `0x00` report-id byte
+  **under `#ifndef _WIN32` only**, so Windows is byte-for-byte unchanged and only
+  Linux/macOS get the report-number byte hidraw expects. Verified: Windows MSVC
+  build + 365 tests pass; the `#ifndef _WIN32` block compiles clean under
+  `g++ -std=c++20 -Wall -Wextra`.
+
+  **Fedora 44 test plan (do these on the device):**
+  ```bash
+  git fetch origin && git checkout feat/linux-device-support
+  # one-time device access:
+  sudo cp resources/linux/99-ajazz.rules /etc/udev/rules.d/ \
+    && sudo udevadm control --reload-rules && sudo udevadm trigger --action=change
+  cmake --preset linux-release && cmake --build --preset linux-release
+  ctest --preset linux-release            # 365 tests must pass under GCC/-Werror too
+  ./build/linux-release/ajazz-control-center 2> akp05.log
+  ```
+  Then verify and record:
+  1. **Does the AKP05 first-key icon now render on Fedora?** (the headline check)
+  2. `grep -iE "opened VID=0300|akp05|streamdeck|write|hid" akp05.log` — the
+     device should open and the image `write()`s should not error.
+  3. If it STILL does not render: try the AKP153 (`0x0300:0x1001`) on the same box
+     to see whether the issue is family-wide; capture
+     `udevadm info -a /dev/hidrawN` for the `0300:3004` node; and confirm the
+     `0x00` prepend is actually firing (Linux build, so `_WIN32` is undefined).
+  4. If it renders on Fedora but you later see a regression on Windows, that is
+     the platform guard — re-confirm the `#ifndef _WIN32` boundary.
+
 - [ ] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
   🐧 **Works on Windows; needs Fedora verification + likely a hidraw fix.**
 
@@ -250,6 +281,37 @@ ______________________________________________________________________
   Note: the same hidraw `usage`-unpopulated risk applies to the AK980 PRO
   keyboard, but its control collection `0xFF13` is a SINGLE collection
   (`controlUsage=0`, matched by usage page alone) so it is unaffected.
+
+  **🟢 IMPLEMENTED on branch `feat/linux-device-support` (`db21686`) — pending
+  Fedora hardware confirmation.** `HidTransport::open()` now does the two-pass
+  match described above (pass 1 `usage_page`+`usage`, pass 2 `usage_page`-only
+  fallback for hidraw's unpopulated `usage`), and logs which match kind won
+  (`usage+page filtered` / `usage-page filtered` / `first-interface` / `default`).
+  Windows is unaffected (it reports `usage`, so pass 1 wins). Verified: Windows
+  MSVC build + 365 tests; the two-pass logic compiles under
+  `g++ -std=c++20 -Wall -Wextra`.
+
+  **Fedora 44 test plan (after the build steps in the AKP05 item above):**
+  ```bash
+  ./build/linux-release/ajazz-control-center 2> mouse.log
+  grep -iE "opened VID=3151|aj_series|battery|queried" mouse.log
+  # direct device probe (bypasses the app — pins app-vs-device):
+  python3 scripts/aj_mouse_probe.py --enumerate     # is 'usage' populated on hidraw?
+  python3 scripts/aj_mouse_probe.py --battery       # reads report 0x05 byte 3
+  ```
+  Then verify and record:
+  1. Log shows `opened VID=3151 PID=5007 (usage+page filtered)` **or**
+     `(usage-page filtered)` — either is the control collection (good). If it
+     shows `(first-interface)` or `(default)`, the match dropped through ⇒ open a
+     follow-up (the hidraw enumeration didn't expose 0xFFFF at all → may need a
+     report-descriptor-based selection).
+  2. `queried ajazz_24g_8k: NN%` appears (battery works) and the **OLED basetta
+     clock** follows a manual "Sync time" from the app (clock 0x28 works).
+  3. If `aj_mouse_probe.py --battery` reads a % but the **app** does not, that is
+     still an app-side interface-selection gap (report it with the
+     `--enumerate` output so the exact `usage`/`usage_page` values are known).
+  4. After a wireless replug, the battery should stay grey then jump to the real
+     value (no transient 1% — frame validation from commit `1f2be0c`).
 
 - [ ] **AKP05 v3 framing migration**. Per `[mirajazz]`'s protocol-version
   taxonomy (see `docs/protocols/streamdeck/_research-sources.md`), the
