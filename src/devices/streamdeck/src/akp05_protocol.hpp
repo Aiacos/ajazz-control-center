@@ -35,6 +35,8 @@
  */
 #pragma once
 
+#include "akp_common_protocol.hpp"
+
 #include <array>
 #include <cstdint>
 #include <optional>
@@ -42,6 +44,16 @@
 #include <string>
 
 namespace ajazz::streamdeck::akp05 {
+
+// Family-wide command words shared verbatim across AKP03/AKP05/AKP153 — single
+// source of truth in akp_common_protocol.hpp. The image opcodes below
+// (BAT/ENC/MAI), the touch-strip DRA, and the boot logo LOG are AKP05-specific.
+using akp_common::CmdClear;
+using akp_common::CmdLight;
+using akp_common::CmdPrefix;
+using akp_common::CmdStop;
+using akp_common::CmdVersion;
+using akp_common::UploadFinishedMarker;
 
 // USB identifiers.
 // `[opendeck-akp05]/40-opendeck-akp05.rules` lists Mirabox N4 as
@@ -84,9 +96,9 @@ inline constexpr std::uint16_t EncoderScreenHeightPx = 100;
 /// see the file header note on the OUT/IN asymmetry).
 inline constexpr std::size_t PacketSize = 1024;
 
-// Command words: bytes 0..2 = "CRT" prefix, bytes 5..7 = command.
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; ///< Packet header "CRT".
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};  ///< Set brightness "LIG".
+// Command words: bytes 0..2 = "CRT" prefix, bytes 5..7 = command. The image
+// opcodes below are AKP05-specific; the shared CmdPrefix/CmdLight/CmdStop/
+// CmdClear come from the akp_common `using` block above.
 inline constexpr std::array<std::uint8_t, 3> CmdKeyImage{0x42,
                                                          0x41,
                                                          0x54}; ///< Key JPEG transfer "BAT".
@@ -96,25 +108,12 @@ inline constexpr std::array<std::uint8_t, 3> CmdEncImage{0x45,
 inline constexpr std::array<std::uint8_t, 3> CmdMainImage{0x4d,
                                                           0x41,
                                                           0x49}; ///< Main LCD transfer "MAI".
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  ///< Flush / stop "STP".
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Clear key(s) "CLE".
 
-// Vendor-RE-discovered opcodes (akp05_vendor.md §1.5 + §3, 2026-05-17).
-// These extend the AKP-family command surface beyond what our v1.x backend
-// shipped against. CmdVersion is the firmware-version probe sent at open
-// time (vendor sends it as the first command); UploadFinishedMarker is the
-// 5-byte "ULEND" commit-after-image-burst sentinel that the vendor sends
-// after every chunked image upload (we previously only emitted STP, which
-// per the vendor RE may explain occasional firmware desync on large bursts).
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
-                                                        0x45,
-                                                        0x52}; ///< Firmware version "VER".
-inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55,
-    0x4c,
-    0x45,
-    0x4e,
-    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+// Vendor-RE-discovered opcodes (akp05_vendor.md §1.5 + §3, 2026-05-17). The
+// firmware-version probe (CmdVersion "VER") and the 5-byte "ULEND" commit
+// sentinel (UploadFinishedMarker) are family-wide and come from the akp_common
+// `using` block above. The touch-strip and boot-logo opcodes below are
+// AKP05-specific.
 inline constexpr std::array<std::uint8_t, 3> CmdSecondaryScreen{
     0x44,
     0x52,

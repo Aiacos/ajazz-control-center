@@ -17,12 +17,24 @@
  */
 #pragma once
 
+#include "akp_common_protocol.hpp"
+
 #include <array>
 #include <cstdint>
 #include <optional>
 #include <span>
 
 namespace ajazz::streamdeck::akp153 {
+
+// Family-wide command words shared verbatim across AKP03/AKP05/AKP153 — single
+// source of truth in akp_common_protocol.hpp. The image opcode (BAT) is the
+// only AKP153-specific command word.
+using akp_common::CmdClear;
+using akp_common::CmdLight;
+using akp_common::CmdPrefix;
+using akp_common::CmdStop;
+using akp_common::CmdVersion;
+using akp_common::UploadFinishedMarker;
 
 // USB ids observed on the HSV293S hardware family.
 inline constexpr std::uint16_t VendorId = 0x0300;               ///< USB Vendor ID.
@@ -38,27 +50,11 @@ inline constexpr std::uint16_t KeyHeightPx = 85; ///< JPEG image height in pixel
 inline constexpr std::size_t PacketSize = 512;
 
 // Command words: bytes 0..2 of every output packet are the ASCII prefix "CRT";
-// bytes 3..4 are 0x00; bytes 5..7 carry the ASCII command word.
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; ///< Packet header "CRT".
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};  ///< Set brightness "LIG".
+// bytes 3..4 are 0x00; bytes 5..7 carry the ASCII command word. CmdBat (image
+// transfer) is the only AKP153-specific word; the rest come from akp_common.
 inline constexpr std::array<std::uint8_t, 3> CmdBat{0x42,
                                                     0x41,
                                                     0x54}; ///< JPEG image transfer "BAT".
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};  ///< Flush / stop "STP".
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45}; ///< Clear key(s) "CLE".
-
-// Vendor-RE-discovered opcodes (akp05_vendor.md §3, 2026-05-17). Same wire
-// format applies across the whole AKP family per SDLibrary1.dll Ghidra audit.
-// See clean-reimplementation-roadmap.md §11.3 carry-over + P3.7.
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
-                                                        0x45,
-                                                        0x52}; ///< Firmware version "VER".
-inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55,
-    0x4c,
-    0x45,
-    0x4e,
-    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
 
 /**
  * @brief Build the firmware-version probe (CRT VER, no payload).
