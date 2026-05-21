@@ -6,7 +6,7 @@
 # to apply the new ACLs to devices that are already plugged in.
 #
 # Nothing here asks the user for input or requires them to join a group,
-# because `99-ajazz.rules` uses `TAG+="uaccess"` which is handled by
+# because `70-ajazz.rules` uses `TAG+="uaccess"` which is handled by
 # systemd-logind on the fly.
 
 set -e

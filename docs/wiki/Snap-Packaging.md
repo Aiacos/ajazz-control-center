@@ -109,7 +109,7 @@ shows the two `snap connect` commands the user runs once.
 > available (kernel-native, no userspace usbfs round-trip), but
 > falls back to libusb-via-usbfs when hidraw is unavailable. Shipping
 > both interfaces makes the snap robust to either path. See the udev
-> rule rationale in `resources/linux/99-ajazz.rules` for the
+> rule rationale in `resources/linux/70-ajazz.rules` for the
 > equivalent permission story on a non-snap install.
 
 ## QtWebEngine and the sandbox-in-snap problem

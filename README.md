@@ -257,7 +257,7 @@ cmake --build --preset linux-release --target package    # CPack → .deb + .rpm
 make flatpak                                              # → .flatpak (uses flatpak-builder)
 ```
 
-The udev rule at `resources/linux/99-ajazz.rules` uses `TAG+="uaccess"`
+The udev rule at `resources/linux/70-ajazz.rules` uses `TAG+="uaccess"`
 so systemd-logind grants your user device access automatically — no
 `plugdev` group, no logout, no replug. `make udev` installs it without
 a full build.

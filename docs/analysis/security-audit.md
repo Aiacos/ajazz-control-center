@@ -22,7 +22,7 @@ Scope: repository snapshot at `/home/user/workspace/ajazz-control-center`, focus
 - Profile data and action settings JSON flowing from disk/UI into device writes and plugin dispatch (`src/core/include/ajazz/core/profile.hpp:114`, `python/ajazz_plugins/__init__.py:120`).
 - Embedded Python plugin code executing inside the host process with access to local filesystem, user network stack, and process memory (`docs/architecture/PLUGIN-SYSTEM.md:97`, `src/plugins/src/plugin_host.cpp:81`).
 - Release artifacts and CI pipeline outputs that users install directly from nightly/stable releases (`README.md:19`, `.github/workflows/nightly.yml:149`, `.github/workflows/release.yml:128`).
-- Linux udev access rules and platform packaging permissions that control who can talk to HID nodes (`resources/linux/99-ajazz.rules:3`, `packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml:7`).
+- Linux udev access rules and platform packaging permissions that control who can talk to HID nodes (`resources/linux/70-ajazz.rules:3`, `packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml:7`).
 
 ### Threats
 
@@ -67,7 +67,7 @@ Scope: repository snapshot at `/home/user/workspace/ajazz-control-center`, focus
 
 ## 4. Privilege model
 
-- Linux udev rules correctly target root-less operation via `TAG+="uaccess"`, avoiding `plugdev` or root requirements (`resources/linux/99-ajazz.rules:3`, `resources/linux/99-ajazz.rules:26`).
+- Linux udev rules correctly target root-less operation via `TAG+="uaccess"`, avoiding `plugdev` or root requirements (`resources/linux/70-ajazz.rules:3`, `resources/linux/70-ajazz.rules:26`).
 - README likewise documents root-less Linux usage and says Windows needs no drivers (`README.md:118`, `README.md:160`).
 - Flatpak packaging is much broader: it requests `--device=all`, giving the app access to all host devices rather than only HID-relevant nodes (`packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml:12`, `packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml:14`).
 - Unsandboxed Python plugins inherit the same desktop privileges as the app and therefore also inherit the broad Flatpak device grant when packaged that way (`docs/architecture/PLUGIN-SYSTEM.md:97`).

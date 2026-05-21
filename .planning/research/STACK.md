@@ -337,7 +337,7 @@ python3 scripts/hex-to-cpparray.py \
 
 ### NEW udev rules
 
-The existing `resources/linux/99-ajazz.rules` (read 2026-05-15) **already covers all four connected devices**:
+The existing `resources/linux/70-ajazz.rules` (read 2026-05-15) **already covers all four connected devices**:
 
 - VID 0x0300 → AKP03 family (PID 0x3004 ✓)
 - VID 0x0c45 → Microdia / AK980 PRO (PID 0x8009 ✓; PID 0x7016 also covered by VID-only rule ✓)
@@ -468,7 +468,7 @@ The existing `resources/linux/99-ajazz.rules` (read 2026-05-15) **already covers
 - `docs/_data/devices.yaml` (read 2026-05-15) — all 4 connected devices' catalogued entries including `akp05e`, `ak980pro`, `ajazz_24g_8k`; 0c45:7016 NOT in catalogue
 - `docs/protocols/REVERSE_ENGINEERING.md` (read 2026-05-15) — clean-room workflow §1-5 (Capture / Annotate / Document / Implement / Verify)
 - `docs/protocols/streamdeck/akp03.md` (read 2026-05-15) — existing AKP03 protocol doc with PID 0x3004 noted as new sibling; mirajazz/opendeck-akp03/ajazz-sdk citations pre-existing
-- `resources/linux/99-ajazz.rules` (read 2026-05-15) — udev rules already cover all 4 device VIDs (no rule change needed)
+- `resources/linux/70-ajazz.rules` (read 2026-05-15) — udev rules already cover all 4 device VIDs (no rule change needed)
 - `CMakeLists.txt` (read 2026-05-15) — root build config; verified Qt6 already includes Gui module; nlohmann::json FetchContent with PRIVATE-link expectation; CMAKE_POLICY_VERSION_MINIMUM 3.10 override for hidapi subdir
 - `vcpkg.json` (read 2026-05-15) — only nlohmann-json 3.12.0 declared; no other third-party
 - Dev-box `lsusb` (run 2026-05-15) — confirms all 4 devices on Bus 001 (single `usbmon1` interface)

@@ -108,7 +108,7 @@ Each platform's compiler catches things the others don't. Land all three.
 
 ## Linux device access
 
-- udev rules at `resources/linux/99-ajazz.rules` cover VID prefixes
+- udev rules at `resources/linux/70-ajazz.rules` cover VID prefixes
   `0300` (Stream Dock family), `3151` (SONiX-VID AJAZZ keyboards/mice),
   `0c45` (Microdia-VID AK980 PRO), `248a` + `249a` + `3554` (AJ-series mice).
 - **Backend**: `hidapi_hidraw` only — kernel-native `/dev/hidraw*`. The

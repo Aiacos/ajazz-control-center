@@ -456,7 +456,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/ajazz-control-center.desktop
             DESTINATION share/applications
     )
-    install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/99-ajazz.rules DESTINATION lib/udev/rules.d)
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/70-ajazz.rules DESTINATION lib/udev/rules.d)
 
     # ----------------------------------------------------------------------
     # hicolor icon theme entries.

@@ -211,7 +211,7 @@ AK980 PRO chipset family ID; AJ199 V1.0 vs Max envelope structural difference; M
 
 ### In-repo (load-bearing)
 
-`CLAUDE.md`; `.planning/PROJECT.md`; `.planning/RETROSPECTIVE.md`; `.planning/milestones/v1.1-research/{STACK,ARCHITECTURE,PITFALLS}.md`; `docs/_data/devices.yaml:264-378`; `docs/protocols/streamdeck/akp03.md`; `docs/protocols/keyboard/proprietary.md`; `docs/protocols/mouse/aj_series.md`; `docs/protocols/REVERSE_ENGINEERING.md`; `docs/research/vendor-protocol-notes.md`; `src/core/include/ajazz/core/capabilities.hpp:31-601`; `src/devices/streamdeck/src/akp03.cpp:274-521` + `akp03_protocol.hpp:53-58`; `src/devices/keyboard/src/proprietary_keyboard.cpp:204-437`; `src/devices/mouse/src/aj_series.cpp:97-264`; `src/app/src/time_sync_service.{hpp,cpp}`; `resources/linux/99-ajazz.rules`.
+`CLAUDE.md`; `.planning/PROJECT.md`; `.planning/RETROSPECTIVE.md`; `.planning/milestones/v1.1-research/{STACK,ARCHITECTURE,PITFALLS}.md`; `docs/_data/devices.yaml:264-378`; `docs/protocols/streamdeck/akp03.md`; `docs/protocols/keyboard/proprietary.md`; `docs/protocols/mouse/aj_series.md`; `docs/protocols/REVERSE_ENGINEERING.md`; `docs/research/vendor-protocol-notes.md`; `src/core/include/ajazz/core/capabilities.hpp:31-601`; `src/devices/streamdeck/src/akp03.cpp:274-521` + `akp03_protocol.hpp:53-58`; `src/devices/keyboard/src/proprietary_keyboard.cpp:204-437`; `src/devices/mouse/src/aj_series.cpp:97-264`; `src/app/src/time_sync_service.{hpp,cpp}`; `resources/linux/70-ajazz.rules`.
 
 ______________________________________________________________________
 

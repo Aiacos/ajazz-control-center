@@ -36,7 +36,7 @@ modules:
       # 6.7) does not ship libusb-1.0, so the default hidapi build fails at
       # `pkg_check_modules(libusb-1.0>=1.0.9)`. Our binary uses only the
       # hidraw backend (kernel-native /dev/hidraw*) on Linux — see
-      # `resources/linux/99-ajazz.rules` ("The libusb backend is not used by
+      # `resources/linux/70-ajazz.rules` ("The libusb backend is not used by
       # our binary."). Disabling here aligns the Flatpak build with the
       # runtime behavior already documented.
       - -DHIDAPI_WITH_LIBUSB=OFF
