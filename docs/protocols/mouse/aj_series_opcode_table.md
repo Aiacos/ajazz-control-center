@@ -618,9 +618,37 @@ report.
 
 > **Supersedes the prior "no HID battery query" claim.** Earlier RE concluded
 > battery was dongle-gRPC-only; on real hardware the value reads directly from
-> status report 0x05. After a wireless replug the value takes a poll cycle or
-> two to settle (a transient grey/low reading arrives from dongle telemetry
-> first).
+> status report 0x05.
+
+### Frame layout + validation (hardware-confirmed 2026-05-21)
+
+A GET_FEATURE on report `0x05` returns (hidapi includes the report-id byte at
+index 0):
+
+```
+byte 0  : 0x05   (report id)
+byte 1  : 0x00   (always 0 in a valid frame)
+byte 2  : 0x00   (always 0 in a valid frame)
+byte 3  : charge percent (0..100; 0x64 = 100; 0 = link up but not yet reported)
+byte 4..7 : status flags — 01 01 01 02 when the wireless link/telemetry is up,
+            all-zero immediately after a reconnect (link not ready)
+```
+
+Observed states (via `scripts/aj_mouse_probe.py --battery-watch` across a replug):
+
+| Frame                         | Meaning                                  |
+| ----------------------------- | ---------------------------------------- |
+| `05 00 00 64 01 01 01 02`     | stable, 100%                             |
+| `05 00 00 00 00 00 00 00`     | fresh reconnect — link not ready yet     |
+| `05 00 00 00 01 01 01 02`     | link up, charge not reported yet (→ grey)|
+| `05 ad 04 01 00 00 00 00`     | **garbage transient frame** during reconnect |
+
+The last row is the source of the spurious "1%" that flashed in the UI before
+the value settled. The fix (`batteryPercent()`, commit 1f2be0c): a valid status
+frame **always has bytes 1 and 2 zero** — reject any frame with non-zero
+byte 1/2, and treat byte 3 == 0 as "unknown" (`std::nullopt` → grey). The
+indicator then stays grey through the reconnect and jumps straight to the real
+percent once it arrives, with no transient 1%.
 
 The vendor app additionally surfaces battery via the `Device.battery` field
 (`js:50798`, `js:50824`, `js:50841`) on the `proto.driver.Device` message
