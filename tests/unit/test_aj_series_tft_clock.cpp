@@ -1,26 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_aj_series_tft_clock.cpp
- * @brief End-to-end byte-level test of the AJ-series mouse TFT LCD
- *        clock+DPI upload (opcode 0x25 chunked, OLED basetta).
+ * @brief Byte-level test of the AJ-series mouse OLED basetta firmware-RTC
+ *        clock (opcode 0x28).
  *
- * The audit-2 follow-up landed `IClockCapable::setTime()` on
- * `AjSeriesMouse`: caller passes `system_clock::time_point`, the backend
- * renders a clock + active-DPI face via `renderClockDpiFace`, packs it
- * into RGB565 chunks via `encodeRgb565Chunks`, and uploads each chunk
- * with `buildSetTftLcdData` (opcode 0x25).
+ * HARDWARE-CONFIRMED 2026-05-21: `IClockCapable::setTime()` on `AjSeriesMouse`
+ * sends a single structured RTC packet (opcode 0x28) via writeFeature(), NOT a
+ * host-rendered RGB565 bitmap. The Frida capture of the vendor iot_driver
+ * (scripts/aj_mouse_frida_capture.py) pinned the wire format:
+ *   00 28 00*6 d7 <yrHi yrLo> M D h m s  (report id 0x00, fixed 0xD7 marker,
+ *   year big-endian, NO checksum).
  *
- * This test wires `MockTransport` through the existing P3.12.1 DI seam
- * (`makeAjSeriesWithTransport`), drives `setTime()`, and asserts the
- * envelope shape of every uploaded chunk:
- *   - opcode 0x25 at pkt[1] on every chunk
- *   - frameCount=1, frameDelay=0 (still image)
- *   - chunkIndex strictly increasing
- *   - chunkLen matches the slice the pipeline produced
- *   - BIT7 checksum stamped at pkt[63]
- *
- * Pins the wire format against regressions and proves the OLED basetta
- * code path is actually live (not just compiled).
+ * This test wires `MockTransport` through `makeAjSeriesWithTransport`, drives
+ * `setTime()`, and asserts the exact 0x28 envelope. The render-pipeline tests
+ * below still exercise renderClockDpiFace/encodeRgb565Chunks (kept for a future
+ * custom-image-on-basetta feature via opcode 0x25).
  */
 #include "aj_series_protocol.hpp"
 #include "aj_series_tft_pipeline.hpp"
@@ -81,9 +75,8 @@ std::chrono::system_clock::time_point referenceTime() {
 
 } // namespace
 
-TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
-          "[mouse][aj_series][tft][clock][CAPTURE-04][vendor-re]") {
-    tests::qtGuiApp(); // QPainter / QFont need a QGuiApplication; offscreen platform.
+TEST_CASE("AjSeriesMouse setTime emits the 0x28 OLED-clock RTC packet",
+          "[mouse][aj_series][tft][clock][vendor-re]") {
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
@@ -98,31 +91,27 @@ TEST_CASE("AjSeriesMouse setTime emits chunked 0x25 TFT upload",
     auto const result = clk->setTime(referenceTime());
     REQUIRE(result == core::TimeSyncResult::Ok);
 
+    // Exactly one feature report — the structured RTC packet, not a chunked
+    // bitmap upload.
     auto const& writes = observer->writes();
-    REQUIRE_FALSE(writes.empty());
+    REQUIRE(writes.size() == 1u);
+    REQUIRE(observer->writeFeatureCount() == 1u);
 
-    // Default panel is 128x128 RGB565 = 32 KiB, chunked at 55 bytes/packet
-    // = ceil(32768/55) = 596 chunks. Pin a lower bound that survives
-    // layout tweaks without becoming flaky.
-    REQUIRE(writes.size() >= 590);
-
-    // Every uploaded packet is a TFT chunk: opcode 0x25, frameCount=1,
-    // frameDelay=0, chunkIndex monotonically increasing.
-    std::uint16_t expectedIndex = 0;
-    for (auto const& pkt : writes) {
-        REQUIRE(pkt.size() == kReportSize); // 65 bytes
-        REQUIRE(pkt[0] == kReportId);       // 0x05
-        REQUIRE(pkt[1] == 0x25);            // FEA_CMD_SETTFTLCDDATA
-        REQUIRE(pkt[2] == 0);               // currentFrame
-        REQUIRE(pkt[3] == 1);               // frameNum (still image)
-        REQUIRE(pkt[4] == 0);               // frameDelay
-        std::uint16_t const idx =
-            static_cast<std::uint16_t>(pkt[5] | (static_cast<std::uint16_t>(pkt[6]) << 8U));
-        REQUIRE(idx == expectedIndex);
-        REQUIRE(pkt[7] <= kTftChunkPayloadBytes); // chunkLen budget
-        REQUIRE(pkt[8] == 0);                     // reserved
-        ++expectedIndex;
-    }
+    auto const& pkt = writes.front();
+    REQUIRE(pkt.size() == kReportSize); // 65 bytes
+    REQUIRE(pkt[0] == 0x00);            // HID report id 0x00 (NOT kReportId 0x05)
+    REQUIRE(pkt[1] == 0x28);            // FEA_CMD_SET_OLEDCLOCK
+    REQUIRE(pkt[8] == 0xd7);            // REQUIRED fixed marker
+    // referenceTime() = 2026-05-18 16:34:00 local.
+    REQUIRE(pkt[9] == 0x07);  // year hi (2026 = 0x07ea, big-endian)
+    REQUIRE(pkt[10] == 0xea); // year lo
+    REQUIRE(pkt[11] == 5);    // month
+    REQUIRE(pkt[12] == 18);   // day
+    REQUIRE(pkt[13] == 16);   // hour
+    REQUIRE(pkt[14] == 34);   // minute
+    REQUIRE(pkt[15] == 0);    // second
+    // No checksum: the vendor leaves the tail zero.
+    REQUIRE(pkt[kReportSize - 1] == 0x00);
 }
 
 TEST_CASE("renderClockDpiFace produces a Format_RGB16 image of the requested size",
@@ -151,11 +140,10 @@ TEST_CASE("encodeRgb565Chunks slices the framebuffer into <= 55-byte payloads",
     REQUIRE(total == 64u * 64u * 2u);
 }
 
-TEST_CASE("AjSeriesMouse setTime tolerates renderer edge cases",
+TEST_CASE("AjSeriesMouse setTime is independent of DPI state",
           "[mouse][aj_series][tft][robustness]") {
-    tests::qtGuiApp();
-    // activeDpi == 0 -> renderer omits the DPI line (mouse without DPI
-    // introspection); the upload still happens with the clock-only face.
+    // The 0x28 RTC packet carries no DPI field, so setTime must work without
+    // any setDpiStages call (unlike the old bitmap face that rendered the DPI).
     auto transport = std::make_unique<tests::MockTransport>();
     auto* observer = transport.get();
     transport->open();
@@ -164,7 +152,7 @@ TEST_CASE("AjSeriesMouse setTime tolerates renderer edge cases",
     auto* clk = dynamic_cast<core::IClockCapable*>(device.get());
     REQUIRE(clk != nullptr);
 
-    // No setDpiStages call -> m_dpiStages stays zero-filled -> activeDpi=0.
     REQUIRE(clk->setTime(referenceTime()) == core::TimeSyncResult::Ok);
-    REQUIRE_FALSE(observer->writes().empty());
+    REQUIRE(observer->writes().size() == 1u);
+    REQUIRE(observer->writes().front()[1] == 0x28);
 }

@@ -473,4 +473,28 @@ std::array<std::uint8_t, kReportSize> buildSetTftLcdData(std::uint8_t frame,
     return pkt;
 }
 
+std::array<std::uint8_t, kReportSize> buildMouseSetOledClock(std::uint16_t year,
+                                                             std::uint8_t month,
+                                                             std::uint8_t day,
+                                                             std::uint8_t hour,
+                                                             std::uint8_t minute,
+                                                             std::uint8_t second) {
+    // Vendor capture: 00 28 00 00 00 00 00 00 d7 <yrHi yrLo> M D h m s, then
+    // zeros. Report id 0x00 (NOT kReportId), fixed 0xD7 marker at byte 8, year
+    // big-endian, and NO BIT7 checksum — the firmware ignores the packet if the
+    // 0xD7 marker is missing.
+    std::array<std::uint8_t, kReportSize> pkt{};
+    pkt[0] = 0x00; // HID report id 0x00
+    pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetOledClock); // 0x28
+    pkt[8] = 0xD7;                                            // required fixed marker
+    pkt[9] = static_cast<std::uint8_t>((year >> 8U) & 0xFFU); // year big-endian
+    pkt[10] = static_cast<std::uint8_t>(year & 0xFFU);
+    pkt[11] = month;
+    pkt[12] = day;
+    pkt[13] = hour;
+    pkt[14] = minute;
+    pkt[15] = second;
+    return pkt;
+}
+
 } // namespace ajazz::mouse::aj_series

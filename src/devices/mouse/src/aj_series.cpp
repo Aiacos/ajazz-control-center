@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <ctime>
 #include <mutex>
 #include <stdexcept>
 
@@ -270,65 +271,55 @@ public:
         emitLedPacket();
     }
 
-    // ---- IClockCapable (TFT basetta clock + DPI widget) -------------------
+    // ---- IClockCapable (OLED basetta firmware RTC, opcode 0x28) -----------
     //
-    // The AJ-series wireless dock / mouse has a small TFT LCD. The vendor
-    // app DOES NOT push the time as a structured opcode; it RENDERS a
-    // bitmap of the current time + active DPI value locally and uploads
-    // it via opcode 0x25 SETTFTLCDDATA chunked at 54 bytes RGB565 per
-    // packet (`aj_series_opcode_table.md` §3.12; vendor doc line 326).
+    // HARDWARE-CONFIRMED 2026-05-21: the AJ-series basetta clock is a
+    // structured firmware RTC, NOT a host-rendered bitmap. A Frida capture of
+    // the vendor iot_driver (scripts/aj_mouse_frida_capture.py) showed
+    // HidD_SetFeature `00 28 00*6 d7 <yrHi yrLo> M D h m s`, and a live
+    // round-trip confirmed the basetta follows the injected time. The earlier
+    // bitmap-upload path (opcode 0x25) never set the clock (it failed with
+    // hid_write errors and only spammed auto-sync warnings).
     //
-    // The widget choice (clock / weather / CPU info / custom) lives in
-    // the vendor's sled `screen` table (`aj_series_ui_action_map.md`
-    // line 107). We default to the clock + DPI face; future UX can
-    // expose a picker.
-    //
-    // Devices without a TFT LCD MCU will NAK opcode 0x25; firmware
-    // silently drops the chunks. Behaviour gracefully degrades to a
-    // no-op on those SKUs, which is honest for now (`devices.yaml`
-    // currently lists 7 mouse codenames; only the 8K/AJ159/AJ199
-    // families ship the panel).
+    // The REQUIRED fixed 0xD7 marker at byte 8 was the missing piece; without
+    // it the firmware ignores the packet. Sent via writeFeature() (the vendor
+    // uses HidD_SetFeature), no checksum. See buildMouseSetOledClock().
     [[nodiscard]] TimeSyncResult setTime(std::chrono::system_clock::time_point tp) override {
-        // Panel size: USB capture pending. 128x128 is the default — small
-        // enough that mice with a smaller panel still get a usable face,
-        // large enough that mice with a 240x240 panel get the upper-left
-        // quadrant (firmware should letterbox). Override via
-        // setTftPanelSize() once we have device introspection.
-        QSize const panel = m_tftPanelSize;
-        std::uint32_t activeDpi = 0;
-        if (m_activeDpiStage < m_dpiStages.size()) {
-            activeDpi = m_dpiStages[m_activeDpiStage].dpi;
-        }
-        QImage const face = renderClockDpiFace(panel, tp, activeDpi);
-        if (face.isNull()) {
-            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: renderClockDpiFace returned null");
+        auto const tt = std::chrono::system_clock::to_time_t(tp);
+        std::tm local{};
+#ifdef _WIN32
+        if (::localtime_s(&local, &tt) != 0) {
+            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: localtime_s failed");
             return TimeSyncResult::IoError;
         }
-        auto const chunks = encodeRgb565Chunks(face);
-        if (chunks.empty()) {
-            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: encodeRgb565Chunks empty");
+#else
+        if (::localtime_r(&tt, &local) == nullptr) {
+            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: localtime_r failed");
             return TimeSyncResult::IoError;
         }
+#endif
+        auto const year = static_cast<std::uint16_t>(local.tm_year + 1900);
+        auto const pkt =
+            aj_series::buildMouseSetOledClock(year,
+                                              static_cast<std::uint8_t>(local.tm_mon + 1),
+                                              static_cast<std::uint8_t>(local.tm_mday),
+                                              static_cast<std::uint8_t>(local.tm_hour),
+                                              static_cast<std::uint8_t>(local.tm_min),
+                                              static_cast<std::uint8_t>(local.tm_sec));
         try {
-            for (std::size_t i = 0; i < chunks.size(); ++i) {
-                auto const pkt = aj_series::buildSetTftLcdData(
-                    /*frame*/ 0,
-                    /*frameCount*/ 1,
-                    /*frameDelayMs*/ 0,
-                    static_cast<std::uint16_t>(i),
-                    chunks[i]);
-                (void)m_transport->write(pkt);
-            }
+            (void)m_transport->writeFeature(pkt);
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: HID write failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "setTime: HID writeFeature failed: {}", e.what());
             return TimeSyncResult::IoError;
         }
         AJAZZ_LOG_INFO("mouse.aj_series",
-                       "TFT face uploaded ({} chunks, panel {}x{}, dpi={})",
-                       chunks.size(),
-                       panel.width(),
-                       panel.height(),
-                       static_cast<unsigned>(activeDpi));
+                       "setTime -> OLED clock 0x28 set to {:04}-{:02}-{:02} {:02}:{:02}:{:02}",
+                       year,
+                       local.tm_mon + 1,
+                       local.tm_mday,
+                       local.tm_hour,
+                       local.tm_min,
+                       local.tm_sec);
         return TimeSyncResult::Ok;
     }
 

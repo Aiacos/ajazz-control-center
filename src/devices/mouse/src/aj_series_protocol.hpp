@@ -71,6 +71,7 @@ enum class FeaCmd : std::uint8_t {
     GetMacro = 0x96,          ///< §3.11 — macro read-back.
     SetTftLcdData = 0x25,     ///< §3.12 — 16-bit RGB565 TFT LCD upload (chunked).
     GetTftLcdData = 0xa5,     ///< §3.12 — RGB565 TFT readback.
+    SetOledClock = 0x28,      ///< OLED basetta firmware RTC (hardware-confirmed 2026-05-21).
     SetScreen24Bit = 0x29,    ///< §3.12 — 24-bit RGB888 TFT upload (chunked variant).
     GetScreen24Bit = 0xa9,    ///< §3.12 — RGB888 TFT readback.
 };
@@ -342,6 +343,31 @@ buildSetTftLcdData(std::uint8_t frame,
                    std::uint8_t frameDelayMs,
                    std::uint16_t chunkIndex,
                    std::span<std::uint8_t const> payload);
+
+/**
+ * @brief Build the OLED-basetta firmware-RTC packet (opcode 0x28).
+ *
+ * Hardware-confirmed 2026-05-21 by a Frida capture of the vendor iot_driver
+ * (`scripts/aj_mouse_frida_capture.py`) + a live round-trip on a 2.4G 8K:
+ *
+ *   pkt[0]   = 0x00   (HID report id — NOT kReportId 0x05 used elsewhere)
+ *   pkt[1]   = 0x28   (FEA_CMD_SET_OLEDCLOCK)
+ *   pkt[8]   = 0xD7   (REQUIRED fixed marker — firmware ignores the packet
+ *                      without it; this was the bug in the first attempts)
+ *   pkt[9]   = year hi, pkt[10] = year lo   (uint16 big-endian)
+ *   pkt[11]  = month, pkt[12] = day, pkt[13] = hour, pkt[14] = minute,
+ *   pkt[15]  = second
+ *
+ * Sent via @c ITransport::writeFeature() (HidD_SetFeature). NO BIT7 checksum —
+ * the vendor leaves bytes 16..64 zero.
+ */
+[[nodiscard]] std::array<std::uint8_t, kReportSize>
+buildMouseSetOledClock(std::uint16_t year,
+                       std::uint8_t month,
+                       std::uint8_t day,
+                       std::uint8_t hour,
+                       std::uint8_t minute,
+                       std::uint8_t second);
 
 // ---------------------------------------------------------------------------
 // §3.11 — SET_MACRO_SIMPLE (opcode 0x16) chunked macro upload
