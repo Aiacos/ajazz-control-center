@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""AJAZZ 2.4G 8K / AJ159 APEX mouse probe — dev-time hardware validation.
+
+Mirrors the wire format reverse-engineered from the vendor Electron driver
+(resources/app/main_dist/main_beautified.js): the OLED-clock RTC opcode 0x28
+and the battery query 0x82, framed for the 0xFFFF vendor HID collection with a
+BIT7 checksum at the last byte.
+
+The report-id VALUE lives inside the native iot_driver.exe (not the JS), so we
+try both 0x05 (current C++ kReportId) and 0x00.
+
+NOT a production tool (writes raw HID). Examples:
+    python scripts/aj_mouse_probe.py --enumerate
+    python scripts/aj_mouse_probe.py --clock 03:33 --report-id 0x05
+    python scripts/aj_mouse_probe.py --battery --report-id 0x05
+"""
+from __future__ import annotations
+
+import argparse
+import datetime
+import sys
+import time
+
+import hid
+
+VID, PID = 0x3151, 0x5007
+CTRL_USAGE_PAGE = 0xFFFF
+CTRL_USAGE = 0x02  # JS: usage:2, usagePage:65535
+REPORT_SIZE = 65   # 1 report-id byte + 64-byte body
+
+FEA_CMD_SET_OLEDCLOCK = 0x28
+FEA_CMD_GET_BATTERY = 0x82
+
+
+def enumerate_collections() -> list[dict]:
+    return list(hid.enumerate(VID, PID))
+
+
+def print_enumeration() -> None:
+    for d in enumerate_collections():
+        up = d["usage_page"]
+        tag = "   <-- 0xFFFF/usage2 control" if (up == CTRL_USAGE_PAGE and d["usage"] == CTRL_USAGE) else ""
+        print(f"UP=0x{up:04x} usage=0x{d['usage']:02x} iface={d['interface_number']}{tag}")
+        print("   path=" + d["path"].decode(errors="replace"))
+
+
+def stamp_bit7(pkt: bytearray) -> None:
+    """BIT7 checksum at the last byte = sum(pkt[1..len-2]) & 0x7F (matches the
+    C++ stampBit7Checksum: report id excluded, checksum slot excluded)."""
+    total = sum(pkt[1 : len(pkt) - 1])
+    pkt[len(pkt) - 1] = total & 0x7F
+
+
+def open_control() -> hid.device:
+    path = None
+    for d in enumerate_collections():
+        if d["usage_page"] == CTRL_USAGE_PAGE and d["usage"] == CTRL_USAGE:
+            path = d["path"]
+            break
+    if path is None:
+        sys.exit(f"No 0x{CTRL_USAGE_PAGE:04x}/usage{CTRL_USAGE} collection for {VID:04x}:{PID:04x}")
+    dev = hid.device()
+    dev.open_path(path)
+    return dev
+
+
+def build_clock(report_id: int, dt: datetime.datetime) -> bytes:
+    # JS body (opcode@0) + report-id prepend => our pkt index = body index + 1.
+    pkt = bytearray(REPORT_SIZE)
+    pkt[0] = report_id
+    pkt[1] = FEA_CMD_SET_OLEDCLOCK   # 0x28
+    pkt[9] = (dt.year >> 8) & 0xFF   # year big-endian (JS r[8]=hi)
+    pkt[10] = dt.year & 0xFF         # (JS r[9]=lo)
+    pkt[11] = dt.month
+    pkt[12] = dt.day
+    pkt[13] = dt.hour
+    pkt[14] = dt.minute
+    pkt[15] = dt.second
+    stamp_bit7(pkt)
+    return bytes(pkt)
+
+
+def set_clock(hhmm: str, report_id: int, use_output: bool, readback: bool) -> None:
+    hour, minute = (int(x) for x in hhmm.split(":"))
+    today = datetime.date.today()
+    dt = datetime.datetime(today.year, today.month, today.day, hour, minute, 0)
+    dev = open_control()
+    pkt = build_clock(report_id, dt)
+    send = dev.write if use_output else dev.send_feature_report
+    kind = "output" if use_output else "feature"
+    print(f"clock 0x28 -> {hhmm} (report-id 0x{report_id:02x}, {kind} report)")
+    print(f"  pkt[0..15]={pkt[:16].hex(' ')}  checksum[64]={pkt[64]:#04x}")
+    n = send(pkt)
+    print(f"  send -> {n}")
+    if readback:
+        time.sleep(0.03)
+        try:
+            r = dev.get_feature_report(report_id, REPORT_SIZE)
+            print(f"  readback={bytes(r)[:16].hex(' ')}")
+        except OSError as exc:
+            print(f"  readback err: {exc}")
+    dev.close()
+    print("  done — check the dock/basetta TFT clock.")
+
+
+def query_battery(report_id: int) -> None:
+    dev = open_control()
+    pkt = bytearray(REPORT_SIZE)
+    pkt[0] = report_id
+    pkt[1] = FEA_CMD_GET_BATTERY  # 0x82
+    stamp_bit7(pkt)
+    print(f"battery 0x82 query (report-id 0x{report_id:02x}): {bytes(pkt)[:8].hex(' ')} …")
+    n = dev.send_feature_report(bytes(pkt))
+    print(f"  send_feature_report -> {n}")
+    time.sleep(0.03)
+    try:
+        r = bytes(dev.get_feature_report(report_id, REPORT_SIZE))
+        print(f"  get_feature_report: len={len(r)} {r[:16].hex(' ')}")
+        print("  (JS keyboard parse: percent=a[1], state=a[2], lp=a[3] — in the")
+        print("   report-id-included layout that maps to resp[2]/resp[3]/resp[4])")
+    except OSError as exc:
+        print(f"  get_feature_report err: {exc}")
+    dev.close()
+    print("\nTell me the mouse's ACTUAL battery % so we can locate the byte.")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--enumerate", action="store_true")
+    ap.add_argument("--clock", metavar="HH:MM", help="set the OLED clock (opcode 0x28)")
+    ap.add_argument("--battery", action="store_true", help="query battery (opcode 0x82)")
+    ap.add_argument("--report-id", default="0x05", help="report id byte (try 0x05 or 0x00)")
+    ap.add_argument("--output", action="store_true", help="use output report instead of feature")
+    ap.add_argument("--readback", action="store_true", help="GET_FEATURE after the clock write")
+    args = ap.parse_args()
+    rid = int(args.report_id, 0)
+    if args.clock:
+        set_clock(args.clock, rid, args.output, args.readback)
+        return
+    if args.battery:
+        query_battery(rid)
+        return
+    print_enumeration()
+
+
+if __name__ == "__main__":
+    main()
