@@ -66,17 +66,21 @@ def open_control() -> hid.device:
 
 def build_clock(report_id: int, dt: datetime.datetime) -> bytes:
     # JS body (opcode@0) + report-id prepend => our pkt index = body index + 1.
+    # Vendor capture (HidD_SetFeature): 00 28 00*6 d7 <yrHi yrLo> M D h m s, NO
+    # checksum. The 0xd7 marker at byte 8 is REQUIRED — without it the firmware
+    # ignores the packet (that was the bug in the earlier probes).
     pkt = bytearray(REPORT_SIZE)
-    pkt[0] = report_id
+    pkt[0] = report_id               # 0x00 on the wire
     pkt[1] = FEA_CMD_SET_OLEDCLOCK   # 0x28
-    pkt[9] = (dt.year >> 8) & 0xFF   # year big-endian (JS r[8]=hi)
-    pkt[10] = dt.year & 0xFF         # (JS r[9]=lo)
+    pkt[8] = 0xD7                    # fixed marker (byte 8)
+    pkt[9] = (dt.year >> 8) & 0xFF   # year big-endian
+    pkt[10] = dt.year & 0xFF
     pkt[11] = dt.month
     pkt[12] = dt.day
     pkt[13] = dt.hour
     pkt[14] = dt.minute
     pkt[15] = dt.second
-    stamp_bit7(pkt)
+    # NO BIT7 checksum — the vendor sends zeros after the time fields.
     return bytes(pkt)
 
 

@@ -48,19 +48,7 @@ function resolve(mod, name) {
     }
   });
 });
-// Output-report path: WriteFile, filtered to HID-report-sized writes (<=128 B).
-var wf = resolve('kernel32.dll', 'WriteFile') || resolve('KernelBase.dll', 'WriteFile');
-if (wf) {
-  Interceptor.attach(wf, {
-    onEnter: function (args) {
-      var n = args[3].toInt32();
-      if (n >= 8 && n <= 128) {
-        send({api: 'WriteFile', len: n, hex: hex(args[1], n)});
-      }
-    }
-  });
-}
-send({info: 'hooks installed: SetFeature/GetFeature + WriteFile'});
+send({info: 'hooks installed: SetFeature/GetFeature (full 67 bytes)'});
 """
 
 
