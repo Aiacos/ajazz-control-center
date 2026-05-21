@@ -218,9 +218,22 @@ public:
             if (n < 4) {
                 return std::nullopt; // short / no reply
             }
+            // Frame validation (hardware-confirmed 2026-05-21 via the replug
+            // watch in scripts/aj_mouse_probe.py --battery-watch): a well-formed
+            // status report has bytes 1 and 2 zero (resp[0]=report id,
+            // resp[3]=percent). Right after a wireless reconnect the GET can
+            // return a garbage frame like `05 ad 04 01 ...` — accepting it
+            // verbatim produced the spurious "1%" flash before the value
+            // settled. Reject any frame whose bytes 1/2 are non-zero.
+            if (resp[1] != 0 || resp[2] != 0) {
+                return std::nullopt; // malformed/transient frame (e.g. reconnect)
+            }
             auto const pct = resp[3];
             if (pct == 0) {
-                return std::nullopt; // 0 = no/unknown reading (e.g. wired-only)
+                // Link present but the dongle has not reported a charge yet
+                // (or wired-only): unknown, not 0%. Stays grey until the real
+                // value arrives on the next poll.
+                return std::nullopt;
             }
             return std::min<std::uint8_t>(pct, 100);
         } catch (std::exception const& e) {

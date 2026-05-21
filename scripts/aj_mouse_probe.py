@@ -128,6 +128,40 @@ def query_battery(report_id: int) -> None:
     print("\nTell me the mouse's ACTUAL battery % so we can locate the byte.")
 
 
+def watch_battery(seconds: int) -> None:
+    """Poll status report 0x05 ~1x/s and dump the full first bytes, so we can
+    watch the battery-percent byte (resp[3]) and the flag bytes (resp[4..7])
+    settle after a wireless replug — to find a 'data valid' flag that lets us
+    suppress the transient low/zero reading."""
+    print(f"watching report 0x05 for {seconds}s — unplug/replug (or sleep/wake) the mouse now…")
+    print("  t(s)  b0 b1 b2 b3(pct) b4 b5 b6 b7")
+    start = time.time()
+    last = None
+    dev = None
+    while time.time() - start < seconds:
+        try:
+            if dev is None:
+                dev = open_control()  # (re)acquire after a replug
+            r = bytes(dev.get_feature_report(0x05, REPORT_SIZE))
+            row = ("  {:4.0f}  ".format(time.time() - start)
+                   + " ".join(f"{r[i]:02x}" for i in range(8)) + f"   pct={r[3]}")
+        except (OSError, SystemExit):
+            if dev is not None:
+                try:
+                    dev.close()
+                except OSError:
+                    pass
+            dev = None
+            row = "  {:4.0f}  <disconnected / reopening>".format(time.time() - start)
+        if row[8:] != (last or "")[8:]:  # print only when the content changes
+            print(row, flush=True)
+            last = row
+        time.sleep(1.0)
+    if dev is not None:
+        dev.close()
+    print("done.")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--enumerate", action="store_true")
@@ -136,8 +170,13 @@ def main() -> None:
     ap.add_argument("--report-id", default="0x05", help="report id byte (try 0x05 or 0x00)")
     ap.add_argument("--output", action="store_true", help="use output report instead of feature")
     ap.add_argument("--readback", action="store_true", help="GET_FEATURE after the clock write")
+    ap.add_argument("--battery-watch", type=int, metavar="SECS", default=0,
+                    help="poll report 0x05 for SECS seconds (watch the replug transient)")
     args = ap.parse_args()
     rid = int(args.report_id, 0)
+    if args.battery_watch:
+        watch_battery(args.battery_watch)
+        return
     if args.clock:
         set_clock(args.clock, rid, args.output, args.readback)
         return
