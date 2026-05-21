@@ -39,6 +39,7 @@ for clock/battery/etc. — no keyboard/mouse-coordinate reports).
 
 | File | Scope |
 | --- | --- |
+| [`HOWTO-reverse-engineer-a-device.md`](HOWTO-reverse-engineer-a-device.md) | **Start here to RE a NEW device/software.** End-to-end community playbook: enumerate → vendor app → Ghidra/JS static → Frida live-hook → decode → confirm on hardware → builders+tests → document. Includes the consolidated gotcha checklist. |
 | [`ak980-keyboard.md`](ak980-keyboard.md) | AK980 PRO + proprietary keyboard family (Microdia/Sonix `0x0c45`, SONiX `0x3151` legacy) — RTC time-sync, battery, RGB (firmware 20-mode + per-key), macros, layers, settings, TFT image upload. |
 | [`aj-series-mouse.md`](aj-series-mouse.md) | AJ-series mouse family (SONiX `0x3151`, AJ199 `0x3554`, legacy `0x248A`/`0x249A`) — OLED firmware clock, battery, DPI/poll/LOD/profiles/macros/keymatrix, the Electron+iot_driver gRPC stack, the OemDrv/HIDUsb/Witmod dialect split. |
 | [`akp-streamdeck.md`](akp-streamdeck.md) | Stream Dock family (AKP03/AKP05/AKP153/AKP815 + Mirabox N3/N4) — CRT framing, image upload, brightness/clear/version, touch strip (DRA), boot logo, the report-id-on-Linux issue, DFU. |
