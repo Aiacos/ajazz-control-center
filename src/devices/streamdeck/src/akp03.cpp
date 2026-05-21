@@ -303,7 +303,12 @@ public:
     Akp03Device(DeviceDescriptor descriptor, DeviceId id)
         : Akp03Device(std::move(descriptor),
                       id,
-                      makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+                      makeHidTransport(id.vendorId,
+                                       id.productId,
+                                       id.serial,
+                                       /*usagePage*/ 0,
+                                       /*usage*/ 0,
+                                       /*prependReportIdPosix*/ true)) {}
 
     /// Test constructor with injected transport (COD-026).
     Akp03Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
