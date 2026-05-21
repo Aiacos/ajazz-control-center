@@ -96,6 +96,16 @@ void registerAll(core::DeviceRegistry& registry) {
                codename == "aj159_apex_24g" || codename == "aj159_apex_dongle";
     };
 
+    // Wireless models expose a host-readable charge level in vendor status
+    // report 0x05 (byte 3) — hardware-confirmed on the 2.4G 8K (0x3151:0x5007).
+    // Wired-only SKUs do not populate it, so we gate hasBattery + IBatteryCapable
+    // polling to the wireless/dongle codenames.
+    auto const hasWirelessBattery = [](std::string_view codename) {
+        return codename == "ajazz_24g_8k" || codename == "aj_series_dongle" ||
+               codename == "aj199_family_dongle" || codename == "aj159_apex_24g" ||
+               codename == "aj159_apex_dongle";
+    };
+
     for (auto const& m : kMice) {
         bool const tft = hasTftBasetta(m.codename);
         reg.registerDevice(
@@ -110,6 +120,12 @@ void registerAll(core::DeviceRegistry& registry) {
                 .dpiStageCount = 8,
                 .hasRgb = true,
                 .hasClock = tft,
+                .hasBattery = hasWirelessBattery(m.codename),
+                // Vendor control collection is HID usage page 0xFFFF (the JS
+                // driver opens usage:2/usagePage:65535); without this the
+                // transport opens the boot-mouse interface and every feature
+                // report (incl. the battery status read) silently fails.
+                .controlUsagePage = 0xFFFF,
             },
             &makeAjSeries);
     }

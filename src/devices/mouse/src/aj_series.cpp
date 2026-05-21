@@ -78,6 +78,7 @@ constexpr std::uint8_t kDefaultProfile = 0;
  */
 class AjSeriesMouse final : public IDevice,
                             public IMouseCapable,
+                            public IBatteryCapable,
                             public IRgbCapable,
                             public IClockCapable,
                             public IPollingRateCapable,
@@ -93,7 +94,10 @@ public:
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id)
         : AjSeriesMouse(std::move(descriptor),
                         id,
-                        makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+                        makeHidTransport(id.vendorId,
+                                         id.productId,
+                                         id.serial,
+                                         descriptor.controlUsagePage)) {}
 
     /** Test constructor with injected transport (DI for unit tests). */
     AjSeriesMouse(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
@@ -189,13 +193,39 @@ public:
         (void)m_transport->write(pkt);
     }
 
+    // IMouseCapable legacy const accessor — superseded by the IBatteryCapable
+    // override below (the BatteryService dynamic_casts to IBatteryCapable). Kept
+    // returning nullopt so the legacy const surface stays honest.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() const override {
-        // Vendor has NO standalone battery query opcode on the mouse path —
-        // battery is push-streamed from the dongle via the gRPC watchDevList
-        // stream (`aj_series_opcode_table.md` §4). Our prior 0x40 query was
-        // nonexistent and may have been silently NAK'd by firmware.
-        // Returning nullopt advertises "battery state unknown" honestly.
         return std::nullopt;
+    }
+
+    // IBatteryCapable — hardware-confirmed 2026-05-21 on a live AJAZZ 2.4G 8K
+    // (VID 0x3151): the mouse mirrors its charge into vendor status report 0x05
+    // at byte 3 (0..100; 0x64 = full pack). Read via GET_FEATURE on the 0xFFFF
+    // control collection. hidapi returns the report WITH the leading report-id
+    // byte at index 0, so the percent sits at resp[3]. This supersedes the old
+    // "no HID battery query, gRPC-only" assumption: the dongle telemetry the
+    // vendor app streams is also exposed in this directly-readable status report
+    // (confirmed with scripts/aj_mouse_probe.py — 0x64 == the device's real 100%).
+    [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
+        try {
+            std::array<std::uint8_t, kReportSize> resp{};
+            resp[0] = 0x05; // status report id to fetch (GET_FEATURE)
+            auto const n = m_transport->readFeature(resp);
+            if (n < 4) {
+                return std::nullopt; // short / no reply
+            }
+            auto const pct = resp[3];
+            if (pct == 0) {
+                return std::nullopt; // 0 = no/unknown reading (e.g. wired-only)
+            }
+            return std::min<std::uint8_t>(pct, 100);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN(
+                "mouse.aj_series", "batteryPercent: HID feature read failed: {}", e.what());
+            return std::nullopt;
+        }
     }
 
     // IRgbCapable
