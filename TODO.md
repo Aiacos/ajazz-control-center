@@ -119,6 +119,138 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
+- [ ] **AKP05 (Stream Dock) image upload silently fails on Linux/hidraw —
+  HID Report-ID framing.** 🐧 **Platform-specific; needs Fedora hardware to
+  fix+verify.**
+
+  **Symptom (observed 2026-05-21):** on Windows the AKP05E (`0x0300:0x3004`)
+  shows our icon on key 1; on Fedora the same build shows nothing. The device
+  **IS detected** in the app on Fedora (appears in the device list), so this is
+  not enumeration/registration — it is the image *write* not reaching the panel.
+
+  **Root cause (hypothesis, high confidence):** the Stream Dock packets put the
+  ASCII `CRT` prefix at **byte 0** (`buildCmdHeader` → `pkt[0]=0x43`), i.e. there
+  is **no leading HID Report-ID byte**. hidapi's `hid_write` contract is that
+  `data[0]` is the Report ID (0x00 for single-/unnumbered-report devices) on
+  *all* platforms. Windows `WriteFile` tolerates the missing report-id byte (the
+  device receives `CRT…` from byte 0), but **Linux hidraw is strict**: it takes
+  `buffer[0]` (0x43) as the Report ID, so the panel gets misaligned/garbage and
+  renders nothing. This exact convention is already documented in
+  `docs/protocols/keyboard/via.md:10` — *"byte 0 : report id (0x00 on
+  Linux/macOS, omitted on Windows WriteFile)"*.
+
+  **Architectural complication (do NOT do a blanket transport fix):**
+  `HidTransport::write()` calls `hid_write` identically on all platforms, but the
+  backends DISAGREE on byte 0:
+  - **Streamdeck** (`akp03/akp05/akp153/akp815`): byte 0 = `'C'` (no report id).
+  - **Keyboard** (`proprietary_keyboard.cpp`): byte 0 = `0x00` report id already
+    (time-sync data packet, TFT chunks).
+  - **Mouse** (`aj_series`): byte 0 = `kReportId` (0x05) / 0x00 for the clock.
+
+  A blanket "prepend 0x00 on Linux" in `HidTransport::write` would fix streamdeck
+  but **double-prefix the keyboard/mouse** (which already carry a report-id byte)
+  and break them on Linux. So the fix must be either (a) targeted to the
+  streamdeck backends only, or (b) a unification of the byte-0 convention across
+  all backends (larger; touches every builder + test + the Windows path).
+
+  **Diagnostic tests to run on Fedora (pin the failure point before coding):**
+  1. ✅ Device detected in the app device list — confirmed 2026-05-21.
+  2. Run from a terminal capturing stderr and inspect the log:
+     `./ajazz-control-center 2> ak.log` then
+     `grep -iE "akp05|streamdeck|opened|write|hid|permission|denied" ak.log`.
+     - Does it log `opened VID=0300 PID=3004`? (if not → udev/permissions, step 3)
+     - Do the image `write()`s return success (>0) or error? A *successful* write
+       with no panel change ⇒ confirms the report-id framing hypothesis.
+  3. udev / hidraw permissions:
+     `ls /etc/udev/rules.d/ | grep -i ajazz` and `ls -l /dev/hidraw*`.
+     - Ensure `resources/linux/99-ajazz.rules` is installed (VID `0300` Stream
+       Dock family) and the `/dev/hidraw*` node for `0300:3004` is user-accessible
+       (`uaccess`); replug or `udevadm trigger --action=change` if ACLs are stale.
+  4. Cross-check with the AKP153 (`0x0300:0x1001`) on the SAME Fedora box — it
+     uses the identical `CRT`-at-byte-0 framing. If AKP153 image upload ALSO
+     fails on Linux, the report-id issue is family-wide (all Stream Dock); if
+     AKP153 works, the problem is AKP05-specific (1024-byte packet size, the
+     0x3004 firmware, or the secondary-screen path).
+
+  **Candidate fix (pending the diagnostics):** if step 2 confirms write-succeeds-
+  but-no-render, give the streamdeck output reports a leading `0x00` report-id
+  byte on Linux/macOS only (mirroring `via.md`), e.g. a small platform-guarded
+  helper in the streamdeck backends (NOT in shared `HidTransport::write`). Then
+  **regression-test BOTH**: re-confirm Windows still shows the key-1 icon, and
+  Fedora now does too. Add a unit test pinning the on-wire byte 0 per platform if
+  feasible.
+
+  Files: `src/devices/streamdeck/src/akp05.cpp` (`buildCmdHeader`, `sendImage`/
+  key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/
+  streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
+
+- [ ] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
+  🐧 **Works on Windows; needs Fedora verification + likely a hidraw fix.**
+
+  **Status:** on Windows the mouse battery reads correctly (commit `376fb61`:
+  vendor status report `0x05`, byte 3, via GET_FEATURE on the `0xFFFF`/usage-0x02
+  control collection) and the OLED clock sets (commit `0a1952e`: opcode `0x28`
+  with the 0xD7 marker via SET_FEATURE on the same collection). Both reads/writes
+  go through the vendor control collection selected by `controlUsagePage=0xFFFF`
+  + `controlUsage=0x02` (commit `69c64a1`). The whole feature must be confirmed
+  on Fedora.
+
+  **Why it may not work out-of-the-box on Fedora — two independent gates:**
+
+  1. **udev / hidraw permissions (device access).** The mouse is VID `0x3151`
+     (SONiX). The app opens `/dev/hidraw*` directly; without a udev rule granting
+     the logged-in user access, `hid_open_path` fails and battery/clock silently
+     return nothing.
+     - Install the project rules: `sudo cp resources/linux/99-ajazz.rules
+       /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm
+       trigger --action=change` (VID prefix `3151` is covered there).
+     - Verify the control node is user-accessible:
+       `ls -l /dev/hidraw*` — the `0x3151:0x5007` MI_02 node should carry an ACL
+       for your user (`getfacl /dev/hidrawN` shows `user:<you>:rw-` when `uaccess`
+       applied). If stale (device was plugged in before the rule landed), replug
+       or `sudo udevadm trigger --action=change`.
+
+  2. **HID usage disambiguation on hidraw (the likely code gate).** The mouse
+     exposes TWO `0xFFFF` collections (usage 2 = control, usage 1 = not). On
+     Windows hidapi reliably reports `usage`, so `controlUsage=0x02` picks the
+     right node. On **Linux hidraw, `hid_enumerate`'s `usage`/`usage_page` can be
+     0 (unpopulated) for non-primary collections**; then `HidTransport::open`'s
+     match (`usage_page==m_usagePage && (m_usage==0 || usage==m_usage)`) finds no
+     candidate and **falls back to `hid_open(vid,pid)` = the first interface (the
+     boot mouse)**, where the battery/clock feature reports do not exist → silent
+     no-op on Fedora.
+
+  **Diagnostic on Fedora (run from a terminal, capture stderr):**
+  ```
+  ./ajazz-control-center 2> mouse.log
+  grep -iE "opened VID=3151|aj_series|battery|queried|hid_open|usage" mouse.log
+  ```
+  - Expect `opened VID=3151 PID=5007 (usage-page filtered)` + `queried
+    ajazz_24g_8k: NN%`. 
+  - If you see `opened VID=3151 …` **without** "(usage-page filtered)" or no
+    `queried ajazz_24g_8k` line ⇒ it opened the wrong interface ⇒ the hidraw
+    usage-unpopulated fallback (gate 2).
+  - Independently confirm which hidraw node is the control channel:
+    `for n in /dev/hidraw*; do udevadm info -q property $n | grep -E "HID_NAME|HID_PHYS|HID_UNIQ"; echo $n; done` and/or
+    a quick `python3 -c "import hid;[print(hex(d['usage_page']),hex(d['usage']),d['path']) for d in hid.enumerate(0x3151,0x5007)]"`
+    to see whether `usage` is populated on this kernel (cython-hidapi reads the
+    report descriptor; if it shows `0xffff/0x02` then the C++ should match too).
+
+  **Fix (if gate 2 is confirmed):** make `HidTransport::open` resilient to an
+  unpopulated `usage` on hidraw — two-pass match: first try `usage_page` **and**
+  `usage`; if no candidate matched AND no enumerated entry for this VID:PID
+  reported a non-zero `usage` at all, fall back to a `usage_page`-only match
+  (still selecting a `0xFFFF` node) before the final `hid_open(vid,pid)` fallback.
+  Keep Windows behaviour identical (where `usage` is populated, the strict match
+  wins). Add a log line distinguishing "usage+page filtered" vs "page-only
+  filtered" vs "first-interface fallback" so future Linux triage is one grep.
+  Re-verify on BOTH OSes: Windows still `queried ajazz_24g_8k`, Fedora now does
+  too. Files: `src/core/src/hid_transport.cpp` (`open()` match loop).
+
+  Note: the same hidraw `usage`-unpopulated risk applies to the AK980 PRO
+  keyboard, but its control collection `0xFF13` is a SINGLE collection
+  (`controlUsage=0`, matched by usage page alone) so it is unaffected.
+
 - [ ] **AKP05 v3 framing migration**. Per `[mirajazz]`'s protocol-version
   taxonomy (see `docs/protocols/streamdeck/_research-sources.md`), the
   Mirabox N4 / AKP05 family is a **protocol_version 3** device with
