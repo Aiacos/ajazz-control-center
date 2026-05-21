@@ -5,6 +5,12 @@ exposes firmware-update functionality to users. Status: **DECIDED
 2026-05-18**, implementation **deferred** pending the W-06 capture in
 [`docs/research/CAPTURE-WISHLIST-2026-05-18.md`](../research/CAPTURE-WISHLIST-2026-05-18.md).
 
+> **Companion study (2026-05-21):** for the RE-grounded, per-device *feasibility*
+> analysis of how an in-app firmware-update FEATURE would actually work — and the
+> online validation of those claims — see
+> [`FIRMWARE-UPDATES-IMPLEMENTATION.md`](FIRMWARE-UPDATES-IMPLEMENTATION.md). It
+> revisits the "Future escape hatch" below; it does not change this decision.
+
 ## Decision
 
 **We do not ship vendor firmware blobs. We do not perform the flash.
