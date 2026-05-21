@@ -64,6 +64,12 @@ QtObject {
     /// failures). Not part of the branding contract — the same
     /// medium-red works on both light and dark surfaces.
     readonly property color errorAccent: "#e34c4c"
+    /// Success accent (positive confirmations, success toasts/snackbars).
+    /// Deliberately distinct from the brand `accent` so a success message
+    /// reads as green even when the brand colour is red/warm. Sits in the
+    /// same value/saturation band as `errorAccent`/`warningAccent` so it
+    /// works on both light and dark surfaces.
+    readonly property color successAccent: "#3fb950"
     /// Warning accent (signed-but-untrusted plugins, deprecated APIs,
     /// reversible-but-unusual operations). Amber 500 — works on both
     /// themes by sitting in the same value/saturation band as

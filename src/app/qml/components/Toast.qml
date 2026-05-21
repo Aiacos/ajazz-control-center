@@ -11,8 +11,9 @@
 //     toast.show("File deleted", "info", "Undo", function() { restore() })
 //
 // Variants
-//   "success" — Theme.accent (brand)
+//   "success" — Theme.successAccent (green; default)
 //   "error"   — Theme.errorAccent
+//   "warning" — Theme.warningAccent
 //   "info"    — Theme.accent2
 //
 // Geometry follows the M3 Snackbar spec:
@@ -92,16 +93,26 @@ Item {
         if (variant === "error") {
             return Theme.errorAccent
         }
+        if (variant === "warning") {
+            return Theme.warningAccent
+        }
         if (variant === "info") {
             return Theme.accent2
         }
-        return Theme.accent
+        // "success" (and the default) read as green — distinct from the
+        // brand accent, which may be red/warm.
+        return Theme.successAccent
     }
 
     // Pick a foreground color that contrasts cleanly with the variant
     // background. ITU-R BT.601 luminance: bright accents get dark text;
     // dark accents get light text.
     function textColorFor(bgColor) {
+        // Success toasts always use white text: the brand-green sits just
+        // above the luminance flip point but reads best with light text.
+        if (root._variant === "success") {
+            return "#f4f4f8"
+        }
         const lum = 0.299 * bgColor.r + 0.587 * bgColor.g + 0.114 * bgColor.b
         return lum > 0.5 ? "#0e1011" : "#f4f4f8"
     }
