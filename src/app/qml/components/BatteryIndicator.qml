@@ -25,10 +25,10 @@
 // BatteryService.lastKnownPercent(codename) on Component.onCompleted so the
 // first 15-s tick isn't visible as a stale "--%" placeholder.
 //
-// Theme tokens only — no hardcoded colours. The low-charge tint at <=20 %
-// uses `Theme.warningAccent` (same token RgbPicker / plugin-store badges
-// use for "needs attention but not destructive"), which keeps polarity
-// correct in both light and dark themes.
+// Theme tokens only — no hardcoded colours. The charge-tier tint steps
+// through Theme.fgMuted (grey, no reading) → Theme.errorAccent (red, <10 %)
+// → Theme.warningAccent (yellow, 10–25 %) → Theme.successAccent (green,
+// 26–100 %), so polarity stays correct in both light and dark themes.
 import QtQuick
 import QtQuick.Layouts
 import AjazzControlCenter
@@ -72,11 +72,19 @@ Item {
         id: pill
         anchors.centerIn: parent
         radius: Theme.radiusSm
-        // Match the offline badge / sync glyph visual rhythm: a soft
-        // 12% tint of the active colour (accent for healthy, warningAccent
-        // for low) on top of bgBase. Border at 30 % alpha for definition.
-        readonly property bool lowCharge: root.percent >= 0 && root.percent <= 20
-        readonly property color tintColor: lowCharge ? Theme.warningAccent : Theme.accent
+        // Match the offline badge / sync glyph visual rhythm: a soft 12% tint
+        // of the charge-tier colour on top of bgBase, border at 30 % alpha.
+        // Charge tiers (per task spec): grey when no reading (--%), red below
+        // 10 %, yellow 10–25 %, green 26–100 %.
+        readonly property color tintColor: {
+            if (root.percent < 0)
+                return Theme.fgMuted; // no data → grey
+            if (root.percent < 10)
+                return Theme.errorAccent; // < 10 % → red
+            if (root.percent <= 25)
+                return Theme.warningAccent; // 10–25 % → yellow
+            return Theme.successAccent; // 26–100 % → green
+        }
         color: Qt.rgba(tintColor.r, tintColor.g, tintColor.b, 0.12)
         border.width: 1
         border.color: Qt.rgba(tintColor.r, tintColor.g, tintColor.b, 0.30)
