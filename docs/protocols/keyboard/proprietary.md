@@ -6,10 +6,10 @@ The backend in `src/devices/keyboard/src/proprietary_keyboard.cpp` is a clean-ro
 
 ## Identification
 
-| Property   | Value (provisional) |
-| ---------- | ------------------- |
-| Vendor ID  | `0x3151`            |
-| Product ID | `0x4024`–`0x4029`   |
+| Property   | Value (provisional)                                |
+| ---------- | -------------------------------------------------- |
+| Vendor ID  | `0x3151`                                           |
+| Product ID | `0x4024`–`0x4029`                                  |
 | Interface  | `usage_page=0xFF00` (provisional / family default) |
 | Report ID  | `0x04` (provisional — see correction below)        |
 
@@ -169,3 +169,28 @@ per D-03 — they are QMK-style with no vendor clock surface.
 
 See [`ARCH-05.1`](../../../.planning/phases/09-research-captures-hygiene/ARCH-05.1.md)
 for the full ADR.
+
+## Battery charge level
+
+**Status:** HARDWARE-CONFIRMED on a physical AK980 PRO (2026-05-21) — the
+wireless battery charge level reads back over HID on the 0xFF13 control
+collection.
+
+The query is opcode `0x20` sub `0x01`, sent with HID Report ID `0x00` (NOT
+the `0x04` used by the legacy command convention). The reply is read back via
+GET_FEATURE into a **65-byte** buffer.
+
+| Field          | Value                                                       |
+| -------------- | ----------------------------------------------------------- |
+| Query opcode   | `0x20`                                                      |
+| Query sub-id   | `0x01`                                                      |
+| Report ID      | `0x00`                                                      |
+| Read transport | GET_FEATURE (`readFeature`) into a 65-byte buffer           |
+| Opcode echo    | `resp[1]`                                                   |
+| Charge percent | `resp[4]` (0 = no battery; `0xFF` wired+full clamps to 100) |
+
+Buffer-size pitfall (hardware-confirmed): a **64-byte** GET buffer makes
+`hid_get_feature_report` *fail* on Windows — the buffer must be **65 bytes**.
+hidapi prepends the report-id byte at index 0 of the returned buffer, which
+is why the opcode echo lands at `resp[1]` and the charge percent at `resp[4]`
+(one byte further along than the on-wire offsets).

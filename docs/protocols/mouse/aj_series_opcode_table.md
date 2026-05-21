@@ -154,7 +154,7 @@ either a `SET = N` or `GET = N | 0x80` pair.
 | `0x26` | `FEA_CMD_SET_OLEDGIFINDEX`       | feature SET | no                                                                 | —                     |
 | `0xa6` | `FEA_CMD_GET_OLEDGIFINDEX`       | feature GET | no                                                                 | —                     |
 | `0x27` | `FEA_CMD_SET_OLEDLUANGAGE`       | feature SET | no                                                                 | —                     |
-| `0x28` | `FEA_CMD_SET_OLEDCLOCK`          | feature SET | no                                                                 | —                     |
+| `0x28` | `FEA_CMD_SET_OLEDCLOCK`          | feature SET | **yes** — OLED basetta firmware-RTC clock (see §3.15)              | iot_driver (Frida)    |
 | `0x29` | `FEA_CMD_SET_SCREEN_24BITDATA`   | feature SET | (mouse with screen, 24-bit colour)                                 | —                     |
 | `0xa9` | `FEA_CMD_GET_SCREEN_24BITDATA`   | feature GET | (mouse with screen)                                                | —                     |
 | `0x2a` | `FEA_CMD_SET_OLEDWEATHER`        | feature SET | no                                                                 | —                     |
@@ -575,12 +575,54 @@ image (the boot header).
 The two recoil opcodes are anti-cheat liabilities and are universally
 disallowed in tournament play (Valorant, CS2, Apex). Do **not** implement.
 
+### 3.15 `FEA_CMD_SET_OLEDCLOCK` — `0x28` (OLED basetta firmware RTC)
+
+**Status:** HARDWARE-CONFIRMED on a physical AJAZZ 2.4G 8K (`0x3151:0x5007`)
+basetta, 2026-05-21. The OLED clock is a **firmware RTC** driven by a single
+`0x28` feature report — **not** a host-rendered bitmap. (The earlier
+`0x25 FEA_CMD_SETTFTLCDDATA` host-render pipeline never actually set the
+clock; it failed with `hid_write` errors. The 0x25 render path is retained
+only for a future custom-image feature.)
+
+Wire format (Frida capture of `iot_driver`):
+
+```
+byte 0     : 0x00            report id
+byte 1     : 0x28            opcode (FEA_CMD_SET_OLEDCLOCK)
+byte 2..7  : 0x00            zeros
+byte 8     : 0xD7            REQUIRED fixed marker (without it firmware ignores the packet)
+byte 9..10 : year, big-endian (e.g. 2026 → 0x07 0xEA)
+byte 11    : month  (1-based)
+byte 12    : day
+byte 13    : hour
+byte 14    : minute
+byte 15    : second
+byte 16..  : 0x00            zeros
+```
+
+Sent via `HidD_SetFeature` (`writeFeature`). **No checksum.** The `0xD7`
+marker at byte 8 was the missing piece — without it the firmware silently
+ignores the packet. Year is big-endian (unlike the keyboard RTC, which uses
+a single 2000-offset byte).
+
 ______________________________________________________________________
 
-## 4 — Battery model (no opcode — pushed from dongle via gRPC)
+## 4 — Battery model (HID status report 0x05, byte 3)
 
-There is **no HID feature-report battery query** on AJ-series mice.
-Battery percentage is delivered via the `Device.battery` field
+**Status:** HARDWARE-CONFIRMED on a physical AJAZZ 2.4G 8K (`0x3151:0x5007`),
+2026-05-21. The mouse mirrors its charge level into vendor **status report
+`0x05`, byte 3** (range `0..100`; `0x64` = 100%), readable via GET_FEATURE on
+the `0xFFFF` control collection (usage `0x02` — see §1 collection
+disambiguation). `AjSeriesMouse` implements `IBatteryCapable` against this
+report.
+
+> **Supersedes the prior "no HID battery query" claim.** Earlier RE concluded
+> battery was dongle-gRPC-only; on real hardware the value reads directly from
+> status report 0x05. After a wireless replug the value takes a poll cycle or
+> two to settle (a transient grey/low reading arrives from dongle telemetry
+> first).
+
+The vendor app additionally surfaces battery via the `Device.battery` field
 (`js:50798`, `js:50824`, `js:50841`) on the `proto.driver.Device` message
 broadcast by the iot_driver's `watchDevList` server-stream:
 

@@ -48,6 +48,25 @@ device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
 
 Offline device returns `BB = 0xFF`.
 
+> **HARDWARE NOTE (2026-05-21):** the `0x40` query above does not match the
+> shipping firmware. On a live AJAZZ 2.4G 8K the charge level mirrors into
+> vendor **status report `0x05`, byte 3** (`0..100`, `0x64` = 100%), read via
+> GET_FEATURE on the `0xFFFF` (usage `0x02`) control collection — no `0x40`
+> request is needed. `AjSeriesMouse` implements `IBatteryCapable` against this
+> report. See `aj_series_opcode_table.md` §4 and `aj_series_vendor.md` for the
+> hardware-confirmed details. The same correction is expected to apply to the
+> AJ199 family, but only the 2.4G 8K is hardware-verified so far.
+
+## Onboard clock (OLED basetta)
+
+> **HARDWARE NOTE (2026-05-21):** mice with an OLED basetta (e.g. the 2.4G 8K,
+> AJ199 family) drive the on-screen clock through a **firmware RTC** set with a
+> single opcode `0x28` (`FEA_CMD_SET_OLEDCLOCK`) feature report — a required
+> fixed `0xD7` marker at byte 8, big-endian year, no checksum, sent via
+> `HidD_SetFeature`. This is **NOT** a host-rendered bitmap; the older
+> `0x25 FEA_CMD_SETTFTLCDDATA` RGB565 render path never actually set the clock.
+> Full packet layout in `aj_series_opcode_table.md` §3.15.
+
 ## References
 
 - [`progzone122/ajazz-aj199-official-software`](https://github.com/progzone122/ajazz-aj199-official-software) — frozen snapshot of the Windows binary, consulted only to *run* the tool during captures. Not disassembled or copied.
