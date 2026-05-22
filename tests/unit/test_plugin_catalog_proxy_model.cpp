@@ -14,6 +14,7 @@
 #include "qt_app_fixture.hpp"
 
 #include <QAbstractListModel>
+#include <QByteArray>
 #include <QHash>
 #include <QSignalSpy>
 #include <QString>
@@ -249,4 +250,31 @@ TEST_CASE("PluginCatalogProxyModel: no source attached behaves as identity",
     proxy.setActiveTab(PluginCatalogProxyModel::StreamdockTab);
     proxy.setQuery("nope");
     REQUIRE(proxy.count() == 0);
+}
+
+TEST_CASE("PluginCatalogModel::validateDownloadedArchive gates size + zip magic",
+          "[plugin-catalog][security][WR-04]") {
+    // Pure static gate — no Qt app or network needed.
+    char const magic[4] = {'P', 'K', 0x03, 0x04};
+    QByteArray const zipHeader(magic, 4);
+
+    SECTION("a valid zip header passes") {
+        REQUIRE(
+            PluginCatalogModel::validateDownloadedArchive(zipHeader + "…archive bytes…").isEmpty());
+    }
+    SECTION("an empty body is rejected") {
+        REQUIRE_FALSE(PluginCatalogModel::validateDownloadedArchive(QByteArray{}).isEmpty());
+    }
+    SECTION("a non-zip body (e.g. an HTML error page) is rejected") {
+        REQUIRE_FALSE(
+            PluginCatalogModel::validateDownloadedArchive(QByteArray("<!doctype html>")).isEmpty());
+    }
+    SECTION("a body past the size cap is rejected even with valid magic") {
+        QByteArray big(64 * 1024 * 1024 + 1, '\0'); // 64 MiB + 1
+        big[0] = 'P';
+        big[1] = 'K';
+        big[2] = 0x03;
+        big[3] = 0x04;
+        REQUIRE_FALSE(PluginCatalogModel::validateDownloadedArchive(big).isEmpty());
+    }
 }

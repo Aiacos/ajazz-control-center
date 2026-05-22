@@ -247,6 +247,18 @@ public:
      */
     Q_INVOKABLE bool install(QString const& uuid);
 
+    /**
+     * @brief Validate a freshly-downloaded `.sdPlugin` blob before it is
+     *        written to disk (WR-04): enforces a size cap and the ZIP magic.
+     *
+     * Static + pure so the security gate is unit-testable without a network
+     * round-trip. Used by the @ref install download path.
+     *
+     * @param body Raw downloaded bytes.
+     * @return Empty string when acceptable; otherwise a user-facing error.
+     */
+    [[nodiscard]] static QString validateDownloadedArchive(QByteArray const& body);
+
     /// Mark a plugin as removed. Returns true on success.
     Q_INVOKABLE bool uninstall(QString const& uuid);
 

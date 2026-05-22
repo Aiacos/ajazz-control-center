@@ -381,6 +381,16 @@ int findRow(std::vector<CatalogEntry> const& rows, QString const& uuid) {
 
 namespace {
 
+/// Upper bound on a downloaded `.sdPlugin` archive (WR-04). A hostile or
+/// compromised CDN could otherwise stream an unbounded body and fill the
+/// user's home filesystem. 64 MiB comfortably covers real Stream Deck
+/// plugins (typically < a few MB) with generous headroom.
+inline constexpr qint64 kMaxPluginDownloadBytes = 64LL * 1024 * 1024;
+
+/// ZIP local-file-header magic. A `.sdPlugin` is a zip per the Elgato SDK;
+/// reject anything that does not begin with it before writing to disk.
+inline constexpr char kZipMagic[4] = {'P', 'K', 0x03, 0x04};
+
 /// Per-user plugin directory.
 ///
 /// We park downloaded `.sdPlugin` archives here so the Stream Deck
@@ -401,6 +411,20 @@ namespace {
 }
 
 } // namespace
+
+QString PluginCatalogModel::validateDownloadedArchive(QByteArray const& body) {
+    // WR-04: reject before writing to disk. Size cap defends against a hostile
+    // CDN streaming an unbounded body; the ZIP magic rejects non-archives a
+    // `.sdPlugin` could never be (the extractor would refuse them anyway).
+    if (body.size() > kMaxPluginDownloadBytes) {
+        return QStringLiteral("Downloaded archive exceeds the %1 MB limit.")
+            .arg(kMaxPluginDownloadBytes / (1024 * 1024));
+    }
+    if (!body.startsWith(QByteArray(kZipMagic, sizeof kZipMagic))) {
+        return QStringLiteral("Downloaded file is not a valid .sdPlugin (zip) archive.");
+    }
+    return {};
+}
 
 bool PluginCatalogModel::install(QString const& uuid) {
     int const row = findRow(m_rows, uuid);
@@ -473,8 +497,20 @@ bool PluginCatalogModel::install(QString const& uuid) {
     QObject::connect(reply,
                      &QNetworkReply::downloadProgress,
                      this,
-                     [self, uuidCopy](qint64 received, qint64 total) {
-                         if (!self || total <= 0) {
+                     [self, reply, uuidCopy](qint64 received, qint64 total) {
+                         if (!self) {
+                             return;
+                         }
+                         // Abort an oversized transfer (WR-04) — up-front when the
+                         // advertised Content-Length is too big, and defensively if
+                         // a server streams past the cap without a length. The
+                         // finished handler maps the resulting cancel to a clear error.
+                         if (received > kMaxPluginDownloadBytes ||
+                             (total > 0 && total > kMaxPluginDownloadBytes)) {
+                             reply->abort();
+                             return;
+                         }
+                         if (total <= 0) {
                              return;
                          }
                          int const pct =
@@ -488,11 +524,27 @@ bool PluginCatalogModel::install(QString const& uuid) {
             return;
         }
         if (reply->error() != QNetworkReply::NoError) {
-            QString const err = reply->errorString();
+            // The only abort() we issue is the size-cap guard above, so a
+            // cancel here means the download exceeded the limit (WR-04).
+            QString const err = (reply->error() == QNetworkReply::OperationCanceledError)
+                                    ? QStringLiteral("Download exceeds the %1 MB limit.")
+                                          .arg(kMaxPluginDownloadBytes / (1024 * 1024))
+                                    : reply->errorString();
             AJAZZ_LOG_WARN("plugin-catalog",
                            "install '{}' failed: {}",
                            uuidCopy.toStdString(),
                            err.toStdString());
+            emit self->installFinished(uuidCopy, false, err);
+            return;
+        }
+        QByteArray const body = reply->readAll();
+        // Final authoritative gates before touching disk (WR-04): the size cap
+        // (in case the body arrived without progress signals) and the ZIP magic
+        // — a `.sdPlugin` is a zip, so reject non-archives up front with a clear
+        // message rather than writing a bogus blob the extractor would refuse.
+        if (QString const err = validateDownloadedArchive(body); !err.isEmpty()) {
+            AJAZZ_LOG_WARN(
+                "plugin-catalog", "install '{}': {}", uuidCopy.toStdString(), err.toStdString());
             emit self->installFinished(uuidCopy, false, err);
             return;
         }
@@ -504,7 +556,6 @@ bool PluginCatalogModel::install(QString const& uuid) {
             emit self->installFinished(uuidCopy, false, err);
             return;
         }
-        QByteArray const body = reply->readAll();
         if (out.write(body) != body.size()) {
             QString const err = QStringLiteral("Short write to %1").arg(destCopy);
             AJAZZ_LOG_WARN("plugin-catalog", "{}", err.toStdString());
