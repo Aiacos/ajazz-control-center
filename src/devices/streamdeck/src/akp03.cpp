@@ -439,6 +439,14 @@ public:
                      std::span<std::uint8_t const> rgba,
                      std::uint16_t width,
                      std::uint16_t height) override {
+        // WR-02: keys are 1-based 1..KeyCount; reject out-of-range before write.
+        if (keyIndex == 0 || keyIndex > akp03::KeyCount) {
+            AJAZZ_LOG_WARN("akp03",
+                           "setKeyImage: keyIndex {} out of range 1..{}; refusing",
+                           static_cast<int>(keyIndex),
+                           static_cast<int>(akp03::KeyCount));
+            return;
+        }
         // The caller is expected to pass already-PNG-encoded bytes for now.
         // When the image pipeline lands (phase 2) this method will resize to
         // 72×72 and encode to PNG itself.
@@ -455,6 +463,15 @@ public:
     }
 
     void clearKey(std::uint8_t keyIndex) override {
+        // 0xff is the deliberate "clear all" broadcast; any other out-of-range
+        // index is rejected (WR-02).
+        if (keyIndex != 0xffU && (keyIndex == 0 || keyIndex > akp03::KeyCount)) {
+            AJAZZ_LOG_WARN("akp03",
+                           "clearKey: keyIndex {} out of range 1..{} (0xff = all); refusing",
+                           static_cast<int>(keyIndex),
+                           static_cast<int>(akp03::KeyCount));
+            return;
+        }
         auto const pkt =
             (keyIndex == 0xff) ? akp03::buildClearAll() : akp03::buildClearKey(keyIndex);
         (void)m_transport->write(pkt);

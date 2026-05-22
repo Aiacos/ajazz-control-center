@@ -335,6 +335,14 @@ public:
                      std::span<std::uint8_t const> rgba,
                      std::uint16_t width,
                      std::uint16_t height) override {
+        // WR-02: keys are 1-based 1..KeyCount; reject out-of-range before write.
+        if (keyIndex == 0 || keyIndex > akp153::KeyCount) {
+            AJAZZ_LOG_WARN("akp153",
+                           "setKeyImage: keyIndex {} out of range 1..{}; refusing",
+                           static_cast<int>(keyIndex),
+                           static_cast<int>(akp153::KeyCount));
+            return;
+        }
         // The real implementation resizes `rgba` to KeyWidthPx × KeyHeightPx
         // and re-encodes as JPEG (quality ≈ 90). That pipeline lives in
         // src/devices/streamdeck/src/image_pipeline.cpp (phase 2). Here we
@@ -353,6 +361,15 @@ public:
     }
 
     void clearKey(std::uint8_t keyIndex) override {
+        // 0xff is the deliberate "clear all" broadcast; any other out-of-range
+        // index is rejected (WR-02).
+        if (keyIndex != 0xffU && (keyIndex == 0 || keyIndex > akp153::KeyCount)) {
+            AJAZZ_LOG_WARN("akp153",
+                           "clearKey: keyIndex {} out of range 1..{} (0xff = all); refusing",
+                           static_cast<int>(keyIndex),
+                           static_cast<int>(akp153::KeyCount));
+            return;
+        }
         auto const pkt =
             (keyIndex == 0xff) ? akp153::buildClearAll() : akp153::buildClearKey(keyIndex);
         (void)m_transport->write(pkt);
