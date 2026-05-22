@@ -31,16 +31,18 @@
 using ajazz::app::FirmwareUpdateService;
 
 TEST_CASE("FirmwareUpdateService download URLs match the pinned per-family map", "[firmware]") {
-    REQUIRE(FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::StreamDock)
-                .host() == QStringLiteral("stream-dock.com"));
-    REQUIRE(FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::Keyboard)
-                .host() == QStringLiteral("ajazzstore.com"));
+    REQUIRE(FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::StreamDock).host() ==
+            QStringLiteral("stream-dock.com"));
+    REQUIRE(FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::Keyboard).host() ==
+            QStringLiteral("ajazzstore.com"));
 
-    auto const aj159 = FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::MouseAj159);
+    auto const aj159 =
+        FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::MouseAj159);
     REQUIRE(aj159.host() == QStringLiteral("epomaker.com"));
     REQUIRE(aj159.path().contains(QStringLiteral("aj159")));
 
-    auto const aj199 = FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::MouseAj199);
+    auto const aj199 =
+        FirmwareUpdateService::firmwareDownloadUrl(FirmwareUpdateService::MouseAj199);
     REQUIRE(aj199.host() == QStringLiteral("epomaker.com"));
     REQUIRE(aj199.path().contains(QStringLiteral("aj199")));
 }
@@ -66,16 +68,17 @@ TEST_CASE("FirmwareUpdateService every family yields a valid https URL", "[firmw
 TEST_CASE("FirmwareUpdateService only Stream Dock has documented vendor-tool paths", "[firmware]") {
     // Keyboard / mouse vendor tools ship inside driver bundles whose exe
     // names we have not pinned -> empty list (download-page fallback).
-    REQUIRE(FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::Keyboard)
-                .isEmpty());
+    REQUIRE(
+        FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::Keyboard).isEmpty());
     REQUIRE(FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::MouseAj159)
                 .isEmpty());
     REQUIRE(FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::MouseAj199)
                 .isEmpty());
-    REQUIRE(FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::Unknown)
-                .isEmpty());
+    REQUIRE(
+        FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::Unknown).isEmpty());
 
-    auto const sd = FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::StreamDock);
+    auto const sd =
+        FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::StreamDock);
     // We launch the vendor MAIN app (auto-updater), not the bare flasher.
 #if defined(Q_OS_WIN)
     REQUIRE_FALSE(sd.isEmpty());

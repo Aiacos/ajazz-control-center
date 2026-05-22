@@ -389,8 +389,7 @@ TEST_CASE("SC6: closeOpenDevicesInFamily closes only the matching family",
     DeviceRegistry registry;
     registerTestBackend(registry,
                         {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
-    registerTestBackend(registry,
-                        {0x3151, 0x4001, "kbd-stub", DeviceFamily::Keyboard, "Stub KBD"});
+    registerTestBackend(registry, {0x3151, 0x4001, "kbd-stub", DeviceFamily::Keyboard, "Stub KBD"});
 
     // Hold the shared_ptrs so the flyweight weak_ptrs stay live. registry.open()
     // runs ensureTransportOpen(), so each stub reports isOpen()==true.

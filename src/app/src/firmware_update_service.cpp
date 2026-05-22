@@ -55,8 +55,7 @@ QUrl FirmwareUpdateService::firmwareDownloadUrl(Family family) {
     case Keyboard:
         return QUrl(QStringLiteral("https://ajazzstore.com/blogs/firmware"));
     case MouseAj159:
-        return QUrl(
-            QStringLiteral("https://epomaker.com/blogs/software/ajazz-aj159-pro-driver-1"));
+        return QUrl(QStringLiteral("https://epomaker.com/blogs/software/ajazz-aj159-pro-driver-1"));
     case MouseAj199:
         return QUrl(QStringLiteral("https://epomaker.com/blogs/software/ajazz-aj199-driver"));
     case Unknown:
@@ -160,7 +159,8 @@ QString FirmwareUpdateService::registryVendorToolPath(Family family) {
     // Scan both the native and WOW6432 uninstall hives for an InstallLocation.
     for (auto const* root :
          {"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
-          "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"}) {
+          "HKEY_LOCAL_"
+          "MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"}) {
         QSettings reg(QString::fromLatin1(root), QSettings::NativeFormat);
         for (auto const& sub : reg.childGroups()) {
             reg.beginGroup(sub);

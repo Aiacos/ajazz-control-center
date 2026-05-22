@@ -76,9 +76,9 @@ qt_add_executable(
     # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables under
     # Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
     src/app_update_service.cpp
-    # Vendor firmware-update deep-link (FirmwareUpdate QML singleton). Read-only /
-    # delegate-only per docs/architecture/FIRMWARE-UPDATES.md: detects + launches the
-    # vendor firmware tool, or opens the per-family download page. No in-app flashing.
+    # Vendor firmware-update deep-link (FirmwareUpdate QML singleton). Read-only / delegate-only per
+    # docs/architecture/FIRMWARE-UPDATES.md: detects + launches the vendor firmware tool, or opens
+    # the per-family download page. No in-app flashing.
     src/firmware_update_service.cpp
 )
 
@@ -224,16 +224,17 @@ foreach(icon_file IN LISTS _acc_ui_devices)
 endforeach()
 list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
 
-# Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized
-# (~256px) vendor product shots, fetched once and bundled so the device editor
-# header shows a real picture offline — no runtime CDN dependency. Aliased under
-# icons/devices/products/ → qrc:/qt/qml/AjazzControlCenter/icons/devices/products/<name>.
-# DeviceImage.qml resolves a codename to one of these; missing models fall back
-# to the per-family SVG (loaded from icons/devices/ above).
+# Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized (~256px) vendor
+# product shots, fetched once and bundled so the device editor header shows a real picture offline —
+# no runtime CDN dependency. Aliased under icons/devices/products/ →
+# qrc:/qt/qml/AjazzControlCenter/icons/devices/products/<name>. DeviceImage.qml resolves a codename
+# to one of these; missing models fall back to the per-family SVG (loaded from icons/devices/
+# above).
 set(ACC_DEVICE_PRODUCTS "")
 file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/resources/devices/products/*.png
-     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.jpg)
+     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.jpg
+)
 foreach(_f IN LISTS ACC_DEVICE_PRODUCTS)
     get_filename_component(_n "${_f}" NAME)
     set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${_n})

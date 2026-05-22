@@ -243,14 +243,14 @@ ______________________________________________________________________
 For our `register.cpp` we should promote the AJAZZ-VID mouse PIDs
 with vendor-matched wire format. Listed in priority order:
 
-| Priority | PID family                        | Display                                | Sensor / max DPI       | Poll rate cap | RGB                   | Screen     | OTA target    |
-| -------: | --------------------------------- | -------------------------------------- | ---------------------- | ------------: | --------------------- | ---------- | ------------- |
-|   **P0** | `0x5008` wired                    | AJ159 APEX                             | PAW3950 / 42K          |            8K | no (battery-LED only) | TFT        | `0x5024` boot |
-|       P0 | `0x4026` 2.4G + `0x4027` dongle   | AJ159 APEX wireless                    | PAW3950 / 42K          |     1K (2.4G) | no                    | TFT        | `0x4025` boot |
+| Priority | PID family                        | Display                                            | Sensor / max DPI       | Poll rate cap | RGB                   | Screen     | OTA target    |
+| -------: | --------------------------------- | -------------------------------------------------- | ---------------------- | ------------: | --------------------- | ---------- | ------------- |
+|   **P0** | `0x5008` wired                    | AJ159 APEX                                         | PAW3950 / 42K          |            8K | no (battery-LED only) | TFT        | `0x5024` boot |
+|       P0 | `0x4026` 2.4G + `0x4027` dongle   | AJ159 APEX wireless                                | PAW3950 / 42K          |     1K (2.4G) | no                    | TFT        | `0x4025` boot |
 |       P1 | `0x5007`                          | **AJ159 APEX (2.4G 8K)** — HW-confirmed 2026-05-22 | (assume PAW3950 / 42K) |            8K | no (battery-LED only) | TFT        | unknown       |
-|       P1 | `0x5006`                          | dongle                                 | shared                 |             — | —                     | —          | —             |
-|       P2 | `0x4022`, `0x4035`, `0x402f` etc. | (M-series rebrands)                    | varies                 |        varies | varies                | usually no | —             |
-|       P2 | `0x4012`/`0x4013` BLE             | AJAZZ keyboard/mouse BLE               | varies                 |      1K (BLE) | varies                | varies     | —             |
+|       P1 | `0x5006`                          | dongle                                             | shared                 |             — | —                     | —          | —             |
+|       P2 | `0x4022`, `0x4035`, `0x402f` etc. | (M-series rebrands)                                | varies                 |        varies | varies                | usually no | —             |
+|       P2 | `0x4012`/`0x4013` BLE             | AJAZZ keyboard/mouse BLE                           | varies                 |      1K (BLE) | varies                | varies     | —             |
 
 > **`0x5007` is what we currently have in `register.cpp` as
 > `ajazz_24g_8k`.** Per the iot_driver table, it's a dongle_common

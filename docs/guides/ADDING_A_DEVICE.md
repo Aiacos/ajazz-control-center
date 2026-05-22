@@ -200,9 +200,9 @@ The photo is rendered by `components/DeviceImage.qml` from a **bundled** image
    product, and a transferred mask from a darker colourway won't pixel-align
    (separate photo shoots). If you ever do have a genuinely pre-cut transparent
    PNG, it still works (it just sits on the white card).
-2. Add one line to the `_productByCodename` map in `DeviceImage.qml`:
+1. Add one line to the `_productByCodename` map in `DeviceImage.qml`:
    `"<codename>": _img("product-<codename>.<ext>"),`
-3. If the new codename is just a **variant** of a product already pictured
+1. If the new codename is just a **variant** of a product already pictured
    (a 2.4G / dongle / rebadge SKU), add a prefix/alias rule in
    `_resolveProduct()` instead of a second copy of the same photo (see the
    `aj159_*` / `akp03*` / `ajazz_24g_8k` rules already there).
