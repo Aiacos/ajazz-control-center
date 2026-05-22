@@ -33,7 +33,7 @@ namespace {
  * @param out Destination stream.
  * @param c   Color to serialise.
  */
-[[maybe_unused]] void writeRgb(std::ostringstream& out, Rgb const& c) {
+void writeRgb(std::ostringstream& out, Rgb const& c) {
     out << "[" << static_cast<int>(c.r) << "," << static_cast<int>(c.g) << ","
         << static_cast<int>(c.b) << "]";
 }
@@ -140,6 +140,52 @@ void writeChain(std::ostringstream& out, std::string_view key, std::vector<Actio
     out << "]";
 }
 
+/// True when a KeyState carries no user-set visuals (all optionals empty and
+/// fontSize at its struct default). Such states are omitted from the wire so
+/// bindings that never set visuals don't bloat the profile JSON; the reader
+/// leaves an absent state default-constructed, so the round-trip is exact.
+[[nodiscard]] bool keyStateIsDefault(KeyState const& s) noexcept {
+    return !s.imagePath && !s.text && !s.background && !s.foreground &&
+           s.fontSize == KeyState{}.fontSize;
+}
+
+/// Serialise a KeyState as `{"imagePath":..,"text":..,"background":[r,g,b],
+/// "foreground":[r,g,b],"fontSize":n}`, emitting only the present fields per
+/// docs/protocols/PROFILE_SCHEMA.md $defs.KeyState.
+void writeKeyState(std::ostringstream& out, KeyState const& s) {
+    out << "{";
+    bool first = true;
+    auto const sep = [&] {
+        if (!first) {
+            out << ",";
+        }
+        first = false;
+    };
+    if (s.imagePath) {
+        sep();
+        out << "\"imagePath\":";
+        escape(out, *s.imagePath);
+    }
+    if (s.text) {
+        sep();
+        out << "\"text\":";
+        escape(out, *s.text);
+    }
+    if (s.background) {
+        sep();
+        out << "\"background\":";
+        writeRgb(out, *s.background);
+    }
+    if (s.foreground) {
+        sep();
+        out << "\"foreground\":";
+        writeRgb(out, *s.foreground);
+    }
+    sep();
+    out << "\"fontSize\":" << static_cast<int>(s.fontSize);
+    out << "}";
+}
+
 void writeBinding(std::ostringstream& out, Binding const& b) {
     out << "{";
     writeChain(out, "onPress", b.onPress);
@@ -147,6 +193,10 @@ void writeBinding(std::ostringstream& out, Binding const& b) {
     writeChain(out, "onRelease", b.onRelease);
     out << ",";
     writeChain(out, "onLongPress", b.onLongPress);
+    if (!keyStateIsDefault(b.state)) {
+        out << ",\"state\":";
+        writeKeyState(out, b.state);
+    }
     out << "}";
 }
 
@@ -158,6 +208,10 @@ void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
     writeChain(out, "onCcw", b.onCcw);
     out << ",";
     writeChain(out, "onPress", b.onPress);
+    if (!keyStateIsDefault(b.state)) {
+        out << ",\"state\":";
+        writeKeyState(out, b.state);
+    }
     out << "}";
 }
 
@@ -547,6 +601,53 @@ std::vector<Action> readActionArray(JsonReader& r) {
     return out;
 }
 
+/// Parse a JSON `[r,g,b]` array (0..255 each) into an Rgb.
+[[nodiscard]] Rgb readRgb(JsonReader& r) {
+    auto const channel = [&] { return static_cast<std::uint8_t>(r.readUInt() & 0xFFu); };
+    Rgb c{};
+    r.expect('[');
+    c.r = channel();
+    r.expect(',');
+    c.g = channel();
+    r.expect(',');
+    c.b = channel();
+    r.expect(']');
+    return c;
+}
+
+/// Parse a KeyState object (per PROFILE_SCHEMA.md $defs.KeyState). Absent
+/// fields stay default (optionals empty, fontSize at its struct default),
+/// so an omitted `state` round-trips to a default-constructed KeyState.
+[[nodiscard]] KeyState readKeyState(JsonReader& r) {
+    KeyState s{};
+    r.expect('{');
+    if (!r.tryConsume('}')) {
+        while (true) {
+            std::string const key = r.readString();
+            r.expect(':');
+            if (key == "imagePath") {
+                s.imagePath = r.readString();
+            } else if (key == "text") {
+                s.text = r.readString();
+            } else if (key == "background") {
+                s.background = readRgb(r);
+            } else if (key == "foreground") {
+                s.foreground = readRgb(r);
+            } else if (key == "fontSize") {
+                s.fontSize = static_cast<std::uint8_t>(r.readUInt() & 0xFFu);
+            } else {
+                r.skipValue();
+            }
+            if (r.tryConsume(',')) {
+                continue;
+            }
+            r.expect('}');
+            break;
+        }
+    }
+    return s;
+}
+
 Binding readBinding(JsonReader& r) {
     Binding b{};
     r.expect('{');
@@ -560,6 +661,8 @@ Binding readBinding(JsonReader& r) {
                 b.onRelease = readActionArray(r);
             } else if (key == "onLongPress") {
                 b.onLongPress = readActionArray(r);
+            } else if (key == "state") {
+                b.state = readKeyState(r);
             } else {
                 r.skipValue();
             }
@@ -586,6 +689,8 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
                 eb.onCcw = readActionArray(r);
             } else if (key == "onPress") {
                 eb.onPress = readActionArray(r);
+            } else if (key == "state") {
+                eb.state = readKeyState(r);
             } else {
                 r.skipValue();
             }

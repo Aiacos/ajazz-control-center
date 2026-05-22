@@ -123,6 +123,55 @@ TEST_CASE("profile round-trips mouseButtons (string-keyed Bindings)",
     REQUIRE(restored.mouseButtons.at(R"(dpi"shift)").onPress.empty());
 }
 
+TEST_CASE("profile round-trips Binding::state (KeyState visuals)",
+          "[profile][roundtrip][keystate]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "ks-uuid";
+    p.name = "KeyState Profile";
+    p.deviceCodename = "akp153";
+
+    // Key 1: full visual state (icon + label + both colors + custom font).
+    Binding b1{};
+    b1.state.imagePath = "/home/user/icons/mic.png";
+    b1.state.text = "Mute";
+    b1.state.background = Rgb{10, 20, 30};
+    b1.state.foreground = Rgb{255, 255, 255};
+    b1.state.fontSize = 22;
+    p.keys[1] = b1;
+
+    // Key 2: default state (no visuals) — must NOT emit a state block and
+    // must restore to a default-constructed KeyState.
+    p.keys[2] = Binding{};
+
+    // Encoder 0: partial state (label only) on the encoder's KeyState.
+    EncoderBinding eb{};
+    eb.state.text = "Vol";
+    p.encoders[0] = eb;
+
+    auto const json = profileToJson(p);
+    auto const restored = profileFromJson(json);
+
+    auto const& s1 = restored.keys.at(1).state;
+    REQUIRE(s1.imagePath.has_value());
+    REQUIRE(s1.imagePath.value() == "/home/user/icons/mic.png");
+    REQUIRE(s1.text.value() == "Mute");
+    REQUIRE(s1.background.has_value());
+    REQUIRE(s1.background->r == 10);
+    REQUIRE(s1.background->g == 20);
+    REQUIRE(s1.background->b == 30);
+    REQUIRE(s1.foreground->r == 255);
+    REQUIRE(s1.fontSize == 22);
+
+    // Default state round-trips as default; the writer omits it from the wire.
+    REQUIRE_FALSE(restored.keys.at(2).state.imagePath.has_value());
+    REQUIRE(restored.keys.at(2).state.fontSize == KeyState{}.fontSize);
+    REQUIRE(json.find("\"state\"") != std::string::npos); // key 1 emitted it
+    REQUIRE(restored.encoders.at(0).state.text.value() == "Vol");
+    REQUIRE_FALSE(restored.encoders.at(0).state.background.has_value());
+}
+
 /// profileFromJson() must tolerate extra whitespace and unknown keys.
 TEST_CASE("profile reader skips unknown keys and tolerates whitespace",
           "[profile][forward-compat]") {
