@@ -75,9 +75,6 @@ jobs:
           bundle: ajazz-control-center.flatpak
           manifest-path: packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
           cache-key: flatpak-builder-${{ github.sha }}
-          # Temporary: surface the appstreamcli compose issue-report detail
-          # (which file the file-read-error is on) while stabilising the build.
-          verbose: true
 
   # ---------------------------------------------------------------------------
   # Windows — MSI installer via CPack/WIX
@@ -332,7 +329,7 @@ jobs:
             dist/linux-packages/*
             dist/windows-packages/*
             dist/macos-packages/*
-            dist/ajazz-control-center.flatpak/*.flatpak
+            dist/ajazz-control-center-x86_64.flatpak/*.flatpak
       - name: Create release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
         with:
@@ -347,5 +344,5 @@ jobs:
             dist/linux-packages/*
             dist/windows-packages/*
             dist/macos-packages/*
-            dist/ajazz-control-center.flatpak/*.flatpak
+            dist/ajazz-control-center-x86_64.flatpak/*.flatpak
             dist/SHA256SUMS
