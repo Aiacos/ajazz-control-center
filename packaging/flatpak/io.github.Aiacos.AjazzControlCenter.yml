@@ -105,3 +105,7 @@ modules:
       # fails the build with "gui-app-without-icon".
       - sed -i 's#<launchable type="desktop-id">ajazz-control-center.desktop</launchable>#<launchable type="desktop-id">io.github.Aiacos.AjazzControlCenter.desktop</launchable>#'
           /app/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
+      # Drop the scalable SVG icon: appstreamcli compose prefers it and fails to
+      # rasterise it ("file-read-error"). The PNG hicolor sizes (incl. 64 + 128)
+      # are enough for AppStream and the desktop icon.
+      - rm -f /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg
