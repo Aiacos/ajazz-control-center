@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: RGB lighting. Three additive colour discs (original). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24">
+  <g style="mix-blend-mode:screen" opacity="0.95">
+    <circle cx="9"  cy="9"  r="6" fill="#E63946"/>
+    <circle cx="15" cy="9"  r="6" fill="#0A82FA"/>
+    <circle cx="12" cy="15" r="6" fill="#22C55E"/>
+  </g>
+</svg>

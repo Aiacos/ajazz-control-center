@@ -10,6 +10,7 @@ NOT a production tool. Run with the device connected:
     python scripts/ak980_tft_probe.py --enumerate
     python scripts/ak980_tft_probe.py --upload [--feature] [--bars]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -112,8 +113,9 @@ def upload(use_feature: bool, bars: bool, color: tuple[int, int, int]) -> None:
     dev = open_control()
     send = dev.send_feature_report if use_feature else dev.write
     kind = "feature report" if use_feature else "output report"
-    print(f"Uploading test frame via {kind}: {total_chunks} chunks "
-          f"(color={color}, bars={bars})")
+    print(
+        f"Uploading test frame via {kind}: {total_chunks} chunks " f"(color={color}, bars={bars})"
+    )
     n = send(bytes(build_header(0, total_chunks)))
     print(f"  header write returned {n}")
     for i in range(total_chunks):
@@ -230,7 +232,7 @@ SWEEP_COMBOS = [
 
 
 def sweep_time(pause: float) -> None:
-    print("Sweeping (interface × transport). Watch the panel — note every time that appears.\n")
+    print("Sweeping (interface x transport). Watch the panel — note every time that appears.\n")
     for up, feat, hhmm in SWEEP_COMBOS:
         kind = "feature" if feat else "output "
         print(f"[{hhmm}] 0x{up:04x} {kind} report:")
@@ -300,7 +302,7 @@ def main() -> None:
     ap.add_argument("--bars", action="store_true", help="R/G/B markers at pixels (0,0)/(1,0)/(2,0)")
     ap.add_argument("--color", default="0,0,255", help="solid fill 'R,G,B' (default blue)")
     ap.add_argument("--settime", metavar="HH:MM", help="set the device RTC clock (e.g. 11:11)")
-    ap.add_argument("--sweep", action="store_true", help="try every interface × transport combo")
+    ap.add_argument("--sweep", action="store_true", help="try every interface x transport combo")
     ap.add_argument("--pause", type=float, default=4.0, help="seconds between sweep combos")
     ap.add_argument("--delay", type=int, default=0, help="ms between time packets")
     ap.add_argument("--readback", action="store_true", help="GET_FEATURE after each packet")
@@ -314,10 +316,13 @@ def main() -> None:
         sweep_time(args.pause)
         return
     if args.settime:
-        print(f"Setting AK980 PRO clock to {args.settime} "
-              f"(delay={args.delay}ms readback={args.readback} output={args.output})")
-        set_time(args.settime, use_feature=not args.output,
-                 delay_ms=args.delay, readback=args.readback)
+        print(
+            f"Setting AK980 PRO clock to {args.settime} "
+            f"(delay={args.delay}ms readback={args.readback} output={args.output})"
+        )
+        set_time(
+            args.settime, use_feature=not args.output, delay_ms=args.delay, readback=args.readback
+        )
         return
     if args.enumerate or not args.upload:
         print_enumeration()

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: volume up. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M3 9 H6 L11 5 V19 L6 15 H3 Z" fill="currentColor" stroke="none"/>
+  <path d="M14.5 9 a4 4 0 0 1 0 6"/>
+  <path d="M17 6.5 a7.5 7.5 0 0 1 0 11" stroke="#E63946"/>
+</svg>

@@ -48,14 +48,22 @@ device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
 
 Offline device returns `BB = 0xFF`.
 
-> **HARDWARE NOTE (2026-05-21):** the `0x40` query above does not match the
-> shipping firmware. On a live AJAZZ 2.4G 8K the charge level mirrors into
-> vendor **status report `0x05`, byte 3** (`0..100`, `0x64` = 100%), read via
-> GET_FEATURE on the `0xFFFF` (usage `0x02`) control collection — no `0x40`
-> request is needed. `AjSeriesMouse` implements `IBatteryCapable` against this
-> report. See `aj_series_opcode_table.md` §4 and `aj_series_vendor.md` for the
-> hardware-confirmed details. The same correction is expected to apply to the
-> AJ199 family, but only the 2.4G 8K is hardware-verified so far.
+> **HARDWARE NOTE (2026-05-22, verified):** the `0x40` query above does NOT
+> match the shipping firmware. The working method — what
+> `AjSeriesMouse::batteryPercent()` implements and logs as
+> `queried ajazz_24g_8k: 100%` — is a **two-step handshake** (like the AK980
+> keyboard): **SET_FEATURE a `0x83 GET_BATTERY` poke** (`[0x05, 0x83, 0…, BIT7]`)
+> on the `0xFFFF`/usage-`0x02` control collection (iface 2), **then GET_FEATURE**
+> the status report. That report uses **report-id `0x00`**, so hidapi returns
+> `[00, 00, charge, 01 01 01 02]` — **charge at byte 2** (`0x64` = 100%). A valid
+> frame has byte 1 == 0; byte 2 == 0 means asleep/not-reported → grey; reject
+> frames with non-zero byte 1 (transient reconnect garbage). The earlier
+> "passive GET_FEATURE, charge at byte 3" assumed a phantom `0x05` report-id
+> prefix (one byte too far → rejected every valid frame → the persistent `--%`);
+> the `0x83` OUTPUT+interrupt variant (b9018fc, reverted) read the wrong channel
+> (the vendor's gRPC `sendMsg` adds `dangle_dev_type` routing; the reply actually
+> surfaces in the GET_FEATURE status report). NOT a libusb blocker. Full detail +
+> frame table in `aj_series_opcode_table.md` §4.
 
 ## Onboard clock (OLED basetta)
 

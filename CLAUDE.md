@@ -108,15 +108,33 @@ Each platform's compiler catches things the others don't. Land all three.
 
 ## Linux device access
 
-- udev rules at `resources/linux/99-ajazz.rules` cover VID prefixes
+- udev rules at `resources/linux/70-ajazz.rules` cover VID prefixes
   `0300` (Stream Dock family), `3151` (SONiX-VID AJAZZ keyboards/mice),
   `0c45` (Microdia-VID AK980 PRO), `248a` + `249a` + `3554` (AJ-series mice).
 - **Backend**: `hidapi_hidraw` only — kernel-native `/dev/hidraw*`. The
   libusb hidapi backend is NOT used and is explicitly disabled in the
   Flatpak manifest. Don't add libusb-only code paths without a deliberate
   cross-team decision.
-- If `udev TAGS=:uaccess:` is present but ACLs are stale (devices plugged
-  in before rules installed), replug or run `udevadm trigger --action=change`.
+- **Rule filename MUST sort before `73-seat-late.rules`.** That stock rule
+  (`/usr/lib/udev/rules.d/73-seat-late.rules:16`,
+  `TAG=="uaccess", … RUN{builtin}+="uaccess"`) is what actually applies the
+  per-user ACL, and it requires the `uaccess` tag to already be set when it
+  runs. Our rule is therefore numbered **`70-`** (was `99-ajazz.rules`, which
+  ran AFTER 73 → the builtin fired before our tag existed → tag shows in
+  `udevadm info` but no ACL → `/dev/hidraw*` stays root-only → `hid_open`
+  EACCES; devices enumerate but cannot be opened). Matches hidapi's documented
+  rule (`udev/69-hid.rules`: "must have priority before 73-seat-late.rules").
+- **systemd ≥258 `uaccess` regression (verified on systemd 259, 2026-05-21).**
+  Even with correct ordering, the `uaccess` ACL is applied only on a *real
+  physical replug / boot* — NOT on `udevadm trigger` (`--action=change` or
+  `add`) and NOT after a synthetic hub re-enumeration (Debian #1112660,
+  hidapi #411). So if Linux USB hubs emit a re-enumeration storm, a device can
+  silently lose its ACL and `udevadm trigger` will NOT restore it. Recovery:
+  physically replug, OR (transient dev-only) `sudo setfacl -m u:$(id -u):rw /dev/hidraw*` on the affected nodes (exactly what `uaccess` sets; survives
+  until the next replug). The `70-` ordering fix is necessary but, on these
+  systemd versions, not sufficient against synthetic re-enumeration. A `GROUP=`
+  rule would survive it; the project deliberately chose `uaccess`-only (no
+  `plugdev`) — revisit only via a cross-team decision.
 
 ## CI architecture
 

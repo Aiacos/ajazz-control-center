@@ -26,12 +26,18 @@
 
 namespace ajazz::streamdeck::akp_common {
 
-inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54};  ///< Packet header "CRT".
-inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};   ///< Set brightness "LIG".
-inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};    ///< Flush / stop "STP".
-inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};   ///< Clear key(s) "CLE".
-inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56, 0x45, 0x52}; ///< Firmware version "VER".
+inline constexpr std::array<std::uint8_t, 3> CmdPrefix{0x43, 0x52, 0x54}; ///< Packet header "CRT".
+inline constexpr std::array<std::uint8_t, 3> CmdLight{0x4c, 0x49, 0x47};  ///< Set brightness "LIG".
+inline constexpr std::array<std::uint8_t, 3> CmdStop{0x53, 0x54, 0x50};   ///< Flush / stop "STP".
+inline constexpr std::array<std::uint8_t, 3> CmdClear{0x43, 0x4c, 0x45};  ///< Clear key(s) "CLE".
+inline constexpr std::array<std::uint8_t, 3> CmdVersion{0x56,
+                                                        0x45,
+                                                        0x52}; ///< Firmware version "VER".
 inline constexpr std::array<std::uint8_t, 5> UploadFinishedMarker{
-    0x55, 0x4c, 0x45, 0x4e, 0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
+    0x55,
+    0x4c,
+    0x45,
+    0x4e,
+    0x44}; ///< End-of-image-burst commit sentinel "ULEND" (5 bytes).
 
 } // namespace ajazz::streamdeck::akp_common

@@ -284,7 +284,7 @@ changes**:
 - [ ] `tests/unit/CMakeLists.txt` adds the new test target.
 - [ ] `CHANGELOG.md` "Unreleased" has a one-line entry.
 - [ ] If Linux-specific udev rule needed, extend
-  `resources/linux/99-ajazz.rules`.
+  `resources/linux/70-ajazz.rules`.
 
 ## 13. Open the PR
 

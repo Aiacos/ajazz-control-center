@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: launch calculator. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="5" y="3" width="14" height="18" rx="2.5"/>
+  <rect x="8" y="6" width="8" height="3" rx="0.8" fill="#E63946" stroke="none"/>
+  <g stroke-width="2"><line x1="8.5" y1="13" x2="8.5" y2="13.01"/><line x1="12" y1="13" x2="12" y2="13.01"/><line x1="15.5" y1="13" x2="15.5" y2="13.01"/>
+  <line x1="8.5" y1="17" x2="8.5" y2="17.01"/><line x1="12" y1="17" x2="12" y2="17.01"/><line x1="15.5" y1="17" x2="15.5" y2="17.01"/></g>
+</svg>

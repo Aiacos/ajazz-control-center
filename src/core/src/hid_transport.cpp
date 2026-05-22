@@ -11,12 +11,14 @@
 #include "ajazz/core/logger.hpp"
 #include "ajazz/core/transport.hpp"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <vector>
 
 // hidapi's top-level CMake target exports its headers without the "hidapi/"
 // prefix (this matches Debian's /usr/include/hidapi symlink and the upstream
@@ -52,9 +54,10 @@ public:
                  std::uint16_t pid,
                  std::string serial,
                  std::uint16_t usagePage = 0,
-                 std::uint16_t usage = 0)
+                 std::uint16_t usage = 0,
+                 bool prependReportIdPosix = false)
         : m_vid(vid), m_pid(pid), m_serial(std::move(serial)), m_usagePage(usagePage),
-          m_usage(usage) {}
+          m_usage(usage), m_prependReportIdPosix(prependReportIdPosix) {}
 
     ~HidTransport() override { HidTransport::close(); }
 
@@ -73,20 +76,38 @@ public:
         // matching interface via hid_open_path instead. Falls back to the
         // plain hid_open path if no interface matches (e.g. Linux hidraw, where
         // usage_page may be unpopulated for non-primary collections).
+        char const* matchKind = "first-interface";
         if (m_usagePage != 0) {
             std::string matchPath;
             if (hid_device_info* head = ::hid_enumerate(m_vid, m_pid)) {
-                // Match the usage page, and the usage too when configured
-                // (m_usage != 0). Some composite devices expose SEVERAL
-                // collections sharing one usage page (e.g. the AJ-series mouse
-                // has two 0xFFFF collections — usage 2 is the control channel,
-                // usage 1 is not) so usage_page alone is ambiguous and can pick
-                // the wrong one after a re-enumeration.
-                for (auto const* p = head; p != nullptr; p = p->next) {
-                    if (p->usage_page == m_usagePage && (m_usage == 0 || p->usage == m_usage) &&
-                        p->path != nullptr) {
-                        matchPath = p->path;
-                        break;
+                // Pass 1 (strict): usage page AND usage, when a usage is
+                // configured. Some composite devices expose SEVERAL collections
+                // sharing one usage page (e.g. the AJ-series mouse has two 0xFFFF
+                // collections — usage 2 is the control channel, usage 1 is not),
+                // so the usage page alone is ambiguous. Windows hidapi reports
+                // usage reliably, so this pass wins there.
+                if (m_usage != 0) {
+                    for (auto const* p = head; p != nullptr; p = p->next) {
+                        if (p->usage_page == m_usagePage && p->usage == m_usage &&
+                            p->path != nullptr) {
+                            matchPath = p->path;
+                            matchKind = "usage+page filtered";
+                            break;
+                        }
+                    }
+                }
+                // Pass 2 (fallback): usage page only. On Linux hidraw,
+                // hid_enumerate can report usage == 0 (unpopulated) for
+                // non-primary collections, so pass 1 finds nothing; matching the
+                // usage page alone still selects the vendor collection instead of
+                // falling all the way back to the boot interface.
+                if (matchPath.empty()) {
+                    for (auto const* p = head; p != nullptr; p = p->next) {
+                        if (p->usage_page == m_usagePage && p->path != nullptr) {
+                            matchPath = p->path;
+                            matchKind = "usage-page filtered";
+                            break;
+                        }
                     }
                 }
                 ::hid_free_enumeration(head);
@@ -98,6 +119,7 @@ public:
         if (!m_handle) {
             std::wstring const wserial = utf8ToWide(m_serial);
             m_handle = ::hid_open(m_vid, m_pid, m_serial.empty() ? nullptr : wserial.c_str());
+            matchKind = "first-interface";
         }
         if (!m_handle) {
             throw std::runtime_error("hid_open failed");
@@ -105,10 +127,10 @@ public:
         // Enable non-blocking mode so zero-timeout reads return immediately.
         ::hid_set_nonblocking(m_handle, 1);
         AJAZZ_LOG_INFO("hid",
-                       "opened VID={:04x} PID={:04x}{}",
+                       "opened VID={:04x} PID={:04x} ({})",
                        m_vid,
                        m_pid,
-                       m_usagePage != 0 ? " (usage-page filtered)" : "");
+                       m_usagePage != 0 ? matchKind : "default");
     }
 
     void close() override {
@@ -123,6 +145,39 @@ public:
 
     std::size_t write(std::span<std::uint8_t const> data) override {
         ensureOpen();
+#ifndef _WIN32
+        // POSIX hidraw treats byte 0 of the write buffer as the HID report
+        // number. Backends whose output reports carry NO report-id byte (the
+        // Stream Dock "CRT" packets start with command data at byte 0) must
+        // prepend a 0x00 report id on Linux/macOS so the kernel strips it and
+        // transmits the data unshifted; otherwise byte 0 (e.g. 'C' = 0x43) is
+        // consumed as the report number and the panel gets misaligned bytes.
+        // Windows WriteFile omits this byte, so the prefix is POSIX-only and is
+        // gated by m_prependReportIdPosix (set only by the streamdeck backends,
+        // whose packets lack a report-id byte). See docs/protocols/keyboard/
+        // via.md and hidapi's hid_write report-id contract.
+        if (m_prependReportIdPosix) {
+            // Pre-size to exactly data.size()+1 (byte 0 = 0x00 report id from the
+            // value-init) and copy the payload to offset 1. Done this way rather
+            // than reserve()+push_back()+insert() because GCC 13's
+            // -Werror=stringop-overflow= mis-bounds the destination of the
+            // insert-from-span memmove and false-positives; a fixed-size buffer
+            // makes the N-byte write at offset 1 into an (N+1)-byte object
+            // provably in-bounds.
+            std::vector<std::uint8_t> framed(data.size() + 1, std::uint8_t{0});
+            std::copy(data.begin(), data.end(), framed.begin() + 1);
+            auto const fn = ::hid_write(m_handle, framed.data(), framed.size());
+            if (fn < 0) {
+                m_errors.fetch_add(1, std::memory_order_relaxed);
+                throw std::runtime_error("hid_write failed");
+            }
+            // Account bytes at the logical (caller-visible, un-prefixed) size.
+            auto const logical = static_cast<std::size_t>(fn) > 0 ? static_cast<std::size_t>(fn) - 1
+                                                                  : std::size_t{0};
+            m_bytesSent.fetch_add(logical, std::memory_order_relaxed);
+            return logical;
+        }
+#endif
         auto const n = ::hid_write(m_handle, data.data(), data.size());
         if (n < 0) {
             m_errors.fetch_add(1, std::memory_order_relaxed);
@@ -234,12 +289,15 @@ private:
         return out;
     }
 
-    std::uint16_t m_vid{0};          ///< USB Vendor ID.
-    std::uint16_t m_pid{0};          ///< USB Product ID.
-    std::string m_serial;            ///< Serial number filter; empty = first match.
-    std::uint16_t m_usagePage{0};    ///< Vendor control usage page to select (0 = first interface).
-    std::uint16_t m_usage{0};        ///< Vendor control usage to disambiguate same-page collections (0 = any).
-    ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
+    std::uint16_t m_vid{0};       ///< USB Vendor ID.
+    std::uint16_t m_pid{0};       ///< USB Product ID.
+    std::string m_serial;         ///< Serial number filter; empty = first match.
+    std::uint16_t m_usagePage{0}; ///< Vendor control usage page to select (0 = first interface).
+    std::uint16_t m_usage{
+        0}; ///< Vendor control usage to disambiguate same-page collections (0 = any).
+    bool m_prependReportIdPosix{false}; ///< Prepend a 0x00 report-id byte to write() on Linux/macOS
+                                        ///< (streamdeck CRT packets).
+    ::hid_device* m_handle{nullptr};    ///< libhidapi device handle; nullptr when closed.
     /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
     std::atomic<std::uint64_t> m_bytesSent{0};
     std::atomic<std::uint64_t> m_bytesReceived{0};
@@ -303,7 +361,8 @@ TransportPtr makeHidTransport(std::uint16_t vid,
                               std::uint16_t pid,
                               std::string serial,
                               std::uint16_t usagePage,
-                              std::uint16_t usage) {
+                              std::uint16_t usage,
+                              bool prependReportIdPosix) {
     /**
      * @brief Decorator that holds a HidLibraryGuard reference for the
      *        transport's lifetime, balancing hid_init / hid_exit.
@@ -314,7 +373,8 @@ TransportPtr makeHidTransport(std::uint16_t vid,
         ~GuardedHidTransport() override { hidLibrary().release(); }
     };
     hidLibrary().acquire();
-    return std::make_unique<GuardedHidTransport>(vid, pid, std::move(serial), usagePage, usage);
+    return std::make_unique<GuardedHidTransport>(
+        vid, pid, std::move(serial), usagePage, usage, prependReportIdPosix);
 }
 
 } // namespace ajazz::core

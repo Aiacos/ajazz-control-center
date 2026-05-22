@@ -193,25 +193,43 @@ set_source_files_properties(
     ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
 )
 
-# Per-family device illustration icons (resources/devices/*.svg). Brought onto this
-# branch from main's clean-room icon set (commit 069dfd7). Surfaced as a small leading
-# icon in each sidebar DeviceRow, selected by DeviceFamily. Aliased under icons/devices/
-# so QML loads them via qrc:/qt/qml/AjazzControlCenter/icons/devices/<name>.svg —
-# matching the alias scheme main uses for the full UI icon set. CONFIGURE_DEPENDS
-# re-globs when an SVG is added/removed so contributors just drop a file in.
-set(ACC_DEVICE_ICONS "")
-file(GLOB ACC_DEVICE_ICONS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/devices/*.svg)
-foreach(_f IN LISTS ACC_DEVICE_ICONS)
-    get_filename_component(_n "${_f}" NAME)
-    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${_n})
+# Clean-room original UI icon set (see resources/icons/README.md). Theme-tintable SVGs: each line
+# glyph uses stroke="currentColor", so a single file renders white on the dark theme and near-black
+# on the light theme — no per-theme duplicates. Three groups: glyphs/ (feature icons), actions/
+# (key-assignment actions), devices/ (per-family illustrations). Aliased under icons/ so QML loads
+# them via qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg. CONFIGURE_DEPENDS re-globs when
+# an SVG is added/removed so contributors just drop a file in. (The per-family DeviceRow icon and
+# the DeviceImage SVG fallback both load from icons/devices/ here.)
+set(ACC_UI_ICONS "")
+file(GLOB _acc_ui_glyphs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/glyphs/*.svg)
+file(GLOB _acc_ui_actions CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/actions/*.svg)
+file(GLOB _acc_ui_devices CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/devices/*.svg)
+foreach(icon_file IN LISTS _acc_ui_glyphs)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/glyphs/${icon_name}
+    )
 endforeach()
+foreach(icon_file IN LISTS _acc_ui_actions)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/actions/${icon_name}
+    )
+endforeach()
+foreach(icon_file IN LISTS _acc_ui_devices)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${icon_name}
+    )
+endforeach()
+list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
 
 # Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized
 # (~256px) vendor product shots, fetched once and bundled so the device editor
 # header shows a real picture offline — no runtime CDN dependency. Aliased under
 # icons/devices/products/ → qrc:/qt/qml/AjazzControlCenter/icons/devices/products/<name>.
 # DeviceImage.qml resolves a codename to one of these; missing models fall back
-# to the per-family SVG above.
+# to the per-family SVG (loaded from icons/devices/ above).
 set(ACC_DEVICE_PRODUCTS "")
 file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/resources/devices/products/*.png
@@ -320,7 +338,7 @@ qt_add_qml_module(
               ${ACC_DOC_PRIVACY}
               ${ACC_STREAMDOCK_FALLBACK}
               ${ACC_OPENDECK_FALLBACK}
-              ${ACC_DEVICE_ICONS}
+              ${ACC_UI_ICONS}
               ${ACC_DEVICE_PRODUCTS}
 )
 
@@ -466,7 +484,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/ajazz-control-center.desktop
             DESTINATION share/applications
     )
-    install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/99-ajazz.rules DESTINATION lib/udev/rules.d)
+    install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/70-ajazz.rules DESTINATION lib/udev/rules.d)
 
     # ----------------------------------------------------------------------
     # hicolor icon theme entries.

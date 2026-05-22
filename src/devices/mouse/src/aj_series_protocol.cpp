@@ -70,6 +70,14 @@ std::array<std::uint8_t, kReportSize> buildGetRev() {
     return pkt;
 }
 
+std::array<std::uint8_t, kReportSize> buildGetBattery() {
+    // §4 — battery poke. SET_FEATURE this opcode; the dongle then keeps its
+    // status feature report populated with the charge (read via GET_FEATURE).
+    auto pkt = startReport(FeaCmd::GetBattery);
+    stampBit7Checksum(pkt);
+    return pkt;
+}
+
 std::array<std::uint8_t, kReportSize> buildSetReset() {
     auto pkt = startReport(FeaCmd::SetReset);
     stampBit7Checksum(pkt);
@@ -484,7 +492,7 @@ std::array<std::uint8_t, kReportSize> buildMouseSetOledClock(std::uint16_t year,
     // big-endian, and NO BIT7 checksum — the firmware ignores the packet if the
     // 0xD7 marker is missing.
     std::array<std::uint8_t, kReportSize> pkt{};
-    pkt[0] = 0x00; // HID report id 0x00
+    pkt[0] = 0x00;                                            // HID report id 0x00
     pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetOledClock); // 0x28
     pkt[8] = 0xD7;                                            // required fixed marker
     pkt[9] = static_cast<std::uint8_t>((year >> 8U) & 0xFFU); // year big-endian

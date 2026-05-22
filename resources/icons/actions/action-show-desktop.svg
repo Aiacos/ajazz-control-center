@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: show desktop / minimize all. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="3" width="18" height="11" rx="2.5"/>
+  <line x1="7" y1="20" x2="17" y2="20" stroke="#E63946"/>
+  <polyline points="9 17 12 20 15 17" stroke="#E63946"/>
+</svg>

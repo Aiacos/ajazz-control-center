@@ -415,7 +415,12 @@ public:
     Akp05Device(DeviceDescriptor descriptor, DeviceId id)
         : Akp05Device(std::move(descriptor),
                       id,
-                      makeHidTransport(id.vendorId, id.productId, id.serial)) {}
+                      makeHidTransport(id.vendorId,
+                                       id.productId,
+                                       id.serial,
+                                       /*usagePage*/ 0,
+                                       /*usage*/ 0,
+                                       /*prependReportIdPosix*/ true)) {}
 
     /// Test constructor with injected transport (COD-026).
     Akp05Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)
@@ -832,8 +837,8 @@ private:
     DeviceId m_id;                 ///< HID bus identity (VID, PID, serial string).
     TransportPtr m_transport;      ///< Underlying HID I/O channel.
     std::string m_firmwareVersion{"unknown"}; ///< Cached CRT VER response; set by open().
-    EventCallback m_callback;      ///< Registered input-event sink (may be null).
-    std::mutex m_mutex;            ///< Guards m_callback for thread-safe registration.
+    EventCallback m_callback;                 ///< Registered input-event sink (may be null).
+    std::mutex m_mutex;                       ///< Guards m_callback for thread-safe registration.
 };
 
 } // namespace

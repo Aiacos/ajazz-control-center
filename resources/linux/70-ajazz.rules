@@ -12,7 +12,7 @@
 # Just install this file, reload udev, and AJAZZ Control Center works.
 #
 # Install:
-#   sudo install -m 644 99-ajazz.rules /etc/udev/rules.d/
+#   sudo install -m 644 70-ajazz.rules /etc/udev/rules.d/
 #   sudo udevadm control --reload-rules
 #   sudo udevadm trigger
 #

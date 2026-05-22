@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: restore default binding. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5.5 12 a6.5 6.5 0 1 0 1.9 -4.6"/>
+  <polyline points="5 3.5 5 8 9.5 8"/>
+  <circle cx="12" cy="12" r="1.8" fill="#E63946" stroke="none"/>
+</svg>

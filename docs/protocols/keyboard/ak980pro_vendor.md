@@ -239,7 +239,7 @@ of the buffer; the binary writes them as little-endian: `byte1 = 0x7F`,
 >   report id is actually the **first data byte** of control packets.
 > - **Report length = 65 bytes** (not 64).
 > - **Interface:** the vendor control collection — HID usage page **0xFF13**
->   (MI_03 in Windows PnP enumeration); set `DeviceDescriptor::controlUsagePage`.
+>   (MI_03 in Windows OnP enumeration); set `DeviceDescriptor::controlUsagePage`.
 > - The runtime time-sync is the **0x18 / 0x28 / 0x02 envelope** (below), NOT the
 >   `0x0C/0x10` single-packet from §13.8 — that opcode was tried on hardware and
 >   did **not** move the TFT clock.

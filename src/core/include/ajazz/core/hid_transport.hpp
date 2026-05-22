@@ -46,6 +46,7 @@ namespace ajazz::core {
                                             std::uint16_t pid,
                                             std::string serial = {},
                                             std::uint16_t usagePage = 0,
-                                            std::uint16_t usage = 0);
+                                            std::uint16_t usage = 0,
+                                            bool prependReportIdPosix = false);
 
 } // namespace ajazz::core
