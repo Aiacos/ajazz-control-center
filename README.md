@@ -194,7 +194,7 @@ Plugins are pure Python packages loaded by the embedded interpreter, each isolat
 in its own sandboxed child process. Minimal example:
 
 ```python
-# ~/.config/ajazz-control-center/plugins/hello/plugin.py
+# ~/.local/share/ajazz-control-center/plugins/hello/plugin.py
 from ajazz import Plugin, action
 
 class HelloPlugin(Plugin):
@@ -220,8 +220,7 @@ make run           # launches the app
 ```
 
 Or drive CMake directly via the per-platform presets in
-[`CMakePresets.json`](CMakePresets.json) (requires Qt 6.7+ with `qtwebsockets`
-and `qtshadertools`):
+[`CMakePresets.json`](CMakePresets.json) (requires Qt 6.7+ with `qtwebsockets`):
 
 ```bash
 cmake --preset linux-release          # also: macos-release / windows-release

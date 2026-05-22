@@ -58,7 +58,6 @@ available ones are:
 | `dev`      | Debug build with sanitizers, compile commands. |
 | `release`  | Optimized build, LTO, strip.                   |
 | `coverage` | Debug + `--coverage` instrumentation for CI.   |
-| `clang`    | Same as `dev` but forced to Clang/libc++.      |
 
 ## Prerequisites (for curious developers)
 

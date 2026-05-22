@@ -24,7 +24,7 @@ AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core librar
                                   │  Q_PROPERTY / Q_INVOKABLE
 ┌──────────────────────────────────────────────────────────────────────┐
 │                        Application Layer (C++)                       │
-│   DeviceModel · ProfileController · ActionDispatcher · PluginHost    │
+│   DeviceModel · ProfileController · ActionEngine · PluginHost        │
 │   HotplugMonitor · BrandingService · TrayController                  │
 └──────────────────────────────────────────────────────────────────────┘
             │                          │                │
@@ -35,8 +35,9 @@ AJAZZ Control Center is a Qt 6 desktop application backed by a C++20 core librar
 └───────────────────────┘  └───────────────────────┘  └──────────────────┘
             │
 ┌──────────────────────────────────────────────────────────────────────┐
-│                      Device Modules (C++, plug-in)                   │
-│   streamdeck_akp153 · _akp03 · _akp05 · keyboard_via · mouse_aj      │
+│                      Device Modules (C++, pluggable)                 │
+│   StreamDeck (AKP153/03/05/815) · Keyboard (VIA/proprietary)         │
+│   · Mouse (AJ-series)                                                │
 └──────────────────────────────────────────────────────────────────────┘
 ```
 
