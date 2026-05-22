@@ -203,3 +203,44 @@ TEST_CASE("SdPluginServer multiple sequential start/stop cycles do not leak port
         REQUIRE_FALSE(server.isListening());
     }
 }
+
+TEST_CASE("SdPluginServer reclaims the connection slot on disconnect + same-UUID reconnect",
+          "[plugin-server][lifecycle]") {
+    // Exercises the erase-on-disconnect path (WR-07): the slot must be removed,
+    // not nulled, so the count returns to zero and a same-UUID reconnect yields
+    // exactly one live slot rather than a live one beside a dead {uuid,nullptr}.
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    QSignalSpy disconnectedSpy(&server, &SdPluginServer::pluginDisconnected);
+    REQUIRE(server.start(0));
+
+    auto const url = QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort()));
+    QString const registerMsg =
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.recycle"})");
+
+    {
+        QWebSocket client;
+        QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+        client.open(url);
+        REQUIRE(waitForSpy(connectedSpy));
+        client.sendTextMessage(registerMsg);
+        REQUIRE(waitForSpy(registeredSpy));
+        REQUIRE(server.connectedPluginCount() == 1);
+
+        client.close();
+        REQUIRE(waitForSpy(disconnectedSpy));
+    }
+    // Slot reclaimed — count back to zero, no lingering dead row.
+    REQUIRE(server.connectedPluginCount() == 0);
+
+    registeredSpy.clear(); // waitForSpy returns on count()>0, so reset before reuse
+    QWebSocket client2;
+    QSignalSpy connectedSpy2(&client2, &QWebSocket::connected);
+    client2.open(url);
+    REQUIRE(waitForSpy(connectedSpy2));
+    client2.sendTextMessage(registerMsg);
+    REQUIRE(waitForSpy(registeredSpy));
+    // Exactly one live slot for the reused UUID — never two.
+    REQUIRE(server.connectedPluginCount() == 1);
+}

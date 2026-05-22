@@ -142,13 +142,15 @@ void SdPluginServer::onClientDisconnected() {
     if (!client) {
         return;
     }
-    QString const uuid = uuidForClient(client);
-    auto it = std::find_if(m_connections.begin(), m_connections.end(), [client](auto const& c) {
-        return c.socket == client;
-    });
-    if (it != m_connections.end()) {
-        it->socket = nullptr;
-    }
+    QString const uuid = uuidForClient(client); // capture before erasing the slot
+    // Erase the slot rather than nulling its socket (WR-07): a nulled entry
+    // lingers forever, so a long-lived session accumulates dead {uuid, nullptr}
+    // rows that connectedPluginCount/uuidForClient/registerPlugin must linear-
+    // scan, and a same-UUID reconnect would leave two entries.
+    m_connections.erase(std::remove_if(m_connections.begin(),
+                                       m_connections.end(),
+                                       [client](auto const& c) { return c.socket == client; }),
+                        m_connections.end());
     client->deleteLater();
     if (!uuid.isEmpty()) {
         AJAZZ_LOG_INFO("plugin-server", "plugin disconnected: uuid={}", uuid.toStdString());
