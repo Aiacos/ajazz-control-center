@@ -132,8 +132,8 @@ public:
      * `weak_ptr` expires (i.e. the last shared_ptr drops). There is no
      * proactive invalidation on hot-plug Removed events — instead, the
      * underlying IDevice implementation honours the zombie contract from
-     * `IDevice`'s class doc (return Result::DeviceGone or equivalent
-     * sentinel after the USB device disappears).
+     * `IDevice`'s class doc (fail safe — no-op / `false` / empty optional
+     * per the capability's error model — after the USB device disappears).
      *
      * @param id Runtime identifier of the device to open.
      * @return Shared backend instance for `id`, or `nullptr` if no matching

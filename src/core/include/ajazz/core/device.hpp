@@ -145,8 +145,10 @@ using EventCallback = std::function<void(DeviceEvent const&)>;
  * @note Zombie contract (D-06 / ARCH-03): each IDevice implementation MUST
  *       gate every HID I/O call on an internal alive flag (or equivalent
  *       hidapi handle validity check). After the underlying USB device
- *       disappears, public methods return Result::DeviceGone (or equivalent
- *       sentinel) rather than dereferencing closed handles. This is what
+ *       disappears, public methods fail safe per the capability's own error
+ *       model (a no-op, a `false` / empty-`std::optional` return, or a
+ *       `TimeSyncResult` error plus a logged warning) rather than
+ *       dereferencing closed handles. This is what
  *       lets the shared_ptr flyweight cache (DeviceRegistry::open) hand the
  *       same backend instance to multiple consumers safely across hot-plug
  *       events. See D-06 in 04-CONTEXT.md and ARCH-03.

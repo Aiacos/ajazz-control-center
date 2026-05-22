@@ -42,6 +42,10 @@
 #include <filesystem>
 #include <set>
 #include <vector>
+
+#if !defined(_WIN32)
+#include <unistd.h> // access(X_OK) for vetted interpreter resolution
+#endif
 #endif
 
 namespace ajazz::app {
@@ -272,10 +276,25 @@ void Application::initPluginHost() {
     // (so `import ajazz_plugins` resolves) and the user-plugins dir (so
     // it can load plugin code). The sandbox adds the system trees and
     // the child-script parent on top; `$HOME` stays hidden.
-    [[maybe_unused]] std::vector<std::filesystem::path> const readablePaths{
+    [[maybe_unused]] std::vector<std::filesystem::path> readablePaths{
         std::filesystem::path{AJAZZ_PLUGIN_PYTHONPATH},
         std::filesystem::path{userPluginsQ.toStdString()},
     };
+#if !defined(_WIN32)
+    // Resolve the interpreter to a vetted absolute path (CWE-426
+    // defense-in-depth: the sandboxed inner command then does not depend on
+    // $PATH resolution inside the namespace), and bind its install prefix so
+    // a non-/usr interpreter (conda/pyenv) stays reachable once the sandbox
+    // scopes the filesystem. For the default /usr/bin/python3 the prefix is
+    // /usr, already in the baseline binds (deduped by the sandbox).
+    for (char const* candidate : {"/usr/bin/python3", "/usr/local/bin/python3", "/bin/python3"}) {
+        if (::access(candidate, X_OK) == 0) {
+            config.pythonExecutable = candidate;
+            readablePaths.push_back(std::filesystem::path{candidate}.parent_path().parent_path());
+            break;
+        }
+    }
+#endif
 #if defined(__linux__)
     // LinuxBwrapSandbox falls back to a no-op passthrough when `bwrap`
     // is not on PATH, so wiring it unconditionally is safe on systems
