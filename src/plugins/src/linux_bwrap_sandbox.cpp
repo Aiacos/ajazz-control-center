@@ -32,34 +32,27 @@
 namespace ajazz::plugins {
 namespace {
 
-/// Resolve `bwrap` against `PATH`. Returns empty string if not found.
-/// The lookup is `access(X_OK)` on each `PATH` entry — same semantics
-/// `execvp` would use, just done eagerly so we know at construction
-/// time whether bwrap is usable.
-std::string findOnPath(std::string_view name) {
-    char const* path = std::getenv("PATH");
-    if (path == nullptr || *path == '\0') {
-        return {};
-    }
-    std::string buf;
-    std::string_view const sv{path};
-    std::size_t start = 0;
-    while (start <= sv.size()) {
-        auto const colon = sv.find(':', start);
-        auto const end = (colon == std::string_view::npos) ? sv.size() : colon;
-        std::string_view const dir = sv.substr(start, end - start);
-        if (!dir.empty()) {
-            buf.assign(dir);
-            buf.push_back('/');
-            buf.append(name);
-            if (::access(buf.c_str(), X_OK) == 0) {
-                return buf;
-            }
+/// Resolve a system program (here: `bwrap`) to an absolute path against
+/// a vetted set of system directories — NEVER via `$PATH` (CWE-426). The
+/// sandbox wrapper is a security boundary: a PATH-hijack that prepends a
+/// writable dir with a fake `bwrap` would silently DISABLE isolation
+/// while still reporting hasBwrap()==true. `bwrap` is always installed as
+/// a system binary, so a fixed allowlist is both correct and safe (this
+/// mirrors the macOS backend, which hard-codes `/usr/bin/sandbox-exec`).
+/// Returns an empty string if not found in any vetted directory.
+std::string findVettedExecutable(std::string_view name) {
+    static constexpr std::array<std::string_view, 3> kVettedDirs{
+        "/usr/bin",
+        "/usr/local/bin",
+        "/bin",
+    };
+    for (auto const& dir : kVettedDirs) {
+        std::string buf{dir};
+        buf.push_back('/');
+        buf.append(name);
+        if (::access(buf.c_str(), X_OK) == 0) {
+            return buf;
         }
-        if (colon == std::string_view::npos) {
-            break;
-        }
-        start = end + 1;
     }
     return {};
 }
@@ -128,7 +121,7 @@ LinuxBwrapSandbox::LinuxBwrapSandbox(std::set<std::string> grantedPermissions,
     : m_grantedPermissions(std::move(grantedPermissions)),
       m_readablePaths(std::move(readablePaths)), m_bwrapExecutable(std::move(bwrapExecutable)) {
     if (m_bwrapExecutable.empty()) {
-        m_bwrapExecutable = findOnPath("bwrap");
+        m_bwrapExecutable = findVettedExecutable("bwrap");
     } else {
         // Caller-provided path: still verify it's executable so the
         // hasBwrap() invariant stays honest.

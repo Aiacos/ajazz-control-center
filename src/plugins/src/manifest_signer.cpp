@@ -30,6 +30,7 @@
 #include "manifest_signer_common.hpp"
 #include "wire_protocol.hpp"
 
+#include <array>
 #include <cerrno>
 #include <cstring>
 #include <fstream>
@@ -58,9 +59,40 @@ std::string readFile(std::filesystem::path const& path) {
     return buf.str();
 }
 
+/// Resolve a program name to an absolute path against a vetted set of
+/// system directories — NEVER via `$PATH` (CWE-426). This interpreter
+/// runs the signature verifier that establishes plugin trust, so a
+/// PATH-hijack (a writable dir prepended to `$PATH` by a `.desktop`
+/// launcher, wrapper, or test harness) substituting a fake `python3`
+/// that always exits 0 would forge a "valid signature" verdict. If the
+/// caller supplied a path (contains `/`) we honour it after an X_OK
+/// check; a bare name is resolved only from the vetted list. Returns an
+/// empty string when nothing resolves, so the caller can fail closed.
+std::string resolveTrustedExecutable(std::string const& nameOrPath) {
+    if (nameOrPath.find('/') != std::string::npos) {
+        return (::access(nameOrPath.c_str(), X_OK) == 0) ? nameOrPath : std::string{};
+    }
+    static constexpr std::array<std::string_view, 3> kVettedDirs{
+        "/usr/bin",
+        "/usr/local/bin",
+        "/bin",
+    };
+    for (auto const& dir : kVettedDirs) {
+        std::string candidate{dir};
+        candidate += '/';
+        candidate += nameOrPath;
+        if (::access(candidate.c_str(), X_OK) == 0) {
+            return candidate;
+        }
+    }
+    return {};
+}
+
 /// Spawn a child process, wait for it, return exit code or -1 on
 /// fork/exec failure. Inherits stdin/stdout from the parent so the
 /// verifier's `::error::` annotations show up in the host's logs.
+/// argv[0] is an absolute path (resolved by @ref resolveTrustedExecutable),
+/// so the `execvp` below performs no `$PATH` lookup.
 int runChild(std::vector<std::string> const& argv) {
     std::vector<char*> rawArgv;
     rawArgv.reserve(argv.size() + 1);
@@ -120,8 +152,17 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
         return result;
     }
 
+    // Resolve the interpreter from a vetted absolute path, never via $PATH
+    // (CWE-426). Fail closed if it cannot be resolved: a manifest we cannot
+    // verify with a trusted interpreter is treated as unverified, not as
+    // valid via a possibly-hijacked python.
+    std::string const pythonExe = resolveTrustedExecutable(config.pythonExecutable);
+    if (pythonExe.empty()) {
+        return result; // valid=false
+    }
+
     std::vector<std::string> const argv = {
-        config.pythonExecutable,
+        pythonExe,
         config.verifierScript.string(),
         "verify",
         "--manifest",

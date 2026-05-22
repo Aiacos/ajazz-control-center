@@ -261,6 +261,42 @@ TEST_CASE("manifest verifier: unsigned manifest fails closed", "[manifest-signer
     fs::remove_all(tmp);
 }
 
+TEST_CASE("manifest verifier: unresolvable interpreter fails closed (CWE-426)",
+          "[manifest-signer]") {
+    // A validly-signed manifest must STILL be rejected when the configured
+    // interpreter cannot be resolved from a vetted absolute path. The
+    // verifier resolves a bare name only from {/usr/bin, /usr/local/bin,
+    // /bin} and never via $PATH, so a PATH-hijack that drops a malicious
+    // "python3" in a writable dir on $PATH cannot be used to forge a valid
+    // verdict — an unresolvable interpreter collapses to valid=false.
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-failclosed";
+    fs::create_directories(tmp);
+    auto const keys = tmp / "keys";
+    auto const manifest = tmp / "manifest.json";
+
+    REQUIRE(runChild(
+                {"python3", verifierScript().string(), "keygen", "--out-dir", keys.string()}) == 0);
+    writeFile(manifest, kMinimalManifestJson);
+    REQUIRE(runChild({"python3",
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      manifest.string(),
+                      "--priv-key",
+                      (keys / "priv.pem").string()}) == 0);
+
+    // Sanity: with a normally-resolvable interpreter this manifest verifies.
+    REQUIRE(verifyManifest(manifest, makeConfig()).valid);
+
+    // But a bare name that is NOT in the vetted dirs must fail closed,
+    // regardless of what $PATH contains.
+    auto cfg = makeConfig();
+    cfg.pythonExecutable = "ajazz-not-a-real-interpreter-xyz";
+    REQUIRE_FALSE(verifyManifest(manifest, cfg).valid);
+
+    fs::remove_all(tmp);
+}
+
 TEST_CASE("manifest verifier: trust-roots match resolves publisher name", "[manifest-signer]") {
     auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-trust";
     fs::create_directories(tmp);
