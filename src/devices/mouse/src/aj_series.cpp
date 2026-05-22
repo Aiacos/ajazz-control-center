@@ -351,8 +351,11 @@ public:
 
     void setRgbBrightness(std::uint8_t percent) override {
         // Brightness rides byte 3 of the 0x07 LED packet (no standalone
-        // opcode per vendor RE). Clamp 0..100% → vendor scale 0..5.
-        m_lastLed.brightness = static_cast<std::uint8_t>((percent * 5u) / 100u);
+        // opcode per vendor RE). Clamp 0..100% → vendor scale 0..5 — percent
+        // is a uint8 (0..255), so without the clamp a >100 value overflows the
+        // documented 0..5 range (e.g. 200 → 10).
+        auto const clampedPercent = std::min<std::uint8_t>(percent, 100U);
+        m_lastLed.brightness = static_cast<std::uint8_t>((clampedPercent * 5U) / 100U);
         emitLedPacket();
     }
 

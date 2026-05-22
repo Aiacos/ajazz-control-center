@@ -255,3 +255,23 @@ TEST_CASE("AjSeriesMouse void setters swallow a transport throw on device-yank",
     CHECK_NOTHROW(m->setActiveDpiStage(0));         // -> uploadDpiTableAtomic
     CHECK_NOTHROW(rgb->setRgbBrightness(50));       // -> emitLedPacket
 }
+
+TEST_CASE("AjSeriesMouse setRgbBrightness clamps percent to the 0..5 vendor scale",
+          "[unit][aj_series][mock_transport][rgb]") {
+    // WR-04: `percent` is a uint8 (0..255). Without the clamp, 200 maps to
+    // (200*5)/100 = 10 — outside the documented 0..5 LED brightness range.
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    auto device =
+        mouse::makeAjSeriesWithTransport(makeDescriptor(), makeId(), std::move(transport));
+    auto* rgb = dynamic_cast<core::IRgbCapable*>(device.get());
+    REQUIRE(rgb != nullptr);
+
+    rgb->setRgbBrightness(200); // over 100%
+    REQUIRE(observer->writes().size() == 1);
+    auto const& pkt = observer->writes().at(0); // 0x07 SetLedParam packet
+    REQUIRE(pkt.size() >= 5);
+    REQUIRE(pkt[1] == 0x07);
+    CHECK(pkt[4] == 5); // clamped to the vendor max, not 10
+}
