@@ -199,17 +199,23 @@ set(ACC_UI_ICONS "")
 file(GLOB _acc_ui_glyphs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/glyphs/*.svg)
 file(GLOB _acc_ui_actions CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/actions/*.svg)
 file(GLOB _acc_ui_devices CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/devices/*.svg)
-foreach(_f IN LISTS _acc_ui_glyphs)
-    get_filename_component(_n "${_f}" NAME)
-    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/glyphs/${_n})
+foreach(icon_file IN LISTS _acc_ui_glyphs)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/glyphs/${icon_name}
+    )
 endforeach()
-foreach(_f IN LISTS _acc_ui_actions)
-    get_filename_component(_n "${_f}" NAME)
-    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/actions/${_n})
+foreach(icon_file IN LISTS _acc_ui_actions)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/actions/${icon_name}
+    )
 endforeach()
-foreach(_f IN LISTS _acc_ui_devices)
-    get_filename_component(_n "${_f}" NAME)
-    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${_n})
+foreach(icon_file IN LISTS _acc_ui_devices)
+    get_filename_component(icon_name "${icon_file}" NAME)
+    set_source_files_properties(
+        "${icon_file}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${icon_name}
+    )
 endforeach()
 list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
 
