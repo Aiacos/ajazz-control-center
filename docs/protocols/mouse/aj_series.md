@@ -48,23 +48,22 @@ device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
 
 Offline device returns `BB = 0xFF`.
 
-> **HARDWARE NOTE (2026-05-21, confirmed):** the `0x40` query above does NOT
-> match the shipping firmware, and the active `0x83` OUTPUT-write + interrupt-IN
-> theory (briefly implemented in b9018fc, since reverted) **never replies on
-> hardware — idle OR awake link**. The hardware-confirmed method — what
-> `AjSeriesMouse::batteryPercent()` implements (commit 1f2be0c) — is that the
-> mouse mirrors its charge into vendor **status report `0x05`, byte 3**
-> (`0..100`; `0x64` = 100%, observed stable on live hardware), read via
-> `GET_FEATURE` on the `0xFFFF`/usage-`0x02` control collection (iface 2). A
-> valid frame has bytes 1 and 2 == 0 — reject others (the `05 ad 04 01 …`
-> reconnect garbage is the spurious "1%") and treat byte 3 == 0 as "unknown"
-> (link up, not yet reported → grey). `0x83 FEA_CMD_GET_BATTERY` is declared by
-> the vendor but NOT usable on the direct mouse path: its `sendMsg` carries a
-> separate `dangle_dev_type=MOUSE` routing arg that `iot_driver.exe` folds into
-> the HID bytes, so a raw hidraw `0x83` write (without that routing) ACKs but
-> gets no reply. Full detail + frame table in `aj_series_opcode_table.md` §4.
-> NOT a libusb blocker. Cross-checked against the `research/reverse-engineering`
-> dossier (`capture-evidence.md`).
+> **HARDWARE NOTE (2026-05-22, verified):** the `0x40` query above does NOT
+> match the shipping firmware. The working method — what
+> `AjSeriesMouse::batteryPercent()` implements and logs as
+> `queried ajazz_24g_8k: 100%` — is a **two-step handshake** (like the AK980
+> keyboard): **SET_FEATURE a `0x83 GET_BATTERY` poke** (`[0x05, 0x83, 0…, BIT7]`)
+> on the `0xFFFF`/usage-`0x02` control collection (iface 2), **then GET_FEATURE**
+> the status report. That report uses **report-id `0x00`**, so hidapi returns
+> `[00, 00, charge, 01 01 01 02]` — **charge at byte 2** (`0x64` = 100%). A valid
+> frame has byte 1 == 0; byte 2 == 0 means asleep/not-reported → grey; reject
+> frames with non-zero byte 1 (transient reconnect garbage). The earlier
+> "passive GET_FEATURE, charge at byte 3" assumed a phantom `0x05` report-id
+> prefix (one byte too far → rejected every valid frame → the persistent `--%`);
+> the `0x83` OUTPUT+interrupt variant (b9018fc, reverted) read the wrong channel
+> (the vendor's gRPC `sendMsg` adds `dangle_dev_type` routing; the reply actually
+> surfaces in the GET_FEATURE status report). NOT a libusb blocker. Full detail +
+> frame table in `aj_series_opcode_table.md` §4.
 
 ## Onboard clock (OLED basetta)
 
