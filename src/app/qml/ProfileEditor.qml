@@ -47,6 +47,7 @@ Rectangle {
     readonly property int  _dpiStageCount: capabilities && capabilities.dpiStageCount ? capabilities.dpiStageCount : 0
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
     readonly property bool _hasSettings:   capabilities && capabilities.hasSettings   ? capabilities.hasSettings   : false
+    readonly property bool _hasClock:      capabilities && capabilities.hasClock      ? capabilities.hasClock      : false
 
     // Coarse core DeviceFamily int (from DeviceModel.capabilitiesFor) — fed to
     // the Firmware tab so it can resolve the FirmwareUpdate.Family.
@@ -56,7 +57,9 @@ Rectangle {
     readonly property bool _showRgb:       _hasRgb
     readonly property bool _showEncoders:  _encoderCount > 0
     readonly property bool _showMouse:     _dpiStageCount > 0
-    readonly property bool _showSettings:  _hasSettings
+    // The Settings tab now also hosts per-device Time-sync, so it shows for any
+    // device that has settings OR a clock surface.
+    readonly property bool _showSettings:  _hasSettings || _hasClock
     // Every device has firmware, so the Firmware tab is always present.
     readonly property bool _showFirmware:  true
 
@@ -240,6 +243,6 @@ Rectangle {
     Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
     Component { id: encoderPanelComp; EncoderPanel { encoderCount: root._encoderCount } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
-    Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename } }
+    Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename; hasSettings: root._hasSettings; hasClock: root._hasClock } }
     Component { id: firmwarePanelComp; FirmwarePanel { deviceCodename: root.codename; deviceFamily: root._family } }
 }

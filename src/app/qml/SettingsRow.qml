@@ -1,27 +1,21 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
-// SettingsRow.qml — per-device row for the AK-series settings batch
-// (opcode 0x07 sub 0x10 — issue #57).
+// SettingsRow.qml — the device "Settings" tab. Hosts, per capability:
 //
-// Three fields land in one 33-byte short report and are persisted to the
-// firmware EEPROM:
+//   * Time synchronization (hasClock) — auto-sync toggle + manual "Sync now".
+//     Moved here from the sidebar so the device's Settings tab is the single
+//     home for per-device configuration. Auto-sync runs automatically on
+//     connect and at app start (default on); this is the on/off + manual push.
 //
-//   * Fn-layer behaviour   — 0 = hold, 1 = toggle (Switch)
-//   * Sleep timer minutes  — vendor values 0/1/3/5/10/30 (ComboBox)
-//   * Key-response time    — level 1..5; higher = snappier (Slider)
+//   * AK-series settings batch (hasSettings) — opcode 0x07 sub 0x10 (issue #57):
+//       - Fn-layer behaviour   — 0 = hold, 1 = toggle (Switch)
+//       - Sleep timer minutes  — vendor values 0/1/3/5/10/30 (ComboBox)
+//       - Key-response time    — level 1..5; higher = snappier (Slider)
+//     "Apply" commits the batch via SettingsService.setSettings (4-packet
+//     envelope on the I/O thread); toast feedback bubbles up via Main.qml.
 //
-// An "Apply" button commits the batch through SettingsService.setSettings,
-// which fans out the 4-packet envelope (START / SETTINGS-DATA / SAVE /
-// FINISH) on the I/O thread. Toast feedback bubbles up via the parent
-// (the SettingsService signals are wired in Main.qml).
-//
-// Initial state seeds from SettingsService.currentSettings(codename) on
-// Component.onCompleted so the controls reflect the last persisted batch
-// the moment the tab opens — no HID round-trip required.
-//
-// Bind `deviceCodename` from the page that hosts this component (the
-// ProfileEditor's per-device tab strip); the row refreshes its seed
-// state whenever the binding changes.
+// Bind `deviceCodename`, `hasClock`, `hasSettings` from the host page
+// (ProfileEditor's per-device tab strip).
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -33,6 +27,31 @@ Item {
     /// Codename of the currently-edited device. Bound by the host page.
     property string deviceCodename: ""
 
+    /// Capability gates from the host (ProfileEditor). Each section shows only
+    /// when the device supports it.
+    property bool hasSettings: false
+    property bool hasClock: false
+
+    // Inline result of the last time-sync for THIS device ("" = none yet,
+    // "ok", or an error message). Updated for both the manual "Sync now" click
+    // and any automatic sync; reset when the host swaps to another device.
+    property string _syncStatus: ""
+    onDeviceCodenameChanged: _syncStatus = ""
+
+    Connections {
+        target: TimeSyncService
+        function onSyncSucceeded(codename) {
+            if (codename === root.deviceCodename) {
+                root._syncStatus = "ok";
+            }
+        }
+        function onSyncFailed(codename, message) {
+            if (codename === root.deviceCodename) {
+                root._syncStatus = message;
+            }
+        }
+    }
+
     /// Cached availability + values map returned by SettingsService.
     /// `available` is true when the device is connected AND advertises
     /// ISettingsCapable; the numeric fields fall back to the vendor
@@ -42,8 +61,7 @@ Item {
                               : SettingsService.currentSettings(deviceCodename)
 
     // Sleep timer vendor values exposed in the UI (matches AK980 PRO vendor
-    // app dropdown). Indexed by ComboBox.currentIndex; map back through
-    // _sleepValues[currentIndex] when reading.
+    // app dropdown). Indexed by ComboBox.currentIndex.
     readonly property var _sleepValues: [0, 1, 3, 5, 10, 30]
 
     function _sleepIndexFor(minutes) {
@@ -55,9 +73,7 @@ Item {
         return 0;
     }
 
-    // Seed the controls from the snapshot whenever the binding refreshes.
-    // Component.onCompleted handles the initial mount; the explicit
-    // `onSnapshotChanged` handler refreshes when the host swaps codenames.
+    // Seed the settings controls from the snapshot whenever the binding refreshes.
     Component.onCompleted: {
         fnSwitch.checked = (root.snapshot.fnSwitch === 1);
         sleepBox.currentIndex = root._sleepIndexFor(root.snapshot.sleepMinutes);
@@ -72,112 +88,163 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        spacing: Theme.spacingMd
+        spacing: Theme.spacingLg
 
-        Label {
-            text: qsTr("Fn-layer behaviour")
-            color: Theme.fgFaint
-        }
-        RowLayout {
+        // ---- Time synchronization (hasClock) -------------------------------
+        ColumnLayout {
             Layout.fillWidth: true
+            visible: root.hasClock
             spacing: Theme.spacingSm
 
+            Label {
+                text: qsTr("Time synchronization")
+                color: Theme.fgFaint
+            }
             Switch {
-                id: fnSwitch
-                text: checked ? qsTr("Toggle") : qsTr("Hold (default)")
+                id: autoSyncSwitch
+                text: qsTr("Auto-sync time on connect")
+                checked: TimeSyncService.autoSync
+                onToggled: TimeSyncService.autoSync = checked
                 Accessible.role: Accessible.CheckBox
-                Accessible.name: qsTr("Fn-layer behaviour")
+                Accessible.name: qsTr("Auto-sync time on connect")
                 Accessible.description:
-                    qsTr("Off: Fn layer activates only while the key is held. "
-                       + "On: tapping Fn toggles the layer on or off.")
+                    qsTr("When on, the system time is pushed to this device automatically "
+                       + "as soon as it connects and when the app starts.")
             }
-            Item { Layout.fillWidth: true }
-        }
-
-        Label {
-            text: qsTr("Sleep timer")
-            color: Theme.fgFaint
-        }
-        ComboBox {
-            id: sleepBox
-            Layout.fillWidth: true
-            model: [
-                qsTr("Never"),
-                qsTr("1 min"),
-                qsTr("3 min"),
-                qsTr("5 min"),
-                qsTr("10 min"),
-                qsTr("30 min")
-            ]
-            Accessible.role: Accessible.ComboBox
-            Accessible.name: qsTr("Sleep timer")
-            Accessible.description:
-                qsTr("Minutes of idle before the firmware halts the backlight controller. "
-                   + "Never disables the timer entirely.")
-        }
-
-        Label {
-            text: qsTr("Key response time")
-            color: Theme.fgFaint
-        }
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spacingSm
-
-            Slider {
-                id: responseSlider
-                from: 1
-                to: 5
-                stepSize: 1
-                snapMode: Slider.SnapAlways
+            RowLayout {
                 Layout.fillWidth: true
-                Accessible.role: Accessible.Slider
-                Accessible.name: qsTr("Key response time")
-                Accessible.description:
-                    qsTr("Higher levels make the keyboard scan faster (snappier feel) "
-                       + "but draw more battery on wireless connections.")
-            }
-            // Numeric chip mirrors the slider's current value so users can
-            // confirm the exact level they're committing.
-            Rectangle {
-                Layout.preferredWidth: 36
-                Layout.preferredHeight: 28
-                radius: Theme.radiusSm
-                color: Theme.tile
-                border.color: Theme.borderSubtle
-                border.width: 1
+                spacing: Theme.spacingSm
 
+                Button {
+                    text: qsTr("Sync time now")
+                    enabled: root.deviceCodename !== ""
+                    onClicked: TimeSyncService.setSystemTimeOn(root.deviceCodename)
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Sync time to this device now")
+                    Accessible.description: qsTr("Push the current system time to this device's clock surface")
+                }
                 Label {
-                    anchors.centerIn: parent
-                    text: Math.round(responseSlider.value).toString()
-                    color: Theme.fgPrimary
-                    font.pixelSize: Theme.typeBodyMedium.pixelSize
-                    font.weight: Font.Medium
+                    visible: root._syncStatus !== ""
+                    text: root._syncStatus === "ok" ? qsTr("✓ Synced")
+                                                     : qsTr("✗ %1").arg(root._syncStatus)
+                    color: root._syncStatus === "ok" ? Theme.accent : Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    Layout.alignment: Qt.AlignVCenter
+                }
+                Item { Layout.fillWidth: true }
+            }
+        }
+
+        // ---- AK-series settings batch (hasSettings) ------------------------
+        ColumnLayout {
+            id: settingsSection
+            Layout.fillWidth: true
+            visible: root.hasSettings
+            spacing: Theme.spacingMd
+
+            Label {
+                text: qsTr("Fn-layer behaviour")
+                color: Theme.fgFaint
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSm
+
+                Switch {
+                    id: fnSwitch
+                    text: checked ? qsTr("Toggle") : qsTr("Hold (default)")
+                    Accessible.role: Accessible.CheckBox
+                    Accessible.name: qsTr("Fn-layer behaviour")
+                    Accessible.description:
+                        qsTr("Off: Fn layer activates only while the key is held. "
+                           + "On: tapping Fn toggles the layer on or off.")
+                }
+                Item { Layout.fillWidth: true }
+            }
+
+            Label {
+                text: qsTr("Sleep timer")
+                color: Theme.fgFaint
+            }
+            ComboBox {
+                id: sleepBox
+                Layout.fillWidth: true
+                model: [
+                    qsTr("Never"),
+                    qsTr("1 min"),
+                    qsTr("3 min"),
+                    qsTr("5 min"),
+                    qsTr("10 min"),
+                    qsTr("30 min")
+                ]
+                Accessible.role: Accessible.ComboBox
+                Accessible.name: qsTr("Sleep timer")
+                Accessible.description:
+                    qsTr("Minutes of idle before the firmware halts the backlight controller. "
+                       + "Never disables the timer entirely.")
+            }
+
+            Label {
+                text: qsTr("Key response time")
+                color: Theme.fgFaint
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSm
+
+                Slider {
+                    id: responseSlider
+                    from: 1
+                    to: 5
+                    stepSize: 1
+                    snapMode: Slider.SnapAlways
+                    Layout.fillWidth: true
+                    Accessible.role: Accessible.Slider
+                    Accessible.name: qsTr("Key response time")
+                    Accessible.description:
+                        qsTr("Higher levels make the keyboard scan faster (snappier feel) "
+                           + "but draw more battery on wireless connections.")
+                }
+                Rectangle {
+                    Layout.preferredWidth: 36
+                    Layout.preferredHeight: 28
+                    radius: Theme.radiusSm
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+
+                    Label {
+                        anchors.centerIn: parent
+                        text: Math.round(responseSlider.value).toString()
+                        color: Theme.fgPrimary
+                        font.pixelSize: Theme.typeBodyMedium.pixelSize
+                        font.weight: Font.Medium
+                    }
                 }
             }
-        }
 
-        RowLayout {
-            Layout.fillWidth: true
-            Layout.topMargin: Theme.spacingMd
-            spacing: Theme.spacingSm
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.spacingMd
+                spacing: Theme.spacingSm
 
-            Item { Layout.fillWidth: true }
-            Button {
-                id: applyButton
-                text: qsTr("Apply")
-                enabled: root.deviceCodename !== "" && root.snapshot.available
-                Accessible.role: Accessible.Button
-                Accessible.name: qsTr("Apply settings batch")
-                Accessible.description:
-                    qsTr("Send the new Fn / sleep / response values to the device "
-                       + "in one firmware-persisted batch.")
-                onClicked: {
-                    SettingsService.setSettings(
-                        root.deviceCodename,
-                        fnSwitch.checked ? 1 : 0,
-                        root._sleepValues[sleepBox.currentIndex],
-                        Math.round(responseSlider.value));
+                Item { Layout.fillWidth: true }
+                Button {
+                    id: applyButton
+                    text: qsTr("Apply")
+                    enabled: root.deviceCodename !== "" && root.snapshot.available
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Apply settings batch")
+                    Accessible.description:
+                        qsTr("Send the new Fn / sleep / response values to the device "
+                           + "in one firmware-persisted batch.")
+                    onClicked: {
+                        SettingsService.setSettings(
+                            root.deviceCodename,
+                            fnSwitch.checked ? 1 : 0,
+                            root._sleepValues[sleepBox.currentIndex],
+                            Math.round(responseSlider.value));
+                    }
                 }
             }
         }

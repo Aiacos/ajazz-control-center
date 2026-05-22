@@ -54,7 +54,10 @@ TimeSyncService::TimeSyncService(DeviceLookup lookup, QObject* parent)
                                                     // need wake-up cost.
     connect(m_autoSyncTimer, &QTimer::timeout, this, &TimeSyncService::periodicAutoSyncTick);
     QSettings settings;
-    m_autoSync = settings.value(QString::fromLatin1(kSettingsKey), false).toBool();
+    // Auto-sync defaults ON: the maintainer wants every clock-capable device
+    // time-synced automatically on connect and at app start. Users can still
+    // turn it off in the device Settings tab (the flag is persisted).
+    m_autoSync = settings.value(QString::fromLatin1(kSettingsKey), true).toBool();
     validatePersistedAutoSync();
     reconcileAutoSyncTimer();
 }
@@ -109,6 +112,11 @@ void TimeSyncService::reconcileAutoSyncTimer() {
         AJAZZ_LOG_INFO("time-sync",
                        "periodic auto-sync timer started ({} ms interval)",
                        static_cast<long long>(kAutoSyncInterval.count()));
+        // Sync once right now rather than waiting a full interval — this is the
+        // "sync at app start" sweep (reconcile runs when the enumerator is
+        // wired during startup) and the immediate push when the user re-enables
+        // auto-sync. Best-effort + glyph-only, same as the periodic tick.
+        periodicAutoSyncTick();
     } else if (!wantRunning && m_autoSyncTimer->isActive()) {
         m_autoSyncTimer->stop();
         AJAZZ_LOG_INFO("time-sync", "periodic auto-sync timer stopped");

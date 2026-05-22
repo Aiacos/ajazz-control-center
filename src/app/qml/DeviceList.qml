@@ -25,18 +25,6 @@ Rectangle {
     /// Emitted when the user activates a device row; carries the device codename.
     signal deviceSelected(string codename)
 
-    /// Emitted when the user clicks the per-row "Sync time" ToolButton.
-    /// Main.qml routes this to TimeSyncService.setSystemTimeOn(codename)
-    /// (Plan 05-06 + 05-07). Bubbled up from each DeviceRow.
-    signal syncTimeRequested(string codename)
-
-    /// Map of `codename → "success" | "not_implemented" | "io_error" | "not_capable" | ""`.
-    /// Set by Main.qml on TimeSyncService syncSucceeded / syncFailed and the
-    /// autoSync result connection. Per-row glyph reads its own state from
-    /// this map via syncGlyphState binding. D-02: auto-sync only writes
-    /// here (no Toast); manual sync writes here AND fires a Toast.
-    property var syncGlyphByCodename: ({})
-
     /// The device model. Set by the parent (Main.qml) to DeviceModel.
     /// We feed it to a Repeater inside a ColumnLayout (rather than a
     /// ListView) so the layout topology survives reflow when rows
@@ -89,16 +77,11 @@ Rectangle {
                     // (deviceCodename / deviceConnected). See the note at the top
                     // of DeviceRow.qml.
                     // F-08/COD-019: required model roles instead of parent.parent.model.
-                    // Names match DeviceModel::roleNames() exactly. Phase 5
-                    // Plan 05-05 names the new role `deviceHasClock`; the
-                    // DeviceRow's consumer property is `hasClockCapability`
-                    // (renamed to dodge the self-binding trap — see the
-                    // top-of-file note on DeviceRow.qml).
+                    // Names match DeviceModel::roleNames() exactly.
                     required property string model
                     required property string codename
                     required property int    family
                     required property bool   connected
-                    required property bool   deviceHasClock
                     // 2026-05-18 P3.d: gates the BatteryIndicator chip mounted
                     // inside DeviceRow. Role name (`deviceHasBattery`) mirrors
                     // DeviceModel::roleNames(); consumer property uses the
@@ -116,16 +99,10 @@ Rectangle {
                     // (NOT `family`) to dodge the QML self-binding trap — same
                     // naming convention as deviceCodename / deviceConnected above.
                     deviceFamily: family
-                    hasClockCapability: deviceHasClock
                     hasBatteryCapability: deviceHasBattery
                     // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.
                     // Bound from DeviceModel.MaturityRole (`maturity` role name).
-                    // Same QML self-binding trap naming pattern as
-                    // deviceConnected: connected (line 94 above).
                     deviceMaturity: maturity
-                    // Per-row glyph state pulled from DeviceList's map (set
-                    // by Main.qml on TimeSyncService signals — D-02).
-                    syncGlyphState: root.syncGlyphByCodename[codename] || ""
 
                     // Connected-only sidebar filter (restored 2026-05-15
                     // per user request, matching d377d80 spec). Hides
@@ -144,7 +121,6 @@ Rectangle {
                     visible: connected
 
                     onClicked: root.deviceSelected(codename)
-                    onSyncTimeRequested: function(cn) { root.syncTimeRequested(cn); }
                 }
             }
         }
