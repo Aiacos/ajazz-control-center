@@ -269,7 +269,7 @@ devices:
     pid: "0x3004"
     keys: 10
     encoders: 4
-    maturity: scaffolded
+    maturity: partial
     capabilities: [display, encoder, touch, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Real retail AKP05E. Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO' (white-label dev string), which led to a brief mis-filing as the 6-key 'akp03_variant_3004'. A live CRT VER handshake on 2026-05-20 returned firmware string 'V3.AKP05E.01.007' — confirming AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Routed through makeAkp05."
@@ -300,7 +300,7 @@ devices:
     name: "AJAZZ AK980 PRO"
     vid: "0x0c45"
     pid: "0x8009"
-    maturity: partial
+    maturity: functional
     capabilities: [rgb, macros, layers, clock, battery]
     protocol_doc: docs/protocols/keyboard/proprietary.md
     notes: "Microdia/Sonix SN32F299 wireless mech; routed through the proprietary backend. ARCH-05.1 (2026-05-17) located the firmware RTC wire format: 4-packet HID Feature Report envelope (START 0x18 + PREAMBLE 0x28 + DATA magic 0x5A + SAVE 0x02), sent via writeFeature() (NOT write()), corroborated by gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node + Agent B vendor binary disassembly; the per-packet delay+readback handshake was the missing piece, pinned on live hardware 2026-05-21 (commit 807b250)."
@@ -423,11 +423,11 @@ devices:
 
   - codename: ajazz_24g_8k
     family: mouse
-    name: "AJAZZ 2.4G 8K"
+    name: "AJAZZ AJ159 APEX"
     vid: "0x3151"
     pid: "0x5007"
-    maturity: partial
-    capabilities: [dpi, rgb, display, clock]
+    maturity: functional
+    capabilities: [dpi, rgb, display, clock, battery]
     protocol_doc: docs/protocols/mouse/aj_series_vendor.md
     dpi_stages: 8
     notes: "8KHz-polling wireless mouse on SONiX VID prefix. Has an OLED basetta showing clock + DPI. The clock is a firmware RTC (HARDWARE-CONFIRMED 2026-05-21, commit 0a1952e): opcode 0x28 SET_OLEDCLOCK feature report with a required 0xD7 marker at byte 8, big-endian year, no checksum, sent via HidD_SetFeature; wired to IClockCapable so TimeSyncService drives it. (Supersedes the earlier opcode-0x25 SETTFTLCDDATA host-rendered RGB565 face, which never actually set the clock — the 0x25 render pipeline is kept only for a future custom-image feature.) Battery now reads on hardware via vendor status report 0x05 byte 3 (0..100, 0x64=100%) over GET_FEATURE on the 0xFFFF (usage 0x02) control collection, with reconnect frame-validation (a valid frame has bytes 1/2 zero; malformed transient frames after a replug are rejected so there is no spurious 1% flash — commit 1f2be0c). Wire-format rewrite landed in P3.12.1/.2 (656fb1c, 0e9bb04)."

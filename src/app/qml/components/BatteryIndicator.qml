@@ -143,9 +143,21 @@ Item {
             Text {
                 id: percentLabel
                 Layout.alignment: Qt.AlignVCenter
+                // Reserve a fixed width sized for the widest value ("100%") and
+                // centre the text, so every row's battery chip is the same width
+                // and the chips line up across the sidebar regardless of how many
+                // digits the percentage has (e.g. mouse "85%" vs keyboard "100%").
+                Layout.preferredWidth: maxMetrics.advanceWidth
+                horizontalAlignment: Text.AlignHCenter
                 text: root.percent >= 0 ? qsTr("%1%").arg(root.percent) : qsTr("--%")
                 color: pill.tintColor
                 font.pixelSize: Theme.fontXs
+
+                TextMetrics {
+                    id: maxMetrics
+                    font: percentLabel.font
+                    text: "100%"
+                }
             }
         }
     }
