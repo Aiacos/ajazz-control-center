@@ -4,87 +4,104 @@
 
 <h1 align="center">AJAZZ Control Center</h1>
 
-[![CI](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/ci.yml?branch=main&label=CI&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml)
-[![Lint](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/lint.yml?branch=main&label=lint&logo=github)](https://github.com/Aiacos/ajazz-control-center/actions/workflows/lint.yml)
-[![Nightly](https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/nightly.yml?branch=main&label=nightly&logo=github)](https://github.com/Aiacos/ajazz-control-center/releases/tag/nightly)
-[![Release](https://img.shields.io/github/v/release/Aiacos/ajazz-control-center?include_prereleases&logo=github&color=blueviolet)](https://github.com/Aiacos/ajazz-control-center/releases)
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
-[![Qt 6.7+](https://img.shields.io/badge/Qt-6.7%2B-41CD52?logo=qt)](https://www.qt.io/)
-[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=cplusplus)](https://isocpp.org/)
-[![Python 3.11+](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python)](https://www.python.org/)
-[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://pre-commit.com/)
-
-<p align="center">A modern, open, cross-platform control center for AJAZZ devices — Stream Dock macropads, keyboards and mice — with a clean Qt 6 / QML UI and a Python plugin system for scripting, automation and third-party integrations.</p>
+<p align="center"><em>One open, cross-platform control center for every AJAZZ device.</em></p>
 
 <p align="center">
-  <img alt="AJAZZ Control Center — Plugin Store with three connected devices in the sidebar" src="docs/screenshots/main-dark.png" width="900">
+  <a href="https://github.com/Aiacos/ajazz-control-center/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Aiacos/ajazz-control-center/ci.yml?branch=main&label=CI&logo=github" alt="CI"></a>
+  <a href="https://github.com/Aiacos/ajazz-control-center/releases"><img src="https://img.shields.io/github/v/release/Aiacos/ajazz-control-center?include_prereleases&logo=github&color=blueviolet" alt="Release"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0-blue" alt="License"></a>
+  <a href="https://www.qt.io/"><img src="https://img.shields.io/badge/Qt-6.7%2B-41CD52?logo=qt" alt="Qt 6.7+"></a>
 </p>
 
-> **Status:** alpha. Hot-plug detection live with three device families connected today (Stream Dock, AK980 PRO, 2.4G 8K). Out-of-process sandboxed Python plugin host shipped. In-app Plugin Store with real one-click install + on-disk extraction (via QZipReader) mirroring the official AJAZZ Streamdock catalogue (~160 plugins) and the OpenDeck archive (~320 plugins). Cross-platform autostart + native notifications on Linux/macOS/Windows. AK980 PRO 20-mode firmware RGB picker (5-packet envelope with `CMD_FINISH 0xF0`) + AJ-series mouse TFT clock+DPI face + AK980 PRO settings-batch wire surface all landed 2026-05-18.
+<p align="center">
+  <img alt="AJAZZ Control Center — main window" src="docs/screenshots/main-dark.png" width="860">
+</p>
 
-## Recent highlights
+**AJAZZ Control Center** is a modern, open, cross-platform control center for AJAZZ
+devices — Stream Dock macropads/docks, keyboards and mice. It runs natively on
+**Linux, Windows and macOS** with a clean Qt 6 / QML interface, and is extensible
+through a sandboxed, out-of-process **Python plugin system** with compatibility for
+Stream Deck (`.sdPlugin`) plugins. Performance-critical code is C++20; each device
+family is an independent backend loaded at runtime.
 
-### What's working today
-
-- **Hot-plug detection (2026-05-13).** The sidebar surfaces only currently-connected devices; reconnects rebind silently. Driven by `HotplugMonitor` on Linux udev, `WM_DEVICECHANGE` on Win32, and IOKit notifications on macOS.
-- **Out-of-process sandboxed Python plugin host (SEC-003).** Each plugin runs in a child process isolated by the platform's native sandbox (`bwrap` on Linux, `sandbox-exec` on macOS, AppContainer on Windows). The host gates loading on a signed-manifest verification against bundled trust roots.
-- **QML singleton invariant locked at build-time.** `QML_SINGLETON` services co-locate a `static_assert(!std::is_default_constructible_v<T>)` next to the class declaration — the long-standing dual-instance pattern (silent duplicate from Qt 6 SFINAE) becomes a compile error rather than a runtime mystery.
-- **In-app Plugin Store with real one-click install + on-disk extraction (2026-05-18).** Live mirrors of the AJAZZ Streamdock (~160 plugins) + OpenDeck (~320 plugins) catalogues, browsable through tabbed search. `Install` fires an HTTPS GET against the upstream CDN (`cdn1.key123.vip` for Streamdock), shows inline download progress in the tile, saves the `.sdPlugin` archive under the per-user plugins directory (`AppDataLocation/plugins/`), **extracts it in place to an `<id>.sdPlugin/` directory tree via QZipReader** (single-folder wrappers are stripped automatically), and flips the row to `Installed`. A first-launch sweep also rounds up any legacy archive files left by older installs. Entries without a direct download URL gracefully fall back to opening the upstream catalogue in the system browser.
-- **VIA / QMK keyboard support.** Any VIA layout JSON works out of the box; the proprietary backend covers AK-series RGB + macros + layers.
-- **AK980 PRO 20-mode firmware RGB picker (2026-05-18).** The RGB tab exposes the keyboard's twenty vendor-built-in lighting effects (Static / Glittering / Rainbow blanket / Dynamic breath / Spectrum rings / Rolling glow / Rotating accents / Press burst / Launch trail / Ripples / etc.) via the new `IFirmwareLightingCapable` capability + `LightingService` QML singleton. Picking a mode sends the **five-packet** `0x18 → 0x13 → DATA → 0x02 → 0xF0` envelope to the device — `CMD_FINISH 0xF0` was added per vendor §13.7 so non-RTC commits match the reference behaviour exactly.
-- **AK980 PRO settings batch C++ surface (2026-05-18).** New `ISettingsCapable` capability lets the host commit Fn-layer / sleep-timer / key-response-time in one shot via opcode `0x07 0x10`. Wire format pinned by byte-level tests; QML row pending — exposed today through the C++ device API for Python plugins and scriptable workflows.
-- **AJ-series mouse OLED basetta clock — firmware RTC (hardware-confirmed 2026-05-21).** The wireless dock OLED on the 2.4G 8K and AJ199 family runs a firmware real-time clock set via a single opcode `0x28` (`FEA_CMD_SET_OLEDCLOCK`) feature report — a fixed `0xD7` marker at byte 8, big-endian year, no checksum, sent over `HidD_SetFeature`. Driven by the same `IClockCapable` surface as the keyboard. (This replaces the earlier opcode-`0x25` host-rendered RGB565 face, which never actually set the clock; the 0x25 render pipeline is kept only for a future custom-image feature.)
-- **Native desktop notifications + autostart on every OS (2026-05-18).** Notifications dispatch through `notify-send` on Linux, `osascript` on macOS, PowerShell BurntToast / Forms-balloon fallback on Windows. Autostart wires a `.desktop` (Linux), a LaunchAgent plist (macOS), or an `HKCU\…\Run` registry value (Windows). 8 of 13 cross-platform features at full parity.
-- **15-minute periodic clock auto-sync (2026-05-18).** `TimeSyncService` runs a coarse-timer tick that re-pushes the host time to every connected `IClockCapable` device, so the AK980 PRO RTC and the mouse OLED firmware RTC stay accurate across DST transitions and long sessions without user intervention.
-
-### Coming next (v1.2 — active milestone)
-
-v1.0 (Phases 1-2) shipped 2026-05-13 and v1.1 (Phases 3-8) shipped 2026-05-14. v1.2 ("Connected-Device Capability Parity") is in flight — see [`.planning/ROADMAP.md`](.planning/ROADMAP.md) and [`.planning/STATE.md`](.planning/STATE.md) for live status.
-
-- **Phase 9.x captures (gating)** — sanitised Wireshark/usbmon captures for the 4 connected devices + ratify ARCH-04/05/06 from default verdict to FINAL. Requires the developer to physically interact with the devices; runbook in [`docs/protocols/CAPTURING.md`](docs/protocols/CAPTURING.md).
-- **Phase 10 — AKP03 `0x3004` promotion** — one-line `PacketSize 512→1024` fix unblocks 13 sibling SKUs; real `setKeyImage` / encoder / brightness wired to the LCD. ARCH-04 host-side image pipeline already landed (2026-05-17).
-- **Phase 11 — AJAZZ 2.4G 8K mouse probe-and-confirm** — zero-OSS-corpus session on `3151:5007`: DPI cycle, polling-rate, LOD, per-zone RGB. Mouse OLED basetta clock+DPI face already landed (2026-05-18).
-- **Phase 12 — AK980 PRO promotion** — sleep-timer, brightness/speed/direction, host-save-vs-flash UX separation. Firmware RTC (ARCH-05.1) + 20-mode RGB picker already landed (2026-05-17 / 2026-05-18).
-- **Phase 13 — catalogue + v1.1 UI verifies back-fill** — `microdia_dongle_7016` at `probed`, real-hardware visual verifies for the Sync button / Settings auto-sync / glyph-only-no-toast / MaturityRole tooltip.
-
-### Open work (where to look)
-
-- **[`TODO.md`](TODO.md)** — living checklist sorted by effort (quick wins, medium fixes, multi-day refactors). Includes the cleanup backlog (dead code, magic numbers, consistency).
-- **[GitHub issues](https://github.com/Aiacos/ajazz-control-center/issues)** — 10 open as of 2026-05-18 (down from 13 earlier today after #58 / #62 closed and #57 C++ surface landed): 5 Phase 3 follow-ups (AK980 PRO settings batch QML row, AKP05 9 host-side effects port, AK980 macro record/assign, plugin store bundling, profile auto-switch runtime) and 5 product-roadmap items (OpenRGB adapter, OBS plugins, live key remap editor, profile auto-switch on focused app, i18n sweep).
-- **[`.planning/HANDOFF-2026-05-18.md`](.planning/HANDOFF-2026-05-18.md)** — snapshot of this development cycle (CI hardening + audits 1/2/3 + audit-3 user-facing landings) with explicit remaining-gaps punch list.
-
-## Try it now
-
-Don't want to build from source? Pre-built installers for every push to `main` are published as a rolling pre-release:
-
-👉 **[Download the latest nightly](https://github.com/Aiacos/ajazz-control-center/releases/tag/nightly)** — `.deb`, `.rpm`, `.flatpak` (Linux), `.msi` / portable `.zip` (Windows), universal `.dmg` (macOS).
-
-For stable, signed, slow-moving builds, see the [tagged releases](https://github.com/Aiacos/ajazz-control-center/releases). The release process is documented in the [Release Process wiki page](docs/wiki/Release-Process.md).
-
-<!-- BEGIN AUTOGEN: stats -->
-**31 devices** across 1 dongle, 3 keyboard, 10 mouse, 17 streamdeck — 12 functional, 15 scaffolded, 2 probed, 2 partial.
-<!-- END AUTOGEN: stats -->
+> **Status:** alpha. Hot-plug detection, an in-app Plugin Store, periodic clock
+> auto-sync, and three device families working today (Stream Dock, AK980 PRO,
+> 2.4G 8K mouse). See [`.planning/STATE.md`](.planning/STATE.md) for live status.
 
 ______________________________________________________________________
 
-## Why another tool?
+## Installation
 
-AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities that rarely see updates, do not run on Linux or macOS, and cannot be scripted. The community has produced several excellent per-device projects — [OpenDeck](https://github.com/nekename/OpenDeck), [`elgato-streamdeck`](https://github.com/OpenActionAPI/rust-elgato-streamdeck), [`mirajazz`](https://crates.io/crates/mirajazz), [`opendeck-akp03`](https://github.com/4ndv/opendeck-akp03), [`opendeck-akp153`](https://github.com/4ndv/opendeck-akp153), [`ajazz-sdk`](https://github.com/mishamyrt/ajazz-sdk), [`ajazz-aj199-official-software`](https://github.com/progzone122/ajazz-aj199-official-software) — but each covers only a narrow subset of the hardware catalog.
+Download the latest build from the **[Releases page](https://github.com/Aiacos/ajazz-control-center/releases)**.
+Rolling pre-release builds for every push to `main` are published as the
+**[nightly release](https://github.com/Aiacos/ajazz-control-center/releases/tag/nightly)**.
 
-**AJAZZ Control Center** unifies these efforts under one roof:
+### Linux
 
-- A single desktop application on **Linux, Windows and macOS**.
-- **Modular device backends**: each product family (Stream Dock macropad, keyboard, mouse) is an independent C++ module loaded at runtime.
-- **Hybrid Qt 6 stack**: performance-critical code in C++20, extensibility in Python 3.11+ via an embedded interpreter.
-- **Legally clean-room** approach: protocols are documented from USB captures and reimplemented in-house; open-source references are cited but not vendored.
-- **First-class developer experience**: CMake presets, CI matrix on three OSes, packaged releases.
+```bash
+# Debian / Ubuntu (.deb)
+sudo apt install ./ajazz-control-center_*.deb      # or: sudo dpkg -i ajazz-control-center_*.deb
 
-## Supported (and planned) devices
+# Fedora / RHEL / openSUSE (.rpm)
+sudo dnf install ./ajazz-control-center-*.rpm
 
-<!--
-  The tables below are generated from `docs/_data/devices.yaml`.
-  Do NOT edit them by hand — run `make docs` (or let pre-commit/CI do it).
--->
+# Any distro (.flatpak)
+flatpak install --user ./ajazz-control-center.flatpak
+```
+
+> **Device access:** the project ships a udev rule
+> [`resources/linux/70-ajazz.rules`](resources/linux/70-ajazz.rules) using
+> `TAG+="uaccess"`, so systemd-logind grants your user access automatically —
+> no `plugdev` group, no logout. The `.deb`/`.rpm` packages install it for you;
+> the Flatpak prompts you to install it on first run.
+
+### Windows
+
+Grab the `.msi` installer (or the portable `.zip`) from the
+[latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest).
+No drivers required.
+
+```powershell
+winget install Aiacos.AjazzControlCenter
+```
+
+### macOS
+
+Download the universal `.dmg` (Apple Silicon + Intel) from the
+[latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest),
+drag the app to **Applications**, and grant **Input Monitoring** on first launch.
+
+> Prefer to compile it yourself? See [Build from source](#build-from-source) below.
+
+______________________________________________________________________
+
+## Features
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| Per-key / LCD-key config | Set images, labels and actions on Stream Dock LCD keys | 🟢 working |
+| RGB lighting | Static, effect and per-LED control; 20 firmware modes on AK980 PRO | 🟢 working |
+| Encoders / dials | Rotation + press handling on Stream Dock Plus-class devices | 🟢 working |
+| Macros | Record / assign macros across keyboards and macropads | 🟢 working |
+| Profiles | Switch device profiles; per-app auto-switch planned | 🟢 working |
+| Time-sync | Push host time to firmware RTCs; 15-min periodic auto-sync | 🟢 working |
+| Battery level | Wireless charge readout (see device notes for caveats) | 🟠 partial |
+| Firmware updates | Auto-download + delegate flashing to the vendor tool | 🟡 planned |
+| Python plugins | Out-of-process, sandboxed (`bwrap` / `sandbox-exec` / AppContainer) | 🟢 working |
+| Stream Deck plugins | In-app store mirrors AJAZZ Streamdock (~160) + OpenDeck (~320) catalogues | 🟢 working |
+| Cross-platform UX | Native notifications + autostart on Linux / macOS / Windows | 🟢 working |
+
+______________________________________________________________________
+
+## Supported devices
+
+<!-- BEGIN AUTOGEN: legend -->
+🟡 **scaffolded** — descriptor + factory exist; backend compiles but does not exercise the device · 🔵 **probed** — device enumerates and descriptor populated; no protocol writes confirmed · 🟠 **partial** — some features work end-to-end; advertised capability set incomplete or untested · 🟢 **functional** — all advertised capabilities work in practice; tested manually or in CI · ✅ **verified** — functional + automated CI on real hardware OR sustained user-confirmed reliability
+<!-- END AUTOGEN: legend -->
+
+The tables below are generated from [`docs/_data/devices.yaml`](docs/_data/devices.yaml)
+by `make docs` — edit the YAML, not this section. Full per-device protocol notes
+live under [`docs/protocols/`](docs/protocols/).
 
 <!-- BEGIN AUTOGEN: devices-by-family -->
 ### Stream Dock macropads
@@ -140,206 +157,41 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 
 <!-- END AUTOGEN: devices-by-family -->
 
-<!-- BEGIN AUTOGEN: legend -->
-🟡 **scaffolded** — descriptor + factory exist; backend compiles but does not exercise the device · 🔵 **probed** — device enumerates and descriptor populated; no protocol writes confirmed · 🟠 **partial** — some features work end-to-end; advertised capability set incomplete or untested · 🟢 **functional** — all advertised capabilities work in practice; tested manually or in CI · ✅ **verified** — functional + automated CI on real hardware OR sustained user-confirmed reliability
-<!-- END AUTOGEN: legend -->
+______________________________________________________________________
 
-## Architecture at a glance
+## Architecture
 
 ```
-┌──────────────────────────────────────────────────────────────────────────┐
-│                          Qt 6 / QML Desktop UI                           │
-│        (device browser · profile editor · button/key designer)           │
-└──────────────────────────────────────────────────────────────────────────┘
-                                     │
-┌──────────────────────────────────────────────────────────────────────────┐
-│                         Application Layer (C++20)                        │
-│     Profile engine · Action dispatcher · Plugin host · Event bus         │
-└──────────────────────────────────────────────────────────────────────────┘
-              │                           │                   │
-┌──────────────────────┐   ┌─────────────────────┐   ┌─────────────────────┐
-│   Device Core (C++)  │   │  OOP Plugin Host    │   │   Persistence (C++) │
-│  HID + USB + hidapi  │   │  bwrap/sb-exec/AC   │   │   JSON / SQLite     │
-│  + Hot-plug monitor  │   │  signed-mfst gate   │   │   QSettings         │
-└──────────────────────┘   └─────────────────────┘   └─────────────────────┘
-              │
-┌──────────────────────────────────────────────────────────────────────────┐
-│                      Device Modules (C++, plug-in)                       │
-│      streamdeck_akp153 · streamdeck_akp03 · keyboard_via · mouse_aj      │
-└──────────────────────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────┐
+│                   Qt 6 / QML Desktop UI                      │
+│      device browser · profile editor · key designer          │
+└────────────────────────────────────────────────────────────┘
+                            │
+┌────────────────────────────────────────────────────────────┐
+│                  Application Layer (C++20)                   │
+│   Profile engine · Action dispatcher · Plugin host · Bus     │
+└────────────────────────────────────────────────────────────┘
+        │                   │                    │
+┌───────────────┐  ┌─────────────────┐  ┌──────────────────┐
+│  Device Core  │  │ OOP Plugin Host │  │   Persistence    │
+│ HID + hidapi  │  │ sandboxed +     │  │  JSON / SQLite   │
+│ + hot-plug    │  │ signed-manifest │  │  QSettings       │
+└───────────────┘  └─────────────────┘  └──────────────────┘
+        │
+┌────────────────────────────────────────────────────────────┐
+│              Device Modules (C++, plug-in)                   │
+│  streamdeck_akp153 · streamdeck_akp03 · keyboard · mouse_aj  │
+└────────────────────────────────────────────────────────────┘
 ```
 
-See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for the full design.
+Full design in [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
 
-The UI ships a **clean-room, original icon set** (24 feature glyphs + 40
-key/button action icons + 3 device illustrations) under
-[`resources/icons/`](resources/icons/README.md). Line icons use
-`stroke="currentColor"` so a single SVG renders white on the dark theme and
-near-black on the light theme — no vendor artwork is reused. See
-[`docs/architecture/BRANDING.md`](docs/architecture/BRANDING.md#icon-system).
-
-## Install (end users)
-
-One command, any platform. No group membership, no logout, no replug.
-
-### Linux / macOS
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Aiacos/ajazz-control-center/main/scripts/install.sh | bash
-```
-
-The installer auto-detects your distro and uses the native package
-manager (Flatpak / `dnf` / `apt` / Homebrew). On Linux it installs a
-udev rule that uses `TAG+="uaccess"` so systemd-logind grants your user
-device access automatically — no `plugdev` group, no logout, no replug.
-
-### Windows
-
-```powershell
-winget install Aiacos.AjazzControlCenter
-```
-
-Or grab the `.msi` from the [latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest).
-
-### Manual downloads
-
-Every release on the [Releases page](https://github.com/Aiacos/ajazz-control-center/releases)
-ships `.deb`, `.rpm`, `.flatpak`, `.msi` and a universal `.dmg`.
-
-## Build from source (developers)
-
-### Happy path — `make bootstrap`
-
-```bash
-git clone https://github.com/Aiacos/ajazz-control-center.git
-cd ajazz-control-center
-make bootstrap          # installs deps + udev rule + builds
-make run                # launches the app
-```
-
-`make bootstrap` detects Fedora / RHEL / openSUSE / Debian / Ubuntu /
-Arch / macOS and installs every build dependency via the native package
-manager. After that, `make build` / `make test` / `make package` /
-`make doctor` do the obvious thing. Run `make help` for the full list.
-
-### Per-platform CMake recipes
-
-If you'd rather drive CMake directly (Windows, custom toolchain, IDE
-integration), each platform has a dedicated preset already wired in
-[`CMakePresets.json`](CMakePresets.json). All recipes assume Qt 6.7+
-with `qtwebsockets` and `qtshadertools` modules installed.
-
-#### Linux (Ubuntu 24.04 / Fedora 40+ / Arch)
-
-```bash
-# 1. Install system deps (Ubuntu/Debian)
-sudo apt install -y build-essential cmake ninja-build pkg-config \
-    libudev-dev libusb-1.0-0-dev libhidapi-dev \
-    libgl1-mesa-dev libxkbcommon-dev libxcb1-dev libxcb-cursor-dev \
-    libxkbcommon-x11-dev python3-dev python3-pip
-
-#    Fedora/RHEL equivalent: sudo dnf install gcc-c++ cmake ninja-build \
-#    systemd-devel libusb1-devel hidapi-devel mesa-libGL-devel libxkbcommon-devel
-
-# 2. Install Qt 6.7+ via aqtinstall (cross-distro) OR your distro's qt6-base
-pip install aqtinstall
-aqt install-qt linux desktop 6.8.3 gcc_64 -m qtwebsockets qtshadertools
-
-# 3. Configure + build (Release)
-cmake --preset linux-release
-cmake --build --preset linux-release
-
-# 4. Test
-ctest --preset linux-release --output-on-failure
-
-# 5. Package (.deb / .rpm / .flatpak)
-cmake --build --preset linux-release --target package    # CPack → .deb + .rpm
-make flatpak                                              # → .flatpak (uses flatpak-builder)
-```
-
-The udev rule at `resources/linux/70-ajazz.rules` uses `TAG+="uaccess"`
-so systemd-logind grants your user device access automatically — no
-`plugdev` group, no logout, no replug. `make udev` installs it without
-a full build.
-
-#### macOS (14+, Apple Silicon or Intel)
-
-```bash
-# 1. Install Xcode CLT + Homebrew deps
-xcode-select --install
-brew install cmake ninja hidapi pkg-config
-
-# 2. Install Qt 6.7+ (universal binary)
-brew install qt@6
-#    or:  aqt install-qt mac desktop 6.8.3 clang_64 -m qtwebsockets qtshadertools
-
-# 3. Configure + build
-cmake --preset macos-release
-cmake --build --preset macos-release
-
-# 4. Test
-ctest --preset macos-release --output-on-failure
-
-# 5. Package universal .dmg (arm64 + x86_64)
-cmake --build --preset macos-release --target package
-```
-
-The release pipeline produces a universal binary via two single-arch
-builds + `lipo`; CI runs on `macos-14` (Apple Silicon) and `macos-13`
-(Intel) and merges. For local development a single-arch build is fine.
-
-#### Windows (10/11, MSVC 2022)
-
-```powershell
-# 1. Open "x64 Native Tools Command Prompt for VS 2022" so cl.exe is on PATH
-# 2. Install Qt 6.7+ (via the official online installer's MaintenanceTool,
-#    OR via aqtinstall)
-pip install aqtinstall
-aqt install-qt windows desktop 6.8.3 win64_msvc2022_64 -m qtwebsockets qtshadertools
-$env:Path = "C:\Qt\6.8.3\msvc2022_64\bin;$env:Path"
-
-# 3. Configure + build (Release)
-cmake --preset windows-release
-cmake --build --preset windows-release
-
-# 4. Test
-ctest --preset windows-release --output-on-failure
-
-# 5. Package .msi + portable .zip
-cmake --build --preset windows-release --target package    # CPack → WiX .msi
-```
-
-**Qt 6.11.1 dev-box gotcha**: Qt 6.11 headers emit `C4702` (unreachable
-code) warnings that fail `/WX`. Until upstream fixes it or our matrix
-adds `/wd4702`, configure with `-DAJAZZ_ENABLE_WERROR=OFF` for local
-Qt 6.11+ builds. CI uses Qt 6.8.3 where the warnings don't fire, so
-`/WX` stays on.
-
-### Useful debug builds
-
-```bash
-cmake --preset dev                                    # Debug + sanitizers
-cmake --build --preset dev
-cmake --preset coverage                               # gcov instrumentation
-ctest --test-dir build-cov && lcov --capture ...      # see Makefile `make coverage`
-```
-
-The full reference (every preset, every `-D` option, every CPack
-generator) lives in [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md).
-
-### Platform support matrix
-
-<!-- BEGIN AUTOGEN: platform-matrix -->
-| Platform | Build | Install | Notes |
-|----------|-------|---------|-------|
-| Linux | ✅ first-class | .rpm / .deb / .flatpak | udev `TAG+=uaccess` — no group, no logout |
-| macOS | ✅ universal | .dmg (arm64 + x86_64) | Grant Input Monitoring on first launch |
-| Windows | ✅ MSVC 2022 | .msi (winget) | No drivers required |
-<!-- END AUTOGEN: platform-matrix -->
+______________________________________________________________________
 
 ## Python plugins
 
-Plugins are pure Python packages loaded by the embedded interpreter. Minimal example:
+Plugins are pure Python packages loaded by the embedded interpreter, each isolated
+in its own sandboxed child process. Minimal example:
 
 ```python
 # ~/.config/ajazz-control-center/plugins/hello/plugin.py
@@ -354,20 +206,50 @@ class HelloPlugin(Plugin):
         ctx.notify("Hello from Python!")
 ```
 
-See [`docs/guides/PLUGIN_DEVELOPMENT.md`](docs/guides/PLUGIN_DEVELOPMENT.md) for the full plugin API.
+Full API in [`docs/guides/PLUGIN_DEVELOPMENT.md`](docs/guides/PLUGIN_DEVELOPMENT.md).
 
-## Reverse engineering methodology
+______________________________________________________________________
 
-All device protocol work follows a documented clean-room procedure (Wireshark + `usbmon` capture, protocol notes in `docs/protocols/`, in-house reimplementation). See [`docs/protocols/REVERSE_ENGINEERING.md`](docs/protocols/REVERSE_ENGINEERING.md).
+## Build from source
+
+```bash
+git clone https://github.com/Aiacos/ajazz-control-center.git
+cd ajazz-control-center
+make bootstrap     # detects your OS, installs deps + udev rule, builds
+make run           # launches the app
+```
+
+Or drive CMake directly via the per-platform presets in
+[`CMakePresets.json`](CMakePresets.json) (requires Qt 6.7+ with `qtwebsockets`
+and `qtshadertools`):
+
+```bash
+cmake --preset linux-release          # also: macos-release / windows-release
+cmake --build --preset linux-release
+ctest --preset linux-release --output-on-failure
+```
+
+The full reference — every preset, `-D` option and CPack generator — lives in
+[`docs/guides/BUILDING.md`](docs/guides/BUILDING.md). Protocol work follows a
+documented clean-room procedure: see
+[`docs/protocols/REVERSE_ENGINEERING.md`](docs/protocols/REVERSE_ENGINEERING.md).
+
+______________________________________________________________________
 
 ## Contributing
 
-Pull requests, bug reports and new device captures are very welcome. Read [`CONTRIBUTING.md`](CONTRIBUTING.md), [`GUIDELINES.md`](GUIDELINES.md) (project-wide engineering rules) and [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md) before you start.
+Pull requests, bug reports and new device captures are very welcome. Read
+[`CONTRIBUTING.md`](CONTRIBUTING.md), [`GUIDELINES.md`](GUIDELINES.md) and
+[`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md) before you start.
 
 ## License
 
-GPL-3.0-or-later. AJAZZ Control Center is a clean-room implementation and is not affiliated with, endorsed by, or sponsored by AJAZZ, Mirabox, or Elgato.
-
-## Acknowledgements
-
-This project stands on the shoulders of the reverse-engineering community, in particular the authors of [OpenDeck](https://github.com/nekename/OpenDeck), [`elgato-streamdeck`](https://github.com/OpenActionAPI/rust-elgato-streamdeck), [`mirajazz`](https://crates.io/crates/mirajazz), [ZCube's AKP153 protocol notes](https://gist.github.com/ZCube/430fab6039899eaa0e18367f60d36b3c), [Den Delimarsky's Stream Deck Plus write-up](https://den.dev/blog/reverse-engineer-stream-deck-plus/), [`opendeck-akp03`](https://github.com/4ndv/opendeck-akp03) and [`ajazz-aj199-official-software`](https://github.com/progzone122/ajazz-aj199-official-software). None of their code is vendored; all protocol knowledge was re-derived from captures and their public notes.
+GPL-3.0-or-later. AJAZZ Control Center is a clean-room implementation and is not
+affiliated with, endorsed by, or sponsored by AJAZZ, Mirabox, or Elgato. It stands
+on the work of the reverse-engineering community — including
+[OpenDeck](https://github.com/nekename/OpenDeck),
+[`elgato-streamdeck`](https://github.com/OpenActionAPI/rust-elgato-streamdeck),
+[`mirajazz`](https://crates.io/crates/mirajazz),
+[`opendeck-akp03`](https://github.com/4ndv/opendeck-akp03) and
+[`ajazz-aj199-official-software`](https://github.com/progzone122/ajazz-aj199-official-software) —
+none of whose code is vendored.
