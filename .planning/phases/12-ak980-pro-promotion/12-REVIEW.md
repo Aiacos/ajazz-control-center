@@ -55,6 +55,17 @@ by the test suite rather than caught by it.
 
 ### CR-01: `setRgbBuffer()` drops 2 RGB bytes per chunk and reports a false length
 
+> **Resolution (2026-05-22): DEFERRED after RE cross-check.** The off-by-two is
+> real, but an RE sweep (`ak980pro_perkey_rgb_protocol.md`, `ak980pro_vendor.md`)
+> shows the whole `0x0A` zone-buffer path is a legacy "similar idea" the RE flags
+> to *unify* with the Ghidra-confirmed per-key protocol `0x20/sub-0x04` (already
+> implemented as `buildPerKeyRgbWriteHeader`). `setRgbBuffer` has no live caller
+> and no test, so nothing is corrupted in production. Changing the wire constant
+> in isolation would polish a superseded path against competing/provisional RE.
+> Documented in code + `docs/protocols/keyboard/proprietary.md`; proper fix is to
+> unify on `0x20/0x04` and verify the wired LED-to-byte mapping (RE-flagged
+> unconfirmed) on a physical AK980 PRO. Not fixed in code this pass, by design.
+
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:683-696`
 **Issue:**
 `RgbBufferChunk` is `60` (proprietary_protocol.hpp:207) but the per-LED RGB

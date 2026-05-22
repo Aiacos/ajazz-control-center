@@ -36,17 +36,37 @@ byte N+1.. : zero padding
 
 ## Command table
 
-| ID     | Name                          | Payload                      |
-| ------ | ----------------------------- | ---------------------------- |
-| `0x01` | `GET_FIRMWARE_VERSION`        | —                            |
-| `0x05` | `SET_KEYCODE(layer,row,col)`  | BE16 keycode                 |
-| `0x08` | `SET_RGB_STATIC(zone,r,g,b)`  | zone id + 24-bit RGB         |
-| `0x09` | `SET_RGB_EFFECT(zone,fx,spd)` | zone id + effect id + speed  |
-| `0x0A` | `SET_RGB_BUFFER(zone,off,n)`  | chunked 60-byte LED buffer   |
-| `0x0B` | `SET_RGB_BRIGHTNESS(percent)` | 0..100                       |
-| `0x0C` | `SET_LAYER(layer)`            | layer id 0..3                |
-| `0x0D` | `UPLOAD_MACRO(slot,off,len)`  | chunked 56-byte macro buffer |
-| `0x0E` | `COMMIT_EEPROM`               | —                            |
+| ID     | Name                          | Payload                       |
+| ------ | ----------------------------- | ----------------------------- |
+| `0x01` | `GET_FIRMWARE_VERSION`        | —                             |
+| `0x05` | `SET_KEYCODE(layer,row,col)`  | BE16 keycode                  |
+| `0x08` | `SET_RGB_STATIC(zone,r,g,b)`  | zone id + 24-bit RGB          |
+| `0x09` | `SET_RGB_EFFECT(zone,fx,spd)` | zone id + effect id + speed   |
+| `0x0A` | `SET_RGB_BUFFER(zone,off,n)`  | chunked LED buffer (see note) |
+| `0x0B` | `SET_RGB_BRIGHTNESS(percent)` | 0..100                        |
+| `0x0C` | `SET_LAYER(layer)`            | layer id 0..3                 |
+| `0x0D` | `UPLOAD_MACRO(slot,off,len)`  | chunked 56-byte macro buffer  |
+| `0x0E` | `COMMIT_EEPROM`               | —                             |
+
+> **Note on `0x0A SET_RGB_BUFFER` (deferred — Phase 12 CR-01, 2026-05-22).**
+> Two unresolved issues, left untouched pending a hardware round-trip:
+>
+> 1. **Chunk size.** The implementation's report layout is `id, cmd, zone, off-hi, off-lo, len, payload…` (6-byte header), so only `64 − 6 = 58`
+>    payload bytes fit per report, not 60. The "60-byte" figure here and the
+>    `RgbBufferChunk = 60` constant in code share the same off-by-two; the
+>    code's `memcpy` silently clamps to 58 while the length byte and offset
+>    advance by up to 60.
+> 1. **Supersession.** `ak980pro_vendor.md` marks `0x0A` as
+>    `⚠️ "similar idea → unify"` with the **Ghidra-confirmed** per-key RGB
+>    protocol `0x20 / sub 0x04` (see `ak980pro_perkey_rgb_protocol.md`, which
+>    supersedes `ak980pro_vendor.md` §3.7–§3.8). The `0x20/0x04` path is
+>    already implemented (`buildPerKeyRgbWriteHeader`): feature reports,
+>    64-byte chunks, mode byte at byte 9, **no length byte**.
+>
+> The `0x0A` method (`IRgbCapable::setRgbBuffer`) currently has no live caller
+> and no test, so the off-by-two corrupts nothing in production. Resolution:
+> unify on `0x20/0x04` and confirm the wired LED-to-byte mapping (RE-flagged
+> unconfirmed) on a physical AK980 PRO before trusting it.
 
 ## Zones
 

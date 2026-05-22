@@ -660,6 +660,27 @@ public:
         (void)m_transport->write(pkt);
     }
 
+    // KNOWN ISSUE — DEFERRED (Phase 12 code-review CR-01, RE cross-check 2026-05-22).
+    // This zone-addressed 0x0A SET_RGB_BUFFER path has TWO problems and is
+    // intentionally left unchanged until a hardware round-trip on a physical
+    // AK980 PRO resolves them:
+    //   1. Off-by-two: RgbBufferChunk is 60 but the header is 6 bytes (id, cmd,
+    //      zone, off-hi, off-lo, len), so only ReportSize-6 = 58 payload bytes
+    //      fit. The loop writes pkt[5]=take (up to 60) and advances offset by
+    //      `take`, while the memcpy below clamps to 58 — dropping 2 bytes/chunk
+    //      and claiming a length the report doesn't carry.
+    //   2. Wire divergence: docs/protocols/keyboard/ak980pro_vendor.md flags
+    //      0x0A as "similar idea, unify" with the Ghidra-confirmed per-key RGB
+    //      protocol 0x20/sub-0x04 (see ak980pro_perkey_rgb_protocol.md, which
+    //      supersedes vendor §3.7-3.8). That RE-correct path is already built
+    //      here as buildPerKeyRgbWriteHeader() (feature reports, 64-byte chunks,
+    //      mode byte at pkt[9], NO length byte).
+    // This method currently has NO live caller (IRgbCapable::setRgbBuffer is a
+    // stub/unused surface) and NO unit test, so the off-by-two corrupts nothing
+    // in production today. Do NOT "fix" the constant in isolation: changing a
+    // provisional/competing wire value blind risks a regression the RE can't
+    // confirm. The proper resolution is to unify on 0x20/0x04 and verify the
+    // wired LED-to-byte mapping (RE-flagged unconfirmed) against hardware.
     void setRgbBuffer(std::string_view zone, std::span<Rgb const> colors) override {
         auto const zoneId = zoneIdFromName(zone);
         if (zoneId == 0xff) {
