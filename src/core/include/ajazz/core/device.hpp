@@ -80,7 +80,7 @@ struct DeviceDescriptor {
     /// that expose several HID interfaces/collections (0 = open the first
     /// matching interface, the default for single-interface devices). When
     /// non-zero, HidTransport opens the interface whose usage page matches via
-    /// hid_enumerate + hid_open_path instead of hid_open(vid,pid) — which on a
+    /// hid_enumerate + hid_open_path instead of a bare vid/pid open — which on a
     /// composite device picks the boot keyboard, not the vendor channel where
     /// feature reports (RTC, battery, RGB) live. Verified for the AK980 PRO:
     /// the control channel is usage page 0xFF13 (the boot keyboard is 0x0001).
