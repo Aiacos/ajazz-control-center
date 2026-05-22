@@ -162,6 +162,66 @@ The descriptor fields here feed the QML grid renderer (`keyCount`,
 `capabilities:` list — there is no automated check for this yet
 (tracked in `TODO.md` "device descriptor / YAML cross-check").
 
+## 8.5 Device presentation (sidebar icon + product photo + name)
+
+Two visual surfaces identify the device in the UI. Keep them consistent for
+every new device:
+
+### Sidebar family icon — automatic, nothing to do
+
+Each sidebar row (`DeviceRow.qml`) shows a small leading icon chosen **by
+`DeviceFamily`** from the bundled clean-room set
+`resources/devices/device-{keyboard,mouse,streamdock}.svg`
+(2→keyboard, 3→mouse, 1/0/else→generic Stream Dock). It is auto-selected — you
+do **not** add a per-model icon. Just make sure the descriptor's
+`.family` (and the YAML `family:`) is correct and the family icon is right.
+
+### Device-pane product photo — one drop-in step
+
+The device editor header (`ProfileEditor.qml`) shows, for the selected device:
+
+```
+<Product Name>            [ product photo ]
+Editing: <codename>
+```
+
+The photo is rendered by `components/DeviceImage.qml` from a **bundled** image
+(qrc, no runtime network). To give a new device a real photo:
+
+1. Download the vendor product shot and **downsize it** (~256 px on the long
+   edge — keep it well under ~80 KB; e.g. Shopify CDN supports `&width=256`).
+   Save it as `resources/devices/products/product-<codename>.{png,jpg}`.
+   CMake auto-globs that folder into the qrc (`CONFIGURE_DEPENDS`) — no
+   CMake edit needed.
+2. Add one line to the `_productByCodename` map in `DeviceImage.qml`:
+   `"<codename>": _img("product-<codename>.<ext>"),`
+3. If the new codename is just a **variant** of a product already pictured
+   (a 2.4G / dongle / rebadge SKU), add a prefix/alias rule in
+   `_resolveProduct()` instead of a second copy of the same photo (see the
+   `aj159_*` / `akp03*` / `ajazz_24g_8k` rules already there).
+
+If you skip this, the header gracefully falls back to the per-family SVG — a
+photo is **recommended but optional**. Never reference a remote URL: photos are
+bundled so the UI works offline.
+
+> **Asset hygiene:** these are downsized vendor product shots used only for
+> in-app device identification. Keep them small and do not commit full-res
+> marketing assets.
+
+### Naming conventions (consistency rules)
+
+- **`name` / descriptor `.model`** = the real human **product name** as a user
+  would recognise it (e.g. `"AJAZZ AJ159 APEX (2.4G 8K)"`), shown large at the
+  top of the editor. Do **not** ship a mode descriptor or placeholder as the
+  name (the `0x5007` "2.4G 8K" → "AJ159 APEX" fix, 2026-05-22, was exactly this:
+  prefer the product family name). If a live unit contradicts the RE catalogue,
+  the hardware wins — fix the name and update the protocol/matrix doc.
+- **`codename`** = a stable lowercase machine id (`akp05e`, `aj159_apex_wired`).
+  It keys profiles, lookups, and the product-photo map, so **do not rename a
+  codename once it has shipped** — add an alias rule instead.
+- Keep the YAML `name:` / `codename:` and the `register.cpp` `.model` /
+  `.codename` identical.
+
 ## 9. Integration tests
 
 Drop a sanitized fragment of your capture into
@@ -205,7 +265,13 @@ changes**:
 - [ ] `src/devices/<family>/src/<codename>.cpp` implements `IDevice` +
   relevant capability mix-ins, plus a `make<Name>WithTransport`
   test-seam factory.
-- [ ] `src/devices/<family>/src/register.cpp` registers the descriptor.
+- [ ] `src/devices/<family>/src/register.cpp` registers the descriptor, with
+  `.model` set to the real **product name** (not a mode/placeholder) and the
+  `.family` correct (drives the sidebar icon).
+- [ ] (Recommended) a downsized product photo at
+  `resources/devices/products/product-<codename>.{png,jpg}` + a line in
+  `DeviceImage.qml`'s `_productByCodename` map (or a `_resolveProduct()` alias
+  rule for a variant). Falls back to the family SVG if omitted.
 - [ ] `tests/unit/test_<codename>_protocol.cpp` covers every builder
   with byte-level assertions (ASCII-only TEST_CASE titles).
 - [ ] `tests/unit/CMakeLists.txt` adds the new test target.
