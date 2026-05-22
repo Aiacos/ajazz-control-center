@@ -323,6 +323,7 @@ qt_add_qml_module(
               qml/components/FirmwarePanel.qml
               qml/components/EncoderCard.qml
               qml/components/KeyCell.qml
+              qml/components/Notification.qml
               qml/components/PageHeader.qml
               qml/components/PrimaryButton.qml
               qml/components/Ripple.qml

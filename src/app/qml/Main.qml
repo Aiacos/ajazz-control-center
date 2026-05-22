@@ -159,9 +159,16 @@ ApplicationWindow {
 
     Toast { id: toast }
 
-    // Time-sync feedback now lives inline in the device Settings tab
-    // (SettingsRow.qml) — auto-sync (connect + app start + periodic) is silent,
-    // and the manual "Sync time now" button shows its own status there.
+    // Compact green confirmation, top-right, whenever a device's clock is synced
+    // (manual "Sync time now" or automatic on-connect / at-startup). The device
+    // Settings tab additionally shows an inline ✓/✗ status.
+    Notification { id: syncNote }
+    Connections {
+        target: TimeSyncService
+        function onSyncSucceeded(codename) {
+            syncNote.show(qsTr("Time synced: %1").arg(codename));
+        }
+    }
 
     // ----------------------------------------------------------------------
     // Plugin Store drawer.

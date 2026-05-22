@@ -68,7 +68,7 @@ void registerAll(core::DeviceRegistry& registry) {
         // is an AJ159 APEX in its 2.4G/8K mode, so the model name now reads
         // APEX. Codename kept as `ajazz_24g_8k` to avoid disturbing existing
         // profile/lookup keys. Wire format reuses the AJ-series backend.
-        {0x3151, 0x5007, "AJAZZ AJ159 APEX (2.4G 8K)", "ajazz_24g_8k"},
+        {0x3151, 0x5007, "AJAZZ AJ159 APEX", "ajazz_24g_8k"},
         // AJ159 APEX family — three PIDs surfaced by deep RE pass
         // 2026-05-17 (aj_series_device_matrix.md §1.2). All three share
         // the same wire format documented in aj_series_opcode_table.md;

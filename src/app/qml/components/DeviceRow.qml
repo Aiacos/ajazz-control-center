@@ -116,9 +116,10 @@ ItemDelegate {
             }
             Text {
                 Layout.fillWidth: true
-                text: "%1 · %2".arg(root.deviceCodename)
-                               .arg(root.deviceConnected ? qsTr("connected") : qsTr("offline"))
-                color: Theme.fgMuted
+                text: root.deviceConnected ? qsTr("connected") : qsTr("offline")
+                // Status colour: connected reads in the success green, offline
+                // stays muted.
+                color: root.deviceConnected ? Theme.successAccent : Theme.fgMuted
                 font.pixelSize: Theme.fontXs
                 elide: Text.ElideRight
             }
@@ -197,6 +198,14 @@ ItemDelegate {
     // sync-state glyph), and adding a third visible element would crowd
     // the row's right-side stack.
     ToolTip.visible: root.hovered && root.deviceMaturity !== ""
-    ToolTip.text: qsTr("Maturity: %1").arg(root.deviceMaturity)
+    ToolTip.text: {
+        var t = root.deviceMaturity;
+        var desc = t === "verified"   ? qsTr("verified on real hardware")
+                 : t === "functional" ? qsTr("core features work on hardware")
+                 : t === "partial"    ? qsTr("some features work, others WIP")
+                 : t === "probed"     ? qsTr("protocol probed, wiring in progress")
+                 :                      qsTr("scaffolded — support not implemented yet");
+        return qsTr("Maturity: %1 — %2").arg(t).arg(desc);
+    }
     ToolTip.delay: 800
 }
