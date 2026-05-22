@@ -234,11 +234,12 @@ private:
         return out;
     }
 
-    std::uint16_t m_vid{0};          ///< USB Vendor ID.
-    std::uint16_t m_pid{0};          ///< USB Product ID.
-    std::string m_serial;            ///< Serial number filter; empty = first match.
-    std::uint16_t m_usagePage{0};    ///< Vendor control usage page to select (0 = first interface).
-    std::uint16_t m_usage{0};        ///< Vendor control usage to disambiguate same-page collections (0 = any).
+    std::uint16_t m_vid{0};       ///< USB Vendor ID.
+    std::uint16_t m_pid{0};       ///< USB Product ID.
+    std::string m_serial;         ///< Serial number filter; empty = first match.
+    std::uint16_t m_usagePage{0}; ///< Vendor control usage page to select (0 = first interface).
+    std::uint16_t m_usage{
+        0}; ///< Vendor control usage to disambiguate same-page collections (0 = any).
     ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
     /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
     std::atomic<std::uint64_t> m_bytesSent{0};

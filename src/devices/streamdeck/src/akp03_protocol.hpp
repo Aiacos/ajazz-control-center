@@ -117,7 +117,7 @@ inline constexpr std::array<std::uint8_t, 3> CmdImagePng = CmdImage;
 // CmdPrefix / CmdLight / CmdStop / CmdVersion / CmdClear / UploadFinishedMarker
 // are shared family-wide — see the akp_common `using` block above. The
 // remaining opcodes below are AKP03-specific.
-inline constexpr std::array<std::uint8_t, 3> CmdInit{0x44, 0x49, 0x53}; ///< Display init "DIS".
+inline constexpr std::array<std::uint8_t, 3> CmdInit{0x44, 0x49, 0x53};  ///< Display init "DIS".
 inline constexpr std::array<std::uint8_t, 3> CmdSleep{0x48, 0x41, 0x4e}; ///< Sleep "HAN".
 
 /**

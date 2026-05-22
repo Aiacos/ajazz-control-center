@@ -142,6 +142,7 @@ ______________________________________________________________________
   **Architectural complication (do NOT do a blanket transport fix):**
   `HidTransport::write()` calls `hid_write` identically on all platforms, but the
   backends DISAGREE on byte 0:
+
   - **Streamdeck** (`akp03/akp05/akp153/akp815`): byte 0 = `'C'` (no report id).
   - **Keyboard** (`proprietary_keyboard.cpp`): byte 0 = `0x00` report id already
     (time-sync data packet, TFT chunks).
@@ -154,19 +155,20 @@ ______________________________________________________________________
   all backends (larger; touches every builder + test + the Windows path).
 
   **Diagnostic tests to run on Fedora (pin the failure point before coding):**
+
   1. ✅ Device detected in the app device list — confirmed 2026-05-21.
-  2. Run from a terminal capturing stderr and inspect the log:
+  1. Run from a terminal capturing stderr and inspect the log:
      `./ajazz-control-center 2> ak.log` then
      `grep -iE "akp05|streamdeck|opened|write|hid|permission|denied" ak.log`.
      - Does it log `opened VID=0300 PID=3004`? (if not → udev/permissions, step 3)
      - Do the image `write()`s return success (>0) or error? A *successful* write
        with no panel change ⇒ confirms the report-id framing hypothesis.
-  3. udev / hidraw permissions:
+  1. udev / hidraw permissions:
      `ls /etc/udev/rules.d/ | grep -i ajazz` and `ls -l /dev/hidraw*`.
      - Ensure `resources/linux/99-ajazz.rules` is installed (VID `0300` Stream
        Dock family) and the `/dev/hidraw*` node for `0300:3004` is user-accessible
        (`uaccess`); replug or `udevadm trigger --action=change` if ACLs are stale.
-  4. Cross-check with the AKP153 (`0x0300:0x1001`) on the SAME Fedora box — it
+  1. Cross-check with the AKP153 (`0x0300:0x1001`) on the SAME Fedora box — it
      uses the identical `CRT`-at-byte-0 framing. If AKP153 image upload ALSO
      fails on Linux, the report-id issue is family-wide (all Stream Dock); if
      AKP153 works, the problem is AKP05-specific (1024-byte packet size, the
@@ -181,8 +183,7 @@ ______________________________________________________________________
   feasible.
 
   Files: `src/devices/streamdeck/src/akp05.cpp` (`buildCmdHeader`, `sendImage`/
-  key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/
-  streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
+  key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/ streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
 
 - [ ] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
   🐧 **Works on Windows; needs Fedora verification + likely a hidraw fix.**
@@ -192,8 +193,9 @@ ______________________________________________________________________
   control collection) and the OLED clock sets (commit `0a1952e`: opcode `0x28`
   with the 0xD7 marker via SET_FEATURE on the same collection). Both reads/writes
   go through the vendor control collection selected by `controlUsagePage=0xFFFF`
-  + `controlUsage=0x02` (commit `69c64a1`). The whole feature must be confirmed
-  on Fedora.
+
+  - `controlUsage=0x02` (commit `69c64a1`). The whole feature must be confirmed
+    on Fedora.
 
   **Why it may not work out-of-the-box on Fedora — two independent gates:**
 
@@ -201,16 +203,15 @@ ______________________________________________________________________
      (SONiX). The app opens `/dev/hidraw*` directly; without a udev rule granting
      the logged-in user access, `hid_open_path` fails and battery/clock silently
      return nothing.
-     - Install the project rules: `sudo cp resources/linux/99-ajazz.rules
-       /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm
-       trigger --action=change` (VID prefix `3151` is covered there).
+
+     - Install the project rules: `sudo cp resources/linux/99-ajazz.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger --action=change` (VID prefix `3151` is covered there).
      - Verify the control node is user-accessible:
        `ls -l /dev/hidraw*` — the `0x3151:0x5007` MI_02 node should carry an ACL
        for your user (`getfacl /dev/hidrawN` shows `user:<you>:rw-` when `uaccess`
        applied). If stale (device was plugged in before the rule landed), replug
        or `sudo udevadm trigger --action=change`.
 
-  2. **HID usage disambiguation on hidraw (the likely code gate).** The mouse
+  1. **HID usage disambiguation on hidraw (the likely code gate).** The mouse
      exposes TWO `0xFFFF` collections (usage 2 = control, usage 1 = not). On
      Windows hidapi reliably reports `usage`, so `controlUsage=0x02` picks the
      right node. On **Linux hidraw, `hid_enumerate`'s `usage`/`usage_page` can be
@@ -221,12 +222,13 @@ ______________________________________________________________________
      no-op on Fedora.
 
   **Diagnostic on Fedora (run from a terminal, capture stderr):**
+
   ```
   ./ajazz-control-center 2> mouse.log
   grep -iE "opened VID=3151|aj_series|battery|queried|hid_open|usage" mouse.log
   ```
-  - Expect `opened VID=3151 PID=5007 (usage-page filtered)` + `queried
-    ajazz_24g_8k: NN%`. 
+
+  - Expect `opened VID=3151 PID=5007 (usage-page filtered)` + `queried ajazz_24g_8k: NN%`.
   - If you see `opened VID=3151 …` **without** "(usage-page filtered)" or no
     `queried ajazz_24g_8k` line ⇒ it opened the wrong interface ⇒ the hidraw
     usage-unpopulated fallback (gate 2).

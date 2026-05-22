@@ -12,7 +12,6 @@ ratified: 2026-05-20
 
 > (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
 
-
 # ARCH-05.2: AJAZZ 2.4G 8K mouse TFT clock — amendment to ARCH-05
 
 **Status:** FINAL — amends ARCH-05 (2026-05-15 default verdict) per the D-05

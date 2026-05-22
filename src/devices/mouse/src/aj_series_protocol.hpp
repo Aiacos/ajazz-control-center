@@ -361,13 +361,12 @@ buildSetTftLcdData(std::uint8_t frame,
  * Sent via @c ITransport::writeFeature() (HidD_SetFeature). NO BIT7 checksum —
  * the vendor leaves bytes 16..64 zero.
  */
-[[nodiscard]] std::array<std::uint8_t, kReportSize>
-buildMouseSetOledClock(std::uint16_t year,
-                       std::uint8_t month,
-                       std::uint8_t day,
-                       std::uint8_t hour,
-                       std::uint8_t minute,
-                       std::uint8_t second);
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildMouseSetOledClock(std::uint16_t year,
+                                                                           std::uint8_t month,
+                                                                           std::uint8_t day,
+                                                                           std::uint8_t hour,
+                                                                           std::uint8_t minute,
+                                                                           std::uint8_t second);
 
 // ---------------------------------------------------------------------------
 // §3.11 — SET_MACRO_SIMPLE (opcode 0x16) chunked macro upload

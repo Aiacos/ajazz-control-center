@@ -145,35 +145,35 @@ for explicit ratification in Phase 9:
 
 **Anchor files (file:line):**
 
-| Concern                                       | File                                                | Lines       |
-| --------------------------------------------- | --------------------------------------------------- | ----------- |
-| All capability mix-ins                        | `src/core/include/ajazz/core/capabilities.hpp`      | 31-601      |
-| `enum Capability` + `static_assert` lock      | `src/core/include/ajazz/core/capabilities.hpp`      | 31-59       |
-| `IDisplayCapable`                             | `src/core/include/ajazz/core/capabilities.hpp`      | 99-197      |
-| `IRgbCapable`                                 | `src/core/include/ajazz/core/capabilities.hpp`      | 199-272     |
-| `IEncoderCapable`                             | `src/core/include/ajazz/core/capabilities.hpp`      | 274-324     |
-| `IKeyRemappable` (layers/macros/keymap)       | `src/core/include/ajazz/core/capabilities.hpp`      | 326-396     |
-| `IMouseCapable` (dpi/poll/lod/btn/battery)    | `src/core/include/ajazz/core/capabilities.hpp`      | 398-498     |
-| `IFirmwareCapable`                            | `src/core/include/ajazz/core/capabilities.hpp`      | 500-553     |
-| `IClockCapable` + `TimeSyncResult`            | `src/core/include/ajazz/core/capabilities.hpp`      | 555-601     |
-| `IDevice` + `DevicePtr = shared_ptr<IDevice>` | `src/core/include/ajazz/core/device.hpp`            | 100-201     |
-| `DeviceDescriptor` + capability flags         | `src/core/include/ajazz/core/device.hpp`            | 45-72       |
-| `DeviceRegistry::open` flyweight              | `src/core/include/ajazz/core/device_registry.hpp`   | 130-196     |
-| `HotplugMonitor::injectEvent` test seam       | `src/core/include/ajazz/core/hotplug_monitor.hpp`   | 96-139      |
-| Streamdock register (AKP03 family + 0x3004)   | `src/devices/streamdeck/src/register.cpp`           | 238-250     |
+| Concern                                           | File                                                | Lines       |
+| ------------------------------------------------- | --------------------------------------------------- | ----------- |
+| All capability mix-ins                            | `src/core/include/ajazz/core/capabilities.hpp`      | 31-601      |
+| `enum Capability` + `static_assert` lock          | `src/core/include/ajazz/core/capabilities.hpp`      | 31-59       |
+| `IDisplayCapable`                                 | `src/core/include/ajazz/core/capabilities.hpp`      | 99-197      |
+| `IRgbCapable`                                     | `src/core/include/ajazz/core/capabilities.hpp`      | 199-272     |
+| `IEncoderCapable`                                 | `src/core/include/ajazz/core/capabilities.hpp`      | 274-324     |
+| `IKeyRemappable` (layers/macros/keymap)           | `src/core/include/ajazz/core/capabilities.hpp`      | 326-396     |
+| `IMouseCapable` (dpi/poll/lod/btn/battery)        | `src/core/include/ajazz/core/capabilities.hpp`      | 398-498     |
+| `IFirmwareCapable`                                | `src/core/include/ajazz/core/capabilities.hpp`      | 500-553     |
+| `IClockCapable` + `TimeSyncResult`                | `src/core/include/ajazz/core/capabilities.hpp`      | 555-601     |
+| `IDevice` + `DevicePtr = shared_ptr<IDevice>`     | `src/core/include/ajazz/core/device.hpp`            | 100-201     |
+| `DeviceDescriptor` + capability flags             | `src/core/include/ajazz/core/device.hpp`            | 45-72       |
+| `DeviceRegistry::open` flyweight                  | `src/core/include/ajazz/core/device_registry.hpp`   | 130-196     |
+| `HotplugMonitor::injectEvent` test seam           | `src/core/include/ajazz/core/hotplug_monitor.hpp`   | 96-139      |
+| Streamdock register (AKP03 family + 0x3004)       | `src/devices/streamdeck/src/register.cpp`           | 238-250     |
 | Stream Dock backend (akp05e routes via makeAkp05) | `src/devices/streamdeck/src/akp03.cpp`              | 274-521     |
-| Keyboard register (AK980 PRO = 0x0c45:0x8009) | `src/devices/keyboard/src/register.cpp`             | 53-63       |
-| ProprietaryKeyboard backend (ak980pro)        | `src/devices/keyboard/src/proprietary_keyboard.cpp` | 204-437     |
-| Mouse register (2.4G 8K = 0x3151:0x5007)      | `src/devices/mouse/src/register.cpp`                | 67          |
-| AjSeriesMouse backend                         | `src/devices/mouse/src/aj_series.cpp`               | 97-264      |
-| TimeSyncService canonical consumer pattern    | `src/app/src/time_sync_service.{hpp,cpp}`           | cpp 149-179 |
-| QML singleton registration pattern            | `src/app/src/application.cpp`                       | 188-204     |
-| DeviceModel roles                             | `src/app/src/device_model.hpp`                      | 62-78       |
-| Catalogue                                     | `docs/_data/devices.yaml`                           | 264-378     |
-| Test fixture pattern                          | `tests/integration/fixtures/akp153/`                | —           |
-| Unit test pattern (per-codename protocol)     | `tests/unit/test_akp03_protocol.cpp` etc.           | —           |
-| Mock-seam pattern (`MockHidEnumerator`)       | `tests/unit/mock_hid_enumerator.hpp`                | —           |
-| Test build wiring                             | `tests/unit/CMakeLists.txt`                         | 1-130       |
+| Keyboard register (AK980 PRO = 0x0c45:0x8009)     | `src/devices/keyboard/src/register.cpp`             | 53-63       |
+| ProprietaryKeyboard backend (ak980pro)            | `src/devices/keyboard/src/proprietary_keyboard.cpp` | 204-437     |
+| Mouse register (2.4G 8K = 0x3151:0x5007)          | `src/devices/mouse/src/register.cpp`                | 67          |
+| AjSeriesMouse backend                             | `src/devices/mouse/src/aj_series.cpp`               | 97-264      |
+| TimeSyncService canonical consumer pattern        | `src/app/src/time_sync_service.{hpp,cpp}`           | cpp 149-179 |
+| QML singleton registration pattern                | `src/app/src/application.cpp`                       | 188-204     |
+| DeviceModel roles                                 | `src/app/src/device_model.hpp`                      | 62-78       |
+| Catalogue                                         | `docs/_data/devices.yaml`                           | 264-378     |
+| Test fixture pattern                              | `tests/integration/fixtures/akp153/`                | —           |
+| Unit test pattern (per-codename protocol)         | `tests/unit/test_akp03_protocol.cpp` etc.           | —           |
+| Mock-seam pattern (`MockHidEnumerator`)           | `tests/unit/mock_hid_enumerator.hpp`                | —           |
+| Test build wiring                                 | `tests/unit/CMakeLists.txt`                         | 1-130       |
 
 ## Capability mix-in inventory
 
@@ -522,7 +522,7 @@ linearly per consumer and is fine at N=2-3 consumers.
 | Type                           | Path                                                   | Purpose                                                                                                                                  |
 | ------------------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Test fixture                   | `tests/unit/fixtures/mock_transport.hpp` (NEW)         | Thin ITransport mock that captures `write` calls + replays canned `read` responses. ~80 LoC. Pre-condition for every capability test.    |
-| Test fixture dir               | `tests/integration/fixtures/akp05e/` (NEW) | hex-format capture fixtures per the `akp153/` precedent.                                                                                 |
+| Test fixture dir               | `tests/integration/fixtures/akp05e/` (NEW)             | hex-format capture fixtures per the `akp153/` precedent.                                                                                 |
 | Test fixture dir               | `tests/integration/fixtures/ak980pro/` (NEW)           | hex-format capture fixtures.                                                                                                             |
 | Test fixture dir               | `tests/integration/fixtures/ajazz_24g_8k/` (NEW)       | hex-format capture fixtures.                                                                                                             |
 | Test fixture dir               | `tests/integration/fixtures/0c45_7016/` (NEW)          | Identification capture (`lsusb -v`, `udevadm`), then either deletion (Scenario B = secondary interface) or wire-format hex (Scenario A). |

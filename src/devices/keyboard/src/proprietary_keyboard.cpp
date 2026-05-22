@@ -305,9 +305,10 @@ std::array<std::uint8_t, 3> encodeTftChunkIndex(std::uint32_t chunkIdx) {
     // with the high 7 bits of the index, byte 2 carries the low 8 bits, byte 3
     // the middle 8 bits. Decoder: idx = byte2 | (byte3<<8) | ((byte1 & 0x7f)<<16).
     return {
-        static_cast<std::uint8_t>(0x80u | ((chunkIdx >> 16) & 0x7fu)), // byte 1: 0x80 marker | high 7 bits
-        static_cast<std::uint8_t>(chunkIdx & 0xffu),                   // byte 2: low 8 bits
-        static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),            // byte 3: middle 8 bits
+        static_cast<std::uint8_t>(0x80u |
+                                  ((chunkIdx >> 16) & 0x7fu)), // byte 1: 0x80 marker | high 7 bits
+        static_cast<std::uint8_t>(chunkIdx & 0xffu),           // byte 2: low 8 bits
+        static_cast<std::uint8_t>((chunkIdx >> 8) & 0xffu),    // byte 3: middle 8 bits
     };
 }
 
@@ -505,14 +506,13 @@ class ProprietaryKeyboard final : public IDevice,
 public:
     /** Production constructor — creates a real HID transport. */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id)
-        : ProprietaryKeyboard(
-              descriptor,
-              id,
-              makeHidTransport(id.vendorId,
-                               id.productId,
-                               id.serial,
-                               descriptor.controlUsagePage,
-                               descriptor.controlUsage)) {}
+        : ProprietaryKeyboard(descriptor,
+                              id,
+                              makeHidTransport(id.vendorId,
+                                               id.productId,
+                                               id.serial,
+                                               descriptor.controlUsagePage,
+                                               descriptor.controlUsage)) {}
 
     /** Test constructor — accepts an injected transport (DI for unit tests). */
     ProprietaryKeyboard(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)

@@ -484,7 +484,7 @@ std::array<std::uint8_t, kReportSize> buildMouseSetOledClock(std::uint16_t year,
     // big-endian, and NO BIT7 checksum — the firmware ignores the packet if the
     // 0xD7 marker is missing.
     std::array<std::uint8_t, kReportSize> pkt{};
-    pkt[0] = 0x00; // HID report id 0x00
+    pkt[0] = 0x00;                                            // HID report id 0x00
     pkt[1] = static_cast<std::uint8_t>(FeaCmd::SetOledClock); // 0x28
     pkt[8] = 0xD7;                                            // required fixed marker
     pkt[9] = static_cast<std::uint8_t>((year >> 8U) & 0xFFU); // year big-endian

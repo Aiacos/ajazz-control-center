@@ -636,12 +636,12 @@ byte 4..7 : status flags — 01 01 01 02 when the wireless link/telemetry is up,
 
 Observed states (via `scripts/aj_mouse_probe.py --battery-watch` across a replug):
 
-| Frame                         | Meaning                                  |
-| ----------------------------- | ---------------------------------------- |
-| `05 00 00 64 01 01 01 02`     | stable, 100%                             |
-| `05 00 00 00 00 00 00 00`     | fresh reconnect — link not ready yet     |
-| `05 00 00 00 01 01 01 02`     | link up, charge not reported yet (→ grey)|
-| `05 ad 04 01 00 00 00 00`     | **garbage transient frame** during reconnect |
+| Frame                     | Meaning                                      |
+| ------------------------- | -------------------------------------------- |
+| `05 00 00 64 01 01 01 02` | stable, 100%                                 |
+| `05 00 00 00 00 00 00 00` | fresh reconnect — link not ready yet         |
+| `05 00 00 00 01 01 01 02` | link up, charge not reported yet (→ grey)    |
+| `05 ad 04 01 00 00 00 00` | **garbage transient frame** during reconnect |
 
 The last row is the source of the spurious "1%" that flashed in the UI before
 the value settled. The fix (`batteryPercent()`, commit 1f2be0c): a valid status

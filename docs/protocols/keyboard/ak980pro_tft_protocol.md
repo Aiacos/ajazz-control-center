@@ -16,9 +16,10 @@ of this file.
 Source: Ghidra decompilation of `FUN_004231c0` (primary path, **HID
 output-report chunks**) and `FUN_00422920` (alternate path, **HID 4097-byte
 bulk write**), plus the transport helpers `FUN_0044f5f0` (output-report write
-+ readback), `FUN_00451220` (`WriteFile`), `FUN_0044eed0` (feature-report
-write), `FUN_00451440` (`HidD_SetFeature`). Raw decompiles at
-`C:/Users/unilo/reverse-eng-workdir/ak980pro/decomp_targets/`.
+
+- readback), `FUN_00451220` (`WriteFile`), `FUN_0044eed0` (feature-report
+  write), `FUN_00451440` (`HidD_SetFeature`). Raw decompiles at
+  `C:/Users/unilo/reverse-eng-workdir/ak980pro/decomp_targets/`.
 
 The C++ implementation lives in `src/devices/keyboard/src/proprietary_keyboard.cpp`
 (`encodeTftChunkIndex`, `buildTftChunkedHeader`, `buildTftChunkedPayload`,
@@ -51,11 +52,11 @@ ______________________________________________________________________
 
 The two upload paths use **two different HID transports** in the vendor binary:
 
-| Path | Helper chain | Win32 call | Wire kind | Logical length |
-| --- | --- | --- | --- | --- |
-| Chunked (§3) | `FUN_004231c0`→`FUN_0044f5f0`→`FUN_00451220` | `WriteFile` | **output report** | **33 bytes** (0x21), padded to `OutputReportByteLength` |
-| Bulk small pkts (§4) | `FUN_00422920`→`FUN_0044eed0`→`FUN_00451440` | `HidD_SetFeature` | **feature report** | 65 bytes (0x41) |
-| Bulk 4 KiB blocks (§4) | `FUN_00422920`→`FUN_0044f2d0`→`FUN_00451220` | `WriteFile` | output report | 4097 bytes (0x1001) |
+| Path                   | Helper chain                                 | Win32 call        | Wire kind          | Logical length                                          |
+| ---------------------- | -------------------------------------------- | ----------------- | ------------------ | ------------------------------------------------------- |
+| Chunked (§3)           | `FUN_004231c0`→`FUN_0044f5f0`→`FUN_00451220` | `WriteFile`       | **output report**  | **33 bytes** (0x21), padded to `OutputReportByteLength` |
+| Bulk small pkts (§4)   | `FUN_00422920`→`FUN_0044eed0`→`FUN_00451440` | `HidD_SetFeature` | **feature report** | 65 bytes (0x41)                                         |
+| Bulk 4 KiB blocks (§4) | `FUN_00422920`→`FUN_0044f2d0`→`FUN_00451220` | `WriteFile`       | output report      | 4097 bytes (0x1001)                                     |
 
 So the **chunked path is an output report** — our code sends it via
 `ITransport::write()`, NOT `writeFeature()`. The **bulk path's control packets
@@ -111,7 +112,7 @@ a separate packet; it is the leading bytes of the chunk stream.
 > region and `total_chunks = ceil((256 + 64800)/28) = 2324` for one frame. If
 > it is 0, `total_chunks = ceil(64800/28) = 2315`. **The current implementation
 > assumes 0 (no header prefix, 2315 chunks)** because the decompile does not pin
-> 256. This is the single most important thing a capture must resolve.
+> 256\. This is the single most important thing a capture must resolve.
 
 ### 3.2 Header packet (`0x7F 0x03`) — `FUN_004231c0:250-267`
 
@@ -230,17 +231,17 @@ ______________________________________________________________________
 
 ## 6. Implementation map
 
-| Concern | Symbol | File |
-| --- | --- | --- |
-| Chunk index split | `encodeTftChunkIndex` | `proprietary_keyboard.cpp` |
-| Header packet | `buildTftChunkedHeader` | `proprietary_keyboard.cpp` |
-| Chunk packet | `buildTftChunkedPayload` | `proprietary_keyboard.cpp` |
-| Byte-32 checksum | `stampTftChecksum` | `proprietary_keyboard.cpp` |
-| RGBA8 → RGB565 | `encodeRgb565` | `proprietary_keyboard.cpp` |
-| Bulk begin (scaffold) | `buildScreenBulkBegin` | `proprietary_keyboard.cpp` |
-| Upload orchestration | `uploadTftImage` (`ITftDisplayCapable`) | `proprietary_keyboard.cpp` |
-| Constants | `kTft*`, `CmdScreen*` | `proprietary_protocol.hpp` |
-| Tests | `[ak980][tft][chunked]`, `[proprietary][protocol][tft]` | `tests/unit/` |
+| Concern               | Symbol                                                  | File                       |
+| --------------------- | ------------------------------------------------------- | -------------------------- |
+| Chunk index split     | `encodeTftChunkIndex`                                   | `proprietary_keyboard.cpp` |
+| Header packet         | `buildTftChunkedHeader`                                 | `proprietary_keyboard.cpp` |
+| Chunk packet          | `buildTftChunkedPayload`                                | `proprietary_keyboard.cpp` |
+| Byte-32 checksum      | `stampTftChecksum`                                      | `proprietary_keyboard.cpp` |
+| RGBA8 → RGB565        | `encodeRgb565`                                          | `proprietary_keyboard.cpp` |
+| Bulk begin (scaffold) | `buildScreenBulkBegin`                                  | `proprietary_keyboard.cpp` |
+| Upload orchestration  | `uploadTftImage` (`ITftDisplayCapable`)                 | `proprietary_keyboard.cpp` |
+| Constants             | `kTft*`, `CmdScreen*`                                   | `proprietary_protocol.hpp` |
+| Tests                 | `[ak980][tft][chunked]`, `[proprietary][protocol][tft]` | `tests/unit/`              |
 
 ______________________________________________________________________
 
@@ -261,17 +262,17 @@ ______________________________________________________________________
    with the frame-count byte) or not (⇒ 2 315, current assumption)? Resolve via
    the init code that assigns the field, or a capture of chunk 0 + the total
    chunk count in the header packet.
-2. **Transport** — does the physical panel accept **output reports** for image
+1. **Transport** — does the physical panel accept **output reports** for image
    upload, or only **feature reports** (as time-sync does)? If feature-only,
    revert `uploadTftImage` to `writeFeature()` and drop the §3.4 checksum.
-3. **Checksum validation** — does the firmware check byte 32, or ignore it?
-4. **Readback / ACK (§3.5)** — does the panel echo bytes 1-3 per chunk? Is the
+1. **Checksum validation** — does the firmware check byte 32, or ignore it?
+1. **Readback / ACK (§3.5)** — does the panel echo bytes 1-3 per chunk? Is the
    fire-and-forget approach safe at speed, or do chunks drop?
-5. **RGB565 byte order + walk direction (§5)** — send a test frame with pixel
+1. **RGB565 byte order + walk direction (§5)** — send a test frame with pixel
    (0,0) = pure red `0xF800`, (1,0) = green `0x07E0`, (2,0) = blue `0x001F`. If
    the top row shows R,G,B left-to-right, the layout is BE top-down row-major.
    Otherwise swap byte order (`htole16`) and/or flip the row walk.
-6. **Bulk vs chunked trigger (§4.2)** — which `config.xml` flag (or firmware
+1. **Bulk vs chunked trigger (§4.2)** — which `config.xml` flag (or firmware
    version) selects the bulk path?
 
 When a capture answers any of these, update the relevant §, flip the code if
