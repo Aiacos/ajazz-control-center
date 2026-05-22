@@ -34,6 +34,7 @@ Image { source: "qrc:/qt/qml/AjazzControlCenter/icons/glyphs/glyph-sync.svg" }
 ## Inventory
 
 ### `glyphs/` — feature icons (24)
+
 `sync` · `battery` · `rgb` · `dpi` · `profile` · `settings` · `brightness` ·
 `macro` · `layer` · `keybind` · `wireless` (2.4 GHz) · `display` (TFT/screen) ·
 `firmware` · `power` (sleep) · `pollrate` · `lod` (lift-off) · `anglesnap` ·
@@ -41,6 +42,7 @@ Image { source: "qrc:/qt/qml/AjazzControlCenter/icons/glyphs/glyph-sync.svg" }
 `clock` · `weather`.
 
 ### `actions/` — key/button assignment actions (40)
+
 - **Mouse:** `click-left` `click-right` `click-middle` `scroll`
   `dpi-up` `dpi-down` `dpi-cycle` `dpi-shift` `button-back` `button-forward`
 - **Keys:** `key` `multikey` `text` `mic-mute`
@@ -51,11 +53,13 @@ Image { source: "qrc:/qt/qml/AjazzControlCenter/icons/glyphs/glyph-sync.svg" }
 - **Window/special:** `show-desktop` `task-view` `disable` `default`
 
 ### `../devices/` — per-family illustrations (3)
+
 `device-keyboard` (AK980-class) · `device-mouse` (AJ-series) ·
 `device-streamdock` (AKP). Inherently coloured (dark surfaces + RGB hints), not
 theme-tinted.
 
 ## Conventions for new icons
+
 - 24×24 viewBox for glyphs/actions; `fill="none"`, `stroke="currentColor"`,
   `stroke-width="2"`, round caps/joins; one brand-red accent where it adds
   meaning.

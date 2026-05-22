@@ -246,11 +246,11 @@ public:
         : Akp153Device(std::move(descriptor),
                        id,
                        makeHidTransport(id.vendorId,
-                                       id.productId,
-                                       id.serial,
-                                       /*usagePage*/ 0,
-                                       /*usage*/ 0,
-                                       /*prependReportIdPosix*/ true)) {}
+                                        id.productId,
+                                        id.serial,
+                                        /*usagePage*/ 0,
+                                        /*usage*/ 0,
+                                        /*prependReportIdPosix*/ true)) {}
 
     /// Test constructor: accepts an injected transport (e.g. a fake) so unit
     /// tests don't need libhidapi or a real device on the bus (COD-026).

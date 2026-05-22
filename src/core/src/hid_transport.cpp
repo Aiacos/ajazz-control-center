@@ -166,9 +166,8 @@ public:
                 throw std::runtime_error("hid_write failed");
             }
             // Account bytes at the logical (caller-visible, un-prefixed) size.
-            auto const logical = static_cast<std::size_t>(fn) > 0
-                                     ? static_cast<std::size_t>(fn) - 1
-                                     : std::size_t{0};
+            auto const logical = static_cast<std::size_t>(fn) > 0 ? static_cast<std::size_t>(fn) - 1
+                                                                  : std::size_t{0};
             m_bytesSent.fetch_add(logical, std::memory_order_relaxed);
             return logical;
         }
@@ -284,13 +283,15 @@ private:
         return out;
     }
 
-    std::uint16_t m_vid{0};          ///< USB Vendor ID.
-    std::uint16_t m_pid{0};          ///< USB Product ID.
-    std::string m_serial;            ///< Serial number filter; empty = first match.
-    std::uint16_t m_usagePage{0};    ///< Vendor control usage page to select (0 = first interface).
-    std::uint16_t m_usage{0};        ///< Vendor control usage to disambiguate same-page collections (0 = any).
-    bool m_prependReportIdPosix{false}; ///< Prepend a 0x00 report-id byte to write() on Linux/macOS (streamdeck CRT packets).
-    ::hid_device* m_handle{nullptr}; ///< libhidapi device handle; nullptr when closed.
+    std::uint16_t m_vid{0};       ///< USB Vendor ID.
+    std::uint16_t m_pid{0};       ///< USB Product ID.
+    std::string m_serial;         ///< Serial number filter; empty = first match.
+    std::uint16_t m_usagePage{0}; ///< Vendor control usage page to select (0 = first interface).
+    std::uint16_t m_usage{
+        0}; ///< Vendor control usage to disambiguate same-page collections (0 = any).
+    bool m_prependReportIdPosix{false}; ///< Prepend a 0x00 report-id byte to write() on Linux/macOS
+                                        ///< (streamdeck CRT packets).
+    ::hid_device* m_handle{nullptr};    ///< libhidapi device handle; nullptr when closed.
     /// Atomic counters; reads happen on threads other than the I/O thread (UI/diagnostics).
     std::atomic<std::uint64_t> m_bytesSent{0};
     std::atomic<std::uint64_t> m_bytesReceived{0};

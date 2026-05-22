@@ -32,6 +32,7 @@
 
 #ifdef _WIN32
 #include <cwctype>
+
 #include <process.h>
 #include <windows.h>
 #else

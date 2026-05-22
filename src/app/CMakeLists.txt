@@ -189,13 +189,12 @@ set_source_files_properties(
     ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
 )
 
-# Clean-room original UI icon set (see resources/icons/README.md). Theme-tintable
-# SVGs: each line glyph uses stroke="currentColor", so a single file renders white
-# on the dark theme and near-black on the light theme — no per-theme duplicates.
-# Three groups: glyphs/ (feature icons), actions/ (key-assignment actions),
-# devices/ (per-family illustrations). Aliased under icons/ so QML loads them via
-# qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg. CONFIGURE_DEPENDS
-# re-globs when an SVG is added/removed so contributors just drop a file in.
+# Clean-room original UI icon set (see resources/icons/README.md). Theme-tintable SVGs: each line
+# glyph uses stroke="currentColor", so a single file renders white on the dark theme and near-black
+# on the light theme — no per-theme duplicates. Three groups: glyphs/ (feature icons), actions/
+# (key-assignment actions), devices/ (per-family illustrations). Aliased under icons/ so QML loads
+# them via qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg. CONFIGURE_DEPENDS re-globs when
+# an SVG is added/removed so contributors just drop a file in.
 set(ACC_UI_ICONS "")
 file(GLOB _acc_ui_glyphs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/glyphs/*.svg)
 file(GLOB _acc_ui_actions CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/actions/*.svg)

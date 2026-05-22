@@ -824,8 +824,8 @@ private:
     DeviceId m_id;                 ///< HID bus identity (VID, PID, serial string).
     TransportPtr m_transport;      ///< Underlying HID I/O channel.
     std::string m_firmwareVersion{"unknown"}; ///< Cached CRT VER response; set by open().
-    EventCallback m_callback;      ///< Registered input-event sink (may be null).
-    std::mutex m_mutex;            ///< Guards m_callback for thread-safe registration.
+    EventCallback m_callback;                 ///< Registered input-event sink (may be null).
+    std::mutex m_mutex;                       ///< Guards m_callback for thread-safe registration.
 };
 
 } // namespace

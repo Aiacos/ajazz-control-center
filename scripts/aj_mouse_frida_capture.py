@@ -6,6 +6,7 @@ Hooks HidD_SetFeature / HidD_GetFeature in the running iot_driver process and
 dumps every feature-report buffer. Run while triggering a clock set in the
 vendor app. Read-only observation of the user's own driver.
 """
+
 from __future__ import annotations
 
 import sys
