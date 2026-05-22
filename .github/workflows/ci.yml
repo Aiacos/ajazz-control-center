@@ -202,6 +202,34 @@ jobs:
             --output-file coverage.info \
             --ignore-errors unused
           lcov --list coverage.info
+          # Print the aggregate rate prominently so the line/function totals
+          # are visible in the job log every run (trend tracking without an
+          # external service).
+          lcov --summary coverage.info
+
+      - name: Enforce coverage floor
+        run: |
+          # Health-report finding #7: the coverage report was upload-only,
+          # with no gate. Parse the aggregate line rate and fail if it drops
+          # below a floor. NOTE: this is a CATASTROPHIC-REGRESSION guard, not
+          # a target — it is deliberately conservative because this is a
+          # Linux-only coverage build of a cross-platform codebase (the
+          # win32/macOS plugin-host + sandbox paths are #ifdef'd out and
+          # cannot be covered here, depressing the aggregate). Ratchet the
+          # floor up toward the observed baseline once a CI run establishes it.
+          FLOOR=40
+          RATE=$(lcov --summary coverage.info 2>&1 \
+            | sed -n 's/.*lines\.*:\s*\([0-9.]*\)%.*/\1/p' | head -1)
+          if [ -z "$RATE" ]; then
+            echo "::error::Could not parse line coverage rate from lcov --summary"
+            exit 1
+          fi
+          echo "Line coverage: ${RATE}% (floor ${FLOOR}%)"
+          # Integer compare (truncate the fractional part) to avoid bc/awk float deps.
+          if [ "${RATE%.*}" -lt "$FLOOR" ]; then
+            echo "::error::Line coverage ${RATE}% is below the ${FLOOR}% floor"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
