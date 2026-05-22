@@ -186,3 +186,58 @@ TEST_CASE("extractStandalonePluginArchives sweeps a plugins dir and deletes cons
     // Bogus file is preserved untouched (sweep is best-effort).
     REQUIRE(QFileInfo(bogus).isFile());
 }
+
+TEST_CASE("extractSdPluginArchive rejects a zip-slip path-traversal entry",
+          "[plugin-store][security]") {
+    // A hostile archive carries a traversal entry that climbs out of the
+    // staging dir to overwrite a file outside the destination. These
+    // archives arrive over HTTPS (PluginCatalogModel::install) and from any
+    // file dropped in the plugins dir, so the extractor must reject the
+    // traversal and write nothing outside its staging root.
+    // Regression for the zip-slip finding (Phase 13 CR-01).
+    //
+    // Note: QZipReader (Qt 6.11) strips a *leading* "../" or "/", so the
+    // textbook "../../escape.txt" is neutralised on read. It does NOT strip
+    // ".." that follows a real path segment, so the live exploit entry is
+    // "x/../../../escape.txt", which resolves to <scratch>/escape.txt — one
+    // level above destDir. The malicious archive is built by Python's
+    // zipfile (which preserves the raw name) and embedded here as base64;
+    // QZipWriter cannot produce it because it sanitises names on write.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    // destDir is a subdir so the surviving traversal lands above it.
+    QString const destDir = scratch.filePath(QStringLiteral("dest"));
+    QDir().mkpath(destDir);
+
+    // Entries: benign "manifest.json" + traversal "x/../../../escape.txt".
+    static constexpr char kEvilZipB64[] =
+        "UEsDBBQAAAAIAOCFtlyYhKfZIAAAACEAAAANAAAAbWFuaWZlc3QuanNvbqtWCg31dFGyUkrO"
+        "z9VLLcvMUdJR8kvMTVWyUnIF8WoBUEsDBBQAAAAIAOCFtlx+UwTZBwAAAAUAAAAVAAAAeC8u"
+        "Li8uLi8uLi9lc2NhcGUudHh0KyjPS00BAFBLAQIUAxQAAAAIAOCFtlyYhKfZIAAAACEAAAAN"
+        "AAAAAAAAAAAAAACAAQAAAABtYW5pZmVzdC5qc29uUEsBAhQDFAAAAAgA4IW2XH5TBNkHAAAA"
+        "BQAAABUAAAAAAAAAAAAAAIABSwAAAHgvLi4vLi4vLi4vZXNjYXBlLnR4dFBLBQYAAAAAAgAC"
+        "AH4AAACFAAAAAAA=";
+
+    QString const archive = destDir + QStringLiteral("/evil.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes =
+            QByteArray::fromBase64(QByteArray::fromRawData(kEvilZipB64, sizeof(kEvilZipB64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const escaped = scratch.filePath(QStringLiteral("escape.txt"));
+    REQUIRE_FALSE(QFileInfo::exists(escaped)); // precondition: nothing there yet
+
+    QString const target = QStringLiteral("evil.sdPlugin");
+    REQUIRE_FALSE(extractSdPluginArchive(archive, destDir, target));
+
+    // The traversal target was never written, the staging dir is cleaned up,
+    // and no partial extraction landed at the final path.
+    REQUIRE_FALSE(QFileInfo::exists(escaped));
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/.tmp_") + target).exists());
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/") + target).exists());
+}

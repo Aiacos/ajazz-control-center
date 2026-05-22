@@ -48,8 +48,27 @@ bool extractSdPluginArchive(QString const& archivePath,
     // 6.11.1's extractAll silently mkpath()s missing parents, but we
     // can't rely on that. Mkpath every file's parent dir before writing.
     bool extractOk = true;
+    QString const rootCanon = QDir::cleanPath(tmpPath) + QStringLiteral("/");
     for (auto const& info : zip.fileInfoList()) {
-        QString const outPath = tmpPath + QStringLiteral("/") + info.filePath;
+        // Zip-slip guard: reject any entry whose normalised destination
+        // escapes the staging root. A hostile archive can name an entry
+        // "../../../.bashrc" — or an absolute / drive-prefixed path — to
+        // overwrite arbitrary files with the user's permissions. This
+        // extractor runs on archives downloaded over HTTPS by
+        // PluginCatalogModel::install and on any file dropped in the
+        // plugins dir, so the input is untrusted. (Symlinks are skipped
+        // below; this covers traversal via regular file/dir entries.)
+        QString const outPath = QDir::cleanPath(tmpPath + QStringLiteral("/") + info.filePath);
+        if (info.filePath.startsWith(QLatin1Char('/')) ||
+            info.filePath.contains(QStringLiteral(":/")) ||
+            info.filePath.contains(QStringLiteral(":\\")) || !outPath.startsWith(rootCanon)) {
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "extract '{}': rejecting entry escaping staging dir: '{}'",
+                           archivePath.toStdString(),
+                           info.filePath.toStdString());
+            extractOk = false;
+            break;
+        }
         if (info.isDir) {
             QDir().mkpath(outPath);
         } else if (info.isFile) {
