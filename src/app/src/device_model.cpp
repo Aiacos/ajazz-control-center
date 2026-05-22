@@ -318,6 +318,10 @@ QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
     m.insert(QStringLiteral("hasClock"), it->hasClock);
     m.insert(QStringLiteral("hasBattery"), it->hasBattery);
     m.insert(QStringLiteral("hasSettings"), it->hasSettings);
+    // Maturity tier (Phase 8 DEVICES-02). Surfaced in the device "Settings"
+    // tab (no longer a sidebar hover tooltip). Same lookup as MaturityRole so
+    // the per-device view and any future model consumer agree.
+    m.insert(QStringLiteral("maturity"), maturityFor(it->codename));
     return m;
 }
 

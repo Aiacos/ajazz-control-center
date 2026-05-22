@@ -2,6 +2,11 @@
 //
 // SettingsRow.qml — the device "Settings" tab. Hosts, per capability:
 //
+//   * Support maturity (always) — the device's maturity tier as a compact
+//     colour-coded chip + one-line description. Moved here from the sidebar
+//     row hover tooltip (it was verbose and easy to miss); the Settings tab
+//     is the single home for per-device info.
+//
 //   * Time synchronization (hasClock) — auto-sync toggle + manual "Sync now".
 //     Moved here from the sidebar so the device's Settings tab is the single
 //     home for per-device configuration. Auto-sync runs automatically on
@@ -31,6 +36,35 @@ Item {
     /// when the device supports it.
     property bool hasSettings: false
     property bool hasClock: false
+
+    /// Maturity tier of this device (5-tier vocabulary: scaffolded / probed /
+    /// partial / functional / verified). Bound by the host; the maturity
+    /// section is always shown.
+    property string deviceMaturity: "scaffolded"
+
+    // Tier → display metadata. Colours stay inside the existing Theme palette:
+    // verified = success green, functional = brand accent, partial = warning
+    // amber, probed/scaffolded = muted (work-in-progress, not alarmist).
+    function _maturityColor(t) {
+        if (t === "verified")   return Theme.successAccent;
+        if (t === "functional") return Theme.accent;
+        if (t === "partial")    return Theme.warningAccent;
+        return Theme.fgMuted; // probed / scaffolded / unknown
+    }
+    function _maturityLabel(t) {
+        if (t === "verified")   return qsTr("Verified");
+        if (t === "functional") return qsTr("Functional");
+        if (t === "partial")    return qsTr("Partial");
+        if (t === "probed")     return qsTr("Probed");
+        return qsTr("Scaffolded");
+    }
+    function _maturityDesc(t) {
+        if (t === "verified")   return qsTr("Tested on real hardware.");
+        if (t === "functional") return qsTr("All advertised features work.");
+        if (t === "partial")    return qsTr("Some features work; others in progress.");
+        if (t === "probed")     return qsTr("Protocol probed; wiring in progress.");
+        return qsTr("Support not implemented yet.");
+    }
 
     // Inline result of the last time-sync for THIS device ("" = none yet,
     // "ok", or an error message). Updated for both the manual "Sync now" click
@@ -89,6 +123,51 @@ Item {
     ColumnLayout {
         anchors.fill: parent
         spacing: Theme.spacingLg
+
+        // ---- Support maturity (always) -------------------------------------
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSm
+
+            Label {
+                text: qsTr("Support maturity")
+                color: Theme.fgFaint
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingSm
+
+                // Colour-coded tier chip.
+                Rectangle {
+                    id: maturityChip
+                    Layout.alignment: Qt.AlignVCenter
+                    implicitWidth: chipLabel.implicitWidth + Theme.spacingMd * 2
+                    implicitHeight: chipLabel.implicitHeight + Theme.spacingXs * 2
+                    radius: Theme.radiusSm
+                    readonly property color tierColor: root._maturityColor(root.deviceMaturity)
+                    color: Qt.rgba(tierColor.r, tierColor.g, tierColor.b, 0.14)
+                    border.width: 1
+                    border.color: Qt.rgba(tierColor.r, tierColor.g, tierColor.b, 0.45)
+
+                    Label {
+                        id: chipLabel
+                        anchors.centerIn: parent
+                        text: root._maturityLabel(root.deviceMaturity)
+                        color: maturityChip.tierColor
+                        font.pixelSize: Theme.fontSm
+                        font.weight: Font.Medium
+                    }
+                }
+                Label {
+                    Layout.fillWidth: true
+                    Layout.alignment: Qt.AlignVCenter
+                    text: root._maturityDesc(root.deviceMaturity)
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    wrapMode: Text.WordWrap
+                }
+            }
+        }
 
         // ---- Time synchronization (hasClock) -------------------------------
         ColumnLayout {

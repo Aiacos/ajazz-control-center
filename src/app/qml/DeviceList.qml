@@ -100,9 +100,6 @@ Rectangle {
                     // naming convention as deviceCodename / deviceConnected above.
                     deviceFamily: family
                     hasBatteryCapability: deviceHasBattery
-                    // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.
-                    // Bound from DeviceModel.MaturityRole (`maturity` role name).
-                    deviceMaturity: maturity
 
                     // Connected-only sidebar filter (restored 2026-05-15
                     // per user request, matching d377d80 spec). Hides

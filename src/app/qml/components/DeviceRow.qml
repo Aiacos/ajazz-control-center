@@ -48,11 +48,6 @@ ItemDelegate {
     // `hasBatteryCapability: deviceHasBattery` binding does not
     // self-reference.
     property bool hasBatteryCapability: false
-    // Maturity tier from DeviceModel.MaturityRole (Phase 8 DEVICES-02). String
-    // value from the 5-tier vocabulary: scaffolded / probed / partial / functional
-    // / verified. Surfaced as a tooltip on the row (NOT a visible badge — per the
-    // existing v1.0 styling vocabulary, badges are bounded by the existing slots).
-    property string deviceMaturity: "scaffolded"
 
     // implicitHeight (not height) so the consumer can override.
     // Phase 4 (HOTPLUG-02) keeps offline rows fully laid out — the
@@ -145,6 +140,11 @@ ItemDelegate {
         // without a re-creation hiccup. The chip's own `visible: percent
         // >= 0 && !unavailable` keeps the visual surface clean.
         BatteryIndicator {
+            // Always shown for battery-capable devices: the chip reads "--%"
+            // during connect / before the first reading, then fills in with the
+            // charge level. (Don't gate on `percent >= 0` here — the icon must
+            // stay put so the row layout doesn't jitter and the user always sees
+            // the battery slot.)
             visible: root.hasBatteryCapability
             Layout.alignment: Qt.AlignVCenter
             codename: root.deviceCodename
@@ -191,21 +191,6 @@ ItemDelegate {
         ? qsTr("Connected device %1").arg(root.deviceCodename)
         : qsTr("Offline device %1").arg(root.deviceCodename)
 
-    // Phase 8 DEVICES-02: maturity tier tooltip. Long-hover the row to see
-    // which tier the device is at. Per CONTEXT.md D-03 the tier is surfaced
-    // as a tooltip (NOT a visible badge) to stay within the existing v1.0
-    // styling vocabulary — badges occupy bounded slots (Offline pill,
-    // sync-state glyph), and adding a third visible element would crowd
-    // the row's right-side stack.
-    ToolTip.visible: root.hovered && root.deviceMaturity !== ""
-    ToolTip.text: {
-        var t = root.deviceMaturity;
-        var desc = t === "verified"   ? qsTr("verified on real hardware")
-                 : t === "functional" ? qsTr("core features work on hardware")
-                 : t === "partial"    ? qsTr("some features work, others WIP")
-                 : t === "probed"     ? qsTr("protocol probed, wiring in progress")
-                 :                      qsTr("scaffolded — support not implemented yet");
-        return qsTr("Maturity: %1 — %2").arg(t).arg(desc);
-    }
-    ToolTip.delay: 800
+    // Maturity tier moved to the device "Settings" tab (see SettingsRow.qml).
+    // The sidebar row no longer carries a hover tooltip for it.
 }
