@@ -33,11 +33,21 @@ the reasons in [§Why not bundle](#why-not-bundle) below.
 
 - **`IFirmwareUpdateCapable` mixin** (deferred — capture-gated)
   exposing `firmwareVersion()` via the device-specific runtime probe:
-  - AKP05 / AKP03 / AKP153: `CRT VER` (capture pending — W-01)
-  - AK980 PRO: opcode `0x20 0x01` (already shipped in
-    `proprietary_keyboard.cpp:601`)
+  - AKP05: `CRT VER` — **hardware-confirmed** 2026-05-20 (response
+    `V3.AKP05E.01.007`) and **already wired** in
+    `akp05.cpp` (`probeFirmwareVersion()`, cached at `open()`).
+  - AKP03 / AKP153: `CRT VER` packet builder exists
+    (`akp03_protocol.hpp` / `akp153_protocol.hpp`) but `firmwareVersion()`
+    still returns the `"unknown"` literal — wiring pending (P0).
+  - AK980 PRO: opcode `0x01` (NOT `0x20 0x01` — `0x20` is the battery
+    query), shipped in `proprietary_keyboard.cpp:528`; response carries
+    `major.minor.patch` in bytes 2–4. **Decompile-derived, not yet
+    hardware-verified** (only time-sync + battery are confirmed).
   - AJ-series: opcode `0x80` `FEA_CMD_GET_REV`
-    (`aj_series_opcode_table.md §3.1`)
+    (`aj_series_opcode_table.md §3.1`); still returns `"unknown"` —
+    wiring pending (P0), and gated on the per-(VID,PID,fw) dialect split
+    (AJ199 `0x3554` is a different wire dialect — see
+    `aj_series.md §5`).
 - **Version display** in device details: `Firmware: X.Y.Z` next to the
   device name.
 - **NO "update available" badge** — we have no signed manifest of

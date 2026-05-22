@@ -136,7 +136,12 @@ at once); always re-probe the firmware version after reboot to confirm.
   to offer;
   (b) it's an HFD-variant SN32F299 **clone**, not the bare stock bootloader —
   confirm the AK980 PRO's exact DFU PID + page size against the real chip before
-  trusting SonixFlasherC's defaults;
+  trusting SonixFlasherC's defaults. **Caveat (RE re-check 2026-05-22):** the DFU
+  PID `0x0C45:0x7140` is **external SonixFlasherC/community lore for the sibling
+  AK820 Pro — it does NOT appear anywhere in our own RE corpus.** Our captured/
+  decompiled keyboard PIDs are only `0x0C45:0x8009` (wired), `0x0C45:0xFEFE`
+  (2.4G dongle), and `0x05AC:0x024F` (XS75T rebrand). Treat `0x7140` as a
+  hypothesis to confirm on the physical AK980 PRO, not a fact;
   (c) **the wireless side is a SEPARATE chip** — a **WCH CH582F** BT/2.4G module
   (I2C/UART to the SN32), which SonixFlasher/QMK do **not** touch. Flashing the
   SN32 updates ONLY the wired/main firmware; the 2.4G/BT firmware (the AK980 PRO
@@ -164,7 +169,13 @@ at once); always re-probe the firmware version after reboot to confirm.
 - **Why risky:** every byte above is **decompile-derived, never captured**. The
   image header/skip semantics, the chunk pacing, and the checksum algorithm are
   unverified; a wrong guess bricks the mouse with no key-combo recovery. The
-  AJ199 family is a *different dialect* entirely (§dossier mouse §5).
+  AJ199 family is a *different dialect* entirely (§dossier mouse §5): the OTA is
+  **not unifiable** across AJ-series. Only AJ159 (`0x3151`, 64-byte / report-id
+  `0x05` / BIT7 checksum) is the dialect our backend speaks; AJ199 (`0x3554`)
+  uses OemDrv 17-byte (`0x08`) or HIDUsb 20-byte (`0x01`) framing, and its
+  registry entries are **flagged SUSPECT** pending a per-(VID,PID,fw) dialect
+  dispatch (`aj_series.md §5`). A mouse flasher would have to be written
+  per-dialect, never once.
 - **Gate:** do NOT attempt without (a) a Frida capture of the vendor OTA on a
   sacrificial unit, (b) a verified image-format spec, (c) a confirmed recovery
   path. Until then this stays detect-and-delegate.
@@ -269,8 +280,10 @@ keyboard path is **more constrained** than the first draft implied.
   SonixFlasherC's `--reboot hfd` is the matching path. (Source: the community RE
   repo `fpb/ajazz-ak820-pro` + SonixQMK Mechanical-Keyboard-Database issue #50.)
 - **Bootloader entry = physical pin-short under the spacebar** during USB connect;
-  DFU enumerates as **`0x0C45:0x7140`**. Hardware-recoverable, but manual (no
-  software-only trigger). Corrected in §3.1/§2.4.
+  DFU enumerates as **`0x0C45:0x7140`** *on the sibling AK820 Pro, per external
+  community RE*. Hardware-recoverable, but manual (no software-only trigger).
+  **This PID is NOT in our own corpus** (RE re-check 2026-05-22) — see §3.1
+  caveat (b); it is a value to confirm on the real AK980 PRO, not yet a fact.
 
 ### Refuted / corrected
 - **"Recoverable via key combo"** → it's a **physical pin-short**, not a key
