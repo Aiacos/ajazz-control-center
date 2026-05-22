@@ -756,24 +756,37 @@ public:
 private:
     /** @brief Probe and cache the firmware version at open time.
      *
-     *  Vendor RE (akp05_init_sequence.md §3.2): the host sends a `CRT VER`
-     *  packet first thing after opening the device. The AKP05E does NOT answer
-     *  on the interrupt-IN endpoint — the response is pulled via a HID
-     *  GET_REPORT (`readFeature`), returning a string like "V3.AKP05E.01.007"
-     *  (confirmed on real hardware 2026-05-20). Best-effort: any failure leaves
-     *  @c m_firmwareVersion at "unknown" rather than aborting @ref open().
+     *  Method (authoritative): the firmware version is a HID **GET_FEATURE_REPORT
+     *  on report id `0x01` with a 20-byte buffer, with NO preceding write** —
+     *  matching the `mirajazz` reference library (`read_firmware_version_from_raw_device`,
+     *  github.com/4ndv/mirajazz) which explicitly supports the Mirabox N4 / AKP05
+     *  family. The reply is the report-id byte followed by an ASCII string like
+     *  "V3.AKP05E.01.007"; @ref parseVersionResponse skips the leading
+     *  non-printable byte and returns the printable run.
+     *
+     *  Earlier attempts (write "CRT VER" then read interrupt-IN, or GET_REPORT
+     *  with report id 0 / a 1024-byte buffer) returned nothing on a live AKP05E
+     *  — the report id (0 vs 0x01) and buffer size were wrong.
+     *
+     *  **KNOWN PLATFORM LIMITATION:** this GET_FEATURE_REPORT does not work
+     *  through the Windows HID stack — `mirajazz` returns `None` on Windows
+     *  outright (their issue #10). On Windows the version therefore stays
+     *  "unknown"; the path works on Linux/macOS hidraw. Best-effort: any failure
+     *  leaves @c m_firmwareVersion at "unknown" rather than aborting @ref open().
      */
     void probeFirmwareVersion() {
         try {
-            (void)m_transport->write(akp05::buildVersionRequest());
-            std::array<std::uint8_t, akp05::PacketSize> resp{};
-            resp[0] = 0; // hid_get_feature_report: report-id byte selects the unnumbered report.
+            // GET_FEATURE_REPORT, report id 0x01, 20-byte buffer, no write
+            // (mirajazz read_firmware_version_from_raw_device).
+            std::array<std::uint8_t, 20> resp{};
+            resp[0] = 0x01;
             auto const n = m_transport->readFeature(resp);
             if (auto v = akp05::parseVersionResponse({resp.data(), n})) {
                 m_firmwareVersion = std::move(*v);
             }
         } catch (...) {
-            // Best-effort probe — leave m_firmwareVersion as "unknown".
+            // Best-effort probe (incl. the known Windows GET_FEATURE_REPORT
+            // limitation, mirajazz #10) — leave m_firmwareVersion as "unknown".
         }
     }
 
