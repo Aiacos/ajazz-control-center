@@ -96,7 +96,14 @@ Item {
 
     // Sleep timer vendor values exposed in the UI (matches AK980 PRO vendor
     // app dropdown). Indexed by ComboBox.currentIndex.
-    readonly property var _sleepValues: [0, 1, 3, 5, 10, 30]
+    // Mutable so an out-of-list firmware value (e.g. a vendor-app-set 2 or 15)
+    // can be appended on seed — Apply must never silently rewrite it to 0
+    // ("Never"). WR-06.
+    property var _sleepValues: [0, 1, 3, 5, 10, 30]
+
+    function _sleepLabel(minutes) {
+        return minutes === 0 ? qsTr("Never") : qsTr("%1 min").arg(minutes);
+    }
 
     function _sleepIndexFor(minutes) {
         for (var i = 0; i < _sleepValues.length; ++i) {
@@ -104,19 +111,33 @@ Item {
                 return i;
             }
         }
-        return 0;
+        return -1; // not in the canonical list
+    }
+
+    // Select the snapshot's sleep value, appending it as a custom entry when
+    // the firmware reports a value the canonical list doesn't contain — so the
+    // real value round-trips through Apply instead of snapping to 0/"Never".
+    function _seedSleep(minutes) {
+        var idx = _sleepIndexFor(minutes);
+        if (idx < 0) {
+            var extended = _sleepValues.slice();
+            extended.push(minutes);
+            _sleepValues = extended; // reassign so the ComboBox model re-derives
+            idx = _sleepValues.length - 1;
+        }
+        sleepBox.currentIndex = idx;
     }
 
     // Seed the settings controls from the snapshot whenever the binding refreshes.
     Component.onCompleted: {
         fnSwitch.checked = (root.snapshot.fnSwitch === 1);
-        sleepBox.currentIndex = root._sleepIndexFor(root.snapshot.sleepMinutes);
+        root._seedSleep(root.snapshot.sleepMinutes);
         responseSlider.value = root.snapshot.responseLevel;
     }
 
     onSnapshotChanged: {
         fnSwitch.checked = (snapshot.fnSwitch === 1);
-        sleepBox.currentIndex = _sleepIndexFor(snapshot.sleepMinutes);
+        root._seedSleep(snapshot.sleepMinutes);
         responseSlider.value = snapshot.responseLevel;
     }
 
@@ -248,14 +269,9 @@ Item {
             ComboBox {
                 id: sleepBox
                 Layout.fillWidth: true
-                model: [
-                    qsTr("Never"),
-                    qsTr("1 min"),
-                    qsTr("3 min"),
-                    qsTr("5 min"),
-                    qsTr("10 min"),
-                    qsTr("30 min")
-                ]
+                // Derived from _sleepValues so an appended out-of-list firmware
+                // value (WR-06) gets a label automatically.
+                model: root._sleepValues.map(function (v) { return root._sleepLabel(v); })
                 Accessible.role: Accessible.ComboBox
                 Accessible.name: qsTr("Sleep timer")
                 Accessible.description:
