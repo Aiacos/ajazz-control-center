@@ -396,8 +396,9 @@ inline ImageTransform akp05MainTransform() noexcept {
  *  Glues the stateless @c akp05:: protocol helpers to the HID transport layer
  *  and exposes the full @ref IDisplayCapable and @ref IEncoderCapable mix-in
  *  interfaces.  All public methods are thread-safe with respect to the event
- *  callback registration; individual writes to the transport are serialised by
- *  the caller because Qt's event loop drives @c poll() from a single thread.
+ *  callback registration and the cached firmware version (both guarded by
+ *  @c m_mutex); individual writes to the transport are serialised by the caller
+ *  because Qt's event loop drives @c poll() from a single thread.
  *
  *  Hardware capabilities:
  *  - 10 keys arranged in a 2×5 grid, each with an 85×85 JPEG LCD
@@ -431,7 +432,13 @@ public:
         return m_descriptor;
     }
     [[nodiscard]] DeviceId id() const noexcept override { return m_id; }
-    [[nodiscard]] std::string firmwareVersion() const override { return m_firmwareVersion; }
+    [[nodiscard]] std::string firmwareVersion() const override {
+        // m_firmwareVersion is written by probeFirmwareVersion() on the I/O
+        // thread (via open()) and may be read here from the UI thread; guard
+        // the std::string against a torn read / reallocating write (WR-03).
+        std::lock_guard const lock(m_mutex);
+        return m_firmwareVersion;
+    }
 
     void open() override {
         if (m_transport->isOpen()) {
@@ -823,6 +830,7 @@ private:
             resp[0] = 0x01;
             auto const n = m_transport->readFeature(resp);
             if (auto v = akp05::parseVersionResponse({resp.data(), n})) {
+                std::lock_guard const lock(m_mutex); // pairs with firmwareVersion() (WR-03)
                 m_firmwareVersion = std::move(*v);
             }
         } catch (...) {
@@ -888,7 +896,7 @@ private:
     TransportPtr m_transport;      ///< Underlying HID I/O channel.
     std::string m_firmwareVersion{"unknown"}; ///< Cached CRT VER response; set by open().
     EventCallback m_callback;                 ///< Registered input-event sink (may be null).
-    std::mutex m_mutex;                       ///< Guards m_callback for thread-safe registration.
+    mutable std::mutex m_mutex;               ///< Guards m_callback and m_firmwareVersion.
 };
 
 } // namespace
