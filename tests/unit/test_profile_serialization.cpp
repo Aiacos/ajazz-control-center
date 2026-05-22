@@ -198,4 +198,10 @@ TEST_CASE("profile reader fails with byte offset on malformed input", "[profile]
     REQUIRE_THROWS_AS(profileFromJson("not an object"), std::runtime_error);
     REQUIRE_THROWS_AS(profileFromJson("{\"id\":"), std::runtime_error);
     REQUIRE_THROWS_AS(profileFromJson("{\"id\":\"x\""), std::runtime_error); // missing close
+    // A negative value in an unsigned field (delayMs) must be rejected, not
+    // silently wrapped to a huge uint32 (WR-04).
+    REQUIRE_THROWS_AS(
+        profileFromJson(
+            R"({"id":"x","name":"Y","device":"d","keys":{"0":{"onPress":[{"id":"a","delayMs":-1}]}}})"),
+        std::runtime_error);
 }

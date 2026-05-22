@@ -454,10 +454,13 @@ public:
 
     [[nodiscard]] std::uint32_t readUInt() {
         skipWs();
-        std::size_t const start = pos_;
+        // Unsigned field: a leading sign is malformed here. std::stoul would
+        // silently wrap "-1" to 4294967295, so e.g. a negative delayMs would
+        // become a multi-year sleep. Reject it instead of accepting garbage.
         if (pos_ < src_.size() && (src_[pos_] == '-' || src_[pos_] == '+')) {
-            ++pos_;
+            fail("expected an unsigned integer but found a leading sign");
         }
+        std::size_t const start = pos_;
         while (pos_ < src_.size() && src_[pos_] >= '0' && src_[pos_] <= '9') {
             ++pos_;
         }
