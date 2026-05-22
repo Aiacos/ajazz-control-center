@@ -89,10 +89,14 @@ modules:
       - type: dir
         path: ../..
     post-install:
-      - install -Dm644 resources/linux/io.github.Aiacos.AjazzControlCenter.appdata.xml
-          /app/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
-      - install -Dm644 resources/linux/ajazz-control-center.desktop
+      # CMake's `ninja install` already placed the AppStream metainfo and the
+      # SVG + PNG icons under /app/share with the app-id names, and the desktop
+      # entry as ajazz-control-center.desktop. (post-install runs in the build
+      # dir because of builddir:true, so the previous `install resources/...`
+      # relative copies could not find the source files.) Flatpak requires the
+      # .desktop to be named after the app-id and to reference the app-id icon,
+      # so just rename the installed file and repoint Icon=.
+      - mv /app/share/applications/ajazz-control-center.desktop
           /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
-      - install -Dm644 resources/icons/app.svg
-          /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg
-      - for s in 16 24 32 48 64 128 256 512; do install -Dm644 resources/icons/hicolor/app-${s}.png /app/share/icons/hicolor/${s}x${s}/apps/io.github.Aiacos.AjazzControlCenter.png; done
+      - sed -i 's/^Icon=.*/Icon=io.github.Aiacos.AjazzControlCenter/'
+          /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
