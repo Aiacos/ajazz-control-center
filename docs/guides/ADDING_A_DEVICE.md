@@ -188,11 +188,17 @@ Editing: <codename>
 The photo is rendered by `components/DeviceImage.qml` from a **bundled** image
 (qrc, no runtime network). To give a new device a real photo:
 
-1. Download the vendor product shot and **downsize it** (~256 px on the long
-   edge — keep it well under ~80 KB; e.g. Shopify CDN supports `&width=256`).
-   Save it as `resources/devices/products/product-<codename>.{png,jpg}`.
-   CMake auto-globs that folder into the qrc (`CONFIGURE_DEPENDS`) — no
-   CMake edit needed.
+1. Download the vendor product shot, **downsize it** (~256 px on the long
+   edge — keep it well under ~80 KB; e.g. Shopify CDN supports `&width=256`)
+   and save it as a **PNG with a transparent background** (cut out the white
+   studio backdrop so it sits cleanly on the app's dark/light surface):
+   `resources/devices/products/product-<codename>.png`. CMake auto-globs that
+   folder (`*.png`/`*.jpg`) into the qrc (`CONFIGURE_DEPENDS`) — no CMake edit
+   needed. (A quick no-dependency way to alpha-out a white background on
+   Windows is a `System.Drawing` LockBits pass that zeroes the alpha of
+   near-white pixels; ImageMagick `-fuzz 6% -transparent white` or Pillow work
+   too. Prefer a source photo that is already on pure white — dark products on
+   grey/gradient backdrops don't key out cleanly.)
 2. Add one line to the `_productByCodename` map in `DeviceImage.qml`:
    `"<codename>": _img("product-<codename>.<ext>"),`
 3. If the new codename is just a **variant** of a product already pictured

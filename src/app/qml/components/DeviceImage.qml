@@ -44,15 +44,15 @@ Item {
     // here fall through to the per-family SVG via _resolveProduct().
     readonly property var _productByCodename: ({
         "akp05e":     _img("product-akp05e.png"),
-        "akp05":      _img("product-akp05.jpg"),
+        "akp05":      _img("product-akp05.png"),
         "mirabox_n4": _img("product-mirabox_n4.png"),
-        "akp03":      _img("product-akp03.jpg"),
-        "akp153":     _img("product-akp153.jpg"),
-        "akp815":     _img("product-akp815.jpg"),
+        "akp03":      _img("product-akp03.png"),
+        "akp153":     _img("product-akp153.png"),
+        "akp815":     _img("product-akp815.png"),
         "ak980pro":   _img("product-ak980pro.png"),
-        "ak820pro":   _img("product-ak820pro.jpg"),
-        "aj159":      _img("product-aj159.jpg"),
-        "aj179":      _img("product-aj179.jpg"),
+        "ak820pro":   _img("product-ak820pro.png"),
+        "aj159":      _img("product-aj159.png"),
+        "aj179":      _img("product-aj179.png"),
         "aj199":      _img("product-aj199.png")
     })
 
