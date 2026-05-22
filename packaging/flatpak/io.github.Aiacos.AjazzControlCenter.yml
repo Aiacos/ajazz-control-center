@@ -100,3 +100,8 @@ modules:
           /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
       - sed -i 's/^Icon=.*/Icon=io.github.Aiacos.AjazzControlCenter/'
           /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
+      # Point the AppStream <launchable> at the renamed desktop id, otherwise
+      # appstreamcli compose cannot link the .desktop to resolve the icon and
+      # fails the build with "gui-app-without-icon".
+      - sed -i 's#<launchable type="desktop-id">ajazz-control-center.desktop</launchable>#<launchable type="desktop-id">io.github.Aiacos.AjazzControlCenter.desktop</launchable>#'
+          /app/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
