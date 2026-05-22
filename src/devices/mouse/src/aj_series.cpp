@@ -206,53 +206,61 @@ public:
     }
 
     // IMouseCapable legacy const accessor — superseded by the IBatteryCapable
-    // override below (the BatteryService dynamic_casts to IBatteryCapable). Kept
+    // override below (BatteryService dynamic_casts to IBatteryCapable). Kept
     // returning nullopt so the legacy const surface stays honest.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() const override {
         return std::nullopt;
     }
 
-    // IBatteryCapable — hardware-verified 2026-05-22 on a live AJAZZ 2.4G 8K
-    // (VID 0x3151). Two-step, mirroring the working keyboard path:
-    //   1. SET_FEATURE a 0x83 GET_BATTERY poke (buildGetBattery) so the dongle
-    //      refreshes its status feature report;
-    //   2. GET_FEATURE the status report and read the charge.
-    // The status report on the vendor control collection uses report-id 0x00,
-    // so the frame is `[00, 00, charge, 01 01 01 02]` — the charge is at
-    // resp[2]. (The earlier code assumed a 0x05 report-id prefix and read
-    // resp[3] while validating resp[2]==0; since resp[2] is the charge byte,
-    // that rejected every valid frame -> the "--%" bug.) resp[1] is a zero pad
-    // in a well-formed frame; a transient/garbage frame (seen right after a
-    // wireless reconnect) has a non-zero resp[1], so we reject it. charge == 0
-    // means the link is up but the dongle has not reported yet (or the mouse is
-    // asleep) -> unknown/grey, not 0%.
+    /// Vendor status report carrying the wireless charge (read via GET_FEATURE).
+    static constexpr std::uint8_t kBatteryStatusReportId = 0x05;
+
+    /// Extract the charge percent (1..100) from a status-report-0x05
+    /// GET_FEATURE frame, or nullopt when no charge has been reported. Pure +
+    /// unit-testable (no I/O).
+    ///
+    /// hidapi keeps the report-id byte at `frame[0]` (0x05) on Windows so the
+    /// charge sits at `frame[3]`; a Linux hidraw read of the unnumbered frame has
+    /// no prefix, so it sits at `frame[2]`. The bytes between the report-id and
+    /// the charge are zero padding — a non-zero there is the garbage frame the
+    /// GET can return right after a wireless reconnect, which we reject. A charge
+    /// of 0 means the link is up but the dongle has not reported yet
+    /// (idle/asleep) → unknown (grey), not 0%.
+    [[nodiscard]] static std::optional<std::uint8_t>
+    parseBatteryCharge(std::span<std::uint8_t const> frame) {
+        if (frame.size() < 4) {
+            return std::nullopt;
+        }
+        std::size_t const chargeIndex = (frame[0] == kBatteryStatusReportId) ? 3U : 2U;
+        for (std::size_t i = 1; i < chargeIndex; ++i) {
+            if (frame[i] != 0) {
+                return std::nullopt;
+            }
+        }
+        std::uint8_t const charge = frame[chargeIndex];
+        if (charge == 0) {
+            return std::nullopt;
+        }
+        return std::min<std::uint8_t>(charge, 100);
+    }
+
+    // IBatteryCapable — wireless charge.
+    //
+    // Per aj_series_vendor.md §battery (hardware-confirmed 2026-05-21, same as
+    // feat/linux-device-support): the mouse mirrors its charge into vendor status
+    // report 0x05, read via GET_FEATURE on the 0xFFFF/usage-2 control collection.
+    // The 0x83 FEA_CMD_GET_BATTERY opcode is declared by the vendor but unused on
+    // the mouse path — no poke is needed. Parsing is delegated to the pure
+    // parseBatteryCharge() helper above.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
-            (void)m_transport->writeFeature(buildGetBattery()); // SET_FEATURE poke
             std::array<std::uint8_t, kReportSize> resp{};
-            for (int attempt = 0; attempt < 6; ++attempt) {
-                std::this_thread::sleep_for(std::chrono::milliseconds{30});
-                resp.fill(0);
-                resp[0] = 0x05; // report id to fetch (device returns its 0x00 status report)
-                std::size_t n = 0;
-                try {
-                    n = m_transport->readFeature(resp);
-                } catch (std::exception const&) {
-                    continue; // transient GET failure; retry within the poll budget
-                }
-                if (n < 3 || resp[1] != 0) {
-                    continue; // short read or transient/garbage frame
-                }
-                auto const pct = resp[2];
-                if (pct == 0) {
-                    continue; // not reported yet / asleep -> retry within budget
-                }
-                return std::min<std::uint8_t>(pct, 100);
-            }
-            return std::nullopt; // no valid charge within the poll budget -> grey
+            resp[0] = kBatteryStatusReportId;
+            std::size_t const n = m_transport->readFeature(resp);
+            return parseBatteryCharge({resp.data(), n});
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN(
-                "mouse.aj_series", "batteryPercent: HID battery read failed: {}", e.what());
+            AJAZZ_LOG_WARN("mouse.aj_series", "batteryPercent: HID battery read failed: {}",
+                           e.what());
             return std::nullopt;
         }
     }
