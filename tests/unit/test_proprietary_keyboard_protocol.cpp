@@ -212,6 +212,16 @@ TEST_CASE("ak980 setTime data packet encodes max representable year (2255 = 0xFF
     REQUIRE(pkt[4] == 0xff);
 }
 
+TEST_CASE("ak980 setTime data packet saturates years above 2255 instead of wrapping",
+          "[proprietary][protocol][clock]") {
+    // 2256 would be year-2000 == 256, which truncates to 0 ("2000") in a uint8.
+    // The high-end clamp must cap it at 0xFF rather than silently wrapping.
+    auto const pkt = buildSetTimeData(2256, 1, 1, 0, 0, 0);
+    REQUIRE(pkt[4] == 0xff);
+    auto const pkt2 = buildSetTimeData(9999, 12, 31, 23, 59, 59);
+    REQUIRE(pkt2[4] == 0xff);
+}
+
 TEST_CASE("ak980 setTime save packet: report id 0x00 + data 0x04 + opcode 0x02 (65-byte)",
           "[proprietary][protocol][clock]") {
     auto const pkt = buildSetTimeSave();

@@ -177,9 +177,9 @@ std::array<std::uint8_t, TimeReportSize> buildSetTimePreamble() {
 /**
  * @brief Build the 65-byte time-data packet (HID Report ID 0x00, magic 0x5A).
  *
- * See proprietary_protocol.hpp for the full byte spec. Year saturates at the
- * 2000 floor so calling with std::chrono::system_clock epoch (year 1970) does
- * not underflow into a uint8 wrap.
+ * See proprietary_protocol.hpp for the full byte spec. Year saturates at both
+ * ends: the 2000 floor so the std::chrono::system_clock epoch (year 1970) does
+ * not underflow, and 2255 (0xFF) so a year >= 2256 does not wrap back to 2000.
  */
 std::array<std::uint8_t, TimeReportSize> buildSetTimeData(std::uint16_t year,
                                                           std::uint8_t month,
@@ -193,7 +193,9 @@ std::array<std::uint8_t, TimeReportSize> buildSetTimeData(std::uint16_t year,
     pkt[1] = 0x00;
     pkt[2] = 0x01; // LCD-select index + 1 (single-LCD device => 1)
     pkt[3] = 0x5a; // magic
-    pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;
+    // Saturate both ends: pre-2000 floors to 0, and >=2255 caps at 0xFF so a
+    // year of 2256+ does not wrap (year-2000=256 truncates to 0 = "2000").
+    pkt[4] = (year >= 2255) ? 0xFF : (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;
     pkt[5] = month;
     pkt[6] = day;
     pkt[7] = hour;
