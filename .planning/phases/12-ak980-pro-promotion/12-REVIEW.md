@@ -2,255 +2,322 @@
 phase: 12-ak980-pro-promotion
 reviewed: 2026-05-22T00:00:00Z
 depth: standard
-files_reviewed: 10
+files_reviewed: 11
 files_reviewed_list:
   - src/devices/keyboard/include/ajazz/keyboard/ak980_lighting.hpp
   - src/devices/keyboard/include/ajazz/keyboard/keyboard.hpp
   - src/devices/keyboard/src/proprietary_keyboard.cpp
   - src/devices/keyboard/src/proprietary_protocol.hpp
   - src/devices/keyboard/src/register.cpp
+  - docs/protocols/keyboard/proprietary.md
   - tests/unit/test_proprietary_keyboard_protocol.cpp
   - tests/unit/test_ak980_clock_sync_e2e.cpp
   - tests/unit/test_ak980_firmware_lighting.cpp
   - tests/unit/test_ak980_settings_batch.cpp
   - tests/unit/test_ak980_tft_chunked.cpp
 findings:
-  critical: 1
-  warning: 5
+  critical: 0
+  warning: 7
   info: 4
-  total: 10
+  total: 11
 status: issues_found
 ---
 
 # Phase 12: Code Review Report
 
-**Reviewed:** 2026-05-22
+**Reviewed:** 2026-05-22 (re-review / verification pass)
 **Depth:** standard
-**Files Reviewed:** 10
+**Files Reviewed:** 11
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the AK980 PRO promotion: proprietary HID protocol builders, the
+Re-review of the AK980 PRO promotion: proprietary HID protocol builders, the
 20-mode firmware lighting picker, clock-sync, settings batch, and the chunked
-TFT transfer, plus their unit/e2e tests.
+TFT transfer, plus their unit/e2e tests, read fresh against the current tree.
 
-Project-specific guardrails check out: the COD-031 boundary holds
-(`grep -rn nlohmann src/core/include/` and `src/devices/keyboard/` both return
-zero), the control interface is correctly pinned to usage page `0xFF13` in
-`register.cpp`, and the CMD_FINISH `0xF0` packet (issue #58) is present in both
-the lighting and settings envelopes. The hardware-verified time-sync framing
-(report id 0x00, 65-byte, magic 0x5A, `0xAA 0x55` tail) is faithfully
-reproduced and has solid e2e coverage.
+Hard-check guardrails all hold:
 
-However there is one data-corruption BLOCKER in `setRgbBuffer()` (an off-by-two
-chunk-size error that silently drops two RGB bytes per report and lies to the
-firmware about the chunk length), plus several wire-format discrepancies between
-the shipped control packets and the byte-2 `0x04` "type select" byte that all
-three Ghidra-decompiled vendor envelopes carry. The shipped envelope packets
-leave that byte 0x00 and the tests never assert it, so the divergence is masked
-by the test suite rather than caught by it.
+- **COD-031** — `grep -rn nlohmann src/core/include/` returns 0; the keyboard
+  backend (`src/devices/keyboard/`) is also nlohmann-free. Boundary intact.
+- **Usage page 0xFF13** — `register.cpp:70` pins `controlUsagePage = 0xFF13`
+  (not the stale 0xFF00 family default). Correct.
+- **CMD_FINISH 0xF0 (issue #58)** — present in both the lighting envelope
+  (`proprietary_keyboard.cpp:975`) and the settings envelope (`:1018`), and
+  asserted by `test_ak980_firmware_lighting.cpp:129-130` and
+  `test_ak980_settings_batch.cpp:114-116`.
+- **Chunked-TFT bounds** — `uploadTftImage` slices `pixelStream` into
+  `ceil(size/28)` chunks; the final partial chunk is zero-padded into a
+  fixed 28-byte `slice` (`proprietary_keyboard.cpp:1128-1137`). No OOB read;
+  `encodeRgb565` validates `rgba.size() == w*h*4` before producing exactly
+  `kTftFrameBytes`. Safe.
+- **ASCII-only test names** — every `TEST_CASE` string across the five test
+  files is ASCII (no em-dash / right-arrow). Verified.
+
+The hardware-verified time-sync framing (report id 0x00, 65-byte, magic 0x5A,
+`0xAA 0x55` tail, per-packet 30 ms settle + best-effort readback) is faithfully
+reproduced and has solid e2e coverage (`test_ak980_clock_sync_e2e.cpp`).
+
+**Prior CR-01 (setRgbBuffer 0x0A off-by-two)** was investigated and DEFERRED by
+deliberate decision (commit `d70503d`) — see CR-01 below. It is no longer a
+fresh actionable blocker; it is now a documented known-issue with no live caller
+and no test. There are therefore **no open BLOCKERs** this pass. The remaining
+findings are wire-format discrepancies between the shipped control packets and
+the corrected deep-RE byte maps in `ak980pro_vendor.md` §13, plus the
+robustness/quality items carried over from the prior review (all re-confirmed as
+still applicable).
 
 ## Critical Issues
 
-### CR-01: `setRgbBuffer()` drops 2 RGB bytes per chunk and reports a false length
+_None open. CR-01 below is retained for traceability but is DEFERRED, not an
+open blocker._
 
-> **Resolution (2026-05-22): DEFERRED after RE cross-check.** The off-by-two is
-> real, but an RE sweep (`ak980pro_perkey_rgb_protocol.md`, `ak980pro_vendor.md`)
-> shows the whole `0x0A` zone-buffer path is a legacy "similar idea" the RE flags
-> to *unify* with the Ghidra-confirmed per-key protocol `0x20/sub-0x04` (already
-> implemented as `buildPerKeyRgbWriteHeader`). `setRgbBuffer` has no live caller
-> and no test, so nothing is corrupted in production. Changing the wire constant
-> in isolation would polish a superseded path against competing/provisional RE.
-> Documented in code + `docs/protocols/keyboard/proprietary.md`; proper fix is to
-> unify on `0x20/0x04` and verify the wired LED-to-byte mapping (RE-flagged
-> unconfirmed) on a physical AK980 PRO. Not fixed in code this pass, by design.
+### CR-01 (DEFERRED — known issue, not fixed in code): `setRgbBuffer()` 0x0A off-by-two
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:683-696`
-**Issue:**
-`RgbBufferChunk` is `60` (proprietary_protocol.hpp:207) but the per-LED RGB
-report places its payload at byte 6 (`pkt[2]=zone`, `pkt[3]=offset-hi`,
-`pkt[4]=offset-lo`, `pkt[5]=length`, payload at `pkt.data()+6`). Only
-`ReportSize - 6 = 58` payload bytes fit in a 64-byte report. The loop computes
-`take = min(60, remaining)`, writes `pkt[5] = take` (up to 60), then
-`memcpy(..., min(take, ReportSize-6))` which clamps the copy to **58** bytes —
-but advances `offset += take` (60). Result for any zone larger than 58 bytes
-(ZoneKeys = 104 LEDs × 3 = 312 bytes is the normal case):
+> **Status: DEFERRED by deliberate decision (commit `d70503d`, 2026-05-22).**
+> Not fixed in code, by design. Surfaced here for traceability only.
 
-- flat[58] and flat[59] of each 60-byte window are never transmitted (two LEDs'
-  colour data corrupted/shifted every chunk),
-- the length byte `pkt[5]` claims 60 bytes when only 58 are present, so the
-  firmware reads two bytes of stale/zero report tail as pixel data.
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:663-718`
+(KNOWN-ISSUE comment block + `setRgbBuffer`), `proprietary_protocol.hpp:207`
+(`RgbBufferChunk = 60`); cross-referenced in
+`docs/protocols/keyboard/proprietary.md:51-69`.
 
-The header is 6 bytes, so the chunk constant must be 58, or the loop must be
-rewritten to copy exactly `take` bytes. The macro path
-(`setMacro`, payload at byte 8 with `MacroChunk=56` = `64-8`) is correct by
-contrast — only the RGB-buffer constant is wrong. There is no unit test
-exercising `setRgbBuffer()`, so this ships undetected.
+**Issue (still real):**
+`RgbBufferChunk` is `60` but the per-LED RGB report's 6-byte header
+(`id, cmd, zone, off-hi, off-lo, len`) leaves only `ReportSize - 6 = 58`
+payload bytes per report. The loop sets `pkt[5] = take` (up to 60) and advances
+`offset += take`, while the `memcpy` clamps to `min(take, ReportSize-6)` = 58 —
+dropping 2 bytes/chunk and claiming a length the report does not carry.
 
-**Fix:**
+**Why it is correctly DEFERRED (verified this pass):**
 
-```cpp
-// proprietary_protocol.hpp — header is 6 bytes (id, cmd, zone, off-hi,
-// off-lo, len), so only 58 payload bytes fit, not 60.
-inline constexpr std::size_t RgbBufferChunk = ReportSize - 6; // 58
+1. The KNOWN-ISSUE comment is present and accurate
+   (`proprietary_keyboard.cpp:663-683`), and the matching note now exists on the
+   `0x0A` row of `docs/protocols/keyboard/proprietary.md:51-69`.
+1. `setRgbBuffer` (the `IRgbCapable` surface) has **no live caller and no unit
+   test** — confirmed: no `setRgbBuffer(` call site in the keyboard backend and
+   no `CmdSetRgbBuffer` assertion in any test file. So the off-by-two corrupts
+   nothing in production today.
+1. RE cross-check (`ak980pro_vendor.md` flags `0x0A` as "similar idea → unify";
+   `ak980pro_perkey_rgb_protocol.md` supersedes §3.7-§3.8) shows the whole
+   `0x0A` zone-buffer path is legacy and should be unified onto the
+   Ghidra-confirmed per-key protocol `0x20/sub-0x04`, already implemented as
+   `buildPerKeyRgbWriteHeader`. Patching the constant in isolation would polish
+   a superseded path against competing/provisional RE.
 
-// proprietary_keyboard.cpp — copy exactly `take`, never silently clamp.
-auto const take = std::min<std::size_t>(RgbBufferChunk, flat.size() - offset);
-pkt[5] = static_cast<std::uint8_t>(take);
-std::memcpy(pkt.data() + 6, flat.data() + offset, take); // take <= 58 now
-```
-
-Add a `setRgbBuffer` MockTransport test that uploads a full ZoneKeys buffer and
-asserts every flat byte appears once, in order, across the emitted chunks.
+**Proper resolution (future):** unify on `0x20/0x04` and verify the
+RE-flagged-unconfirmed wired LED-to-byte mapping against a physical AK980 PRO,
+rather than fixing `RgbBufferChunk` in place.
 
 ## Warnings
 
-### WR-01: Control envelope packets omit the byte-2 `0x04` "type select" that all three vendor decompiles carry
+### WR-01: Lighting + settings envelope control packets use report-id-0x04 framing with opcode at byte 1 — the corrected deep-RE (§13.1) says report-id 0x00, frame-magic 0x04 at byte 1, opcode at byte 2
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:924-954` (lighting),
-`:985-997` (settings); `proprietary_protocol.hpp:224-229` (`makeReport`)
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:936-987` (lighting
+envelope), `:1001-1038` (settings envelope); `proprietary_protocol.hpp:224-229`
+(`makeReport`)
 **Issue:**
-`ak980pro_vendor.md` §4 (lines 562-567) and §13.7 (lines 1033-1038) document the
-5-packet envelope with `byte2 = 0x04` on START / MODE_BEGIN / SAVE / FINISH
-("type select"), confirmed in three independent Ghidra functions
-(`FUN_0042b0a0`, `FUN_004340c0`, `FUN_0044b910`). The shipped code emits these
-control packets via `makeReport(cmd)`, which only sets `byte0=ReportId(0x04)` and
-`byte1=cmd`, leaving `byte2 = 0x00`. So every START, MODE_BEGIN, SAVE, and FINISH
-goes out with `byte2 = 0x00` instead of the documented `0x04`. The code comments
-(lines 919-923, 982-984) acknowledge the envelope is "not yet hardware-verified"
-and "kept as-shipped", but per CLAUDE.md the RE doc is the source of truth for
-wire formats and three corroborating decompiles is not "provisional". If the
-firmware treats byte 2 as a required discriminator, the lighting and settings
-commits are silent no-ops on hardware (the same failure mode the time-sync path
-already hit once).
-**Fix:** Either set `byte2 = 0x04` on the envelope control packets (a dedicated
-`makeEnvelopeControl(cmd)` helper) and add the missing assertions, or
-explicitly record in `proprietary.md` that byte 2 was hardware-verified to be
-ignored. Do not leave it both undocumented-as-verified and unasserted.
+`ak980pro_vendor.md` §13.1 (lines 910-920) is the *corrected* deep-RE finding
+for every 33-byte short report sent through the FEATURE path (`FUN_0044eed0`):
+the HID Report ID is **0x00**, the `0x04` is a fixed frame-magic byte inserted
+at **byte 1**, and the real opcode lands at **byte 2**. This is the exact same
+"off-by-one" framing the time-sync path was *hardware-proven* to require
+(report id 0x00, not 0x04) on this same AK980 PRO / 0xFF13 collection. The
+shipped lighting + settings envelopes instead go out via `makeReport(cmd)` /
+`writeFeature()`, which produces `byte0 = 0x04`, `byte1 = opcode`, `byte2 = 0x00`
+— the older, superseded layout. Additionally §4 (lines 562-567) documents the
+envelope control packets (START / SAVE / FINISH) carrying `byte2 = 0x04`
+("type select"), which the shipped packets also leave at 0x00.
 
-### WR-02: Settings-batch DATA packet uses report id 0x04 and omits the fixed `0x01` at byte 5
+Because the device is the same model on the same collection where report-id-0x04
+framing was empirically a silent no-op, there is a strong likelihood these
+commits do nothing on real hardware. The code comments
+(`:940-944`, `:1003-1005`) candidly mark the envelope "not yet hardware-verified,
+kept as-shipped", but the byte map they ship is the one the deep RE explicitly
+flags as wrong, and the tests (`test_ak980_firmware_lighting.cpp:92-130`,
+`test_ak980_settings_batch.cpp:86-116`) assert the unverified layout
+(`p1[0]==0x04`, opcode at `[1]`), so the divergence is *locked in* by the suite
+rather than flagged by it.
+
+Note this is a WARNING, not a BLOCKER: the vendor doc is internally inconsistent
+(§10 line 780 recommends `{0x04, 0xF0, …}`; §4/§13.1 say report-id 0x00 / byte-2
+opcode), there is no live AK980 PRO hardware witness for these two paths either
+way, and a wrong-but-no-op write does not corrupt data. But shipping the layout
+the deep RE marks wrong, while the tests pin it as correct, is the trap.
+**Fix:** Re-derive the lighting + settings envelopes against §13.1/§13.4 (report
+id 0x00, frame-magic 0x04 at byte 1, opcode at byte 2; §13.4 even gives the full
+`0x0B 0x1C` lighting-params byte map), OR record in `proprietary.md` that the
+report-id-0x04 layout was hardware-verified to be accepted for these opcodes.
+Until one of those, do not let the tests assert the unverified layout as ground
+truth — mark those byte assertions PROVISIONAL.
+
+### WR-02: Settings-batch DATA packet uses report id 0x04, places the opcode at byte 1, and omits the fixed `0x01` at byte 5
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:243-257`
 (`buildSettingsBatch`)
 **Issue:**
-`ak980pro_vendor.md` §13.2 (lines 926-945) gives the corrected settings-batch
-byte map: `byte 0 = 0x00 (HID Report ID)` and `byte 5 = 0x01 (fixed)`.
-`buildSettingsBatch` calls `makeReport(CmdSettingsBatch)` which sets
-`byte0 = 0x04` (not 0x00) and never writes the fixed `0x01` at byte 5. The same
-doc also documents bytes 6/7/8 (disable_winkey / disable_alt_f4 / disable_alt_tab,
-with byte 8 doubling as the checksum slot) — none of which the builder emits.
-The test (`test_ak980_settings_batch.cpp:88-104`) asserts `p2[0] == 0x04`,
-locking in the wrong report id rather than catching it. Given the time-sync path
-was proven to need report id 0x00 on this exact device, shipping the settings
-DATA packet with report id 0x04 and a missing fixed byte is a likely silent
-no-op against hardware.
-**Fix:** Reconcile against §13.2: set byte 0 to 0x00 (or confirm 0x04 is
-accepted), write the fixed `0x01` at byte 5, and update the test to assert the
-documented layout. Where the C++ field name and the schema differ, the schema
-wins (CLAUDE.md).
+`ak980pro_vendor.md` §13.2 (lines 922-945) is the *corrected* settings-batch
+byte map (re-derived from `FUN_00414290`, explicitly superseding the wrong §3.2):
+`byte 0 = 0x00 (HID Report ID)`, `byte 1 = 0x07`, `byte 2 = 0x10`,
+`byte 5 = 0x01 (fixed)`, fn/sleep/response at bytes 9/10/12, trailer 0xAA 0x55
+at 18/19. `buildSettingsBatch` calls `makeReport(CmdSettingsBatch)` which yields
+`byte0 = 0x04` (should be 0x00) and never writes the fixed `0x01` at byte 5; it
+also omits the disable_winkey / disable_alt_f4 / disable_alt_tab bytes (6/7/8)
+and the byte-8 checksum slot the corrected map documents. The fn/sleep/response
+offsets (9/10/12) and the trailer (18/19) DO match §13.2 — only the framing
+header (report id, byte-5 fixed) is wrong. The test
+(`test_ak980_settings_batch.cpp:88-99`) asserts `p2[0] == 0x04` and the opcode
+at `p2[1]`, locking in the superseded framing. Given the same device proved it
+needs report id 0x00 for time-sync, this DATA packet's 0x04 report id + missing
+fixed byte is a likely silent no-op against hardware.
+**Fix:** Reconcile `buildSettingsBatch` against §13.2 — set byte 0 to 0x00 (or
+confirm 0x04 is accepted on hardware), write the fixed `0x01` at byte 5, and
+update the test to assert the documented layout. Where the C++ field name and
+the schema differ, the schema wins (CLAUDE.md).
 
-### WR-03: `firmwareVersion()` swallows all exceptions and silently returns "unknown" on device-yank
+### WR-03: `firmwareVersion()` swallows all exceptions and silently returns "unknown"
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:528-542`
 **Issue:**
-The `catch (...)` block discards the error entirely (no log line, unlike
-`batteryPercent`/`setTime` which `AJAZZ_LOG_WARN`). On a device yank or transport
-failure, the function returns `"unknown"` indistinguishably from a device that
-genuinely reports an unparsable version. There is also no `read`-count guard
-beyond `n >= 5`, so a short/garbage reply produces a plausible-looking but bogus
-`"x.y.z"` string. Operationally this hides I/O failures from the logs that every
-sibling method records.
+The `catch (...)` block (`:539`) discards the error entirely with no log line,
+unlike `batteryPercent` (`:792`) and `setTime` (`:882`) which both
+`AJAZZ_LOG_WARN`. On a device yank or transport failure, the function returns
+`"unknown"` indistinguishably from a device that genuinely reports an unparsable
+version. The only guard on the reply is `n >= 5` (`:534`), so a short/garbage
+reply still produces a plausible-looking but bogus `"x.y.z"`. Operationally this
+hides I/O failures that every sibling method records.
 **Fix:** Catch `std::exception const& e` and `AJAZZ_LOG_WARN("keyboard.ak980", "firmwareVersion: HID I/O failed: {}", e.what())` before falling through to
 `"unknown"`, mirroring the other capability methods.
 
 ### WR-04: `batteryPercent()` treats a genuine 0% charge as "no battery"
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:760-763`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:781-783`
 **Issue:**
-`if (pct == 0) return std::nullopt;` conflates two distinct device states: a
-wired keyboard with no battery (which the comment intends to suppress) and a
-wireless keyboard that is genuinely at 0% / critically drained. A real
-near-empty battery will therefore show "unknown" in the UI instead of "0%",
-exactly when the user most needs the warning. The header comment
-(proprietary_protocol.hpp:294-296) only documents "0 means no battery" without a
-way to disambiguate the drained-wireless case.
-**Fix:** Use the byte-0/opcode echo already mentioned in the comments
-(lines 723-728) to distinguish "wired, no battery" (echo 0x00) from a wireless
-0% reading, or gate the nullopt on `descriptor` battery/wireless state rather
-than on the percent value alone.
+`if (pct == 0) return std::nullopt;` (`:782`) conflates two distinct states: a
+wired keyboard with no battery (the comment's intended suppression) and a
+wireless keyboard genuinely at 0% / critically drained. A real near-empty
+battery shows "unknown" in the UI instead of "0%", exactly when the user most
+needs the warning. The comment at `:746-749` references the `resp[1]` opcode
+echo as a sanity check, but the code only validates `resp[1] == CmdBatteryQuery`
+(`:778`) — it does not use any echo byte to disambiguate drained-wireless from
+no-battery before collapsing both to `nullopt`.
+**Fix:** Disambiguate "wired, no battery" from a wireless 0% reading using a
+device/echo signal (e.g. gate the `nullopt` on the descriptor's battery/wireless
+state, or on a distinct echo byte the response carries), rather than on the
+percent value alone.
 
-### WR-05: `buildSetTimeData` high-year wrap above 2255 is unguarded and untested
+### WR-05: `buildSetTimeData` high-year wrap above 2255 is unguarded
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:196`
 **Issue:**
 `pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` guards
-the low end (pre-2000 saturates to 0) but not the high end: `year = 2256` yields
-`year - 2000 = 256`, which truncates to `0` — i.e. 2256 silently encodes as the
-year 2000. The test suite pins 2255 → 0xFF (test_proprietary_keyboard_protocol
-.cpp:208-213) but never exercises the 2256 wrap, so the asymmetry is invisible.
-Not reachable from a real `system_clock` today, but it is a latent
-silent-corruption path the symmetric saturation comment implies is handled.
-**Fix:** Clamp the high end too: `year >= 2255 ? 0xFF : (year >= 2000 ? year-2000 : 0)` and add a 2256-saturates test.
+the low end (pre-2000 saturates to 0) but not the high end: `year = 2256` gives
+`year - 2000 = 256`, which truncates to `0` — 2256 silently encodes as the year
+2000\. The test suite pins 2255 → 0xFF
+(`test_proprietary_keyboard_protocol.cpp:208-213`) but never exercises the 2256
+wrap, so the asymmetry is invisible. Not reachable from a real `system_clock`
+today, but it is a latent silent-corruption path the symmetric-saturation
+docstring (`:184-186`) implies is handled.
+**Fix:** Clamp the high end too:
+`year >= 2255 ? 0xFF : (year >= 2000 ? year - 2000 : 0)` and add a
+2256-saturates test.
+
+### WR-06: Stale block comment claims `setTime()` "returns NotImplemented … with a WARN-once"
+
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:798-822` (the
+IClockCapable banner comment); echoed in `register.cpp:48-52`
+**Issue:**
+The banner comment above `setTime()` still reads "ProprietaryKeyboard inherits
+IClockCapable and returns NotImplemented from setTime() with a WARN-once"
+(`:822` / `register.cpp:48-50`). The actual `setTime()` is fully implemented —
+it emits the 4-packet RTC envelope, returns `TimeSyncResult::Ok` on success, and
+the e2e test asserts exactly that. The comment describes a long-superseded
+behaviour and will mislead the next contributor about what the method does. This
+is a documentation-vs-code contradiction (low risk, but a maintainability trap
+in load-bearing protocol code).
+**Fix:** Update the IClockCapable banner (and the `register.cpp` D-03 note) to
+describe the shipped 4-packet handshake; drop the "NotImplemented / WARN-once"
+language.
+
+### WR-07: Lighting envelope inline comment says the 4-packet variant ships and FINISH is "not yet shipped" — but the code ships the 5-packet form including FINISH
+
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:900-908`
+**Issue:**
+The comment block above `setFirmwareLightingMode` states: "4-packet envelope …
+The 5th packet CMD_FINISH (0xF0) … our project does not yet ship it (Phase 3
+P3.6 pending)". The code immediately below (`:968-975`) DOES emit the FINISH
+packet, and the test (`test_ak980_firmware_lighting.cpp:89-130`) asserts a
+5-packet envelope ending in 0xF0. The comment directly contradicts the shipped
+behaviour it sits on top of — a regression introduced when FINISH was wired in
+for issue #58 without updating this banner. A future reader trusting the comment
+would believe FINISH is absent.
+**Fix:** Rewrite the `setFirmwareLightingMode` banner to describe the shipped
+5-packet envelope (START → MODE_BEGIN → DATA → SAVE → FINISH); remove the
+"does not yet ship it / P3.6 pending" sentence.
 
 ## Info
 
-### IN-01: `ak980pro_vendor.md` §5.2 TFT chunk layout contradicts the shipped (correct) `ak980pro_tft_protocol.md` §3.3
+### IN-01: `ak980pro_vendor.md` §5.2 TFT chunk layout contradicts the shipped (correct) §3.3 / `ak980pro_tft_protocol.md`
 
-**File:** `docs/protocols/keyboard/ak980pro_vendor.md:604-607` vs
+**File:** `docs/protocols/keyboard/ak980pro_vendor.md:601-607` vs
 `src/devices/keyboard/src/proprietary_keyboard.cpp:303-313` (`encodeTftChunkIndex`)
 **Issue:**
-`ak980pro_vendor.md` §5.2 still documents the superseded chunk layout
-(byte1 = index low, byte2 = `0x80 | (i>>16)`), while `ak980pro_tft_protocol.md`
-§3.3 (lines 135-150) and the shipped code put the 0x80 marker on byte 1 and the
-low byte on byte 2. The code follows the corrected doc and is right; the stale
-§5.2 in the vendor doc is a documentation-correctness trap for the next
-contributor. CLAUDE.md mandates updating the RE doc when it disagrees with the
-hardware-pinned layout.
-**Fix:** Update `ak980pro_vendor.md` §5.2 to match §3.3 (or cross-reference it as
-superseded).
+`ak980pro_vendor.md` §5.2 documents the chunk-count at "bytes 4..7" of the header
+(line 598) and an older chunk-index split, while the shipped code (and the
+authoritative `ak980pro_tft_protocol.md` §3.3) put the 24-bit count at bytes 5..7
+with LCD-select at byte 4, and the chunk index as `byte1 = 0x80 | high7`,
+`byte2 = low8`, `byte3 = mid8`. The code follows the corrected doc and is
+self-consistent with its tests; the stale §5.2 in the vendor doc is a
+documentation trap. CLAUDE.md mandates updating the RE doc when it disagrees with
+the pinned layout.
+**Fix:** Update `ak980pro_vendor.md` §5.2 to match §3.3 / `ak980pro_tft_protocol.md`
+or cross-reference it as superseded.
 
 ### IN-02: Lighting DATA trailer byte order (`0x55 0xAA`) is inverted relative to the settings/time trailer (`0xAA 0x55`)
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:436-437`
 **Issue:**
 `buildSetRgbModeData` writes `pkt[14]=0x55, pkt[15]=0xaa`, matching
-`ak980pro_vendor.md` §3.4 (line 354 "0x55 0xAA"), but the settings batch and
-time-sync trailers are `0xAA 0x55` (bytes 18/19 and 63/64). §13.7 line 1054 of
-the same doc lists the lighting trailer as `0xAA 0x55`, contradicting §3.4. The
-code is internally consistent with §3.4, but the intra-doc conflict means one of
-the two is wrong and only a hardware witness can settle it.
-**Fix:** Add a one-line note in `proprietary.md` recording which trailer order
-was hardware-verified for opcode 0x13, and reconcile §3.4 vs §13.7.
+`ak980pro_vendor.md` §3.4, but the settings batch and time-sync trailers are
+`0xAA 0x55` (bytes 18/19 and 63/64). §13 of the same doc lists the lighting
+trailer as `0xAA 0x55`, contradicting §3.4. The code is internally consistent
+with §3.4, but the intra-doc conflict means only a hardware witness can settle
+which order opcode 0x13 actually wants.
+**Fix:** Record in `proprietary.md` which trailer order was hardware-verified for
+opcode 0x13, and reconcile §3.4 vs §13.
 
-### IN-03: `stampTftChecksum` / TFT output-report transport is flagged PROVISIONAL with no hardware witness
+### IN-03: `stampTftChecksum` / chunked-TFT output-report transport is PROVISIONAL but tests pin its arithmetic as ground truth
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:283-301, 1035-1043`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:283-301`,
+`:1044-1067`; `tests/unit/test_ak980_tft_chunked.cpp:106-108, 140-141`
 **Issue:**
 The chunked TFT path (byte-32 checksum + `write()` output reports vs
-`writeFeature()`) is explicitly unverified ("no USB/Frida capture exists yet").
-The tests pin the checksum arithmetic (e.g. `pkt[32] == 0x16`) as if it were
-ground truth, which will make a future hardware correction look like a test
-regression. This is acceptable scaffolding but the test comments should mark the
-checksum expectations as provisional so a hardware-driven change isn't mistaken
-for a defect.
-**Fix:** Annotate the checksum REQUIREs in `test_ak980_tft_chunked.cpp` as
-PROVISIONAL, mirroring the source comment.
+`writeFeature()`) is explicitly unverified ("whether it accepts output reports
+for image upload is UNVERIFIED — no USB/Frida capture exists yet", `:1060-1064`).
+The tests assert exact checksum values (`pkt[32] == 0x16`, `pkt[32] == 0x97`) as
+if they were ground truth, so a future hardware-driven correction will look like
+a test regression rather than an expected change.
+**Fix:** Annotate the checksum `REQUIRE`s in `test_ak980_tft_chunked.cpp` as
+PROVISIONAL, mirroring the source comment, so a hardware fix isn't mistaken for a
+defect.
 
 ### IN-04: Magic offsets in the lighting DATA builder are bare literals
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:428-437`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:422-438`
 **Issue:**
 `buildSetRgbModeData` uses bare byte indices (1, 2, 3, 4, 8, 9, 10, 11, 14, 15)
 and the `0x55`/`0xaa` trailer literals inline, unlike the settings builder which
 uses named `kSettingsByte*` and `SettingsBatchTrailer*` constants. The lighting
-path is the one most likely to be re-derived if the §3.4/§13.7 trailer conflict
-(IN-02) is resolved against it, so named constants would localise the change.
-**Fix:** Introduce `kLightingByteMode/Rainbow/Brightness/Speed/Direction/TrailerHi /TrailerLo` constants in `proprietary_protocol.hpp` and use them in the builder
-and test.
+path is the most likely to be re-derived if the §3.4/§13 trailer conflict
+(IN-02) or the framing question (WR-01) is resolved against it, so named
+constants would localise the change and reduce the risk of an off-by-one when
+someone shifts the opcode to byte 2.
+**Fix:** Introduce
+`kLightingByteMode/Rainbow/Brightness/Speed/Direction/TrailerHi/TrailerLo`
+constants in `proprietary_protocol.hpp` and use them in the builder and test.
 
 ______________________________________________________________________
 
-_Reviewed: 2026-05-22_
+_Reviewed: 2026-05-22 (re-review)_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_

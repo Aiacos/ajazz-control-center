@@ -2,230 +2,326 @@
 phase: 13-catalogue-v1-1-ui-verifies-back-fill
 reviewed: 2026-05-22T00:00:00Z
 depth: standard
-files_reviewed: 46
+files_reviewed: 18
 files_reviewed_list:
-  - src/app/src/app_update_service.cpp
-  - src/app/src/app_update_service.hpp
-  - src/app/src/application.cpp
-  - src/app/src/application.hpp
-  - src/app/src/autostart_service.cpp
-  - src/app/src/battery_service.cpp
-  - src/app/src/battery_service.hpp
-  - src/app/src/device_model.cpp
-  - src/app/src/device_model.hpp
-  - src/app/src/firmware_update_service.cpp
-  - src/app/src/firmware_update_service.hpp
-  - src/app/src/lighting_service.cpp
-  - src/app/src/lighting_service.hpp
+  - src/app/src/sdplugin_extractor.cpp
   - src/app/src/plugin_catalog_model.cpp
   - src/app/src/plugin_catalog_model.hpp
   - src/app/src/sd_plugin_server.cpp
   - src/app/src/sd_plugin_server.hpp
-  - src/app/src/sdplugin_extractor.cpp
-  - src/app/src/sdplugin_extractor.hpp
-  - src/app/src/settings_service.cpp
-  - src/app/src/settings_service.hpp
   - src/app/src/streamdock_catalog_fetcher.cpp
+  - src/app/src/app_update_service.cpp
+  - src/app/src/device_model.cpp
   - src/app/src/time_sync_service.cpp
-  - src/app/src/time_sync_service.hpp
-  - src/app/qml/DeviceList.qml
   - src/app/qml/LoadedPluginsPage.qml
-  - src/app/qml/Main.qml
-  - src/app/qml/PluginStore.qml
-  - src/app/qml/ProfileEditor.qml
-  - src/app/qml/PropertyInspector.qml
   - src/app/qml/RgbPicker.qml
-  - src/app/qml/SettingsPage.qml
   - src/app/qml/SettingsRow.qml
-  - src/app/qml/Theme.qml
+  - src/app/qml/PropertyInspector.qml
+  - src/app/qml/PluginStore.qml
   - src/app/qml/components/BatteryIndicator.qml
-  - src/app/qml/components/DeviceImage.qml
-  - src/app/qml/components/DeviceRow.qml
-  - src/app/qml/components/FirmwarePanel.qml
   - src/app/qml/components/Notification.qml
-  - src/app/qml/components/Toast.qml
-  - src/app/qml/components/UpdateBanner.qml
-  - tests/unit/test_app_update_service.cpp
-  - tests/unit/test_battery_service.cpp
-  - tests/unit/test_firmware_update_service.cpp
-  - tests/unit/test_profile_serialization.cpp
-  - tests/unit/test_settings_service.cpp
+  - src/app/qml/Main.qml
+  - tests/unit/test_sdplugin_extractor.cpp
 findings:
-  critical: 2
-  warning: 8
-  info: 6
-  total: 16
+  critical: 0
+  warning: 5
+  info: 4
+  total: 9
 status: issues_found
 ---
 
-# Phase 13: Code Review Report
+# Phase 13: Code Review Report (RE-REVIEW / verification pass)
 
 **Reviewed:** 2026-05-22
 **Depth:** standard
-**Files Reviewed:** 46
+**Files Reviewed:** 18
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the Qt 6 / QML application layer and its C++ services touched during the v1.2 milestone. The codebase is generally careful — the QML_SINGLETON / static_assert Pitfall-4 lock is consistently applied, the loopback-only SdPluginServer invariant is intact, the DeviceLookup UAF discipline (pin shared_ptr in a local) is followed everywhere, and the autostart Desktop-Exec quoting is correct. However adversarial tracing surfaced two BLOCKER-class defects: a QML binding that references a non-existent `Theme.materialTheme` property (the Loaded-Plugins drawer renders with wrong/undefined Material theme), and a `.sdPlugin` archive extractor that writes attacker-controlled archive paths without any zip-slip path-traversal guard (the same archives are downloaded over the network in `install()`). Eight WARNING-class issues cover silent-failure / state-machine edge cases in the update, catalog and battery paths.
+This is a verification pass over the four prior Phase 13 findings plus a
+re-list of the still-applicable warnings/info. All four prior findings are
+**confirmed resolved at the source level** with no holes and no regression
+introduced by the edits. The remaining open items are warnings and info
+carried forward from the prior review; none rise to BLOCKER.
 
-## Critical Issues
+### Verification of the four fixed findings
 
-### CR-01: Path-traversal (zip-slip) in `.sdPlugin` archive extraction
+**CR-01 (zip-slip in `extractSdPluginArchive`) — RESOLVED.**
+`sdplugin_extractor.cpp:51-71` now computes `rootCanon = QDir::cleanPath(tmpPath) + "/"` and, for every entry, derives
+`outPath = QDir::cleanPath(tmpPath + "/" + info.filePath)` and rejects when
+the entry is absolute (`startsWith('/')`), drive/scheme-prefixed (`:/` or
+`:\`), or `!outPath.startsWith(rootCanon)`. Because `cleanPath` collapses
+`..` lexically, the surviving traversal `x/../../../escape.txt` resolves
+above the root and fails the `startsWith` containment check; the loop
+`break`s, `extractOk=false`, the staging dir is `removeRecursively()`'d, and
+the function returns `false` before any write. The guard precedes both the
+`isDir` mkpath and the `isFile` write. The trailing `/` on `rootCanon`
+defeats sibling-prefix attacks (e.g. `tmp_foo-evil`). Symlinks are skipped.
+The new regression test `test_sdplugin_extractor.cpp:190-243` drives a
+Python-built malicious zip (base64-embedded, since QZipWriter sanitises on
+write) and asserts the escape file is never created and neither the staging
+nor final dir survives. No hole found.
 
-**File:** `src/app/src/sdplugin_extractor.cpp:51-69`
-**Issue:** `extractSdPluginArchive` iterates `zip.fileInfoList()` and writes each entry to `tmpPath + "/" + info.filePath` with no validation that the resulting path stays inside `tmpPath`. A malicious archive entry named `../../../../home/user/.bashrc` (or an absolute path on platforms where Qt does not normalise it) escapes the staging directory and overwrites arbitrary files with the current user's permissions. This is reachable from the network: `PluginCatalogModel::install` (`plugin_catalog_model.cpp:526`) downloads a `.sdPlugin` over HTTPS from `cdn1.key123.vip` and feeds it straight into this extractor, and `extractStandalonePluginArchives` runs the same path on every launch over any file dropped in the plugins dir. The comment at line 70 only addresses symlinks, not traversal via `..` components in regular file entries.
-**Fix:** Reject or skip any entry whose normalised destination escapes the staging root before opening the output file:
+**CR-02 (`LoadedPluginsPage` Material.theme bound to non-existent
+`Theme.materialTheme`) — RESOLVED.**
+`LoadedPluginsPage.qml:36` now reads
+`Material.theme: ThemeService.effectiveMode === "light" ? Material.Light : Material.Dark`, which is exactly the expression `Main.qml:48-49` uses for
+its `materialTheme` property and re-asserts on every Drawer
+(`Main.qml:196,226,260`). `ThemeService.effectiveMode` is a real, always-
+resolved property (never `undefined`), so the binding can no longer evaluate
+to `undefined`. The CLAUDE.md "Material attached props don't cross Popup
+scope" gotcha is correctly honoured by re-asserting inside the Page that
+mounts in the Drawer. No hole found.
 
-```cpp
-QString const outPath = QDir::cleanPath(tmpPath + QStringLiteral("/") + info.filePath);
-QString const rootCanon = QDir::cleanPath(tmpPath) + QStringLiteral("/");
-if (!outPath.startsWith(rootCanon)) {
-    AJAZZ_LOG_WARN("plugin-catalog",
-                   "extract '{}': rejecting entry escaping staging dir: '{}'",
-                   archivePath.toStdString(), info.filePath.toStdString());
-    extractOk = false;
-    break;
-}
-```
+**WR-04 (unbounded plugin download) — RESOLVED.**
+A 64 MiB cap (`plugin_catalog_model.cpp:388 kMaxPluginDownloadBytes`) plus a
+`PK\x03\x04` magic check are enforced at three layers:
+(1) up-front abort in the `downloadProgress` slot when `received` or the
+advertised `total` exceed the cap (`:508-512`);
+(2) the static, pure, unit-testable `validateDownloadedArchive()`
+(`:415-427`) is called in the `finished` handler *before* any disk write
+(`:545-550`), re-checking the size cap (covers the no-progress-signal case)
+and the zip magic;
+(3) the `finished` handler maps the resulting
+`OperationCanceledError` to a clear "exceeds the N MB limit" message
+(`:529-532`).
+The gate sits strictly ahead of `QFile::open`/`write`, so a bogus or
+oversized body never lands on disk. The unit test
+`test_plugin_catalog_proxy_model.cpp:255-280` covers valid magic, empty
+body, non-zip body, and a 64 MiB+1 body with valid magic. No hole found.
 
-Also reject entries containing a leading `/` or a Windows drive prefix.
+**WR-07 (`SdPluginServer` dead connection slots) — RESOLVED.**
+`onClientDisconnected` (`sd_plugin_server.cpp:140-161`) now captures the uuid
+first, then `erase`/`remove_if`s the slot whose `socket == client` rather
+than nulling it, then `deleteLater()`s the socket. No `{uuid,nullptr}` row
+survives, so `connectedPluginCount`/`uuidForClient`/`registerPlugin` linear
+scans never see dead rows and a same-UUID reconnect yields exactly one live
+slot. The regression test `test_sd_plugin_server.cpp:207-246` asserts the
+count returns to 0 after disconnect and is exactly 1 after a same-UUID
+reconnect. `stop()` (`:72-82`) still disconnects-this, closes, deleteLaters,
+nulls, and `clear()`s the whole vector — consistent. No hole found.
 
-### CR-02: `LoadedPluginsPage.qml` binds to a non-existent `Theme.materialTheme` property
+### Regression scan of the four edits
 
-**File:** `src/app/qml/LoadedPluginsPage.qml:31`
-**Issue:** `Material.theme: Theme.materialTheme` references a property that does not exist on the `Theme` singleton (`Theme.qml` defines no `materialTheme`; the real `materialTheme` lives on `Main.qml`'s `root`, line 48). At runtime this binding resolves to `undefined`, so `Material.theme` falls back to its default (Light) regardless of `ThemeService.effectiveMode`. Per the project's documented v1.0 light-theme bug class, this produces Light Material chrome (dark/black text) on the dark BrandingService surface inside the Loaded-Plugins drawer — exactly the invisible-text failure mode CLAUDE.md warns about. The sibling drawers in `Main.qml` correctly bind `root.materialTheme`; this page was missed. qmllint with `pragma ComponentBehavior: Bound` should flag the unqualified/missing property.
-**Fix:** Pass the resolved theme from the host, matching the Main.qml drawers. Either bind through a property on the page set by the drawer, or use `ThemeService.effectiveMode`:
+No regressions introduced. Specifically:
 
-```qml
-Material.theme: ThemeService.effectiveMode === "light" ? Material.Light : Material.Dark
-```
-
-(LoadedPluginsPage is mounted inside `loadedPluginsDrawer`, which already sets `Material.theme: root.materialTheme` on the Drawer — but Material attached props don't cross the Popup→child boundary cleanly for a Page that re-asserts its own `Material.theme`, so set it explicitly here.)
+- The zip-slip guard does not break the legitimate paths: the wrapper-strip,
+  in-place file-to-dir replacement, and standalone-sweep tests still pass the
+  containment check (entries are plain relative paths under the root).
+- `validateDownloadedArchive` is `static` + pure and does not perturb the
+  install state machine; `installFinished` still fires exactly once on each
+  branch.
+- The `erase`/`remove_if` in `onClientDisconnected` is safe against the
+  `disconnect(this)` performed in `stop()` (stop nulls + clears, so the
+  disconnected slot can't double-fire into a stale iterator).
 
 ## Warnings
 
-### WR-01: Update banner re-fires for a dismissed tag if a 304 follows the dismiss
+### WR-05: RgbPicker fires unsolicited HID writes on tab open / device swap
 
-**File:** `src/app/src/app_update_service.cpp:316-321`
-**Issue:** `dismissCurrentUpdate()` sets status to `Idle` and persists the dismissed tag, but it does not clear `m_latestVersion`. On the next check that returns `304 Not Modified`, the handler does `setStatus(m_latestVersion.isEmpty() ? UpToDate : UpdateAvailable)` — since `m_latestVersion` is still the dismissed tag, the banner re-surfaces even though the user clicked "Later" and nothing changed upstream. The dismissed-tag gate in `applyRelease` is bypassed because the 304 path never calls `applyRelease`.
-**Fix:** On the 304 path, honour the dismissed tag before flipping to `UpdateAvailable`:
-
-```cpp
-QSettings settings;
-QString const dismissed = settings.value(QString::fromLatin1(kDismissedTagKey)).toString();
-if (httpStatus == 304) {
-    if (m_status == Status::Checking) {
-        bool const newer = !m_latestVersion.isEmpty()
-            && isNewerThan(m_latestVersion, currentVersion())
-            && m_latestVersion != dismissed;
-        setStatus(newer ? Status::UpdateAvailable : Status::UpToDate);
-    }
-    return;
-}
-```
-
-### WR-02: Nightly download URL is never carried into the banner
-
-**File:** `src/app/src/app_update_service.cpp:363-377`
-**Issue:** In the nightly-enabled path, `onLatestReplyFinished` calls `applyRelease(tag, notes, url)` with the *stable* release data, then chains the nightly fetch. `onNightlyReplyFinished` (line 401) only re-applies if `isNewerThan(tag, m_latestVersion)`. Because the stable record was already applied to `m_latestVersion`, and nightly is always treated as "newer than stable" by `isNewerThan`, the nightly correctly wins — but the intermediate `applyRelease(stable)` already emitted `UpdateAvailable` and the banner can flash the stable tag/URL before the nightly reply lands. If the nightly request fails (line 381-384), the banner is left pointing at the stable release even though the user opted into nightly. The transient stable-then-nightly flip is observable in QML bindings.
-**Fix:** When `m_includeNightly`, defer the `setStatus(UpdateAvailable)` decision until after the nightly reply resolves (or fails); apply the stable record's fields silently but only transition status once.
-
-### WR-03: `StreamdockCatalogFetcher` can wedge in `Loading` forever if a page never finishes
-
-**File:** `src/app/src/streamdock_catalog_fetcher.cpp:507-510, 547-579`
-**Issue:** `refresh()` no-ops while `m_state == State::Loading` (re-entry guard). The only transitions out of `Loading` happen inside `onPageFinished`. But `fetchPage` returns early without scheduling any reply when the URL is invalid (line 549-553) — e.g. a malformed `ACC_STREAMDOCK_CATALOG_URL` override or empty scheme — leaving `m_state` pinned at `Loading` with no in-flight reply to ever call `onPageFinished`. The fetcher is then permanently wedged: every subsequent `refresh()` (including the PluginStore "Retry" button) is silently dropped, and the QML banner stays on "loading" indefinitely.
-**Fix:** In `fetchPage`, on the invalid-URL early return, reset state out of `Loading`:
-
-```cpp
-if (!url.isValid() || url.scheme().isEmpty()) {
-    qCWarning(lcStreamdock) << "fetchPage aborted — invalid URL:" << url.toString();
-    if (m_state == State::Loading) {
-        m_state = m_accumulated.empty() ? State::Offline : State::Cached;
-        emit stateChanged(m_state);
-    }
-    return;
-}
-```
-
-### WR-04: Plugin install writes the full network body to disk with no size cap
-
-**File:** `src/app/src/plugin_catalog_model.cpp:507-515`
-**Issue:** `install()` reads the entire reply (`reply->readAll()`) and writes it to `<userPluginsDir>/<id>.sdPlugin` with no upper bound on the downloaded size. A hostile or compromised CDN (`cdn1.key123.vip`, which the code follows redirects to per line 464-466) can stream an arbitrarily large body and fill the user's home filesystem before the write completes. Combined with CR-01 the same body is then extracted. There is also no Content-Type / magic-byte check before treating the blob as a zip.
-**Fix:** Enforce a sane maximum (e.g. 64 MB) by inspecting `QNetworkRequest::ContentLengthHeader` up front and aborting in the `downloadProgress` slot when `received` exceeds the cap; reject the install if the body's first bytes are not the `PK\x03\x04` zip magic.
-
-### WR-05: `RgbPicker` sliders push HID writes on initial value assignment
-
-**File:** `src/app/qml/RgbPicker.qml:84-95, 106-116`
-**Issue:** Both firmware sliders set an initial `value: Math.min(3, root.firmwareBrightnessMax)` AND have an `onValueChanged` handler that calls `LightingService.setMode(...)`. In QML, the initial value assignment fires `onValueChanged`, so simply opening the RGB tab for an `IFirmwareLightingCapable` device issues two unsolicited HID `setFirmwareLightingMode` writes (one per slider) before the user touches anything — using `firmwareModeBox.currentValue`, which may itself still be defaulting. This can clobber the device's current effect on tab open.
-**Fix:** Gate the writes behind a "user has interacted" flag, or use `onMoved` (user-driven only) instead of `onValueChanged` for the slider handlers, mirroring the ComboBox's `onActivated` (which already only fires on user action).
-
-### WR-06: `SettingsRow` Apply uses unclamped slider value; relies on backend clamp only
-
-**File:** `src/app/qml/SettingsRow.qml:320-326`
-**Issue:** `onSnapshotChanged` / `Component.onCompleted` set `responseSlider.value = snapshot.responseLevel`, but the slider's `from: 1; to: 5`. When the device is absent the snapshot returns `responseLevel: 3` (fine), but if a future backend ever returns 0 (the documented "vendor default sentinel"), the slider clamps the displayed value to 1 while `Apply` sends `Math.round(responseSlider.value)` = 1, silently changing the persisted value from "default" to "level 1". The QML and the `clampResponseLevel` C++ contract (0 → 3) disagree at the boundary.
-**Fix:** Map the snapshot's 0-sentinel to 3 before seeding the slider, so the UI and `SettingsService::clampResponseLevel` agree:
+**File:** `src/app/qml/RgbPicker.qml:88-95, 110-116`
+**Issue:** The brightness and speed `Slider`s call
+`LightingService.setMode(...)` from `onValueChanged`. `onValueChanged` fires
+not only on user drag but also on the programmatic seed at
+`value: Math.min(3, root.firmwareBrightnessMax)` (`:84`, `:106`) and whenever
+`root.firmwareBrightnessMax` / `firmwareSpeedMax` re-resolve because
+`deviceCodename` changed. The only guard is
+`if (firmwareModeBox.currentValue === undefined) return` — that is satisfied
+as soon as the ComboBox model is populated, so merely opening the RGB tab (or
+switching the bound device) emits an HID `setMode` write to hardware the user
+never touched. The `ComboBox.onActivated` path is correctly user-only;
+the two sliders are not. This can flicker device lighting and burns HID I/O
+on every tab open.
+**Fix:** Gate the slider handlers on user interaction, e.g. only write from
+`onMoved` (fires on user drag, not on programmatic `value` assignment) rather
+than `onValueChanged`, or set a `property bool seeded: false` flipped true in
+`Component.onCompleted`/after the seed and early-return while `!seeded`:
 
 ```qml
-responseSlider.value = snapshot.responseLevel === 0 ? 3 : snapshot.responseLevel;
+Slider {
+    id: firmwareBrightnessSlider
+    // ...
+    onMoved: {                           // user-drag only
+        if (firmwareModeBox.currentValue === undefined) return
+        LightingService.setMode(root.deviceCodename,
+            firmwareModeBox.currentValue, value, firmwareSpeedSlider.value)
+    }
+}
 ```
 
-### WR-07: `connectedPluginCount` and disconnect bookkeeping leave dead slots in `m_connections`
+### WR-06: SettingsRow sleep ComboBox silently maps an unknown value to "Never" (0)
 
-**File:** `src/app/src/sd_plugin_server.cpp:140-159`
-**Issue:** `onClientDisconnected` sets `it->socket = nullptr` but never erases the `PluginConnection` entry from `m_connections`. Over a long session with many plugin connect/disconnect cycles, the vector grows unboundedly with dead `{uuid, nullptr}` entries. `connectedPluginCount` filters them out (`c.socket != nullptr`), so the count stays correct, but `uuidForClient` and the `registerPlugin` lookup do a linear scan over an ever-growing vector, and a disconnected-then-reconnected plugin with the same UUID will have two entries. Not a crash, but a slow leak + correctness smell.
-**Fix:** Erase the entry instead of nulling it:
+**File:** `src/app/qml/SettingsRow.qml:99-108, 320-326`
+**Issue:** `_sleepIndexFor(minutes)` returns `0` ("Never") for any
+`sleepMinutes` value not in `_sleepValues [0,1,3,5,10,30]`. If
+`SettingsService.currentSettings()` ever reports a sleep value the UI list
+doesn't contain (a firmware default or a value set by the vendor app, e.g.
+`2` or `15`), the ComboBox silently snaps to "Never". On the next "Apply" the
+device is reprogrammed to `0` (disable sleep) without the user ever choosing
+that — a silent destructive write of the sentinel. The response slider
+(`:274-279`, `from:1 to:5 SnapAlways`) is correctly clamped; the sleep path is
+the unguarded one. Note the snapshot fallback default in the binding
+(`:94 sleepMinutes: 0`) is also "Never", so a disconnected device defaults to
+disabling sleep on Apply too.
+**Fix:** When `_sleepIndexFor` finds no match, append the actual value as a
+custom entry (e.g. `"%1 min"`) and select it, or disable Apply until the user
+explicitly picks a known value, so an out-of-list firmware value is never
+silently rewritten to 0.
+
+### WR-08: app-update banner re-fires for a dismissed tag on a non-304 re-check
+
+**File:** `src/app/src/app_update_service.cpp:316-321, 406-435`
+**Issue:** The dismissed-tag suppression in `applyRelease` (`:426-431`) only
+holds while the server returns a full body. The dismissed tag is session-
+scoped by design (`dismissCurrentUpdate` persists it, `applyRelease` honours
+it), but the 304 fast-path at `:316-321` restores
+`Status::UpdateAvailable` purely from `m_latestVersion.isEmpty()` — it does
+**not** re-consult the persisted `dismissedTag`. So the sequence {check ->
+UpdateAvailable -> user dismisses (Idle) -> next 24 h auto-check returns 304
+because the ETag still matches} flips the banner back to `UpdateAvailable`
+even though the user dismissed that exact tag. The full-body path
+(`:426-431`) is correct; only the 304 shortcut regresses.
+**Fix:** Mirror the dismissed-tag check in the 304 branch:
 
 ```cpp
-m_connections.erase(std::remove_if(m_connections.begin(), m_connections.end(),
-    [client](auto const& c){ return c.socket == client; }), m_connections.end());
+if (httpStatus == 304) {
+    if (m_status == Status::Checking) {
+        QSettings s;
+        QString const dismissed =
+            s.value(QString::fromLatin1(kDismissedTagKey)).toString();
+        bool const haveUpdate = !m_latestVersion.isEmpty()
+            && isNewerThan(m_latestVersion, currentVersion())
+            && m_latestVersion != dismissed;
+        setStatus(haveUpdate ? Status::UpdateAvailable : Status::UpToDate);
+    }
+    return;
+}
 ```
 
-(Capture `uuid` before erasing, as the code already does.)
+### WR-09: StreamdockCatalogFetcher Loading re-entry guard has no watchdog
 
-### WR-08: Battery indicator never collapses a stale reading when the row goes offline
+**File:** `src/app/src/streamdock_catalog_fetcher.cpp:502-510, 581-657`
+**Issue:** `refresh()` early-returns whenever `m_state == State::Loading`
+(`:507`). The only exits from `Loading` live inside `onPageFinished` (every
+error/parse/envelope branch resets the state; the success branch emits
+`Online`). A per-request `setTransferTimeout(kPerPageTimeoutMs)` (`:567`)
+means a stalled socket fires `finished` with a timeout error and unwedges —
+good, that closes the common case. But the guard has no watchdog of its own:
+if a reply is never delivered to `onPageFinished` (NAME torn down mid-flight,
+or a future code path drops the connection), `m_state` stays `Loading`
+forever and every later `reload()`/Retry no-ops at `:507`, while the QML
+Retry button is also disabled while state is "loading"
+(`PluginStore.qml:314,448`). Low likelihood given the transfer timeout, but
+the guard is not self-healing.
+**Fix:** Arm a single-shot watchdog QTimer when entering `Loading` that, on
+expiry without a terminal page result, forces the state back to
+`Cached`/`Offline` (mirroring `:592-597`) so the guard self-heals and Retry
+becomes usable again.
 
-**File:** `src/app/qml/components/BatteryIndicator.qml:58, 168-186`
-**Issue:** The chip's `visible: percent >= 0 && !unavailable` only clears on an explicit `batteryUnavailable` signal. `BatteryService::doQuery` emits `batteryUnavailable` when the lookup returns null (device disconnected) — but only if a poll actually fires for that codename. When `pollEnabled` is false (user opted out) and a device is unplugged, no further query runs, so the indicator keeps showing the last cached percent (e.g. "85%") for a device that is no longer present. The DeviceRow keeps the chip mounted for offline battery-capable devices by design (DeviceRow.qml:142-151), so the stale value persists visibly.
-**Fix:** Have `BatteryIndicator` also watch the row's connected state (pass `deviceConnected` in from DeviceRow) and reset `percent = -1` when it goes false, independent of the poll timer.
+### WR-10: BatteryIndicator keeps a stale percent across an undetected offline transition
+
+**File:** `src/app/qml/components/BatteryIndicator.qml:58, 168-199`
+**Issue:** The chip self-hides only on an explicit `batteryUnavailable`
+signal (`:178-185`) or while `percent < 0`. If a device goes offline without
+`BatteryService` emitting `batteryUnavailable` for that codename (the poll
+simply stops because the codename de-registers, or the row's `connected` flag
+flips while the last `batteryQueried` value lingers), the chip keeps showing
+the last-known percent. The header comment (`:14-18`) claims the parent gates
+`visible` on "connected", but inside the component `visible: percent >= 0 && !unavailable` (`:58`) does not consider connection state — the indicator
+trusts that an offline device always produces a `batteryUnavailable`. There
+is also no `onCodenameChanged` reset, so a recycled delegate can inherit a
+prior device's charge until the first signal arrives (only
+`Component.onCompleted` seeds, `:191-199`). This is a stale-reading display
+bug, not a crash.
+**Fix:** (a) clear `percent = -1; unavailable = false` in
+`onCodenameChanged` so a recycled delegate doesn't inherit a prior device's
+charge, and/or (b) have the parent row bind a `connected` property the
+component honours so the chip collapses on disconnect even without an explicit
+unavailable signal.
 
 ## Info
 
-### IN-01: `streamdockProductId` snapshot round-trip drops the `downloadUrl`
+### IN-01: `extractSdPluginArchive` silently skips entries that are neither file nor dir
 
-**File:** `src/app/src/streamdock_catalog_fetcher.cpp:381-419, 332-364`
-**Issue:** `serialiseSnapshot` writes 14 fields but omits `downloadUrl`; the cached-snapshot reader path (lines 337-358) likewise never reads it. After a live fetch is cached and reloaded on next launch, every cached row loses its direct `downloadUrl`, so `install()` silently falls back to the open-in-browser bridge instead of the in-app HTTPS download — a quiet capability regression that only manifests across an app restart.
-**Fix:** Add `{"downloadUrl", e.downloadUrl.toString()}` to `serialiseSnapshot` and parse it back in the `rows` branch of `parseUpstreamJson`.
+**File:** `src/app/src/sdplugin_extractor.cpp:72-92`
+**Issue:** The loop handles `info.isDir` and `info.isFile`; any other entry
+kind (symlink, FIFO, special) is silently skipped after passing the path
+guard. That is the intended security posture (symlinks deliberately not
+honoured), but a plugin whose payload genuinely depends on a symlink would
+extract an incomplete tree with no warning. Low impact for flat vendor
+`.sdPlugin` payloads.
+**Fix:** Optional `AJAZZ_LOG_DEBUG` noting the skipped non-regular entry so a
+"plugin extracted but broken" field report has a breadcrumb.
 
-### IN-02: `humaniseSize` unit-index can read past the array on absurd inputs
+### IN-02: `kStandardActions` includes register-events that are unreachable in that scan
 
-**File:** `src/app/src/streamdock_catalog_fetcher.cpp:201-214`
-**Issue:** `kUnits` has 4 entries (B/KB/GB) and the loop caps `unit < 3`, so `unit` maxes at 3 — safe today. But the cap is a magic `3` decoupled from `std::size(kUnits)`; a future edit to `kUnits` without updating the literal re-arms an out-of-bounds read.
-**Fix:** Use `static_cast<int>(std::size(kUnits)) - 1` instead of the literal `3`.
+**File:** `src/app/src/sd_plugin_server.cpp:212-224, 185-206`
+**Issue:** `kStandardActions` (size 13) lists `registerPlugin` and
+`registerPropertyInspector`, but both events are fully handled and `return`ed
+at `:185-206` before the action scan runs, so the `isAction` branch can never
+see them. Harmless dead entries that may mislead a maintainer into thinking
+those events flow through `actionReceived`.
+**Fix:** Drop the two register-events from `kStandardActions` (size 11), or
+note explicitly that they appear only for documentation symmetry.
 
-### IN-03: `parseVersion` swallows non-numeric components as 0
+### IN-03: PluginStore status-glyph trailing comments duplicate the glyph
 
-**File:** `src/app/src/app_update_service.cpp:94-98`
-**Issue:** `p.toInt(&ok)` failures append `0` to the components, so a tag like `1.x.3` compares equal to `1.0.3`. Probably fine for GitHub release tags, but a malformed tag silently ranks as a real version rather than being rejected. Low impact (notify-only), worth a comment at minimum.
-**Fix:** Document the lenient behaviour, or treat a non-numeric component as a parse failure that ranks the tag as not-newer.
+**File:** `src/app/qml/PluginStore.qml:238-242, 312, 377-381, 446`
+**Issue:** Lines like `return "●";  // ●` and `text: "↻" // ↻` carry a
+trailing comment that just repeats the literal — redundant noise.
+**Fix:** Drop the redundant trailing comments.
 
-### IN-04: `DeviceList` scroll-visibility relies on a brittle child-count heuristic
+### IN-04: `streamdockProductId` field comment overstates its warning-suppression role
 
-**File:** `src/app/qml/DeviceList.qml:61`
-**Issue:** `visible: rows.children.length > 1` assumes the Repeater contributes exactly one non-delegate child. This is true today but couples the empty-state logic to an internal QML implementation detail (Repeater child accounting); adding any sibling item to the `ColumnLayout` silently breaks the empty-state predicate.
-**Fix:** Bind to the model count instead: `visible: root.model && root.model.count > 0` (DeviceModel exposes rowCount via the model; or expose a count property).
+**File:** `src/app/src/plugin_catalog_model.hpp:80-85`
+**Issue:** The comment says the `= {}` default "doubles as a
+`-Wmissing-field-initializers` suppressor", but `downloadUrl` (`:97`) also has
+a default and the `mockFixture()` rows
+(`plugin_catalog_model.cpp:721-836`) rely on the defaults for both trailing
+fields. The suppression is the aggregate's trailing-default behaviour, not a
+single field's. Documentation nit.
+**Fix:** Reword to attach the note once to the struct: "trailing fields use
+default member initializers so positional aggregate init can omit them".
 
-### IN-05: Magic timeout / interval literals scattered without named constants in QML
+## Hard checks (all pass)
 
-**File:** `src/app/qml/PluginStore.qml:198, 340`; `src/app/qml/components/Notification.qml:119`
-**Issue:** `interval: 30000` (relative-age tick) and `interval: root.dwellMs` (3000 default) are inline literals duplicated across the two banners. Minor maintainability smell; the two banners are otherwise copy-paste duplicates (Streamdock vs OpenDeck) of ~120 lines each.
-**Fix:** Factor the banner into a shared component parameterised by source state/timestamp, and lift the tick interval to a Theme token.
-
-### IN-06: `PluginCatalogModel::install` re-uses `m_install[uuid]` operator[] which inserts default state
-
-**File:** `src/app/src/plugin_catalog_model.cpp:411`
-**Issue:** `auto& state = m_install[uuid];` default-inserts an `InstallState{false,false}` for any uuid that passes the `findRow` check, even when the subsequent download fails — leaving a spurious not-installed entry in the side-map. The reconcile in `replace*Rows` keeps it bounded to catalogue rows, so it is not a true leak, but it muddies `installedCount`-adjacent logic if the semantics ever change to "has an install record".
-**Fix:** Use `find` and only insert on actual state change, or accept the current behaviour with a comment.
+- **QML_SINGLETON via `qmlRegisterSingletonInstance`**: `PluginCatalogModel`
+  (hpp:121) and `DeviceModel` use the `create()`+`registerInstance()` factory
+  pattern with `static_assert(!std::is_default_constructible_v<...>)`
+  (hpp:385) co-located — matches the CLAUDE.md rule. `AppUpdateService` /
+  `TimeSyncService` use the same `create`/`registerInstance` shape.
+- **WebEngineView / WebChannelQuick**: `PropertyInspector.qml` loads
+  `PIWebView.qml` via a *string* `source` (`:94`) so the WebEngine import is
+  not hard-required at compile time on no-WebEngine builds; the `Loader.Error`
+  status is logged (`:100-105`). The WebChannel wiring lives in PIWebView.qml
+  (out of scope here) but the indirection is correct.
+- **MultiEffect.maskSource Item type**: `Notification.qml:93-100` uses
+  `MultiEffect` only as a `layer.effect` shadow (no `maskSource`), so the
+  raw-Rectangle-mask SIGABRT trap does not apply.
+- **Material attached props across Popup scope**: `Main.qml` re-asserts
+  `Material.theme/accent/primary` inside every Drawer (`:196-198, 226-228, 260-262`) and `LoadedPluginsPage.qml:36-37` re-asserts on the Page mounted
+  in the drawer — correct per CLAUDE.md.
+- **Schema-as-source-of-truth**: the cached-snapshot reader/writer in
+  `streamdock_catalog_fetcher.cpp:319-419` round-trips the documented JSON
+  keys; the upstream `download`/`headUrl`/`deviceUuid` keys are read per
+  PLUGIN-SDK.md, not aligned to C++ field names. No COD-031 `nlohmann::json`
+  leak (all Qt JSON).
+- **app-update 404 graceful handling**: `onLatestReplyFinished` treats any
+  `reply->error() != NoError` (incl. 404) as `Status::Error` and logs
+  (`:323-330`); the nightly tag 404 is explicitly non-fatal (`:379-385`);
+  empty `tag_name` maps to `Status::Error` (`:353-357`). Graceful. (See WR-08
+  for the 304-vs-dismissed-tag interaction, which is the only update-path
+  defect.)
+- **Cross-platform**: `qsizetype` used throughout `isNewerThan`
+  (`app_update_service.cpp:263-266`) per the GCC `-Wconversion`/`-Werror`
+  note; `platformLabel` covers macOS/Win/Linux/source branches. No `sprintf`
+  / deprecated `_wgetenv` patterns in scope.
+- **ASCII test names**: every `TEST_CASE` string in the four reviewed test
+  files uses `-` / `->` only — no em-dash or right-arrow that would mangle
+  through the Win32 CMD codepage. Confirmed in
+  `test_sdplugin_extractor.cpp`, `test_sd_plugin_server.cpp`,
+  `test_plugin_catalog_proxy_model.cpp`, `test_app_update_service.cpp`.
 
 ______________________________________________________________________
 

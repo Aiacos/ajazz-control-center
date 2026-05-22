@@ -2,277 +2,271 @@
 phase: 11-ajazz-2-4g-8k-mouse-probe-and-confirm
 reviewed: 2026-05-22T00:00:00Z
 depth: standard
-files_reviewed: 18
+files_reviewed: 12
 files_reviewed_list:
-  - src/devices/mouse/CMakeLists.txt
-  - src/devices/mouse/include/ajazz/mouse/mouse.hpp
   - src/devices/mouse/src/aj_series.cpp
   - src/devices/mouse/src/aj_series_protocol.cpp
   - src/devices/mouse/src/aj_series_protocol.hpp
   - src/devices/mouse/src/aj_series_tft_pipeline.cpp
   - src/devices/mouse/src/aj_series_tft_pipeline.hpp
   - src/devices/mouse/src/register.cpp
-  - tests/unit/test_aj_series_dpi_fn.cpp
-  - tests/unit/test_aj_series_keymatrix_readback.cpp
+  - src/devices/mouse/include/ajazz/mouse/mouse.hpp
   - tests/unit/test_aj_series_mock_transport.cpp
-  - tests/unit/test_aj_series_mouse_macros.cpp
-  - tests/unit/test_aj_series_omnibus_settings.cpp
-  - tests/unit/test_aj_series_settings.cpp
-  - tests/unit/test_aj_series_tft_clock.cpp
   - tests/unit/test_aj_series_wire_format.cpp
+  - tests/unit/test_aj_series_settings.cpp
+  - tests/unit/test_aj_series_dpi_fn.cpp
+  - CLAUDE.md
 findings:
-  critical: 1
-  warning: 7
-  info: 6
-  total: 14
+  critical: 0
+  warning: 4
+  info: 5
+  total: 9
 status: issues_found
 ---
 
-# Phase 11: Code Review Report
+# Phase 11: Code Review Report (RE-REVIEW / verification pass)
 
 **Reviewed:** 2026-05-22
 **Depth:** standard
-**Files Reviewed:** 18
+**Files Reviewed:** 12
 **Status:** issues_found
 
 ## Summary
 
-Reviewed the AJ-series mouse backend (lifecycle/caching class, wire-format
-builders, TFT renderer, registration table) plus 8 unit-test files at standard
-depth. The wire-format builders are well-tested at byte level and the COD-031
-boundary is clean (no `nlohmann::json` anywhere under `src/devices/mouse/`).
-Polling-rate, profile, omnibus-settings, DPI-table, Fn-remap, macro, and
-key-matrix paths all have solid byte-pinned coverage.
+Verification pass over the Phase 11 AJAZZ AJ-series mouse code, with focus on
+the CR-01 device-yank fix (commit 02d03b5), regressions introduced by that fix,
+and remaining quality defects. This OVERWRITES the prior REVIEW.md.
 
-The most serious problems are around **error-handling consistency on device
-removal** and **stale/contradictory documentation that no longer matches the
-shipped battery code**. Four `void` setters write to the transport without the
-try/catch guard that every sibling setter uses, so a HID-write exception on a
-yanked device propagates uncaught and can crash the caller. A whole TFT upload
-pipeline (`renderClockDpiFace` / `encodeRgb565Chunks` / `buildSetTftLcdData`)
-and the `buildGetBattery()` 0x83 builder are dead code paths whose surrounding
-comments actively misdescribe what the production code does — a maintenance
-hazard given CLAUDE.md's hard rule that protocol code must match the RE source
-of truth.
+**CR-01 is CONFIRMED FIXED and is no longer a finding.** All four previously
+unguarded void-setter write paths now wrap `m_transport->write()` in the same
+`WARN`-and-swallow `try/catch (std::exception const&)` block used by sibling
+setters:
 
-## Critical Issues
+- `setLiftOffDistanceMm` (aj_series.cpp:197-203) — direct write, guarded.
+- `setButtonBinding` (aj_series.cpp:210-216) — direct write, guarded.
+- `uploadDpiTableAtomic` (aj_series.cpp:808-814) — reached by `setDpiStages` /
+  `setDpiStage` / `setActiveDpiStage`, guarded.
+- `emitLedPacket` (aj_series.cpp:817-830) — reached by all `setRgb*` setters,
+  guarded.
 
-### CR-01: Unguarded transport writes crash the caller on device-yank
+I audited every other write path in the class for a still-unguarded surface:
+the bool/optional setters (`setPollingRateHz`, `setActiveOnboardProfile`,
+`setMouseSettings`, `setDpiTable`, `setFnLayerBinding`, `uploadMacro`,
+`factoryReset`), `readKeyMatrix` (write + read), `batteryPercent` (writeFeature
 
-**File:** `src/devices/mouse/src/aj_series.cpp:197, 206, 799, 811`
-**Issue:** Four setters call `m_transport->write(pkt)` with **no** try/catch,
-while every other setter in the same class wraps the write and returns
-`false` / logs on `std::exception`:
+- readFeature), and `setTime` (writeFeature) are ALL wrapped. No unguarded
+  `->write` / `->writeFeature` / `->read` / `->readFeature` call remains on the
+  configuration path. CR-01 does not recur.
 
-- `setLiftOffDistanceMm` (line 197)
-- `setButtonBinding` (line 206)
-- `uploadDpiTableAtomic` (line 799) — reached by `setDpiStages`,
-  `setDpiStage`, and `setActiveDpiStage`
-- `emitLedPacket` (line 811) — reached by `setRgbStatic`, `setRgbEffect`,
-  `setRgbBrightness`
+**No regression introduced by the CR-01 fix.** The guard is correctly scoped:
+the void setters silently swallow (matching their void contract and the
+fire-and-forget QML caller model), while the bool setters that already returned
+`false` on failure were untouched and still propagate failure to callers. The
+diff (verified against `git show 02d03b5`) is a pure additive try/catch around
+the existing write call plus the new `ThrowingTransport` regression test — no
+behavioural change beyond not crashing. The regression test
+(`test_aj_series_mock_transport.cpp:239-257`) exercises all four sites
+(two direct, one via `setActiveDpiStage`, one via `setRgbBrightness`) and
+asserts `CHECK_NOTHROW`.
 
-`makeHidTransport`'s `write()` throws on a failed HID write (the catch blocks
-elsewhere in this file exist precisely because `write()` can throw). When the
-mouse is physically removed mid-session, these four void setters let the
-exception propagate out of the `IMouseCapable` / `IRgbCapable` surface. Most
-GUI/QML call sites invoke setters fire-and-forget and are not exception-safe,
-so this is a crash / data-loss-on-disconnect path. The asymmetry also means
-the RGB and legacy-DPI paths behave differently from the poll-rate/profile/
-settings paths under identical fault conditions.
+**Hard project checks:**
 
-**Fix:** Wrap each write in the same guard the sibling setters use. Example for
-`emitLedPacket`:
+- **COD-031:** PASS. `grep -rn nlohmann src/core/include/` and
+  `grep -rn nlohmann src/devices/mouse/` both return zero hits.
+- **Wire format vs RE:** Battery now uses the 0xF7 status poll
+  (`kStatusPollOpcode`, hardware-verified per the project memory note) —
+  correct. OLED clock 0x28 keeps the required 0xD7 marker at byte 8, year
+  big-endian, no checksum — correct. BIT7 checksum range pkt[1..63] is
+  consistent across the builder and all four test files.
+- **Cross-platform -Werror:** see WR-04 (unclamped percent→scale) and IN-04
+  (a single-use file-scope `constexpr` at risk under `-Wunused-const-variable`).
+
+The remaining defects are quality / maintainability / wire-format-doc-drift
+issues; none is a blocker.
+
+## Warnings
+
+### WR-01: Stale battery 0x83 dead-code path and contradictory doc comments
+
+**File:** `src/devices/mouse/src/aj_series.cpp:267-315`,
+`src/devices/mouse/src/aj_series_protocol.cpp:73-79`,
+`src/devices/mouse/src/aj_series_protocol.hpp:59-60,130-134`
+**Issue:** The implemented battery read uses the **0xF7** status poll built
+inline (`aj_series.cpp:294-296`: `poll[1] = kStatusPollOpcode`). The older
+**0x83** path is now dead:
+
+- `buildGetBattery()` (protocol.cpp:73-79) builds a `FeaCmd::GetBattery`
+  (0x83) packet with **zero call sites** in production or tests (confirmed by
+  grep). It is referenced only inside a comment.
+- The `IBatteryCapable` doc block (aj_series.cpp:267-286) still describes the
+  superseded "SET_FEATURE the 0x83 GET_BATTERY poke ... then GET_FEATURE that
+  report ... and read the charge at byte 2" handshake. The actual code sends
+  0xF7, then reads charge at byte 3 (Windows) / byte 2 (Linux) via
+  `parseBatteryCharge`. The comment at line 273 ("read the charge at byte 2")
+  contradicts the code's auto-detected byte-3 Windows path.
+- The header doc for `buildGetBattery` (protocol.hpp:130-134) and the enum
+  comment (protocol.hpp:59-60) both still document the 0x83 reply landing in a
+  status report — narrative for a path the runtime no longer takes.
+
+CLAUDE.md makes the schema/RE doc the source of truth for wire keys; a
+maintainer reading this block could re-introduce the 0x83 poke.
+**Fix:** Either delete `buildGetBattery()` + `FeaCmd::GetBattery` if 0x83 is
+retired, or annotate them "superseded by 0xF7 — see `batteryPercent()`". Rewrite
+the `batteryPercent()` doc block (267-286) to describe the 0xF7 poll and the
+byte-3/byte-2 auto-detect, removing the "0x83 ... read the charge at byte 2"
+language.
+
+### WR-02: Omnibus 0x53 settings push zeroes the cached LED sub-blocks on the wire
+
+**File:** `src/devices/mouse/src/aj_series.cpp:484-491`,
+`src/devices/mouse/src/aj_series_protocol.cpp:309-310`,
+`src/devices/mouse/src/aj_series_protocol.hpp:301-307`
+**Issue:** `setMouseSettings` builds the omnibus packet with
+`buildMouseSettings(m_activeProfile, m_pollRate, settings)` and writes it
+directly. `buildMouseSettings` intentionally leaves `ledBlock` and
+`logoLedBlock` zero (protocol.cpp:309-310), and BOTH the builder comment and
+the header doc (protocol.hpp:301-307) explicitly promise that "the
+`AjSeriesMouse` setter wires the cached blocks back in before send" / "to keep
+the LED state coherent across commits." But `setMouseSettings` never injects
+any cached LED block before `write()` — the mirror-back at lines 507-535 writes
+INTO `m_options` for *future* `setLiftOffDistanceMm` re-emits, it does not feed
+the just-built packet. Result: every settings push transmits all-zero LED +
+logo-LED sub-blocks at vendor bytes 24..39, which the firmware reads as
+"LED off / black". A user who sets an RGB colour and then changes any unrelated
+setting (sleep timer, LOD, sensitivity) silently loses their lighting.
+**Fix:** Before the `write(pkt)` in `setMouseSettings`, populate the LED
+sub-blocks from cached state — e.g. build via `buildMouseSetOption0(m_options)`
+after mirroring `m_lastLed` into `m_options.ledBlock`/`logoLedBlock` — so the
+documented promise becomes true. Alternatively, if clearing the LED blocks on
+every omnibus push is the intended firmware behaviour, fix the contradictory
+docs; the current code+doc pair cannot both be right.
+
+### WR-03: Macro `lastNonZeroPos` encoding contradicts its own spec and comments
+
+**File:** `src/devices/mouse/src/aj_series.cpp:686-698`,
+`src/devices/mouse/src/aj_series_protocol.hpp:419-427`
+**Issue:** `uploadMacro` computes `lastNonZeroPos` as the **0-based** index of
+the last non-zero byte:
 
 ```cpp
-void emitLedPacket() {
-    auto const pkt = buildSetLedParam(m_lastLed.effect, m_lastLed.speed,
-                                      m_lastLed.brightness, m_lastLed.modeBits,
-                                      m_lastLed.r, m_lastLed.g, m_lastLed.b);
-    try {
-        (void)m_transport->write(pkt);
-    } catch (std::exception const& e) {
-        AJAZZ_LOG_WARN("mouse.aj_series", "emitLedPacket: HID write failed: {}", e.what());
+for (std::size_t i = 0; i < payloadBytes; ++i) {
+    if (encoded[i] != 0) {
+        lastNonZeroPos = static_cast<std::uint8_t>(i);
     }
 }
 ```
 
-Apply the same pattern to `uploadDpiTableAtomic`, `setLiftOffDistanceMm`, and
-`setButtonBinding`. (The `void`-returning IMouseCapable/IRgbCapable signatures
-can't return a status, but they must not throw out of the device surface.)
+But three places document it as **1-based**:
 
-## Warnings
+- The header param doc (protocol.hpp:419-427) specifies the §3.11 line-491
+  encoding `56*(u-1) + s` where `s` is "the position of the last non-zero byte
+  within that chunk" — a 1-based byte position in the vendor scheme.
+- The inline comment (aj_series.cpp:690-692) claims "the last non-zero byte is
+  at position 1 (the 0x01 repeatCount low byte)" for an empty macro.
+- The class-level comment (aj_series.cpp:669-672) claims empty events emit
+  "lastNonZeroPos=1".
 
-### WR-01: Battery code contradicts its own comments and CLAUDE.md (0x83 vs 0xF7)
+For an empty macro the encoder emits `[0x01, 0x00]`, so the loop yields
+`lastNonZeroPos = 0` (index of the `0x01`), NOT 1. The code is off-by-one
+relative to its own documented `56*(u-1)+s` vendor formula. Either the vendor
+expects a 1-based marker (then the code under-reports by one and firmware may
+truncate the final macro byte) or the vendor expects 0-based (then all three
+comments are wrong). There is no round-trip test pinning this, so the divergence
+is a latent wire-format bug.
+**Fix:** Reconcile against `aj_series_opcode_table.md` §3.11 line 491. If 1-based,
+use `lastNonZeroPos = static_cast<std::uint8_t>(i + 1)` and confirm the
+empty-macro case lands `1`; if 0-based, correct the three comments. Add a unit
+test pinning `lastNonZeroPos` for the empty-macro case and a known multi-event
+payload so the chosen convention is regression-locked.
 
-**File:** `src/devices/mouse/src/aj_series.cpp:258-306`, `aj_series_protocol.cpp:73-79`, `aj_series_protocol.hpp:59-60,130-134`
-**Issue:** The shipped `batteryPercent()` poke is a hand-built **0xF7** status
-poll (`poll[1] = kStatusPollOpcode` = `0xF7`, line 287) — which matches the
-HARDWARE-VERIFIED method recorded in CLAUDE.md ("mouse battery = 0xF7 status
-poll"). But the in-function comment block at lines 258-264 says the opposite:
-*"SET_FEATURE the 0x83 GET_BATTERY poke (buildGetBattery() = [0x05, 0x83, …])"*.
-The header (`FeaCmd::GetBattery = 0x83`, `buildGetBattery()` doc) and the
-`test_aj_series_wire_format.cpp:342-360` "no-standalone-battery-opcode" guard
-all assert the 0x83 method as if it were the live path. Per CLAUDE.md's hard
-rule ("Always cross-check the reverse engineering before touching protocol …
-the RE is the source of truth"), a comment that lies about the actual opcode
-is a release-grade hazard: the next contributor will "fix" the code to match
-the comment and regress the verified battery read.
-**Fix:** Rewrite the lines 258-264 comment to describe the actual 0xF7
-report-id-0x00 status poll. Either delete the now-misleading 0x83 references in
-`aj_series_protocol.hpp:130-134` and the `buildGetBattery` doc, or annotate
-them clearly as the superseded theory. Reconcile against CLAUDE.md and the RE
-dossier so the single source of truth is the 0xF7 poll.
+### WR-04: `setRgbBrightness` percent→scale conversion has no upper clamp
 
-### WR-02: `buildGetBattery()` (opcode 0x83) is dead code
+**File:** `src/devices/mouse/src/aj_series.cpp:352-357`
+**Issue:**
 
-**File:** `src/devices/mouse/src/aj_series_protocol.cpp:73-79`
-**Issue:** `buildGetBattery()` is exported and documented but is never called
-anywhere in `src/` or `tests/` (grep confirms zero call sites outside its own
-definition + comments). `batteryPercent()` builds its own 0xF7 poll inline
-instead. Dead code that purports to be the battery poke compounds WR-01's
-documentation drift.
-**Fix:** Remove `buildGetBattery()` and `FeaCmd::GetBattery` if the 0x83 poke
-is genuinely superseded by 0xF7; or, if 0x83 is still a real fallback, wire it
-in and add a test. Do not leave an unused builder that contradicts the live
-code path.
+```cpp
+m_lastLed.brightness = static_cast<std::uint8_t>((percent * 5u) / 100u);
+```
 
-### WR-03: Entire TFT upload pipeline is unreachable from the backend
+The comment says "Clamp 0..100% → vendor scale 0..5", but there is no clamp.
+The `percent` param is `std::uint8_t` (range 0..255); passing `percent > 100`
+yields `(255 * 5) / 100 = 12`, far outside the documented vendor 0..5 range,
+sending an out-of-spec brightness byte to firmware. Sibling code clamps
+defensively everywhere (sensitivity/LOD in `buildMouseSetOption0`, profile slot
+in `setActiveOnboardProfile`), so this is an inconsistent missing guard.
+**Fix:**
 
-**File:** `src/devices/mouse/src/aj_series.cpp:914`, `aj_series_tft_pipeline.cpp` (whole file), `aj_series.cpp:6-11,22-26`
-**Issue:** `renderClockDpiFace`, `encodeRgb565Chunks`, and
-`buildSetTftLcdData` (opcode 0x25) are never invoked by `AjSeriesMouse` — the
-only `IClockCapable` implementation, `setTime()` (lines 363-400), uses the
-**0x28** firmware-RTC packet instead. The member `m_tftPanelSize` (line 914)
-that the pipeline would consume is written once at construction and never read.
-The file-level doc-comment (lines 22-26) still advertises *"IClockCapable —
-clock + DPI face on the dock TFT (opcode 0x25 chunked RGB565)"* which is no
-longer how the clock works. The pipeline is exercised only by isolated unit
-tests, so the dead production wiring is invisible to the test suite.
-**Fix:** Either (a) delete the unused pipeline + `m_tftPanelSize` and correct
-the file header to describe the 0x28 RTC path, or (b) if a future custom-image
-feature will use it, mark it explicitly as not-yet-wired in the header and add
-a `// NOLINT(...)`/`[[maybe_unused]]` on `m_tftPanelSize` so the intent is
-clear and `-Wunused-private-field` (Clang) stays quiet.
-
-### WR-04: `m_tftPanelSize` is an unread private member (cross-platform -Werror risk)
-
-**File:** `src/devices/mouse/src/aj_series.cpp:914`
-**Issue:** `m_tftPanelSize{128, 128}` is assigned in the member initialiser and
-never read. Under Apple Clang / Clang `-Werror` with `-Wunused-private-field`
-this is a hard build error (CLAUDE.md flags Apple Clang `-Werror` as the strict
-gate that catches things GCC misses). The default-init does not suppress the
-warning because the field is genuinely never used.
-**Fix:** Remove the member (preferred — see WR-03), or annotate
-`[[maybe_unused]] QSize m_tftPanelSize{128, 128};` if it must stay for an
-imminent feature.
-
-### WR-05: `setActiveDpiStage` silently clamps while `setDpiStage` throws — inconsistent contract
-
-**File:** `src/devices/mouse/src/aj_series.cpp:161-179`
-**Issue:** `setDpiStage(index, …)` throws `std::out_of_range` when
-`index >= dpiStageCount()` (line 162-164), but `setActiveDpiStage(index)`
-silently clamps to 7 via `std::min<std::uint8_t>(index, 7)` (line 177). Two
-index-taking methods on the same capability handle out-of-range input with
-opposite policies (throw vs swallow). A caller that relies on the throw for
-validation gets none from `setActiveDpiStage`, and one that catches nothing
-gets surprised by `setDpiStage`. No test covers the `setActiveDpiStage`
-out-of-range path, so the clamp is unverified.
-**Fix:** Pick one policy. Given the rest of the class clamps (profile, poll
-rate, slot, LOD), prefer clamping in `setDpiStage` too (or document the
-deliberate divergence). Add a test for `setActiveDpiStage(99)`.
-
-### WR-06: `parseBatteryCharge` auto-detect can misread a Linux frame whose data byte 0 == 0x05
-
-**File:** `src/devices/mouse/src/aj_series.cpp:240-256`
-**Issue:** The Windows-vs-Linux offset is auto-detected purely from
-`frame[0] == kBatteryStatusReportId` (0x05). On Linux the frame is unnumbered,
-so if the first *data* byte ever legitimately equals 0x05, the parser treats it
-as a Windows report-ID prefix and reads charge from `frame[3]` instead of
-`frame[2]`, returning a wrong percentage. The documented layout (`00 00 charge …`)
-makes this unlikely (byte 0 is documented as 0x00), but the heuristic has no
-corroborating check (e.g. verifying the trailing `01 01 01 02` status tail).
-**Fix:** Tighten the detection: confirm the status tail bytes, or pass the
-platform/transport-known report-id-present flag down rather than sniffing
-`frame[0]`. At minimum add a comment+test pinning the documented invariant that
-Linux byte 0 is always 0x00.
-
-### WR-07: Test header doc-comment describes a stale wire format (0x21/kCmdDpi, 64-byte report)
-
-**File:** `tests/unit/test_aj_series_mock_transport.cpp:9-18`
-**Issue:** The file-level doc-comment still describes the *old* envelope
-(`kReportSize == 64`, command `0x21` kCmdDpi at byte 1, sub-cmd 0x01, checksum
-`0x23`). The actual test body (lines 88-99) correctly asserts the new format
-(65-byte, opcode `0x54`, BIT7 checksum `0x54`). The doc-comment is now false and
-references constants (`kCmdDpi`, `kReportSize == 64`) that no longer exist —
-exactly the kind of drift CLAUDE.md warns leads contributors astray.
-**Fix:** Update the doc-comment to match the 0x54 / 65-byte / BIT7 reality the
-test now verifies.
+```cpp
+std::uint8_t const pct = std::min<std::uint8_t>(percent, 100);
+m_lastLed.brightness = static_cast<std::uint8_t>((pct * 5u) / 100u);
+```
 
 ## Info
 
-### IN-01: BIT7 checksum range doc-comment off by one (pkt[1..62] vs pkt[1..63])
+### IN-01: `setActiveDpiStage` clamps out-of-range index while `setDpiStage` throws
 
-**File:** `src/devices/mouse/src/aj_series_protocol.hpp:107-113`
-**Issue:** The doc says `Checksum = sum(pkt[1..62]) & 0x7F`, but the impl
-(`aj_series_protocol.cpp:63`, `accumulate(begin()+1, end()-1, …)`) and the test
-(`test_aj_series_wire_format.cpp:57` "checksum range is pkt[1..63]") both sum
-**pkt[1..63]**. The header comment understates the range by one byte.
-**Fix:** Change the header doc to `sum(pkt[1..63])` to match code and test.
+**File:** `src/devices/mouse/src/aj_series.cpp:161-179`
+**Issue:** `setDpiStage(index, ...)` throws `std::out_of_range` for
+`index >= dpiStageCount()` (lines 162-164), but `setActiveDpiStage(index)`
+silently clamps via `std::min<std::uint8_t>(index, 7)` (line 177). Two adjacent
+`IMouseCapable` index setters handle out-of-range differently — a caller cannot
+predict whether a bad index throws or is quietly clamped. Contract-asymmetry
+smell, not a correctness bug.
+**Fix:** Pick one policy. Given the rest of the file clamps defensively, prefer
+clamping in `setDpiStage` too (or document the divergence in the interface). If
+throwing is intended, throw in both.
 
-### IN-02: Macro `lastNonZeroPos` is 0-based but spec/doc describe a 1-based `56*(u-1)+s`
+### IN-02: `parseBatteryCharge` auto-detect can misclassify a Linux frame whose byte-0 is 0x05
 
-**File:** `src/devices/mouse/src/aj_series.cpp:677-689`
-**Issue:** The code computes `lastNonZeroPos` as the **0-based** index of the
-last non-zero byte, but the surrounding comment (and `aj_series_protocol.hpp`
-line 419-427) cite vendor §3.11 line 491 as `56*(u-1) + s` (a 1-based scheme).
-The empty-payload comment claims "the last non-zero byte is at position 1" for
-`[0x01, 0x00]` though index of `0x01` is 0. The tests match the 0-based code,
-but no hardware witness confirms the firmware expects 0-based — this is an
-unverified-against-device value (CLAUDE.md: treat provisional RE values as
-hypotheses). Flag for a hardware round-trip before relying on macros.
-**Fix:** Reconcile the comment with the code (state it is 0-based), and add a
-HANDOFF note that `lastNonZeroPos` encoding is pending hardware confirmation.
+**File:** `src/devices/mouse/src/aj_series.cpp:249-265`
+**Issue:** The Windows-vs-Linux offset is auto-detected purely by
+`frame[0] == kBatteryStatusReportId (0x05)`. On Linux (unnumbered frame) the
+charge sits at `frame[2]`; if a Linux frame's `frame[0]` ever equals 0x05, the
+parser takes the Windows branch (chargeIndex=3) and reads the wrong byte. The
+captured Linux frame is `00 00 64 ...` so `frame[0]==0` today and the doc
+acknowledges the heuristic, so risk is low — but detection is value-based, not
+transport-based.
+**Fix:** Low priority; if a Linux frame with a non-zero leading byte is ever
+observed, switch to a transport-supplied "report-id present" flag instead of
+sniffing the value.
 
-### IN-03: `setRgbBrightness` integer math truncates and ignores `setRgbStatic` speed reset
+### IN-03: `mouse.hpp` factory doc is stale (wrong transport + wrong SKU list)
 
-**File:** `src/devices/mouse/src/aj_series.cpp:343-348`
-**Issue:** `(percent * 5u) / 100u` truncates toward zero — e.g. 19% → 0
-(off), 39% → 1. Combined with the fact that brightness is the only field
-`setRgbBrightness` touches (effect/speed/color come from whatever the last
-`setRgbStatic`/`setRgbEffect` left in `m_lastLed`), a brightness-only call after
-a non-static effect re-emits that effect. Behaviorally defensible but the
-truncation makes low-percent inputs map to "off" surprisingly.
-**Fix:** Round to nearest: `static_cast<std::uint8_t>((percent * 5u + 50u) / 100u)`,
-and document that brightness rides the cached effect.
+**File:** `src/devices/mouse/include/ajazz/mouse/mouse.hpp:33-46`
+**Issue:** The `makeAjSeries` doc-comment says the backend targets "AJ159,
+AJ199, AJ339 Pro, AJ380" via a "64-byte feature-report command envelope on HID
+interface #1 (keyboard-class)". Per `register.cpp` the AJ339/AJ380 SKUs were
+removed as fictional; the envelope is **65-byte HID OUTPUT reports** (not
+feature reports — see protocol.hpp:17-23); and the control collection is
+usage-page 0xFFFF/usage 0x02, not the keyboard interface. The header doc
+contradicts both `register.cpp` and the protocol header.
+**Fix:** Update the doc: drop AJ339/AJ380, say "65-byte HID OUTPUT report on the
+0xFFFF/usage-0x02 control collection," and reference `aj_series_opcode_table.md`
+instead of the older `aj_series.md`.
 
-### IN-04: `register.cpp` battery-offset comment contradicts the §4 RE / CLAUDE.md
+### IN-04: `kDefaultProfile` is a single-use file-scope constexpr at -Werror risk
 
-**File:** `src/devices/mouse/src/register.cpp:101-106`
-**Issue:** The comment says charge is "at byte 3 on Windows / byte 2 on Linux"
-and describes a "passive GET_FEATURE" — but per WR-01 the live read is an active
-0xF7 poll, and CLAUDE.md pins the verified offset narrative. Same drift as WR-01,
-lower severity since it's only descriptive text in the registration file.
-**Fix:** Align with the corrected battery narrative once WR-01 is resolved.
+**File:** `src/devices/mouse/src/aj_series.cpp:75,923`
+**Issue:** `constexpr std::uint8_t kDefaultProfile = 0;` is used exactly once,
+as the in-class initialiser for `m_activeProfile`. It is a file-scope
+`constexpr` in an anonymous namespace; if a refactor removes that single use,
+Apple Clang `-Werror` flags `-Wunused-const-variable` on file-scope
+`inline constexpr` (per CLAUDE.md cross-platform note). Minor today; flagged
+because the project's build-strictness section calls this exact class out.
+**Fix:** Either inline the literal `0` into the member initialiser or ensure the
+constant stays referenced. Not urgent.
 
-### IN-05: Magic number `7` for max DPI-stage index repeated across the class
+### IN-05: `test_aj_series_mock_transport.cpp` banner describes the OLD wrong wire format
 
-**File:** `src/devices/mouse/src/aj_series.cpp:177, 444, 589, 590`
-**Issue:** `std::min<std::uint8_t>(index, 7)` and friends hard-code `7`
-(=`dpiStageCount()-1` / `onboardProfileCount()-1`) in several places rather than
-deriving from the accessor. If a future SKU changes stage/profile counts, these
-literals silently desync.
-**Fix:** Derive from `dpiStageCount() - 1` / `onboardProfileCount() - 1`, or a
-named `kMaxStageIndex` constant.
-
-### IN-06: `firmwareVersion()` hard-codes "unknown" despite a `buildGetRev()` (0x80) being available
-
-**File:** `src/devices/mouse/src/aj_series.cpp:124`
-**Issue:** `firmwareVersion()` always returns `"unknown"` even though
-`buildGetRev()` (opcode 0x80, §3.1) exists in the protocol layer to query it.
-Not a bug, but the version surface is permanently stubbed and the GetRev builder
-is (like buildGetBattery) effectively dead.
-**Fix:** Wire `buildGetRev()` + a response parse into `firmwareVersion()`, or
-document why it stays stubbed (no hardware witness for the response shape).
+**File:** `tests/unit/test_aj_series_mock_transport.cpp:6-19`
+**Issue:** The file-level doc-comment still describes `kReportSize == 64`,
+command `0x21` (kCmdDpi), sub-cmd `0x01`, payload-length `0x01`, and a
+`& 0xff = 0x23` checksum — the pre-P3.12 wrong envelope. The actual test body
+(lines 100-122) correctly asserts the new 65-byte, opcode-0x54, BIT7-checksum
+envelope and even comments "was 0x21, wrong". The banner now misleads directly
+above the corrected assertions.
+**Fix:** Rewrite the banner to describe the current 0x54 / 65-byte / BIT7
+envelope, matching the in-body comments.
 
 ______________________________________________________________________
 
