@@ -11,6 +11,7 @@
 #include "ajazz/core/logger.hpp"
 #include "ajazz/core/transport.hpp"
 
+#include <algorithm>
 #include <array>
 #include <atomic>
 #include <cstdint>
@@ -156,10 +157,15 @@ public:
         // whose packets lack a report-id byte). See docs/protocols/keyboard/
         // via.md and hidapi's hid_write report-id contract.
         if (m_prependReportIdPosix) {
-            std::vector<std::uint8_t> framed;
-            framed.reserve(data.size() + 1);
-            framed.push_back(0x00);
-            framed.insert(framed.end(), data.begin(), data.end());
+            // Pre-size to exactly data.size()+1 (byte 0 = 0x00 report id from the
+            // value-init) and copy the payload to offset 1. Done this way rather
+            // than reserve()+push_back()+insert() because GCC 13's
+            // -Werror=stringop-overflow= mis-bounds the destination of the
+            // insert-from-span memmove and false-positives; a fixed-size buffer
+            // makes the N-byte write at offset 1 into an (N+1)-byte object
+            // provably in-bounds.
+            std::vector<std::uint8_t> framed(data.size() + 1, std::uint8_t{0});
+            std::copy(data.begin(), data.end(), framed.begin() + 1);
             auto const fn = ::hid_write(m_handle, framed.data(), framed.size());
             if (fn < 0) {
                 m_errors.fetch_add(1, std::memory_order_relaxed);
