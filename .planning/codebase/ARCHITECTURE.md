@@ -145,8 +145,8 @@ AJAZZ Control Center is a Qt 6 desktop application with a modular, capability-dr
 1. **Device Lookup** — Service calls `DeviceRegistry::open(deviceId)` → returns `shared_ptr<IDevice>`.
 1. **Capability Query** — `dynamic_cast<IClockCapable*>(device.get())` checks if the device supports clocks.
 1. **Wire Format** — `IClockCapable::setTime(now)` encodes the current UTC timestamp into the device's wire format and writes via the transport.
-1. **Response** — Backend returns `Result::Ok` or `Result::NotImplemented` (not `Ok` with a lie if the device cannot do it — D-02 honesty contract).
-1. **UI Feedback** — Service emits a toast or glyph update showing the result (exclamation icon on `NotImplemented`, checkmark on `Ok`).
+1. **Response** — Backend returns `TimeSyncResult::Ok`, `TimeSyncResult::NotImplemented`, or `TimeSyncResult::IoError` (`src/core/include/ajazz/core/capabilities.hpp:1176`) — never `Ok` with a lie if the device cannot do it (D-02 honesty contract).
+1. **UI Feedback** — Service emits a toast or glyph update showing the result (exclamation icon on `NotImplemented`, checkmark on `Ok`); see `src/app/src/time_sync_service.cpp:252`.
 
 **Example call trace:** `Main.qml` sync button → `TimeSyncService::syncDevice()` → `DeviceRegistry::open()` → `dynamic_cast<IClockCapable*>` → `setTime(now)` → `Akp05Device::setTime()` → wire format build → `ITransport::write()` → USB HID output report → device firmware receives → UI glyph updates.
 
@@ -159,7 +159,7 @@ AJAZZ Control Center is a Qt 6 desktop application with a modular, capability-dr
 1. **Application Handler** — `Application::onHotplug()` forwards to `DeviceModel::handleHotplug()`.
 1. **Model Update** — DeviceModel adds or marks device as offline; emits `dataChanged()` signal.
 1. **UI Refresh** — QML ListView re-renders; offline devices show a grayed-out badge; online devices refresh.
-1. **Zombie Contract (D-06)** — If a consumer holds a `shared_ptr<IDevice>` from before the disconnect, the backend instance stays alive but all HID I/O operations return `Result::DeviceGone` (not a crash). The shared_ptr is naturally released when the consumer drops its reference.
+1. **Zombie Contract (D-06)** — If a consumer holds a `shared_ptr<IDevice>` from before the disconnect, the backend instance stays alive but HID I/O fails safely (not a crash). There is no `Result::DeviceGone` type: the transport throws on the dead handle and backends either swallow-and-log (fire-and-forget setters), return an empty `std::optional` (fallible reads), or surface `TimeSyncResult::IoError` (clock ops). The shared_ptr is naturally released when the consumer drops its reference.
 
 **Example call trace:** Hot-plug event → `HotplugMonitor::injectEvent(Disconnected)` → `Application::onHotplug()` → `DeviceModel::handleHotplug()` → `dataChanged()` signal → QML ListView re-renders → device grayed out. Later, user closes key designer → `DevicePtr` released → backend reclaimed from the flyweight cache.
 
@@ -249,19 +249,19 @@ AJAZZ Control Center is a Qt 6 desktop application with a modular, capability-dr
 
 **What happens:** A backend calls `hid_open()` and it fails, so the backend throws `std::runtime_error("device not found")` to the caller.
 **Why it's wrong:** Qt signal-slot connections cannot propagate exceptions safely; the exception disappears and the app crashes unpredictably. QML has no exception handling.
-**Do this instead:** Device backends return `Result::DeviceGone` or equivalent sentinel (enum/optional). Application-layer code wraps USB calls in try-catch and emits a signal with the error message, which QML connects to a toast. See `src/app/src/profile_controller.cpp::loadProfile()` for the pattern.
+**Do this instead:** Use the heterogeneous error model the codebase actually implements — `std::optional<T>` for fallible reads (e.g. `parseInputReport`, `batteryPercent`), `TimeSyncResult` for clock ops, and `void`+internal-try/catch+`AJAZZ_LOG_WARN` for fire-and-forget setters. `IDevice::open()` is the one place that throws (`std::runtime_error`) at the lifecycle edge. Application-layer code wraps the lifecycle calls in try-catch and emits a signal with the error message, which QML connects to a toast. See `src/app/src/profile_controller.cpp::loadProfile()` for the pattern.
 
 ### Lying Success UX on Unsupported Operations
 
-**What happens:** A device backend's `setTime()` returns `Result::Ok` even though the firmware does not support RTC — the device cannot actually keep the time, but the UI shows a checkmark.
+**What happens:** A device backend's `setTime()` returns `TimeSyncResult::Ok` even though the firmware does not support RTC — the device cannot actually keep the time, but the UI shows a checkmark.
 **Why it's wrong:** User sets time, closes the app, reopens it a week later, thinks the time is synced (it is not) — silent data loss of intent. D-02 honesty contract.
-**Do this instead:** Return `Result::NotImplemented` or equivalent. Let the UI show an exclamation icon + tooltip "this device does not support time sync" (TIMESYNC-05). This is what `ProprietaryKeyboard::setTime()` does for unsupported backends (before ARCH-05.1 found the AK980 PRO firmware RTC).
+**Do this instead:** Return `TimeSyncResult::NotImplemented` (and `TimeSyncResult::IoError` on a failed write). Let the UI show an exclamation icon + tooltip "this device does not support time sync" (TIMESYNC-05). This is what `ProprietaryKeyboard::setTime()` does for unsupported backends (before ARCH-05.1 found the AK980 PRO firmware RTC).
 
 ### Ignoring the Zombie Contract in Device Backends
 
 **What happens:** A device backend stores a raw `HID_HANDLE*` as a data member; when hot-plug removes the device, the handle becomes invalid. Later, someone holds a `shared_ptr<IDevice>` across a reconnect and tries to call a method — the backend dereferences the dead handle → SEGFAULT.
 **Why it's wrong:** Breaks the flyweight cache contract; prevents safe multi-consumer device instances.
-**Do this instead:** Gate every HID I/O operation on an internal `m_alive` flag or check `hid_get_info()` to detect if the USB handle is still valid. Return `Result::DeviceGone` on failure, not an exception. See the zombie contract note in `src/core/include/ajazz/core/device.hpp` class doc.
+**Do this instead:** Gate every HID I/O operation on an internal `m_alive` flag or check `hid_get_info()` to detect if the USB handle is still valid. On failure, fail safely along the heterogeneous error model — empty `std::optional` for reads, `TimeSyncResult::IoError` for clock ops, swallow-and-log for fire-and-forget setters — rather than letting an exception escape into a Qt slot. See the zombie contract note in `src/core/include/ajazz/core/device.hpp` class doc.
 
 ### Circular Dependency Between Backends
 
@@ -277,7 +277,7 @@ AJAZZ Control Center is a Qt 6 desktop application with a modular, capability-dr
 
 1. **Protocol decode errors** — Wire-format parsers (e.g., `parseInputReport()`) return `std::optional<T>` and never throw on malformed data (defensive against corrupt USB reports). Return empty optional if the report is not parseable.
 
-1. **Device lifecycle errors** — `IDevice::open()` throws `std::runtime_error` on failure (cannot acquire USB handle, permissions denied, etc.). `IDevice` methods (e.g., `setTime()`) return `Result::DeviceGone` if the device was yanked mid-call, and the caller marks the device offline without crashing.
+1. **Device lifecycle errors** — `IDevice::open()` throws `std::runtime_error` on failure (cannot acquire USB handle, permissions denied, etc.). If the device is yanked mid-call, capability methods fail safely instead of throwing into a slot: fallible reads return an empty `std::optional`, clock ops return `TimeSyncResult::IoError`, and fire-and-forget setters catch internally and `AJAZZ_LOG_WARN`. The caller marks the device offline without crashing. (There is no `Result::DeviceGone` enum — that was a documentation fiction; `TimeSyncResult` in `capabilities.hpp:1176` is the only result-enum in the model.)
 
 1. **Application layer** — Services wrap device calls in try-catch and emit Qt signals with error messages (never throw directly from a slot). QML connects those signals to Toast components or other in-app notifications.
 

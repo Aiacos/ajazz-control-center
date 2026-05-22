@@ -249,15 +249,18 @@ ______________________________________________________________________
 
 ### DFR-05: AKP05 v3 protocol framing (1024-byte packets)
 
-**Status: 🟡 DEFERRED (hardware capture pending, TODO.md)**
+**Status: ✅ RESOLVED (doc was stale — code already ships 1024)**
 
-**File:** `src/devices/streamdeck/src/akp05_protocol.hpp:PacketSize` (currently 512)
+**File:** `src/devices/streamdeck/src/akp05_protocol.hpp:97` (`PacketSize = 1024`)
 
-**Issue:** Per `[mirajazz]` taxonomy, the AKP05 family is protocol_version 3 with **1024-byte packets**, but our backend hardcodes `PacketSize = 512`. When the first real v3 capture lands, the packet size must be gated on detected protocol version (like `Kind::is_v2_api()` in `[ajazz-sdk]`) and `buildCmdHeader` adapted accordingly.
+**Issue (as written):** claimed the backend hardcoded `PacketSize = 512` for the
+protocol-v3 AKP05 family, which should be 1024.
 
-**Why deferred:** No v3 USB capture yet. Changing the packet size breaks every chunk loop in `akp05.cpp` without hardware validation.
-
-**Tracking:** TODO.md, "AKP05 v3 framing migration". Tests must cover both 512- and 1024-byte paths once resolved.
+**Resolution:** HEAD already defines `inline constexpr std::size_t PacketSize = 1024`
+for AKP05 — the 512 premise is stale. The AKP05E (`0300:3004`) was promoted with the
+correct v3 framing and is exercised live (4-device enumeration, fw `V3.AKP05E.01.007`).
+The remaining v2/v3 gating concern is AKP03-specific and tracked separately under
+\[[DFR-06]\] (AKP03 still ships 512 pending a capture).
 
 ______________________________________________________________________
 
@@ -293,31 +296,29 @@ ______________________________________________________________________
 
 ### QC-01: `Binding::state` (KeyState) silently dropped on profile round-trip
 
-**Status: ⚪ OPEN (pre-existing gap, phase 09, WR-01)**
+**Status: 🟢 RESOLVED (commit fc1caa3, phase 09, WR-01)**
 
-**File:** `src/core/src/profile.cpp:143-162` (writers), `:550-600` (readers); schema `docs/protocols/PROFILE_SCHEMA.md:64,74,96`
+**File:** `src/core/src/profile.cpp:155-217` (writers), `:624-707` (readers); schema `docs/protocols/PROFILE_SCHEMA.md:64,74,96`
 
-**Issue:** `writeBinding`/`writeEncoderBinding` never emit the `state` object (image path, overlay text, background/foreground RGB, fontSize). The schema declares `state: {$ref: KeyState}` on both Binding and EncoderBinding, but the writers omit it entirely, causing silent data loss on save → load. The profile.hpp doc claims "every field that the writer emits is round-tripped" — technically true because the writer omits `state`, but a caller expecting persistence of key visuals gets unexpected data loss.
+**What was wrong:** `writeBinding`/`writeEncoderBinding` never emitted the `state` object (image path, overlay text, background/foreground RGB, fontSize). The schema declared `state: {$ref: KeyState}` on both Binding and EncoderBinding, but the writers omitted it entirely, causing silent data loss on save → load.
 
-**Impact:** Users cannot persist custom key visuals (icons, labels, colors). Every profile load strips the visual state.
+**How it was fixed:** (commit fc1caa3) Added a `writeKeyState` helper (`profile.cpp:155`) called from both `writeBinding` (`:198`) and `writeEncoderBinding` (`:213`), with a symmetric `readKeyState` (`:624`) wired into `readBinding` (`:668`) and `readEncoderBinding` (`:696`). Visual state (image, overlay, fg/bg RGB, fontSize) now round-trips.
 
-**Fix approach:** Either (a) emit/parse a `"state"` object in `writeBinding`/`readBinding` (and encoder variants) using optional-aware RGB/text fields, or (b) if KeyState is deliberately persisted elsewhere, document that explicitly and remove `state` from the wire schema so the contract is honest. Add a round-trip assertion on `Binding::state`.
-
-**Tracking:** Phase 09, WR-01. Not covered by the new round-trip test (test only asserts action chains, never `state`).
+**Verification:** Confirmed against HEAD — `writeKeyState`/`readKeyState` exist and are invoked from both binding paths.
 
 ______________________________________________________________________
 
 ### QC-02: `writeRgb` is dead code
 
-**Status: ⚪ OPEN (pre-existing, phase 09, IN-01)**
+**Status: 🟢 RESOLVED (commit fc1caa3, phase 09, IN-01)**
 
 **File:** `src/core/src/profile.cpp:36-39`
 
-**Issue:** `writeRgb` is defined and marked `[[maybe_unused]]` but has no callers — RGB/KeyState are never serialized (see QC-01). It exists in anticipation of KeyState serialization that was never wired up. Dead helpers marked `[[maybe_unused]]` invite drift.
+**What was wrong:** `writeRgb` was defined and marked `[[maybe_unused]]` but had no callers — RGB/KeyState were never serialized (see QC-01). It existed in anticipation of KeyState serialization that was never wired up.
 
-**Fix:** Remove it once QC-01 is resolved (either delete or wire into the KeyState fix).
+**How it was fixed:** Resolved alongside QC-01 (commit fc1caa3). `writeRgb` (`profile.cpp:36`) is now called from `writeKeyState` (`:177`, `:182`) for the background/foreground colors and no longer carries `[[maybe_unused]]`.
 
-**Tracking:** Phase 09, IN-01.
+**Verification:** Confirmed against HEAD — `writeRgb` is a live helper invoked by `writeKeyState`.
 
 ______________________________________________________________________
 
@@ -403,17 +404,15 @@ ______________________________________________________________________
 
 ### QC-08: `notify-send` / `osascript` shell-out resolves via PATH (PATH-hijack surface)
 
-**Status: ⚪ OPEN (pre-existing, phase 09, WR-02)**
+**Status: 🟢 RESOLVED (commit eea2e1a, phase 09, WR-02)**
 
-**File:** `src/core/src/notification_service.cpp:125,153`
+**File:** `src/core/src/notification_service.cpp:131-134, 162-166`
 
-**Issue:** Linux and macOS notification back-ends call `execvp("notify-send", ...)` / `execvp("osascript", ...)`, resolving the binary against inherited `PATH`. If the process launches with an attacker-influenced `PATH` (a `.desktop` launcher, wrapper script, or test harness), a malicious `notify-send`/`osascript` on `PATH` runs with user privileges every time a notification fires. Title/body are passed as separate argv entries (no shell injection), so the only exposure is the PATH lookup of the helper itself.
+**What was wrong:** Linux and macOS notification back-ends called `execvp("notify-send", ...)` / `execvp("osascript", ...)`, resolving the binary against inherited `PATH`. A process launched with an attacker-influenced `PATH` could run a malicious helper on every notification.
 
-**Impact:** Notification feature becomes a privilege-escalation surface if the app's launch context is untrusted.
+**How it was fixed:** (commit eea2e1a) The Linux path now `execv`s against a vetted candidate list (`/usr/bin/notify-send`, `/bin/notify-send`, `/usr/local/bin/notify-send`); the macOS path `execv`s the fixed system binary `/usr/bin/osascript`. Neither resolves via `$PATH` any longer.
 
-**Fix:** Prefer absolute paths (`/usr/bin/notify-send`, `/usr/bin/osascript`) or use `execv`/`posix_spawn` against a vetted candidate list, falling back across known install locations. At minimum, document the trust assumption that the process launches with a clean `PATH`.
-
-**Tracking:** Phase 09, WR-02.
+**Verification:** Confirmed against HEAD — no `execvp` remains in `notification_service.cpp`; both helpers exec absolute paths.
 
 ______________________________________________________________________
 
@@ -443,24 +442,15 @@ ______________________________________________________________________
 
 ### QC-10: AKP05 `m_firmwareVersion` read/write data race
 
-**Status: ⚪ OPEN (pre-existing, phase 10, WR-03)**
+**Status: 🟢 RESOLVED (commit 817391a, phase 10, WR-03)**
 
-**File:** `src/devices/streamdeck/src/akp05.cpp:434, 783-797, 854, 856`
+**File:** `src/devices/streamdeck/src/akp05.cpp:435-440` (read), `:833-834` (write), `:899` (mutex)
 
-**Issue:** `firmwareVersion()` reads `m_firmwareVersion` without lock, while `probeFirmwareVersion()` (called from `open()`) writes it via `std::move`. The `m_mutex` guards only `m_callback`, not `m_firmwareVersion`. If a UI thread calls `firmwareVersion()` concurrently with the I/O thread running `open()`, a data race on `std::string` causes UB (torn read). Unit tests only exercise the single-threaded path, so this is not surfaced.
+**What was wrong:** `firmwareVersion()` read `m_firmwareVersion` without lock, while `probeFirmwareVersion()` (called from `open()`) wrote it via `std::move`. The `m_mutex` guarded only `m_callback`, so concurrent UI/I/O access was a data race (torn `std::string` read → UB).
 
-**Impact:** Potential data race on concurrent access to firmware version string. May manifest as garbage version on high-contention systems.
+**How it was fixed:** (commit 817391a) `m_mutex` is now `mutable` (`:899`, "Guards m_callback and m_firmwareVersion") and taken via `std::lock_guard` in `firmwareVersion()` (`:439`) and around the `std::move` write in the probe (`:833`, "pairs with firmwareVersion() (WR-03)").
 
-**Fix:** Guard `m_firmwareVersion` with `m_mutex` (made `mutable`) on both read and write:
-
-```cpp
-[[nodiscard]] std::string firmwareVersion() const override {
-    std::lock_guard const lock(m_mutex);
-    return m_firmwareVersion;
-}
-```
-
-**Tracking:** Phase 10, WR-03.
+**Verification:** Confirmed against HEAD — both read and write are mutex-guarded.
 
 ______________________________________________________________________
 
@@ -576,55 +566,43 @@ ______________________________________________________________________
 
 ### QC-18: AK980 `firmwareVersion()` swallows exceptions with no log
 
-**Status: ⚪ OPEN (pre-existing, phase 12, WR-03)**
+**Status: 🟢 RESOLVED (commit c43980d, phase 12, WR-03)**
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:528-542`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:530-547`
 
-**Issue:** The `catch (...)` block (line 539) discards the error entirely with no log, unlike `batteryPercent` and `setTime` which both `AJAZZ_LOG_WARN`. On device yank or transport failure, the function returns `"unknown"` indistinguishably from a device that genuinely reports unparsable version. A short/garbage reply can produce a plausible-looking but bogus `"x.y.z"`. Operationally this hides I/O failures that every sibling method records.
+**What was wrong:** The `catch (...)` block discarded the error with no log, unlike `batteryPercent` and `setTime` which both `AJAZZ_LOG_WARN`. On device yank or transport failure the function returned `"unknown"` indistinguishably from a genuine unparsable-version device, hiding I/O failures every sibling method records.
 
-**Impact:** Silent I/O failures on version reads, harder to diagnose device issues.
+**How it was fixed:** (commit c43980d) The handler now catches `std::exception const& e` and logs `AJAZZ_LOG_WARN("keyboard.ak980", "firmwareVersion: HID I/O failed: {}", e.what())` (`:545`) before falling through to `"unknown"`.
 
-**Fix:** Catch `std::exception const& e` and `AJAZZ_LOG_WARN("keyboard.ak980", "firmwareVersion: HID I/O failed: {}", e.what())` before falling through to `"unknown"`.
-
-**Tracking:** Phase 12, WR-03.
+**Verification:** Confirmed against HEAD — the `AJAZZ_LOG_WARN` is present at line 545.
 
 ______________________________________________________________________
 
 ### QC-19: AK980 `batteryPercent()` treats 0% charge as "no battery"
 
-**Status: ⚪ OPEN (pre-existing, phase 12, WR-04)**
+**Status: 🟢 RESOLVED (commit 3b2b937, phase 12, WR-04)**
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:781-783`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:784-797`
 
-**Issue:** `if (pct == 0) return std::nullopt;` conflates two distinct states: a wired keyboard with no battery (the intended suppression) and a wireless keyboard genuinely at 0% / critically drained. A real near-empty battery shows "unknown" in the UI instead of "0%", exactly when the user most needs the warning. The comment references `resp[1]` opcode echo as a sanity check, but the code only validates the opcode echo — it does not use it to disambiguate drained-wireless from no-battery.
+**What was wrong:** `if (pct == 0) return std::nullopt;` conflated a wired keyboard with no battery (intended suppression) and a wireless keyboard genuinely at 0% / critically drained, so a near-empty battery showed "unknown" instead of "0%" exactly when the warning matters.
 
-**Impact:** Critically drained wireless keyboards show "unknown" battery instead of a warning-critical "0%".
+**How it was fixed:** (commit 3b2b937) The "no battery" case is now distinguished by the opcode echo guard (`resp[1] != CmdBatteryQuery` → reply rejected, `:784`). A reply that passes the echo check is a genuine battery reading, so a `0` charge is surfaced as `0%` (`return std::min<std::uint8_t>(resp[4], 100)`, `:797`) rather than collapsing to `nullopt`.
 
-**Fix:** Disambiguate "wired, no battery" from wireless 0% using a device/echo signal (e.g. gate the `nullopt` on the descriptor's battery/wireless state, or on a distinct echo byte), rather than on the percent value alone.
-
-**Tracking:** Phase 12, WR-04.
+**Verification:** Confirmed against HEAD — the value-based `pct == 0 → nullopt` collapse is gone; suppression is now keyed on the echo guard.
 
 ______________________________________________________________________
 
 ### QC-20: AK980 `buildSetTimeData` high-year wrap above 2255 is unguarded
 
-**Status: ⚪ OPEN (pre-existing, phase 12, WR-05)**
+**Status: 🟢 RESOLVED (commit f0441bd, phase 12, WR-05)**
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:196`
+**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:198`
 
-**Issue:** `pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` guards the low end (pre-2000 saturates to 0) but not the high end: `year = 2256` gives `256`, which truncates to `0` — 2256 silently encodes as 2000. The test suite pins 2255 → 0xFF but never exercises the 2256 wrap. Not reachable from a real `system_clock` today, but latent silent-corruption path.
+**What was wrong:** `pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` guarded the low end but not the high end: `year = 2256` gave `256`, truncating to `0` (silently encoding 2256 as 2000). Not reachable from a real `system_clock` today, but a latent silent-corruption path.
 
-**Impact:** Very low on current platforms. Latent risk for future systems with extended time values.
+**How it was fixed:** (commit f0441bd) The high end is now clamped: `pkt[4] = (year >= 2255) ? 0xFF : (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` (`:198`).
 
-**Fix:** Clamp the high end too:
-
-```cpp
-year >= 2255 ? 0xFF : (year >= 2000 ? year - 2000 : 0)
-```
-
-Add test for 2256-saturates-to-2000.
-
-**Tracking:** Phase 12, WR-05.
+**Verification:** Confirmed against HEAD — the `year >= 2255 ? 0xFF` clamp is present at line 198.
 
 ______________________________________________________________________
 
@@ -872,15 +850,16 @@ ______________________________________________________________________
 
 ## Summary: Concern Tiers
 
-| Tier                                                         | Count | Examples                                                                                                                     |
-| ------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
-| **🔴 BLOCKER** (release-preventing)                          | 0     | (all resolved this session)                                                                                                  |
-| **🟡 DEFERRED** (known, documented, pending hardware/vendor) | 7     | AK980 envelope framing (WR-01/02), Touch-strip X clamp, v3 protocol, placeholder PIDs, off-by-two RGB buffer                 |
-| **⚪ OPEN** (actionable quality/maintainability)             | 21    | KeyState serialization (QC-01), data races (QC-10), macro encoding (QC-15), app UI glitches (QC-24–28), battery issues, etc. |
-| **ℹ️ INFORMATIONAL** (monitoring)                            | 1     | Test suite growth                                                                                                            |
+| Tier                                                         | Count | Examples                                                                                                                                                                                                                              |
+| ------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **🔴 BLOCKER** (release-preventing)                          | 0     | (all resolved this session)                                                                                                                                                                                                           |
+| **🟡 DEFERRED** (known, documented, pending hardware/vendor) | 7     | AK980 envelope framing (WR-01/02), Touch-strip X clamp, v3 protocol, placeholder PIDs, off-by-two RGB buffer                                                                                                                          |
+| **⚪ OPEN** (actionable quality/maintainability)             | 14    | macro encoding (QC-15), DPI error-handling asymmetry (QC-16), mouse settings LED zeroing (QC-14), provisional-RE test pins (QC-23), catalog watchdog (QC-27), stale battery indicator (QC-28), platform-specific guards (QC-07), etc. |
+| **ℹ️ INFORMATIONAL** (monitoring)                            | 1     | Test suite growth                                                                                                                                                                                                                     |
 
 ______________________________________________________________________
 
 *Codebase concerns audit: 2026-05-22*
 *References: phases 09–13 code-review reports, CLAUDE.md hard rules, TODO.md open work.*
 *Session fixes: 9da5c22 (zip-slip), b361596 (mouseButtons), 24dea36 (Theme), 02d03b5+7e04fdd (device-yank), f34282a (SdPluginServer), a43f930 (plugin-size), d70503d (RGB defer), 5f2c017–ea3824a (warnings).*
+*Doc-refresh 2026-05-22 (verified against HEAD): flipped QC-01/QC-02 → RESOLVED (fc1caa3, KeyState/Rgb now round-trip), QC-08 → RESOLVED (eea2e1a, notify-send/osascript via absolute path), QC-10 → RESOLVED (817391a, m_firmwareVersion mutex-guarded), QC-18 → RESOLVED (c43980d, firmwareVersion logs I/O failure), QC-19 → RESOLVED (3b2b937, genuine 0% surfaced), QC-20 → RESOLVED (f0441bd, year>2255 clamp). Plugin sandbox FS scope (CWE-200, 4c16cc0) and manifest-signer/bwrap PATH-hijack (CWE-426, f54d69b) were also fixed this session (tracked in the health report, not previously in this doc).*
