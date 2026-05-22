@@ -92,6 +92,37 @@ TEST_CASE("profile JSON reader round-trips writer output", "[profile][roundtrip]
     REQUIRE(restored.encoders.at(0).onCcw.front().kind == ActionKind::BackToParent);
 }
 
+TEST_CASE("profile round-trips mouseButtons (string-keyed Bindings)",
+          "[profile][roundtrip][mouse]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "mouse-rt-uuid";
+    p.name = "Mouse Profile";
+    p.deviceCodename = "aj_series";
+
+    Binding side{};
+    side.onPress.push_back(
+        Action{.kind = ActionKind::Plugin, .id = "media.next", .label = "Next", .delayMs = 0});
+    side.onLongPress.push_back(
+        Action{.kind = ActionKind::Sleep, .id = "", .label = "Hold", .delayMs = 250});
+    p.mouseButtons["side1"] = side;
+    // A button name needing JSON escaping exercises escape()/readString()
+    // symmetry on the string key (the keys/encoders maps are uint16-keyed
+    // and never hit this path); empty binding must round-trip too.
+    p.mouseButtons[R"(dpi"shift)"] = Binding{};
+
+    auto const restored = profileFromJson(profileToJson(p));
+
+    REQUIRE(restored.mouseButtons.size() == 2);
+    REQUIRE(restored.mouseButtons.at("side1").onPress.size() == 1);
+    REQUIRE(restored.mouseButtons.at("side1").onPress.front().id == "media.next");
+    REQUIRE(restored.mouseButtons.at("side1").onPress.front().kind == ActionKind::Plugin);
+    REQUIRE(restored.mouseButtons.at("side1").onLongPress.front().kind == ActionKind::Sleep);
+    REQUIRE(restored.mouseButtons.at("side1").onLongPress.front().delayMs == 250);
+    REQUIRE(restored.mouseButtons.at(R"(dpi"shift)").onPress.empty());
+}
+
 /// profileFromJson() must tolerate extra whitespace and unknown keys.
 TEST_CASE("profile reader skips unknown keys and tolerates whitespace",
           "[profile][forward-compat]") {

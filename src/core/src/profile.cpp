@@ -201,6 +201,22 @@ std::string profileToJson(Profile const& profile) {
     }
     out << "}";
 
+    // Mouse buttons (button name → key-style Binding). Wire key
+    // "mouseButtons" per docs/protocols/PROFILE_SCHEMA.md; string-keyed
+    // (escaped), unlike the uint16-keyed keys/encoders maps above.
+    out << ",\"mouseButtons\":{";
+    first = true;
+    for (auto const& [name, binding] : profile.mouseButtons) {
+        if (!first) {
+            out << ",";
+        }
+        escape(out, name);
+        out << ":";
+        writeBinding(out, binding);
+        first = false;
+    }
+    out << "}";
+
     // Folder pages (root keys live above; child pages live here).
     out << ",\"pages\":{";
     first = true;
@@ -673,6 +689,23 @@ Profile profileFromJson(std::string_view json) {
         } else if (key == "encoders") {
             readUintKeyedMap(
                 r, profile.encoders, [](JsonReader& rr) { return readEncoderBinding(rr); });
+        } else if (key == "mouseButtons") {
+            // String-keyed (button name) map of key-style Bindings. Wire key
+            // "mouseButtons" per PROFILE_SCHEMA.md. Mirrors the pages reader's
+            // inline string-key loop since readUintKeyedMap is uint16-only.
+            r.expect('{');
+            if (!r.tryConsume('}')) {
+                while (true) {
+                    std::string const btn = r.readString();
+                    r.expect(':');
+                    profile.mouseButtons.emplace(btn, readBinding(r));
+                    if (r.tryConsume(',')) {
+                        continue;
+                    }
+                    r.expect('}');
+                    break;
+                }
+            }
         } else if (key == "pages") {
             r.expect('{');
             if (!r.tryConsume('}')) {
