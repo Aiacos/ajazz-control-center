@@ -18,6 +18,7 @@ NOT a production tool (writes raw HID). Examples:
 from __future__ import annotations
 
 import argparse
+import contextlib
 import datetime
 import sys
 import time
@@ -155,10 +156,8 @@ def watch_battery(seconds: int) -> None:
             )
         except (OSError, SystemExit):
             if dev is not None:
-                try:
+                with contextlib.suppress(OSError):
                     dev.close()
-                except OSError:
-                    pass
             dev = None
             row = f"  {time.time() - start:4.0f}  <disconnected / reopening>"
         if row[8:] != (last or "")[8:]:  # print only when the content changes

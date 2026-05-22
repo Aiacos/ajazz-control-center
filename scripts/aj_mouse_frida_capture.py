@@ -60,7 +60,7 @@ def main() -> None:
         sys.exit(f"{TARGET} not running")
     script = session.create_script(JS)
 
-    def on_message(message, data):
+    def on_message(message, _data):
         if message["type"] == "send":
             p = message["payload"]
             if "hex" in p:
