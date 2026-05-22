@@ -272,7 +272,7 @@ qt_add_qml_module(
               qml/components/Card.qml
               qml/components/DeviceRow.qml
               qml/components/EmptyState.qml
-              qml/components/FirmwareUpdateDialog.qml
+              qml/components/FirmwarePanel.qml
               qml/components/EncoderCard.qml
               qml/components/KeyCell.qml
               qml/components/PageHeader.qml

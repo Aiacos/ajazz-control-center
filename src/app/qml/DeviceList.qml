@@ -30,11 +30,6 @@ Rectangle {
     /// (Plan 05-06 + 05-07). Bubbled up from each DeviceRow.
     signal syncTimeRequested(string codename)
 
-    /// Emitted when the user clicks a row's "Update firmware…" ToolButton.
-    /// Main.qml opens the FirmwareUpdateDialog. Carries the coarse family +
-    /// codename so the consumer can resolve the granular FirmwareUpdate.Family.
-    signal firmwareUpdateRequested(string codename, int family, string modelName)
-
     /// Map of `codename → "success" | "not_implemented" | "io_error" | "not_capable" | ""`.
     /// Set by Main.qml on TimeSyncService syncSucceeded / syncFailed and the
     /// autoSync result connection. Per-row glyph reads its own state from
@@ -116,7 +111,6 @@ Rectangle {
                     modelName: model
                     deviceCodename: codename
                     deviceConnected: connected
-                    deviceFamily: family
                     hasClockCapability: deviceHasClock
                     hasBatteryCapability: deviceHasBattery
                     // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.
@@ -146,9 +140,6 @@ Rectangle {
 
                     onClicked: root.deviceSelected(codename)
                     onSyncTimeRequested: function(cn) { root.syncTimeRequested(cn); }
-                    onFirmwareUpdateRequested: function(cn, fam, mn) {
-                        root.firmwareUpdateRequested(cn, fam, mn);
-                    }
                 }
             }
         }

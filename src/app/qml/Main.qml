@@ -138,13 +138,6 @@ ApplicationWindow {
                     timeSyncLastTrigger = "manual";
                     TimeSyncService.setSystemTimeOn(codename);
                 }
-                // Per-row "Update firmware…" button. Resolve the granular
-                // FirmwareUpdate.Family from the coarse device family + codename,
-                // then open the deep-link dialog (no in-app flashing).
-                onFirmwareUpdateRequested: (codename, family, modelName) => {
-                    firmwareDialog.openFor(
-                        FirmwareUpdate.familyForDevice(family, codename), modelName);
-                }
             }
 
             ProfileEditor {
@@ -175,11 +168,6 @@ ApplicationWindow {
     }
 
     Toast { id: toast }
-
-    // "Update firmware…" deep-link modal (read-only / delegate-only per
-    // docs/architecture/FIRMWARE-UPDATES.md). Opened from a DeviceRow's
-    // firmware button via DeviceList.onFirmwareUpdateRequested above.
-    FirmwareUpdateDialog { id: firmwareDialog }
 
     // Phase 5 Plan 05-06: TimeSyncService feedback connections.
     //

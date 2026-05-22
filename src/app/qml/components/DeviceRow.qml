@@ -67,22 +67,10 @@ ItemDelegate {
     // (manual sync) AND on autoSync ticks (D-02: glyph-only, no toast).
     property string syncGlyphState: ""
 
-    // Coarse core DeviceFamily (Unknown/StreamDeck/Keyboard/Mouse) as an int,
-    // bound from the DeviceModel `family` role. Forwarded with the firmware-
-    // update request so Main.qml can resolve the granular FirmwareUpdate.Family
-    // via FirmwareUpdate.familyForDevice(deviceFamily, codename).
-    property int deviceFamily: 0
-
     /// Emitted by the Sync time ToolButton when the user manually triggers
     /// a sync push for this row. Main.qml bubbles this up to
     /// TimeSyncService.setSystemTimeOn(codename).
     signal syncTimeRequested(string deviceCodename)
-
-    /// Emitted by the "Update firmware…" ToolButton. Main.qml opens the
-    /// FirmwareUpdateDialog with the resolved family + model name. Carries the
-    /// coarse deviceFamily + codename so the consumer can resolve the granular
-    /// FirmwareUpdate.Family (the mouse split needs the codename).
-    signal firmwareUpdateRequested(string deviceCodename, int deviceFamily, string modelName)
 
     // implicitHeight (not height) so the consumer can override.
     // Phase 4 (HOTPLUG-02) keeps offline rows fully laid out — the
@@ -187,28 +175,6 @@ ItemDelegate {
                 hoverEnabled: true
                 acceptedButtons: Qt.NoButton // tooltip only
             }
-        }
-
-        // "Update firmware…" ToolButton. Always available — every device has
-        // firmware, and the action is read-only / delegate-only (it opens the
-        // FirmwareUpdateDialog, which only deep-links to the vendor tool /
-        // download page; we never flash). Bubbles firmwareUpdateRequested up
-        // to Main.qml. Uses a text glyph fallback like the sync button so no
-        // extra qrc icon dependency is needed.
-        ToolButton {
-            id: firmwareButton
-            Layout.alignment: Qt.AlignVCenter
-            icon.name: "system-software-update"
-            text: icon.name === "system-software-update" && icon.source.toString() === ""
-                ? qsTr("⬆") : ""
-            ToolTip.visible: hovered
-            ToolTip.text: qsTr("Update firmware…")
-            ToolTip.delay: 500
-            onClicked: root.firmwareUpdateRequested(root.deviceCodename,
-                                                    root.deviceFamily,
-                                                    root.modelName)
-            Accessible.name: qsTr("Update firmware on %1").arg(root.modelName)
-            Accessible.description: qsTr("Open the firmware-update options for this device")
         }
 
         // Battery indicator chip (2026-05-18 P3.d).
