@@ -93,24 +93,24 @@ Rectangle {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 2
 
-                // Line 1 — "Editing: <human model name>". Falls back to the
+                // Line 1 — the human product NAME, large. Falls back to the
                 // codename when the capability map carries no model string.
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("Editing: %1").arg(
-                        root.capabilities && root.capabilities.model
-                            ? root.capabilities.model
-                            : root.codename)
+                    text: root.capabilities && root.capabilities.model
+                              ? root.capabilities.model
+                              : root.codename
                     color: Theme.fgPrimary
                     font.pixelSize: Theme.fontXl
+                    font.bold: true
                     wrapMode: Text.NoWrap
                     elide: Text.ElideRight
                 }
 
-                // Line 2 — machine codename.
+                // Line 2 — "Editing: <machine codename>".
                 Text {
                     Layout.fillWidth: true
-                    text: root.codename
+                    text: qsTr("Editing: %1").arg(root.codename)
                     color: Theme.fgMuted
                     font.pixelSize: Theme.fontSm
                     wrapMode: Text.NoWrap

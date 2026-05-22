@@ -206,6 +206,21 @@ foreach(_f IN LISTS ACC_DEVICE_ICONS)
     set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${_n})
 endforeach()
 
+# Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized
+# (~256px) vendor product shots, fetched once and bundled so the device editor
+# header shows a real picture offline — no runtime CDN dependency. Aliased under
+# icons/devices/products/ → qrc:/qt/qml/AjazzControlCenter/icons/devices/products/<name>.
+# DeviceImage.qml resolves a codename to one of these; missing models fall back
+# to the per-family SVG above.
+set(ACC_DEVICE_PRODUCTS "")
+file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
+     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.png
+     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.jpg)
+foreach(_f IN LISTS ACC_DEVICE_PRODUCTS)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${_n})
+endforeach()
+
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
 # `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
 # only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
@@ -306,6 +321,7 @@ qt_add_qml_module(
               ${ACC_STREAMDOCK_FALLBACK}
               ${ACC_OPENDECK_FALLBACK}
               ${ACC_DEVICE_ICONS}
+              ${ACC_DEVICE_PRODUCTS}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)
