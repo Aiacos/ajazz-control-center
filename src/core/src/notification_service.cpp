@@ -121,8 +121,18 @@ public:
                 bodyStr.c_str(),
                 nullptr,
             };
-            // Cast away const for execvp — POSIX prototype predates const.
-            execvp("notify-send", const_cast<char* const*>(args));
+            // Resolve the helper from a vetted set of absolute paths rather
+            // than $PATH (WR-02): a PATH-hijack — a writable dir prepended by a
+            // .desktop launcher, wrapper script, or test harness — must not be
+            // able to substitute a malicious notify-send that would then run on
+            // every notification. execv() returns only on failure, so we fall
+            // through the candidate list and _Exit(127) if none exist (a dropped
+            // toast is safer than execing an attacker-controlled binary).
+            // Cast away const — the POSIX execv prototype predates const.
+            for (char const* const helper :
+                 {"/usr/bin/notify-send", "/bin/notify-send", "/usr/local/bin/notify-send"}) {
+                execv(helper, const_cast<char* const*>(args));
+            }
             std::_Exit(127);
         }
         // Parent: reap the child to avoid zombies.
@@ -150,7 +160,10 @@ public:
         }
         if (pid == 0) {
             char const* args[] = {"osascript", "-e", script.c_str(), nullptr};
-            execvp("osascript", const_cast<char* const*>(args));
+            // execv against the fixed system path, not execvp via $PATH, so a
+            // hijacked PATH cannot substitute the helper (WR-02). osascript is a
+            // macOS system binary always at /usr/bin/osascript.
+            execv("/usr/bin/osascript", const_cast<char* const*>(args));
             std::_Exit(127);
         }
         int status = 0;
