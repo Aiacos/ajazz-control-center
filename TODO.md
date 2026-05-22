@@ -185,15 +185,23 @@ ______________________________________________________________________
   Files: `src/devices/streamdeck/src/akp05.cpp` (`buildCmdHeader`, `sendImage`/
   key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/ streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
 
-  **🟢 IMPLEMENTED on branch `feat/linux-device-support` (`db21686`) — pending
-  Fedora hardware confirmation.** The fix landed at the transport (not per
-  backend): `makeHidTransport` gained a `prependReportIdPosix` flag (default
-  false) that the four streamdeck constructors (`akp03/akp05/akp153/akp815.cpp`)
-  set to `true`; `HidTransport::write()` prepends a single `0x00` report-id byte
-  **under `#ifndef _WIN32` only**, so Windows is byte-for-byte unchanged and only
+  **✅ HARDWARE-CONFIRMED on Fedora 2026-05-22 (branch `feat/linux-device-support`).**
+  The fix landed at the transport (not per backend): `makeHidTransport` gained a
+  `prependReportIdPosix` flag (default false) that the four streamdeck
+  constructors (`akp03/akp05/akp153/akp815.cpp`) set to `true`;
+  `HidTransport::write()` prepends a single `0x00` report-id byte **under
+  `#ifndef _WIN32` only**, so Windows is byte-for-byte unchanged and only
   Linux/macOS get the report-number byte hidraw expects. Verified: Windows MSVC
-  build + 365 tests pass; the `#ifndef _WIN32` block compiles clean under
-  `g++ -std=c++20 -Wall -Wextra`.
+  build + tests pass; GCC `-Werror` clean.
+
+  **Fedora confirmation:** a `CRT LIG` brightness probe on the live AKP05E
+  (`0x0300:0x3004`, IF0 = `/dev/hidraw14`) with the `0x00` report-id prepend
+  (1025 B on the wire) made the panel brightness pulse bright↔dim — every write
+  ACKed full-length and the device acted on the packet. That confirms the
+  report-id-prepend **OUT write path** (the same path key-image upload rides) is
+  byte-aligned on hidraw, closing the root-cause framing question. Remaining (not
+  a framing bug): drive an end-to-end key-image render through the app UI (AKP05E
+  backend maturity is "scaffolded") and confirm the icon appears on key 1.
 
   **Fedora 44 test plan (do these on the device):**
 
@@ -219,11 +227,21 @@ ______________________________________________________________________
   1. If it renders on Fedora but you later see a regression on Windows, that is
      the platform guard — re-confirm the `#ifndef _WIN32` boundary.
 
-- [ ] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
-  🐧 **Works on Windows; needs Fedora verification + likely a hidraw fix.**
+- [x] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
+  ✅ **HARDWARE-CONFIRMED on Fedora 2026-05-22.**
 
-  **Status:** on Windows the mouse battery reads correctly (commit `376fb61`:
-  vendor status report `0x05`, byte 3, via GET_FEATURE on the `0xFFFF`/usage-0x02
+  **✅ Resolved (2026-05-22, commit `9019682`):** the mouse battery now reads on
+  Fedora — the app logs `[battery] queried ajazz_24g_8k: 100%` and the UI shows
+  the percent. The shipped read was a **two-step handshake**: SET_FEATURE a
+  `0x83` GET_BATTERY poke, then GET_FEATURE the status report. The status report
+  uses **report-id `0x00`**, so the frame is `[00, 00, charge, 01 01 01 02]` —
+  charge at **byte 2** (the old "byte 3 / report-id 0x05" framing was off by one
+  and rejected every valid frame). The OLED clock (`0x28`) and the usage-`0x02`
+  control-collection selection were also confirmed live. Historical
+  investigation notes below.
+
+  **Status (historical):** on Windows the mouse battery reads correctly (commit `376fb61`:
+  vendor status report `0x05`, via GET_FEATURE on the `0xFFFF`/usage-0x02
   control collection) and the OLED clock sets (commit `0a1952e`: opcode `0x28`
   with the 0xD7 marker via SET_FEATURE on the same collection). Both reads/writes
   go through the vendor control collection selected by `controlUsagePage=0xFFFF`
