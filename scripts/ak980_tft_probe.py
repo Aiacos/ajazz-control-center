@@ -10,6 +10,7 @@ NOT a production tool. Run with the device connected:
     python scripts/ak980_tft_probe.py --enumerate
     python scripts/ak980_tft_probe.py --upload [--feature] [--bars]
 """
+
 from __future__ import annotations
 
 import argparse
@@ -112,8 +113,9 @@ def upload(use_feature: bool, bars: bool, color: tuple[int, int, int]) -> None:
     dev = open_control()
     send = dev.send_feature_report if use_feature else dev.write
     kind = "feature report" if use_feature else "output report"
-    print(f"Uploading test frame via {kind}: {total_chunks} chunks "
-          f"(color={color}, bars={bars})")
+    print(
+        f"Uploading test frame via {kind}: {total_chunks} chunks " f"(color={color}, bars={bars})"
+    )
     n = send(bytes(build_header(0, total_chunks)))
     print(f"  header write returned {n}")
     for i in range(total_chunks):
@@ -314,10 +316,13 @@ def main() -> None:
         sweep_time(args.pause)
         return
     if args.settime:
-        print(f"Setting AK980 PRO clock to {args.settime} "
-              f"(delay={args.delay}ms readback={args.readback} output={args.output})")
-        set_time(args.settime, use_feature=not args.output,
-                 delay_ms=args.delay, readback=args.readback)
+        print(
+            f"Setting AK980 PRO clock to {args.settime} "
+            f"(delay={args.delay}ms readback={args.readback} output={args.output})"
+        )
+        set_time(
+            args.settime, use_feature=not args.output, delay_ms=args.delay, readback=args.readback
+        )
         return
     if args.enumerate or not args.upload:
         print_enumeration()

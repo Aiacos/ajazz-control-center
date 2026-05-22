@@ -76,11 +76,11 @@ public:
         : Akp815Device(std::move(descriptor),
                        id,
                        makeHidTransport(id.vendorId,
-                                       id.productId,
-                                       id.serial,
-                                       /*usagePage*/ 0,
-                                       /*usage*/ 0,
-                                       /*prependReportIdPosix*/ true)) {}
+                                        id.productId,
+                                        id.serial,
+                                        /*usagePage*/ 0,
+                                        /*usage*/ 0,
+                                        /*prependReportIdPosix*/ true)) {}
 
     /// Test constructor accepting an injected transport (COD-026).
     Akp815Device(DeviceDescriptor descriptor, DeviceId id, TransportPtr transport)

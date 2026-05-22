@@ -11,7 +11,6 @@ ratified: 2026-05-17
 
 > (NOTE 2026-05-20: this device — USB 0x3004 — was later firmware-confirmed to be an AKP05E, codename akp05e; see STATE.md.)
 
-
 # ARCH-05.1: AK980 PRO firmware RTC — amendment to ARCH-05 default verdict
 
 **Status:** FINAL — amends ARCH-05 (2026-05-15 default verdict) per the D-05
@@ -281,11 +280,11 @@ keyboard's TFT clock followed a deliberately-distinct injected time (2031-12-25
    marker at byte 9, magic 0x5A at byte 3, day-of-week at byte 11, trailer
    0xAA/0x55 at bytes 63/64). The original report-id-0x04 / 64-byte packets were
    accepted at the HID layer but **silently ignored** by the firmware.
-2. **Reports are 65 bytes** (`TimeReportSize`), not 64.
-3. **Interface:** the control channel is the vendor HID collection at usage page
+1. **Reports are 65 bytes** (`TimeReportSize`), not 64.
+1. **Interface:** the control channel is the vendor HID collection at usage page
    **0xFF13** (MI_03), selected via the new `DeviceDescriptor::controlUsagePage`
-   + `HidTransport` usage-page filter. `hid_open(vid,pid)` had bound the boot
-   keyboard, where the feature reports failed.
+   - `HidTransport` usage-page filter. `hid_open(vid,pid)` had bound the boot
+     keyboard, where the feature reports failed.
 
 The transport (HID SET_FEATURE / `writeFeature`) and the 0x18/0x28/0x02 opcodes
 were already correct. The byte-level spec + the Frida method are documented in

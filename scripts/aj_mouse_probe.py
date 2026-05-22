@@ -14,6 +14,7 @@ NOT a production tool (writes raw HID). Examples:
     python scripts/aj_mouse_probe.py --clock 03:33 --report-id 0x05
     python scripts/aj_mouse_probe.py --battery --report-id 0x05
 """
+
 from __future__ import annotations
 
 import argparse
@@ -26,7 +27,7 @@ import hid
 VID, PID = 0x3151, 0x5007
 CTRL_USAGE_PAGE = 0xFFFF
 CTRL_USAGE = 0x02  # JS: usage:2, usagePage:65535
-REPORT_SIZE = 65   # 1 report-id byte + 64-byte body
+REPORT_SIZE = 65  # 1 report-id byte + 64-byte body
 
 FEA_CMD_SET_OLEDCLOCK = 0x28
 FEA_CMD_GET_BATTERY = 0x82
@@ -39,7 +40,11 @@ def enumerate_collections() -> list[dict]:
 def print_enumeration() -> None:
     for d in enumerate_collections():
         up = d["usage_page"]
-        tag = "   <-- 0xFFFF/usage2 control" if (up == CTRL_USAGE_PAGE and d["usage"] == CTRL_USAGE) else ""
+        tag = (
+            "   <-- 0xFFFF/usage2 control"
+            if (up == CTRL_USAGE_PAGE and d["usage"] == CTRL_USAGE)
+            else ""
+        )
         print(f"UP=0x{up:04x} usage=0x{d['usage']:02x} iface={d['interface_number']}{tag}")
         print("   path=" + d["path"].decode(errors="replace"))
 
@@ -70,10 +75,10 @@ def build_clock(report_id: int, dt: datetime.datetime) -> bytes:
     # checksum. The 0xd7 marker at byte 8 is REQUIRED — without it the firmware
     # ignores the packet (that was the bug in the earlier probes).
     pkt = bytearray(REPORT_SIZE)
-    pkt[0] = report_id               # 0x00 on the wire
-    pkt[1] = FEA_CMD_SET_OLEDCLOCK   # 0x28
-    pkt[8] = 0xD7                    # fixed marker (byte 8)
-    pkt[9] = (dt.year >> 8) & 0xFF   # year big-endian
+    pkt[0] = report_id  # 0x00 on the wire
+    pkt[1] = FEA_CMD_SET_OLEDCLOCK  # 0x28
+    pkt[8] = 0xD7  # fixed marker (byte 8)
+    pkt[9] = (dt.year >> 8) & 0xFF  # year big-endian
     pkt[10] = dt.year & 0xFF
     pkt[11] = dt.month
     pkt[12] = dt.day
@@ -143,8 +148,11 @@ def watch_battery(seconds: int) -> None:
             if dev is None:
                 dev = open_control()  # (re)acquire after a replug
             r = bytes(dev.get_feature_report(0x05, REPORT_SIZE))
-            row = ("  {:4.0f}  ".format(time.time() - start)
-                   + " ".join(f"{r[i]:02x}" for i in range(8)) + f"   pct={r[3]}")
+            row = (
+                f"  {time.time() - start:4.0f}  "
+                + " ".join(f"{r[i]:02x}" for i in range(8))
+                + f"   pct={r[3]}"
+            )
         except (OSError, SystemExit):
             if dev is not None:
                 try:
@@ -152,7 +160,7 @@ def watch_battery(seconds: int) -> None:
                 except OSError:
                     pass
             dev = None
-            row = "  {:4.0f}  <disconnected / reopening>".format(time.time() - start)
+            row = f"  {time.time() - start:4.0f}  <disconnected / reopening>"
         if row[8:] != (last or "")[8:]:  # print only when the content changes
             print(row, flush=True)
             last = row
@@ -170,8 +178,13 @@ def main() -> None:
     ap.add_argument("--report-id", default="0x05", help="report id byte (try 0x05 or 0x00)")
     ap.add_argument("--output", action="store_true", help="use output report instead of feature")
     ap.add_argument("--readback", action="store_true", help="GET_FEATURE after the clock write")
-    ap.add_argument("--battery-watch", type=int, metavar="SECS", default=0,
-                    help="poll report 0x05 for SECS seconds (watch the replug transient)")
+    ap.add_argument(
+        "--battery-watch",
+        type=int,
+        metavar="SECS",
+        default=0,
+        help="poll report 0x05 for SECS seconds (watch the replug transient)",
+    )
     args = ap.parse_args()
     rid = int(args.report_id, 0)
     if args.battery_watch:

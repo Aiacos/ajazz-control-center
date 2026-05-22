@@ -136,9 +136,9 @@ those cases:
   (deferred to Phase 9.x) by **SHA-256 only**, alongside the matching
   sanitised hex-fixture path. The schema is:
 
-  | SHA-256 (full)      | Device codename    | Label                    | Date       | Researcher | Fixture path                                                             |
-  | ------------------- | ------------------ | ------------------------ | ---------- | ---------- | ------------------------------------------------------------------------ |
-  | abc123…64-char-hex… | akp05e | image-upload-first-chunk | 2026-05-15 | (initials) | tests/integration/fixtures/akp05e/image_upload_first_chunk.h |
+  | SHA-256 (full)      | Device codename | Label                    | Date       | Researcher | Fixture path                                                 |
+  | ------------------- | --------------- | ------------------------ | ---------- | ---------- | ------------------------------------------------------------ |
+  | abc123…64-char-hex… | akp05e          | image-upload-first-chunk | 2026-05-15 | (initials) | tests/integration/fixtures/akp05e/image_upload_first_chunk.h |
 
 - The sanitised hex fixture MUST land in the same commit as the index
   row. An index row without a fixture is not reviewable and gets the
