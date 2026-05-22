@@ -536,7 +536,11 @@ public:
                 (void)std::snprintf(buf, sizeof(buf), "%u.%u.%u", resp[2], resp[3], resp[4]);
                 return std::string{buf};
             }
-        } catch (...) { /* fall through to unknown */
+        } catch (std::exception const& e) {
+            // Log the I/O failure (WR-03): a silent catch made a device-yank /
+            // transport error indistinguishable from a genuinely unparsable
+            // version. Mirrors batteryPercent() / setTime().
+            AJAZZ_LOG_WARN("keyboard.ak980", "firmwareVersion: HID I/O failed: {}", e.what());
         }
         return "unknown";
     }
