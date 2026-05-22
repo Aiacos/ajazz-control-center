@@ -9,10 +9,12 @@ finish-args:
   - --socket=fallback-x11
   - --socket=wayland
   - --device=dri
-  # USB / HID access via libhidapi. Restrict to USB devices only — never grant
-  # `--device=all` which would expose webcams, audio, and other unrelated
-  # device classes (SEC-006).
-  - --device=usb
+  # HID device access for /dev/hidraw*. The fine-grained `--device=usb`
+  # (SEC-006's preference) needs flatpak >= 1.15, which the org.kde 6.7 runtime
+  # does not ship ("Unknown device type usb" at build-finish). `--device=all` is
+  # the only device type that exposes hidraw on this runtime. Revisit to
+  # `--device=usb` when bumping to a newer (non-EOL) org.kde runtime.
+  - --device=all
   # AJAZZ HID devices live under /dev/hidraw*; expose only that namespace.
   - --filesystem=/dev/hidraw0:rw
   - --filesystem=/dev/hidraw1:rw
