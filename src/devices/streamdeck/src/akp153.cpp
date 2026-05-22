@@ -138,21 +138,6 @@ std::array<std::uint8_t, PacketSize> buildUploadFinished() {
     return pkt;
 }
 
-/** @brief Build a "show device logo" command packet.
- *
- *  Triggers the firmware to display the built-in AJAZZ logo on all key
- *  LCDs.  The magic byte pair 0x44/0x43 at offsets 10–11 is a firmware
- *  constant ("DC") observed during protocol capture.
- *
- *  @return Ready-to-send 512-byte packet.
- */
-std::array<std::uint8_t, PacketSize> buildShowLogo() {
-    auto pkt = buildCmdHeader(CmdClear);
-    pkt[10] = 0x44;
-    pkt[11] = 0x43;
-    return pkt;
-}
-
 /** @brief Build the header packet for a key-image transfer.
  *
  *  The firmware expects one header packet followed immediately by one or more

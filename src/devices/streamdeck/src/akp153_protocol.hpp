@@ -103,16 +103,6 @@ inline constexpr std::array<std::uint8_t, 3> CmdBat{0x42,
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex);
 
 /**
- * @brief Build the `Show logo` output report.
- *
- * Bytes 10..11 = 0x44, 0x43 ("DC" magic). Instructs the device to display
- * its built-in AJAZZ splash screen.
- *
- * @return 512-byte report.
- */
-[[nodiscard]] std::array<std::uint8_t, PacketSize> buildShowLogo();
-
-/**
  * @brief Build the first packet of a `Set Image` transfer.
  *
  * Packet layout: offsets 10..11 = big-endian JPEG payload size, offset 12 =
