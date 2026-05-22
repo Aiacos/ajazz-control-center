@@ -81,6 +81,10 @@ modules:
       # Resolve hidapi + nlohmann_json from the modules built above (offline
       # sandbox has no network for the default FetchContent clone).
       - -DAJAZZ_USE_SYSTEM_DEPS=ON
+      # The udev rule installs to an absolute /usr path (read-only in the
+      # sandbox) and is a host resource — device access inside Flatpak is via
+      # portals + the host's own rule.
+      - -DAJAZZ_INSTALL_UDEV_RULES=OFF
     sources:
       - type: dir
         path: ../..

@@ -235,7 +235,16 @@ endif()
 # Install (shared resources: udev, desktop entry, icon, AppStream)
 # -----------------------------------------------------------------------------
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    install(FILES resources/linux/70-ajazz.rules DESTINATION /usr/lib/udev/rules.d COMPONENT udev)
+    # The udev rule is a HOST resource (grants /dev/hidraw* access) and installs
+    # to an absolute system path. Skip it for the Flatpak build: its sandbox has
+    # a read-only /usr (so the absolute copy fails) and device access is handled
+    # by portals + the host's own udev rule, not a rule inside the sandbox.
+    option(AJAZZ_INSTALL_UDEV_RULES
+           "Install the Linux udev rule to /usr/lib/udev/rules.d (off for Flatpak)" ON)
+    if(AJAZZ_INSTALL_UDEV_RULES)
+        install(FILES resources/linux/70-ajazz.rules DESTINATION /usr/lib/udev/rules.d
+                COMPONENT udev)
+    endif()
     install(FILES resources/linux/ajazz-control-center.desktop DESTINATION share/applications
             COMPONENT desktop
     )
