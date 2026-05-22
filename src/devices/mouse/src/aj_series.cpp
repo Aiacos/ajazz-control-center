@@ -252,6 +252,18 @@ public:
     // The 0x83 FEA_CMD_GET_BATTERY opcode is declared by the vendor but unused on
     // the mouse path — no poke is needed. Parsing is delegated to the pure
     // parseBatteryCharge() helper above.
+    //
+    // CROSS-PLATFORM (live probe + Frida on Windows, 2026-05-22): on Linux hidraw
+    // report 0x05 byte 3 carries the charge and this reads it. On Windows the same
+    // report returns byte 3 == 0 in BOTH HID channels (GET_FEATURE and the
+    // interrupt-IN input report); a 90 s Frida trace of the vendor `iot_driver`
+    // recorded ZERO HID calls of any kind (HidD_SetFeature / HidD_GetFeature /
+    // HidD_GetInputReport / small ReadFile) — the vendor talks to the dongle via
+    // libusb (it bundles libusb1.0.dll) and surfaces the charge through its gRPC
+    // `Device.battery` field, not the HID report. Our stack is hidapi-only by
+    // design (COD-031: no libusb in core), so the mouse charge is reachable on
+    // Linux hidraw only; on Windows this returns nullopt and the chip honestly
+    // stays hidden (never a wrong 0%). See aj_series_vendor.md §battery.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
             std::array<std::uint8_t, kReportSize> resp{};

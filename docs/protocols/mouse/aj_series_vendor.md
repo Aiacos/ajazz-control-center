@@ -415,6 +415,17 @@ ______________________________________________________________________
    read via GET_FEATURE on the `0xFFFF` (usage 0x02) control collection;
    `AjSeriesMouse` reads it there. (The vendor app additionally surfaces the
    value via the gRPC `Device.battery` field broadcast by the dongle.)
+   - **PLATFORM (Windows, 2026-05-22 — live probe + Frida):** on Windows the
+     report `0x05` byte 3 stays `0` in *both* HID channels (GET_FEATURE and the
+     interrupt-IN input report), and a 90 s Frida trace of the vendor
+     `iot_driver_v193` recorded **zero** HID calls of any kind
+     (`HidD_SetFeature` / `HidD_GetFeature` / `HidD_GetInputReport` / small
+     `ReadFile`). The vendor talks to the dongle over **libusb**
+     (`libusb1.0.dll`) and exposes the charge via gRPC, not the HID report.
+     Since our stack is hidapi-only (**COD-031**: no libusb in core), the mouse
+     charge is reachable on **Linux hidraw only**; on Windows `batteryPercent()`
+     returns `nullopt` and the chip stays hidden (an honest "unknown", never a
+     wrong `0%`). A Windows charge read would require the libusb vendor channel.
 1. **`kCmdRgb sub 0x02` (standalone brightness)** — does not exist.
    Brightness must ride inside the 8-byte light packet (byte 3).
 
