@@ -56,9 +56,6 @@ inline constexpr std::uint8_t kReportId = 0x05;
  */
 enum class FeaCmd : std::uint8_t {
     GetRev = 0x80,      ///< §3.1 — firmware version query (response uint16-LE at byte 1..2).
-    GetBattery = 0x83,  ///< §4 — battery query. OUTPUT-write then interrupt-IN read
-                        ///< (vendor `getBattery()`); reply: percent@resp[1],
-                        ///< state@resp[2] (1=charge,2=full), low-power@resp[3].
     SetReset = 0x02,    ///< §3.2 — factory reset.
     SetProfile = 0x05,  ///< §3.3 — active profile select.
     SetReport = 0x04,   ///< §3.4 — polling rate via _RateToNum lookup.
@@ -127,10 +124,6 @@ void stampBit7Checksum(std::array<std::uint8_t, kReportSize>& pkt) noexcept;
 
 /// §3.1 GetRev — `[0x05, 0x80, 0, …, 0, checksum]`.
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetRev();
-
-/// §4 GetBattery — `[0x05, 0x83, 0, …, 0, checksum]`. Write via the OUTPUT
-/// channel, then read the reply on interrupt-IN (percent@resp[1]).
-[[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetBattery();
 
 /// §3.2 SetReset — `[0x05, 0x02, 0, …, 0, checksum]`. Factory reset (destructive!).
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetReset();

@@ -70,15 +70,6 @@ std::array<std::uint8_t, kReportSize> buildGetRev() {
     return pkt;
 }
 
-std::array<std::uint8_t, kReportSize> buildGetBattery() {
-    // §4 — battery query. Vendor `getBattery()` sends opcode 0x83 with an empty
-    // payload over the OUTPUT-report channel (sendMsg), then reads the reply on
-    // the interrupt-IN channel (readMsg). BIT7 checksum like every mouse opcode.
-    auto pkt = startReport(FeaCmd::GetBattery);
-    stampBit7Checksum(pkt);
-    return pkt;
-}
-
 std::array<std::uint8_t, kReportSize> buildSetReset() {
     auto pkt = startReport(FeaCmd::SetReset);
     stampBit7Checksum(pkt);
