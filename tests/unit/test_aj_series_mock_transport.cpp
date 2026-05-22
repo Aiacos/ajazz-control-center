@@ -20,13 +20,17 @@
  */
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
+#include "ajazz/core/transport.hpp"
 #include "ajazz/mouse/mouse.hpp"
 #include "fixtures/mock_transport.hpp"
 
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
+#include <stdexcept>
 #include <utility>
 
 #include <catch2/catch_test_macros.hpp>
@@ -56,6 +60,25 @@ core::DeviceId makeId() {
     id.serial = "TEST";
     return id;
 }
+
+/// Minimal ITransport whose write() always throws, simulating a mouse
+/// physically yanked mid-transaction (makeHidTransport's write() throws on
+/// a failed HID write). MockTransport is `final`, so this is a separate stub.
+class ThrowingTransport final : public core::ITransport {
+public:
+    void open() override {}
+    void close() override {}
+    [[nodiscard]] bool isOpen() const noexcept override { return true; }
+    std::size_t write(std::span<std::uint8_t const>) override {
+        throw std::runtime_error("simulated device-yank: HID write failed");
+    }
+    std::size_t read(std::span<std::uint8_t>, std::chrono::milliseconds) override { return 0; }
+    std::size_t writeFeature(std::span<std::uint8_t const>) override {
+        throw std::runtime_error("simulated device-yank: HID writeFeature failed");
+    }
+    std::size_t readFeature(std::span<std::uint8_t>) override { return 0; }
+    [[nodiscard]] core::TransportStats stats() const noexcept override { return {}; }
+};
 
 } // namespace
 
@@ -102,7 +125,7 @@ TEST_CASE("MockTransport captures setActiveDpiStage envelope on AjSeriesMouse",
 TEST_CASE("AjSeriesMouse batteryPercent polls 0xF7 then reads the Windows frame (byte 3)",
           "[unit][aj_series][mock_transport][battery]") {
     // The basetta only fills the charge after the 0xF7 status poll. The backend
-    // SET_FEATUREs that poll (report-id 0x00, opcode 0xF7), then GET_FEATUREs the
+    // SET_FEATUREEs that poll (report-id 0x00, opcode 0xF7), then GET_FEATUREEs the
     // status report. On Windows hidapi keeps the report-id byte at index 0, so
     // the captured frame is `05 00 00 64 01 01 01 02` (charge 0x64=100% at byte 3).
     auto transport = std::make_unique<tests::MockTransport>();
@@ -211,4 +234,24 @@ TEST_CASE("MockTransport differentiates write and writeFeature in counts",
     REQUIRE(mt.writes().at(1).size() == 3);
     REQUIRE(mt.writes().at(2).size() == 2);
     CHECK(mt.writes().at(1)[1] == 0x21);
+}
+
+TEST_CASE("AjSeriesMouse void setters swallow a transport throw on device-yank",
+          "[mouse][aj_series][regression]") {
+    // Regression for Phase 11 CR-01: the void IMouseCapable/IRgbCapable
+    // setters must not let a transport write() exception (physical yank)
+    // escape into fire-and-forget QML callers. Covers all four patched
+    // sites: two direct writes plus uploadDpiTableAtomic (via
+    // setActiveDpiStage) and emitLedPacket (via setRgbBrightness).
+    auto device = mouse::makeAjSeriesWithTransport(
+        makeDescriptor(), makeId(), std::make_unique<ThrowingTransport>());
+    auto* m = dynamic_cast<core::IMouseCapable*>(device.get());
+    auto* rgb = dynamic_cast<core::IRgbCapable*>(device.get());
+    REQUIRE(m != nullptr);
+    REQUIRE(rgb != nullptr);
+
+    CHECK_NOTHROW(m->setLiftOffDistanceMm(2.0F));   // direct write
+    CHECK_NOTHROW(m->setButtonBinding(1, 0x1234U)); // direct write
+    CHECK_NOTHROW(m->setActiveDpiStage(0));         // -> uploadDpiTableAtomic
+    CHECK_NOTHROW(rgb->setRgbBrightness(50));       // -> emitLedPacket
 }

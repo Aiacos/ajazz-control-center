@@ -194,7 +194,12 @@ public:
         // packet with all other fields at their cached defaults.
         m_options.liftCutOff = mmToLiftCutOffCode(mm);
         auto const pkt = buildMouseSetOption0(m_options);
-        (void)m_transport->write(pkt);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN(
+                "mouse.aj_series", "setLiftOffDistanceMm: HID write failed: {}", e.what());
+        }
     }
 
     void setButtonBinding(std::uint8_t button, std::uint32_t action) override {
@@ -203,7 +208,11 @@ public:
         // currently-active onboard profile so the QML profile picker
         // (IProfileSelectCapable) and per-button rebinds stay coherent.
         auto const pkt = buildMouseSetKeyMatrix(m_activeProfile, button, action);
-        (void)m_transport->write(pkt);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series", "setButtonBinding: HID write failed: {}", e.what());
+        }
     }
 
     // IMouseCapable legacy const accessor — superseded by the IBatteryCapable
@@ -299,8 +308,8 @@ public:
             std::size_t const n = m_transport->readFeature(resp);
             return parseBatteryCharge({resp.data(), n});
         } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("mouse.aj_series", "batteryPercent: HID battery read failed: {}",
-                           e.what());
+            AJAZZ_LOG_WARN(
+                "mouse.aj_series", "batteryPercent: HID battery read failed: {}", e.what());
             return std::nullopt;
         }
     }
@@ -796,7 +805,12 @@ private:
             }
         }
         auto const pkt = buildMouseSetOption1(m_activeDpiStage, stageCount, dpis, colours);
-        (void)m_transport->write(pkt);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN(
+                "mouse.aj_series", "uploadDpiTableAtomic: HID write failed: {}", e.what());
+        }
     }
 
     /// Emit the cached LED packet via opcode 0x07.
@@ -808,7 +822,11 @@ private:
                                           m_lastLed.r,
                                           m_lastLed.g,
                                           m_lastLed.b);
-        (void)m_transport->write(pkt);
+        try {
+            (void)m_transport->write(pkt);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("mouse.aj_series", "emitLedPacket: HID write failed: {}", e.what());
+        }
     }
 
     /// Clamp an arbitrary Hz value to the nearest entry in @p supported.
