@@ -186,8 +186,17 @@ signals:
     /// Emitted whenever @c autoSync changes value.
     void autoSyncChanged(bool enabled);
 
-    /// Emitted on a successful @c setSystemTimeOn / @c onDeviceArrived push.
+    /// Emitted on ANY successful push — manual @c setSystemTimeOn, on-connect
+    /// auto-sync, and the periodic tick. Drives the inline ✓ status in the
+    /// device Settings tab. Per D-02 this is glyph/inline-only: do NOT wire a
+    /// toast to it (auto-sync would spam one per device every tick). Use
+    /// @c manualSyncSucceeded for user-visible toasts.
     void syncSucceeded(QString const& codename);
+
+    /// Emitted ONLY by the manual "Sync time now" path (@c setSystemTimeOn) —
+    /// the signal a top-right toast should listen to, so automatic syncs
+    /// (startup sweep, on-connect, 15-min tick, hot-plug) stay silent.
+    void manualSyncSucceeded(QString const& codename);
 
     /// Emitted on a failed manual push. @p message is human-readable and
     /// safe to surface in a toast / tooltip. Per D-02, auto-sync failures

@@ -155,7 +155,11 @@ void TimeSyncService::periodicAutoSyncTick() {
 void TimeSyncService::setSystemTimeOn(QString const& codename) {
     QString const reason = doPush(codename);
     if (reason.isEmpty()) {
+        // syncSucceeded → inline ✓ in the Settings tab; manualSyncSucceeded →
+        // the top-right toast. Auto-sync paths emit only syncSucceeded, so the
+        // toast fires for user-initiated syncs only (D-02 glyph-only otherwise).
         emit syncSucceeded(codename);
+        emit manualSyncSucceeded(codename);
     } else {
         emit syncFailed(codename, reason);
     }

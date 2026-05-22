@@ -159,13 +159,15 @@ ApplicationWindow {
 
     Toast { id: toast }
 
-    // Compact green confirmation, top-right, whenever a device's clock is synced
-    // (manual "Sync time now" or automatic on-connect / at-startup). The device
-    // Settings tab additionally shows an inline ✓/✗ status.
+    // Compact green confirmation, top-right, ONLY for a user-initiated "Sync
+    // time now" (manualSyncSucceeded). Automatic syncs (startup sweep,
+    // on-connect, 15-min tick, hot-plug) stay silent per D-02 — otherwise they
+    // stack one toast per device every tick. The device Settings tab still
+    // shows an inline ✓/✗ status for both manual and automatic syncs.
     Notification { id: syncNote }
     Connections {
         target: TimeSyncService
-        function onSyncSucceeded(codename) {
+        function onManualSyncSucceeded(codename) {
             syncNote.show(qsTr("Time synced: %1").arg(codename));
         }
     }
