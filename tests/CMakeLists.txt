@@ -8,6 +8,11 @@ include(Catch)
 add_subdirectory(unit)
 add_subdirectory(integration)
 
+# QML load-time smoke harness (health report 2026-05-22, finding #3). Rebuilds the
+# AjazzControlCenter QML module in a standalone target and load-tests every component through a real
+# QQmlEngine. Runs headless (QT_QPA_PLATFORM=offscreen).
+add_subdirectory(qml)
+
 # Phase 7 / Plan 07-03: opt-in libFuzzer harnesses. Gated on AJAZZ_BUILD_FUZZ_TESTS (default OFF in
 # the root CMakeLists). The Clang-only requirement is checked here at configure time — better to
 # surface the constraint up front than produce a confusing link error later.

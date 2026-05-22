@@ -237,8 +237,9 @@ file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
 )
 foreach(product_path IN LISTS ACC_DEVICE_PRODUCTS)
     get_filename_component(product_name "${product_path}" NAME)
-    set_source_files_properties("${product_path}"
-        PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${product_name})
+    set_source_files_properties(
+        "${product_path}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${product_name}
+    )
 endforeach()
 
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
@@ -263,6 +264,97 @@ if(Qt6_VERSION VERSION_GREATER_EQUAL 6.8)
     qt_policy(SET QTP0004 NEW)
 endif()
 
+# The QML module's C++ singleton SOURCES, the QML_FILES, and the RESOURCES are captured into
+# variables so the QML smoke-test target (tests/qml) can build a parallel copy of the exact same
+# module with zero list divergence. The lists are relative to this directory; the test target
+# consumes them with a ${CMAKE_CURRENT_SOURCE_DIR} of src/app via the exported source dir below.
+set(ACC_QML_MODULE_SOURCES
+    src/branding_service.cpp
+    src/branding_service.hpp
+    src/theme_service.cpp
+    src/theme_service.hpp
+    src/autostart_service.cpp
+    src/autostart_service.hpp
+    src/tray_controller.cpp
+    src/tray_controller.hpp
+    src/device_model.cpp
+    src/device_model.hpp
+    src/profile_controller.cpp
+    src/profile_controller.hpp
+    src/plugin_catalog_model.cpp
+    src/plugin_catalog_model.hpp
+    src/loaded_plugins_model.cpp
+    src/loaded_plugins_model.hpp
+    src/time_sync_service.cpp
+    src/time_sync_service.hpp
+    src/lighting_service.cpp
+    src/lighting_service.hpp
+    src/settings_service.cpp
+    src/settings_service.hpp
+    src/battery_service.cpp
+    src/battery_service.hpp
+    src/app_update_service.cpp
+    src/app_update_service.hpp
+    src/property_inspector_controller.cpp
+    src/property_inspector_controller.hpp
+)
+set(ACC_QML_MODULE_QML_FILES
+    qml/Main.qml
+    qml/Theme.qml
+    qml/DeviceList.qml
+    qml/ProfileEditor.qml
+    qml/RgbPicker.qml
+    qml/SettingsRow.qml
+    qml/KeyDesigner.qml
+    qml/EncoderPanel.qml
+    qml/MousePanel.qml
+    qml/Inspector.qml
+    qml/PluginStore.qml
+    qml/LoadedPluginsPage.qml
+    qml/PropertyInspector.qml
+    qml/NativePropertyInspector.qml
+    qml/SettingsPage.qml
+    qml/components/AppHeader.qml
+    qml/components/BatteryIndicator.qml
+    qml/components/Card.qml
+    qml/components/DeviceImage.qml
+    qml/components/DeviceRow.qml
+    qml/components/EmptyState.qml
+    qml/components/FirmwarePanel.qml
+    qml/components/EncoderCard.qml
+    qml/components/KeyCell.qml
+    qml/components/Notification.qml
+    qml/components/PageHeader.qml
+    qml/components/PrimaryButton.qml
+    qml/components/Ripple.qml
+    qml/components/SecondaryButton.qml
+    qml/components/Toast.qml
+    qml/components/UpdateBanner.qml
+)
+set(ACC_QML_MODULE_RESOURCES
+    ${ACC_APP_ICON}
+    ${ACC_BRAND_APP}
+    ${ACC_BRAND_TRAY}
+    ${ACC_BRAND_THEME}
+    ${ACC_BRAND_THEME_LIGHT}
+    ${ACC_BRAND_LOGO}
+    ${ACC_DOC_CHANGELOG}
+    ${ACC_DOC_PRIVACY}
+    ${ACC_STREAMDOCK_FALLBACK}
+    ${ACC_OPENDECK_FALLBACK}
+    ${ACC_UI_ICONS}
+    ${ACC_DEVICE_PRODUCTS}
+)
+
+# Export the module lists + this source dir so tests/qml can rebuild an identical AjazzControlCenter
+# module in a standalone test executable without duplicating (and drifting from) the file lists
+# above.
+set(ACC_QML_MODULE_SOURCES "${ACC_QML_MODULE_SOURCES}" PARENT_SCOPE)
+set(ACC_QML_MODULE_QML_FILES "${ACC_QML_MODULE_QML_FILES}" PARENT_SCOPE)
+set(ACC_QML_MODULE_RESOURCES "${ACC_QML_MODULE_RESOURCES}" PARENT_SCOPE)
+set(ACC_APP_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}" PARENT_SCOPE)
+set(ACC_QML_IMPORTS "${_acc_qml_imports}" PARENT_SCOPE)
+
 qt_add_qml_module(
     ajazz-control-center
     URI AjazzControlCenter
@@ -272,77 +364,9 @@ qt_add_qml_module(
             # C++ types declared with QML_NAMED_ELEMENT + QML_SINGLETON are picked up via the
             # SOURCES list. Migrating from setContextProperty to QML singletons so qmllint can
             # statically resolve them — see TODO.md → Quality bar.
-    SOURCES src/branding_service.cpp
-            src/branding_service.hpp
-            src/theme_service.cpp
-            src/theme_service.hpp
-            src/autostart_service.cpp
-            src/autostart_service.hpp
-            src/tray_controller.cpp
-            src/tray_controller.hpp
-            src/device_model.cpp
-            src/device_model.hpp
-            src/profile_controller.cpp
-            src/profile_controller.hpp
-            src/plugin_catalog_model.cpp
-            src/plugin_catalog_model.hpp
-            src/loaded_plugins_model.cpp
-            src/loaded_plugins_model.hpp
-            src/time_sync_service.cpp
-            src/time_sync_service.hpp
-            src/lighting_service.cpp
-            src/lighting_service.hpp
-            src/settings_service.cpp
-            src/settings_service.hpp
-            src/battery_service.cpp
-            src/battery_service.hpp
-            src/app_update_service.cpp
-            src/app_update_service.hpp
-            src/property_inspector_controller.cpp
-            src/property_inspector_controller.hpp
-    QML_FILES qml/Main.qml
-              qml/Theme.qml
-              qml/DeviceList.qml
-              qml/ProfileEditor.qml
-              qml/RgbPicker.qml
-              qml/SettingsRow.qml
-              qml/KeyDesigner.qml
-              qml/EncoderPanel.qml
-              qml/MousePanel.qml
-              qml/Inspector.qml
-              qml/PluginStore.qml
-              qml/LoadedPluginsPage.qml
-              qml/PropertyInspector.qml
-              qml/NativePropertyInspector.qml
-              qml/SettingsPage.qml
-              qml/components/AppHeader.qml
-              qml/components/BatteryIndicator.qml
-              qml/components/Card.qml
-              qml/components/DeviceImage.qml
-              qml/components/DeviceRow.qml
-              qml/components/EmptyState.qml
-              qml/components/FirmwarePanel.qml
-              qml/components/EncoderCard.qml
-              qml/components/KeyCell.qml
-              qml/components/Notification.qml
-              qml/components/PageHeader.qml
-              qml/components/PrimaryButton.qml
-              qml/components/Ripple.qml
-              qml/components/SecondaryButton.qml
-              qml/components/Toast.qml
-              qml/components/UpdateBanner.qml
-    RESOURCES ${ACC_APP_ICON}
-              ${ACC_BRAND_APP}
-              ${ACC_BRAND_TRAY}
-              ${ACC_BRAND_THEME}
-              ${ACC_BRAND_THEME_LIGHT}
-              ${ACC_BRAND_LOGO}
-              ${ACC_DOC_CHANGELOG}
-              ${ACC_DOC_PRIVACY}
-              ${ACC_STREAMDOCK_FALLBACK}
-              ${ACC_OPENDECK_FALLBACK}
-              ${ACC_UI_ICONS}
-              ${ACC_DEVICE_PRODUCTS}
+    SOURCES ${ACC_QML_MODULE_SOURCES}
+    QML_FILES ${ACC_QML_MODULE_QML_FILES}
+    RESOURCES ${ACC_QML_MODULE_RESOURCES}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)
