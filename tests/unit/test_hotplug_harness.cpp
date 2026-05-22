@@ -373,3 +373,38 @@ TEST_CASE("SC1+D-06: disconnect-during-use composite (HOTPLUG-07 narrative)",
     REQUIRE(fresh != nullptr);
     REQUIRE(fresh.use_count() == 1); // Fresh, no other strong refs.
 }
+
+// ----------------------------------------------------------------------------
+// SECTION 6: closeOpenDevicesInFamily releases handles before a vendor flash.
+//
+// Before launching the vendor firmware tool, Application drops our HID handle
+// for the target family so the flasher can claim the USB interface (Windows
+// exclusive-open). The registry closes only the matching family's live
+// backends; other families keep their handle. Flyweight instances stay alive.
+// ----------------------------------------------------------------------------
+TEST_CASE("SC6: closeOpenDevicesInFamily closes only the matching family",
+          "[hotplug][harness][firmware]") {
+    qtApp();
+
+    DeviceRegistry registry;
+    registerTestBackend(registry,
+                        {0x5548, 0x6672, "akp03-stub", DeviceFamily::StreamDeck, "Stub AKP03"});
+    registerTestBackend(registry,
+                        {0x3151, 0x4001, "kbd-stub", DeviceFamily::Keyboard, "Stub KBD"});
+
+    // Hold the shared_ptrs so the flyweight weak_ptrs stay live. registry.open()
+    // runs ensureTransportOpen(), so each stub reports isOpen()==true.
+    DevicePtr deck = registry.open(DeviceId{0x5548, 0x6672, ""});
+    DevicePtr kbd = registry.open(DeviceId{0x3151, 0x4001, ""});
+    REQUIRE(deck->isOpen());
+    REQUIRE(kbd->isOpen());
+
+    REQUIRE(registry.closeOpenDevicesInFamily(DeviceFamily::StreamDeck) == 1);
+    REQUIRE_FALSE(deck->isOpen()); // Stream Dock handle released for the flasher.
+    REQUIRE(kbd->isOpen());        // Keyboard untouched.
+
+    // Idempotent: nothing open left in that family.
+    REQUIRE(registry.closeOpenDevicesInFamily(DeviceFamily::StreamDeck) == 0);
+    // A family with no open devices closes nothing.
+    REQUIRE(registry.closeOpenDevicesInFamily(DeviceFamily::Mouse) == 0);
+}

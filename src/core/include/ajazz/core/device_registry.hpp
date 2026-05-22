@@ -159,6 +159,26 @@ public:
      */
     [[nodiscard]] DevicePtr open(DeviceId const& id) const;
 
+    /**
+     * @brief Close the HID handle of every currently-open device in @p family.
+     *
+     * Walks the flyweight cache (`m_open_devices`), and for each live backend
+     * whose `descriptor().family` matches, calls `close()` so its transport
+     * releases the OS handle. Used before launching the vendor firmware tool:
+     * the vendor flasher needs to claim the USB interface uncontested, and on
+     * Windows our open handle would block it (FIRMWARE-UPDATES.md §Launch
+     * vendor app). The shared instances stay alive (flyweight); the next
+     * `open()` — e.g. on the post-flash re-enumeration — reopens the transport
+     * via `ensureTransportOpen`.
+     *
+     * Best-effort: a close failure is logged, not thrown. Closing is done
+     * outside `m_open_mutex` since `close()` may block on HID I/O.
+     *
+     * @param family Device category whose open handles should be released.
+     * @return Number of devices whose handle was closed.
+     */
+    std::size_t closeOpenDevicesInFamily(DeviceFamily family) const;
+
     DeviceRegistry(DeviceRegistry const&) = delete;
     DeviceRegistry& operator=(DeviceRegistry const&) = delete;
     DeviceRegistry(DeviceRegistry&&) = delete;

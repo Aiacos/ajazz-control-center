@@ -185,4 +185,38 @@ DevicePtr DeviceRegistry::open(DeviceId const& id) const {
     return fresh;
 }
 
+std::size_t DeviceRegistry::closeOpenDevicesInFamily(DeviceFamily family) const {
+    // Collect live matches under the lock, then close OUTSIDE it — close()
+    // may block on HID I/O and must not be held under m_open_mutex (the same
+    // lock-hygiene rule open() follows for the factory call).
+    std::vector<DevicePtr> matches;
+    {
+        std::lock_guard const cacheLock(m_open_mutex);
+        for (auto const& [key, weak] : m_open_devices) {
+            if (auto dev = weak.lock(); dev && dev->descriptor().family == family) {
+                matches.push_back(std::move(dev));
+            }
+        }
+    }
+
+    std::size_t closed = 0;
+    for (auto const& dev : matches) {
+        try {
+            if (dev->isOpen()) {
+                dev->close();
+                ++closed;
+            }
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("registry", "close-before-vendor-flash failed: {}", e.what());
+        }
+    }
+    if (closed > 0) {
+        AJAZZ_LOG_INFO("registry",
+                       "closed {} open device handle(s) in family {} before vendor tool launch",
+                       closed,
+                       static_cast<int>(family));
+    }
+    return closed;
+}
+
 } // namespace ajazz::core

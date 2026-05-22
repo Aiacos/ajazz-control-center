@@ -289,6 +289,33 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     BatteryService::registerInstance(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
     FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
+    // Before the vendor firmware tool is launched, drop our HID handle for the
+    // matching device family so the vendor flasher can claim the USB interface
+    // uncontested (FIRMWARE-UPDATES.md §Launch vendor app). The shared backend
+    // instances stay alive (flyweight); the next open() — typically the
+    // post-flash re-enumeration — reopens the transport.
+    QObject::connect(
+        m_firmwareUpdate.get(),
+        &FirmwareUpdateService::aboutToLaunchVendorTool,
+        this,
+        [this](FirmwareUpdateService::Family family) {
+            core::DeviceFamily coreFamily = core::DeviceFamily::Unknown;
+            switch (family) {
+            case FirmwareUpdateService::StreamDock:
+                coreFamily = core::DeviceFamily::StreamDeck;
+                break;
+            case FirmwareUpdateService::Keyboard:
+                coreFamily = core::DeviceFamily::Keyboard;
+                break;
+            case FirmwareUpdateService::MouseAj159:
+            case FirmwareUpdateService::MouseAj199:
+                coreFamily = core::DeviceFamily::Mouse;
+                break;
+            case FirmwareUpdateService::Unknown:
+                return; // nothing to release
+            }
+            m_deviceRegistry.closeOpenDevicesInFamily(coreFamily);
+        });
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable
