@@ -28,7 +28,12 @@ Page {
     id: root
     title: qsTr("Loaded plugins")
 
-    Material.theme: Theme.materialTheme
+    // Theme has no `materialTheme` property — that lives on Main.qml's root.
+    // Material attached props don't cross the Drawer(Popup)->child boundary
+    // (CLAUDE.md gotcha), so this Page must re-assert Material.theme itself.
+    // Mirror Main.qml's `materialTheme` expression so the drawer chrome stays
+    // dark with ThemeService (avoids the invisible black-text-on-dark bug).
+    Material.theme: ThemeService.effectiveMode === "light" ? Material.Light : Material.Dark
     Material.accent: Theme.accent
 
     // Frame the page with the standard column layout used by SettingsPage
