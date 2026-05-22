@@ -85,7 +85,12 @@ Item {
                     Layout.fillWidth: true
                     Accessible.role: Accessible.Slider
                     Accessible.name: qsTr("Brightness")
-                    onValueChanged: {
+                    // onMoved (user-driven only), NOT onValueChanged: the
+                    // programmatic initial `value` seed above would otherwise
+                    // fire an unsolicited setMode HID write on tab open,
+                    // clobbering the device's current effect (WR-05). Mirrors
+                    // firmwareModeBox's onActivated.
+                    onMoved: {
                         if (firmwareModeBox.currentValue === undefined)
                             return
                         LightingService.setMode(
@@ -107,7 +112,9 @@ Item {
                     Layout.fillWidth: true
                     Accessible.role: Accessible.Slider
                     Accessible.name: qsTr("Animation speed")
-                    onValueChanged: {
+                    // onMoved (user-driven only) — see the brightness slider
+                    // above; avoids the unsolicited setMode write on tab open.
+                    onMoved: {
                         if (firmwareModeBox.currentValue === undefined)
                             return
                         LightingService.setMode(
