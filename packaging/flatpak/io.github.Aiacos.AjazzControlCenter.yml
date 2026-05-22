@@ -52,6 +52,19 @@ modules:
         url: https://github.com/pybind/pybind11.git
         tag: v2.13.6
 
+  # nlohmann/json provided as a module (installs its CMake config into /app) so
+  # the app build resolves it with find_package — the flatpak-builder sandbox has
+  # no network, so the app's default FetchContent git clone cannot run. Version
+  # pinned in lockstep with the FetchContent tag in the root CMakeLists.txt.
+  - name: nlohmann-json
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DJSON_BuildTests=OFF
+    sources:
+      - type: git
+        url: https://github.com/nlohmann/json.git
+        tag: v3.12.0
+
   - name: ajazz-control-center
     buildsystem: cmake-ninja
     # Build in a separate `_flatpak_build/` subdirectory so CMAKE_SOURCE_DIR
@@ -65,6 +78,9 @@ modules:
       - -DCMAKE_BUILD_TYPE=RelWithDebInfo
       - -DAJAZZ_BUILD_TESTS=OFF
       - -DAJAZZ_ENABLE_WERROR=OFF
+      # Resolve hidapi + nlohmann_json from the modules built above (offline
+      # sandbox has no network for the default FetchContent clone).
+      - -DAJAZZ_USE_SYSTEM_DEPS=ON
     sources:
       - type: dir
         path: ../..

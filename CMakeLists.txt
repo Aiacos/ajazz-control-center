@@ -143,39 +143,74 @@ else()
 endif()
 qt_standard_project_setup(REQUIRES 6.7)
 
-# hidapi — vendored via FetchContent for reproducibility
+# hidapi + nlohmann::json.
+#
+# Default: vendored via FetchContent for reproducible CI / dev builds.
+#
+# AJAZZ_USE_SYSTEM_DEPS=ON instead resolves both with find_package. This is
+# required for the Flatpak build: flatpak-builder runs the build in a sandbox
+# with NO network, so a FetchContent git clone fails with
+# "Could not resolve host: github.com". The Flatpak manifest
+# (packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml) provides hidapi and
+# nlohmann_json as their own modules (fetched during the networked source phase)
+# and sets this option ON for the app module.
 include(FetchContent)
-FetchContent_Declare(
-    hidapi
-    GIT_REPOSITORY https://github.com/libusb/hidapi.git
-    GIT_TAG 73d292a8f4d18f7fb532b9829b9a26ca8d864419 # hidapi-0.14.0
-    GIT_SHALLOW OFF
-)
-set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
-set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
-# hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under libusb/.
-# CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x emits
-# `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored project
-# targets a floor below 3.10. Force a 3.10 policy floor for the subproject only so the fetched
-# CMakeLists are accepted without patching *and* without triggering a deprecation warning (violates
-# our zero-warnings invariant). Revisit when hidapi upstream bumps its own minimum.
-set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
-FetchContent_MakeAvailable(hidapi)
-unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+option(AJAZZ_USE_SYSTEM_DEPS
+       "Resolve hidapi + nlohmann_json via find_package (provided externally, e.g. \
+Flatpak manifest modules) instead of FetchContent. Required for offline builds."
+       OFF)
 
-# nlohmann::json — vendored via FetchContent for reproducibility. PRIVATE-linked to `ajazz_plugins`
-# only (see `src/plugins/CMakeLists.txt`); MUST NOT appear in `ajazz_core` or any installed public
-# header (COD-031 invariant per Phase 3 / ARCH-01). Version pinned to v3.12.0 in lockstep with
-# `vcpkg.json`.
-FetchContent_Declare(
-    nlohmann_json
-    GIT_REPOSITORY https://github.com/nlohmann/json.git
-    GIT_TAG v3.12.0
-    GIT_SHALLOW TRUE
-)
-set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
-set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
-FetchContent_MakeAvailable(nlohmann_json)
+if(AJAZZ_USE_SYSTEM_DEPS)
+    find_package(hidapi REQUIRED)
+    # hidapi's installed config exports per-backend targets (e.g. hidapi::hidraw
+    # on Linux). The codebase links the umbrella name `hidapi::hidapi`; synthesise
+    # it from whichever backend(s) the config provided when it is absent.
+    if(NOT TARGET hidapi::hidapi)
+        add_library(ajazz_hidapi_compat INTERFACE)
+        foreach(_be hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
+            if(TARGET ${_be})
+                target_link_libraries(ajazz_hidapi_compat INTERFACE ${_be})
+            endif()
+        endforeach()
+        add_library(hidapi::hidapi ALIAS ajazz_hidapi_compat)
+    endif()
+    # nlohmann::json stays PRIVATE-linked to `ajazz_plugins` (COD-031); see
+    # `src/plugins/CMakeLists.txt`. The config target is nlohmann_json::nlohmann_json.
+    find_package(nlohmann_json 3.12 REQUIRED)
+else()
+    # hidapi — vendored via FetchContent for reproducibility
+    FetchContent_Declare(
+        hidapi
+        GIT_REPOSITORY https://github.com/libusb/hidapi.git
+        GIT_TAG 73d292a8f4d18f7fb532b9829b9a26ca8d864419 # hidapi-0.14.0
+        GIT_SHALLOW OFF
+    )
+    set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
+    set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
+    # hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under libusb/.
+    # CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x emits
+    # `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored project
+    # targets a floor below 3.10. Force a 3.10 policy floor for the subproject only so the fetched
+    # CMakeLists are accepted without patching *and* without triggering a deprecation warning (violates
+    # our zero-warnings invariant). Revisit when hidapi upstream bumps its own minimum.
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
+    FetchContent_MakeAvailable(hidapi)
+    unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+
+    # nlohmann::json — vendored via FetchContent for reproducibility. PRIVATE-linked to `ajazz_plugins`
+    # only (see `src/plugins/CMakeLists.txt`); MUST NOT appear in `ajazz_core` or any installed public
+    # header (COD-031 invariant per Phase 3 / ARCH-01). Version pinned to v3.12.0 in lockstep with
+    # `vcpkg.json`.
+    FetchContent_Declare(
+        nlohmann_json
+        GIT_REPOSITORY https://github.com/nlohmann/json.git
+        GIT_TAG v3.12.0
+        GIT_SHALLOW TRUE
+    )
+    set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
+    set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 # -----------------------------------------------------------------------------
 # Subprojects
