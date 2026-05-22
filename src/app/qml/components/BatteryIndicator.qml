@@ -10,11 +10,16 @@
 //
 // Wire-up:
 //   * Bind `codename` to the row's codename.
+//   * Bind `connected` to the row's connection state. The chip self-hides
+//     while the device is offline so it never shows a stale charge after a
+//     disconnect that produced no explicit `batteryUnavailable` (e.g. the
+//     codename simply drops out of BatteryService's poll enumeration).
 //   * Mount only when `DeviceModel.HasBatteryRole` (role `deviceHasBattery`)
-//     is true AND the row is connected — the parent decides via the `visible`
-//     binding. Inside, we also self-hide when `state === "unavailable"` so a
-//     transient I/O failure (BatteryUnavailable signal) makes the chip
-//     vanish instead of showing a stale stale percent.
+//     is true — the parent gates that via its own `visible` binding. Inside,
+//     we also self-hide when `unavailable` is set so a transient I/O failure
+//     (BatteryUnavailable signal) makes the chip vanish instead of showing a
+//     stale percent, and we reset on `codename` change so a recycled delegate
+//     does not inherit the previous device's charge.
 //
 // Polling policy (per task spec): BatteryService's 15-s QTimer is enabled by
 // default (see battery_service.cpp) and short-circuits to no-op when no
@@ -50,12 +55,18 @@ Item {
     /// (e.g. backend is not IBatteryCapable, or the HID I/O failed).
     property bool unavailable: false
 
+    /// Connection state of the tracked device, bound by the parent row.
+    /// Defaults to true so a standalone instance stays visible; when the
+    /// device goes offline the chip collapses even if no explicit
+    /// `batteryUnavailable` signal arrived for this codename.
+    property bool connected: true
+
     // The chip is visually empty when we have no reading and no signal yet —
     // collapse to zero width so it does not take layout space until we know
     // the device can answer. Once we *do* know (either a successful percent
     // OR an explicit unavailable signal), we keep the chip's width stable
     // so the row layout does not jitter.
-    visible: percent >= 0 && !unavailable
+    visible: connected && percent >= 0 && !unavailable
     implicitWidth: pill.implicitWidth
     implicitHeight: pill.implicitHeight
 
@@ -185,16 +196,21 @@ Item {
         }
     }
 
-    // Seed initial state from the BatteryService cache so a freshly-mounted
-    // indicator paints immediately if a previous poll already saw the
-    // device, instead of waiting up to 15 s for the next tick.
-    Component.onCompleted: {
+    // Reset, then seed from the BatteryService cache. Called both at mount
+    // and whenever `codename` changes so a recycled delegate (ListView reuses
+    // Items) never inherits the previous device's charge: we clear to the
+    // unknown state first, then paint immediately if a previous poll already
+    // saw this device, instead of waiting up to 15 s for the next tick.
+    function _seedFromCache() {
+        root.percent = -1;
+        root.unavailable = false;
         if (codename === "")
             return;
         var seed = BatteryService.lastKnownPercent(codename);
-        if (seed >= 0) {
+        if (seed >= 0)
             root.percent = seed;
-            root.unavailable = false;
-        }
     }
+
+    onCodenameChanged: _seedFromCache()
+    Component.onCompleted: _seedFromCache()
 }

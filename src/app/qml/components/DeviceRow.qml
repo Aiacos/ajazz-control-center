@@ -140,14 +140,18 @@ ItemDelegate {
         // without a re-creation hiccup. The chip's own `visible: percent
         // >= 0 && !unavailable` keeps the visual surface clean.
         BatteryIndicator {
-            // Always shown for battery-capable devices: the chip reads "--%"
+            // Mounted for every battery-capable device: the chip reads "--%"
             // during connect / before the first reading, then fills in with the
-            // charge level. (Don't gate on `percent >= 0` here — the icon must
-            // stay put so the row layout doesn't jitter and the user always sees
-            // the battery slot.)
+            // charge level. (Don't gate on `percent >= 0` here — the slot must
+            // stay put while connected so the row layout doesn't jitter.) The
+            // chip's own `connected` binding below collapses it when offline.
             visible: root.hasBatteryCapability
             Layout.alignment: Qt.AlignVCenter
             codename: root.deviceCodename
+            // Collapse the chip when the device is offline so it never shows a
+            // stale charge after a disconnect that produced no batteryUnavailable
+            // signal (the codename just drops out of BatteryService's poll).
+            connected: root.deviceConnected
         }
 
         // Offline pill (HOTPLUG-02 + D-01 silent-badge policy).
