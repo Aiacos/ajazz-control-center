@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ajazz Control Center — device illustration: AJ-series gaming mouse.
+     Original clean-room artwork; generic high-DPI wireless mouse silhouette,
+     brand-coherent. Not traced from any vendor asset. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 84 120" width="84" height="120">
+  <defs>
+    <linearGradient id="rgbm" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#E63946"/>
+      <stop offset="100%" stop-color="#0A82FA"/>
+    </linearGradient>
+  </defs>
+  <!-- Body -->
+  <path d="M42 8
+           C60 8 72 24 72 50
+           L72 78
+           C72 100 58 112 42 112
+           C26 112 12 100 12 78
+           L12 50
+           C12 24 24 8 42 8 Z"
+        fill="#1B1D24" stroke="#3A3A44" stroke-width="2"/>
+  <!-- L/R split + spine -->
+  <path d="M42 9 L42 46" stroke="#3A3A44" stroke-width="2" stroke-linecap="round"/>
+  <!-- Scroll wheel -->
+  <rect x="38" y="22" width="8" height="16" rx="4" fill="#E63946"/>
+  <!-- DPI stage dots -->
+  <g fill="#0A82FA">
+    <circle cx="42" cy="52" r="2.4"/>
+    <circle cx="42" cy="60" r="2.4" opacity="0.5"/>
+    <circle cx="42" cy="68" r="2.4" opacity="0.5"/>
+  </g>
+  <!-- side button -->
+  <rect x="13" y="40" width="6" height="12" rx="3" fill="#2C2C34"/>
+  <!-- RGB base strip -->
+  <path d="M16 104 C26 110 58 110 68 104" fill="none" stroke="url(#rgbm)" stroke-width="3" stroke-linecap="round" opacity="0.8"/>
+</svg>

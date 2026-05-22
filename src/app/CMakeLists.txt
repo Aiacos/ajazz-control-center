@@ -193,6 +193,19 @@ set_source_files_properties(
     ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
 )
 
+# Per-family device illustration icons (resources/devices/*.svg). Brought onto this
+# branch from main's clean-room icon set (commit 069dfd7). Surfaced as a small leading
+# icon in each sidebar DeviceRow, selected by DeviceFamily. Aliased under icons/devices/
+# so QML loads them via qrc:/qt/qml/AjazzControlCenter/icons/devices/<name>.svg —
+# matching the alias scheme main uses for the full UI icon set. CONFIGURE_DEPENDS
+# re-globs when an SVG is added/removed so contributors just drop a file in.
+set(ACC_DEVICE_ICONS "")
+file(GLOB ACC_DEVICE_ICONS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/devices/*.svg)
+foreach(_f IN LISTS ACC_DEVICE_ICONS)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${_n})
+endforeach()
+
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
 # `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
 # only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
@@ -291,6 +304,7 @@ qt_add_qml_module(
               ${ACC_DOC_PRIVACY}
               ${ACC_STREAMDOCK_FALLBACK}
               ${ACC_OPENDECK_FALLBACK}
+              ${ACC_DEVICE_ICONS}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)
