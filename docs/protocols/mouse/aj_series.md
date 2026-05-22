@@ -48,17 +48,23 @@ device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
 
 Offline device returns `BB = 0xFF`.
 
-> **HARDWARE NOTE (2026-05-21, corrected):** neither the `0x40` query above NOR
-> the once-claimed "status report `0x05` byte 3 via GET_FEATURE" matches the
-> shipping firmware (`GET_FEATURE 0x05` returns all-zeros on live hardware even
-> with the link awake). Verified against the real vendor app: battery is an
-> **active `0x83` (`FEA_CMD_GET_BATTERY`) query over OUTPUT-write +
-> interrupt-IN** — `getBattery()` → 8-byte `[0x83]` + BIT7 → `sendMsg` (OUTPUT)
-> then `readMsg` (interrupt-IN); parse **percent = `resp[1]`**, state =
-> `resp[2]` (1=charge, 2=full), lp = `resp[3]`; on the mouse vendor interface
-> (usage `0x02` = iface 2). `AjSeriesMouse::batteryPercent()` still uses a cold
-> `GET_FEATURE` (wrong channel) → returns "unknown" until reimplemented. Full
-> detail in `aj_series_opcode_table.md` §4. NOT a libusb blocker.
+> **HARDWARE NOTE (2026-05-21, confirmed):** the `0x40` query above does NOT
+> match the shipping firmware, and the active `0x83` OUTPUT-write + interrupt-IN
+> theory (briefly implemented in b9018fc, since reverted) **never replies on
+> hardware — idle OR awake link**. The hardware-confirmed method — what
+> `AjSeriesMouse::batteryPercent()` implements (commit 1f2be0c) — is that the
+> mouse mirrors its charge into vendor **status report `0x05`, byte 3**
+> (`0..100`; `0x64` = 100%, observed stable on live hardware), read via
+> `GET_FEATURE` on the `0xFFFF`/usage-`0x02` control collection (iface 2). A
+> valid frame has bytes 1 and 2 == 0 — reject others (the `05 ad 04 01 …`
+> reconnect garbage is the spurious "1%") and treat byte 3 == 0 as "unknown"
+> (link up, not yet reported → grey). `0x83 FEA_CMD_GET_BATTERY` is declared by
+> the vendor but NOT usable on the direct mouse path: its `sendMsg` carries a
+> separate `dangle_dev_type=MOUSE` routing arg that `iot_driver.exe` folds into
+> the HID bytes, so a raw hidraw `0x83` write (without that routing) ACKs but
+> gets no reply. Full detail + frame table in `aj_series_opcode_table.md` §4.
+> NOT a libusb blocker. Cross-checked against the `research/reverse-engineering`
+> dossier (`capture-evidence.md`).
 
 ## Onboard clock (OLED basetta)
 
