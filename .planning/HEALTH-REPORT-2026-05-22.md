@@ -97,3 +97,43 @@ hard parts (layering, cross-platform strictness, supply chain, RE traceability) 
 done unusually well. The two security items (#1 sandbox FS scope, #2 python PATH) are
 the only findings that rise to "should fix before shipping plugins broadly," and #2 is
 a quick, high-value follow-on to work already done this session.
+
+______________________________________________________________________
+
+## Re-analysis — post-fix-loop (2026-05-22, same day)
+
+All seven findings were fixed and **re-audited by two independent read-only agents**
+against HEAD; every one is genuinely closed (correct logic + real test coverage, not
+cosmetic), and **no new HIGH/MEDIUM was introduced**.
+
+| #   | Finding                                           | Status                                                                 | Commit(s)                       |
+| --- | ------------------------------------------------- | ---------------------------------------------------------------------- | ------------------------------- |
+| 1   | Plugin sandbox unwired + reads whole FS (CWE-200) | ✅ wired + scoped + real-bwrap E2E proves `$HOME` hidden               | `4c16cc0`, `6615619`            |
+| 2   | `python3`/`bwrap` PATH-hijack (CWE-426)           | ✅ vetted absolute resolution + fail-closed verifier + regression test | `f54d69b`, `6615619`            |
+| 3   | QML entirely untested                             | ✅ headless QML smoke harness, 31 components                           | `b9b61fe`                       |
+| 4   | CONCERNS.md lists fixed items as OPEN             | ✅ 7 items + DFR-05 flipped, count 21→14                               | `c24ccde`                       |
+| 5   | Provisional-RE tests pinned as ground truth       | ✅ annotated PROVISIONAL (no values changed)                           | `f8c3e69`                       |
+| 6   | Dead `instance()` shim + fictional `Result::*`    | ✅ shim deleted; ARCH + header comments de-fictionalized               | `63cd396`, `c24ccde`, `6615619` |
+| 7   | No coverage floor; stale test count               | ✅ floor + `lcov --summary` in CI; CLAUDE count refreshed              | `0f25866`, `36e28a3`            |
+
+**Updated ratings:** Security **strong-Good** (both anchor findings closed; not Excellent
+only due to residual LOW hardening), Code quality **Excellent**, Technical debt **Good**
+(0 FIXME/HACK), Testing **Good→Excellent** (largest hole closed), Build/CI **Excellent**.
+
+**Remaining LOW items (documented, none exploitable on the default config — deliberate
+follow-ups, not blockers):**
+
+- **Sandbox env hardening:** the bwrap child still inherits the full parent environment
+  (no `--clearenv`). A behavior-changing hardening (must re-add `PATH`/`HOME`/locale/
+  `XDG_*`) that needs real-plugin testing — schedule deliberately, don't rush.
+- **`tests/qml/CMakeLists.txt` controller-dep list** is hand-maintained (a new
+  Application non-module dependency would break the QML test build — self-correcting, not
+  silent).
+- **Thin service tests:** `test_battery_service` / `test_settings_service` remain
+  single-case (pre-existing; not touched by this loop).
+
+**Excluded by agreement:** the §5 hardware-wall wire-format items (DFR-01..07 etc.) — they
+require a physical-device round-trip and are honestly flagged as provisional in-code.
+
+**Verdict:** the codebase is clean and green (408/408 ctest, 16,728 assertions). Ready to
+resume feature work (Phase 10 verification).
