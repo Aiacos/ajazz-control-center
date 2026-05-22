@@ -10,10 +10,12 @@
  * `buildMouseSetOption0/1`, `buildMouseSetKeyMatrix`, `buildSetLedParam`,
  * `buildSetTftLcdData`); this file only owns lifecycle + caching.
  *
- * Transport: HID OUTPUT REPORTS (`m_transport->write()`, interrupt-OUT).
- * NOT feature reports — confirmed by Ghidra audit of `iot_driver.exe`
- * (vendor's Rust gRPC daemon dispatches via the `sendMsg` path, which
- * wraps `hid_write`, not `sendRawFeature`).
+ * Transport: setters use HID OUTPUT REPORTS (`m_transport->write()`,
+ * interrupt-OUT) — confirmed by Ghidra audit of `iot_driver.exe` (the
+ * vendor's Rust gRPC daemon dispatches setters via the `sendMsg` path, which
+ * wraps `hid_write`, not `sendRawFeature`). Two paths are the exception and
+ * use feature reports: the `0x28` OLED clock (SET_FEATURE) and the battery
+ * read (GET_FEATURE on status report `0x05`, see below).
  *
  * Capabilities implemented:
  *   - @ref IMouseCapable      — DPI stages, poll rate, LOD, button bind
@@ -24,10 +26,17 @@
  *   - @ref IMouseMacroCapable — 256-byte macro upload (opcode 0x16 chunked,
  *                               20 slots) per `aj_series_opcode_table.md` §3.11
  *
- * Battery is intentionally NOT exposed via @ref IBatteryCapable: the
- * vendor RE confirmed there is no standalone battery-query opcode on the
- * mouse HID path. Vendor pulls battery from the dongle's gRPC
- * `watchDevList` stream (out of scope for our in-process design).
+ *   - @ref IBatteryCapable    — wireless charge via GET_FEATURE on vendor
+ *                               status report `0x05`, byte 3 (hardware-
+ *                               confirmed; frame-validated, byte1/2 must be 0).
+ *                               See `batteryPercent()` and §4 of
+ *                               `aj_series_opcode_table.md`. (The `0x83`
+ *                               GET_BATTERY opcode is declared by the vendor
+ *                               but NOT usable on the direct HID path — its
+ *                               gRPC `sendMsg` carries dongle routing that
+ *                               `iot_driver` folds into the bytes; a raw write
+ *                               gets no reply. The vendor app also surfaces
+ *                               battery via the dongle's gRPC `watchDevList`.)
  *
  * Maturity: `scaffolded` -> `partial` for SKUs with a TFT basetta
  * (ajazz_24g_8k, aj199_family, aj199_family_dongle, aj159_apex_*) per
