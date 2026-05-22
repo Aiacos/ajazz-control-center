@@ -92,6 +92,23 @@ public:
     [[nodiscard]] static QUrl firmwareDownloadUrl(Family family);
 
     /**
+     * @brief Map the coarse core @c DeviceFamily + codename to a granular
+     *        @ref Family.
+     *
+     * Exposed @c Q_INVOKABLE so the QML device row can turn its @c family
+     * role (a @c ajazz::core::DeviceFamily integer) + @c codename into the
+     * argument the launch / URL methods expect. The mouse split (AJ159 vs
+     * AJ199) is decided by codename prefix — `aj199*` is the distinct
+     * dialect / download page (FIRMWARE-UPDATES-IMPLEMENTATION.md §3.2);
+     * every other mouse maps to @ref MouseAj159. Pure, exposed for testing.
+     *
+     * @param coreDeviceFamily @c static_cast<int> of @c ajazz::core::DeviceFamily.
+     * @param codename         Backend codename (e.g. "akp05", "aj159pro").
+     */
+    [[nodiscard]] Q_INVOKABLE static Family familyForDevice(int coreDeviceFamily,
+                                                            QString const& codename);
+
+    /**
      * @brief Candidate absolute paths to the vendor firmware-update tool for
      *        @p family on the current OS, most-specific first.
      *

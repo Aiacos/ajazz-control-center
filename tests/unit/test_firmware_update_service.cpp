@@ -91,6 +91,26 @@ TEST_CASE("FirmwareUpdateService only Stream Dock has documented vendor-tool pat
 #endif
 }
 
+TEST_CASE("FirmwareUpdateService familyForDevice maps the coarse core family", "[firmware]") {
+    using F = FirmwareUpdateService;
+    // core::DeviceFamily: Unknown=0, StreamDeck=1, Keyboard=2, Mouse=3.
+    REQUIRE(F::familyForDevice(1, QStringLiteral("akp05")) == F::StreamDock);
+    REQUIRE(F::familyForDevice(2, QStringLiteral("ak980pro")) == F::Keyboard);
+    REQUIRE(F::familyForDevice(0, QStringLiteral("whatever")) == F::Unknown);
+}
+
+TEST_CASE("FirmwareUpdateService familyForDevice splits the mouse dialects by codename",
+          "[firmware]") {
+    using F = FirmwareUpdateService;
+    // AJ199 (0x3554) is its own dialect + download page; everything else on
+    // the mouse side is the AJ159 (0x3151) dialect we speak.
+    REQUIRE(F::familyForDevice(3, QStringLiteral("aj159pro")) == F::MouseAj159);
+    REQUIRE(F::familyForDevice(3, QStringLiteral("aj179")) == F::MouseAj159);
+    REQUIRE(F::familyForDevice(3, QStringLiteral("aj199")) == F::MouseAj199);
+    REQUIRE(F::familyForDevice(3, QStringLiteral("aj199max")) == F::MouseAj199);
+    REQUIRE(F::familyForDevice(3, QStringLiteral("AJ199")) == F::MouseAj199); // case-insensitive
+}
+
 TEST_CASE("FirmwareUpdateService reports tool not installed on a bare machine", "[firmware]") {
     // CI runners + dev boxes without the vendor app installed: detection
     // must return empty / false rather than a phantom path.

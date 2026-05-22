@@ -8,6 +8,7 @@
  */
 #include "firmware_update_service.hpp"
 
+#include "ajazz/core/device.hpp"
 #include "ajazz/core/logger.hpp"
 
 #include <QDesktopServices>
@@ -62,6 +63,25 @@ QUrl FirmwareUpdateService::firmwareDownloadUrl(Family family) {
     }
     // Generic fallback: the AJAZZ firmware blog lists every model.
     return QUrl(QStringLiteral("https://ajazzstore.com/blogs/firmware"));
+}
+
+FirmwareUpdateService::Family FirmwareUpdateService::familyForDevice(int coreDeviceFamily,
+                                                                     QString const& codename) {
+    switch (static_cast<core::DeviceFamily>(coreDeviceFamily)) {
+    case core::DeviceFamily::StreamDeck:
+        return StreamDock;
+    case core::DeviceFamily::Keyboard:
+        return Keyboard;
+    case core::DeviceFamily::Mouse:
+        // AJ199 / AJ199 Max (0x3554) is a separate wire dialect AND a separate
+        // download page; everything else on the mouse side is the AJ159
+        // (0x3151) dialect we actually speak.
+        return codename.startsWith(QStringLiteral("aj199"), Qt::CaseInsensitive) ? MouseAj199
+                                                                                 : MouseAj159;
+    case core::DeviceFamily::Unknown:
+        break;
+    }
+    return Unknown;
 }
 
 QStringList FirmwareUpdateService::vendorToolCandidatePaths(Family family) {
