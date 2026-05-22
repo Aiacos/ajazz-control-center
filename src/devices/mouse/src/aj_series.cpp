@@ -59,6 +59,7 @@
 #include <ctime>
 #include <mutex>
 #include <stdexcept>
+#include <thread>
 
 namespace ajazz::mouse {
 
@@ -211,43 +212,47 @@ public:
         return std::nullopt;
     }
 
-    // IBatteryCapable — hardware-confirmed 2026-05-21 on a live AJAZZ 2.4G 8K
-    // (VID 0x3151): the mouse mirrors its charge into vendor status report 0x05
-    // at byte 3 (0..100; 0x64 = full pack). Read via GET_FEATURE on the 0xFFFF
-    // control collection. hidapi returns the report WITH the leading report-id
-    // byte at index 0, so the percent sits at resp[3]. This supersedes the old
-    // "no HID battery query, gRPC-only" assumption: the dongle telemetry the
-    // vendor app streams is also exposed in this directly-readable status report
-    // (confirmed with scripts/aj_mouse_probe.py — 0x64 == the device's real 100%).
+    // IBatteryCapable — hardware-verified 2026-05-22 on a live AJAZZ 2.4G 8K
+    // (VID 0x3151). Two-step, mirroring the working keyboard path:
+    //   1. SET_FEATURE a 0x83 GET_BATTERY poke (buildGetBattery) so the dongle
+    //      refreshes its status feature report;
+    //   2. GET_FEATURE the status report and read the charge.
+    // The status report on the vendor control collection uses report-id 0x00,
+    // so the frame is `[00, 00, charge, 01 01 01 02]` — the charge is at
+    // resp[2]. (The earlier code assumed a 0x05 report-id prefix and read
+    // resp[3] while validating resp[2]==0; since resp[2] is the charge byte,
+    // that rejected every valid frame -> the "--%" bug.) resp[1] is a zero pad
+    // in a well-formed frame; a transient/garbage frame (seen right after a
+    // wireless reconnect) has a non-zero resp[1], so we reject it. charge == 0
+    // means the link is up but the dongle has not reported yet (or the mouse is
+    // asleep) -> unknown/grey, not 0%.
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
+            (void)m_transport->writeFeature(buildGetBattery()); // SET_FEATURE poke
             std::array<std::uint8_t, kReportSize> resp{};
-            resp[0] = 0x05; // status report id to fetch (GET_FEATURE)
-            auto const n = m_transport->readFeature(resp);
-            if (n < 4) {
-                return std::nullopt; // short / no reply
+            for (int attempt = 0; attempt < 6; ++attempt) {
+                std::this_thread::sleep_for(std::chrono::milliseconds{30});
+                resp.fill(0);
+                resp[0] = 0x05; // report id to fetch (device returns its 0x00 status report)
+                std::size_t n = 0;
+                try {
+                    n = m_transport->readFeature(resp);
+                } catch (std::exception const&) {
+                    continue; // transient GET failure; retry within the poll budget
+                }
+                if (n < 3 || resp[1] != 0) {
+                    continue; // short read or transient/garbage frame
+                }
+                auto const pct = resp[2];
+                if (pct == 0) {
+                    continue; // not reported yet / asleep -> retry within budget
+                }
+                return std::min<std::uint8_t>(pct, 100);
             }
-            // Frame validation (hardware-confirmed 2026-05-21 via the replug
-            // watch in scripts/aj_mouse_probe.py --battery-watch): a well-formed
-            // status report has bytes 1 and 2 zero (resp[0]=report id,
-            // resp[3]=percent). Right after a wireless reconnect the GET can
-            // return a garbage frame like `05 ad 04 01 ...` — accepting it
-            // verbatim produced the spurious "1%" flash before the value
-            // settled. Reject any frame whose bytes 1/2 are non-zero.
-            if (resp[1] != 0 || resp[2] != 0) {
-                return std::nullopt; // malformed/transient frame (e.g. reconnect)
-            }
-            auto const pct = resp[3];
-            if (pct == 0) {
-                // Link present but the dongle has not reported a charge yet
-                // (or wired-only): unknown, not 0%. Stays grey until the real
-                // value arrives on the next poll.
-                return std::nullopt;
-            }
-            return std::min<std::uint8_t>(pct, 100);
+            return std::nullopt; // no valid charge within the poll budget -> grey
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN(
-                "mouse.aj_series", "batteryPercent: HID feature read failed: {}", e.what());
+                "mouse.aj_series", "batteryPercent: HID battery read failed: {}", e.what());
             return std::nullopt;
         }
     }

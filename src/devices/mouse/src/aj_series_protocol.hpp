@@ -56,6 +56,8 @@ inline constexpr std::uint8_t kReportId = 0x05;
  */
 enum class FeaCmd : std::uint8_t {
     GetRev = 0x80,      ///< §3.1 — firmware version query (response uint16-LE at byte 1..2).
+    GetBattery = 0x83,  ///< §4 — battery status poke; reply lands in the status feature
+                        ///< report [report-id, 0x00, charge, flag…] (charge at index 2).
     SetReset = 0x02,    ///< §3.2 — factory reset.
     SetProfile = 0x05,  ///< §3.3 — active profile select.
     SetReport = 0x04,   ///< §3.4 — polling rate via _RateToNum lookup.
@@ -124,6 +126,12 @@ void stampBit7Checksum(std::array<std::uint8_t, kReportSize>& pkt) noexcept;
 
 /// §3.1 GetRev — `[0x05, 0x80, 0, …, 0, checksum]`.
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetRev();
+
+/// §4 GetBattery — `[0x05, 0x83, 0, …, 0, checksum]`. Active poke written via
+/// SET_FEATURE; the dongle then exposes the charge in its status feature report
+/// (`[report-id, 0x00, charge, 01 01 01 02]`, charge at index 2) read via
+/// GET_FEATURE. See @c AjSeriesMouse::batteryPercent().
+[[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetBattery();
 
 /// §3.2 SetReset — `[0x05, 0x02, 0, …, 0, checksum]`. Factory reset (destructive!).
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetReset();
