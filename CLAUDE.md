@@ -94,12 +94,13 @@ Each platform's compiler catches things the others don't. Land all three.
 ## CMake / CTest
 
 - **Working preset**: `ctest --preset linux-release`. The suite contains
-  roughly 286 `TEST_CASE` invocations across `tests/unit/` and
-  `tests/integration/` as of 2026-05-18 (was 178 at v1.1 close; grew
-  through Phase 9 captures, vendor-RE work, AK980 clock-sync, OOP plugin
-  host, SdPluginServer MVP, and the bulk audit follow-up). Run the
-  preset and trust the live count; do not hand-edit this figure on
-  every push.
+  roughly 408 ctest cases (≈399 Catch2 `TEST_CASE`s in `tests/unit/` plus
+  `tests/integration/` and the new offscreen QML smoke target `tests/qml/`)
+  as of 2026-05-22 (was 178 at v1.1 close, ~286 at 2026-05-18; grew through
+  Phase 9 captures, vendor-RE work, AK980 clock-sync, OOP plugin host,
+  SdPluginServer MVP, the bulk audit follow-up, the health-report fix loop,
+  and the QML harness). Run the preset and trust the live count; do not
+  hand-edit this figure on every push.
 - **ctest filter flag is `--tests-regex` / `-R`, NOT `--test-regex`.**
   The latter is a typo that produces "Unknown argument" from CMake.
 - **Win32EnvBlock sort order**: env blocks passed to `CreateProcessW` must
