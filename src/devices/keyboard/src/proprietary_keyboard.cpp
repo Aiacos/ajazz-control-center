@@ -899,13 +899,12 @@ public:
 
     // ---- IFirmwareLightingCapable (20 built-in modes via opcode 0x13) -----
     //
-    // 4-packet envelope per ak980pro_vendor.md §3.4: CMD_START (0x18) ->
+    // 5-packet envelope per ak980pro_vendor.md §3.4: CMD_START (0x18) ->
     // CMD_MODE_BEGIN (0x13) -> DATA (mode_id, RGB, brightness, speed) ->
-    // CMD_SAVE (0x02). The 5th packet CMD_FINISH (0xF0) is part of the
-    // standard vendor envelope but our project does not yet ship it
-    // (Phase 3 P3.6 pending) - hardware-testing has shown the 4-packet
-    // variant works in practice; FINISH is needed only for some other
-    // config flows.
+    // CMD_SAVE (0x02) -> CMD_FINISH (0xF0) end-of-envelope sentinel. FINISH
+    // was wired in for issue #58 and IS shipped here; the e2e test asserts
+    // the full 5-packet sequence ending in 0xF0. (The RTC time-sync path uses
+    // the shorter 4-packet variant without FINISH — see setTime() above.)
     [[nodiscard]] std::vector<FirmwareLightingMode> availableFirmwareModes() const override {
         // Names match the vendor 1033.lan English strings (cross-referenced
         // with the Chinese originals documented in ak980_lighting.hpp).

@@ -46,10 +46,10 @@ void registerAll(core::DeviceRegistry& registry) {
     // either confirms VIA compatibility or motivates a dedicated handler.
     //
     // D-03 / Plan 05-03: ProprietaryKeyboard inherits IClockCapable and
-    // returns NotImplemented from setTime() with a WARN-once. Advertise the
-    // descriptor flag so the UI's Sync button can render. VIA keyboards
-    // (above) are explicitly excluded — QMK-style keyboards have no vendor
-    // clock surface.
+    // implements setTime() via the 4-packet firmware-RTC handshake (opcode
+    // 0x28, hardware-confirmed on the AK980 PRO). Advertise the descriptor
+    // flag so the UI's Sync button can render. VIA keyboards (above) are
+    // explicitly excluded — QMK-style keyboards have no vendor clock surface.
     reg.registerDevice(
         core::DeviceDescriptor{
             .vendorId = 0x0c45, // Microdia (chip vendor used by AK980 PRO)
