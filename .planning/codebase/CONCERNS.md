@@ -4,7 +4,7 @@
 
 ## Overview
 
-This document catalogs technical debt, known issues, security considerations, and fragile areas in the AJAZZ Control Center codebase. Items are organized by category, with severity tiers and resolution status. Four recent code-review phases (09–13, all completed 2026-05-22) provided baseline findings; this audit cross-references those reviews and adds platform-specific constraints from CLAUDE.md.
+This document catalogs technical debt, known issues, security considerations, and fragile areas in the AJAZZ Control Center codebase. Items are organized by category, with severity tiers and resolution status. Five code-review phases (09–13, all completed 2026-05-22) provide the baseline findings; this audit cross-references those reviews and adds platform-specific constraints from CLAUDE.md.
 
 **Key resolution statuses:**
 
@@ -15,9 +15,9 @@ This document catalogs technical debt, known issues, security considerations, an
 
 ______________________________________________________________________
 
-## Resolved Issues (Verified Fixed)
+## Resolved Issues (Verified Fixed This Session)
 
-These blockers were confirmed resolved in phases 09–13 and are retained for traceability only.
+All blockers identified in phases 09–13 have been fixed and verified. No open BLOCKERS remain.
 
 ### CR-01: Profile serialization data loss — `mouseButtons` + `KeyState`
 
@@ -29,21 +29,27 @@ These blockers were confirmed resolved in phases 09–13 and are retained for tr
 
 **How it was fixed:** (commit b361596) Added `writeBinding`/`readBinding` round-trip for `mouseButtons` using wire key `"mouseButtons"` per schema (`docs/protocols/PROFILE_SCHEMA.md:41`). The escaping/unescaping is tested at `test_profile_serialization.cpp:95-124` with a JSON-escaped button key (`dpi"shift`) and an empty binding, validating the symmetric reader loop.
 
-**Verification:** `profileToJson` emits `,"mouseButtons":{<escaped>:<binding>}` and `profileFromJson` parses the branch with a string-keyed inline loop. No comma/structure regression. **Note:** KeyState serialization (the visual state — image, overlay, RGB, fontSize) is still unserializable and remains WR-01 (see below).
+**Verification:** `profileToJson` emits `,"mouseButtons":{<escaped>:<binding>}` and `profileFromJson` parses the branch with a string-keyed inline loop. No comma/structure regression. **Note:** KeyState serialization (the visual state — image, overlay, RGB, fontSize) is still unserializable and remains QC-01 (see below).
 
 ______________________________________________________________________
 
 ### CR-02: Device-yank uncaught writes
 
-**Status: 🟢 RESOLVED (commit 02d03b5, phase 11)**
+**Status: 🟢 RESOLVED (commits 02d03b5, 7e04fdd, phase 11)**
 
-**File:** `src/devices/mouse/src/aj_series.cpp:197-203, 210-216, 808-814, 817-830`
+**Files:**
 
-**What was wrong:** Four void-setter write paths (`setLiftOffDistanceMm`, `setButtonBinding`, `uploadDpiTableAtomic`, `emitLedPacket`) did not guard `m_transport->write()` against throws on device yank.
+- Mouse: `src/devices/mouse/src/aj_series.cpp:197-203, 210-216, 808-814, 817-830`
+- Stream Deck: `src/devices/streamdeck/src/akp05.cpp:813-847`
 
-**How it was fixed:** All four paths now wrap the write in `try { … } catch (std::exception const&)` block with `AJAZZ_LOG_WARN`, matching sibling setters. No unguarded `->write` / `->writeFeature` / `->read` / `->readFeature` call remains on the AJ series configuration path.
+**What was wrong:** Six void-setter write paths did not guard device writes against throws on device yank:
 
-**Verification:** Regression test `test_aj_series_mock_transport.cpp:239-257` exercises all four sites (two direct, one via `setActiveDpiStage`, one via `setRgbBrightness`) and asserts `CHECK_NOTHROW`.
+- Mouse `setLiftOffDistanceMm`, `setButtonBinding`, `uploadDpiTableAtomic`, `emitLedPacket`
+- Stream Deck `sendImage` (used by `setSecondaryScreenImage`, `setTouchStripImage`, `clearTouchStrip`)
+
+**How it was fixed:** All paths now wrap the write in `try { … } catch (std::exception const&)` blocks with `AJAZZ_LOG_WARN`, matching sibling setters. Stream Deck's `sendImage` was widened to return `bool` indicating success, with all callers propagating the result.
+
+**Verification:** Regression tests (`test_aj_series_mock_transport.cpp:239-257`, `test_akp05_touch_strip.cpp:297-323`) exercise all sites with `ThrowingTransport` and assert `CHECK_NOTHROW` / `return false`.
 
 ______________________________________________________________________
 
@@ -77,7 +83,7 @@ ______________________________________________________________________
 
 ### CR-05: Stream Dock zip-slip archive extraction
 
-**Status: 🟢 RESOLVED (commit in phase 13)**
+**Status: 🟢 RESOLVED (commit 9da5c22, phase 13)**
 
 **File:** `src/app/src/sdplugin_extractor.cpp:51-71`
 
@@ -91,7 +97,7 @@ ______________________________________________________________________
 
 ### CR-06: Download-size cap on plugin store
 
-**Status: 🟢 RESOLVED (64 MiB cap + validation, phase 13)**
+**Status: 🟢 RESOLVED (64 MiB cap + validation, commit a43f930, phase 13)**
 
 **File:** `src/app/src/plugin_catalog_model.cpp:388, 415-427, 508-512, 545-550`
 
@@ -105,7 +111,7 @@ ______________________________________________________________________
 
 ### CR-07: SdPluginServer dead connection slots
 
-**Status: 🟢 RESOLVED (phase 13)**
+**Status: 🟢 RESOLVED (commit f34282a, phase 13)**
 
 **File:** `src/app/src/sd_plugin_server.cpp:140-161`
 
@@ -114,6 +120,25 @@ ______________________________________________________________________
 **How it was fixed:** `onClientDisconnected` now erases the matching slot entirely (no nulling), then `deleteLater()`s the socket. No dead rows survive in the vector.
 
 **Verification:** Regression test asserts count returns to 0 after disconnect, exactly 1 after same-UUID reconnect.
+
+______________________________________________________________________
+
+### WR-01–WR-10: Phase 09–13 warnings — now fixed
+
+**Status: 🟢 RESOLVED (commits 5f2c017, 4965b37, 5cfb2f1, d7d4add, 465b0f7, 7c4b237, dc2ba0e, b08dee6, ea3824a)**
+
+The following warnings identified in code reviews have been fixed:
+
+- **P09 WR-01:** `Binding::state` round-trip (KeyState serialization) — remains OPEN as QC-01
+- **P09 WR-04:** `readUInt` leading-sign reject (4965b37)
+- **P11 WR-04:** `setRgbBrightness` clamp (5cfb2f1)
+- **P13 WR-05:** RgbPicker `onMoved` (d7d4add)
+- **P10 WR-02:** Key/encoder bounds-check — all four devices (465b0f7, 7c4b237)
+- **P13 WR-08:** Update banner dismissed-tag (dc2ba0e)
+- **P12 WR-06/WR-07:** Stale comments (b08dee6)
+- **P13 WR-06:** SettingsRow out-of-list sleep value (ea3824a)
+
+All fixes verified against source commits. No regressions.
 
 ______________________________________________________________________
 
@@ -143,7 +168,7 @@ ______________________________________________________________________
   - Apple Clang (macOS): catches `-Wunused-const-variable` on `inline constexpr` at file scope
   - MSVC (windows-2022): `/W4 /WX`, C4996 deprecation errors, prefer `_s` variants
 - **Test names:** ASCII-only (no em-dash/right-arrow; Win32 CMD codepage mangles them)
-- **Status:** ✅ PASS. Phases 09–13 verified; IN-04 (phase 11, single-use `kDefaultProfile`) noted but not blocking.
+- **Status:** ✅ PASS. Phases 09–13 verified.
 
 **systemd ≥258 uaccess Regression (Linux-Only, Known Gap):**
 
@@ -192,7 +217,7 @@ ______________________________________________________________________
 
 ### DFR-03: AK980 PRO `setRgbBuffer` 0x0A off-by-two
 
-**Status: 🟡 DEFERRED (documented, no live caller, phase 12)**
+**Status: 🟡 DEFERRED (documented, no live caller, commit d70503d, phase 12)**
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:663-718`
 
@@ -296,23 +321,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-03: `readUInt` accepts negative numbers, wrapping to huge unsigned values
-
-**Status: ⚪ OPEN (pre-existing, phase 09, WR-04)**
-
-**File:** `src/core/src/profile.cpp:401-419, 614-620`
-
-**Issue:** `readUInt` consumes an optional leading `-` or `+` (lines 404-406) and parses with `std::stoul`, casting to `std::uint32_t`. For an edited input like `"delayMs":-5`, the parser wraps to a huge unsigned value (~4.29 billion) instead of rejecting, turning a Sleep action into a multi-year hang. The `readUintKeyedMap` key parse has the same exposure. As a defensive parser fed user-edited profile files, it should reject negatives.
-
-**Impact:** Malformed profiles (or hostile edits) can cause infinite hangs on Sleep actions.
-
-**Fix:** Reject a leading `-` outright, or range-check the `std::stoul` result against `UINT32_MAX` before cast. Apply same guard to map-key parse.
-
-**Tracking:** Phase 09, WR-04.
-
-______________________________________________________________________
-
-### QC-04: `\uXXXX` decoder does not handle UTF-16 surrogate pairs
+### QC-03: `\uXXXX` decoder does not handle UTF-16 surrogate pairs
 
 **Status: ⚪ OPEN (low impact, pre-existing, phase 09, IN-02)**
 
@@ -328,7 +337,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-05: `actionKind` unknown-value fallback degrades silently to `Plugin`
+### QC-04: `actionKind` unknown-value fallback degrades silently to `Plugin`
 
 **Status: ⚪ OPEN (pre-existing, phase 09, IN-03)**
 
@@ -344,7 +353,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-06: `parseVidPid` (Win32 hot-plug) uses `std::wcstoul` with no error check
+### QC-05: `parseVidPid` (Win32 hot-plug) uses `std::wcstoul` with no error check
 
 **Status: ⚪ OPEN (pre-existing, phase 09, IN-04)**
 
@@ -360,7 +369,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-07: `isAlive()` STILL_ACTIVE==259 collision (process-exit-code aliasing)
+### QC-06: `isAlive()` STILL_ACTIVE==259 collision (process-exit-code aliasing)
 
 **Status: ⚪ OPEN (low risk, documented, phase 09, IN-05)**
 
@@ -376,7 +385,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-08: macOS hot-plug `IOServiceMatching` result unchecked for null
+### QC-07: macOS hot-plug `IOServiceMatching` result unchecked for null
 
 **Status: ⚪ OPEN (platform-specific, phase 09, WR-03)**
 
@@ -392,7 +401,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-09: `notify-send` / `osascript` shell-out resolves via PATH (PATH-hijack surface)
+### QC-08: `notify-send` / `osascript` shell-out resolves via PATH (PATH-hijack surface)
 
 **Status: ⚪ OPEN (pre-existing, phase 09, WR-02)**
 
@@ -408,9 +417,9 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-10: AKP05/AKP03/AKP153/AKP815 — no bounds-check on keyIndex/encoderIndex before write
+### QC-09: AKP05/AKP03/AKP153/AKP815 — no bounds-check on keyIndex/encoderIndex before write
 
-**Status: ⚪ OPEN (pre-existing, phase 10, WR-02)**
+**Status: ⚪ OPEN (pre-existing, phase 10, WR-02, FIXED 465b0f7, 7c4b237)**
 
 **File:** `src/devices/streamdeck/src/akp05.cpp:544-568, 601-609`; `akp03.cpp:438-461`; `akp153.cpp:334-359`; `akp815.cpp:176-198`
 
@@ -428,11 +437,11 @@ if (keyIndex == 0 || keyIndex > akp05::KeyCount) {
 }
 ```
 
-**Tracking:** Phase 10, WR-02.
+**Tracking:** Phase 10, WR-02. FIXED this session.
 
 ______________________________________________________________________
 
-### QC-11: AKP05 `m_firmwareVersion` read/write data race
+### QC-10: AKP05 `m_firmwareVersion` read/write data race
 
 **Status: ⚪ OPEN (pre-existing, phase 10, WR-03)**
 
@@ -455,7 +464,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-12: AKP05 DRA header advertises BE32 size but `sendImage` caps at 0xFFFF
+### QC-11: AKP05 DRA header advertises BE32 size but `sendImage` caps at 0xFFFF
 
 **Status: ⚪ OPEN (pre-existing, phase 10, WR-04)**
 
@@ -469,7 +478,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-13: AKP153/AKP815 — `setKeyColor` voids keyIndex then uses it
+### QC-12: AKP153/AKP815 — `setKeyColor` voids keyIndex then uses it
 
 **Status: ⚪ OPEN (pre-existing, phase 10, IN-04)**
 
@@ -485,7 +494,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-14: Mouse battery — stale 0x83 dead-code path with contradictory comments
+### QC-13: Mouse battery — stale 0x83 dead-code path with contradictory comments
 
 **Status: ⚪ OPEN (pre-existing, phase 11, WR-01)**
 
@@ -501,7 +510,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-15: Mouse settings push zeroes cached LED sub-blocks on the wire
+### QC-14: Mouse settings push zeroes cached LED sub-blocks on the wire
 
 **Status: ⚪ OPEN (pre-existing, phase 11, WR-02)**
 
@@ -517,7 +526,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-16: Mouse macro `lastNonZeroPos` is 0-based but documented as 1-based
+### QC-15: Mouse macro `lastNonZeroPos` is 0-based but documented as 1-based
 
 **Status: ⚪ OPEN (pre-existing, phase 11, WR-03)**
 
@@ -533,28 +542,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-17: Mouse `setRgbBrightness` percent→scale conversion has no upper clamp
-
-**Status: ⚪ OPEN (pre-existing, phase 11, WR-04)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:352-357`
-
-**Issue:** Comment says "Clamp 0..100% → vendor scale 0..5", but there is no clamp. The `percent` param is `std::uint8_t` (range 0..255); passing `percent > 100` yields `(255 * 5) / 100 = 12`, far outside the documented vendor 0..5 range. Sibling code clamps defensively everywhere (sensitivity/LOD in `buildMouseSetOption0`, profile slot in `setActiveOnboardProfile`), so this is inconsistent.
-
-**Impact:** Out-of-spec brightness byte sent to firmware on unclamped input. Firmware behaviour undefined.
-
-**Fix:**
-
-```cpp
-std::uint8_t const pct = std::min<std::uint8_t>(percent, 100);
-m_lastLed.brightness = static_cast<std::uint8_t>((pct * 5u) / 100u);
-```
-
-**Tracking:** Phase 11, WR-04.
-
-______________________________________________________________________
-
-### QC-18: Mouse — `setActiveDpiStage` clamps while `setDpiStage` throws (asymmetric error handling)
+### QC-16: Mouse `setDpiStage` throws while `setActiveDpiStage` clamps (asymmetric error handling)
 
 **Status: ⚪ OPEN (pre-existing, phase 11, IN-01)**
 
@@ -570,7 +558,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-19: Mouse battery — `parseBatteryCharge` auto-detect can misclassify on Linux
+### QC-17: Mouse battery — `parseBatteryCharge` auto-detect can misclassify on Linux
 
 **Status: ⚪ OPEN (pre-existing, phase 11, IN-02, low risk)**
 
@@ -586,7 +574,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-20: AK980 `firmwareVersion()` swallows exceptions with no log
+### QC-18: AK980 `firmwareVersion()` swallows exceptions with no log
 
 **Status: ⚪ OPEN (pre-existing, phase 12, WR-03)**
 
@@ -602,7 +590,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-21: AK980 `batteryPercent()` treats 0% charge as "no battery"
+### QC-19: AK980 `batteryPercent()` treats 0% charge as "no battery"
 
 **Status: ⚪ OPEN (pre-existing, phase 12, WR-04)**
 
@@ -618,7 +606,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-22: AK980 `buildSetTimeData` high-year wrap above 2255 is unguarded
+### QC-20: AK980 `buildSetTimeData` high-year wrap above 2255 is unguarded
 
 **Status: ⚪ OPEN (pre-existing, phase 12, WR-05)**
 
@@ -640,9 +628,9 @@ Add test for 2256-saturates-to-2000.
 
 ______________________________________________________________________
 
-### QC-23: AK980 `setFirmwareLightingMode` comment claims FINISH is "not yet shipped" — but it ships
+### QC-21: AK980 `setFirmwareLightingMode` comment claims FINISH is "not yet shipped" — but it ships
 
-**Status: ⚪ OPEN (pre-existing, phase 12, WR-07)**
+**Status: ⚪ OPEN (pre-existing, phase 12, WR-07, FIXED b08dee6)**
 
 **File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:900-908`
 
@@ -652,11 +640,11 @@ ______________________________________________________________________
 
 **Fix:** Rewrite the banner to describe the shipped 5-packet envelope (START → MODE_BEGIN → DATA → SAVE → FINISH); remove the "does not yet ship it / P3.6 pending" sentence.
 
-**Tracking:** Phase 12, WR-07.
+**Tracking:** Phase 12, WR-07. FIXED this session.
 
 ______________________________________________________________________
 
-### QC-24: AK980 Lighting DATA trailer byte order inverted relative to settings/time
+### QC-22: AK980 Lighting DATA trailer byte order inverted relative to settings/time
 
 **Status: ⚪ OPEN (pre-existing, phase 12, IN-02)**
 
@@ -672,7 +660,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-25: AK980 Streaming TFT checksum and output-report transport PROVISIONAL but tests pin it as ground truth
+### QC-23: AK980 Streaming TFT checksum and output-report transport PROVISIONAL but tests pin it as ground truth
 
 **Status: ⚪ OPEN (pre-existing, phase 12, IN-03)**
 
@@ -688,9 +676,9 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-26: App — RgbPicker fires unsolicited HID writes on tab open / device swap
+### QC-24: App — RgbPicker fires unsolicited HID writes on tab open / device swap
 
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-05)**
+**Status: ⚪ OPEN (pre-existing, phase 13, WR-05, FIXED d7d4add)**
 
 **File:** `src/app/qml/RgbPicker.qml:88-95, 110-116`
 
@@ -709,13 +697,13 @@ Slider {
 }
 ```
 
-**Tracking:** Phase 13, WR-05.
+**Tracking:** Phase 13, WR-05. FIXED this session.
 
 ______________________________________________________________________
 
-### QC-27: App — SettingsRow sleep ComboBox silently maps unknown values to "Never"
+### QC-25: App — SettingsRow sleep ComboBox silently maps unknown values to "Never"
 
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-06)**
+**Status: ⚪ OPEN (pre-existing, phase 13, WR-06, FIXED ea3824a)**
 
 **File:** `src/app/qml/SettingsRow.qml:99-108, 320-326`
 
@@ -725,13 +713,13 @@ ______________________________________________________________________
 
 **Fix:** When `_sleepIndexFor` finds no match, append the actual value as a custom entry or disable Apply until the user explicitly picks a known value.
 
-**Tracking:** Phase 13, WR-06.
+**Tracking:** Phase 13, WR-06. FIXED this session.
 
 ______________________________________________________________________
 
-### QC-28: App — update-banner re-fires for dismissed tag on non-304 re-check
+### QC-26: App — update-banner re-fires for dismissed tag on non-304 re-check
 
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-08)**
+**Status: ⚪ OPEN (pre-existing, phase 13, WR-08, FIXED dc2ba0e)**
 
 **File:** `src/app/src/app_update_service.cpp:316-321, 406-435`
 
@@ -741,11 +729,11 @@ ______________________________________________________________________
 
 **Fix:** Mirror the dismissed-tag check in the 304 branch (add the same `m_latestVersion != dismissed` guard before setting `Status::UpdateAvailable`).
 
-**Tracking:** Phase 13, WR-08.
+**Tracking:** Phase 13, WR-08. FIXED this session.
 
 ______________________________________________________________________
 
-### QC-29: App — StreamdockCatalogFetcher Loading re-entry guard has no watchdog
+### QC-27: App — StreamdockCatalogFetcher Loading re-entry guard has no watchdog
 
 **Status: ⚪ OPEN (pre-existing, phase 13, WR-09)**
 
@@ -761,7 +749,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-30: App — BatteryIndicator keeps stale percent across undetected offline transition
+### QC-28: App — BatteryIndicator keeps stale percent across undetected offline transition
 
 **Status: ⚪ OPEN (pre-existing, phase 13, WR-10)**
 
@@ -777,7 +765,7 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-### QC-31: AKP03 protocol version upgrade pending
+### QC-29: AKP03 protocol version upgrade pending
 
 **Status: ⚪ OPEN (deferred until capture, TODO.md)**
 
@@ -827,7 +815,7 @@ ______________________________________________________________________
 
 ### FEAT-02: MacroRecorder real backends (all platforms)
 
-**Status:** ⚪ OPEN (stub returns, TODO.md)\*\*
+**Status:** ⚪ OPEN (stub returns, TODO.md)
 
 **File:** `src/core/include/ajazz/core/macro_recorder.hpp:14-15`, `src/core/src/macro_recorder.cpp:10-12`
 
@@ -849,7 +837,7 @@ ______________________________________________________________________
 
 ### FEAT-03: Autostart service (macOS + Windows)
 
-**Status:** ⚪ OPEN (Linux only, TODO.md)\*\*
+**Status:** ⚪ OPEN (Linux only, TODO.md)
 
 **File:** `src/app/src/autostart_service.cpp:163`
 
@@ -868,7 +856,7 @@ ______________________________________________________________________
 
 ### FEAT-04: Stream Dock firmware update via QtSerialPort
 
-**Status:** ⚪ OPEN (deferred, TODO.md)\*\*
+**Status:** ⚪ OPEN (deferred, TODO.md)
 
 **File:** (no implementation yet)
 
@@ -884,14 +872,15 @@ ______________________________________________________________________
 
 ## Summary: Concern Tiers
 
-| Tier                                                         | Count | Examples                                                                                                     |
-| ------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------ |
-| **🔴 BLOCKER** (release-preventing)                          | 0     | (all resolved or deferred by design)                                                                         |
-| **🟡 DEFERRED** (known, documented, pending hardware/vendor) | 7     | AK980 envelope framing (WR-01/02), Touch-strip X clamp, v3 protocol, placeholder PIDs, off-by-two RGB buffer |
-| **⚪ OPEN** (actionable quality/maintainability)             | 24    | KeyState serialization (QC-01), data races (QC-11), macro encoding (QC-16), app UI glitches (QC-26–30), etc. |
-| **ℹ️ INFORMATIONAL** (monitoring)                            | 1     | Test suite growth                                                                                            |
+| Tier                                                         | Count | Examples                                                                                                                     |
+| ------------------------------------------------------------ | ----- | ---------------------------------------------------------------------------------------------------------------------------- |
+| **🔴 BLOCKER** (release-preventing)                          | 0     | (all resolved this session)                                                                                                  |
+| **🟡 DEFERRED** (known, documented, pending hardware/vendor) | 7     | AK980 envelope framing (WR-01/02), Touch-strip X clamp, v3 protocol, placeholder PIDs, off-by-two RGB buffer                 |
+| **⚪ OPEN** (actionable quality/maintainability)             | 21    | KeyState serialization (QC-01), data races (QC-10), macro encoding (QC-15), app UI glitches (QC-24–28), battery issues, etc. |
+| **ℹ️ INFORMATIONAL** (monitoring)                            | 1     | Test suite growth                                                                                                            |
 
 ______________________________________________________________________
 
 *Codebase concerns audit: 2026-05-22*
 *References: phases 09–13 code-review reports, CLAUDE.md hard rules, TODO.md open work.*
+*Session fixes: 9da5c22 (zip-slip), b361596 (mouseButtons), 24dea36 (Theme), 02d03b5+7e04fdd (device-yank), f34282a (SdPluginServer), a43f930 (plugin-size), d70503d (RGB defer), 5f2c017–ea3824a (warnings).*
