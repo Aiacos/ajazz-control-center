@@ -294,6 +294,34 @@ TEST_CASE("akp05 open() probes and caches the firmware version", "[akp05][open][
     // (mirajazz #10), but the mock supplies it, so the parse path is exercised here.
 }
 
+TEST_CASE("akp05 rejects out-of-range key/encoder indices without writing the wire",
+          "[akp05][bounds]") {
+    // WR-02: an out-of-range index must be refused before any header is built,
+    // never shipped verbatim to firmware. The 0xff broadcast clear stays valid.
+    tests::qtGuiApp();
+    auto fx = buildFixture();
+    auto* disp = dynamic_cast<core::IDisplayCapable*>(fx.device.get());
+    auto* enc = dynamic_cast<core::IEncoderCapable*>(fx.device.get());
+    REQUIRE(disp != nullptr);
+    REQUIRE(enc != nullptr);
+
+    auto const rgba = gradientRgba(16, 16);
+
+    // Out-of-range indices: nothing reaches the transport.
+    disp->setKeyImage(200, rgba, 16, 16);   // > KeyCount (10)
+    disp->setKeyImage(0, rgba, 16, 16);     // 0 invalid (keys are 1-based)
+    enc->setEncoderImage(50, rgba, 16, 16); // >= EncoderCount (4)
+    disp->clearKey(99);                     // not 0xff, out of range
+    REQUIRE(fx.transport->writes().empty());
+
+    // A valid key index DOES write, and the 0xff "clear all" broadcast survives.
+    disp->setKeyImage(1, rgba, 16, 16);
+    REQUIRE_FALSE(fx.transport->writes().empty());
+    auto const before = fx.transport->writes().size();
+    disp->clearKey(0xff);
+    REQUIRE(fx.transport->writes().size() > before);
+}
+
 TEST_CASE("akp05 touch-strip writes return false (not throw) on a device-yank",
           "[akp05][touch-strip]") {
     // Regression for Phase 10 CR-01: a transport write that throws mid-burst

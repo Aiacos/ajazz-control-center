@@ -541,10 +541,29 @@ public:
         };
     }
 
+    /// Validate a 1-based key index against the AKP05's 10-key geometry,
+    /// logging + returning false on an out-of-range value (WR-02). Shared by
+    /// setKeyImage / setKeyColor / clearKey.
+    [[nodiscard]] static bool keyIndexInRange(std::uint8_t keyIndex) {
+        if (keyIndex >= 1U && keyIndex <= akp05::KeyCount) {
+            return true;
+        }
+        AJAZZ_LOG_WARN("akp05",
+                       "key index {} out of range 1..{}; refusing",
+                       static_cast<int>(keyIndex),
+                       static_cast<int>(akp05::KeyCount));
+        return false;
+    }
+
     void setKeyImage(std::uint8_t keyIndex,
                      std::span<std::uint8_t const> rgba,
                      std::uint16_t width,
                      std::uint16_t height) override {
+        // WR-02: keys are 1-based 1..KeyCount; reject out-of-range before
+        // shipping a bogus index to firmware (mirrors the parser's range check).
+        if (!keyIndexInRange(keyIndex)) {
+            return;
+        }
         // ARCH-04: caller passes RGBA8 at any resolution per IDisplayCapable contract;
         // backend resizes to the device's native 85×85 and JPEG-encodes host-side.
         auto const jpeg = encodeForDevice(rgba, width, height, akp05KeyTransform());
@@ -553,6 +572,9 @@ public:
     }
 
     void setKeyColor(std::uint8_t keyIndex, Rgb color) override {
+        if (!keyIndexInRange(keyIndex)) {
+            return;
+        }
         // ARCH-04: synthesise a solid-color JPEG at native dimensions and ship via
         // the standard key-image path. The 1×1 source is upscaled cheaply by
         // QImage::scaled inside encodeSolid.
@@ -562,6 +584,11 @@ public:
     }
 
     void clearKey(std::uint8_t keyIndex) override {
+        // 0xff is the deliberate "clear all" broadcast sentinel — keep it; any
+        // other out-of-range index is rejected (WR-02).
+        if (keyIndex != 0xffU && !keyIndexInRange(keyIndex)) {
+            return;
+        }
         auto const pkt =
             (keyIndex == 0xff) ? akp05::buildClearAll() : akp05::buildClearKey(keyIndex);
         (void)m_transport->write(pkt);
@@ -602,6 +629,14 @@ public:
                          std::span<std::uint8_t const> rgba,
                          std::uint16_t width,
                          std::uint16_t height) override {
+        // WR-02: encoders are 0-based 0..EncoderCount-1; reject out-of-range.
+        if (encoderIndex >= akp05::EncoderCount) {
+            AJAZZ_LOG_WARN("akp05",
+                           "setEncoderImage: encoderIndex {} out of range 0..{}; refusing",
+                           static_cast<int>(encoderIndex),
+                           static_cast<int>(akp05::EncoderCount - 1));
+            return;
+        }
         // ARCH-04: 100×100 per-encoder LCD. RGBA8 → JPEG host-side.
         auto const jpeg = encodeForDevice(rgba, width, height, akp05EncoderTransform());
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
