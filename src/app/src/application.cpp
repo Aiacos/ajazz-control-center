@@ -229,7 +229,7 @@ void Application::bootstrap() {
     core::setLogLevel(core::LogLevel::Info);
 
     // Audit finding A1: pass the owned registry into every backend
-    // bootstrap rather than relying on the deprecated `instance()` shim.
+    // bootstrap (constructor injection — there is no registry singleton).
     streamdeck::registerAll(m_deviceRegistry);
     keyboard::registerAll(m_deviceRegistry);
     mouse::registerAll(m_deviceRegistry);

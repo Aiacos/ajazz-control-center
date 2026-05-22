@@ -23,21 +23,6 @@
 
 namespace ajazz::core {
 
-// The shim is itself marked deprecated, so its own definition would trip
-// -Wdeprecated-declarations on compilers that warn on definitions. Suppress
-// locally; this is the only translation unit that should still touch it.
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-#endif
-DeviceRegistry& DeviceRegistry::instance() {
-    static DeviceRegistry sInstance;
-    return sInstance;
-}
-#if defined(__GNUC__) || defined(__clang__)
-#pragma GCC diagnostic pop
-#endif
-
 DeviceRegistry::DeviceRegistry(HidEnumerator enumerator) : m_enumerator(std::move(enumerator)) {}
 
 void DeviceRegistry::registerDevice(DeviceDescriptor descriptor, DeviceFactory factory) {

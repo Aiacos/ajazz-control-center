@@ -77,22 +77,6 @@ public:
     explicit DeviceRegistry(HidEnumerator enumerator = {});
 
     /**
-     * @brief Process-wide transition shim used by code that has not yet
-     *        been migrated to constructor injection.
-     *
-     * @deprecated Audit finding A1 — replace every call site with an
-     *             injected `DeviceRegistry&` parameter. The shim only
-     *             exists so device backends keep compiling during the
-     *             multi-PR migration; it returns a private function-local
-     *             static instance that is shared across translation units.
-     *
-     * @return Reference to the legacy fallback registry.
-     */
-    [[deprecated("Use constructor injection — pass DeviceRegistry& explicitly. "
-                 "This singleton is a transition shim (audit finding A1).")]] static DeviceRegistry&
-    instance();
-
-    /**
      * @brief Register a device model and its factory.
      *
      * Silently skips duplicate registrations (same VID+PID). Logs a
