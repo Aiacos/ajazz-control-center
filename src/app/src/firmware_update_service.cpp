@@ -86,47 +86,100 @@ FirmwareUpdateService::Family FirmwareUpdateService::familyForDevice(int coreDev
 }
 
 QStringList FirmwareUpdateService::vendorToolCandidatePaths(Family family) {
-    // Only the Stream Dock tool has documented, per-OS install paths
-    // (akp_dfu_protocol.md §9.3). Keyboard/mouse vendor tools ship inside
-    // driver bundles whose executable names we have not pinned, so they
-    // resolve to the download page instead of a guessed path.
+    // We launch the vendor's MAIN app (it auto-checks, downloads, decrypts and
+    // flashes), NOT the bare FirmwareUpgradeTool — launching the tool directly
+    // would make the user pick a firmware file by hand, which is exactly the
+    // manual step the maintainer wants gone. Only the Stream Dock app has a
+    // guessable, region-stable-ish install dir; the keyboard / mouse driver dirs
+    // are model-named (often CJK, e.g. "AJAZZ AK980 ... Keyboard"), so those
+    // resolve via the Uninstall registry (registryVendorToolPath) only.
     if (family != StreamDock) {
         return {};
     }
 #if defined(Q_OS_WIN)
     QStringList out;
-    for (auto const* base :
-         {"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"}) {
-        if (auto const dir = qEnvironmentVariable(base); !dir.isEmpty()) {
-            out << dir + QStringLiteral("\\Stream Dock AJAZZ\\FirmwareUpgradeTool.exe");
+    for (auto const* base : {"ProgramFiles", "ProgramFiles(x86)", "ProgramW6432"}) {
+        auto const dir = qEnvironmentVariable(base);
+        if (dir.isEmpty()) {
+            continue;
+        }
+        // The retail installer dir is "Stream Dock AJAZZ Global"; older/region
+        // builds drop the "Global" suffix. Try both.
+        for (auto const* sub : {"Stream Dock AJAZZ Global", "Stream Dock AJAZZ"}) {
+            out << dir + QLatin1Char('\\') + QString::fromLatin1(sub) +
+                       QStringLiteral("\\Stream Dock AJAZZ.exe");
         }
     }
     return out;
 #elif defined(Q_OS_MACOS)
-    return {QStringLiteral(
-        "/Applications/Stream Dock AJAZZ.app/Contents/Resources/FirmwareUpgradeTool.app")};
-#elif defined(Q_OS_LINUX)
-    return {QStringLiteral("/opt/Stream Dock AJAZZ/FirmwareUpgradeTool")};
+    return {QStringLiteral("/Applications/Stream Dock AJAZZ.app")};
 #else
+    // No vendor app exists on Linux (Stream Dock app is Windows/macOS only).
     return {};
 #endif
 }
 
+QString FirmwareUpdateService::vendorAppExeName(Family family) {
+    switch (family) {
+    case StreamDock:
+        return QStringLiteral("Stream Dock AJAZZ.exe");
+    case Keyboard:
+    case MouseAj159:
+    case MouseAj199:
+        return QStringLiteral("DeviceDriver.exe");
+    case Unknown:
+        break;
+    }
+    return {};
+}
+
 QString FirmwareUpdateService::registryVendorToolPath(Family family) {
 #if defined(Q_OS_WIN)
-    if (family != StreamDock) {
+    QString const exeName = vendorAppExeName(family);
+    if (exeName.isEmpty()) {
         return {};
     }
-    // The vendor records its install root under HKLM; the firmware tool sits
-    // alongside the main app there (akp_dfu_protocol.md §9.3).
-    QSettings reg(
-        QStringLiteral("HKEY_LOCAL_MACHINE\\SOFTWARE\\HotSpot\\StreamDock"),
-        QSettings::NativeFormat);
-    QString const root = reg.value(QStringLiteral("InstallPath")).toString();
-    if (root.isEmpty()) {
-        return {};
+    // Match the family's vendor app by its uninstall DisplayName. "Stream Dock
+    // AJAZZ" covers the Stream Dock app; the keyboard/mouse driver bundles read
+    // "AJAZZ <model> Keyboard" / "... Mouse".
+    auto const matches = [family](QString const& name) {
+        QString const n = name.toLower();
+        switch (family) {
+        case StreamDock:
+            return n.contains(QStringLiteral("stream dock"));
+        case Keyboard:
+            return n.contains(QStringLiteral("ajazz")) && n.contains(QStringLiteral("keyboard"));
+        case MouseAj159:
+        case MouseAj199:
+            return n.contains(QStringLiteral("ajazz")) && n.contains(QStringLiteral("mouse"));
+        case Unknown:
+            break;
+        }
+        return false;
+    };
+    // Scan both the native and WOW6432 uninstall hives for an InstallLocation.
+    for (auto const* root :
+         {"HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+          "HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"}) {
+        QSettings reg(QString::fromLatin1(root), QSettings::NativeFormat);
+        for (auto const& sub : reg.childGroups()) {
+            reg.beginGroup(sub);
+            QString const name = reg.value(QStringLiteral("DisplayName")).toString();
+            QString loc = reg.value(QStringLiteral("InstallLocation")).toString();
+            reg.endGroup();
+            if (loc.isEmpty() || !matches(name)) {
+                continue;
+            }
+            if (loc.endsWith(QLatin1Char('\\')) || loc.endsWith(QLatin1Char('/'))) {
+                loc.chop(1);
+            }
+            QString const exe = loc + QLatin1Char('\\') + exeName;
+            if (QFileInfo::exists(exe)) {
+                return exe;
+            }
+        }
     }
-    return root + QStringLiteral("\\FirmwareUpgradeTool.exe");
+    return {};
 #else
     Q_UNUSED(family)
     return {};
@@ -179,28 +232,30 @@ bool FirmwareUpdateService::launchVendorTool(Family family) {
     QString const path = detectedVendorToolPath(family);
     if (path.isEmpty()) {
         AJAZZ_LOG_INFO("firmware",
-                       "no vendor firmware tool installed for family {}; caller should fall back "
-                       "to the download page",
+                       "no vendor updater app installed for family {}; caller should fall back "
+                       "to the download/install page",
                        static_cast<int>(family));
         return false;
     }
 
-    // Let the app drop its HID handle before the vendor flasher claims the
-    // device (FIRMWARE-UPDATES.md §Launch vendor app).
+    // We launch the vendor's MAIN app, which performs the firmware update
+    // automatically (version check -> download -> decrypt -> flash) — the user
+    // does not pick a firmware file by hand. Drop our HID handle first so the
+    // vendor flasher can claim the device (FIRMWARE-UPDATES.md §Launch vendor app).
     Q_EMIT aboutToLaunchVendorTool(family);
 
     bool started = false;
 #if defined(Q_OS_MACOS)
-    // The tool is a .app bundle; launch it via `open` rather than exec'ing the
+    // macOS ships a .app bundle; launch it via `open` rather than exec'ing the
     // directory.
     started = QProcess::startDetached(QStringLiteral("open"), {path});
 #else
     started = QProcess::startDetached(path, {});
 #endif
     if (!started) {
-        AJAZZ_LOG_WARN("firmware", "failed to launch vendor tool {}", path.toStdString());
+        AJAZZ_LOG_WARN("firmware", "failed to launch vendor updater {}", path.toStdString());
     } else {
-        AJAZZ_LOG_INFO("firmware", "launched vendor firmware tool {}", path.toStdString());
+        AJAZZ_LOG_INFO("firmware", "launched vendor updater app {}", path.toStdString());
     }
     return started;
 }

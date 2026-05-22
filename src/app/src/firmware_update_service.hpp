@@ -189,6 +189,11 @@ private:
     /// (returns empty) on non-Windows / non-StreamDock.
     [[nodiscard]] static QString registryVendorToolPath(Family family);
 
+    /// Filename of the vendor's MAIN updater app per family (the one that
+    /// auto-checks/downloads/flashes), e.g. "Stream Dock AJAZZ.exe",
+    /// "DeviceDriver.exe". Empty for @ref Unknown.
+    [[nodiscard]] static QString vendorAppExeName(Family family);
+
     DeviceLookup m_lookup; ///< codename -> live backend; empty in tests.
 };
 

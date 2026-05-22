@@ -22,6 +22,7 @@
  */
 #include "firmware_update_service.hpp"
 
+#include <QFileInfo>
 #include <QString>
 #include <QUrl>
 
@@ -75,19 +76,20 @@ TEST_CASE("FirmwareUpdateService only Stream Dock has documented vendor-tool pat
                 .isEmpty());
 
     auto const sd = FirmwareUpdateService::vendorToolCandidatePaths(FirmwareUpdateService::StreamDock);
+    // We launch the vendor MAIN app (auto-updater), not the bare flasher.
 #if defined(Q_OS_WIN)
     REQUIRE_FALSE(sd.isEmpty());
     for (auto const& p : sd) {
-        REQUIRE(p.endsWith(QStringLiteral("FirmwareUpgradeTool.exe")));
+        REQUIRE(p.endsWith(QStringLiteral("Stream Dock AJAZZ.exe")));
         REQUIRE(p.contains(QStringLiteral("Stream Dock AJAZZ")));
     }
 #elif defined(Q_OS_MACOS)
     REQUIRE(sd.size() == 1);
     REQUIRE(sd.first().contains(QStringLiteral(".app")));
     REQUIRE(sd.first().contains(QStringLiteral("Stream Dock AJAZZ")));
-#elif defined(Q_OS_LINUX)
-    REQUIRE(sd.size() == 1);
-    REQUIRE(sd.first() == QStringLiteral("/opt/Stream Dock AJAZZ/FirmwareUpgradeTool"));
+#else
+    // No vendor app on Linux — empty (the device matrix has no Linux updater).
+    REQUIRE(sd.isEmpty());
 #endif
 }
 
@@ -111,22 +113,26 @@ TEST_CASE("FirmwareUpdateService familyForDevice splits the mouse dialects by co
     REQUIRE(F::familyForDevice(3, QStringLiteral("AJ199")) == F::MouseAj199); // case-insensitive
 }
 
-TEST_CASE("FirmwareUpdateService reports tool not installed on a bare machine", "[firmware]") {
-    // CI runners + dev boxes without the vendor app installed: detection
-    // must return empty / false rather than a phantom path.
+TEST_CASE("FirmwareUpdateService vendor-app detection is consistent", "[firmware]") {
+    // Environment-independent invariant: detection probes the real registry +
+    // filesystem, so what's "installed" varies by machine (a dev box may have
+    // the vendor apps, CI does not). We only pin the contract that
+    // isVendorToolInstalled(f) == (detectedVendorToolPath(f) is non-empty), and
+    // that any reported path actually exists on disk.
     FirmwareUpdateService const svc(nullptr);
-    auto const path = svc.detectedVendorToolPath(FirmwareUpdateService::StreamDock);
-    if (path.isEmpty()) {
-        REQUIRE_FALSE(svc.isVendorToolInstalled(FirmwareUpdateService::StreamDock));
-    } else {
-        // If a developer happens to have the tool installed, the contract is
-        // simply that the reported path exists on disk.
-        REQUIRE(svc.isVendorToolInstalled(FirmwareUpdateService::StreamDock));
+    for (auto const family : {FirmwareUpdateService::StreamDock,
+                              FirmwareUpdateService::Keyboard,
+                              FirmwareUpdateService::MouseAj159,
+                              FirmwareUpdateService::MouseAj199,
+                              FirmwareUpdateService::Unknown}) {
+        auto const path = svc.detectedVendorToolPath(family);
+        REQUIRE(svc.isVendorToolInstalled(family) == !path.isEmpty());
+        if (!path.isEmpty()) {
+            REQUIRE(QFileInfo::exists(path));
+        }
     }
-
-    // Families with no documented tool are never "installed".
-    REQUIRE_FALSE(svc.isVendorToolInstalled(FirmwareUpdateService::Keyboard));
-    REQUIRE_FALSE(svc.isVendorToolInstalled(FirmwareUpdateService::MouseAj159));
+    // Unknown never resolves to anything.
+    REQUIRE(svc.detectedVendorToolPath(FirmwareUpdateService::Unknown).isEmpty());
 }
 
 TEST_CASE("FirmwareUpdateService runningFirmwareVersion is empty without a lookup", "[firmware]") {

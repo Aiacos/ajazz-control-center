@@ -63,27 +63,32 @@ Item {
             wrapMode: Text.WordWrap
             color: Theme.fgMuted
             font.pixelSize: Theme.fontSm
-            text: qsTr("%1 is a clean-room reimplementation — it does not flash your device itself. "
-                       + "The firmware update is performed by the official AJAZZ vendor tool.")
-                  .arg(Branding.productName)
+            text: root.toolInstalled
+                ? qsTr("%1 doesn't flash the device itself. Updating launches the official "
+                       + "AJAZZ app, which checks, downloads and flashes the firmware "
+                       + "automatically — we just hand off the device to it.")
+                      .arg(Branding.productName)
+                : qsTr("%1 doesn't flash the device itself — the official AJAZZ app does. "
+                       + "Install it to update this device's firmware.")
+                      .arg(Branding.productName)
         }
 
-        // Primary action: launch the installed vendor firmware tool. Shown only
-        // when the tool is actually present on this machine.
+        // Primary action: hand off to the vendor's MAIN app, which performs the
+        // whole update automatically. Shown only when that app is installed.
         PrimaryButton {
             Layout.topMargin: Theme.spacingSm
             visible: root.toolInstalled
-            text: qsTr("Update with vendor tool")
-            accessibleDescription: qsTr("Closes this app's connection to the device, then starts the installed vendor firmware tool")
+            text: qsTr("Update firmware")
+            accessibleDescription: qsTr("Closes this app's connection to the device, then launches the official AJAZZ app, which updates the firmware automatically")
             onClicked: FirmwareUpdate.launchVendorTool(root.fwFamily)
         }
 
-        // Fallback when the vendor tool is not installed: take the user to the
-        // official firmware download page. (Auto-download replaces this next.)
+        // Fallback when the vendor app is not installed: send the user to the
+        // official page to install it.
         SecondaryButton {
             visible: !root.toolInstalled
-            text: qsTr("Open firmware download page")
-            accessibleDescription: qsTr("Opens the official AJAZZ firmware download page in your browser")
+            text: qsTr("Get the AJAZZ app")
+            accessibleDescription: qsTr("Opens the official AJAZZ download page so you can install the app that updates firmware")
             onClicked: FirmwareUpdate.openFirmwareDownloadPage(root.fwFamily)
         }
 
