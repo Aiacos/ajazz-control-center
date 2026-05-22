@@ -21,10 +21,12 @@
  *   - `(version 1)` — required first form.
  *   - `(deny default)` — start from a closed posture.
  *   - Allow the bare minimum the python3 interpreter needs to start:
- *     process exec/fork, signal-self, sysctl-read, and unrestricted
- *     file-read* (so /usr/bin/python3 + the standard library are
- *     reachable). Matches @ref LinuxBwrapSandbox's `--ro-bind / /`
- *     posture.
+ *     process exec/fork, signal-self, sysctl-read, and `file-read*`
+ *     SCOPED to a minimal allowlist — `/usr`, `/System`, `/Library`,
+ *     `/etc`, `/private/etc`, plus each caller-supplied readable path
+ *     and the child script's parent. The user's `$HOME` is NOT
+ *     readable (CWE-200). Matches @ref LinuxBwrapSandbox's minimal
+ *     read-only bind allowlist.
  *   - Allow file-write* only under the user's @c $TMPDIR, mirroring
  *     bwrap's `--tmpfs /tmp`.
  *
@@ -69,6 +71,7 @@
 #include <filesystem>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace ajazz::plugins {
 
@@ -93,6 +96,14 @@ public:
      * @param grantedPermissions Strings from the
      *        @c Ajazz.Permissions enum that the host is willing to
      *        grant the child. Unknown strings are silently ignored.
+     * @param readablePaths Extra host directories to allow
+     *        `file-read*` on, on top of the system baseline (`/usr`,
+     *        `/System`, `/Library`, `/etc`). Typically the python
+     *        package dir(s) and the user-plugins dir, so the child can
+     *        `import ajazz_plugins` and load plugin code. Empty,
+     *        non-existent, or duplicate entries are skipped. These are
+     *        the ONLY non-system subpaths exposed: `$HOME` is not
+     *        readable (CWE-200).
      * @param sandboxExecExecutable Optional override for the
      *        @c sandbox-exec binary path. Empty (default) checks
      *        @c /usr/bin/sandbox-exec at construction time. Tests
@@ -100,6 +111,7 @@ public:
      *        being present.
      */
     explicit MacosSandboxExecSandbox(std::set<std::string> grantedPermissions,
+                                     std::vector<std::filesystem::path> readablePaths = {},
                                      std::string sandboxExecExecutable = {});
 
     /// True if `sandbox-exec` was located at construction time.
@@ -121,7 +133,10 @@ public:
     /// The S-expression profile string this sandbox would pass to
     /// `sandbox-exec -p`. Exposed for unit tests so they can pin the
     /// policy text without having to round-trip through `decorate()`.
-    /// The string is computed once at construction and cached.
+    /// The string is computed once at construction and cached. It
+    /// already contains the system + @c readablePaths `file-read*`
+    /// subpath rules; `decorate()` appends one more subpath rule for
+    /// the script's parent directory (only known per-spawn).
     [[nodiscard]] std::string const& profile() const noexcept { return m_profile; }
 
     [[nodiscard]] DecoratedSpawn decorate(std::string const& pythonExe,
@@ -129,8 +144,9 @@ public:
 
 private:
     std::set<std::string> m_grantedPermissions;
-    std::string m_sandboxExecExecutable; ///< empty if not found
-    std::string m_profile;               ///< cached S-expression profile
+    std::vector<std::filesystem::path> m_readablePaths; ///< extra file-read* subpaths
+    std::string m_sandboxExecExecutable;                ///< empty if not found
+    std::string m_profile;                              ///< cached S-expression profile
     bool m_hasSandboxExec{false};
 };
 

@@ -11,7 +11,16 @@
  *
  * Default profile (empty permissions set):
  *
- *   - `--ro-bind / /` — host filesystem mounted read-only
+ *   - A minimal read-only allowlist instead of binding the host root:
+ *     `--ro-bind /usr /usr` plus `--ro-bind-try` for `/lib`, `/lib64`,
+ *     `/bin`, `/sbin`, `/etc` (the `-try` variants tolerate the dir
+ *     being absent on merged-`/usr` distros). Each caller-supplied
+ *     readable path (the python package dir, the user-plugins dir) and
+ *     the child script's parent directory are bound read-only too. The
+ *     user's `$HOME`, `/root`, `/mnt`, `/media` and `/run/user`
+ *     (except the explicit DBus socket) are NEVER bound — a plugin
+ *     cannot read `~/.ssh`, browser credentials or `~/.config` secrets
+ *     (CWE-200).
  *   - `--tmpfs /tmp` — writable scratch
  *   - `--proc /proc` + `--dev /dev` — fresh kernel filesystems
  *   - `--unshare-pid` / `--unshare-ipc` / `--unshare-uts`
@@ -58,6 +67,7 @@
 #include <filesystem>
 #include <set>
 #include <string>
+#include <vector>
 
 namespace ajazz::plugins {
 
@@ -82,12 +92,21 @@ public:
      * @param grantedPermissions Strings from the
      *        @c Ajazz.Permissions enum that the host is willing to
      *        grant the child. Unknown strings are silently ignored.
+     * @param readablePaths Extra host directories to bind read-only
+     *        into the sandbox on top of the system baseline
+     *        (`/usr`, `/lib`, `/etc`, ...). Typically the python
+     *        package dir(s) from @c OutOfProcessHostConfig::pythonPath
+     *        and the user-plugins search dir, so the child can
+     *        `import ajazz_plugins` and load plugin code. Empty,
+     *        non-existent, or duplicate entries are skipped. These are
+     *        the ONLY non-system paths exposed: `$HOME` stays hidden.
      * @param bwrapExecutable Optional override for the @c bwrap
      *        executable path. Empty (default) means resolve via
      *        @c PATH at construction time. Tests pass an explicit
      *        path so they don't depend on the dev machine layout.
      */
     explicit LinuxBwrapSandbox(std::set<std::string> grantedPermissions,
+                               std::vector<std::filesystem::path> readablePaths = {},
                                std::string bwrapExecutable = {});
 
     /// True if `bwrap` was located at construction time. False puts
@@ -110,7 +129,8 @@ public:
 
 private:
     std::set<std::string> m_grantedPermissions;
-    std::string m_bwrapExecutable; ///< empty if not found
+    std::vector<std::filesystem::path> m_readablePaths; ///< extra read-only binds
+    std::string m_bwrapExecutable;                      ///< empty if not found
     bool m_hasBwrap{false};
     std::string m_userBusPath; ///< `/run/user/<uid>/bus`, empty if not bind-able
 };

@@ -29,10 +29,19 @@
 #include "ajazz/plugins/manifest_signer.hpp"
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
 
+#if defined(__linux__)
+#include "ajazz/plugins/linux_bwrap_sandbox.hpp"
+#elif defined(__APPLE__)
+#include "ajazz/plugins/macos_sandbox_exec_sandbox.hpp"
+#endif
+
 #include <QDir>
 #include <QStandardPaths>
 
 #include <exception>
+#include <filesystem>
+#include <set>
+#include <vector>
 #endif
 
 namespace ajazz::app {
@@ -246,16 +255,44 @@ void Application::initPluginHost() {
     verifier.trustedPublishersFile = AJAZZ_PLUGIN_TRUST_ROOTS;
     config.manifestVerifier = std::move(verifier);
 
+    // User-level plugin search path: XDG `AppLocalDataLocation`, e.g.
+    // `~/.local/share/ajazz-control-center/plugins` on Linux. Created
+    // lazily so a fresh checkout doesn't error on the first launch.
+    // Computed BEFORE the sandbox so it can be added to the read-only
+    // allowlist (the child must be able to read plugin code it loads).
+    QString const userPluginsQ =
+        QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) +
+        QStringLiteral("/plugins");
+    QDir().mkpath(userPluginsQ);
+
+    // SECURITY (CWE-200): give the sandbox an explicit read-only
+    // allowlist instead of leaving it unset (which fell through to the
+    // no-op sandbox — plugins ran with FULL host authority) or binding
+    // the host root. The child needs exactly: the python package dir
+    // (so `import ajazz_plugins` resolves) and the user-plugins dir (so
+    // it can load plugin code). The sandbox adds the system trees and
+    // the child-script parent on top; `$HOME` stays hidden.
+    [[maybe_unused]] std::vector<std::filesystem::path> const readablePaths{
+        std::filesystem::path{AJAZZ_PLUGIN_PYTHONPATH},
+        std::filesystem::path{userPluginsQ.toStdString()},
+    };
+#if defined(__linux__)
+    // LinuxBwrapSandbox falls back to a no-op passthrough when `bwrap`
+    // is not on PATH, so wiring it unconditionally is safe on systems
+    // without bubblewrap.
+    config.sandbox =
+        std::make_unique<plugins::LinuxBwrapSandbox>(std::set<std::string>{}, readablePaths);
+#elif defined(__APPLE__)
+    config.sandbox =
+        std::make_unique<plugins::MacosSandboxExecSandbox>(std::set<std::string>{}, readablePaths);
+#endif
+    // Windows: WindowsAppContainerSandbox requires capability SIDs that
+    // are out of scope for this fix; leave config.sandbox unset (no-op)
+    // until the AppContainer wiring lands.
+
     try {
         auto host = std::make_unique<plugins::OutOfProcessPluginHost>(std::move(config));
 
-        // User-level plugin search path: XDG `AppLocalDataLocation`, e.g.
-        // `~/.local/share/ajazz-control-center/plugins` on Linux. Created
-        // lazily so a fresh checkout doesn't error on the first launch.
-        QString const userPluginsQ =
-            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) +
-            QStringLiteral("/plugins");
-        QDir().mkpath(userPluginsQ);
         host->addSearchPath(userPluginsQ.toStdString());
         host->loadAll();
 

@@ -22,8 +22,10 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <unistd.h>
 
@@ -121,9 +123,10 @@ std::string discoverUserBus() {
 } // namespace
 
 LinuxBwrapSandbox::LinuxBwrapSandbox(std::set<std::string> grantedPermissions,
+                                     std::vector<std::filesystem::path> readablePaths,
                                      std::string bwrapExecutable)
     : m_grantedPermissions(std::move(grantedPermissions)),
-      m_bwrapExecutable(std::move(bwrapExecutable)) {
+      m_readablePaths(std::move(readablePaths)), m_bwrapExecutable(std::move(bwrapExecutable)) {
     if (m_bwrapExecutable.empty()) {
         m_bwrapExecutable = findOnPath("bwrap");
     } else {
@@ -157,18 +160,68 @@ DecoratedSpawn LinuxBwrapSandbox::decorate(std::string const& pythonExe,
     auto& argv = out.args;
     argv.push_back(m_bwrapExecutable);
 
-    // Filesystem layout: read-only host root, fresh /proc + /dev,
-    // writable tmpfs at /tmp. The host's PYTHONPATH still resolves
-    // because the project sources are reachable through `/`.
+    // Filesystem layout: a MINIMAL read-only allowlist instead of
+    // binding the host root. Binding `/` read-only (the pre-CWE-200
+    // posture) still let a plugin read `~/.ssh`, browser credentials,
+    // and `~/.config` secrets — the filesystem was readable, only
+    // un-writable. We now expose only what the python interpreter and
+    // the plugin code actually need:
+    //
+    //   - the system tree (`/usr`, and `-try` for the legacy split-/usr
+    //     dirs + `/etc` for ld.so.cache, SSL certs, resolv.conf);
+    //   - each caller-supplied readable path (the python package dir,
+    //     the user-plugins dir);
+    //   - the child script's parent directory.
+    //
+    // `$HOME`, `/root`, `/mnt`, `/media`, and `/run/user/*` (bar the
+    // explicit DBus socket bound below) are deliberately NEVER bound.
     argv.emplace_back("--ro-bind");
-    argv.emplace_back("/");
-    argv.emplace_back("/");
+    argv.emplace_back("/usr");
+    argv.emplace_back("/usr");
+    for (char const* dir : {"/lib", "/lib64", "/bin", "/sbin", "/etc"}) {
+        // `--ro-bind-try` does not fail when the source is absent — on
+        // merged-/usr distros `/lib` etc. are symlinks into /usr (still
+        // resolvable) while non-merged layouts have them as real dirs.
+        argv.emplace_back("--ro-bind-try");
+        argv.emplace_back(dir);
+        argv.emplace_back(dir);
+    }
+
     argv.emplace_back("--proc");
     argv.emplace_back("/proc");
     argv.emplace_back("--dev");
     argv.emplace_back("/dev");
     argv.emplace_back("--tmpfs");
     argv.emplace_back("/tmp");
+
+    // Caller-supplied readable paths + the script's parent directory.
+    // Deduplicate so a path that equals the script parent (or appears
+    // twice in the config) is bound once. Empty paths are skipped: an
+    // empty source would make bwrap reject the whole launch.
+    //
+    // These binds come AFTER `--tmpfs /tmp`: bwrap applies mounts in
+    // argv order, so a readable path located under `/tmp` (or any
+    // earlier mount) must be bound last or the later overlay would
+    // shadow it.
+    {
+        std::set<std::string> seen;
+        auto bindReadable = [&](std::filesystem::path const& p) {
+            if (p.empty()) {
+                return;
+            }
+            std::string const s = p.string();
+            if (!seen.insert(s).second) {
+                return;
+            }
+            argv.emplace_back("--ro-bind");
+            argv.push_back(s);
+            argv.push_back(s);
+        };
+        for (auto const& p : m_readablePaths) {
+            bindReadable(p);
+        }
+        bindReadable(scriptPath.parent_path());
+    }
 
     // Lifecycle: detach controlling terminal, die when host dies.
     // --die-with-parent is the kill-switch the host relies on if it

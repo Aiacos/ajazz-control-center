@@ -37,6 +37,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <filesystem>
 #include <set>
 #include <string>
 #include <string_view>
@@ -61,7 +62,15 @@ bool profileContains(std::string const& profile, std::string_view rule) {
 /// "hasSandboxExec == true" branch on Linux runners without needing
 /// to actually invoke macOS-only `sandbox-exec`.
 ajazz::plugins::MacosSandboxExecSandbox makeSandbox(std::set<std::string> permissions) {
-    return ajazz::plugins::MacosSandboxExecSandbox{std::move(permissions), "/bin/sh"};
+    return ajazz::plugins::MacosSandboxExecSandbox{std::move(permissions), {}, "/bin/sh"};
+}
+
+/// As @ref makeSandbox but with an explicit read-only allowlist.
+ajazz::plugins::MacosSandboxExecSandbox
+makeSandboxWithReadable(std::set<std::string> permissions,
+                        std::vector<std::filesystem::path> readablePaths) {
+    return ajazz::plugins::MacosSandboxExecSandbox{
+        std::move(permissions), std::move(readablePaths), "/bin/sh"};
 }
 
 } // namespace
@@ -70,7 +79,7 @@ TEST_CASE("MacosSandboxExecSandbox: passthrough when sandbox-exec absent",
           "[plugins][sandbox][macos]") {
     // Forced-empty path with a non-executable target → passthrough,
     // regardless of whether the host machine is macOS or Linux.
-    ajazz::plugins::MacosSandboxExecSandbox sandbox{{}, "/nonexistent/sandbox-exec"};
+    ajazz::plugins::MacosSandboxExecSandbox sandbox{{}, {}, "/nonexistent/sandbox-exec"};
     REQUIRE_FALSE(sandbox.hasSandboxExec());
     auto const spawn = sandbox.decorate("python3", "/tmp/host_child.py");
     REQUIRE(spawn.executable == "python3");
@@ -88,7 +97,14 @@ TEST_CASE("MacosSandboxExecSandbox: default profile is most-restrictive",
     REQUIRE(profileContains(profile, "(allow process-fork)"));
     REQUIRE(profileContains(profile, "(allow process-exec*)"));
     REQUIRE(profileContains(profile, "(allow signal (target self))"));
-    REQUIRE(profileContains(profile, "(allow file-read*)"));
+    // file-read* is SCOPED to a system allowlist, NOT the former
+    // blanket `(allow file-read*)` (which let plugins read $HOME —
+    // CWE-200). The blanket form (the rule terminated immediately by a
+    // newline) must be gone; the scoped subpath form must be present.
+    REQUIRE_FALSE(profileContains(profile, "(allow file-read*)\n"));
+    REQUIRE(profileContains(profile, "(allow file-read* (subpath \"/usr\")"));
+    REQUIRE(profileContains(profile, "(subpath \"/System\")"));
+    REQUIRE(profileContains(profile, "(subpath \"/Library\")"));
     REQUIRE(profileContains(profile, "(allow file-write* (subpath \"/private/var/folders\")"));
     // `(allow network*)` must NOT be present in the default profile —
     // its absence is what enforces "no network without permission".
@@ -107,6 +123,29 @@ TEST_CASE("MacosSandboxExecSandbox: default profile is most-restrictive",
     REQUIRE(argvContains(spawn.args, "-p"));
     REQUIRE(spawn.args.at(spawn.args.size() - 2) == "python3");
     REQUIRE(spawn.args.back() == "/tmp/host_child.py");
+}
+
+TEST_CASE("MacosSandboxExecSandbox: readable allowlist scopes file-read to supplied paths",
+          "[plugins][sandbox][macos]") {
+    auto const sandbox =
+        makeSandboxWithReadable({}, {"/opt/ajazz/python", "/var/lib/ajazz/plugins"});
+
+    // The cached profile carries the readable subpaths but NOT the
+    // per-spawn script parent.
+    auto const& profile = sandbox.profile();
+    REQUIRE(profileContains(profile, "(subpath \"/opt/ajazz/python\")"));
+    REQUIRE(profileContains(profile, "(subpath \"/var/lib/ajazz/plugins\")"));
+    REQUIRE_FALSE(profileContains(profile, "(allow file-read*)\n"));
+
+    // decorate() appends a file-read* rule for the script's parent dir.
+    auto const spawn = sandbox.decorate("python3", "/opt/ajazz/host/_host_child.py");
+    // The profile string lives at args[2] (after argv[0] and "-p").
+    REQUIRE(spawn.args.size() >= 3);
+    std::string const& spawnProfile = spawn.args.at(2);
+    REQUIRE(spawnProfile.find("(allow file-read* (subpath \"/opt/ajazz/host\"))") !=
+            std::string::npos);
+    // $HOME is never granted.
+    REQUIRE(spawnProfile.find("(subpath \"/home") == std::string::npos);
 }
 
 TEST_CASE("MacosSandboxExecSandbox: network permissions enable (allow network*)",

@@ -31,8 +31,10 @@
 #include <array>
 #include <cstdlib>
 #include <filesystem>
+#include <set>
 #include <string>
 #include <string_view>
+#include <vector>
 
 #include <unistd.h>
 
@@ -85,10 +87,43 @@ bool grantsMachLookup(std::set<std::string> const& granted) {
     return false;
 }
 
+/// Escape a path so it is a safe S-expression string literal. The
+/// TinyScheme reader treats `"` as the string terminator and `\` as
+/// an escape introducer, so both must be backslash-escaped. Other
+/// bytes (including spaces and UTF-8) pass through verbatim — they are
+/// legal inside a quoted literal.
+std::string escapeSexpr(std::string const& raw) {
+    std::string out;
+    out.reserve(raw.size() + 2);
+    for (char const c : raw) {
+        if (c == '\\' || c == '"') {
+            out.push_back('\\');
+        }
+        out.push_back(c);
+    }
+    return out;
+}
+
+/// Emit a `(subpath "...")` clause for a single path, skipping empties
+/// and duplicates (tracked via @p seen). Appends to @p out.
+void appendSubpath(std::string& out, std::set<std::string>& seen, std::filesystem::path const& p) {
+    if (p.empty()) {
+        return;
+    }
+    std::string const s = p.string();
+    if (!seen.insert(s).second) {
+        return;
+    }
+    out += " (subpath \"";
+    out += escapeSexpr(s);
+    out += "\")";
+}
+
 /// Build the inline S-expression sandbox profile from the granted
-/// permission set. The result is what we hand to
-/// `sandbox-exec -p <profile> ...` at decoration time.
-std::string buildProfile(std::set<std::string> const& granted) {
+/// permission set + the extra readable paths. The result is what we
+/// hand to `sandbox-exec -p <profile> ...` at decoration time.
+std::string buildProfile(std::set<std::string> const& granted,
+                         std::vector<std::filesystem::path> const& readablePaths) {
     std::string out;
     // Most-restrictive baseline. The order matters: `(version 1)`
     // MUST be first; `(deny default)` MUST come before any allow rule
@@ -105,12 +140,27 @@ std::string buildProfile(std::set<std::string> const& granted) {
     out += "(allow signal (target self))\n";
 
     // sysctl-read is needed for libc / CoreFoundation init. file-read*
-    // is broad on purpose — it mirrors `--ro-bind / /` on Linux. Future
-    // hardening can scope it to (allow file-read* (subpath "/usr")
-    // (subpath "/System") (subpath "/Library")) once we measure what
-    // CPython actually opens.
+    // is SCOPED to a minimal allowlist instead of the former blanket
+    // `(allow file-read*)`, which (mirroring Linux's old `--ro-bind / /`)
+    // let a plugin read `~/.ssh`, browser credentials and `~/.config`
+    // secrets (CWE-200). We expose only the system trees CPython + the
+    // dynamic loader need, plus each caller-supplied readable path (the
+    // python package dir, the user-plugins dir). The script's parent is
+    // appended per-spawn in decorate(). `$HOME` is deliberately absent.
     out += "(allow sysctl-read)\n";
-    out += "(allow file-read*)\n";
+    out += "(allow file-read*";
+    out += " (subpath \"/usr\")";
+    out += " (subpath \"/System\")";
+    out += " (subpath \"/Library\")";
+    out += " (subpath \"/private/etc\")";
+    out += " (subpath \"/etc\")";
+    {
+        std::set<std::string> seen;
+        for (auto const& p : readablePaths) {
+            appendSubpath(out, seen, p);
+        }
+    }
+    out += ")\n";
 
     // Writable scratch under the user's $TMPDIR (macOS's per-user
     // temp dir; Apple discourages /tmp). The runtime expansion
@@ -144,8 +194,10 @@ std::string buildProfile(std::set<std::string> const& granted) {
 } // namespace
 
 MacosSandboxExecSandbox::MacosSandboxExecSandbox(std::set<std::string> grantedPermissions,
+                                                 std::vector<std::filesystem::path> readablePaths,
                                                  std::string sandboxExecExecutable)
     : m_grantedPermissions(std::move(grantedPermissions)),
+      m_readablePaths(std::move(readablePaths)),
       m_sandboxExecExecutable(std::move(sandboxExecExecutable)) {
     if (m_sandboxExecExecutable.empty()) {
         // Default lookup: the canonical macOS path. We deliberately
@@ -164,7 +216,7 @@ MacosSandboxExecSandbox::MacosSandboxExecSandbox(std::set<std::string> grantedPe
         }
     }
     m_hasSandboxExec = !m_sandboxExecExecutable.empty();
-    m_profile = buildProfile(m_grantedPermissions);
+    m_profile = buildProfile(m_grantedPermissions, m_readablePaths);
 }
 
 DecoratedSpawn MacosSandboxExecSandbox::decorate(std::string const& pythonExe,
@@ -189,8 +241,20 @@ DecoratedSpawn MacosSandboxExecSandbox::decorate(std::string const& pythonExe,
     // concerns post-fork. The profile is precomputed at construction
     // time so this argv assembly is cheap and allocation-free
     // beyond the trivial vector growth.
+    // The cached profile already carries the system + readablePaths
+    // file-read* rules. Append one more `(allow file-read* ...)` form
+    // scoped to the script's parent directory — only known per-spawn —
+    // so the child can actually read the host child script it execs.
+    std::string profile = m_profile;
+    auto const scriptParent = scriptPath.parent_path();
+    if (!scriptParent.empty()) {
+        profile += "(allow file-read* (subpath \"";
+        profile += escapeSexpr(scriptParent.string());
+        profile += "\"))\n";
+    }
+
     argv.emplace_back("-p");
-    argv.push_back(m_profile);
+    argv.push_back(std::move(profile));
     argv.push_back(pythonExe);
     argv.push_back(scriptPath.string());
     return out;
