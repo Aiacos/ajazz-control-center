@@ -246,13 +246,15 @@ TEST_CASE("akp05 clearTouchStrip emits a DRA header + chunks + ULEND", "[akp05][
 TEST_CASE("akp05 open() probes and caches the firmware version", "[akp05][open][vendor-re]") {
     auto owned = std::make_unique<tests::MockTransport>();
     auto* observer = owned.get();
-    // Queue the GET_REPORT response the real AKP05E returns: a leading report-id
-    // byte followed by the ASCII version string, zero-padded.
+    // The real AKP05E returns the version via a HID GET_FEATURE_REPORT on report
+    // id 0x01 with NO preceding write (mirajazz read_firmware_version_from_raw_device,
+    // github.com/4ndv/mirajazz). Response: a leading report-id byte followed by
+    // the ASCII version string, zero-padded.
     std::vector<std::uint8_t> verResp{0x00};
     for (char const c : std::string{"V3.AKP05E.01.007"}) {
         verResp.push_back(static_cast<std::uint8_t>(c));
     }
-    verResp.resize(64, 0x00);
+    verResp.resize(20, 0x00); // the probe reads into a 20-byte buffer
     observer->enqueueReadFeature(verResp);
 
     auto dev =
@@ -263,15 +265,8 @@ TEST_CASE("akp05 open() probes and caches the firmware version", "[akp05][open][
     dev->open();
     CHECK(dev->firmwareVersion() == "V3.AKP05E.01.007");
 
-    // The probe must have emitted a CRT VER request on the OUT channel first.
-    auto const& writes = observer->writes();
-    REQUIRE(!writes.empty());
-    auto const& ver = writes.front();
-    REQUIRE(ver.size() == streamdeck::akp05::PacketSize);
-    CHECK(ver[0] == 0x43); // C
-    CHECK(ver[1] == 0x52); // R
-    CHECK(ver[2] == 0x54); // T
-    CHECK(ver[5] == 0x56); // V
-    CHECK(ver[6] == 0x45); // E
-    CHECK(ver[7] == 0x52); // R
+    // The version is pulled purely via GET_FEATURE_REPORT — no CRT VER OUT write
+    // is emitted by the probe (it was the wrong method and never elicited a reply
+    // on real hardware). On Windows hidapi this GET_FEATURE_REPORT returns nothing
+    // (mirajazz #10), but the mock supplies it, so the parse path is exercised here.
 }

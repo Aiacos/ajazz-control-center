@@ -111,6 +111,11 @@ Rectangle {
                     modelName: model
                     deviceCodename: codename
                     deviceConnected: connected
+                    // Per-family leading icon (DeviceFamily int: 1=StreamDeck,
+                    // 2=Keyboard, 3=Mouse). Consumer property is `deviceFamily`
+                    // (NOT `family`) to dodge the QML self-binding trap — same
+                    // naming convention as deviceCodename / deviceConnected above.
+                    deviceFamily: family
                     hasClockCapability: deviceHasClock
                     hasBatteryCapability: deviceHasBattery
                     // Phase 8 DEVICES-02: maturity tier surfaced as tooltip.

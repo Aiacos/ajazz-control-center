@@ -76,6 +76,10 @@ qt_add_executable(
     # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables under
     # Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
     src/app_update_service.cpp
+    # Vendor firmware-update deep-link (FirmwareUpdate QML singleton). Read-only / delegate-only per
+    # docs/architecture/FIRMWARE-UPDATES.md: detects + launches the vendor firmware tool, or opens
+    # the per-family download page. No in-app flashing.
+    src/firmware_update_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -194,7 +198,8 @@ set_source_files_properties(
 # on the light theme — no per-theme duplicates. Three groups: glyphs/ (feature icons), actions/
 # (key-assignment actions), devices/ (per-family illustrations). Aliased under icons/ so QML loads
 # them via qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg. CONFIGURE_DEPENDS re-globs when
-# an SVG is added/removed so contributors just drop a file in.
+# an SVG is added/removed so contributors just drop a file in. (The per-family DeviceRow icon and
+# the DeviceImage SVG fallback both load from icons/devices/ here.)
 set(ACC_UI_ICONS "")
 file(GLOB _acc_ui_glyphs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/glyphs/*.svg)
 file(GLOB _acc_ui_actions CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/actions/*.svg)
@@ -218,6 +223,22 @@ foreach(icon_file IN LISTS _acc_ui_devices)
     )
 endforeach()
 list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
+
+# Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized (~256px) vendor
+# product shots, fetched once and bundled so the device editor header shows a real picture offline —
+# no runtime CDN dependency. Aliased under icons/devices/products/ →
+# qrc:/qt/qml/AjazzControlCenter/icons/devices/products/<name>. DeviceImage.qml resolves a codename
+# to one of these; missing models fall back to the per-family SVG (loaded from icons/devices/
+# above).
+set(ACC_DEVICE_PRODUCTS "")
+file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
+     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.png
+     ${CMAKE_SOURCE_DIR}/resources/devices/products/*.jpg
+)
+foreach(_f IN LISTS ACC_DEVICE_PRODUCTS)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${_n})
+endforeach()
 
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
 # `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
@@ -296,8 +317,10 @@ qt_add_qml_module(
               qml/components/AppHeader.qml
               qml/components/BatteryIndicator.qml
               qml/components/Card.qml
+              qml/components/DeviceImage.qml
               qml/components/DeviceRow.qml
               qml/components/EmptyState.qml
+              qml/components/FirmwarePanel.qml
               qml/components/EncoderCard.qml
               qml/components/KeyCell.qml
               qml/components/PageHeader.qml
@@ -317,6 +340,7 @@ qt_add_qml_module(
               ${ACC_STREAMDOCK_FALLBACK}
               ${ACC_OPENDECK_FALLBACK}
               ${ACC_UI_ICONS}
+              ${ACC_DEVICE_PRODUCTS}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

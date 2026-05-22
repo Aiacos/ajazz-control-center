@@ -32,6 +32,13 @@ ItemDelegate {
     property string modelName: ""
     property string deviceCodename: ""
     property bool deviceConnected: false
+    // Core DeviceFamily int (0=Unknown, 1=StreamDeck, 2=Keyboard, 3=Mouse — see
+    // src/core/include/ajazz/core/device.hpp). Drives the per-family leading icon.
+    // Named `deviceFamily` (NOT `family`) to dodge the QML self-binding trap: if it
+    // shared the model role name `family`, the consumer's `family: family` binding in
+    // DeviceList.qml would resolve to this property's own default (0). Same naming
+    // convention rationale as deviceCodename / deviceConnected.
+    property int deviceFamily: 0
     // Phase 5 Plan 05-06: gates the per-row "Sync time" ToolButton + glyph.
     // Bound by DeviceList.qml from `model.deviceHasClock` (DeviceModel
     // HasClockRole, Plan 05-05). The property name is `hasClockCapability`
@@ -94,6 +101,33 @@ ItemDelegate {
 
     contentItem: RowLayout {
         spacing: Theme.spacingSm
+
+        // Per-family device-type icon at the leading edge. Source selected by
+        // deviceFamily (DeviceFamily int): 2→keyboard, 3→mouse, 1/0/else→streamdock
+        // as a neutral default. The three SVGs are clean-room originals brought onto
+        // this branch from main's icon set, aliased under icons/devices/ by the QML
+        // module (qrc:/qt/qml/AjazzControlCenter/icons/devices/<name>.svg). 24px square,
+        // vertically centred. Rendered at a smaller opacity for offline rows via the
+        // row-level background opacity already applied to the whole contentItem.
+        Image {
+            id: familyIcon
+            Layout.alignment: Qt.AlignVCenter
+            Layout.preferredWidth: 24
+            Layout.preferredHeight: 24
+            fillMode: Image.PreserveAspectFit
+            sourceSize.width: 24
+            sourceSize.height: 24
+            mipmap: true
+            source: {
+                var base = "qrc:/qt/qml/AjazzControlCenter/icons/devices/";
+                if (root.deviceFamily === 2) return base + "device-keyboard.svg";
+                if (root.deviceFamily === 3) return base + "device-mouse.svg";
+                // 1=StreamDeck, 0=Unknown, and any future family fall back to the
+                // generic Stream Dock illustration.
+                return base + "device-streamdock.svg";
+            }
+            Accessible.ignored: true
+        }
 
         ColumnLayout {
             Layout.fillWidth: true

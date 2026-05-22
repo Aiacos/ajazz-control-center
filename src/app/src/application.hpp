@@ -17,6 +17,7 @@
 #include "battery_service.hpp"
 #include "branding_service.hpp"
 #include "device_model.hpp"
+#include "firmware_update_service.hpp"
 #include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
 #include "plugin_catalog_model.hpp"
@@ -167,6 +168,12 @@ private:
                      ///< list (constructed after m_battery in application.cpp)
                      ///< stays in member-declaration order, satisfying GCC's
                      ///< -Wreorder on the Linux CI matrix.
+    std::unique_ptr<FirmwareUpdateService>
+        m_firmwareUpdate; ///< Vendor firmware-update deep-link (detect + launch the
+                          ///< vendor tool, or open the download page). Read-only /
+                          ///< delegate-only per docs/architecture/FIRMWARE-UPDATES.md;
+                          ///< no in-app flashing. Declared after m_appUpdate to keep
+                          ///< the init list in member-declaration order (-Wreorder).
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

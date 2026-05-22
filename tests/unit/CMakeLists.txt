@@ -183,6 +183,13 @@ add_executable(
     # here -- it needs a mock QNetworkAccessManager seam (TODO).
     test_app_update_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/app_update_service.cpp
+    # FirmwareUpdateService (docs/architecture/FIRMWARE-UPDATES.md): pins the
+    # pure per-family download-URL map, the Stream-Dock-only vendor-tool
+    # candidate-path list, and the "tool not installed -> use the page"
+    # contract. The QProcess launch / QDesktopServices open are thin OS
+    # wrappers, intentionally not exercised here.
+    test_firmware_update_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/firmware_update_service.cpp
     # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
     # link the source directly into this test binary without dragging the
     # WebEngine dependency in. Coverage in test_pi_bridge.cpp.

@@ -48,23 +48,75 @@ Rectangle {
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
     readonly property bool _hasSettings:   capabilities && capabilities.hasSettings   ? capabilities.hasSettings   : false
 
+    // Coarse core DeviceFamily int (from DeviceModel.capabilitiesFor) — fed to
+    // the Firmware tab so it can resolve the FirmwareUpdate.Family.
+    readonly property int  _family:        capabilities && capabilities.family !== undefined ? capabilities.family : 0
+
     readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
     readonly property bool _showEncoders:  _encoderCount > 0
     readonly property bool _showMouse:     _dpiStageCount > 0
     readonly property bool _showSettings:  _hasSettings
+    // Every device has firmware, so the Firmware tab is always present.
+    readonly property bool _showFirmware:  true
 
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingLg
         spacing: Theme.spacingMd
 
+        // Header — restructured so the human model name sits on line 1 next to
+        // the device's product image, with the machine codename on line 2.
+        //
+        // Empty state: when nothing is selected we fall back to the plain
+        // PageHeader prompt (no image, no codename line).
         PageHeader {
             Layout.fillWidth: true
-            title: root.codename === ""
-                ? qsTr("Select a device on the left")
-                : qsTr("Editing: %1").arg(root.codename)
-            subtitle: root.capabilities && root.capabilities.model ? root.capabilities.model : ""
+            visible: root.codename === ""
+            title: qsTr("Select a device on the left")
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.codename !== ""
+            spacing: Theme.spacingMd
+
+            // Product photo (remote, per-codename) with per-family SVG fallback.
+            DeviceImage {
+                Layout.alignment: Qt.AlignVCenter
+                codename: root.codename
+                family: root._family
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
+
+                // Line 1 — the human product NAME, large. Falls back to the
+                // codename when the capability map carries no model string.
+                Text {
+                    Layout.fillWidth: true
+                    text: root.capabilities && root.capabilities.model
+                              ? root.capabilities.model
+                              : root.codename
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.fontXl
+                    font.bold: true
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+
+                // Line 2 — "Editing: <machine codename>".
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Editing: %1").arg(root.codename)
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+            }
         }
 
         // Empty state when nothing is selected -------------------------------
@@ -107,6 +159,11 @@ Rectangle {
                 visible: root._showSettings
                 width: visible ? implicitWidth : 0
             }
+            TabButton {
+                text: qsTr("Firmware")
+                visible: root._showFirmware
+                width: visible ? implicitWidth : 0
+            }
         }
 
         // Each Loader's `active` property is bound so only the visible panel
@@ -137,6 +194,10 @@ Rectangle {
             Loader {
                 active: stack.currentIndex === 4 && root._showSettings
                 sourceComponent: settingsRowComp
+            }
+            Loader {
+                active: stack.currentIndex === 5 && root._showFirmware
+                sourceComponent: firmwarePanelComp
             }
         }
 
@@ -180,4 +241,5 @@ Rectangle {
     Component { id: encoderPanelComp; EncoderPanel { encoderCount: root._encoderCount } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
     Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename } }
+    Component { id: firmwarePanelComp; FirmwarePanel { deviceCodename: root.codename; deviceFamily: root._family } }
 }

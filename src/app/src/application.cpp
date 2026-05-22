@@ -167,6 +167,22 @@ Application::Application(QObject* parent)
       // Owned here so its QTimer / QNetworkAccessManager live on the GUI
       // thread for the same lifetime as the other QML singletons.
       m_appUpdate(std::make_unique<AppUpdateService>(this)),
+      m_firmwareUpdate(std::make_unique<FirmwareUpdateService>(
+          this,
+          // Same codename -> shared_ptr<IDevice> DeviceLookup as BatteryService,
+          // so the Firmware tab can read the running firmware version.
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          })),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -287,6 +303,33 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     SettingsService::registerInstance(m_settings.get());
     BatteryService::registerInstance(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
+    FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
+    // Before the vendor firmware tool is launched, drop our HID handle for the
+    // matching device family so the vendor flasher can claim the USB interface
+    // uncontested (FIRMWARE-UPDATES.md §Launch vendor app). The shared backend
+    // instances stay alive (flyweight); the next open() — typically the
+    // post-flash re-enumeration — reopens the transport.
+    QObject::connect(m_firmwareUpdate.get(),
+                     &FirmwareUpdateService::aboutToLaunchVendorTool,
+                     this,
+                     [this](FirmwareUpdateService::Family family) {
+                         core::DeviceFamily coreFamily = core::DeviceFamily::Unknown;
+                         switch (family) {
+                         case FirmwareUpdateService::StreamDock:
+                             coreFamily = core::DeviceFamily::StreamDeck;
+                             break;
+                         case FirmwareUpdateService::Keyboard:
+                             coreFamily = core::DeviceFamily::Keyboard;
+                             break;
+                         case FirmwareUpdateService::MouseAj159:
+                         case FirmwareUpdateService::MouseAj199:
+                             coreFamily = core::DeviceFamily::Mouse;
+                             break;
+                         case FirmwareUpdateService::Unknown:
+                             return; // nothing to release
+                         }
+                         m_deviceRegistry.closeOpenDevicesInFamily(coreFamily);
+                     });
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable
