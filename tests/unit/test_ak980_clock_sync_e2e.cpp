@@ -192,3 +192,40 @@ TEST_CASE("AK980 PRO setTime maps year < 2000 to byte 0 instead of underflowing"
     REQUIRE(observer->writes().size() == 4);
     REQUIRE(observer->writes().at(2)[4] == 0);
 }
+
+TEST_CASE("AK980 PRO batteryPercent surfaces a genuine 0% reading (not 'no battery')",
+          "[ak980][battery][P12-WR-04]") {
+    // A reply that echoes CmdBatteryQuery (0x20) at resp[1] is a genuine battery
+    // reply; resp[4] == 0 then means a critically-drained wireless battery, which
+    // must surface as 0% rather than being collapsed to nullopt ("unknown").
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    // [0]=report id, [1]=0x20 echo, [4]=0 charge.
+    observer->enqueueReadFeature({0x00, 0x20, 0x00, 0x00, 0x00});
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+
+    auto const pct = battery->batteryPercent();
+    REQUIRE(pct.has_value());
+    REQUIRE(*pct == 0);
+}
+
+TEST_CASE("AK980 PRO batteryPercent rejects a reply without the 0x20 echo",
+          "[ak980][battery][P12-WR-04]") {
+    // A wired/no-battery reply carries a different echo at resp[1]; even a
+    // non-zero charge byte must be rejected as not-a-battery-reply (nullopt),
+    // so the disambiguation rides on the echo, never on the percent value.
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    observer->enqueueReadFeature({0x00, 0x00, 0x00, 0x00, 0x32}); // wrong echo, charge 50
+    auto device = keyboard::makeProprietaryKeyboardWithTransport(
+        makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+
+    REQUIRE_FALSE(battery->batteryPercent().has_value());
+}

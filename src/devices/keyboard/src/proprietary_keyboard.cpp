@@ -784,14 +784,17 @@ public:
                 if (n < 5 || resp[1] != CmdBatteryQuery) {
                     continue; // reply not ready yet / wrong report
                 }
-                auto const pct = resp[4];
-                if (pct == 0) {
-                    return std::nullopt; // "no battery" sentinel; do not surface as 0%
-                }
+                // resp[1] echoed CmdBatteryQuery (0x20), checked above, so this is
+                // a genuine battery reply: resp[4] is a real charge level. A
+                // wired/no-battery device answers with a different echo and was
+                // already rejected by that guard, so a 0 here is a critically
+                // drained wireless battery, NOT "no battery" — surface it as 0%
+                // rather than collapsing to nullopt (the user most needs the
+                // warning exactly then). P12 WR-04.
                 // Wired + full reports 0xFF here; the firmware/vendor app clamp
                 // out-of-range readings to 100. Per-percent wireless encoding is
                 // unverified (can't drain over USB) — see ak980pro_vendor.md §13.5.
-                return std::min<std::uint8_t>(pct, 100);
+                return std::min<std::uint8_t>(resp[4], 100);
             }
             return std::nullopt; // no valid reply within the poll budget
         } catch (std::exception const& e) {
