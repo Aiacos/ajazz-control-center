@@ -24,8 +24,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
         target_compile_options(ajazz_warnings INTERFACE -Werror)
     endif()
 elseif(MSVC)
+    # /wd4702 (unreachable code): Qt's own headers (qmetatype.h, qvariant.h,
+    # qjsengine.h) emit C4702 under /W4, which /WX then promotes to a hard
+    # error when the qmlcache-generated translation units include them. It is
+    # never our code, and there is no targeted pragma we can place in generated
+    # files, so suppress it project-wide. Seen on both Qt 6.8.3 (CI) and the
+    # 6.11.x local toolchain.
     target_compile_options(
-        ajazz_warnings INTERFACE /W4 /permissive- /Zc:__cplusplus /Zc:preprocessor
+        ajazz_warnings INTERFACE /W4 /permissive- /Zc:__cplusplus /Zc:preprocessor /wd4702
     )
     if(AJAZZ_ENABLE_WERROR)
         target_compile_options(ajazz_warnings INTERFACE /WX)

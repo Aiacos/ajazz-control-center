@@ -235,9 +235,10 @@ file(GLOB ACC_DEVICE_PRODUCTS CONFIGURE_DEPENDS
      ${CMAKE_SOURCE_DIR}/resources/devices/products/*.png
      ${CMAKE_SOURCE_DIR}/resources/devices/products/*.jpg
 )
-foreach(_f IN LISTS ACC_DEVICE_PRODUCTS)
-    get_filename_component(_n "${_f}" NAME)
-    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${_n})
+foreach(product_path IN LISTS ACC_DEVICE_PRODUCTS)
+    get_filename_component(product_name "${product_path}" NAME)
+    set_source_files_properties("${product_path}"
+        PROPERTIES QT_RESOURCE_ALIAS icons/devices/products/${product_name})
 endforeach()
 
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
