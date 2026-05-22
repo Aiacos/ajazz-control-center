@@ -127,12 +127,6 @@ void stampBit7Checksum(std::array<std::uint8_t, kReportSize>& pkt) noexcept;
 /// §3.1 GetRev — `[0x05, 0x80, 0, …, 0, checksum]`.
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetRev();
 
-/// §4 GetBattery — `[0x05, 0x83, 0, …, 0, checksum]`. Active poke written via
-/// SET_FEATURE; the dongle then exposes the charge in its status feature report
-/// (`[report-id, 0x00, charge, 01 01 01 02]`, charge at index 2) read via
-/// GET_FEATURE. See @c AjSeriesMouse::batteryPercent().
-[[nodiscard]] std::array<std::uint8_t, kReportSize> buildGetBattery();
-
 /// §3.2 SetReset — `[0x05, 0x02, 0, …, 0, checksum]`. Factory reset (destructive!).
 [[nodiscard]] std::array<std::uint8_t, kReportSize> buildSetReset();
 

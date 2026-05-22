@@ -70,14 +70,6 @@ std::array<std::uint8_t, kReportSize> buildGetRev() {
     return pkt;
 }
 
-std::array<std::uint8_t, kReportSize> buildGetBattery() {
-    // §4 — battery poke. SET_FEATURE this opcode; the dongle then keeps its
-    // status feature report populated with the charge (read via GET_FEATURE).
-    auto pkt = startReport(FeaCmd::GetBattery);
-    stampBit7Checksum(pkt);
-    return pkt;
-}
-
 std::array<std::uint8_t, kReportSize> buildSetReset() {
     auto pkt = startReport(FeaCmd::SetReset);
     stampBit7Checksum(pkt);

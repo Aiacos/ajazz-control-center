@@ -267,10 +267,13 @@ public:
     // IBatteryCapable — wireless charge.
     //
     // Two-step handshake (the same write-query-then-read the AK980 keyboard
-    // uses): SET_FEATURE the 0x83 GET_BATTERY poke (buildGetBattery() =
-    // [0x05, 0x83, 0…, BIT7]) on the 0xFFFF/usage-0x02 control collection so the
-    // basetta refreshes its status feature report, then GET_FEATURE that report
-    // (report-id 0x00) and read the charge at byte 2 (parseBatteryCharge()).
+    // uses): SET_FEATURE the 0xF7 status poll (kStatusPollOpcode) on the control
+    // collection so the basetta refreshes its status feature report, then
+    // GET_FEATURE that report (report-id 0x00) and read the charge via
+    // parseBatteryCharge() — see the step-by-step inline notes below. (The §4
+    // 0x83 GET_BATTERY opcode still catalogued in aj_series_protocol.hpp's FeaCmd
+    // enum was an earlier theory; the shipping, live-probe-confirmed path is the
+    // 0xF7 poll.)
     //
     // PLATFORM (re-confirmed by live probe 2026-05-22):
     //   * Linux hidraw — the basetta populates the status report and the charge
