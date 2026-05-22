@@ -315,7 +315,18 @@ void AppUpdateService::onLatestReplyFinished(QNetworkReply* reply) {
     // status; remain UpToDate (or whatever the previous state was).
     if (httpStatus == 304) {
         if (m_status == Status::Checking) {
-            setStatus(m_latestVersion.isEmpty() ? Status::UpToDate : Status::UpdateAvailable);
+            // Mirror applyRelease's dismissed-tag handling (WR-08): the cached
+            // ETag still matching does NOT mean we should re-surface a banner
+            // the user already dismissed. m_latestVersion holds the last seen
+            // release tag (== the dismissed tag when they clicked "Later").
+            if (m_latestVersion.isEmpty()) {
+                setStatus(Status::UpToDate);
+            } else {
+                QSettings settings;
+                QString const dismissedTag =
+                    settings.value(QString::fromLatin1(kDismissedTagKey)).toString();
+                setStatus(m_latestVersion == dismissedTag ? Status::Idle : Status::UpdateAvailable);
+            }
         }
         return;
     }
