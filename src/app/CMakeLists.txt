@@ -76,6 +76,10 @@ qt_add_executable(
     # checker (notify-only). Mirrors LightingService / SettingsService DI shape; self-disables under
     # Flatpak and surfaces a Material banner from Main.qml when a newer tag is observed.
     src/app_update_service.cpp
+    # Vendor firmware-update deep-link (FirmwareUpdate QML singleton). Read-only /
+    # delegate-only per docs/architecture/FIRMWARE-UPDATES.md: detects + launches the
+    # vendor firmware tool, or opens the per-family download page. No in-app flashing.
+    src/firmware_update_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on

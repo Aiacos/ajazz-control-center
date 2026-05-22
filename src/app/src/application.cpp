@@ -167,6 +167,7 @@ Application::Application(QObject* parent)
       // Owned here so its QTimer / QNetworkAccessManager live on the GUI
       // thread for the same lifetime as the other QML singletons.
       m_appUpdate(std::make_unique<AppUpdateService>(this)),
+      m_firmwareUpdate(std::make_unique<FirmwareUpdateService>(this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -287,6 +288,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     SettingsService::registerInstance(m_settings.get());
     BatteryService::registerInstance(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
+    FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
     // Wire the periodic auto-sync enumerator now that DeviceModel is
     // registered + connected to live hotplug. The TimeSyncService timer
     // (15 min interval) calls this back to enumerate IClockCapable
