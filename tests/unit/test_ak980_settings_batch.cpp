@@ -83,6 +83,13 @@ TEST_CASE("AK980 PRO setKeyboardSettings emits the 4-packet envelope",
     REQUIRE(writes.size() == 4);
     REQUIRE(observer->writeFeatureCount() == 4);
 
+    // PROVISIONAL (RE, unconfirmed on hardware): the per-packet byte-0 == 0x04
+    // ReportId framing below is the UNVERIFIED settings-envelope layout (DFR-02).
+    // The corrected deep-RE (ak980pro_vendor.md §13.2) says ReportId 0x00 with a
+    // fixed 0x01 at byte 5 — and the same device proved it needs ReportId 0x00
+    // for time-sync (hardware-confirmed). No live AK980 PRO witness exists for
+    // this path. If a capture flips byte 0 to 0x00, that is the expected fix,
+    // not a regression.
     // Packet 1: START control (ReportId=0x04, opcode 0x18, marker 0x01).
     auto const& p1 = writes.at(0);
     REQUIRE(p1.size() == 64);

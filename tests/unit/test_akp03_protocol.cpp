@@ -33,6 +33,10 @@ using namespace ajazz::streamdeck::akp03;
 /// `buildSetBrightness(60)` must produce a CRT-prefixed LIG packet with byte 10 == 60.
 TEST_CASE("akp03 brightness packet has CRT prefix and LIG command", "[akp03][protocol]") {
     auto const pkt = buildSetBrightness(60);
+    // PROVISIONAL (RE, unconfirmed on hardware): PacketSize is hardcoded 512,
+    // but [ajazz-sdk] declares the AKP03 family is_v2_api() → 1024-byte packets
+    // (akp03_protocol.hpp DFR-06/QC-29). When a USB capture confirms 1024, this
+    // size will change — that is the expected migration, not a regression.
     REQUIRE(pkt.size() == PacketSize);
     REQUIRE(pkt[0] == 0x43); // C
     REQUIRE(pkt[1] == 0x52); // R

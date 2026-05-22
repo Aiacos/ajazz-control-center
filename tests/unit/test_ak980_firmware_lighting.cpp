@@ -89,6 +89,13 @@ TEST_CASE("AK980 PRO setFirmwareLightingMode emits the 5-packet envelope",
     REQUIRE(writes.size() == 5);
     REQUIRE(observer->writeFeatureCount() == 5);
 
+    // PROVISIONAL (RE, unconfirmed on hardware): the per-packet byte-0 == 0x04
+    // ReportId framing below is the UNVERIFIED lighting-envelope layout (DFR-01).
+    // The corrected deep-RE (ak980pro_vendor.md §13.1) says ReportId 0x00 with
+    // frame-magic 0x04 at byte 1 and opcode at byte 2 — the same off-by-one the
+    // time-sync path was hardware-proven to need on this device. No live AK980
+    // PRO witness exists for this path. If a capture flips byte 0 to 0x00, that
+    // is the expected fix, not a regression.
     // Packet 1: START control (ReportId=0x04, opcode 0x18, marker 0x01).
     auto const& p1 = writes.at(0);
     REQUIRE(p1.size() == 64);

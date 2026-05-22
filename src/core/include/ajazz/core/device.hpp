@@ -60,6 +60,14 @@ struct DeviceDescriptor {
     // These are static layout hints used by the QML UI to avoid magic
     // constants like `model: 15`. They should match the values reported by
     // the runtime IDevice/ICapability interfaces of the same backend.
+    //
+    // DRIFT WARNING: these fields duplicate runtime capability data with no
+    // compile-time or test enforcement that the two agree, so they are a
+    // latent drift surface — a backend whose runtime IDevice/ICapability
+    // values change without a matching descriptor edit will silently
+    // mis-size or mis-gate the UI. Keep this descriptor in lockstep with the
+    // backend's actual capabilities (or, longer-term, derive these from the
+    // runtime interface instead of restating them here).
 
     std::uint16_t keyCount{0};      ///< Number of LCD/macro keys (0 if N/A).
     std::uint16_t gridColumns{0};   ///< Preferred grid column count for the keys (0 if N/A).

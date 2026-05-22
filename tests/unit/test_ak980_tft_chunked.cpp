@@ -105,6 +105,11 @@ TEST_CASE("ak980 TFT chunk packet has 0x80 marker and 28-byte RGB565 payload",
         // Byte 32 is the transport checksum = sum(bytes[0..31]) mod 256. For the
         // index-0 packet the only non-zero bytes are the marker (0x80) and the
         // 1..28 payload ramp (sum = 28*29/2 = 406), so 0x80 + 406 = 534 -> 0x16.
+        // PROVISIONAL (RE, unconfirmed on hardware): the byte-32 checksum scheme
+        // and the output-report (write() vs writeFeature()) transport for TFT
+        // upload are UNVERIFIED — no USB/Frida capture exists yet (QC-23). A
+        // hardware-driven correction to this value is an expected fix, not a
+        // regression.
         REQUIRE(pkt[32] == 0x16);
         for (std::size_t i = 4 + kTftChunkPayload; i < ReportSize; ++i) {
             if (i == 32) {
@@ -138,6 +143,9 @@ TEST_CASE("ak980 TFT chunked HEADER carries opcode 0x7F sub 0x03 + total chunks"
     REQUIRE(pkt[6] == 0x09);
     REQUIRE(pkt[7] == 0x00);
     // Byte 32 transport checksum = sum(0x7F + 0x03 + 0x01 + 0x0b + 0x09) = 0x97.
+    // PROVISIONAL (RE, unconfirmed on hardware): byte-32 checksum scheme is
+    // UNVERIFIED — no USB/Frida capture yet (QC-23); a hardware fix here is
+    // expected, not a regression.
     REQUIRE(pkt[32] == 0x97);
 }
 
