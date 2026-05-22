@@ -341,10 +341,11 @@ TEST_CASE("AJ series opcode table - values match vendor RE", "[mouse][aj_series]
 
 TEST_CASE("AJ series no-standalone-battery-opcode regression guard",
           "[mouse][aj_series][wire][safety]") {
-    // §4 of opcode-table: there is NO standalone battery query opcode on the
-    // mouse path. Battery is push-streamed from the dongle via gRPC; our prior
-    // kCmdBattery=0x40 was nonexistent. The new FeaCmd enum MUST NOT contain
-    // a 0x40 value - guard against future re-introduction.
+    // §4 of opcode-table: battery is read with the 0x83 GET_BATTERY poke +
+    // GET_FEATURE status report (FeaCmd::GetBattery), NOT the imaginary 0x40
+    // query our early scaffold used (kCmdBattery=0x40 was nonexistent on this
+    // firmware). The FeaCmd enum MUST NOT contain a 0x40 value — guard against
+    // future re-introduction.
     for (auto const cmd : {FeaCmd::GetRev,
                            FeaCmd::SetReset,
                            FeaCmd::SetProfile,

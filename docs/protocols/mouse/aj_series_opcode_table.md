@@ -607,66 +607,76 @@ a single 2000-offset byte).
 
 ______________________________________________________________________
 
-## 4 — Battery model (write 0x83 poke, then GET_FEATURE; charge at byte 2)
+## 4 — Battery model (0xF7 status poll, then GET_FEATURE report 0x05)
 
 > **✅ HARDWARE-VERIFIED 2026-05-22** on a physical AJAZZ 2.4G 8K
-> (`0x3151:0x5007`) — the app logs `[battery] queried ajazz_24g_8k: 100%`. The
-> read is a **two-step handshake**, the same write-query-then-read the AK980
-> keyboard uses:
+> (`0x3151:0x5007`) on **Windows** (and the method is platform-shared) — the app
+> logs `[battery] queried ajazz_24g_8k: 100%`. The read is a **two-step
+> sequence**, replicating what the vendor `iot_driver` does ~1 Hz:
 >
-> 1. **SET_FEATURE** a `0x83` `GET_BATTERY` poke (`buildGetBattery()` =
->    `[0x05, 0x83, 0…, BIT7]`) on the `0xFFFF`/usage-`0x02` control collection
->    (iface 2, `/dev/hidraw9` on Linux) so the dongle refreshes its status
->    report.
-> 1. **GET_FEATURE** the status report and read the charge.
+> 1. **SET_FEATURE the `0xF7` status poll** — report-id `0x00`, opcode `0xF7` at
+>    body byte 0, **zero payload**, on the `0xFFFF`/usage-`0x02` control
+>    collection (iface 2 / MI_02). This is the enabler: it tells the basetta to
+>    refresh its 2.4G wireless telemetry and mirror the mouse's charge into the
+>    status report. (The vendor sends this as a continuous ~1 Hz heartbeat;
+>    a single poll + short settle is enough from cold.)
+> 1. After a **~30 ms settle**, **GET_FEATURE the status report `0x05`** and read
+>    the charge.
 >
-> The status feature report on iface 2 uses **report-id `0x00`** (confirmed from
-> the HID report descriptor: iface 2 declares only a `0xFFFF` FEATURE report id
-> `0x00`), so hidapi returns `[00, 00, charge, 01 01 01 02]` — **the charge is
-> at index 2.** A cold GET_FEATURE with no preceding poke, or while the mouse is
-> asleep, returns all-zeros → unknown/grey.
+> The charge byte position depends on the platform's hidapi framing, NOT on the
+> device: hidapi keeps the requested report-id byte at index 0 on **Windows**, so
+> the frame is `05 00 00 64 01 01 01 02` → **charge at byte 3**; on **Linux
+> hidraw** the unnumbered frame has no report-id prefix → **charge at byte 2**.
+> `parseBatteryCharge()` auto-detects: `chargeIndex = (frame[0] == 0x05) ? 3 : 2`.
+> Status bytes after the charge read `01 01 01 02` once the telemetry link is up;
+> all-zero means the link is not ready yet (keep polling).
 >
-> **History — why the earlier attempts produced a persistent `--%`:**
+> **History — why earlier attempts produced a persistent `--%`:**
 >
-> - The passive "GET_FEATURE report `0x05`, charge at **byte 3**" method (the
->   dossier frame `05 00 00 64`, commit 1f2be0c) assumed a `0x05` report-id
->   prefix the device does not send. The real frame is report-id `0x00` with the
->   charge one byte earlier (**index 2**). Reading byte 3 while validating
->   byte 2 == 0 rejected every valid frame (byte 2 *is* the charge) → `--%`.
->   It also did no poke, so a cold read returned zeros.
-> - The active `0x83` **OUTPUT-write + interrupt-IN** query (commit b9018fc,
->   reverted) read the wrong channel. The vendor renderer's `getBattery()` does
->   `r[0]=0x83; commomFeature(r, BIT7)` over gRPC `sendMsg`, which carries a
->   separate `dangle_dev_type=MOUSE(2)` routing arg that `iot_driver.exe` folds
->   into the bytes; the *reply* surfaces in the GET_FEATURE status report above,
->   **not** on an interrupt-IN read. `iot_driver` links the same hidapi we do —
->   no libusb gap.
+> - **No `0xF7` poll** (passive GET_FEATURE only). Without the poll the basetta
+>   never brings the telemetry link up, so report `0x05` stays `05 00 00 00 …`
+>   (charge AND status flags all-zero) on every read — the all-platforms cause of
+>   the `--%`. Confirmed by live probe across all 6 HID collections and report
+>   ids: nothing populates without the `0xF7` poll. **Sending it makes the same
+>   read return `05 00 00 64 01 01 01 02` immediately.**
+> - The brief "`0x83` poke + report-id `0x00` + byte 2" theory (mid-investigation)
+>   was wrong on Windows: the `0x83` poke does not enable the link, and the report
+>   we read is `0x05` (charge at byte 3 on Windows), not `0x00`.
+> - The active `0x83` **OUTPUT-write + interrupt-IN** query (reverted) read the
+>   wrong channel — the reply surfaces in the GET_FEATURE status report, not on an
+>   interrupt-IN read. `iot_driver` links the same hidapi we do — **no libusb gap.**
 > - The `0x40` host→device query — no such opcode on this firmware.
+>
+> `FEA_CMD_GET_BATTERY = 0x83` is declared by the vendor but is NOT what enables
+> the dongle path; the `0xF7` status poll is.
 
-### Frame layout + validation (hardware-verified 2026-05-22)
+### Frame layout + validation (hardware-verified 2026-05-22, Windows)
 
-GET_FEATURE after the poke returns (hidapi keeps the report-id byte at index 0):
+GET_FEATURE of report `0x05` after the `0xF7` poll (Windows; hidapi keeps the
+report-id byte at index 0):
 
 ```
-byte 0  : 0x00   (report id of the status feature report)
+byte 0  : 0x05   (report id, present on Windows; absent on Linux hidraw → shift left 1)
 byte 1  : 0x00   (always 0 in a valid frame)
-byte 2  : charge percent (0..100; 0x64 = 100; 0 = link up but not reported / asleep)
-byte 3..6 : status flags — 01 01 01 02 when the wireless link/telemetry is up,
-            all-zero immediately after a reconnect (link not ready)
+byte 2  : 0x00
+byte 3  : charge percent (0..100; 0x64 = 100; 0 = link up but charge not reported yet)
+byte 4..7 : status flags — 01 01 01 02 when the telemetry link is up, all-zero
+            before the 0xF7 poll has brought the link up (not ready)
 ```
 
-Observed frames (bytes 0..7):
+Observed frames (Windows, bytes 0..7):
 
-| Frame                     | Meaning                                       |
-| ------------------------- | --------------------------------------------- |
-| `00 00 64 01 01 01 02 00` | stable, 100% (verified live)                  |
-| `00 00 00 00 00 00 00 00` | mouse asleep / charge not yet reported → grey |
-| `00 ad 04 …`              | transient garbage (byte 1 ≠ 0) → rejected     |
+| Frame                     | Meaning                                            |
+| ------------------------- | -------------------------------------------------- |
+| `05 00 00 64 01 01 01 02` | stable, 100% (verified live after the 0xF7 poll)   |
+| `05 00 00 00 00 00 00 00` | link not ready (no/ineffective poll) → grey        |
+| `05 ad 04 …`              | transient garbage (byte 1 ≠ 0) → rejected          |
 
-`batteryPercent()` (current): poke `0x83`, then poll GET_FEATURE; a valid frame
-has **byte 1 == 0**, charge = **byte 2**; byte 2 == 0 means unknown (asleep / not
-reported yet) → `std::nullopt` (grey), not 0%; any frame with non-zero byte 1 is
-rejected as transient reconnect garbage.
+`batteryPercent()` (current): SET_FEATURE `0xF7` poll (report-id `0x00`), ~30 ms
+settle, GET_FEATURE report `0x05`; `parseBatteryCharge()` takes the charge at
+byte 3 (Windows) / byte 2 (Linux), requires the bytes between the report-id and
+the charge to be 0, and treats charge `0` as unknown (asleep / link not ready) →
+`std::nullopt` (grey), not 0%.
 
 The vendor app additionally surfaces battery via the `Device.battery` field
 (`js:50798`, `js:50824`, `js:50841`) on the `proto.driver.Device` message

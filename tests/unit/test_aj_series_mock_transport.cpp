@@ -99,6 +99,86 @@ TEST_CASE("MockTransport captures setActiveDpiStage envelope on AjSeriesMouse",
     CHECK(pkt[64] == 0x54);
 }
 
+TEST_CASE("AjSeriesMouse batteryPercent polls 0xF7 then reads the Windows frame (byte 3)",
+          "[unit][aj_series][mock_transport][battery]") {
+    // The basetta only fills the charge after the 0xF7 status poll. The backend
+    // SET_FEATUREs that poll (report-id 0x00, opcode 0xF7), then GET_FEATUREs the
+    // status report. On Windows hidapi keeps the report-id byte at index 0, so
+    // the captured frame is `05 00 00 64 01 01 01 02` (charge 0x64=100% at byte 3).
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    observer->enqueueReadFeature({0x05, 0x00, 0x00, 0x64, 0x01, 0x01, 0x01, 0x02});
+
+    auto device =
+        mouse::makeAjSeriesWithTransport(makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+
+    auto const charge = battery->batteryPercent();
+    REQUIRE(charge.has_value());
+    CHECK(charge.value() == 100);
+    // Exactly one SET_FEATURE — the 0xF7 status poll on report-id 0x00.
+    REQUIRE(observer->writeFeatureCount() == 1);
+    REQUIRE(observer->writes().size() == 1);
+    auto const& poll = observer->writes().at(0);
+    REQUIRE(poll.size() == 65);
+    CHECK(poll[0] == 0x00); // status-poll report id
+    CHECK(poll[1] == 0xF7); // status-poll opcode
+}
+
+TEST_CASE("AjSeriesMouse batteryPercent reads the Linux status frame (byte 2)",
+          "[unit][aj_series][mock_transport][battery]") {
+    // On Linux hidraw the unnumbered frame has no report-id prefix, so the same
+    // status report reads back as `00 00 64 …` (charge at byte 2). The shared
+    // parseBatteryCharge() auto-detects the offset from the leading byte.
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    observer->enqueueReadFeature({0x00, 0x00, 0x64, 0x01, 0x01, 0x01, 0x02});
+
+    auto device =
+        mouse::makeAjSeriesWithTransport(makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+
+    auto const charge = battery->batteryPercent();
+    REQUIRE(charge.has_value());
+    CHECK(charge.value() == 100);
+}
+
+TEST_CASE("AjSeriesMouse batteryPercent treats an all-zero frame as unknown",
+          "[unit][aj_series][mock_transport][battery]") {
+    // Charge byte 0 = link up but the dongle has not reported yet (asleep) →
+    // nullopt (grey), never a wrong 0%.
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    observer->enqueueReadFeature({0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00});
+
+    auto device =
+        mouse::makeAjSeriesWithTransport(makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+    CHECK_FALSE(battery->batteryPercent().has_value());
+}
+
+TEST_CASE("AjSeriesMouse batteryPercent rejects a transient garbage frame",
+          "[unit][aj_series][mock_transport][battery]") {
+    // A non-zero byte 1 marks the garbage GET_FEATURE can return right after a
+    // wireless reconnect (e.g. `00 ad 04 ...`) → rejected.
+    auto transport = std::make_unique<tests::MockTransport>();
+    auto* observer = transport.get();
+    transport->open();
+    observer->enqueueReadFeature({0x00, 0xAD, 0x04, 0x00, 0x00, 0x00, 0x00});
+
+    auto device =
+        mouse::makeAjSeriesWithTransport(makeDescriptor(), makeId(), std::move(transport));
+    auto* battery = dynamic_cast<core::IBatteryCapable*>(device.get());
+    REQUIRE(battery != nullptr);
+    CHECK_FALSE(battery->batteryPercent().has_value());
+}
+
 TEST_CASE("MockTransport reset() clears captured writes", "[unit][mock_transport][CAPTURE-04]") {
     tests::MockTransport mt;
     std::array<std::uint8_t, 4> sample{0x01, 0x02, 0x03, 0x04};

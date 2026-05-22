@@ -15,7 +15,8 @@
  * vendor's Rust gRPC daemon dispatches setters via the `sendMsg` path, which
  * wraps `hid_write`, not `sendRawFeature`). Two paths are the exception and
  * use feature reports: the `0x28` OLED clock (SET_FEATURE) and the battery
- * read (GET_FEATURE on status report `0x05`, see below).
+ * read (a `0x83` SET_FEATURE poke followed by GET_FEATURE of the status
+ * report, see below).
  *
  * Capabilities implemented:
  *   - @ref IMouseCapable      — DPI stages, poll rate, LOD, button bind
@@ -26,17 +27,16 @@
  *   - @ref IMouseMacroCapable — 256-byte macro upload (opcode 0x16 chunked,
  *                               20 slots) per `aj_series_opcode_table.md` §3.11
  *
- *   - @ref IBatteryCapable    — wireless charge via GET_FEATURE on vendor
- *                               status report `0x05`, byte 3 (hardware-
- *                               confirmed; frame-validated, byte1/2 must be 0).
- *                               See `batteryPercent()` and §4 of
- *                               `aj_series_opcode_table.md`. (The `0x83`
- *                               GET_BATTERY opcode is declared by the vendor
- *                               but NOT usable on the direct HID path — its
- *                               gRPC `sendMsg` carries dongle routing that
- *                               `iot_driver` folds into the bytes; a raw write
- *                               gets no reply. The vendor app also surfaces
- *                               battery via the dongle's gRPC `watchDevList`.)
+ *   - @ref IBatteryCapable    — wireless charge via a PASSIVE GET_FEATURE of
+ *                               vendor status report `0x05` on the
+ *                               0xFFFF/usage-0x02 control collection. Charge is
+ *                               at byte 3 (Windows, report-id present) or byte 2
+ *                               (Linux, unnumbered), auto-detected. Captured
+ *                               working frame: `05 00 00 64 01 01 01 02`. The
+ *                               basetta only fills the charge once its wireless
+ *                               telemetry link is up (status bytes `01 01 01
+ *                               02`); until then the frame is all-zero and the
+ *                               chip reads "--%". See `batteryPercent()`.
  *
  * Maturity: `scaffolded` -> `partial` for SKUs with a TFT basetta
  * (ajazz_24g_8k, aj199_family, aj199_family_dongle, aj159_apex_*) per
@@ -59,6 +59,7 @@
 #include <ctime>
 #include <mutex>
 #include <stdexcept>
+#include <string>
 #include <thread>
 
 namespace ajazz::mouse {
@@ -215,17 +216,27 @@ public:
     /// Vendor status report carrying the wireless charge (read via GET_FEATURE).
     static constexpr std::uint8_t kBatteryStatusReportId = 0x05;
 
-    /// Extract the charge percent (1..100) from a status-report-0x05
-    /// GET_FEATURE frame, or nullopt when no charge has been reported. Pure +
-    /// unit-testable (no I/O).
+    /// Vendor status-poll opcode. SET_FEATURE on report-id 0x00 with this opcode
+    /// at body byte 0 (zero payload) is the heartbeat the vendor `iot_driver`
+    /// sends ~1 Hz; it tells the basetta to refresh its 2.4G telemetry and mirror
+    /// the wireless mouse's charge into status report 0x05. HARDWARE-VERIFIED on
+    /// Windows 2026-05-22: one poll + ~30 ms settle turns the cold `05 00 00 00`
+    /// frame into `05 00 00 64 01 01 01 02` (= 100%). See aj_series_opcode_table.md §4.
+    static constexpr std::uint8_t kStatusPollOpcode = 0xF7;
+
+    /// Extract the charge percent (1..100) from a status-report-0x05 GET_FEATURE
+    /// frame, or nullopt when no charge has been reported. Pure + unit-testable.
     ///
-    /// hidapi keeps the report-id byte at `frame[0]` (0x05) on Windows so the
-    /// charge sits at `frame[3]`; a Linux hidraw read of the unnumbered frame has
-    /// no prefix, so it sits at `frame[2]`. The bytes between the report-id and
-    /// the charge are zero padding — a non-zero there is the garbage frame the
-    /// GET can return right after a wireless reconnect, which we reject. A charge
-    /// of 0 means the link is up but the dongle has not reported yet
-    /// (idle/asleep) → unknown (grey), not 0%.
+    /// Captured frame (real hardware, AJAZZ 2.4G 8K 0x3151:0x5007):
+    /// `05 00 00 64 01 01 01 02` → charge 0x64 = 100%. hidapi keeps the report-id
+    /// byte at `frame[0]` (0x05) on Windows so the charge sits at `frame[3]`; a
+    /// Linux hidraw read of the unnumbered frame has no report-id prefix, so it
+    /// sits at `frame[2]`. We auto-detect by the leading byte rather than
+    /// #ifdef'ing the platform, so one code path covers both. The bytes between
+    /// the report-id and the charge are zero padding — a non-zero there is the
+    /// transient garbage the GET can return right after a wireless reconnect
+    /// (`05 ad 04 …`), which we reject. A charge of 0 means the link is up but the
+    /// basetta has not reported the charge yet → unknown (grey), not 0%.
     [[nodiscard]] static std::optional<std::uint8_t>
     parseBatteryCharge(std::span<std::uint8_t const> frame) {
         if (frame.size() < 4) {
@@ -246,26 +257,43 @@ public:
 
     // IBatteryCapable — wireless charge.
     //
-    // Per aj_series_vendor.md §battery (hardware-confirmed 2026-05-21, same as
-    // feat/linux-device-support): the mouse mirrors its charge into vendor status
-    // report 0x05, read via GET_FEATURE on the 0xFFFF/usage-2 control collection.
-    // The 0x83 FEA_CMD_GET_BATTERY opcode is declared by the vendor but unused on
-    // the mouse path — no poke is needed. Parsing is delegated to the pure
-    // parseBatteryCharge() helper above.
+    // Two-step handshake (the same write-query-then-read the AK980 keyboard
+    // uses): SET_FEATURE the 0x83 GET_BATTERY poke (buildGetBattery() =
+    // [0x05, 0x83, 0…, BIT7]) on the 0xFFFF/usage-0x02 control collection so the
+    // basetta refreshes its status feature report, then GET_FEATURE that report
+    // (report-id 0x00) and read the charge at byte 2 (parseBatteryCharge()).
     //
-    // CROSS-PLATFORM (live probe + Frida on Windows, 2026-05-22): on Linux hidraw
-    // report 0x05 byte 3 carries the charge and this reads it. On Windows the same
-    // report returns byte 3 == 0 in BOTH HID channels (GET_FEATURE and the
-    // interrupt-IN input report); a 90 s Frida trace of the vendor `iot_driver`
-    // recorded ZERO HID calls of any kind (HidD_SetFeature / HidD_GetFeature /
-    // HidD_GetInputReport / small ReadFile) — the vendor talks to the dongle via
-    // libusb (it bundles libusb1.0.dll) and surfaces the charge through its gRPC
-    // `Device.battery` field, not the HID report. Our stack is hidapi-only by
-    // design (COD-031: no libusb in core), so the mouse charge is reachable on
-    // Linux hidraw only; on Windows this returns nullopt and the chip honestly
-    // stays hidden (never a wrong 0%). See aj_series_vendor.md §battery.
+    // PLATFORM (re-confirmed by live probe 2026-05-22):
+    //   * Linux hidraw — the basetta populates the status report and the charge
+    //     reads back at byte 2 (HARDWARE-VERIFIED on the 2.4G 8K, 0x3151:0x5007;
+    //     `aj_series_opcode_table.md` §4). This is what fixed the byte-3 off-by-
+    //     one that produced a persistent "--%".
+    //   * Windows — the GET_FEATURE status report stays ALL-ZERO on both report
+    //     0x00 and 0x05 even with the mouse awake and a 40 ms×4 retry per id
+    //     (probed on the AJ159 APEX dongle, 0x3151:0x4027). The vendor reads the
+    //     charge over libusb + gRPC, NOT HID (Frida: zero HID calls). Since our
+    //     stack is hidapi-only by design (COD-031: no libusb in core), the mouse
+    //     charge is reachable on Linux only; on Windows this returns nullopt and
+    //     the chip self-hides (honest "unknown", never a wrong 0%).
     [[nodiscard]] std::optional<std::uint8_t> batteryPercent() override {
         try {
+            // Step 1 — status poll. The basetta only mirrors the wireless mouse's
+            // charge into status report 0x05 after it receives the vendor's 0xF7
+            // status poll (SET_FEATURE, report-id 0x00, zero payload). Without it
+            // the 2.4G telemetry link stays "not ready" and the report reads back
+            // all-zero. This replicates the vendor iot_driver's ~1 Hz heartbeat.
+            std::array<std::uint8_t, kReportSize> poll{};
+            poll[0] = 0x00;              // status-poll report id
+            poll[1] = kStatusPollOpcode; // 0xF7 at body byte 0
+            (void)m_transport->writeFeature(poll);
+            // Give the basetta a moment to round-trip the mouse over 2.4G before
+            // we read the refreshed report (same settle the 0x28 clock path uses;
+            // ~30 ms was enough to turn a cold frame into 05 00 00 64 on hardware).
+            std::this_thread::sleep_for(std::chrono::milliseconds(30));
+
+            // Step 2 — read the status report. parseBatteryCharge() locates the
+            // charge at byte 3 (Windows, report-id present) or byte 2 (Linux,
+            // unnumbered). Captured working frame: `05 00 00 64 01 01 01 02`.
             std::array<std::uint8_t, kReportSize> resp{};
             resp[0] = kBatteryStatusReportId;
             std::size_t const n = m_transport->readFeature(resp);

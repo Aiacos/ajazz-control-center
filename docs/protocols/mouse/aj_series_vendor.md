@@ -148,7 +148,8 @@ ______________________________________________________________________
 | `0x80` | `FEA_CMD_GET_REV`                     | host→dev feature, response read via `readRawFeature` | none → uint16 LE @ byte 1 = firmware version     | "About" dialog, version banner                                                                                                                                                                                                 | **gap** (we hardcode `"unknown"`)                                                 |
 | `0x8f` | `FEA_CMD_GET_INFO`                    | feature                                              | none                                             | initial device probe                                                                                                                                                                                                           | gap                                                                               |
 | `0x02` | `FEA_CMD_SET_RESERT`                  | feature                                              | empty                                            | **"Restore defaults"** button (line 921730)                                                                                                                                                                                    | gap                                                                               |
-| `0x83` | `FEA_CMD_GET_BATTERY`                 | feature                                              | none                                             | (declared but **NOT** used on mouse path; on hardware the charge mirrors into status report `0x05` byte 3, read via GET_FEATURE — HARDWARE-CONFIRMED 2026-05-21; vendor app additionally uses the `Device.battery` gRPC field) | n/a — battery reads from report `0x05` byte 3 instead                             |
+| `0xF7` | status poll (battery enabler)         | feature SET (report-id `0x00`)                       | none (zero payload)                              | **SET_FEATURE report-id `0x00` + opcode `0xF7`** on `0xFFFF`/usage-`0x02` brings up the 2.4G telemetry link; then GET_FEATURE report `0x05` → charge at byte 3 (Windows) / byte 2 (Linux). HARDWARE-VERIFIED 2026-05-22 (Windows, 2.4G 8K). Cross-platform on hidapi, no libusb. | `batteryPercent()`: 0xF7 poll + ~30 ms + GET 0x05; see §4 |
+| `0x83` | `FEA_CMD_GET_BATTERY`                 | feature                                              | none                                             | Declared by the vendor but does NOT enable the dongle battery path — the `0xF7` status poll above is what populates report `0x05`. | unused on the mouse path; see §4 |
 | `0x01` | `FEA_CMD_SET_WIRELESS_SYNC`           | feature                                              | (unknown sub-fields)                             | wireless re-pair handshake                                                                                                                                                                                                     | gap                                                                               |
 | `0x05` | `FEA_CMD_SET_PROFILE`                 | feature                                              | byte 1 = profile idx (0…7)                       | profile-switch dropdown                                                                                                                                                                                                        | **gap** (we have no profile switching)                                            |
 | `0x85` | `FEA_CMD_GET_PROFILE`                 | feature                                              | empty → byte 1 = current profile                 | active-profile read on startup                                                                                                                                                                                                 | gap                                                                               |
@@ -410,22 +411,23 @@ ______________________________________________________________________
 1. **`kCmdCommit = 0x50`** — vendor has no separate "commit" step. Writes
    persist immediately. Action: delete the helper, audit every caller.
 1. **`kCmdBattery = 0x40` HID query** — opcode `0x40` does not exist for
-   battery. On real hardware (HARDWARE-CONFIRMED 2026-05-21) the charge level
-   mirrors into vendor **status report `0x05` byte 3** (`0..100`, `0x64`=100%),
-   read via GET_FEATURE on the `0xFFFF` (usage 0x02) control collection;
-   `AjSeriesMouse` reads it there. (The vendor app additionally surfaces the
-   value via the gRPC `Device.battery` field broadcast by the dongle.)
-   - **PLATFORM (Windows, 2026-05-22 — live probe + Frida):** on Windows the
-     report `0x05` byte 3 stays `0` in *both* HID channels (GET_FEATURE and the
-     interrupt-IN input report), and a 90 s Frida trace of the vendor
-     `iot_driver_v193` recorded **zero** HID calls of any kind
-     (`HidD_SetFeature` / `HidD_GetFeature` / `HidD_GetInputReport` / small
-     `ReadFile`). The vendor talks to the dongle over **libusb**
-     (`libusb1.0.dll`) and exposes the charge via gRPC, not the HID report.
-     Since our stack is hidapi-only (**COD-031**: no libusb in core), the mouse
-     charge is reachable on **Linux hidraw only**; on Windows `batteryPercent()`
-     returns `nullopt` and the chip stays hidden (an honest "unknown", never a
-     wrong `0%`). A Windows charge read would require the libusb vendor channel.
+   battery. The working read (HARDWARE-VERIFIED 2026-05-22 on Windows) is a
+   **`0xF7` status poll then GET_FEATURE**: SET_FEATURE the `0xF7` status poll
+   (report-id `0x00`, opcode `0xF7` at body byte 0, zero payload) on the
+   `0xFFFF`/usage-`0x02` control collection — this brings up the basetta's 2.4G
+   telemetry link — then, after a ~30 ms settle, GET_FEATURE report `0x05`.
+   Charge at **byte 3** on Windows (`05 00 00 64 …`) / **byte 2** on Linux
+   (unnumbered), auto-detected. `AjSeriesMouse::batteryPercent()` does exactly
+   this; full frame table in `aj_series_opcode_table.md` §4 and `aj_series.md`
+   §Battery. (The vendor app additionally surfaces the value via the gRPC
+   `Device.battery` field, but the `0xF7` HID poll is what populates the report.)
+   - **CROSS-PLATFORM on hidapi — NOT a libusb gap.** The earlier "Linux-only /
+     Windows needs libusb" conclusion was wrong: it came from reading the report
+     **without sending the `0xF7` poll**, so the telemetry link never came up and
+     the report stayed all-zero on every platform. With the `0xF7` poll the
+     Windows read returns `05 00 00 64 01 01 01 02` immediately (live-verified on
+     the 2.4G 8K). The `0x83` GET_BATTERY opcode does NOT enable the link; the
+     `0xF7` status poll does. COD-031 (no libusb) is preserved.
 1. **`kCmdRgb sub 0x02` (standalone brightness)** — does not exist.
    Brightness must ride inside the 8-byte light packet (byte 3).
 

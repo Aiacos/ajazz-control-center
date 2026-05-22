@@ -99,9 +99,11 @@ void registerAll(core::DeviceRegistry& registry) {
     };
 
     // Wireless models expose a host-readable charge level in vendor status
-    // report 0x05 (byte 3) — hardware-confirmed on the 2.4G 8K (0x3151:0x5007).
-    // Wired-only SKUs do not populate it, so we gate hasBattery + IBatteryCapable
-    // polling to the wireless/dongle codenames.
+    // report 0x05 (passive GET_FEATURE on the 0xFFFF/usage-0x02 control
+    // collection; charge at byte 3 on Windows / byte 2 on Linux) — see
+    // aj_series.cpp. The basetta only fills it once its wireless telemetry link
+    // is up. Wired-only SKUs do not populate it, so we gate hasBattery +
+    // IBatteryCapable polling to the wireless/dongle codenames.
     auto const hasWirelessBattery = [](std::string_view codename) {
         return codename == "ajazz_24g_8k" || codename == "aj_series_dongle" ||
                codename == "aj199_family_dongle" || codename == "aj159_apex_24g" ||
