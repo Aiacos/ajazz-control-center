@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ajazz Control Center — device illustration: AKP Stream Dock (LCD-key deck).
+     Original clean-room artwork; a generic LCD-key macro deck (3x5 grid),
+     brand-coherent. Not traced from any vendor asset. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 96" width="128" height="96">
+  <!-- Stand -->
+  <path d="M40 84 L88 84 L96 92 L32 92 Z" fill="#15161B" stroke="#3A3A44" stroke-width="1.5"/>
+  <!-- Body -->
+  <rect x="14" y="10" width="100" height="74" rx="10" fill="#1B1D24" stroke="#3A3A44" stroke-width="2"/>
+  <!-- 3 rows x 5 cols of LCD keys -->
+  <g>
+    <!-- row 1 -->
+    <rect x="24" y="20" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="42" y="20" width="14" height="14" rx="3" fill="#E63946"/>
+    <rect x="60" y="20" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="78" y="20" width="14" height="14" rx="3" fill="#0A82FA" opacity="0.85"/>
+    <rect x="96" y="20" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <!-- row 2 -->
+    <rect x="24" y="38" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="42" y="38" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="60" y="38" width="14" height="14" rx="3" fill="#7C3AED" opacity="0.8"/>
+    <rect x="78" y="38" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="96" y="38" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <!-- row 3 -->
+    <rect x="24" y="56" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="42" y="56" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="60" y="56" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+    <rect x="78" y="56" width="14" height="14" rx="3" fill="#E63946" opacity="0.6"/>
+    <rect x="96" y="56" width="14" height="14" rx="3" fill="#0A0B10" stroke="#3A3A44"/>
+  </g>
+</svg>

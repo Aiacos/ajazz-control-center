@@ -94,6 +94,37 @@ Even on a vanilla build, the user can override colors at runtime via:
 
 Runtime overrides emit `BrandingService::themeChanged()`, which triggers QML re-evaluation of all `branding.*` bindings.
 
+## Icon system
+
+The UI ships a **clean-room, original** vector icon set in
+[`resources/icons/`](../../resources/icons/README.md) — drawn from scratch in
+the brand's visual language; **no vendor artwork is traced or reused**.
+
+- **`resources/icons/glyphs/`** — 24 feature glyphs (sync, battery, rgb, dpi,
+  profile, settings, brightness, macro, layer, keybind, wireless, display,
+  firmware, power, pollrate, lod, anglesnap, bluetooth, wired, colorpicker,
+  record, delay, clock, weather).
+- **`resources/icons/actions/`** — 40 key/button **assignment** icons (mouse
+  clicks/DPI/side-buttons, media transport, volume/mic, launch app/website/
+  email/folder/home/favorites/calculator/search, copy/paste/cut/undo/redo/
+  screenshot/lock, show-desktop/task-view, key/multikey/text, disable/default).
+- **`resources/devices/`** — 3 per-family illustrations (keyboard, mouse,
+  Stream Dock); inherently coloured, not theme-tinted.
+
+**Theming (white ⇄ black from one file).** Every line icon uses
+`stroke="currentColor"`, so the *same* SVG renders white on the dark theme and
+near-black on the light theme — driven by the consuming `Image`/icon `color`
+(typically bound to a `Theme` token). There are deliberately **no per-theme
+duplicate assets**; the brand-red highlight and the inherently-colourful
+`rgb`/`colorpicker`/`weather` glyphs keep their explicit accents on both themes.
+
+**Wiring.** `src/app/CMakeLists.txt` globs the three folders
+(`CONFIGURE_DEPENDS`) and aliases each file as
+`icons/<group>/<name>.svg`, so QML loads them via
+`qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg`. Dropping a new
+`glyph-*.svg` / `action-*.svg` in and re-configuring is all it takes — see the
+conventions in `resources/icons/README.md`.
+
 ## What is **not** brandable
 
 - The license — output binaries remain GPL-3.0-or-later. Forks must comply.

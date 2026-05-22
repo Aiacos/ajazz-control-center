@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: delay / debounce / macro inter-event wait (hourglass). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <line x1="7" y1="3.5" x2="17" y2="3.5"/>
+  <line x1="7" y1="20.5" x2="17" y2="20.5"/>
+  <path d="M8 3.5 V7 L12 12 L8 17 V20.5"/>
+  <path d="M16 3.5 V7 L12 12 L16 17 V20.5"/>
+  <path d="M10 19 L12 16 L14 19 Z" fill="#E63946" stroke="none"/>
+</svg>

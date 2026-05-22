@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: key combination / shortcut (multi-key). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="8" width="9" height="9" rx="2"/>
+  <rect x="13" y="4" width="8" height="8" rx="2"/>
+  <line x1="16" y1="15" x2="20" y2="15" stroke="#E63946"/>
+  <line x1="18" y1="13" x2="18" y2="17" stroke="#E63946"/>
+</svg>

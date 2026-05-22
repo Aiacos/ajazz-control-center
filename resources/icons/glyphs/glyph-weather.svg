@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: OLED weather widget (sun behind cloud). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <!-- sun (red), partly behind the cloud -->
+  <g stroke="#E63946">
+    <circle cx="8.5" cy="8" r="3"/>
+    <line x1="8.5" y1="2" x2="8.5" y2="3.4"/>
+    <line x1="3" y1="8" x2="4.4" y2="8"/>
+    <line x1="4.4" y1="3.9" x2="5.4" y2="4.9"/>
+    <line x1="12.6" y1="3.9" x2="11.6" y2="4.9"/>
+  </g>
+  <!-- cloud (currentColor) -->
+  <path d="M8 19 a3.5 3.5 0 0 1 0.3 -7 a4.5 4.5 0 0 1 8.6 0.9 a3 3 0 0 1 -0.4 6.1 Z"/>
+</svg>

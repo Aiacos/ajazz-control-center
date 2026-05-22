@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: onboard profile / config slot (stacked cards). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="8" width="14" height="13" rx="2.5"/>
+  <path d="M7 8 V6.5 A2.5 2.5 0 0 1 9.5 4 H18.5 A2.5 2.5 0 0 1 21 6.5 V15.5 A2.5 2.5 0 0 1 18.5 18 H17"/>
+  <circle cx="10" cy="14.5" r="1.6" fill="#E63946" stroke="none"/>
+</svg>

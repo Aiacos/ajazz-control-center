@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Ajazz Control Center — device illustration: proprietary keyboard (AK980-class).
+     Original clean-room artwork; stylised representation of a screen+RGB mech
+     keyboard, coherent with the brand (#E63946 accent, dark Material surfaces).
+     Not traced from any vendor asset. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 84" width="128" height="84">
+  <defs>
+    <linearGradient id="rgb" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%"  stop-color="#0A82FA"/>
+      <stop offset="50%" stop-color="#E63946"/>
+      <stop offset="100%" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <!-- RGB underglow -->
+  <rect x="12" y="66" width="104" height="8" rx="4" fill="url(#rgb)" opacity="0.55"/>
+  <!-- Body -->
+  <rect x="8" y="12" width="112" height="56" rx="9" fill="#1B1D24" stroke="#3A3A44" stroke-width="2"/>
+  <!-- Small TFT screen (top-right) showing a clock tick -->
+  <rect x="92" y="18" width="22" height="16" rx="3" fill="#0A0B10" stroke="#E63946" stroke-width="1.5"/>
+  <line x1="103" y1="22" x2="103" y2="26" stroke="#E63946" stroke-width="1.5" stroke-linecap="round"/>
+  <line x1="103" y1="26" x2="107" y2="28" stroke="#E63946" stroke-width="1.5" stroke-linecap="round"/>
+  <!-- Key rows -->
+  <g fill="#2C2C34">
+    <g>
+      <rect x="16" y="20" width="10" height="9" rx="2"/><rect x="29" y="20" width="10" height="9" rx="2"/>
+      <rect x="42" y="20" width="10" height="9" rx="2"/><rect x="55" y="20" width="10" height="9" rx="2"/>
+      <rect x="68" y="20" width="10" height="9" rx="2"/><rect x="81" y="20" width="6" height="9" rx="2"/>
+    </g>
+    <g>
+      <rect x="16" y="32" width="10" height="9" rx="2"/><rect x="29" y="32" width="10" height="9" rx="2"/>
+      <rect x="42" y="32" width="10" height="9" rx="2"/><rect x="55" y="32" width="10" height="9" rx="2"/>
+      <rect x="68" y="32" width="10" height="9" rx="2"/><rect x="81" y="32" width="33" height="9" rx="2"/>
+    </g>
+    <g>
+      <rect x="16" y="44" width="14" height="9" rx="2"/><rect x="33" y="44" width="44" height="9" rx="2" fill="#3A3A44"/>
+      <rect x="80" y="44" width="14" height="9" rx="2"/><rect x="97" y="44" width="17" height="9" rx="2"/>
+    </g>
+  </g>
+</svg>

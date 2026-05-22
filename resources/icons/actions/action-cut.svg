@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: cut. Original scissors, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="6.5" cy="7" r="2.8"/>
+  <circle cx="6.5" cy="17" r="2.8"/>
+  <line x1="9" y1="8.5" x2="20" y2="16" stroke="#E63946"/>
+  <line x1="9" y1="15.5" x2="20" y2="8" stroke="#E63946"/>
+</svg>

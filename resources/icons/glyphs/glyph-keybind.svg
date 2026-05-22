@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: key remap / bind (keycap + reassign arrow). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <rect x="3" y="5" width="11" height="11" rx="2.5"/>
+  <line x1="8.5" y1="9" x2="8.5" y2="12.2" stroke="#E63946"/>
+  <path d="M14 19 H18.5 A2.5 2.5 0 0 0 21 16.5 V10"/>
+  <polyline points="18.5 12 21 9.5 23 12" transform="translate(-2 0)"/>
+</svg>

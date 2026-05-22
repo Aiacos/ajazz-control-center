@@ -171,6 +171,13 @@ AJAZZ (and its OEM partner Mirabox) ships device-specific Windows-only utilities
 
 See [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md) for the full design.
 
+The UI ships a **clean-room, original icon set** (24 feature glyphs + 40
+key/button action icons + 3 device illustrations) under
+[`resources/icons/`](resources/icons/README.md). Line icons use
+`stroke="currentColor"` so a single SVG renders white on the dark theme and
+near-black on the light theme — no vendor artwork is reused. See
+[`docs/architecture/BRANDING.md`](docs/architecture/BRANDING.md#icon-system).
+
 ## Install (end users)
 
 One command, any platform. No group membership, no logout, no replug.

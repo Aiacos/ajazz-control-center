@@ -189,6 +189,31 @@ set_source_files_properties(
     ${ACC_OPENDECK_FALLBACK} PROPERTIES QT_RESOURCE_ALIAS opendeck-fallback.json
 )
 
+# Clean-room original UI icon set (see resources/icons/README.md). Theme-tintable
+# SVGs: each line glyph uses stroke="currentColor", so a single file renders white
+# on the dark theme and near-black on the light theme — no per-theme duplicates.
+# Three groups: glyphs/ (feature icons), actions/ (key-assignment actions),
+# devices/ (per-family illustrations). Aliased under icons/ so QML loads them via
+# qrc:/qt/qml/AjazzControlCenter/icons/<group>/<name>.svg. CONFIGURE_DEPENDS
+# re-globs when an SVG is added/removed so contributors just drop a file in.
+set(ACC_UI_ICONS "")
+file(GLOB _acc_ui_glyphs CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/glyphs/*.svg)
+file(GLOB _acc_ui_actions CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/icons/actions/*.svg)
+file(GLOB _acc_ui_devices CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/devices/*.svg)
+foreach(_f IN LISTS _acc_ui_glyphs)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/glyphs/${_n})
+endforeach()
+foreach(_f IN LISTS _acc_ui_actions)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/actions/${_n})
+endforeach()
+foreach(_f IN LISTS _acc_ui_devices)
+    get_filename_component(_n "${_f}" NAME)
+    set_source_files_properties("${_f}" PROPERTIES QT_RESOURCE_ALIAS icons/devices/${_n})
+endforeach()
+list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
+
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
 # `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
 # only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
@@ -286,6 +311,7 @@ qt_add_qml_module(
               ${ACC_DOC_PRIVACY}
               ${ACC_STREAMDOCK_FALLBACK}
               ${ACC_OPENDECK_FALLBACK}
+              ${ACC_UI_ICONS}
 )
 
 target_include_directories(ajazz-control-center PRIVATE src)

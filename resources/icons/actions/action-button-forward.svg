@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: browser/forward side button. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <path d="M16 5 H9 a5 5 0 0 0 -5 5 v4 a5 5 0 0 0 5 5 h6 a5 5 0 0 0 5 -5 v-4 a5 5 0 0 0 -5 -5 Z"/>
+  <polyline points="13 9 16 12 13 15" stroke="#E63946"/>
+  <line x1="16" y1="12" x2="10" y2="12" stroke="#E63946"/>
+</svg>

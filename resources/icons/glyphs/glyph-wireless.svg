@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: wireless / connection mode (2.4G / BT). Signal arcs + dot. Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <path d="M5 10.5 a10 10 0 0 1 14 0"/>
+  <path d="M8 13.5 a6 6 0 0 1 8 0"/>
+  <circle cx="12" cy="17.5" r="1.8" fill="#E63946" stroke="none"/>
+</svg>

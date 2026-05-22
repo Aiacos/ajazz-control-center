@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- glyph: Fn layer / key layer (stacked sheets). Original, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2"
+     stroke-linecap="round" stroke-linejoin="round">
+  <path d="M12 3 L21 8 L12 13 L3 8 Z" fill="#E63946" stroke="none" opacity="0.9"/>
+  <path d="M3 12 L12 17 L21 12"/>
+  <path d="M3 16 L12 21 L21 16"/>
+</svg>

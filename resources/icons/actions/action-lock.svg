@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- action: lock screen. Original padlock, theme-tintable. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"
+     fill="none" color="#E8E8EE" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <rect x="5" y="10" width="14" height="10" rx="2.5"/>
+  <path d="M8 10 V7 a4 4 0 0 1 8 0 V10"/>
+  <circle cx="12" cy="15" r="1.8" fill="#E63946" stroke="none"/>
+</svg>
