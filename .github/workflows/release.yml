@@ -296,6 +296,9 @@ jobs:
       id-token: write           # for Sigstore OIDC
       attestations: write       # for actions/attest-build-provenance
     steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        # Needed so the release-notes template (.github/RELEASE_NOTES_TEMPLATE.md)
+        # is on disk for body_path below.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
         with: { path: dist }
       - name: List artifacts
@@ -331,6 +334,10 @@ jobs:
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
         with:
           tag_name: ${{ github.ref_name || github.event.inputs.tag }}
+          # Curated downloads + install guide rendered at the top of the
+          # release; generate_release_notes: true appends the auto-generated
+          # "What's Changed" / contributor list below it.
+          body_path: .github/RELEASE_NOTES_TEMPLATE.md
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
