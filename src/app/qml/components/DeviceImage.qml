@@ -2,27 +2,31 @@
 //
 // DeviceImage.qml — product illustration for the selected device.
 //
-// Renders a real product photo for the device currently being edited, sized to
-// fit a fixed box next to the editor header. The photos are **bundled in the
-// repo** (resources/devices/products/, downsized vendor shots) and loaded via
-// qrc — no runtime network dependency, works offline. When no per-model photo
-// is curated for the codename, the box falls back to the bundled per-family
-// device-type SVG (the same clean-room icon set the sidebar DeviceRow uses).
-// A broken-image placeholder is never shown.
+// Renders a real product photo for the device currently being edited inside a
+// small rounded "thumbnail card". The card (a light, rounded, bordered tile) is
+// deliberate: vendor product shots are studio photos on a white background, and
+// white/light products (white keyboard, white mouse) cannot be colour-keyed to
+// transparency without punching holes in the product. Putting every photo on a
+// white card makes that white background read as an intentional product
+// thumbnail on any app theme — and dark-device cutouts sit cleanly on it too.
 //
-// Adding a device (keep this in sync — see docs/guides/ADDING_A_DEVICE.md):
+// Photos are bundled in the repo (resources/devices/products/, downsized) and
+// loaded via qrc — no runtime network dependency. When no per-model photo is
+// curated for the codename, the card shows the bundled per-family device-type
+// SVG instead.
+//
+// Adding a device (keep in sync — see docs/guides/ADDING_A_DEVICE.md):
 //   1. Drop the downsized product image in resources/devices/products/ as
 //      product-<codename>.{png,jpg} (CMake auto-globs it into the qrc).
-//   2. Add a `"<codename>": _img("product-<codename>.<ext>")` line below.
-//   3. If the new codename is a variant of an existing product, add a prefix
-//      rule in _resolveProduct() instead of a new image.
+//   2. Add a `"<codename>": _img("product-<codename>.<ext>")` line below, or a
+//      prefix rule in _resolveProduct() for a variant of an existing product.
 //
 // Properties:
 //   * `codename` — device codename (e.g. "akp05e"). Drives the curated lookup.
 //   * `family`   — core DeviceFamily int (0=Unknown, 1=StreamDeck, 2=Keyboard,
-//                  3=Mouse). Drives the per-family SVG fallback (same mapping
-//                  DeviceRow uses).
+//                  3=Mouse). Drives the per-family SVG fallback.
 import QtQuick
+import AjazzControlCenter
 
 Item {
     id: root
@@ -30,18 +34,13 @@ Item {
     property string codename: ""
     property int    family: 0
 
-    // Fixed display box next to the header title. PreserveAspectFit keeps the
-    // aspect ratio inside this box regardless of source dimensions.
-    implicitWidth: 104
-    implicitHeight: 80
+    implicitWidth: 116
+    implicitHeight: 84
 
     readonly property string _base: "qrc:/qt/qml/AjazzControlCenter/icons/devices/products/"
     function _img(name) { return root._base + name; }
 
     // ---- Curated per-codename product photos (bundled qrc) -----------------
-    // Keyed by the registry codename. Files live in resources/devices/products/
-    // and are aliased into the qrc by src/app/CMakeLists.txt. Codenames absent
-    // here fall through to the per-family SVG via _resolveProduct().
     readonly property var _productByCodename: ({
         "akp05e":     _img("product-akp05e.png"),
         "akp05":      _img("product-akp05.png"),
@@ -57,8 +56,6 @@ Item {
     })
 
     // Resolve the bundled product photo for the current codename, or "" if none.
-    // Exact match first, then prefix/alias normalisation so the many registry
-    // variants of one physical product reuse the same canonical photo.
     function _resolveProduct() {
         if (root.codename === "")
             return "";
@@ -76,8 +73,7 @@ Item {
         return "";
     }
 
-    // Per-family device-type SVG fallback. Same mapping + qrc aliasing scheme as
-    // DeviceRow.qml: 2→keyboard, 3→mouse, 1/0/else→streamdock.
+    // Per-family device-type SVG fallback. Same mapping + qrc scheme as DeviceRow.
     function _familySvg() {
         var base = "qrc:/qt/qml/AjazzControlCenter/icons/devices/";
         if (root.family === 2) return base + "device-keyboard.svg";
@@ -86,42 +82,56 @@ Item {
     }
 
     readonly property string _productUrl: _resolveProduct()
+    readonly property bool   _hasProduct: _productUrl !== ""
 
-    // Guards against a (rare) bundled-image decode failure: swap to the SVG.
     property bool _productFailed: false
     onCodenameChanged: root._productFailed = false
 
-    // The product photo. Hidden while loading / on failure so we never flash a
-    // broken-image box; the SVG underlay shows through until it paints.
-    Image {
-        id: productImage
+    // The thumbnail card. White so studio product shots (on white) blend in; a
+    // hairline border + rounded corners make it read as an intentional product
+    // tile rather than a stray white box on dark themes. The family SVG sits on
+    // a transparent card instead (no white tile behind a flat icon).
+    Rectangle {
+        id: card
         anchors.fill: parent
-        fillMode: Image.PreserveAspectFit
-        sourceSize.width: 208
-        sourceSize.height: 160
-        smooth: true
-        mipmap: true
-        source: (root._productUrl !== "" && !root._productFailed) ? root._productUrl : ""
-        visible: status === Image.Ready && source.toString() !== ""
-        onStatusChanged: {
-            if (status === Image.Error)
-                root._productFailed = true;
-        }
-        Accessible.ignored: true
-    }
+        radius: Theme.radiusMd
+        clip: true
+        color: (root._hasProduct && !root._productFailed) ? "#ffffff" : "transparent"
+        border.width: (root._hasProduct && !root._productFailed) ? 1 : 0
+        border.color: Qt.rgba(0, 0, 0, 0.12)
 
-    // Family SVG fallback — always mounted underneath; visible whenever the
-    // product photo is not currently painted (no curated photo or decode error).
-    Image {
-        id: fallbackIcon
-        anchors.fill: parent
-        fillMode: Image.PreserveAspectFit
-        sourceSize.width: 96
-        sourceSize.height: 96
-        smooth: true
-        mipmap: true
-        source: root._familySvg()
-        visible: !productImage.visible
-        Accessible.ignored: true
+        // Product photo, inset a little from the card edge.
+        Image {
+            id: productImage
+            anchors.fill: parent
+            anchors.margins: 5
+            fillMode: Image.PreserveAspectFit
+            sourceSize.width: 232
+            sourceSize.height: 168
+            smooth: true
+            mipmap: true
+            source: (root._productUrl !== "" && !root._productFailed) ? root._productUrl : ""
+            visible: status === Image.Ready && source.toString() !== ""
+            onStatusChanged: {
+                if (status === Image.Error)
+                    root._productFailed = true;
+            }
+            Accessible.ignored: true
+        }
+
+        // Per-family SVG fallback — visible when no product photo paints.
+        Image {
+            id: fallbackIcon
+            anchors.fill: parent
+            anchors.margins: 6
+            fillMode: Image.PreserveAspectFit
+            sourceSize.width: 96
+            sourceSize.height: 96
+            smooth: true
+            mipmap: true
+            source: root._familySvg()
+            visible: !productImage.visible
+            Accessible.ignored: true
+        }
     }
 }
