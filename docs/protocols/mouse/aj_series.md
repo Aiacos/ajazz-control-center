@@ -41,6 +41,9 @@ byte 63 : checksum = (sum of bytes 1..62) mod 256
 
 ## Battery (wireless models)
 
+> Solution narrative (how the read was made to work, root cause, verification):
+> [`aj_series_battery.md`](aj_series_battery.md).
+
 ```
 host  → 05 40 00 00  ... CK
 device← 05 40 00 01  BB  ... CK      (BB = percent, 0..100)
