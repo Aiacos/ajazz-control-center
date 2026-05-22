@@ -625,7 +625,7 @@ public:
     // intended zone, and for picking a sane `location` id (DO NOT pass 0x12 —
     // vendor uses that to route through a different packet shape that we
     // haven't yet captured; the runtime check below refuses).
-    void setSecondaryScreenImage(std::uint8_t location,
+    bool setSecondaryScreenImage(std::uint8_t location,
                                  std::uint16_t zoneWidth,
                                  std::uint16_t zoneHeight,
                                  std::uint16_t zoneX,
@@ -637,7 +637,7 @@ public:
             AJAZZ_LOG_WARN("akp05",
                            "setSecondaryScreenImage: location=0x12 is reserved for the M_V "
                            "boot-logo variant which is not yet captured; refusing");
-            return;
+            return false;
         }
         ImageTransform const transform{
             .targetWidth = zoneWidth,
@@ -650,7 +650,7 @@ public:
         auto const jpeg = encodeForDevice(rgba, srcWidth, srcHeight, transform);
         auto const header = akp05::buildSecondaryScreenHeader(
             location, zoneWidth, zoneHeight, zoneX, zoneY, static_cast<std::uint32_t>(jpeg.size()));
-        sendImage(header, jpeg);
+        return sendImage(header, jpeg);
     }
 
     // ---- ITouchStripDisplayCapable (CRT DRA — akp05_vendor.md §3 row 190) --
@@ -693,9 +693,11 @@ public:
             return false;
         }
         // Reuse the existing rect-addressable helper for resize + JPEG encode
-        // + DRA header + chunked sendImage + ULEND commit sentinel.
-        setSecondaryScreenImage(location, rectWidth, rectHeight, x, y, rgba, srcWidth, srcHeight);
-        return true;
+        // + DRA header + chunked sendImage + ULEND commit sentinel. Propagate
+        // its success so a device-yank mid-burst is reported as false per the
+        // ITouchStripDisplayCapable contract.
+        return setSecondaryScreenImage(
+            location, rectWidth, rectHeight, x, y, rgba, srcWidth, srcHeight);
     }
 
     bool clearTouchStrip() override {
@@ -717,8 +719,7 @@ public:
             /*x=*/0,
             /*y=*/0,
             static_cast<std::uint32_t>(jpeg.size()));
-        sendImage(header, jpeg);
-        return true;
+        return sendImage(header, jpeg);
     }
 
     // ---- IBootLogoCapable (CRT LOG — akp05_vendor.md §2 row 188) ----------
@@ -804,7 +805,12 @@ private:
      *  @param header   Pre-built command header (key, encoder, or main LCD).
      *  @param payload  Raw JPEG bytes to transmit.
      */
-    void sendImage(std::array<std::uint8_t, akp05::PacketSize> const& header,
+    /// @return false on an oversized payload or a transport write failure
+    /// (e.g. device-yank mid-burst), true once the full image + ULEND
+    /// sentinel are written. void callers (setKeyImage/setMainImage/
+    /// setEncoderImage/setBootLogo) discard this; the bool capability
+    /// surface (setTouchStripImage/clearTouchStrip) propagates it.
+    bool sendImage(std::array<std::uint8_t, akp05::PacketSize> const& header,
                    std::span<std::uint8_t const> payload) {
         // SEC-008 / COD-013 / CWE-190: header length field is 16 bits across
         // all three image variants (key/main/encoder). Refuse oversized
@@ -814,23 +820,32 @@ private:
                            "sendImage: payload {} bytes exceeds 65535-byte protocol max; "
                            "refusing",
                            payload.size());
-            return;
+            return false;
         }
-        (void)m_transport->write(header);
-        std::size_t offset = 0;
-        while (offset < payload.size()) {
-            std::array<std::uint8_t, akp05::PacketSize> chunk{};
-            auto const take = std::min<std::size_t>(akp05::PacketSize, payload.size() - offset);
-            std::memcpy(chunk.data(), payload.data() + offset, take);
-            (void)m_transport->write(chunk);
-            offset += take;
+        // ITransport::write() throws on a failed HID write; on a device-yank
+        // mid-burst the throw must become a false return, not escape the
+        // capability override (mirrors AjSeriesMouse::factoryReset).
+        try {
+            (void)m_transport->write(header);
+            std::size_t offset = 0;
+            while (offset < payload.size()) {
+                std::array<std::uint8_t, akp05::PacketSize> chunk{};
+                auto const take = std::min<std::size_t>(akp05::PacketSize, payload.size() - offset);
+                std::memcpy(chunk.data(), payload.data() + offset, take);
+                (void)m_transport->write(chunk);
+                offset += take;
+            }
+            // Vendor RE (akp05_vendor.md §3 + roadmap §11.3): emit the 5-byte
+            // ULEND commit-after-image-burst sentinel. Previously we relied on
+            // STP from flush() but the vendor sends ULEND specifically after
+            // image streams. Missing this may cause firmware desync on large
+            // bursts (vendor RE annotation).
+            (void)m_transport->write(akp05::buildUploadFinished());
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("akp05", "sendImage: HID write failed: {}", e.what());
+            return false;
         }
-        // Vendor RE (akp05_vendor.md §3 + roadmap §11.3): emit the 5-byte
-        // ULEND commit-after-image-burst sentinel. Previously we relied on
-        // STP from flush() but the vendor sends ULEND specifically after
-        // image streams. Missing this may cause firmware desync on large
-        // bursts (vendor RE annotation).
-        (void)m_transport->write(akp05::buildUploadFinished());
+        return true;
     }
 
     DeviceDescriptor m_descriptor; ///< Static hardware description supplied at construction.

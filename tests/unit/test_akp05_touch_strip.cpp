@@ -24,14 +24,18 @@
  */
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/device.hpp"
+#include "ajazz/core/transport.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
 #include "akp05_protocol.hpp"
 #include "fixtures/mock_transport.hpp"
 #include "qt_app_fixture.hpp"
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <span>
+#include <stdexcept>
 #include <string>
 #include <utility>
 #include <vector>
@@ -89,6 +93,25 @@ std::vector<std::uint8_t> gradientRgba(std::uint16_t width, std::uint16_t height
     }
     return out;
 }
+
+/// Minimal ITransport whose write() always throws, simulating a device
+/// physically yanked mid-burst (makeHidTransport's write() throws on a
+/// failed HID write). MockTransport is `final`, so this is a separate stub.
+class ThrowingTransport final : public core::ITransport {
+public:
+    void open() override {}
+    void close() override {}
+    [[nodiscard]] bool isOpen() const noexcept override { return true; }
+    std::size_t write(std::span<std::uint8_t const>) override {
+        throw std::runtime_error("simulated device-yank: HID write failed");
+    }
+    std::size_t read(std::span<std::uint8_t>, std::chrono::milliseconds) override { return 0; }
+    std::size_t writeFeature(std::span<std::uint8_t const>) override {
+        throw std::runtime_error("simulated device-yank: HID writeFeature failed");
+    }
+    std::size_t readFeature(std::span<std::uint8_t>) override { return 0; }
+    [[nodiscard]] core::TransportStats stats() const noexcept override { return {}; }
+};
 
 } // namespace
 
@@ -269,4 +292,32 @@ TEST_CASE("akp05 open() probes and caches the firmware version", "[akp05][open][
     // is emitted by the probe (it was the wrong method and never elicited a reply
     // on real hardware). On Windows hidapi this GET_FEATURE_REPORT returns nothing
     // (mirajazz #10), but the mock supplies it, so the parse path is exercised here.
+}
+
+TEST_CASE("akp05 touch-strip writes return false (not throw) on a device-yank",
+          "[akp05][touch-strip]") {
+    // Regression for Phase 10 CR-01: a transport write that throws mid-burst
+    // (physical yank) must surface as a false return per the
+    // ITouchStripDisplayCapable contract, never escape the override.
+    tests::qtGuiApp();
+    auto dev = streamdeck::makeAkp05WithTransport(
+        makeAkp05Descriptor(), makeAkp05Id(), std::make_unique<ThrowingTransport>());
+    auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(dev.get());
+    REQUIRE(strip != nullptr);
+
+    auto const rgba = gradientRgba(64, 64);
+    bool result = true;
+    REQUIRE_NOTHROW(result = strip->setTouchStripImage(rgba,
+                                                       64,
+                                                       64,
+                                                       /*location=*/0,
+                                                       /*x=*/0,
+                                                       /*y=*/0,
+                                                       /*rectWidth=*/200,
+                                                       /*rectHeight=*/100));
+    CHECK_FALSE(result);
+
+    result = true;
+    REQUIRE_NOTHROW(result = strip->clearTouchStrip());
+    CHECK_FALSE(result);
 }
