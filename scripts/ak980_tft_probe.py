@@ -232,7 +232,7 @@ SWEEP_COMBOS = [
 
 
 def sweep_time(pause: float) -> None:
-    print("Sweeping (interface × transport). Watch the panel — note every time that appears.\n")
+    print("Sweeping (interface x transport). Watch the panel — note every time that appears.\n")
     for up, feat, hhmm in SWEEP_COMBOS:
         kind = "feature" if feat else "output "
         print(f"[{hhmm}] 0x{up:04x} {kind} report:")
@@ -302,7 +302,7 @@ def main() -> None:
     ap.add_argument("--bars", action="store_true", help="R/G/B markers at pixels (0,0)/(1,0)/(2,0)")
     ap.add_argument("--color", default="0,0,255", help="solid fill 'R,G,B' (default blue)")
     ap.add_argument("--settime", metavar="HH:MM", help="set the device RTC clock (e.g. 11:11)")
-    ap.add_argument("--sweep", action="store_true", help="try every interface × transport combo")
+    ap.add_argument("--sweep", action="store_true", help="try every interface x transport combo")
     ap.add_argument("--pause", type=float, default=4.0, help="seconds between sweep combos")
     ap.add_argument("--delay", type=int, default=0, help="ms between time packets")
     ap.add_argument("--readback", action="store_true", help="GET_FEATURE after each packet")
