@@ -29,6 +29,12 @@ Item {
     readonly property int fwFamily: FirmwareUpdate.familyForDevice(deviceFamily, deviceCodename)
     readonly property bool toolInstalled: FirmwareUpdate.isVendorToolInstalled(fwFamily)
 
+    // Running firmware version, read once when the tab opens (firmwareVersion()
+    // may do a HID round-trip, so we don't put it in a binding). Empty/"unknown"
+    // when the device is offline or doesn't answer.
+    property string installedVersion: ""
+    Component.onCompleted: installedVersion = FirmwareUpdate.runningFirmwareVersion(deviceCodename)
+
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingLg
@@ -39,6 +45,17 @@ Item {
             color: Theme.fgPrimary
             font.pixelSize: Theme.fontLg
             font.bold: true
+        }
+
+        Text {
+            Layout.fillWidth: true
+            color: Theme.fgPrimary
+            font.pixelSize: Theme.fontMd
+            text: {
+                var v = root.installedVersion;
+                var shown = (v === "" || v === "unknown") ? qsTr("unknown") : v;
+                return qsTr("Installed firmware: %1").arg(shown);
+            }
         }
 
         Text {

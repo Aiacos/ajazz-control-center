@@ -128,3 +128,15 @@ TEST_CASE("FirmwareUpdateService reports tool not installed on a bare machine", 
     REQUIRE_FALSE(svc.isVendorToolInstalled(FirmwareUpdateService::Keyboard));
     REQUIRE_FALSE(svc.isVendorToolInstalled(FirmwareUpdateService::MouseAj159));
 }
+
+TEST_CASE("FirmwareUpdateService runningFirmwareVersion is empty without a lookup", "[firmware]") {
+    // No DeviceLookup wired (the default ctor path): must degrade gracefully
+    // to an empty string rather than dereferencing a null lookup.
+    FirmwareUpdateService const svc(nullptr);
+    REQUIRE(svc.runningFirmwareVersion(QStringLiteral("akp05")).isEmpty());
+
+    // A lookup that resolves nothing also yields empty (no crash on null device).
+    FirmwareUpdateService const svc2(
+        nullptr, [](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return nullptr; });
+    REQUIRE(svc2.runningFirmwareVersion(QStringLiteral("akp05")).isEmpty());
+}

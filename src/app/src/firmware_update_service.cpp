@@ -29,7 +29,8 @@ FirmwareUpdateService* s_instance = nullptr;
 
 } // namespace
 
-FirmwareUpdateService::FirmwareUpdateService(QObject* parent) : QObject(parent) {}
+FirmwareUpdateService::FirmwareUpdateService(QObject* parent, DeviceLookup lookup)
+    : QObject(parent), m_lookup(std::move(lookup)) {}
 
 FirmwareUpdateService* FirmwareUpdateService::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
     Q_ASSERT_X(s_instance != nullptr,
@@ -148,6 +149,21 @@ QString FirmwareUpdateService::detectedVendorToolPath(Family family) const {
 
 bool FirmwareUpdateService::isVendorToolInstalled(Family family) const {
     return !detectedVendorToolPath(family).isEmpty();
+}
+
+QString FirmwareUpdateService::runningFirmwareVersion(QString const& codename) const {
+    if (!m_lookup) {
+        return {};
+    }
+    auto const device = m_lookup(codename);
+    if (!device) {
+        return {};
+    }
+    try {
+        return QString::fromStdString(device->firmwareVersion());
+    } catch (...) {
+        return {};
+    }
 }
 
 bool FirmwareUpdateService::openFirmwareDownloadPage(Family family) {

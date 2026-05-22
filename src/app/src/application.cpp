@@ -167,7 +167,22 @@ Application::Application(QObject* parent)
       // Owned here so its QTimer / QNetworkAccessManager live on the GUI
       // thread for the same lifetime as the other QML singletons.
       m_appUpdate(std::make_unique<AppUpdateService>(this)),
-      m_firmwareUpdate(std::make_unique<FirmwareUpdateService>(this)),
+      m_firmwareUpdate(std::make_unique<FirmwareUpdateService>(
+          this,
+          // Same codename -> shared_ptr<IDevice> DeviceLookup as BatteryService,
+          // so the Firmware tab can read the running firmware version.
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          })),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer

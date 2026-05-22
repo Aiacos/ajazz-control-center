@@ -37,10 +37,16 @@
 #include <QtQmlIntegration>
 #include <QUrl>
 
+#include <functional>
+#include <memory>
 #include <type_traits>
 
 class QJSEngine;
 class QQmlEngine;
+
+namespace ajazz::core {
+class IDevice;
+}
 
 namespace ajazz::app {
 
@@ -76,7 +82,13 @@ public:
     };
     Q_ENUM(Family)
 
-    explicit FirmwareUpdateService(QObject* parent);
+    /// Resolves a device codename to its (possibly null) live backend, so the
+    /// service can read the running firmware version. Mirrors the
+    /// BatteryService / TimeSyncService DeviceLookup seam. Defaulted empty:
+    /// when unset (e.g. unit tests), runningFirmwareVersion() returns "".
+    using DeviceLookup = std::function<std::shared_ptr<core::IDevice>(QString const&)>;
+
+    explicit FirmwareUpdateService(QObject* parent, DeviceLookup lookup = {});
     ~FirmwareUpdateService() override = default;
 
     static FirmwareUpdateService* create(QQmlEngine* qml, QJSEngine* js);
@@ -132,6 +144,18 @@ public:
     /// @return true iff @ref detectedVendorToolPath is non-empty.
     [[nodiscard]] Q_INVOKABLE bool isVendorToolInstalled(Family family) const;
 
+    /**
+     * @brief The device's currently-running firmware version string.
+     *
+     * Resolves @p codename via the injected @ref DeviceLookup and returns
+     * `IDevice::firmwareVersion()` (e.g. the AKP05E's `CRT VER` "V3.AKP05E.01.007",
+     * or the AK980's `major.minor.patch`). Returns an empty string when no
+     * lookup is wired or the device is unavailable. May perform a short HID
+     * round-trip — call it on demand (e.g. when the Firmware tab opens), not in
+     * a binding.
+     */
+    [[nodiscard]] Q_INVOKABLE QString runningFirmwareVersion(QString const& codename) const;
+
 public Q_SLOTS:
     /**
      * @brief Open the vendor firmware download page in the user's browser.
@@ -164,6 +188,8 @@ private:
     /// join the FirmwareUpgradeTool executable, or return empty. No-op
     /// (returns empty) on non-Windows / non-StreamDock.
     [[nodiscard]] static QString registryVendorToolPath(Family family);
+
+    DeviceLookup m_lookup; ///< codename -> live backend; empty in tests.
 };
 
 // Pitfall 4 build-break lock — co-located with QML_SINGLETON.
