@@ -283,6 +283,7 @@ qt_add_qml_module(
               qml/components/AppHeader.qml
               qml/components/BatteryIndicator.qml
               qml/components/Card.qml
+              qml/components/DeviceImage.qml
               qml/components/DeviceRow.qml
               qml/components/EmptyState.qml
               qml/components/FirmwarePanel.qml

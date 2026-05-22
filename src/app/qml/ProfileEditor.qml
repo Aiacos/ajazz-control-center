@@ -65,12 +65,58 @@ Rectangle {
         anchors.margins: Theme.spacingLg
         spacing: Theme.spacingMd
 
+        // Header — restructured so the human model name sits on line 1 next to
+        // the device's product image, with the machine codename on line 2.
+        //
+        // Empty state: when nothing is selected we fall back to the plain
+        // PageHeader prompt (no image, no codename line).
         PageHeader {
             Layout.fillWidth: true
-            title: root.codename === ""
-                ? qsTr("Select a device on the left")
-                : qsTr("Editing: %1").arg(root.codename)
-            subtitle: root.capabilities && root.capabilities.model ? root.capabilities.model : ""
+            visible: root.codename === ""
+            title: qsTr("Select a device on the left")
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            visible: root.codename !== ""
+            spacing: Theme.spacingMd
+
+            // Product photo (remote, per-codename) with per-family SVG fallback.
+            DeviceImage {
+                Layout.alignment: Qt.AlignVCenter
+                codename: root.codename
+                family: root._family
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
+
+                // Line 1 — "Editing: <human model name>". Falls back to the
+                // codename when the capability map carries no model string.
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Editing: %1").arg(
+                        root.capabilities && root.capabilities.model
+                            ? root.capabilities.model
+                            : root.codename)
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.fontXl
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+
+                // Line 2 — machine codename.
+                Text {
+                    Layout.fillWidth: true
+                    text: root.codename
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+            }
         }
 
         // Empty state when nothing is selected -------------------------------
