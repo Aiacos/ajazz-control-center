@@ -24,11 +24,11 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 
 ## Current Position
 
-Phase: 14 — Stream Dock Control Service (**PLANNED**, verified PASS)
-Plan: 14-01 (DEVICES-11 hasClock fix), 14-02 (StreamDockControlService) — 2 plans, 1 wave
-Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). Phase 14 planned + plan-checker PASS; ready to `/gsd-execute-phase 14` (run 14-01 then 14-02 — shared tests/unit/CMakeLists.txt append)
-Branch: feat/streamdock (off develop)
-Last activity: 2026-05-23 — Phase 14 planned: CONTEXT + RESEARCH (HIGH) + VALIDATION + 2 PLAN.md committed; plan-checker PASS (wire offsets BAT/LIG/ULEND confirmed vs shipping code; app-layer gap is real)
+Phase: 14-18 PLANNED + plan-checker PASS (Phases 19-25 not yet planned)
+Plan: 14 (2 plans), 15 (2), 16 (3), 17 (3), 18 (4) — all CONTEXT+RESEARCH+VALIDATION+PLAN committed, all plan-checker PASS (17-01 revised once for a routed-action-count BLOCKER, then PASS)
+Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). The device slice (14-16) + plugin-SDK core (17-18) are planned + verified, NOT executed. Ready to either `/gsd-execute-phase 14` (start landing code) or continue planning Phases 19-25 (bridge, Property Inspector, built-in actions, store, aux surfaces, family, hardware verify).
+Branch: feat/streamdock (off develop) — planning commits unpushed (operator pushes per workflow)
+Last activity: 2026-05-23 — planned Phases 14-18 ahead of execution (per user "plan ahead first"). Execution dependency chain: 14 → 15 → 16 (16 depends on 14+15 SUMMARY files); 17 (independent) → 18 (18-04 depends on 17-02 sendEvent). Build unblocked (qt6-qtbase-private-devel present); all phase verification is hardware-free (MockTransport / loopback WebSocket); live witnesses deferred to Phase 25.
 
 **Phase 14 execution prerequisites (for the operator):** the build needs Qt6 private headers (`qt6-qtbase-private-devel` on Fedora — Phase-10 review flagged CorePrivate missing). System-package install is the operator's action (project hard rule: no system-level mutations from tooling). Verification is hardware-free (MockTransport + `makeAkp05WithTransport`); the live power-cycle smoke is deferred to Phase 25.
 
