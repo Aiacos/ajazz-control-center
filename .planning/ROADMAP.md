@@ -235,7 +235,12 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 1. Loading/switching a profile repaints all keys from saved bindings (DISPLAY-08).
 1. `VER` firmware probe runs at open and is cached/surfaced (DOCK-01); the `akp05e` descriptor advertises `hasClock=false` (DEVICES-11).
 
-**Plans**: TBD · **Phase notes**: Load-bearing foundation — land first. BAT header capture-verified; do NOT alter the wire format (app-side wiring only). **UI hint**: yes
+**Plans**: 2 plans · **Phase notes**: Load-bearing foundation — land first. BAT header capture-verified; do NOT alter the wire format (app-side wiring only). **UI hint**: yes
+
+Plans:
+
+- [ ] 14-01-PLAN.md — akp05e `hasClock=false` descriptor honesty fix (DEVICES-11) + regression test
+- [ ] 14-02-PLAN.md — StreamDockControlService: held-open handle, brightness-ON at open, coalesced BAT->chunk->ULEND key push, repaint-on-load, firmware surface (DISPLAY-06/07/08, DOCK-01/02)
 
 ### Phase 15: Stream Dock Input Routing
 
