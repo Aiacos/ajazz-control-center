@@ -1,0 +1,87 @@
+name: Sync packages
+
+# Keep every package-manager manifest under packaging/ in lockstep with each
+# GitHub release: when a release is published, rewrite the version / URL /
+# checksum (and MSI ProductCode) across winget, Chocolatey, Homebrew, AUR,
+# Flathub, Fedora and Ubuntu from the release's own SHA256SUMS + source tarball,
+# commit the result to main, then auto-submit the channels whose credentials
+# are configured as repo secrets (the rest stay a documented manual step).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to sync (e.g. v0.1.0)
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-packages
+  cancel-in-progress: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Refresh the in-repo manifests and commit them to main. No secrets needed.
+  # ---------------------------------------------------------------------------
+  sync:
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+      - id: tag
+        run: echo "tag=${{ github.event.release.tag_name || github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+      - name: Install tools (msitools provides the MSI ProductCode reader)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends msitools
+      - name: Sync manifests to the release
+        run: python3 scripts/sync-packaging.py --tag "${{ steps.tag.outputs.tag }}"
+      - name: Commit & push the bumped manifests
+        run: |
+          if git diff --quiet -- packaging/; then
+            echo "Manifests already in sync — nothing to commit."
+            exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/
+          git commit -m "chore(packaging): sync manifests to ${{ steps.tag.outputs.tag }} [skip ci]"
+          # Direct-to-main per project workflow. If main is protected against the
+          # GITHUB_TOKEN, replace this with a PAT or a PR step.
+          git push origin HEAD:main
+
+  # ---------------------------------------------------------------------------
+  # winget auto-PR to microsoft/winget-pkgs. No-op until WINGET_TOKEN (a GitHub
+  # PAT with public_repo) is added as a repo secret.
+  # ---------------------------------------------------------------------------
+  submit-winget:
+    needs: sync
+    runs-on: windows-latest
+    env:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+    steps:
+      - if: ${{ env.WINGET_TOKEN == '' }}
+        run: Write-Host "WINGET_TOKEN secret not set — skipping winget submission."
+      - if: ${{ env.WINGET_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          $tag = "${{ needs.sync.outputs.tag }}"
+          $ver = $tag.TrimStart('v')
+          $msi = "https://github.com/${{ github.repository }}/releases/download/$tag/ajazz-control-center-$ver-win64.msi"
+          winget install --id Microsoft.WingetCreate --exact --silent `
+            --accept-source-agreements --accept-package-agreements
+          $wc = "$env:LOCALAPPDATA\Microsoft\WindowsApps\wingetcreate.exe"
+          & $wc update Aiacos.AjazzControlCenter --version $ver --urls $msi `
+            --submit --token $env:WINGET_TOKEN --no-open
+
+  # NOTE: the other channels (Chocolatey, AUR, Snap, Homebrew tap, Flathub,
+  # Fedora Copr, Ubuntu PPA) each need their own credentials/identity. Their
+  # secret-gated submission snippets are documented in packaging/PUBLISHING.md;
+  # add the matching repo secret (CHOCO_API_KEY, AUR_SSH_KEY, SNAPCRAFT_TOKEN,
+  # HOMEBREW_TAP_TOKEN, …) and a job here to automate each one.
