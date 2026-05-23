@@ -41,9 +41,13 @@ ______________________________________________________________________
 
 > Filled by the planner. Template row:
 
-| Task ID  | Plan | Wave | Requirement | Threat Ref | Secure Behavior                                                                                               | Test Type | Automated Command      | File Exists | Status     |
-| -------- | ---- | ---- | ----------- | ---------- | ------------------------------------------------------------------------------------------------------------- | --------- | ---------------------- | ----------- | ---------- |
-| 25-01-01 | 01   | 1    | VERIFY-05   | —          | image-on-key, key press, 4 encoders CW/CCW/press, touch tap+swipe, brightness, clear all verified by operator | manual    | `25-UAT.md` (operator) | ❌          | ⬜ pending |
+| Task ID  | Plan | Wave | Requirement          | Threat Ref       | Secure Behavior                                                                                                                           | Test Type | Automated Command                                           | File Exists | Status     |
+| -------- | ---- | ---- | -------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------- | ----------- | ---------- |
+| 25-01-01 | 01   | 1    | VERIFY-05            | T-25-03          | akp05e descriptor advertises hasClock=false (no Sync button); DEVICES-11/ARCH-05 honesty correction                                       | automated | `grep ... hasClock = false` in register.cpp                 | ❌          | ⬜ pending |
+| 25-01-02 | 01   | 1    | VERIFY-05, VERIFY-06 | T-25-03          | 25-UAT.md authored: all 10 VERIFY-05 rows + 3 provisional-§5 confirm-or-correct rows + VERIFY-06 round-trip exist                         | automated | `test -f 25-UAT.md && grep -c 'result: [pending]'`          | ❌          | ⬜ pending |
+| 25-02-01 | 02   | 2    | VERIFY-05            | T-25-06          | operator walks VERIFY-05 live on AKP05E (image, key, 4 encoders CW/CCW/press, touch tap-zone, swipe, brightness, clear, hasClock=false)   | manual    | `25-UAT.md` (operator-witnessed)                            | ❌          | ⬜ pending |
+| 25-02-02 | 02   | 2    | VERIFY-06            | T-25-04, T-25-05 | real .sdPlugin registers over loopback WS, setImage paints a key, physical press/turn delivers keyDown/dialRotate with observable effect  | manual    | `25-UAT.md` (operator-witnessed)                            | ❌          | ⬜ pending |
+| 25-02-03 | 02   | 2    | VERIFY-05            | —                | provisional §5 (DRA / encoder-overlay framing / touch zone+swipe) reconciled; RE doc corrected where hardware contradicts (hardware wins) | automated | `grep ... provisional` in akp05\*.md; ctest if code changed | ❌          | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 

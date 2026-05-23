@@ -439,7 +439,12 @@ Plans:
 1. Every provisional §5 wire item (DRA / encoder-overlay framing / touch zone+swipe map) is reconciled and the RE doc updated where hardware contradicts; `hasClock=false` confirmed (no Sync button on the AKP05E row) (VERIFY-05).
 1. A real third-party Elgato/Mirabox `.sdPlugin` registers over the loopback WebSocket, paints a key via `setImage`, and receives `keyDown`/`dialRotate` from a physical press/turn with its observable effect (VERIFY-06).
 
-**Plans**: TBD · **Phase notes**: **HARDWARE-GATED** (replug/`setfacl` if root-only — systemd ≥258). Verification gate + RE reconciliation; promotes the family `functional`/`verified` honestly. **UI hint**: yes
+**Plans**: 2 plans · **Phase notes**: **HARDWARE-GATED** (replug/`setfacl` if root-only — systemd ≥258). Verification gate + RE reconciliation; promotes the family `functional`/`verified` honestly. **UI hint**: yes
+
+Plans:
+
+- [ ] 25-01-PLAN.md — Author the 25-UAT.md operator runbook + correct akp05e hasClock=false (autonomous)
+- [ ] 25-02-PLAN.md — Operator walks VERIFY-05/06 on the AKP05E + reconciles provisional §5 (hardware wins; operator-gated)
 
 ## Progress
 
@@ -474,4 +479,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 0/?            | Not started      | —          |
-| 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/?            | Not started      | —          |
+| 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/2            | Not started      | —          |
