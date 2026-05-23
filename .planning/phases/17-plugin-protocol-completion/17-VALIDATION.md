@@ -41,15 +41,15 @@ ______________________________________________________________________
 
 ## Per-Task Verification Map
 
-| Task ID  | Plan | Wave | Requirement     | Threat Ref               | Secure Behavior                                                               | Test Type | Automated Command                                           | File Exists | Status     |
-| -------- | ---- | ---- | --------------- | ------------------------ | ----------------------------------------------------------------------------- | --------- | ----------------------------------------------------------- | ----------- | ---------- |
-| 17-01-01 | 01   | 1    | PLUGIN-03       | T-17-FWD, T-17-DEVFWD    | all 39 actions route via actionReceived; unknown still surfaces as unhandled  | unit      | `ctest --preset linux-release -R "plugin-server"`           | ✅ extend   | ⬜ pending |
-| 17-01-02 | 01   | 1    | PLUGIN-01/02/03 | T-17-LAN, T-17-JSON      | LocalHost-only re-pinned; envelope round-trips; setBG inverted; 39 route      | unit      | `ctest --preset linux-release -R "plugin-server"`           | ✅ extend   | ⬜ pending |
-| 17-02-01 | 02   | 2    | PLUGIN-04       | T-17-UAF, T-17-DEVTRUST  | sendEvent re-resolves live slot each call; false for unknown uuid; no UAF     | unit      | (build) + `ctest --preset linux-release -R "plugin-server"` | ✅ extend   | ⬜ pending |
-| 17-02-02 | 02   | 2    | PLUGIN-04       | T-17-UAF                 | dialRotate carries ticks/pressed/controller; §4.4 events arrive at client     | unit      | `ctest --preset linux-release -R "plugin-server"`           | ❌ W0       | ⬜ pending |
-| 17-03-01 | 03   | 3    | PLUGIN-05       | T-17-REPLAY, T-17-CRYPTO | passHello with random nested authentication.salt after registerPlugin         | unit      | (build) + `ctest --preset linux-release -R "PluginAuth"`    | ❌ W0       | ⬜ pending |
-| 17-03-02 | 03   | 3    | PLUGIN-05       | T-17-BRUTE, T-17-UAF     | sha256(password+salt) verify; reject-after-5 closes socket; auth before route | unit      | (build) + `ctest --preset linux-release -R "plugin-server"` | ❌ W0       | ⬜ pending |
-| 17-03-03 | 03   | 3    | PLUGIN-05       | T-17-BRUTE, T-17-PREAUTH | passHello-salt, acceptsCorrectChallenge, rejectsAfter5BadAttempts loopback    | unit      | `ctest --preset linux-release -R "PluginAuth"`              | ❌ W0       | ⬜ pending |
+| Task ID  | Plan | Wave | Requirement     | Threat Ref               | Secure Behavior                                                                                         | Test Type | Automated Command                                           | File Exists | Status     |
+| -------- | ---- | ---- | --------------- | ------------------------ | ------------------------------------------------------------------------------------------------------- | --------- | ----------------------------------------------------------- | ----------- | ---------- |
+| 17-01-01 | 01   | 1    | PLUGIN-03       | T-17-FWD, T-17-DEVFWD    | all 41 actions (15 std + 26 AJAZZ, spec 4.3) route via actionReceived; unknown still unhandled          | unit      | `ctest --preset linux-release -R "plugin-server"`           | ✅ extend   | ⬜ pending |
+| 17-01-02 | 01   | 1    | PLUGIN-01/02/03 | T-17-LAN, T-17-JSON      | LocalHost-only re-pinned; envelope round-trips; setBG inverted; all 41 route (count derived from table) | unit      | `ctest --preset linux-release -R "plugin-server"`           | ✅ extend   | ⬜ pending |
+| 17-02-01 | 02   | 2    | PLUGIN-04       | T-17-UAF, T-17-DEVTRUST  | sendEvent re-resolves live slot each call; false for unknown uuid; no UAF                               | unit      | (build) + `ctest --preset linux-release -R "plugin-server"` | ✅ extend   | ⬜ pending |
+| 17-02-02 | 02   | 2    | PLUGIN-04       | T-17-UAF                 | dialRotate carries ticks/pressed/controller; §4.4 events arrive at client                               | unit      | `ctest --preset linux-release -R "plugin-server"`           | ❌ W0       | ⬜ pending |
+| 17-03-01 | 03   | 3    | PLUGIN-05       | T-17-REPLAY, T-17-CRYPTO | passHello with random nested authentication.salt after registerPlugin                                   | unit      | (build) + `ctest --preset linux-release -R "PluginAuth"`    | ❌ W0       | ⬜ pending |
+| 17-03-02 | 03   | 3    | PLUGIN-05       | T-17-BRUTE, T-17-UAF     | sha256(password+salt) verify; reject-after-5 closes socket; auth before route                           | unit      | (build) + `ctest --preset linux-release -R "plugin-server"` | ❌ W0       | ⬜ pending |
+| 17-03-03 | 03   | 3    | PLUGIN-05       | T-17-BRUTE, T-17-PREAUTH | passHello-salt, acceptsCorrectChallenge, rejectsAfter5BadAttempts loopback                              | unit      | `ctest --preset linux-release -R "PluginAuth"`              | ❌ W0       | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -60,7 +60,7 @@ ______________________________________________________________________
 
 ## Wave 0 Requirements
 
-- [ ] Extend `tests/unit/test_sd_plugin_server.cpp` (no new file — reuse the harness + `ensureQCoreApp`/`waitForSpy`) — loopback client asserts: LocalHost+random-port (PLUGIN-01); envelope round-trip (PLUGIN-02); all 13+26 actions route without `unhandledEventReceived` (PLUGIN-03); host→plugin events arrive with correct envelope incl. `dialRotate` ticks/pressed/controller (PLUGIN-04); passHello salt + `sha256(password+salt)` accept/reject + reject-after-5 (PLUGIN-05)
+- [ ] Extend `tests/unit/test_sd_plugin_server.cpp` (no new file — reuse the harness + `ensureQCoreApp`/`waitForSpy`) — loopback client asserts: LocalHost+random-port (PLUGIN-01); envelope round-trip (PLUGIN-02); all 41 routed actions (15 standard + 26 AJAZZ per spec 4.3) route without `unhandledEventReceived`, with the expected count derived from the table size not a literal (PLUGIN-03); host→plugin events arrive with correct envelope incl. `dialRotate` ticks/pressed/controller (PLUGIN-04); passHello salt + `sha256(password+salt)` accept/reject + reject-after-5 (PLUGIN-05)
 - [ ] **INVERT** the existing `setBG → unhandledEventReceived` assertion (test_sd_plugin_server.cpp:171-193) — `setBG` now routes via `actionReceived` (17-01 Task 2)
 - [ ] Reuse `QCryptographicHash::Sha256` + `QRandomGenerator::system()` (no new dep)
 
