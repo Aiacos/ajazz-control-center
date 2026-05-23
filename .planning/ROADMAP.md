@@ -263,7 +263,7 @@ Plans:
 ### Phase 16: Device Controls + Binding Persistence + Pages
 
 **Goal**: Brightness slider + "clear all" drive the device live; key/encoder/touch bindings persist and survive restart; multi-page/folder profiles drive host-side page navigation.
-**Depends on**: Phase 14 (control service is the live driver + repaint surface).
+**Depends on**: Phase 14 (control service is the live driver + repaint surface) **and** Phase 15 (the `pageNavRequested(±1)` swipe intent + the `ActionEngine` page-state authority this phase reuses). Both 14 and 15 must be EXECUTED first (HARD dependency; `depends_on: [14, 15]`).
 **Requirements**: DISPLAY-09, PROFILE-01, PROFILE-02
 **Success Criteria**:
 
@@ -271,7 +271,13 @@ Plans:
 1. Key/encoder/touch bindings (image, label, action chain) round-trip through the profile schema (`deviceCodename` ⇄ `"device"`) and repaint on reload after restart — no longer session-only (PROFILE-01).
 1. Multi-page/folder profiles switch pages host-side (page prev/next/goto + touch swipe) via `ActionEngine` `OpenFolder`/`BackToParent` and repaint; no device page opcode is invented (PROFILE-02).
 
-**Plans**: TBD · **Phase notes**: Schema doc is the source of truth for JSON wire keys. Reuses Phase 14 paint path. **UI hint**: yes
+**Plans**: 3 plans (2 waves) · **Phase notes**: Schema doc is the source of truth for JSON wire keys. Reuses Phase 14 paint path. **UI hint**: yes
+
+Plans:
+
+- [ ] 16-01-PLAN.md — DISPLAY-09: Q_INVOKABLE setBrightness/clearAll on the control service (LIG/CLE) + QML-expose it + debounced brightness Slider + Clear-all button in the Keys tab (wave 1)
+- [ ] 16-02-PLAN.md — PROFILE-01: default profile path (AppDataLocation/profiles/<id>.json) + KeyDesigner→Profile commit + Main Apply/Revert real save/load + fresh-controller round-trip (keys/encoders/touch/pages) + repaint-on-load (wave 1)
+- [ ] 16-03-PLAN.md — PROFILE-02: page-scoped repaintPage(pageId) + pageNavRequested(±1) carousel over top-level pages + repaint via the reused ActionEngine page state; no device page opcode (wave 2, depends 16-01+16-02)
 
 ### Phase 17: Plugin Protocol Completion
 
