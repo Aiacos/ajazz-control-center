@@ -1,0 +1,128 @@
+# Flathub submission manifest for AJAZZ Control Center.
+#
+# This is the manifest that lives in the per-app Flathub repository
+# (github.com/flathub/io.github.Aiacos.AjazzControlCenter) once the app is
+# accepted. It differs from packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
+# in one fundamental way: Flathub BUILDS FROM SOURCE in an offline sandbox, so
+# the app module must use a pinned, verifiable `type: git` source (tag + commit),
+# NOT the local `type: dir` used by the release CI. See SUBMITTING.md.
+#
+# Runtime choice: Flathub rejects apps on EOL runtimes (org.kde.Platform 6.6 and
+# earlier are EOL as of 2026; 6.7 is on its way out). New submissions must use the
+# latest runtime available at submission time. We target 6.8 — the current Qt 6.8
+# LTS-based KDE runtime — which also ships flatpak >= 1.15, enabling the
+# fine-grained `--device=usb` instead of the blanket `--device=all` that the 6.7
+# runtime forced. Bump runtime-version as KDE publishes newer non-EOL branches.
+app-id: io.github.Aiacos.AjazzControlCenter
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: ajazz-control-center
+
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # Fine-grained USB/HID access via the device portal. Available on flatpak
+  # >= 1.15, which the org.kde.Platform 6.8 runtime ships. This replaces the
+  # blanket `--device=all` that the EOL 6.7 runtime forced (it lacked the `usb`
+  # device type — "Unknown device type usb" at build-finish). `--device=usb`
+  # is the SEC-006-preferred minimal grant for AJAZZ /dev/hidraw* access and is
+  # also what the Flathub linter prefers over `--device=all`.
+  - --device=usb
+  - --filesystem=xdg-config/ajazz-control-center:create
+  - --filesystem=xdg-data/ajazz-control-center:create
+
+modules:
+  - name: hidapi
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DHIDAPI_BUILD_HIDTEST=OFF
+      - -DHIDAPI_WITH_TESTS=OFF
+      # Disable the libusb backend. The KDE runtime does not ship libusb-1.0, so
+      # the default hidapi build fails at pkg_check_modules(libusb-1.0>=1.0.9).
+      # Our binary uses only the hidraw backend (kernel-native /dev/hidraw*) on
+      # Linux — see resources/linux/70-ajazz.rules.
+      - -DHIDAPI_WITH_LIBUSB=OFF
+    sources:
+      - type: git
+        url: https://github.com/libusb/hidapi.git
+        tag: hidapi-0.14.0
+        # hidapi-0.14.0 is an ANNOTATED tag; this is the underlying commit it
+        # peels to (git ls-remote 'refs/tags/hidapi-0.14.0^{}'), which is what
+        # flatpak-builder's commit: field must pin — NOT the tag object SHA
+        # (73d292a8...) that the root CMakeLists.txt references. Flathub requires
+        # the commit pinned alongside the tag so the build is verifiable.
+        commit: d3013f0af3f4029d82872c1a9487ea461a56dee4
+
+  - name: pybind11
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DPYBIND11_TEST=OFF
+    sources:
+      - type: git
+        url: https://github.com/pybind/pybind11.git
+        tag: v2.13.6
+        commit: a2e59f0e7065404b44dfe92a28aca47ba1378dc4
+
+  # nlohmann/json provided as a module (installs its CMake config into /app) so
+  # the app build resolves it with find_package — the flatpak-builder sandbox has
+  # no network, so the app's default FetchContent git clone cannot run. Version
+  # pinned in lockstep with the FetchContent tag in the root CMakeLists.txt.
+  - name: nlohmann-json
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DJSON_BuildTests=OFF
+    sources:
+      - type: git
+        url: https://github.com/nlohmann/json.git
+        tag: v3.12.0
+        commit: 55f93686c01528224f448c19128836e7df245f72
+
+  - name: ajazz-control-center
+    buildsystem: cmake-ninja
+    # Out-of-source build: our top-level CMakeLists.txt fatal-errors on in-source
+    # builds (CMAKE_SOURCE_DIR == CMAKE_BINARY_DIR guard). flatpak-builder's
+    # default for a git source is out-of-tree, but keep builddir:true explicit so
+    # the guard never fires and post-install runs in the build dir.
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=RelWithDebInfo
+      - -DAJAZZ_BUILD_TESTS=OFF
+      - -DAJAZZ_ENABLE_WERROR=OFF
+      # Resolve hidapi + nlohmann_json from the modules built above (offline
+      # sandbox has no network for the default FetchContent clone).
+      - -DAJAZZ_USE_SYSTEM_DEPS=ON
+      # The udev rule installs to an absolute /usr path (read-only in the
+      # sandbox) and is a host resource — device access inside Flatpak is via
+      # the USB portal + the host's own rule.
+      - -DAJAZZ_INSTALL_UDEV_RULES=OFF
+    sources:
+      # Flathub builds from source. Pin to the released tag AND its commit so the
+      # build is reproducible and verifiable. Bump both on every release (see the
+      # per-release checklist in SUBMITTING.md).
+      - type: git
+        url: https://github.com/Aiacos/ajazz-control-center.git
+        tag: v0.1.0
+        commit: 731c70b2b0bc078b317fcc97fa2e8ae9c22a8c22
+    post-install:
+      # CMake's `ninja install` already placed the AppStream metainfo and the
+      # SVG + PNG icons under /app/share with the app-id names, and the desktop
+      # entry as ajazz-control-center.desktop. Flatpak requires the .desktop to be
+      # named after the app-id and to reference the app-id icon, so rename the
+      # installed file and repoint Icon=.
+      - mv /app/share/applications/ajazz-control-center.desktop
+          /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
+      - sed -i 's/^Icon=.*/Icon=io.github.Aiacos.AjazzControlCenter/'
+          /app/share/applications/io.github.Aiacos.AjazzControlCenter.desktop
+      # Point the AppStream <launchable> at the renamed desktop id, otherwise
+      # appstreamcli compose cannot link the .desktop to resolve the icon and
+      # fails the build with "gui-app-without-icon".
+      - sed -i 's#<launchable type="desktop-id">ajazz-control-center.desktop</launchable>#<launchable type="desktop-id">io.github.Aiacos.AjazzControlCenter.desktop</launchable>#'
+          /app/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
+      # Drop the scalable SVG icon: appstreamcli compose prefers it and fails to
+      # rasterise it ("file-read-error"). The PNG hicolor sizes (incl. 64 + 128 +
+      # 256) are enough for AppStream and the desktop icon.
+      - rm -f /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg

@@ -1,0 +1,47 @@
+Source: ajazz-control-center
+Section: utils
+Priority: optional
+Maintainer: Lorenzo Argentieri <uni.lorenzo.a@gmail.com>
+Build-Depends:
+ debhelper-compat (= 13),
+ cmake (>= 3.28),
+ ninja-build,
+ pkg-config,
+ qt6-base-dev (>= 6.7),
+ qt6-base-private-dev (>= 6.7),
+ qt6-declarative-dev (>= 6.7),
+ qt6-declarative-private-dev (>= 6.7),
+ libqt6svg6-dev,
+ qml6-module-qtquick-controls (>= 6.7),
+ libhidapi-dev,
+ nlohmann-json3-dev,
+ python3-dev,
+ pybind11-dev,
+Standards-Version: 4.7.0
+Homepage: https://github.com/Aiacos/ajazz-control-center
+Vcs-Git: https://github.com/Aiacos/ajazz-control-center.git
+Vcs-Browser: https://github.com/Aiacos/ajazz-control-center
+Rules-Requires-Root: no
+
+Package: ajazz-control-center
+Architecture: any
+Depends:
+ ${shlibs:Depends},
+ ${misc:Depends},
+ python3,
+ qml6-module-qtquick-controls,
+ qml6-module-qtquick-layouts,
+ qml6-module-qtquick-window,
+Recommends:
+ qml6-module-qtquick-dialogs,
+Description: Cross-platform control center for AJAZZ devices
+ AJAZZ Control Center is a desktop application for AJAZZ and Mirabox HID
+ devices: stream-deck-style key panels (AKP153 / AKP153E / AKP03 / AKP05),
+ VIA-compatible and Microdia-chipset keyboards (AK820 Pro, AK980 PRO, AK
+ series), and AJ-line mice. It provides a Qt-based GUI for binding keys,
+ encoders and mouse buttons to multi-step action chains (key macros, URLs,
+ plugin actions), managing folder pages, importing / exporting profile
+ bundles, and a system-tray quick-switcher.
+ .
+ The udev rule shipped with this package grants user-level device access via
+ TAG+="uaccess" - no group membership and no logout required.

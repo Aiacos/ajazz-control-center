@@ -1,0 +1,10 @@
+ajazz-control-center (0.1.0-1~noble1) noble; urgency=medium
+
+  * Initial Ubuntu / Launchpad PPA packaging of AJAZZ Control Center.
+  * Builds the Qt 6 / QML desktop application from source against the distro
+    Qt 6, hidapi (hidraw) and nlohmann-json packages.
+  * Ships the 70-ajazz.rules udev rule (TAG+="uaccess") for user-level
+    /dev/hidraw* access, the desktop entry, AppStream metainfo and hicolor
+    icons.
+
+ -- Lorenzo Argentieri <uni.lorenzo.a@gmail.com>  Fri, 23 May 2026 00:00:00 +0000

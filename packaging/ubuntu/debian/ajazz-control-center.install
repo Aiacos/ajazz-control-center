@@ -1,0 +1,6 @@
+usr/bin/ajazz-control-center
+usr/lib/udev/rules.d/70-ajazz.rules
+usr/share/applications/ajazz-control-center.desktop
+usr/share/metainfo/io.github.Aiacos.AjazzControlCenter.appdata.xml
+usr/share/icons/hicolor/scalable/apps/*.svg
+usr/share/icons/hicolor/*/apps/*.png

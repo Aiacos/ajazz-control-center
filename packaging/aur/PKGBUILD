@@ -1,0 +1,74 @@
+# Maintainer: Lorenzo Argentieri <uni.lorenzo.a@gmail.com>
+pkgname=ajazz-control-center
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Cross-platform control center for AJAZZ devices (stream decks, keyboards, mice)"
+arch=('x86_64')
+url="https://github.com/Aiacos/ajazz-control-center"
+license=('GPL-3.0-or-later')
+depends=(
+    'qt6-base'
+    'qt6-declarative'
+    'qt6-svg'
+    'hidapi'
+    'python'
+)
+# Optional Qt modules: when present at build time they enable extra features
+# (Property Inspector HTML pages, the Elgato-compatible WebSocket plugin host).
+# They are detected with find_package(... QUIET); absence falls back gracefully.
+optdepends=(
+    'qt6-webengine: embed plugin Property Inspector HTML pages'
+    'qt6-websockets: Elgato Stream Deck v6-compatible WebSocket plugin host'
+    'python-cryptography: verify Ed25519-signed plugin manifests'
+)
+makedepends=(
+    'cmake'
+    'ninja'
+    'git'
+    'qt6-base'
+    'qt6-declarative'
+    'qt6-svg'
+    'hidapi'
+    'nlohmann-json'
+    'python'
+)
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('9ec5342db63a905e3ab97d6596a053fd25e0b0142efdad6f09e293429613fe7f')
+
+build() {
+    # AJAZZ_USE_SYSTEM_DEPS=ON resolves hidapi + nlohmann_json via find_package
+    # instead of the default FetchContent git clone. makepkg builds in a clean
+    # chroot with no network, so the FetchContent clone would fail otherwise.
+    # hidapi + nlohmann-json are listed as makedepends so the find_package calls
+    # this option triggers resolve. nlohmann_json is PRIVATE-linked to the plugin
+    # library only (COD-031), so it is not a runtime depend.
+    #
+    # CMAKE_BUILD_TYPE=None honours the system CXXFLAGS/LDFLAGS from makepkg.conf
+    # (Arch CMake guideline); the project does not require -O via a named config.
+    # AJAZZ_ENABLE_WERROR=OFF: the project's -Werror invariant is calibrated for
+    # its pinned Qt; distro Qt point releases can emit benign warnings that would
+    # otherwise break the build.
+    cmake -B build -S "$pkgname-$pkgver" \
+        -G Ninja \
+        -DCMAKE_BUILD_TYPE=None \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DCMAKE_INSTALL_LIBDIR=lib \
+        -DAJAZZ_BUILD_TESTS=OFF \
+        -DAJAZZ_ENABLE_WERROR=OFF \
+        -DAJAZZ_USE_SYSTEM_DEPS=ON \
+        -Wno-dev
+    cmake --build build
+}
+
+package() {
+    DESTDIR="$pkgdir" cmake --install build
+
+    # The udev rule installs to /usr/lib/udev/rules.d (CMake DESTINATION
+    # lib/udev/rules.d under prefix /usr) — the correct location for
+    # distro-shipped rules. It grants /dev/hidraw* access via TAG+="uaccess";
+    # no group membership or logout required.
+
+    # Ship the GPL text under the conventional Arch licenses path.
+    install -Dm644 "$pkgname-$pkgver/LICENSE" \
+        "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

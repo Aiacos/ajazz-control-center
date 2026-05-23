@@ -1,0 +1,49 @@
+#!/usr/bin/make -f
+# Build rules for ajazz-control-center.
+#
+# Uses debhelper's "dh" sequencer with the cmake buildsystem and the ninja
+# backend (the cmake.pm helper drives "cmake -G Ninja" when ninja-build is a
+# build dependency). See debhelper(7) and dh_auto_configure(1).
+
+# Surface every build command in the buildlog (helpful for PPA build debugging).
+export DH_VERBOSE = 1
+
+# Reproducible-build / hardening flags from dpkg-buildflags.
+export DEB_BUILD_MAINT_OPTIONS = hardening=+all
+
+%:
+	dh $@ --buildsystem=cmake+ninja
+
+# Project-specific CMake configuration.
+#
+# * Tests OFF   - PPA builders are network-restricted and the suite pulls
+#                 Catch2; the binary package ships no tests anyway.
+# * WERROR OFF  - distro Qt/GCC point releases differ from upstream CI and may
+#                 emit new warnings; do not let those fail an archive build.
+# * UDEV rules  - install the relative (prefix-based) copy from src/app only;
+#                 the top-level rule uses an absolute /usr/lib path that does
+#                 not compose cleanly with DESTDIR staging, so it is OFF here.
+#                 The relative rule lands at /usr/lib/udev/rules.d all the same.
+# * SYSTEM_DEPS - resolve hidapi + nlohmann_json via the distro -dev packages
+#                 (libhidapi-dev, nlohmann-json3-dev) instead of FetchContent,
+#                 which would need network access the PPA builders deny.
+override_dh_auto_configure:
+	dh_auto_configure -- \
+		-DCMAKE_BUILD_TYPE=Release \
+		-DAJAZZ_BUILD_APP=ON \
+		-DAJAZZ_BUILD_TESTS=OFF \
+		-DAJAZZ_BUILD_PYTHON_HOST=ON \
+		-DAJAZZ_ENABLE_WERROR=OFF \
+		-DAJAZZ_USE_SYSTEM_DEPS=ON \
+		-DAJAZZ_INSTALL_UDEV_RULES=OFF
+
+# The upstream test suite is disabled at configure time; make the test step a
+# no-op so dh does not try to run ctest.
+override_dh_auto_test:
+
+# Stage the install tree into debian/tmp so the *.install files below select
+# the artifacts into the (single) binary package. With one package this is not
+# strictly required - dh would install the whole tree automatically - but the
+# explicit manifest documents exactly what ships and catches stray files.
+override_dh_auto_install:
+	dh_auto_install --destdir=debian/tmp
