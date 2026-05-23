@@ -5,6 +5,7 @@
 - ✅ **v1.0 milestone** — Phases 1-2, retro-fit catalogue (shipped 2026-05-13). See [milestones/v1.0-ROADMAP.md](milestones/v1.0-ROADMAP.md).
 - ✅ **v1.1 milestone** — Phases 3-8, device lifecycle hardening + scaffolding-to-functional (shipped 2026-05-14). See [milestones/v1.1-ROADMAP.md](milestones/v1.1-ROADMAP.md).
 - 🚧 **v1.2 milestone** — Phases 9-13, Connected-Device Capability Parity (active, bootstrapped 2026-05-15).
+- 🚧 **v1.3 milestone** — Phases 14-19, Stream Dock End-to-End (active, bootstrapped 2026-05-23).
 
 ## Phases
 
@@ -49,6 +50,25 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 - **COD-031 boundary preserved** — no `nlohmann::json` in `ajazz_core` or any installed public header. Capture-extraction tooling is dev-time Python (`scripts/hex-to-cpparray.py`); runtime code reads `std::array<uint8_t>` literals, not parsed JSON.
 - **Direct-to-`main` workflow + atomic Conventional Commits.** Pre-commit hooks must pass; `--no-verify` only acceptable when the hook itself is broken and the content verified independently.
 - **ASCII-only test names** (Win32 CMD codepage mangling).
+
+### 🚧 v1.3 milestone (Phases 14-19)
+
+**Milestone Goal:** Wire the already-built, capture-verified Stream Dock device backends into the app. v1.2 shipped the device-side wire protocol (`BAT`/`LIG`/`CLE`/`ULEND`, byte-tested) but Phase-10 UAT revealed NO app code calls it: `open()` leaves the panel dark, assigned images never reach the device, `ActionEngine` is never instantiated, and `KeyDesigner` bindings are session-only. v1.3 builds the missing **app→device integration layer** so assigning an image to a key shows it on the physical key, pressing keys / turning encoders fires the bound actions, and brightness / clear / displays are driven from the UI — promoting the Stream Dock family `scaffolded` → `functional`. Phase 14 is the foundation (persistent open + brightness-on + one capability call reaching the device); Phases 15-17 build on it; Phase 18 generalises across the family; Phase 19 verifies on real hardware and reconciles provisional RE.
+
+- [ ] **Phase 14: Stream Dock Control Service** — A persistent control service holds the active Stream Deck open, sets brightness ON at `open()`, pushes key images live on assign (~1s, no manual flush) and repaints all keys on profile load. The first app→device call that reaches the panel. (DISPLAY-06, DISPLAY-07, DISPLAY-08)
+- [ ] **Phase 15: Stream Dock Input Routing** — A poll loop drives each connected Stream Deck; key press/release, encoder rotate (CW/CCW)/press, and (provisional) touch-strip gestures route to bound actions via the core `ActionEngine`, instantiated in the app for the first time. (INPUT-03, INPUT-04, INPUT-05)
+- [ ] **Phase 16: Device Controls + Binding Persistence** — A brightness slider + "clear all keys" control drive the device live; key bindings (image / label / action) persist to the profile and survive restart, repainting the device on load. (DISPLAY-09, PROFILE-01)
+- [ ] **Phase 17: Auxiliary Display Surfaces** — Encoder LCDs, the main LCD strip, and the touch strip accept assigned images (layouts hardware-gated; DRA/encoder/touch framing provisional until verified on the AKP05E). (DISPLAY-10)
+- [ ] **Phase 18: Family Coverage AKP03/153/815** — The same assign-image-and-press flow works on AKP03 / AKP153 / AKP815 via the capability-generic service (per-family init + image format honored). (DEVICES-10)
+- [ ] **Phase 19: Hardware Verification** — The AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) is verified end-to-end on the connected device; provisional §5 wire items (DRA/encoder/touch layout) are reconciled and `hasClock` honesty confirmed (no false clock advertised). (VERIFY-05)
+
+**Milestone constraints (load-bearing — do not lose these):**
+
+- **Built on branch `feat/streamdock`** (off `develop`). COD-031 boundary preserved — no `nlohmann::json` in `ajazz_core` or any installed public header.
+- **The RE is the source of truth** (CLAUDE.md hard rule). The capture-verified BAT header (JPEG size BE16@10-11, key index 1-based@12) MATCHES real capture `43 52 54 00 00 42 41 54 00 00 08 7C 0D` — do NOT change it. Provisional §5 wire items (DRA / encoder / touch layout) are hypotheses to verify against the physical device, not facts; where hardware contradicts a provisional RE value, the hardware wins and the RE doc is updated. Sources: `docs/protocols/streamdeck/**` + `~/MEGAsync/ajazz-reverse-engineering/dossier/{akp-streamdeck,capture-evidence}.md`.
+- **HARDWARE-GATED phases**: Phase 17 (auxiliary surface layouts) and Phase 19 (full end-to-end verify) require the AKP05E physically connected with a working `uaccess` ACL. If `/dev/hidraw*` is root-only after a re-enumeration (systemd ≥258 regression), physically replug or `setfacl` per CLAUDE.md.
+- **Cap concurrent execute agents at 2** in autonomous runs (v1.1 retrospective lesson).
+- **Direct-to-`main`-style workflow + atomic Conventional Commits.** Pre-commit must pass; `--no-verify` only when the hook itself is broken and verified independently. ASCII-only test names (Win32 CMD codepage mangling).
 
 ## Phase Details
 
@@ -177,10 +197,130 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 
 **UI hint**: yes
 
+### Phase 14: Stream Dock Control Service
+
+**Goal**: A user with an AKP05E plugged in sees the panel light up when the app selects it, and assigning an image to a key in the editor makes that image appear on the physical key within ~1s with no manual flush; selecting/loading a profile repaints every key from its saved binding. This is the first app→device call that actually reaches the panel — it closes the Phase-10 UAT gap where the capture-verified wire layer existed but no app code ever called it.
+**Depends on**: Nothing in v1.3 (foundation phase). Builds on the v1.2 device-side wire layer (`BAT`/`LIG`/`CLE`/`ULEND`, capture-verified) and the ARCH-04 host-side image pipeline (`image_pipeline.{hpp,cpp}`).
+**Requirements**: DISPLAY-06, DISPLAY-07, DISPLAY-08
+**Success Criteria** (what must be TRUE):
+
+1. When the app makes a Stream Deck the active device, the panel is visibly lit (the persistent control service holds the device open and issues a brightness-ON `LIG` at `open()`) — the panel no longer stays dark as it did when the backend `open()` set no brightness (DISPLAY-06).
+1. Assigning an image to a key in the editor pushes it to the physical key within ~1s, end-to-end through encode → `BAT` header → 1024-byte chunks → `ULEND`, with NO manual flush step required by the user (DISPLAY-07).
+1. Loading (or switching to) a profile repaints all of the device's keys from the saved bindings — every key with a saved image shows that image after load (DISPLAY-08).
+1. The control service keeps the device open across the session (single HID handle, weak_ptr flyweight invariant from v1.1 ARCH-03 preserved) rather than opening/closing per push.
+
+**Plans**: TBD
+**Phase notes**:
+
+- This phase is the load-bearing foundation: Phases 15, 16, and 17 all depend on a live, held-open control service. Land it first.
+- The BAT header is capture-verified — do NOT alter the wire format (CLAUDE.md hard rule). The integration work is app-side wiring, not protocol change.
+
+**UI hint**: yes
+
+### Phase 15: Stream Dock Input Routing
+
+**Goal**: A user pressing a physical key, turning an encoder, or pressing an encoder on a connected Stream Deck sees the bound action fire — routed through the core `ActionEngine`, which is instantiated in the app here for the first time. Touch-strip gestures route too (provisional, hardware-gated).
+**Depends on**: Phase 14 (the persistent control service holds the device open; the poll loop drives the same held-open handle).
+**Requirements**: INPUT-03, INPUT-04, INPUT-05
+**Success Criteria** (what must be TRUE):
+
+1. A poll loop drives each connected Stream Deck, and a physical key press/release fires that key's bound action via the core `ActionEngine` (instantiated in the app for the first time) — pressing a bound key produces the action's observable effect (INPUT-03).
+1. Turning an encoder clockwise vs counter-clockwise, and pressing an encoder, each fire their bound encoder actions with correct direction (INPUT-04).
+1. A touch-strip gesture routes to its bound action (INPUT-05 — PROVISIONAL: the touch tag / coordinate map is hardware-gated and verified in Phase 19; ships behind the captured-or-confirmed layout).
+1. Encoder rotation does not produce a signal storm during fast spin (coalesced per the v1.2 INPUT-02 16ms QTimer pattern at the observer layer).
+
+**Plans**: TBD
+**Phase notes**:
+
+- First instantiation of `ActionEngine` in the app — establishes the device-event → action-binding → execution path that the rest of the family reuses.
+- INPUT-05 (touch) carries provisional wire framing; if hardware contradicts the captured layout, the hardware wins (reconciled in Phase 19).
+
+**UI hint**: yes
+
+### Phase 16: Device Controls + Binding Persistence
+
+**Goal**: A user can drag a brightness slider and click "clear all keys" in the device panel and see the device respond live; key bindings (image, label, action) persist to the profile and survive an app restart, repainting the device on load — closing the Phase-10 gap where `KeyDesigner` bindings were session-only.
+**Depends on**: Phase 14 (control service drives brightness/clear live and is the repaint surface on load).
+**Requirements**: DISPLAY-09, PROFILE-01
+**Success Criteria** (what must be TRUE):
+
+1. A brightness slider in the device panel drives the panel's brightness live as the user moves it (via `LIG`), and a "clear all keys" control blanks the device live (via `CLE`) (DISPLAY-09).
+1. A key binding's image, label, and action are written to the profile on assign and round-trip through the schema (`Profile::deviceCodename` ⇄ `"device"` wire-key convention preserved) (PROFILE-01).
+1. After an app restart, the saved bindings reload and the device repaints from the profile — bindings are no longer session-only (PROFILE-01).
+
+**Plans**: TBD
+**Phase notes**:
+
+- Schema doc is the source of truth for JSON wire keys (CLAUDE.md hard rule); never align a profile writer to a C++ field name without checking the schema first.
+- Repaint-on-load reuses the Phase 14 control-service paint path.
+
+**UI hint**: yes
+
+### Phase 17: Auxiliary Display Surfaces
+
+**Goal**: A user can assign images to the AKP05E's auxiliary display surfaces — the per-encoder LCDs, the main LCD strip, and the LCD touch strip — and see them appear, with the per-surface framing (DRA / encoder / touch layout) confirmed on hardware.
+**Depends on**: Phase 14 (control service + image pipeline). HARDWARE-GATED.
+**Requirements**: DISPLAY-10
+**Success Criteria** (what must be TRUE):
+
+1. Assigning an image to an encoder LCD shows it on that encoder's display (DISPLAY-10).
+1. Assigning an image to the main LCD strip shows it on the strip (DISPLAY-10).
+1. Assigning an image to the touch strip shows it on the touch strip (DISPLAY-10).
+1. The per-surface framing (DRA opcode / encoder-LCD layout / touch-strip layout) matches what the physical AKP05E accepts; where the provisional §5 RE framing contradicts the hardware, the RE doc is updated to match the device (DISPLAY-10).
+
+**Plans**: TBD
+**Phase notes**:
+
+- **HARDWARE-GATED**: requires the AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) physically connected with a working `uaccess` ACL. The DRA / encoder-LCD / touch-strip layouts are PROVISIONAL in the RE (§5) — treat captured values as hypotheses to verify against the device, not facts (CLAUDE.md hard rule).
+- If `/dev/hidraw*` is root-only after a USB re-enumeration (systemd ≥258 regression), physically replug or `setfacl -m u:$(id -u):rw /dev/hidraw*` per CLAUDE.md.
+
+**UI hint**: yes
+
+### Phase 18: Family Coverage AKP03/153/815
+
+**Goal**: A user with an AKP03, AKP153, or AKP815 plugged in gets the same assign-image-and-key-press flow that the AKP05E got in Phases 14-16, driven through the capability-generic control service with each family's init sequence and image format honored.
+**Depends on**: Phases 14-17 (the AKP05E vertical slice — control service, input routing, controls/persistence — is the template this generalises). Land after the slice proves out.
+**Requirements**: DEVICES-10
+**Success Criteria** (what must be TRUE):
+
+1. On AKP03, assigning an image to a key shows it on the physical key and pressing the key fires its bound action via the same capability-generic control service (DEVICES-10).
+1. On AKP153, the same assign-image-and-press flow works with the device's per-family init and image format honored (DEVICES-10).
+1. On AKP815, the same assign-image-and-press flow works with the device's per-family init and image format honored (DEVICES-10).
+1. Family-specific differences (init sequence, image resolution/rotation/format) are table-driven from the device descriptor, not hardcoded per call site.
+
+**Plans**: TBD
+**Phase notes**:
+
+- Reuses the Phase 14-16 control-service + descriptor-parameterisation template verbatim; the goal is generalisation, not new protocol work.
+- AKP153/AKP815 may not be physically connected; bench-verify what hardware is available and gate the rest behind the descriptor + `MockTransport` byte tests (real-hardware confirmation can defer to a later capture).
+
+**UI hint**: yes
+
+### Phase 19: Hardware Verification
+
+**Goal**: The whole v1.3 vertical slice is verified end-to-end on the physically connected AKP05E: an assigned image appears on the assigned key, a key press fires the action, an encoder fires the action, the brightness slider works, and clear works — and every provisional RE value the milestone touched is reconciled against the hardware, with `hasClock` honestly reflecting that the Stream Dock family has no firmware RTC.
+**Depends on**: Phases 14-17 (the AKP05E features to verify must exist). Interleaves with / gates the milestone close. HARDWARE-GATED.
+**Requirements**: VERIFY-05
+**Success Criteria** (what must be TRUE):
+
+1. On the connected AKP05E, an image assigned to a key appears on that physical key, a press on a bound key fires its action, an encoder fires its bound action, the brightness slider changes the panel brightness, and "clear all keys" blanks the panel — all verified by a human operating the physical device (VERIFY-05).
+1. Every provisional §5 wire item touched by the milestone (DRA / encoder-LCD / touch-strip layout) is reconciled: confirmed-as-correct or corrected, and the relevant `docs/protocols/streamdeck/**` RE doc is updated wherever the hardware contradicted a provisional value (VERIFY-05; hardware-wins rule).
+1. The `akp05e` descriptor's `hasClock` is reconciled so no false clock capability is advertised (Stream Dock family has no firmware RTC per ARCH-05) — the Sync button does not appear on the AKP05E row (VERIFY-05; D-02 honesty contract).
+
+**Plans**: TBD
+**Phase notes**:
+
+- **HARDWARE-GATED**: requires the AKP05E (`0300:3004`, codename `akp05e`, fw `V3.AKP05E.01.007`) physically connected with a working `uaccess` ACL (replug / `setfacl` if root-only after re-enumeration — systemd ≥258).
+- This phase is a verification gate, not new feature work. It can interleave with Phase 17 (both need the device connected) and is the final close-out of the milestone. The RE-doc reconciliation here is the load-bearing deliverable that promotes the family `scaffolded` → `functional`/`verified` honestly.
+
+**UI hint**: yes
+
 ## Progress
 
 **Execution Order:**
 Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 12 are device-clustered and could in principle fan out subject to the 2-agent concurrent cap, but Phase 10 establishes the template Phases 11/12 reuse — landing Phase 10 first remains the recommended sequencing.
+
+v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19. Phase 14 is the load-bearing foundation (persistent open + brightness + the first capability call reaching the device) and MUST land first. Phases 15, 16, 17 each depend on 14 and can fan out subject to the 2-agent cap. Phase 18 (family coverage) lands after the 14-17 AKP05E vertical slice proves the template. Phase 19 (hardware verify) interleaves with / gates the milestone close — Phases 17 and 19 are HARDWARE-GATED (AKP05E connected, fw `V3.AKP05E.01.007`).
 
 | Phase                                      | Milestone | Plans Complete | Status           | Completed  |
 | ------------------------------------------ | --------- | -------------- | ---------------- | ---------- |
@@ -197,3 +337,9 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 1
 | 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm  | v1.2      | 0/?            | Not started      | —          |
 | 12. AK980 PRO Promotion                    | v1.2      | 0/?            | Not started      | —          |
 | 13. Catalogue + v1.1 UI Verifies Back-Fill | v1.2      | 0/?            | Not started      | —          |
+| 14. Stream Dock Control Service            | v1.3      | 0/?            | Not started      | —          |
+| 15. Stream Dock Input Routing              | v1.3      | 0/?            | Not started      | —          |
+| 16. Device Controls + Binding Persistence  | v1.3      | 0/?            | Not started      | —          |
+| 17. Auxiliary Display Surfaces             | v1.3      | 0/?            | Not started      | —          |
+| 18. Family Coverage AKP03/153/815          | v1.3      | 0/?            | Not started      | —          |
+| 19. Hardware Verification                  | v1.3      | 0/?            | Not started      | —          |

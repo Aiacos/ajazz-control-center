@@ -1,8 +1,43 @@
 # Requirements: AJAZZ Control Center
 
-**Defined:** 2026-05-15
-**Milestone:** v1.2 — Connected-Device Capability Parity
+**Defined:** 2026-05-15 (v1.2) · 2026-05-23 (v1.3)
+**Milestone:** v1.3 — Stream Dock End-to-End (active). v1.2 requirements retained below for traceability.
 **Core Value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
+
+## v1.3 Requirements (Stream Dock End-to-End)
+
+Active milestone. The device-side Stream Dock wire protocol shipped in v1.2 (capture-verified, byte-tested) but was never wired into the app; these requirements deliver the app→device integration (`scaffolded` → `functional`). REQ-IDs continue category numbering from v1.2 (DISPLAY-05 → DISPLAY-06, INPUT-02 → INPUT-03, DEVICES-09 → DEVICES-10); new category PROFILE starts at `-01`. Phases continue at 14.
+
+### Stream Dock Control Service (Phase 14)
+
+- [ ] **DISPLAY-06**: A persistent control service keeps the active Stream Deck open and sets brightness ON at open, so the panel is visible (the backend `open()` previously left it dark).
+- [ ] **DISPLAY-07**: Assigning an image to a key in the editor pushes it to the physical key within ~1s (encode → BAT header → 1024-byte chunks → ULEND), with no manual flush.
+- [ ] **DISPLAY-08**: Loading a profile repaints all of the device's keys from the saved bindings.
+
+### Stream Dock Input Routing (Phase 15)
+
+- [ ] **INPUT-03**: A poll loop drives each connected Stream Deck; a physical key press/release fires its bound action via the core `ActionEngine`.
+- [ ] **INPUT-04**: Encoder rotate (CW/CCW) and press fire their bound encoder actions.
+- [ ] **INPUT-05**: Touch-strip gestures route to a bound action (provisional — hardware-gated tag/coordinate map).
+
+### Device Controls + Binding Persistence (Phase 16)
+
+- [ ] **DISPLAY-09**: A brightness slider and a "clear all keys" control in the device panel drive the device live.
+- [ ] **PROFILE-01**: Key bindings (image, label, action) persist to the profile and survive restart, repainting the device on load.
+
+### Auxiliary Display Surfaces (Phase 17)
+
+- [ ] **DISPLAY-10**: Encoder LCDs, the main LCD strip, and the touch strip accept assigned images (layout confirmed on hardware; DRA/encoder/touch framing is provisional until verified).
+
+### Family Coverage (Phase 18)
+
+- [ ] **DEVICES-10**: The same assign-image-and-press flow works on AKP03 / AKP153 / AKP815 via the capability-generic service (per-family init + image format honored).
+
+### Hardware Verification (Phase 19)
+
+- [ ] **VERIFY-05**: The AKP05E is verified end-to-end on the connected device (image appears on the assigned key, key press fires the action, encoder fires the action, brightness slider works, clear works); RE docs are updated wherever hardware contradicts a provisional value, and the descriptor's `hasClock` is reconciled (no false clock advertised).
+
+______________________________________________________________________
 
 ## v1.2 Requirements
 
@@ -168,15 +203,26 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | VERIFY-02   | Phase 13 | Pending  |
 | VERIFY-03   | Phase 13 | Pending  |
 | VERIFY-04   | Phase 13 | Pending  |
+| DISPLAY-06  | Phase 14 | Pending  |
+| DISPLAY-07  | Phase 14 | Pending  |
+| DISPLAY-08  | Phase 14 | Pending  |
+| INPUT-03    | Phase 15 | Pending  |
+| INPUT-04    | Phase 15 | Pending  |
+| INPUT-05    | Phase 15 | Pending  |
+| DISPLAY-09  | Phase 16 | Pending  |
+| PROFILE-01  | Phase 16 | Pending  |
+| DISPLAY-10  | Phase 17 | Pending  |
+| DEVICES-10  | Phase 18 | Pending  |
+| VERIFY-05   | Phase 19 | Pending  |
 
 **Coverage:**
 
-- v1.2 requirements: 33 total
-- Mapped to phases: 33 (validated by gsd-roadmapper 2026-05-15; no orphans, no duplicates)
+- v1.2 requirements: 33 total — mapped to Phases 9-13 (validated by gsd-roadmapper 2026-05-15; no orphans, no duplicates)
+- v1.3 requirements: 11 total (DISPLAY-06/07/08, INPUT-03/04/05, DISPLAY-09, PROFILE-01, DISPLAY-10, DEVICES-10, VERIFY-05) — mapped to Phases 14-19 (validated by gsd-roadmapper 2026-05-23; no orphans, no duplicates)
 - Unmapped: 0
 
 ______________________________________________________________________
 
-*Requirements defined: 2026-05-15*
-*Last updated: 2026-05-15 after v1.2 milestone research synthesis*
-*Traceability validated: 2026-05-15 by gsd-roadmapper (ROADMAP.md generated; 33/33 reqs mapped to Phases 9-13)*
+*Requirements defined: 2026-05-15 (v1.2) · 2026-05-23 (v1.3)*
+*Last updated: 2026-05-23 after v1.3 milestone roadmap generation*
+*Traceability validated: 2026-05-15 by gsd-roadmapper (33/33 v1.2 reqs → Phases 9-13); 2026-05-23 by gsd-roadmapper (11/11 v1.3 reqs → Phases 14-19)*

@@ -41,25 +41,25 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 ### Active
 
-## Current Milestone: v1.2 Connected-Device Capability Parity
+## Current Milestone: v1.3 Stream Dock End-to-End
 
-**Goal:** Promote the 4 currently-connected scaffolded devices (3 catalogued + 1 unknown PID) to full advertised-capability parity with the native AJAZZ control software, driven by real-hardware USB protocol captures.
+**Goal:** Make the Stream Dock family actually functional from the app — assigning an image to a key shows it on the device, pressing keys / turning encoders fires the bound actions, and brightness / clear / displays are driven from the UI. v1.2 built and capture-verified the device-side wire protocol; v1.3 builds the missing **app→device integration layer** (`scaffolded` → `functional`).
 
 **Target features:**
 
-- Native-behavior research baseline for each connected device (OSS reverse-engineering corpora + direct `usbmon`/Wireshark captures from real hardware).
-- AKP05E 0x3004 (Stream Dock Plus — 10 LCD keys / 4 endless encoders / LCD touch strip): `display` + `encoder` + `clock` → `scaffolded` → `functional`.
-- AK980 PRO keyboard (0c45:8009): `rgb` + `macros` + `layers` + `clock` → `scaffolded` → `functional`/`partial` per capture coverage.
-- AJAZZ 2.4G 8K mouse (3151:5007): `dpi` + `rgb` → `scaffolded` → `functional`.
-- Unknown PID 0c45:7016: identify + add `devices.yaml` entry + protocol notes.
-- Back-fill v1.1 deferred visual UI verifies on real hardware (Phase 5 Sync button + auto-sync glyph + Settings persistence; Phase 8 MaturityRole tooltip).
+- A persistent Stream Dock control service (holds the device open, brightness-on at `open()`) that pushes key images live on assign and on profile load — closing the Phase-10 UAT gap where assigned images never reached the device.
+- Device input routing: a poll loop drives connected Stream Decks and routes key press/release + encoder rotate/press (+ touch gestures, provisional) to the bound actions via the core `ActionEngine` (instantiated in the app for the first time).
+- Brightness + clear UI controls, and key-binding persistence (image / label / action round-tripping through the profile, repainting the device on load).
+- Encoder LCDs, main LCD strip, and touch-strip image surfaces (layouts hardware-gated).
+- Extend the same capability-generic flow to AKP03 / AKP153 / AKP815.
+- On-device verification on the connected AKP05E (fw `V3.AKP05E.01.007`); RE docs updated wherever hardware contradicts a provisional value.
 
 **Key context:**
 
-- All 4 devices physically connected with `uaccess` udev tag → no sudo needed for captures.
-- Phase 9 = formal research (4 parallel `gsd-project-researcher` agents); subsequent phases driven by research findings.
-- `IClockCapable::setTime` wire formats: ARCH-05.1 (2026-05-17) FOUND a real firmware RTC on `ak980pro` (opcode `0x28`) and it shipped — so this is no longer fully Out of Scope. ARCH-05 still stands for the Stream Dock family (no RTC). The Out-of-Scope row below is scoped accordingly.
-- COD-031 boundary preserved: no `nlohmann::json` in `ajazz_core` or installed headers.
+- Root cause (Phase 10 UAT, 2026-05-22): the `akp05` wire layer (`BAT`/`LIG`/`CLE`/`ULEND`, capture-verified) is correct, but NO app code calls it — the entire app→device pipeline is missing; `open()` doesn't even set brightness; `ActionEngine` is never instantiated; `KeyDesigner` bindings are session-only.
+- RE is the source of truth (CLAUDE.md hard rule): the BAT header (JPEG size BE16@10-11, key index 1-based@12) MATCHES real capture `43 52 54 00 00 42 41 54 00 00 08 7C 0D` — do NOT change it. Sources: `docs/protocols/streamdeck/**` + `~/MEGAsync/ajazz-reverse-engineering/dossier/{akp-streamdeck,capture-evidence}.md`.
+- AKP05E connected (`0300:3004`, codename `akp05e`); `uaccess` ACL present (replug/`setfacl` if `/dev/hidraw*` is root-only after a re-enumeration — systemd ≥258).
+- Built on branch `feat/streamdock` (off `develop`). COD-031 boundary preserved.
 
 ### Out of Scope
 
@@ -104,6 +104,7 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 - **v1.0** (shipped 2026-05-13) — Retro-fit catalogue. 2 phases, 7/7 success criteria, audit `tech_debt` (CR-01 + WR-01 deferred). Archived in `.planning/milestones/`.
 - **v1.1** (shipped 2026-05-14) — Device lifecycle hardening + scaffolding-to-functional. 6 phases (3-8), 26 plans, 28/28 requirements, 178/178 tests, audit `tech_debt` (6 deferred items — real-hardware UI verifies + Windows CI back-fill + maturity promotion blocked on captures + libFuzzer Fedora packaging). Archived in `.planning/milestones/`.
+- **v1.2** (phases 9-13, 2026-05-15 → 2026-05-22) — Connected-Device Capability Parity. Delivered the research/capture infrastructure (Phase 9) and the **device-side wire protocol** for the Stream Dock, AK980 PRO, and AJ-series mouse (capture-verified, byte-tested), plus a full health-report fix loop (sandbox CWE-200, PATH-hijack CWE-426, QML test harness). Phase-10 UAT then revealed the device backends were never wired into the app (no live image push, no input routing) — that **app→device integration is carried into v1.3**. Phase dirs `09-13` retained in `.planning/phases/` (not archived); numbering continues at 14.
 
 ## Key Constraints
 
@@ -151,4 +152,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ______________________________________________________________________
 
-*Last updated: 2026-05-15 — v1.2 milestone "Connected-Device Capability Parity" bootstrap*
+*Last updated: 2026-05-23 — v1.3 milestone "Stream Dock End-to-End" bootstrap*

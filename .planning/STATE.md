@@ -1,16 +1,15 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.2
-milestone_name: Connected-Device Capability Parity
-status: executing
-stopped_at: 'Audit-3 (2026-05-18) landed user-visible features ahead of Phase 10-12 schedule: mouse OLED basetta clock+DPI (Phase 11 partial), AK980 PRO 20-mode firmware RGB picker (Phase 12 partial), real in-app plugin install. P3.6 AK980 CMD_FINISH 0xF0 closed (issue #58).'
-last_updated: '2026-05-18T11:00:00.000Z'
-last_activity: 2026-05-18
+milestone: v1.3
+milestone_name: Stream Dock End-to-End
+status: roadmap-complete
+last_updated: '2026-05-23T12:00:00.000Z'
+last_activity: 2026-05-23
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 0
-  total_plans: 7
-  completed_plans: 7
+  total_plans: 0
+  completed_plans: 0
   percent: 0
 ---
 
@@ -21,24 +20,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 9 — Research, Captures, Hygiene (gating phase; captures-driven; CAPTURE-01 MUST-FIX-FIRST).
+**Current focus:** v1.3 Stream Dock End-to-End — Phase 14 (Stream Dock Control Service), the load-bearing foundation that puts the first app→device call onto the panel. Wires the v1.2 capture-verified backends into the app (Phase-10 UAT integration gap).
 
 ## Current Position
 
-Phase: 9 of 13 (Research, Captures, Hygiene) — first v1.2 phase, PARTIAL-SCOPE COMPLETE
-Plan: 7 of 7 partial-scope plans landed (CAPTURE-01..04 + ARCH-04/05/06 at default verdict)
-Status: Phase 9 paused at partial-scope boundary; Phase 9.x follow-up required before Phase 10 can start
-Last activity: 2026-05-15 — Phase 9 partial-scope execution complete (CAPTURE-01..04 infra + 3 ADRs at default verdict)
-
-Progress: [██░░░░░░░░] 20% (1 of 5 phases partially complete; full v1.2 = 33 reqs across 5 phases)
-
-**Phase 9 ROADMAP success criteria status (4 of 5 closed by this partial-scope run):**
-
-- ✓ #1 Raw `.pcap`/`.pcapng` rejected at commit time (CAPTURE-01, hook + policy)
-- ✓ #2 Developer can install Wireshark + usbmon + use hex-to-cpparray.py (CAPTURE-02 + CAPTURE-03)
-- ✓ #3 `MockTransport` exists; backends accept via COD-026 DI (CAPTURE-04; 181/181 ctest)
-- ◌ #4 Sanitised capture fixtures for all 4 devices + per-device diff docs — **DEFERRED to Phase 9.x** (CAPTURE-05 + CAPTURE-06)
-- ✓ #5 ARCH-04 + ARCH-05 + ARCH-06 ratified in writing — at **DEFAULT VERDICT** pending Phase 9.x captures confirmation
+Phase: 14 — Stream Dock Control Service (not yet planned)
+Plan: —
+Status: v1.3 roadmap complete (Phases 14-19); ready to `/gsd-plan-phase 14`
+Branch: feat/streamdock (off develop)
+Last activity: 2026-05-23 — v1.3 roadmap generated; 11/11 v1.3 requirements mapped to Phases 14-19 (no orphans, no duplicates)
 
 ## Performance Metrics
 
