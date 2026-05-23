@@ -349,7 +349,13 @@ Plans:
 1. The per-action Property Inspector renders in `QWebEngineView`+`QWebChannel`; a `cefQuery` polyfill delegates to the bridge; `sendToPlugin`/`sendToPropertyInspector` relay; Elgato `sdpi.css` served from a built-in URL (PLUGIN-09).
 1. `get/setSettings` (per-context) and `get/setGlobalSettings` (plugin-wide) persist and survive restart (PLUGIN-13).
 
-**Plans**: TBD · **Phase notes**: QWebChannel bridge per akp_plugin_sdk.md §8 mapping table. **UI hint**: yes
+**Plans**: 3 plans (3 waves) · **Phase notes**: Reuse-first — the PI stack is pre-built; this phase closes 4 gaps (cefQuery polyfill, sdpi.css, load handshake, restart round-trip test) and reuses the 18-03 QWebEngineScript injection mechanism. **UI hint**: yes
+
+Plans:
+
+- [ ] 20-01-PLAN.md — PLUGIN-13: settings + global restart round-trip test + path-traversal refusal; link pi_bridge.cpp into the test binary (wave 1)
+- [ ] 20-02-PLAN.md — PLUGIN-09: cefQuery polyfill (pi_cef_shim + PIBridge::invoke §8 dispatcher) + bundled sdpi.css served via the interceptor redirect (wave 2)
+- [ ] 20-03-PLAN.md — PLUGIN-09: registerPropertyInspector load handshake (action-select -> loadInspector -> didReceiveSettings) + cefQuery shim insertion + Inspector.qml trigger; relay endpoints test-pinned, live route deferred to 17/19/25 per STOP gate (wave 3)
 
 ### Phase 21: Built-in In-Process Actions
 
@@ -442,7 +448,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
-| 20. Property Inspector + Settings           | v1.3      | 0/?            | Not started      | —          |
+| 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
