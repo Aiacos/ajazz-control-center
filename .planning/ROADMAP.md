@@ -386,7 +386,12 @@ Plans:
 1. A local `.sdPlugin`/`.zip` installs into `installedPlugins/` via the host-owned catalog (`PluginStore.qml` + catalog models), with **no network call** to Mirabox/Aliyun (PLUGIN-14).
 1. A signature/manifest-verification gate (reuse `ManifestSignerConfig`) must pass before a plugin is trusted/loaded.
 
-**Plans**: TBD · **Phase notes**: Closes the vendor's no-signature gap. **UI hint**: yes
+**Plans**: 2 plans (2 waves) · **Phase notes**: Closes the vendor's no-signature gap. ~80% wiring + the honesty gate; verify covers ALL install paths (local + network + launch sweep), phone-home default-OFF + fail-closed are tested mitigations. First task = STOP-if-SUMMARY-absent gate for 18. **UI hint**: yes
+
+Plans:
+
+- [ ] 22-01-PLAN.md — STOP-gate 18; un-gate the manifest_signer link/verifier defs (or fail-closed); reusable `verifyStagedPlugin` gate + apply it to the existing network `install()` and launch-sweep paths (wave 1)
+- [ ] 22-02-PLAN.md — `installFromFile` staging->verify->promote into Phase-18 `installedPlugins/`; kill the launch phone-home (opt-in default-off) + no-network test; PluginStore.qml FileDialog + opt-in online toggle (wave 2)
 
 ### Phase 23: Auxiliary Display Surfaces
 
