@@ -368,7 +368,13 @@ Plans:
 1. `system.hotkey` (**opt-in** global hook — never always-on), `system.multimedia`, `system.volume`, `plain.text`, `browser`/`openUrl`, `multiactions` (+ carousel) work.
 1. `obsstudio` integration ships with WebSocket auth **default-on**.
 
-**Plans**: TBD · **Phase notes**: Reuses `ActionEngine` kinds; hotkey hook is opt-in (anti-feature avoided). **UI hint**: yes
+**Plans**: 3 plans (2 waves) · **Phase notes**: Reuses `ActionEngine` kinds; hotkey hook is opt-in (anti-feature avoided); OBS auth default-on. First task = STOP-if-SUMMARY-absent gate for 15/16/19. **UI hint**: yes
+
+Plans:
+
+- [ ] 21-01-PLAN.md — STOP-gate 15/16/19 SUMMARY files + pure-core `IInputSynthesizer` (Linux uinput real, Win/mac stubbed-compiling) behind `AJAZZ_FEATURE_INPUT_SYNTH` + opt-in capture gate OFF + fake-backend test (wave 1)
+- [ ] 21-02-PLAN.md — `ObsClient` obs-websocket v5 (auth default-on, refuse unauthenticated) + the four-request subset + mock-OBS `QWebSocketServer` auth test, gated `AJAZZ_HAVE_WEBSOCKETS` (wave 1)
+- [ ] 21-03-PLAN.md — pure-core `BuiltinActionRegistry` + app `BuiltinActionsService` (nav/profile/brightness/synthesis/OBS/multiactions+LunBo/browser) + plugin-executor short-circuit + spy/fake e2e test (wave 2, depends 21-01+21-02)
 
 ### Phase 22: Plugin Store / Local Install
 
