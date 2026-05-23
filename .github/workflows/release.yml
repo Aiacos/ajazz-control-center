@@ -133,9 +133,17 @@ jobs:
 
       - name: Package (MSI + ZIP)
         working-directory: build/windows-release
+        shell: pwsh
         run: |
           cpack -G WIX
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "::group::wix.log (cpack -G WIX failed, exit $LASTEXITCODE)"
+            Get-ChildItem -Recurse -Path _CPack_Packages -Filter wix.log -ErrorAction SilentlyContinue |
+              ForEach-Object { Write-Host "==== $($_.FullName) ===="; Get-Content -Raw $_.FullName }
+            Write-Host "::endgroup::"
+          }
           cpack -G ZIP
+          if ($LASTEXITCODE -ne 0) { throw "ZIP packaging failed" }
 
       - name: Code-sign MSI
         if: env.WIN_CERT_BASE64 != ''
