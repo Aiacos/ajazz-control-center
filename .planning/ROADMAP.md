@@ -253,7 +253,12 @@ Plans:
 1. Each of the **4 encoders** fires bound actions on rotate CW vs CCW and on press; because the device emits a press only, the host **synthesises the release** and delivers a genuine `EncoderReleased` (replaces the `value=0` half-step workaround); rotation coalesced with a 16 ms `QTimer` (INPUT-04).
 1. A touch-strip **tap on one of the 4 zones** fires the action bound to the encoder under that zone, and **swipe left/right** changes pages (INPUT-05 — PROVISIONAL zone/coordinate map, verified in Phase 25).
 
-**Plans**: TBD · **Phase notes**: First `ActionEngine` instantiation. Touch framing provisional; hardware wins (Phase 25). **UI hint**: yes
+**Plans**: 2 plans (2 waves) · **Phase notes**: First `ActionEngine` instantiation. Touch framing provisional; hardware wins (Phase 25). **UI hint**: yes
+
+Plans:
+
+- [ ] 15-01-PLAN.md — StreamDockInputService: QTimer poll-pump on the Phase-14 held handle, first ActionEngine instantiation, DeviceEvent->Binding dispatch, 16 ms rotation coalescer, encoder press->synthetic-release, provisional touch X->zone map + swipe page-nav intent; MockTransport-fed dispatch test (INPUT-03/04/05) (wave 1)
+- [ ] 15-02-PLAN.md — Application wiring: own one QtExecutor-backed ActionEngine (keyPress stub / runCommand QProcess / openUrl QDesktopServices / plugin stub), share the Phase-14 held handle on Stream Deck arrival, wire the ProfileController::activeProfile() accessor + page-nav intent sink (INPUT-03/04/05) (wave 2)
 
 ### Phase 16: Device Controls + Binding Persistence + Pages
 
