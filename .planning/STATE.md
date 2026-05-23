@@ -24,11 +24,18 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 
 ## Current Position
 
-Phase: 14-18 PLANNED + plan-checker PASS (Phases 19-25 not yet planned)
-Plan: 14 (2 plans), 15 (2), 16 (3), 17 (3), 18 (4) — all CONTEXT+RESEARCH+VALIDATION+PLAN committed, all plan-checker PASS (17-01 revised once for a routed-action-count BLOCKER, then PASS)
-Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). The device slice (14-16) + plugin-SDK core (17-18) are planned + verified, NOT executed. Ready to either `/gsd-execute-phase 14` (start landing code) or continue planning Phases 19-25 (bridge, Property Inspector, built-in actions, store, aux surfaces, family, hardware verify).
-Branch: feat/streamdock (off develop) — planning commits unpushed (operator pushes per workflow)
-Last activity: 2026-05-23 — planned Phases 14-18 ahead of execution (per user "plan ahead first"). Execution dependency chain: 14 → 15 → 16 (16 depends on 14+15 SUMMARY files); 17 (independent) → 18 (18-04 depends on 17-02 sendEvent). Build unblocked (qt6-qtbase-private-devel present); all phase verification is hardware-free (MockTransport / loopback WebSocket); live witnesses deferred to Phase 25.
+Phase: ALL of 14-25 PLANNED (0 executed) — full v1.3 plan set ready for review/execution
+Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
+Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
+Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). Whole milestone PLANNED, NOTHING executed. Ready for `/gsd-execute-phase 14` (then 15, 17 in parallel under the 2-agent cap, → 16/18/19 …). Build unblocked (qt6-qtbase-private-devel present). All phase gating proofs are hardware-free (MockTransport / loopback WebSocket); the live witnesses (a real `.sdPlugin` + the AKP05E) are the hardware-gated Phases 23 + 25.
+Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
+Last activity: 2026-05-23 — planned ALL of Phases 14-25 ahead of execution (per user "plan ahead first" → "plan 19-25"). Reuse-first finding held across the milestone: the hard parts (SdPluginServer, ActionEngine, Profile schema, .sdPlugin extractor, Ed25519 manifest_signer, the PI QWebEngine/QWebChannel stack, all akp05/akp03/153/815 wire backends incl. ENC/MAI/DRA aux surfaces) already exist — most phases are app-layer wiring + the honesty gates (loopback-only bind, signature verification, no phone-home, opt-in hook, OBS auth-on).
+
+### Execution dependency map (for the operator)
+
+- 14 (foundation) → 15, 16, 23 build on it. 17 (independent, MockDevice) → 18. **19 = convergence** (depends 14,15,17,18). 20 (PI) ← 18. 21 (built-ins) ← 15,16,19. 22 (store) ← 18. 24 (family) ← 14,15,16,19. 25 (HW verify) ← whole slice.
+- Every dependent phase's FIRST task is a STOP-if-SUMMARY-absent gate, so out-of-order execution halts safely.
+- HARDWARE-GATED (need the physical AKP05E + uaccess): Phase 23 (aux-surface live framing) + Phase 25 (full UAT + real `.sdPlugin`). Everything else lands hardware-free.
 
 **Phase 14 execution prerequisites (for the operator):** the build needs Qt6 private headers (`qt6-qtbase-private-devel` on Fedora — Phase-10 review flagged CorePrivate missing). System-package install is the operator's action (project hard rule: no system-level mutations from tooling). Verification is hardware-free (MockTransport + `makeAkp05WithTransport`); the live power-cycle smoke is deferred to Phase 25.
 
