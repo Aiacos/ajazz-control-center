@@ -1,12 +1,12 @@
 ---
 gsd_state_version: 1.0
 milestone: v1.3
-milestone_name: Stream Dock End-to-End
+milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: roadmap-complete
-last_updated: '2026-05-23T12:00:00.000Z'
+last_updated: '2026-05-23T14:30:00.000Z'
 last_activity: 2026-05-23
 progress:
-  total_phases: 6
+  total_phases: 12
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -20,15 +20,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** v1.3 Stream Dock End-to-End — Phase 14 (Stream Dock Control Service), the load-bearing foundation that puts the first app→device call onto the panel. Wires the v1.2 capture-verified backends into the app (Phase-10 UAT integration gap).
+**Current focus:** v1.3 Stream Dock End-to-End / **Elgato-compatible Plugin SDK** — recreate the AJAZZ "Stream Dock" app 1:1: wire the v1.2 capture-verified backends into the app AND complete the partially-built Elgato Stream Deck v6-compatible plugin SDK. Phase 14 (Stream Dock Control Service) is the load-bearing foundation that puts the first app→device call onto the panel.
 
 ## Current Position
 
 Phase: 14 — Stream Dock Control Service (not yet planned)
 Plan: —
-Status: v1.3 roadmap complete (Phases 14-19); ready to `/gsd-plan-phase 14`
+Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements); ready to `/gsd-plan-phase 14`
 Branch: feat/streamdock (off develop)
-Last activity: 2026-05-23 — v1.3 roadmap generated; 11/11 v1.3 requirements mapped to Phases 14-19 (no orphans, no duplicates)
+Last activity: 2026-05-23 — v1.3 replanned: REQUIREMENTS + ROADMAP rewritten; 30/30 v1.3 requirements mapped 1:1 to Phases 14-25 (no orphans, no duplicates)
+
+### v1.3 replan decisions (locked 2026-05-23)
+
+- **Scope = Full Elgato SDK, 1:1** — WebSocket plugin server, manifest schema, Property Inspector, 13 Elgato + 26 AJAZZ messages, node/native/HTML plugin spawn, plugin store. Source of truth: `docs/protocols/streamdeck/akp_plugin_sdk.md` + `akp05_vendor.md` + `akp05_init_sequence.md` + `akp05.md`.
+- **Runtime = Elgato-compatible WebSocket** — extend the existing `SdPluginServer` (`src/app/src/`, already LocalHost-bound + 13 standard messages). The Python OOP host (`src/plugins/`) stays as-is (SEC-003); it is NOT the Stream Dock plugin runtime. Do NOT create a `src/host/plugin-host/` module.
+- **Structure = replan v1.3 from scratch** — Phases 14-25 supersede the prior Phases 14-19. Reuse-first: `SdPluginServer`, `ActionEngine` (folder nav), `Profile`/`ProfilePage`, the `.sdPlugin` extractor, `image_pipeline`.
+- **Device facts (verified):** AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) = 10 LCD keys (2×5) + **4 endless pressable rotary encoders** + touch strip; encoders emit press-only → synthesise release; per-encoder graphics are touch-strip zones (provisional vs in-code ENC-LCD model — Phase 25). `register.cpp` currently advertises `hasClock=true` for `akp05e` → must be `false` (DEVICES-11, Phase 14).
+- **Anti-features NOT replicated:** bind `Any`, unsigned plugins, phone-home, plaintext OBS, always-on global hook, bundled node.
+- Convergence at **Phase 19** (setImage e2e + input→plugin). HARDWARE-GATED: Phases 23, 25.
 
 ## Performance Metrics
 
