@@ -421,7 +421,12 @@ Plans:
 1. On AKP03 (6 keys + 3 encoders), AKP153, and AKP815, assigning a key image shows it and pressing fires the bound action via the same capability-generic service (DEVICES-10).
 1. Per-family differences (init sequence, image resolution/rotation/format, encoder count) are table-driven from the descriptor, not hardcoded.
 
-**Plans**: TBD · **Phase notes**: Generalisation, not new protocol. AKP153/815 may be bench-gated behind descriptor + `MockTransport` tests if not physically connected. **UI hint**: yes
+**Plans**: 2 plans · **Phase notes**: Generalisation, not new protocol. AKP153/815 may be bench-gated behind descriptor + `MockTransport` tests if not physically connected. **UI hint**: yes
+
+Plans:
+
+- [ ] 24-01-PLAN.md — STOP-if-14/15-SUMMARY-absent gate + add makeAkp03/153/815WithTransport DI overloads (test seam; no wire edits)
+- [ ] 24-02-PLAN.md — make control + input services descriptor-driven (no AKP05 geometry) + family MockTransport byte test (AKP03 6keys+3enc, AKP153/815 15keys)
 
 ### Phase 25: Hardware Verification + Real Plugin
 
