@@ -331,7 +331,13 @@ Plans:
 1. `actionReceived` (setImage/setTitle/setState/setBG/setFeedback/setText) routes to the device via the control service.
 1. Device input (keyDown/keyUp, dialRotate/dialDown/dialUp, touchTap) routes to the registered plugin, with willAppear/deviceDidConnect lifecycle.
 
-**Plans**: TBD · **Phase notes**: The integration spine; everything upstream proves out here. **UI hint**: no
+**Plans**: 3 plans · **Phase notes**: The integration spine; everything upstream proves out here. **UI hint**: no
+
+Plans:
+
+- [ ] 19-01-PLAN.md — STOP-gate dep SUMMARY files + bridge shell, ContextRegistry, pure helpers (data-URI decode, keyIndex↔coords, owner-prefix resolution)
+- [ ] 19-02-PLAN.md — inbound action routing: setImage decode→Phase-14 paint, context-ownership denial, placeholder; Application wiring + control-spy e2e
+- [ ] 19-03-PLAN.md — outbound DeviceEvent→§4.4 sendEvent (keyDown/dialRotate/touchTap) + willAppear/deviceDidConnect lifecycle; loopback receives-event e2e
 
 ### Phase 20: Property Inspector + Settings
 
