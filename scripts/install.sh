@@ -204,14 +204,15 @@ install_windows_hint() {
     cat <<EOF
 ${BOLD}Windows installation${RST}
 
-This script is designed for POSIX shells. On Windows, open PowerShell
-and run one of:
+This script is designed for POSIX shells. On Windows, download and run the
+.msi (or portable .zip) from:
 
-  ${BOLD}winget install Aiacos.AjazzControlCenter${RST}         (recommended)
-  ${BOLD}scoop install ajazz-control-center${RST}               (if you use Scoop)
-
-Or download the .msi from:
   https://github.com/${REPO}/releases/latest
+
+winget and Chocolatey packages are prepared and pending approval — once live:
+
+  ${BOLD}winget install Aiacos.AjazzControlCenter${RST}         (coming soon)
+  ${BOLD}choco install ajazz-control-center${RST}               (coming soon)
 EOF
 }
 

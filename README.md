@@ -57,12 +57,17 @@ flatpak install --user ./ajazz-control-center.flatpak
 
 ### Windows
 
-Grab the `.msi` installer (or the portable `.zip`) from the
-[latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest).
-No drivers required.
+Download the `.msi` installer (or the portable `.zip`) from the
+[latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest)
+and run it — no drivers required. SmartScreen may warn while the installer is
+unsigned: choose **More info → Run anyway**.
+
+`winget` and `Chocolatey` packages are prepared
+([`packaging/`](packaging/PUBLISHING.md)) and pending submission/approval:
 
 ```powershell
-winget install Aiacos.AjazzControlCenter
+winget install Aiacos.AjazzControlCenter   # coming soon (pending winget-pkgs)
+choco  install ajazz-control-center        # coming soon (pending moderation)
 ```
 
 ### macOS
