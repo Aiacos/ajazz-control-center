@@ -135,12 +135,15 @@ jobs:
         working-directory: build/windows-release
         shell: pwsh
         run: |
+          # WIX failure is fatal: the job must not silently ship only the ZIP.
+          # On failure, dump wix.log so the cause is visible in the run log.
           cpack -G WIX
           if ($LASTEXITCODE -ne 0) {
             Write-Host "::group::wix.log (cpack -G WIX failed, exit $LASTEXITCODE)"
             Get-ChildItem -Recurse -Path _CPack_Packages -Filter wix.log -ErrorAction SilentlyContinue |
               ForEach-Object { Write-Host "==== $($_.FullName) ===="; Get-Content -Raw $_.FullName }
             Write-Host "::endgroup::"
+            throw "WIX MSI packaging failed"
           }
           cpack -G ZIP
           if ($LASTEXITCODE -ne 0) { throw "ZIP packaging failed" }
@@ -341,7 +344,11 @@ jobs:
       - name: Create release
         uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
         with:
-          tag_name: ${{ github.ref_name || github.event.inputs.tag }}
+          # Prefer the explicit workflow_dispatch input; on a tag push there is
+          # no input so fall back to the pushed ref. (The old order put
+          # github.ref_name first, so a manual dispatch — which runs on `main` —
+          # published to a bogus `main` tag instead of the requested version.)
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
           # Curated downloads + install guide rendered at the top of the
           # release; generate_release_notes: true appends the auto-generated
           # "What's Changed" / contributor list below it.
