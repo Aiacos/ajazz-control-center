@@ -311,7 +311,14 @@ Plans:
 1. Spawn for **system node ≥20** (detected, not bundled), native exe via `QProcess` (optional elevation), and HTML via `QWebEngineView`+`QWebChannel` (PLUGIN-08).
 1. `connectMiraBoxSDSocket` aliased to `connectElgatoStreamDeckSocket` — existing packages load unmodified (PLUGIN-11).
 
-**Plans**: TBD · **Phase notes**: No QCefView. Node is system-detected, never bundled. **UI hint**: yes
+**Plans**: 4 plans (4 waves) · **Phase notes**: No QCefView. Node is system-detected, never bundled. Plans land in reviewable slices (manifest -> node-runner -> mirabox-shim -> manager); the four serialize because they share `tests/unit/CMakeLists.txt` + `src/app/CMakeLists.txt`. **UI hint**: yes
+
+Plans:
+
+- [ ] 18-01-PLAN.md - PluginManifest struct + parsePluginManifest + OS/MinimumVersion gate (Linux OS-accept rule); Controllers incl. Knob/SecondaryScreen (PLUGIN-06) (wave 1)
+- [ ] 18-02-PLAN.md - NodeRunner: exact node argv builder + injectable node>=20 detection, asserted without launching node (PLUGIN-08 node runtime) (wave 2)
+- [ ] 18-03-PLAN.md - Mirabox compat shim: connectMiraBoxSDSocket -> connectElgatoStreamDeckSocket QWebEngineScript at DocumentCreation (PLUGIN-11) (wave 3)
+- [ ] 18-04-PLAN.md - PluginCrashTracker (3-in-30s) + PluginManager: discovery + reused zip-slip extraction + spawn dispatch (node/native/HTML) + crash/restart/disable + exitApp shutdown via SdPluginServer::sendEvent (PLUGIN-07/08) (wave 4)
 
 ### Phase 19: Device ↔ Plugin Bridge (setImage end-to-end)
 
