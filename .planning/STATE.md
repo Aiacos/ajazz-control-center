@@ -24,11 +24,13 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 
 ## Current Position
 
-Phase: 14 — Stream Dock Control Service (not yet planned)
-Plan: —
-Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements); ready to `/gsd-plan-phase 14`
+Phase: 14 — Stream Dock Control Service (**PLANNED**, verified PASS)
+Plan: 14-01 (DEVICES-11 hasClock fix), 14-02 (StreamDockControlService) — 2 plans, 1 wave
+Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). Phase 14 planned + plan-checker PASS; ready to `/gsd-execute-phase 14` (run 14-01 then 14-02 — shared tests/unit/CMakeLists.txt append)
 Branch: feat/streamdock (off develop)
-Last activity: 2026-05-23 — v1.3 replanned: REQUIREMENTS + ROADMAP rewritten; 30/30 v1.3 requirements mapped 1:1 to Phases 14-25 (no orphans, no duplicates)
+Last activity: 2026-05-23 — Phase 14 planned: CONTEXT + RESEARCH (HIGH) + VALIDATION + 2 PLAN.md committed; plan-checker PASS (wire offsets BAT/LIG/ULEND confirmed vs shipping code; app-layer gap is real)
+
+**Phase 14 execution prerequisites (for the operator):** the build needs Qt6 private headers (`qt6-qtbase-private-devel` on Fedora — Phase-10 review flagged CorePrivate missing). System-package install is the operator's action (project hard rule: no system-level mutations from tooling). Verification is hardware-free (MockTransport + `makeAkp05WithTransport`); the live power-cycle smoke is deferred to Phase 25.
 
 ### v1.3 replan decisions (locked 2026-05-23)
 
