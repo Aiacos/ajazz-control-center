@@ -396,7 +396,7 @@ Plans:
 ### Phase 23: Auxiliary Display Surfaces
 
 **Goal**: The encoder overlays, main LCD strip, and touch strip accept assigned images, with DRA partial-zone upload — framing confirmed on hardware.
-**Depends on**: Phase 14 (control service + image pipeline). HARDWARE-GATED.
+**Depends on**: Phases 14 and 16 (both extend `StreamDockControlService`; 16 provides the editor assignment UX). HARDWARE-GATED.
 **Requirements**: DISPLAY-10
 **Success Criteria**:
 
@@ -404,7 +404,12 @@ Plans:
 1. The `DRA` rect-addressable opcode uploads a single zone without re-encoding the whole 800×480 strip (vendor §10 P0).
 1. Per-surface framing matches what the device accepts; where the provisional §5 RE contradicts the hardware, the RE doc is updated (DISPLAY-10).
 
-**Plans**: TBD · **Phase notes**: **HARDWARE-GATED** (AKP05E `0300:3004`, fw `V3.AKP05E.01.007`, working `uaccess` ACL; replug/`setfacl` if root-only). Encoder-overlay framing is the key provisional item. **UI hint**: yes
+**Plans**: 2 plans (2 waves) · **Phase notes**: **HARDWARE-GATED** (AKP05E `0300:3004`, fw `V3.AKP05E.01.007`, working `uaccess` ACL; replug/`setfacl` if root-only). App-wiring only — the backend aux methods are byte-tested; do NOT edit `akp05.cpp`. Encoder-overlay framing (ENC-vs-zone) is the key provisional item; both paths wired, neither deleted, reconciled live in Phase 25. **UI hint**: yes
+
+Plans:
+
+- [ ] 23-01-PLAN.md — STOP-gate Phase 14 + add assignMainImage/assignEncoderImage/assignTouchStripZone to the control service with MockTransport ENC/MAI/DRA wire tests (DISPLAY-10)
+- [ ] 23-02-PLAN.md — repaintEncodersFromProfile (DRA zone default, ENC fallback) wired into the existing profileChanged path (DISPLAY-10)
 
 ### Phase 24: Family Coverage AKP03/153/815
 
