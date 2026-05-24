@@ -159,7 +159,7 @@ TEST_CASE("SdPluginServer action message emits actionReceived with parsed JSON",
     REQUIRE(waitForSpy(clientConnectedSpy));
     client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
     REQUIRE(waitForSpy(registeredSpy));
-    // setTitle is one of the 13 standard Elgato actions.
+    // setTitle is one of the 15 standard Elgato actions.
     client.sendTextMessage(
         QStringLiteral(R"({"event":"setTitle","context":"abc","payload":{"title":"Hi"}})"));
     REQUIRE(waitForSpy(actionSpy));
@@ -590,7 +590,7 @@ TEST_CASE("PluginAuthTest passHello carries salt after registerPlugin",
 TEST_CASE("PluginAuthTest acceptsCorrectChallenge", "[plugin-server][auth]") {
     // With a password configured, a correct sha256(password+salt) challenge is
     // accepted (socket stays open, no disconnected signal).
-    // RED: fails until authentication handling + setPasswordForTesting land.
+    // CR-02: pluginRegistered now fires AFTER auth, not at registerPlugin time.
     ensureQCoreApp();
     SdPluginServer server;
     // setPasswordForTesting: test-only setter so the auth path is exercisable;
@@ -609,8 +609,9 @@ TEST_CASE("PluginAuthTest acceptsCorrectChallenge", "[plugin-server][auth]") {
 
     client.sendTextMessage(
         QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.auth.accept"})"));
-    REQUIRE(waitForSpy(registeredSpy));
 
+    // When a password is configured, pluginRegistered is deferred until auth succeeds
+    // (CR-02). Wait for passHello instead — it fires at registration time regardless.
     // Receive passHello and extract salt.
     QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
     REQUIRE_FALSE(frame.isEmpty());
@@ -623,6 +624,9 @@ TEST_CASE("PluginAuthTest acceptsCorrectChallenge", "[plugin-server][auth]") {
                                 .value(QStringLiteral("salt"))
                                 .toString();
     REQUIRE_FALSE(saltHex.isEmpty());
+
+    // pluginRegistered must NOT have fired yet (pre-auth).
+    REQUIRE(registeredSpy.count() == 0);
 
     // Compute expected challenge = sha256(password + salt) in UTF-8 bytes.
     // This mirrors challengeFor() in the implementation (17-03).
@@ -639,17 +643,19 @@ TEST_CASE("PluginAuthTest acceptsCorrectChallenge", "[plugin-server][auth]") {
     pump(300);
     REQUIRE(clientDisconnectedSpy.count() == 0);
     REQUIRE(client.state() == QAbstractSocket::ConnectedState);
+    // pluginRegistered must now have fired (deferred emit on auth success, CR-02).
+    REQUIRE(registeredSpy.count() == 1);
+    REQUIRE(registeredSpy.first().at(0).toString() == QStringLiteral("com.test.auth.accept"));
 }
 
 TEST_CASE("PluginAuthTest rejectsAfter5BadAttempts", "[plugin-server][auth]") {
     // With a password configured, sending 5 wrong challenges closes the socket.
     // Fewer than 5 attempts must NOT close (assert still-connected after 4).
-    // RED: fails until authentication rejection + kMaxAuthAttempts=5 land.
+    // CR-02: pluginRegistered is deferred until auth success — do NOT wait on it here.
     ensureQCoreApp();
     SdPluginServer server;
     server.setPasswordForTesting(QStringLiteral("pw"));
 
-    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
     REQUIRE(server.start(0));
 
     QWebSocket client;
@@ -661,9 +667,10 @@ TEST_CASE("PluginAuthTest rejectsAfter5BadAttempts", "[plugin-server][auth]") {
 
     client.sendTextMessage(
         QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.auth.reject"})"));
-    REQUIRE(waitForSpy(registeredSpy));
 
-    // Wait for passHello to arrive (ensures server is ready to process auth).
+    // Wait for passHello to arrive (ensures server processed registerPlugin).
+    // When a password is configured, pluginRegistered is deferred — use passHello
+    // as the readiness signal instead (CR-02).
     QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
     REQUIRE_FALSE(frame.isEmpty());
 
@@ -681,4 +688,98 @@ TEST_CASE("PluginAuthTest rejectsAfter5BadAttempts", "[plugin-server][auth]") {
     client.sendTextMessage(QStringLiteral(R"({"event":"authentication","challenge":"wrong"})"));
     REQUIRE(waitForSpy(clientDisconnectedSpy, 3000));
     REQUIRE(clientDisconnectedSpy.count() >= 1);
+}
+
+// ---------------------------------------------------------------------------
+// Security regression tests (CR-01 / CR-03 fixes from Phase 17 code review)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginAuthTest unauthenticated socket cannot trigger actionReceived",
+          "[plugin-server][auth][security]") {
+    // Regression guard for CR-01: a socket that has sent registerPlugin but NOT
+    // yet replied with a correct authentication challenge must NOT be able to
+    // emit actionReceived signals on the app layer, even if it sends a valid
+    // routed-action event (setTitle, sendToDevice, etc.).
+    //
+    // Attack path before fix:
+    //   1. Connect.  2. registerPlugin.  3. Immediately send setTitle.
+    //   4. actionReceived("com.attacker", ...) fired on app layer.
+    ensureQCoreApp();
+    SdPluginServer server;
+    server.setPasswordForTesting(QStringLiteral("pw"));
+    QSignalSpy actionSpy(&server, &SdPluginServer::actionReceived);
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(connectedSpy));
+
+    // Register but do NOT send an authentication reply.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.unauth"})"));
+    // Wait for passHello to arrive — confirms server processed registerPlugin.
+    QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
+    REQUIRE_FALSE(frame.isEmpty());
+
+    // pluginRegistered must NOT have fired (deferred until auth — CR-02).
+    REQUIRE(registeredSpy.count() == 0);
+
+    // Attempt every type of routed action without authenticating first.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"setTitle","context":"c","payload":{"title":"x"}})"));
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"sendToDevice","context":"c","payload":{}})"));
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"getSystemAudioVolume","context":"c","payload":{}})"));
+    pump(300);
+
+    // CR-01: actionReceived must NOT fire — the socket is not yet authenticated.
+    REQUIRE(actionSpy.count() == 0);
+    // CR-02: pluginRegistered must still not have fired.
+    REQUIRE(registeredSpy.count() == 0);
+}
+
+TEST_CASE("PluginAuthTest duplicate UUID registration rejected",
+          "[plugin-server][auth][security]") {
+    // Regression guard for CR-03: a second client that tries to claim a UUID
+    // already held by a live, authenticated connection must be closed by the
+    // server. The legitimate connection must remain undisturbed.
+    ensureQCoreApp();
+    SdPluginServer server;
+    // No password for this test — we just want to confirm the UUID collision
+    // guard fires regardless of auth state.
+    REQUIRE(server.start(0));
+
+    auto const url = QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort()));
+    constexpr char const* kUuid = "com.test.collision";
+
+    // Connect and register the legitimate client.
+    QWebSocket legit;
+    QSignalSpy legitConnected(&legit, &QWebSocket::connected);
+    QSignalSpy legitRegistered(&server, &SdPluginServer::pluginRegistered);
+    legit.open(url);
+    REQUIRE(waitForSpy(legitConnected));
+    legit.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})").arg(QLatin1String(kUuid)));
+    REQUIRE(waitForSpy(legitRegistered));
+    REQUIRE(server.connectedPluginCount() == 1);
+
+    // Connect an impostor that claims the same UUID.
+    QWebSocket impostor;
+    QSignalSpy impostorConnected(&impostor, &QWebSocket::connected);
+    QSignalSpy impostorDisconnected(&impostor, &QWebSocket::disconnected);
+    impostor.open(url);
+    REQUIRE(waitForSpy(impostorConnected));
+    impostor.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})").arg(QLatin1String(kUuid)));
+    // Server must close the impostor.
+    REQUIRE(waitForSpy(impostorDisconnected, 3000));
+
+    // Legitimate connection must still be live with count == 1.
+    pump(200);
+    REQUIRE(server.connectedPluginCount() == 1);
+    REQUIRE(legit.state() == QAbstractSocket::ConnectedState);
 }
