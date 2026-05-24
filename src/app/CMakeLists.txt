@@ -305,6 +305,10 @@ set(ACC_QML_MODULE_SOURCES
     src/plugin_manifest.hpp
     src/node_runner.cpp
     src/node_runner.hpp
+    # Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim. The header is always included
+    # (kMiraboxShimSource is inline constexpr, non-WebEngine builds can unit-test it); the .cpp is
+    # in the WebEngine-gated block below (makeMiraboxShim uses QWebEngineScript).
+    src/plugin_mirabox_shim.hpp
     src/plugin_catalog_model.cpp
     src/plugin_catalog_model.hpp
     src/loaded_plugins_model.cpp
@@ -437,6 +441,11 @@ if(AJAZZ_HAVE_WEBENGINE)
     # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
     # inside it), so it only compiles when WebEngine is present.
     target_sources(ajazz-control-center PRIVATE src/pi_url_request_interceptor.cpp)
+    # Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim. kMiraboxShimSource is declared
+    # inline constexpr in the header (always reachable); makeMiraboxShim() body uses
+    # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
+    # profile->scripts()->insert(makeMiraboxShim()) before loading HTML plugin index.html.
+    target_sources(ajazz-control-center PRIVATE src/plugin_mirabox_shim.cpp)
 endif()
 
 # ----------------------------------------------------------------------------
