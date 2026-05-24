@@ -15,8 +15,8 @@
  *   auth = Base64( SHA256( Base64( SHA256( password + salt ) ) + challenge ) )
  * Computed via QCryptographicHash::Sha256 — no bundled crypto (T-21-obscrypto).
  *
- * **COD-031**: all JSON is app-tier QJsonDocument/QJsonObject. Never nlohmann
- * in this file or obs_client.cpp.
+ * **COD-031**: all JSON is app-tier QJsonDocument/QJsonObject (the vendored
+ * JSON library is not permitted in any app-tier OBS client code).
  *
  * **Compile-out when AJAZZ_HAVE_WEBSOCKETS is unset**: mirrors sd_plugin_server.hpp
  * so the app builds on minimal Qt installs. 21-03 wires the obsstudio built-in

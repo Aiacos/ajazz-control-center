@@ -137,6 +137,10 @@ target_link_libraries(
 # in the headless harness.
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/sd_plugin_server.cpp")
+    # Phase 21 Plan 21-02 (PLUGIN-12): obs_client.hpp is included via ACC_QML_MODULE_SOURCES (for
+    # AUTOMOC) so its Q_OBJECT symbols must be resolved here — mirror the sd_plugin_server pattern
+    # above.
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/obs_client.cpp")
     target_link_libraries(ajazz_qml_tests PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz_qml_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()

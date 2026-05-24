@@ -521,6 +521,19 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()
 
+# Phase 21 Plan 21-02 (PLUGIN-12): ObsClient obs-websocket v5 auth handshake tests. Hardware-free:
+# loopback QWebSocketServer mock OBS server (bound to 127.0.0.1). Mirrors the test_sd_plugin_server
+# block: links obs_client.cpp + Qt6::WebSockets directly (both already available when
+# AJAZZ_HAVE_WEBSOCKETS). Gated identically so the suite builds on minimal Qt installs without the
+# WebSockets module.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_obs_client.cpp ${CMAKE_SOURCE_DIR}/src/app/src/obs_client.cpp
+    )
+    # AJAZZ_HAVE_WEBSOCKETS compile definition + Qt6::WebSockets already set by the sd_plugin_server
+    # block above — no duplication needed here.
+endif()
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.
