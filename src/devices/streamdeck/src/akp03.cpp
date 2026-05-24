@@ -577,4 +577,19 @@ core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_shared<Akp03Device>(d, std::move(id));
 }
 
+/**
+ * @brief Test-only factory exposing the @c Akp03Device COD-026 DI constructor
+ *        across translation-unit boundaries (parallels @c makeAkp05WithTransport).
+ *
+ * Production code uses @ref makeAkp03 above; this overload exposes the same
+ * backend with a substitutable transport so unit tests can assert byte-level
+ * wire-format equality via @c MockTransport::writes() without touching real
+ * HID hardware.
+ */
+core::DevicePtr makeAkp03WithTransport(core::DeviceDescriptor const& d,
+                                       core::DeviceId id,
+                                       core::TransportPtr transport) {
+    return std::make_shared<Akp03Device>(d, std::move(id), std::move(transport));
+}
+
 } // namespace ajazz::streamdeck

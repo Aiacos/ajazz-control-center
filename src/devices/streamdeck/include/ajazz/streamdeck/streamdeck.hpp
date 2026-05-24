@@ -53,6 +53,18 @@ void registerAll(core::DeviceRegistry& registry);
 [[nodiscard]] core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id);
 
 /**
+ * @brief Test-only factory: construct an AKP153 device with an injected
+ *        @c ITransport. Parallels @ref makeAkp05WithTransport.
+ *
+ * Production code uses @ref makeAkp153 above; tests use this overload to
+ * substitute a mock that records every write for byte-level wire-format
+ * assertions (CAPTURE-04 pattern, COD-026 DI seam).
+ */
+[[nodiscard]] core::DevicePtr makeAkp153WithTransport(core::DeviceDescriptor const& d,
+                                                      core::DeviceId id,
+                                                      core::TransportPtr transport);
+
+/**
  * @brief Factory for the AJAZZ AKP03 / Mirabox N3 backend.
  *
  * 6-key grid (72×72 PNG) plus one rotary encoder. Implements
@@ -66,6 +78,18 @@ void registerAll(core::DeviceRegistry& registry);
  *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id);
+
+/**
+ * @brief Test-only factory: construct an AKP03 device with an injected
+ *        @c ITransport. Parallels @ref makeAkp05WithTransport.
+ *
+ * Production code uses @ref makeAkp03 above; tests use this overload to
+ * substitute a mock that records every write for byte-level wire-format
+ * assertions (CAPTURE-04 pattern, COD-026 DI seam).
+ */
+[[nodiscard]] core::DevicePtr makeAkp03WithTransport(core::DeviceDescriptor const& d,
+                                                     core::DeviceId id,
+                                                     core::TransportPtr transport);
 
 /**
  * @brief Factory for the AJAZZ AKP05 / AKP05E backend.
@@ -112,5 +136,17 @@ void registerAll(core::DeviceRegistry& registry);
  *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id);
+
+/**
+ * @brief Test-only factory: construct an AKP815 device with an injected
+ *        @c ITransport. Parallels @ref makeAkp05WithTransport.
+ *
+ * Production code uses @ref makeAkp815 above; tests use this overload to
+ * substitute a mock that records every write for byte-level wire-format
+ * assertions (CAPTURE-04 pattern, COD-026 DI seam).
+ */
+[[nodiscard]] core::DevicePtr makeAkp815WithTransport(core::DeviceDescriptor const& d,
+                                                      core::DeviceId id,
+                                                      core::TransportPtr transport);
 
 } // namespace ajazz::streamdeck
