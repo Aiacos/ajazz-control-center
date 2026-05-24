@@ -111,6 +111,11 @@ add_executable(
     # the CLE "clear all keys" path, and the no-op contract for non-display
     # devices. Hardware-free gating proof; live witness is Phase 25.
     test_stream_dock_controls.cpp
+    # Phase 16 Plan 16-02 (PROFILE-01): commit -> save -> fresh-controller load round-trip
+    # equality for keys, encoders, touch KeyState, and pages; plus repaint-on-load proof
+    # (BAT+ULEND per bound key via StreamDockControlService + MockTransport).
+    # profile_controller.cpp is already in the binary via the 14-02 entry above.
+    test_profile_persistence.cpp
     # qt_executor.cpp is already in the binary (test_qt_executor block above)
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
