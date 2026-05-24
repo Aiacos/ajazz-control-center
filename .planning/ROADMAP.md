@@ -276,7 +276,7 @@ Plans:
 Plans:
 
 - [x] 16-01-PLAN.md — DISPLAY-09: Q_INVOKABLE setBrightness/clearAll on the control service (LIG/CLE) + QML-expose it + debounced brightness Slider + Clear-all button in the Keys tab (wave 1)
-- [ ] 16-02-PLAN.md — PROFILE-01: default profile path (AppDataLocation/profiles/<id>.json) + KeyDesigner→Profile commit + Main Apply/Revert real save/load + fresh-controller round-trip (keys/encoders/touch/pages) + repaint-on-load (wave 1)
+- [x] 16-02-PLAN.md — PROFILE-01: default profile path (AppDataLocation/profiles/<id>.json) + KeyDesigner→Profile commit + Main Apply/Revert real save/load + fresh-controller round-trip (keys/encoders/touch/pages) + repaint-on-load (wave 1)
 - [ ] 16-03-PLAN.md — PROFILE-02: page-scoped repaintPage(pageId) + pageNavRequested(±1) carousel over top-level pages + repaint via the reused ActionEngine page state; no device page opcode (wave 2, depends 16-01+16-02)
 
 ### Phase 17: Plugin Protocol Completion
@@ -470,7 +470,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 0/?            | Not started      | —          |
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 16. Device Controls + Persistence + Pages   | v1.3      | 1/3            | In Progress      |            |
+| 16. Device Controls + Persistence + Pages   | v1.3      | 2/3            | In Progress      |            |
 | 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
