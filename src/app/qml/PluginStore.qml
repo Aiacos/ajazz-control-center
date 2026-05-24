@@ -100,6 +100,29 @@ Page {
     /// Status text shown in the install-from-file banner (success / error).
     property string localInstallStatus: ""
 
+    /// IN-01: shared relative-age formatter (replaces two identical copies
+    /// that previously lived inside streamdockBanner and opendeckBanner).
+    /// @param unixMs  Unix timestamp in milliseconds (0 = unknown).
+    /// @param tick    The caller's relativeAgeTick property (triggers re-eval).
+    /// @returns Short human delta: "just now", "3 min ago", "2 days ago", or "".
+    function relativeAge(unixMs, tick) {
+        void(tick); // dependency: force re-eval when the caller's tick increments
+        if (!unixMs || unixMs <= 0) {
+            return "";
+        }
+        var deltaSec = Math.max(0, Math.floor((Date.now() - unixMs) / 1000));
+        if (deltaSec < 45) {
+            return qsTr("just now");
+        }
+        if (deltaSec < 3600) {
+            return qsTr("%1 min ago").arg(Math.round(deltaSec / 60));
+        }
+        if (deltaSec < 86400) {
+            return qsTr("%1 h ago").arg(Math.round(deltaSec / 3600));
+        }
+        return qsTr("%1 days ago").arg(Math.round(deltaSec / 86400));
+    }
+
     Connections {
         target: PluginCatalog
         function onInstalledCountChanged() { root.catalogRevision += 1; }
@@ -336,28 +359,6 @@ Page {
                 onTriggered: streamdockBanner.relativeAgeTick++
             }
 
-            // Translate a unix-ms timestamp into a short human delta
-            // ("just now", "3 min ago", "2 days ago"). Returns the empty
-            // string for unknown timestamps so callers can elide the
-            // suffix entirely.
-            function relativeAge(unixMs) {
-                if (!unixMs || unixMs <= 0) {
-                    return "";
-                }
-                streamdockBanner.relativeAgeTick;  // depend on the tick
-                var deltaSec = Math.max(0, Math.floor((Date.now() - unixMs) / 1000));
-                if (deltaSec < 45) {
-                    return qsTr("just now");
-                }
-                if (deltaSec < 3600) {
-                    return qsTr("%1 min ago").arg(Math.round(deltaSec / 60));
-                }
-                if (deltaSec < 86400) {
-                    return qsTr("%1 h ago").arg(Math.round(deltaSec / 3600));
-                }
-                return qsTr("%1 days ago").arg(Math.round(deltaSec / 86400));
-            }
-
             readonly property string streamdockState:
                 PluginCatalog ? PluginCatalog.streamdockState : "loading"
             readonly property color statusColor: {
@@ -378,7 +379,8 @@ Page {
             }
             readonly property string statusLine: {
                 var ts = PluginCatalog ? PluginCatalog.streamdockFetchedAtUnixMs : 0;
-                var rel = streamdockBanner.relativeAge(ts);
+                // IN-01: use the page-level relativeAge, passing the local tick.
+                var rel = root.relativeAge(ts, streamdockBanner.relativeAgeTick);
                 switch (streamdockBanner.streamdockState) {
                 case "online":
                     return rel.length > 0
@@ -483,24 +485,6 @@ Page {
                 onTriggered: opendeckBanner.relativeAgeTick++
             }
 
-            function relativeAge(unixMs) {
-                if (!unixMs || unixMs <= 0) {
-                    return "";
-                }
-                opendeckBanner.relativeAgeTick;  // depend on the tick
-                var deltaSec = Math.max(0, Math.floor((Date.now() - unixMs) / 1000));
-                if (deltaSec < 45) {
-                    return qsTr("just now");
-                }
-                if (deltaSec < 3600) {
-                    return qsTr("%1 min ago").arg(Math.round(deltaSec / 60));
-                }
-                if (deltaSec < 86400) {
-                    return qsTr("%1 h ago").arg(Math.round(deltaSec / 3600));
-                }
-                return qsTr("%1 days ago").arg(Math.round(deltaSec / 86400));
-            }
-
             readonly property string opendeckState:
                 PluginCatalog ? PluginCatalog.opendeckState : "loading"
             readonly property color statusColor: {
@@ -521,7 +505,8 @@ Page {
             }
             readonly property string statusLine: {
                 var ts = PluginCatalog ? PluginCatalog.opendeckFetchedAtUnixMs : 0;
-                var rel = opendeckBanner.relativeAge(ts);
+                // IN-01: use the page-level relativeAge, passing the local tick.
+                var rel = root.relativeAge(ts, opendeckBanner.relativeAgeTick);
                 switch (opendeckBanner.opendeckState) {
                 case "online":
                     return rel.length > 0

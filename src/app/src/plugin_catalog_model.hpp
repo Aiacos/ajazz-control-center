@@ -157,6 +157,7 @@ public:
         EnabledRole,                 ///< True when the installed plugin is currently enabled.
         SourceRole,                  ///< "local" | "community" | "streamdock".
         StreamdockProductIdRole,     ///< Upstream Streamdock product id (when source==streamdock).
+        DownloadUrlRole,             ///< Direct download URL (QUrl) for in-app install.
     };
 
     // No default on `parent`: see BrandingService — a default-constructible

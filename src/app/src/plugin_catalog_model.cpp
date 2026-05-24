@@ -253,6 +253,8 @@ QVariant PluginCatalogModel::data(QModelIndex const& index, int role) const {
         return row.source;
     case StreamdockProductIdRole:
         return row.streamdockProductId;
+    case DownloadUrlRole:
+        return row.downloadUrl;
     default:
         return {};
     }
@@ -276,6 +278,7 @@ QHash<int, QByteArray> PluginCatalogModel::roleNames() const {
         {EnabledRole, "enabled"},
         {SourceRole, "source"},
         {StreamdockProductIdRole, "streamdockProductId"},
+        {DownloadUrlRole, "downloadUrl"},
     };
 }
 
