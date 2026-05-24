@@ -825,21 +825,26 @@ bool PluginCatalogModel::install(QString const& uuid) {
 
         // Extract the archive in place so the plugin host
         // finds an expanded `<id>.sdPlugin/manifest.json`
-        // tree instead of an opaque zip. On success we
-        // delete the archive; on failure we leave it so
-        // the user can retry / inspect (issue #62).
+        // tree instead of an opaque zip.
         QFileInfo const archiveInfo(destCopy);
         QString const archiveDir = archiveInfo.absolutePath();
         QString const archiveName = archiveInfo.fileName();
         bool const extractOk = extractSdPluginArchive(destCopy, archiveDir, archiveName);
-        if (extractOk) {
-            QFile::remove(destCopy);
-        } else {
+        if (!extractOk) {
+            // CR-01 fix: extraction failure must NOT fall through to
+            // markInstalled + installFinished(success=true) — the verify gate
+            // would be completely bypassed. Remove the archive so the
+            // launch-sweep can never pick it up, and emit failure.
             AJAZZ_LOG_WARN("plugin-catalog",
-                           "install '{}' extract failed; archive left at {}",
+                           "install '{}': extract failed; removing archive at {}",
                            uuidCopy.toStdString(),
                            destCopy.toStdString());
+            QFile::remove(destCopy);
+            emit self->installFinished(
+                uuidCopy, false, QStringLiteral("Failed to extract plugin archive."));
+            return;
         }
+        QFile::remove(destCopy);
 
         // PLUGIN-14 verify gate (T-22-backdoor): run Ed25519 signature
         // verification on the extracted manifest BEFORE marking as installed.
@@ -847,7 +852,7 @@ bool PluginCatalogModel::install(QString const& uuid) {
         // promoted by the network path. SelfSigned is allowed (explicit
         // sideload UX is plan 02's concern; network path treats it as
         // allowed-but-logged). Refused = quarantine the extracted dir.
-        if (extractOk) {
+        {
             QString const extractedManifest =
                 QDir(archiveDir).filePath(archiveName + QStringLiteral("/manifest.json"));
             VerifyOutcome const vout = verifyStagedPlugin(extractedManifest);
@@ -863,7 +868,8 @@ bool PluginCatalogModel::install(QString const& uuid) {
                 emit self->installFinished(
                     uuidCopy,
                     false,
-                    tr("Plugin signature verification failed: %1").arg(vout.reason));
+                    PluginCatalogModel::tr("Plugin signature verification failed: %1")
+                        .arg(vout.reason));
                 return;
             }
             AJAZZ_LOG_INFO("plugin-catalog",
