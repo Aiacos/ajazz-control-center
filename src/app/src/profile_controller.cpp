@@ -86,6 +86,10 @@ QString ProfileController::profileNameFor(QString const& profileId) const {
     return {};
 }
 
+ajazz::core::Profile const& ProfileController::activeProfile() const noexcept {
+    return m_profile;
+}
+
 void ProfileController::loadProfileById(QString const& profileId) {
     if (profileId.isEmpty()) {
         emit loadFailed(tr("Empty profile id"));

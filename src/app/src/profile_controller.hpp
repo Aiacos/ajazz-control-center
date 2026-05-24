@@ -102,6 +102,21 @@ public:
      */
     Q_INVOKABLE void loadProfileById(QString const& profileId);
 
+    /**
+     * @brief Return the currently loaded profile by const-ref.
+     *
+     * Provides read-only access to the active profile for sibling C++ services
+     * (e.g. StreamDockControlService) that need to iterate key bindings on
+     * profileChanged without ProfileController gaining a dependency on the
+     * device layer. NOT Q_INVOKABLE — returns a non-QML core type; for C++ use
+     * only. The returned reference is valid until the next loadProfile() call.
+     *
+     * @note Open Question 4 from Phase 14 RESEARCH.md — this minimal getter is
+     *       the chosen seam: keeps ProfileController a pure I/O bridge while
+     *       allowing the repaint service to iterate Profile::keys directly.
+     */
+    [[nodiscard]] ajazz::core::Profile const& activeProfile() const noexcept;
+
 signals:
     /**
      * @signal profileChanged
