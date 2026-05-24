@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file stream_dock_input_service.hpp
- * @brief App-layer input dispatch service for AKP05E Stream Dock devices.
+ * @brief App-layer input dispatch service for AKP-family Stream Dock devices
+ *        (AKP03, AKP05/05E, AKP153, AKP815).
  *
  * StreamDockInputService is the first instantiation of the core ActionEngine
- * in the app. It bridges the device-event stream (produced by
- * Akp05Device::poll() / onEvent) to bound action chains in the active Profile,
- * executing them through one ActionEngine constructed with the app's
- * ActionExecutors and the injected QtExecutor (so Sleep never blocks the poll
- * thread — audit A2 / Pitfall 4).
+ * in the app. It bridges the device-event stream (produced by IDevice::poll()
+ * / onEvent) to bound action chains in the active Profile, executing them
+ * through one ActionEngine constructed with the app's ActionExecutors and the
+ * injected QtExecutor (so Sleep never blocks the poll thread — audit A2 / Pitfall 4).
+ *
+ * The service is descriptor-driven (Phase 24 generalization): all AKP families
+ * share the same dispatch/coalescer/synthesis code paths, parameterised by the
+ * active device's descriptor.encoderCount and descriptor.hasTouchStrip.
+ *
+ *   Family     | LCD keys | Encoders | Touch strip
+ *   -----------|----------|----------|-----------
+ *   AKP03      | 6        | 3        | no
+ *   AKP05/05E  | 10       | 4        | yes (800x480)
+ *   AKP153     | 15       | 0        | no
+ *   AKP815     | 15       | 0        | no
  *
  * Responsibilities:
  *  - Hold the active Stream Dock's shared_ptr<IDevice> (Pitfall 2 — no raw
@@ -25,7 +36,7 @@
  *  - Expose the `pageNavRequested(int)` Q_SIGNAL for Phase 16's page model.
  *  - Expose `encoderReleaseSynthesised(uint16_t)` Q_SIGNAL for testability.
  *
- * Design decisions (Phase 15 SUMMARY):
+ * Design decisions (Phase 15 + Phase 24 generalization):
  *  - NOT QML-exposed for Phase 15 — headless C++ dispatch; QML/UI wiring is
  *    Phase 16's concern.
  *  - ProfileAccessor seam: std::function<Profile const&()> injected by the
@@ -33,22 +44,23 @@
  *  - ActionEngine owned by this service (unique_ptr): Application supplies a
  *    pre-constructed engine with the app's real executors + QtExecutor; tests
  *    inject spy engines.
- *  - Poll cadence 8 ms: poll() drains <=8 reports/cycle (akp05.cpp:474), so
- *    8 ms * 8 = effective read ceiling ~1000 reports/s — matches the >100 Hz
- *    encoder spec (event_bus.hpp:33). Qt::PreciseTimer minimises cadence drift.
- *    Revisit with a dedicated reader thread only if hardware stalls appear
- *    in Phase 25.
+ *  - Poll cadence 8 ms: poll() drains <=8 reports/cycle, so 8 ms * 8 =
+ *    effective read ceiling ~1000 reports/s — matches the >100 Hz encoder spec.
+ *    Qt::PreciseTimer minimises cadence drift. Revisit with a dedicated reader
+ *    thread only if hardware stalls appear in Phase 25.
  *  - GUI-thread dispatch: onEvent fires on the GUI thread (poll is QTimer-
- *    driven), so ActionEngine::run() executes there. Safe per device.hpp:199
- *    "callback invoked from I/O thread" — here I/O thread == GUI thread.
+ *    driven), so ActionEngine::run() executes there.
  *  - 16 ms rotation coalescer: accumulates signed delta per encoder; one
- *    onCw/onCcw dispatch per 16 ms window (Pattern 3 / INPUT-04c).
- *    Accumulated magnitude is preserved in m_encAccum for potential per-detent
- *    semantics in a later phase (just read the array before zeroing).
- *  - Encoder release synthesis: device is press-only (akp05.md:76); release
- *    is synthesised immediately after onPress (Pattern 4).
+ *    onCw/onCcw dispatch per 16 ms window (Pattern 3 / INPUT-04c). The
+ *    per-encoder accumulator vector is sized from descriptor.encoderCount on
+ *    setActiveDevice() (AKP03=3, AKP05=4, AKP153/AKP815=0).
+ *  - Encoder release synthesis: AKP05 is press-only (akp05.md:76); release
+ *    is synthesised immediately after onPress (Pattern 4). AKP03 v3 firmware
+ *    does emit real release events (akp03.cpp handles EncoderReleased), but
+ *    EncoderBinding has no onRelease field yet — see WR-05 TODO.
  *  - Touch zone derivation: PROVISIONAL formula X*4/640 (akp05.md §5);
- *    hardware-reconciled in Phase 25.
+ *    hardware-reconciled in Phase 25. Only AKP05 triggers this path
+ *    (hasTouchStrip=true); other families are gated out.
  */
 #pragma once
 
@@ -68,10 +80,16 @@ namespace ajazz::app {
 
 /**
  * @class StreamDockInputService
- * @brief App-layer input dispatch service for AKP05E Stream Dock devices.
+ * @brief App-layer input dispatch service for AKP-family Stream Dock devices
+ *        (AKP03, AKP05/05E, AKP153, AKP815).
  *
  * Not a QML singleton for Phase 15 — plain QObject owned by Application.
  * QML wiring is Phase 16.
+ *
+ * After Phase 24 the service is fully descriptor-driven: setActiveDevice()
+ * reads descriptor.encoderCount and descriptor.hasTouchStrip to configure
+ * m_encAccum and the touch-strip gate. No family-specific code remains in
+ * the dispatch / coalescer paths.
  *
  * @note Not thread-safe; must be used on the Qt main (GUI) thread.
  */
@@ -219,8 +237,11 @@ private:
     /// Accumulate a rotation delta and arm the 16 ms coalescer timer.
     void onEncoderTurned(std::uint16_t encIndex, std::int32_t delta);
 
-    /// Synthesise a paired EncoderReleased event for the host (device is
-    /// press-only — see Pattern 4 / Pitfall 2 / akp05.md:76).
+    /// Synthesise a paired EncoderReleased event for the host.
+    /// AKP05 is press-only (akp05.md:76) so this is always needed there.
+    /// AKP03 v3 firmware does emit real release events; once EncoderBinding
+    /// gains an onRelease field the hardware event should be used instead
+    /// of a synthetic one on AKP03 (see WR-05 and dispatch()).
     void synthesiseEncoderRelease(std::uint16_t encIndex);
 
     ProfileAccessor m_profileAccessor;
