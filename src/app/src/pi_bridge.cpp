@@ -81,6 +81,14 @@ bool isSafeUuidComponent(QString const& s) {
         if (u < 0x20 || u == 0x7f) {
             return false; // ASCII control chars + NUL
         }
+        // IN-01: reject non-ASCII code points (> 0x7E). Stream Deck SDK-2
+        // UUIDs are reverse-DNS strings (com.elgato.foo) or hex UUIDs —
+        // both are pure ASCII. Non-ASCII chars (emoji, non-Latin, lone
+        // surrogates) have no place in a UUID and could cause issues on
+        // case-insensitive or encoding-sensitive filesystems.
+        if (u > 0x7e) {
+            return false; // non-ASCII: reject
+        }
         if (c == QLatin1Char('/') || c == QLatin1Char('\\')) {
             return false; // path separators on any platform
         }
