@@ -208,6 +208,17 @@ QString readJsonOrEmpty(QString const& path, QString const& whatForLog) {
                         in.errorString().toStdString());
         return QStringLiteral("{}");
     }
+    // WR-03: cap before readAll() — the settings directory is user-writable,
+    // so a file may have been replaced externally with an oversized payload.
+    if (in.size() > kMaxSettingsBytes) {
+        AJAZZ_LOG_ERROR("pi-bridge",
+                        "{}: file '{}' is {} bytes, exceeds {}-byte cap; returning empty",
+                        whatForLog.toStdString(),
+                        path.toStdString(),
+                        static_cast<long long>(in.size()),
+                        static_cast<long long>(kMaxSettingsBytes));
+        return QStringLiteral("{}");
+    }
     QByteArray const data = in.readAll();
     in.close();
     if (data.isEmpty()) {
