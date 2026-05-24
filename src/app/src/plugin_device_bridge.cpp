@@ -834,6 +834,17 @@ void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
     if (m_server == nullptr) {
         return;
     }
+    // WR-01: send willDisappear for every visible action context on this device
+    // before retiring them. This matches the Elgato SDK spec (§4.4) requirement
+    // that willDisappear is sent per context when a device disappears, and mirrors
+    // the onPluginDisconnected path. Failure to send willDisappear causes plugins
+    // that track mounted-instance counts to mis-count.
+    retirePageContexts(deviceId, QStringLiteral("root"), {});
+    // retireDevice() is a safety net for any contexts on non-root pages (Phase 16
+    // multi-page). For the Phase 19 root-only scope it is a no-op after the call
+    // above, but calling it keeps the retireDevice path in place for future pages.
+    m_registry.retireDevice(deviceId);
+
     // Send deviceDidDisconnect to all registered plugins (§4.4).
     QJsonObject const deviceInfo{
         {QStringLiteral("name"), deviceId},
@@ -843,8 +854,6 @@ void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
     for (QString const& uuid : m_registeredPlugins) {
         m_server->sendEvent(uuid, QStringLiteral("deviceDidDisconnect"), payload);
     }
-    // Retire all contexts for this device (T-19-stale: post-retire events are dropped).
-    m_registry.retireDevice(deviceId);
 }
 
 void PluginDeviceBridge::onActivePageChanged(QString const& deviceId, QString const& pageId) {
