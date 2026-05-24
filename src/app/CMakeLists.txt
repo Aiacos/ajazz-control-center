@@ -46,6 +46,11 @@ qt_add_executable(
     # extensions. Pure Qt-Core-only; no nlohmann (COD-031). Used by discovery (18-04) and any future
     # catalog enrichment. manifestRunnableHere() gates OS + Software.MinimumVersion.
     src/plugin_manifest.cpp
+    # Phase 18 Plan 18-02 (PLUGIN-08): Node.js spawn argv builder + injectable node >= 20 resolver.
+    # Pure Qt-Core-only; no process launched at unit time (injectable NodeProbe for tests). The
+    # Wave-3 PluginManager calls QProcess::start(nodeExe, buildNodeArgv(...)); absence/old-version
+    # surfaces as a disabled plugin. No bundled node (anti-feature, CONTEXT.md).
+    src/node_runner.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
     # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13). Mirrors TimeSyncService
@@ -298,6 +303,8 @@ set(ACC_QML_MODULE_SOURCES
     src/profile_controller.hpp
     src/plugin_manifest.cpp
     src/plugin_manifest.hpp
+    src/node_runner.cpp
+    src/node_runner.hpp
     src/plugin_catalog_model.cpp
     src/plugin_catalog_model.hpp
     src/loaded_plugins_model.cpp
