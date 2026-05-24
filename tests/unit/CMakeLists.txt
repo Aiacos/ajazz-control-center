@@ -404,6 +404,30 @@ target_sources(
     ajazz_unit_tests PRIVATE test_node_runner.cpp ${CMAKE_SOURCE_DIR}/src/app/src/node_runner.cpp
 )
 
+# Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim tests. The pure-string case
+# (CompatTest::miraboxSocket_aliasedToElgato) compiles unconditionally — no WebEngine dep — and
+# asserts that kMiraboxShimSource contains the forwarding alias. The injection-point case
+# (CompatTest mirabox shim injects at document creation) is gated on AJAZZ_HAVE_WEBENGINE and builds
+# makeMiraboxShim() to assert DocumentCreation + MainWorld + matching sourceCode.
+# plugin_mirabox_shim.cpp is linked here via the conditional block below.
+target_sources(ajazz_unit_tests PRIVATE test_mirabox_compat.cpp)
+
+# When WebEngine is present, link plugin_mirabox_shim.cpp (contains makeMiraboxShim() which uses
+# QWebEngineScript) and add Qt6::WebEngineCore so QWebEngineScript is fully defined. The
+# kMiraboxShimSource string literal in the .cpp is always compiled (not gated); only the
+# QWebEngineScript builder needs WebEngine. Mirror the pi_url_policy pattern: the pure-logic source
+# compiles unconditionally, the WebEngine-using parts are gated.
+if(AJAZZ_HAVE_WEBENGINE)
+    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
+    target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebEngineCore)
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBENGINE=1)
+else()
+    # Without WebEngine, we still need plugin_mirabox_shim.cpp to compile the kMiraboxShimSource
+    # constant (the pure-string test needs it). The WebEngine-guarded makeMiraboxShim() body is
+    # excluded by #if defined(AJAZZ_HAVE_WEBENGINE), so no QWebEngineScript include is dragged in.
+    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
+endif()
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.
