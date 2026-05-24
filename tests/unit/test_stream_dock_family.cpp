@@ -708,3 +708,210 @@ TEST_CASE("StreamDockFamily: AKP815 key press fires chain; encoderCount=0 path i
     svc.pump();
     REQUIRE(pressCount == 1);
 }
+
+// =============================================================================
+// CR-01 REGRESSION: AKP03 setKeyImage/clearKey side-button index rejection
+// =============================================================================
+// Regression for CR-01: key indices 7..9 (non-LCD side buttons) must be
+// rejected by the backend WITHOUT sending any BAT/ULEND burst to the firmware.
+// Key indices 1..6 (LCD keys) must continue to produce a burst.
+//
+// Source: akp03.md "LCD keys: 6"; akp03_protocol.hpp DisplayKeyCount=6,
+//         SideButtonCount=3, KeyCount=9.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("StreamDockFamily: CR-01 AKP03 side-button keyIndex 7 rejected -- no BAT burst",
+          "[stream-dock-family]") {
+    ajazz::tests::qtApp();
+
+    auto transport = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = transport.get();
+    transport->open();
+
+    auto desc = makeAkp03Desc();
+    auto id = makeDeviceId("AKP03-CR01-REJECT");
+    auto dev = streamdeck::makeAkp03WithTransport(desc, id, std::move(transport));
+
+    StreamDockControlService svc(
+        [dev](QString const&) -> std::shared_ptr<core::IDevice> { return dev; }, nullptr);
+    svc.setActiveDevice(QStringLiteral("akp03"));
+    drainQueue();
+    auto const baseCount = obs->writeCount();
+
+    // Key 7 is a non-LCD side button -- setKeyImage must reject it silently.
+    // No BAT header or ULEND burst should be written.
+    QImage img(60, 60, QImage::Format_RGBA8888);
+    img.fill(qRgba(255, 255, 0, 255));
+    svc.assignKeyImage(7, img);
+    drainQueue();
+
+    // Write count must not have grown (no burst emitted for a non-LCD key).
+    CHECK(obs->writeCount() == baseCount);
+}
+
+TEST_CASE("StreamDockFamily: CR-01 AKP03 side-button keyIndex 8 rejected -- no BAT burst",
+          "[stream-dock-family]") {
+    ajazz::tests::qtApp();
+
+    auto transport = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = transport.get();
+    transport->open();
+
+    auto desc = makeAkp03Desc();
+    auto id = makeDeviceId("AKP03-CR01-REJECT8");
+    auto dev = streamdeck::makeAkp03WithTransport(desc, id, std::move(transport));
+
+    StreamDockControlService svc(
+        [dev](QString const&) -> std::shared_ptr<core::IDevice> { return dev; }, nullptr);
+    svc.setActiveDevice(QStringLiteral("akp03"));
+    drainQueue();
+    auto const baseCount = obs->writeCount();
+
+    QImage img(60, 60, QImage::Format_RGBA8888);
+    img.fill(qRgba(0, 255, 255, 255));
+    svc.assignKeyImage(8, img);
+    drainQueue();
+
+    CHECK(obs->writeCount() == baseCount);
+}
+
+TEST_CASE("StreamDockFamily: CR-01 AKP03 side-button keyIndex 9 rejected -- no BAT burst",
+          "[stream-dock-family]") {
+    ajazz::tests::qtApp();
+
+    auto transport = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = transport.get();
+    transport->open();
+
+    auto desc = makeAkp03Desc();
+    auto id = makeDeviceId("AKP03-CR01-REJECT9");
+    auto dev = streamdeck::makeAkp03WithTransport(desc, id, std::move(transport));
+
+    StreamDockControlService svc(
+        [dev](QString const&) -> std::shared_ptr<core::IDevice> { return dev; }, nullptr);
+    svc.setActiveDevice(QStringLiteral("akp03"));
+    drainQueue();
+    auto const baseCount = obs->writeCount();
+
+    QImage img(60, 60, QImage::Format_RGBA8888);
+    img.fill(qRgba(255, 0, 255, 255));
+    svc.assignKeyImage(9, img);
+    drainQueue();
+
+    CHECK(obs->writeCount() == baseCount);
+}
+
+TEST_CASE("StreamDockFamily: CR-01 AKP03 LCD keyIndex 1..6 all produce a BAT burst",
+          "[stream-dock-family]") {
+    // Verifies that the CR-01 fix did not accidentally over-restrict: all
+    // 6 LCD keys must still produce a BAT + ULEND burst after the fix.
+    ajazz::tests::qtApp();
+
+    for (std::uint8_t keyIdx = 1; keyIdx <= 6; ++keyIdx) {
+        auto transport = std::make_unique<ajazz::tests::MockTransport>();
+        auto* obs = transport.get();
+        transport->open();
+
+        auto desc = makeAkp03Desc();
+        auto id = makeDeviceId("AKP03-CR01-LCD" + std::to_string(keyIdx));
+        auto dev = streamdeck::makeAkp03WithTransport(desc, id, std::move(transport));
+
+        StreamDockControlService svc(
+            [dev](QString const&) -> std::shared_ptr<core::IDevice> { return dev; }, nullptr);
+        svc.setActiveDevice(QStringLiteral("akp03"));
+        drainQueue();
+        auto const baseCount = obs->writeCount();
+
+        QImage img(60, 60, QImage::Format_RGBA8888);
+        img.fill(qRgba(static_cast<int>(keyIdx * 40), 0, 0, 255));
+        svc.assignKeyImage(static_cast<int>(keyIdx), img);
+        drainQueue();
+
+        // Must have emitted at least BAT header + 1 chunk + ULEND.
+        INFO("keyIndex=" << static_cast<int>(keyIdx));
+        REQUIRE(obs->writeCount() > baseCount + 2);
+
+        auto const batIdx = findWriteByCmd0(obs->writes(), 0x42, baseCount);
+        REQUIRE(batIdx < obs->writes().size());
+    }
+}
+
+// =============================================================================
+// WR-05 REGRESSION: AKP03 v3 EncoderReleased hardware event handled
+// =============================================================================
+// Regression for WR-05: the AKP03 v3 firmware emits real EncoderReleased
+// events (byte[9]=ActionEncoderNPress, byte[10]=0x00). The dispatch() case
+// for EncoderReleased now has a clear comment instead of "Dormant on hardware".
+// This test verifies that:
+//  (a) EncoderPressed fires the onPress chain AND the encoderReleaseSynthesised
+//      signal (as before -- no regression on AKP05 path).
+//  (b) A hardware EncoderReleased frame from the AKP03 backend passes through
+//      poll() and dispatch() without crashing or corrupting state.
+// ---------------------------------------------------------------------------
+
+/// AKP03 encoder release frame: byte[9] = press action code, byte[10] = 0x00
+/// (v3 firmware release polarity). parseInputReport produces EncoderReleased.
+std::vector<std::uint8_t> makeAkp03EncoderReleaseFrame(std::uint8_t actionCode) {
+    std::vector<std::uint8_t> f(16, 0);
+    f[9] = actionCode;
+    f[10] = 0x00u; // released (v3 firmware)
+    return f;
+}
+
+TEST_CASE("StreamDockFamily: WR-05 AKP03 EncoderReleased hardware event dispatched without crash",
+          "[stream-dock-family]") {
+    // This test verifies the WR-05 fix: EncoderReleased events from AKP03 v3
+    // firmware pass through dispatch() cleanly. The service currently breaks
+    // on EncoderReleased (no onRelease binding yet); this is intentional and
+    // documented in the TODO(WR-05) comment. The test asserts:
+    //  - pump() does not throw or corrupt the service for a real release frame.
+    //  - The synthesised release still fires on the PRIOR EncoderPressed.
+    ajazz::tests::qtApp();
+
+    auto transport = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = transport.get();
+    transport->open();
+
+    auto desc = makeAkp03Desc();
+    auto id = makeDeviceId("AKP03-WR05-RELEASE");
+    auto dev = streamdeck::makeAkp03WithTransport(desc, id, std::move(transport));
+
+    int pressCount = 0;
+    int synthReleaseCount = 0;
+
+    ActionExecutors spies;
+    spies.keyPress = [&](std::string_view) { ++pressCount; };
+
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.encoders[0].onPress = {Action{.kind = ActionKind::KeyPress}};
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    QObject::connect(&svc, &StreamDockInputService::encoderReleaseSynthesised, [&](std::uint16_t) {
+        ++synthReleaseCount;
+    });
+    svc.setActiveDevice(dev);
+
+    // Feed an encoder press (byte[10]=0x01 -> EncoderPressed).
+    obs->enqueueRead(makeAkp03EncoderPressFrame(streamdeck::akp03::ActionEncoder0Press));
+    svc.pump();
+
+    // Press chain fired and synthetic release synthesised.
+    REQUIRE(pressCount == 1);
+    REQUIRE(synthReleaseCount == 1);
+
+    auto const synthCountBefore = synthReleaseCount;
+
+    // Now feed a real v3-firmware EncoderReleased (byte[10]=0x00).
+    // This should NOT crash, NOT fire the press chain again, and NOT
+    // synthesise another release (it goes to the EncoderReleased break case).
+    obs->enqueueRead(makeAkp03EncoderReleaseFrame(streamdeck::akp03::ActionEncoder0Press));
+    svc.pump(); // must not throw
+
+    // Press count unchanged (release doesn't re-fire the press chain).
+    REQUIRE(pressCount == 1);
+    // Synthetic release count unchanged (release goes to break, not synthesise).
+    REQUIRE(synthReleaseCount == synthCountBefore);
+}
