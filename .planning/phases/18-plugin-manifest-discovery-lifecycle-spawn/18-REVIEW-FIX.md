@@ -99,3 +99,132 @@ ______________________________________________________________________
 _Fixed: 2026-05-24T12:48:12Z_
 _Fixer: Claude (gsd-code-fixer)_
 _Iteration: 1_
+
+______________________________________________________________________
+
+______________________________________________________________________
+
+## phase: 18-plugin-manifest-discovery-lifecycle-spawn fixed_at: 2026-05-24T15:15:00Z review_path: .planning/phases/18-plugin-manifest-discovery-lifecycle-spawn/18-REVIEW.md iteration: 2 findings_in_scope: 7 fixed: 7 skipped: 0 status: all_fixed
+
+# Phase 18: Code Review Fix Report (Iteration 2)
+
+**Fixed at:** 2026-05-24T15:15:00Z
+**Source review:** `.planning/phases/18-plugin-manifest-discovery-lifecycle-spawn/18-REVIEW.md`
+**Iteration:** 2
+
+**Summary:**
+
+- Findings in scope: 7 (3 Critical, 3 Warning, 1 Info)
+- Fixed: 7
+- Skipped: 0
+
+**Build gate:** PASSED — `Linking CXX executable src/app/ajazz-control-center` (65 MB binary)
+**Test gate:** PASSED — 484/484 tests, 0 failures (+6 new security regression tests)
+
+## Fixed Issues
+
+### CR-01: Spawned child processes inherit the full host environment
+
+**Files modified:** `src/app/src/plugin_manager.cpp`, `src/app/src/plugin_manager.hpp`
+**Commit:** `4d38346`
+**Applied fix:**
+Added `buildChildEnv()` static helper that constructs a `QProcessEnvironment` from
+an explicit allowlist: PATH, HOME, TMPDIR/TEMP/TMP, LANG, LC_ALL, LC_CTYPE,
+DISPLAY, WAYLAND_DISPLAY. All other variables (DBUS_SESSION_BUS_ADDRESS,
+XDG_RUNTIME_DIR, *\_TOKEN/*\_SECRET/*\_KEY/*\_PASSWORD, etc.) are excluded.
+Applied `setProcessEnvironment(buildChildEnv())` to both the node and native
+`QProcess` before `start()`. Exposed via `buildChildEnvironmentForTesting()` public
+static for test assertions. Used default constructor `QProcessEnvironment()` for
+Qt 6.7 compatibility (`QProcessEnvironment::empty()` is Qt 6.8+).
+
+### CR-02: Double-fire of `onProcessFailed` on `QProcess::FailedToStart`
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `4d38346` (included with CR-01 — same QProcess setup blocks)
+**Applied fix:**
+In both the node and native `QProcess` signal connections, changed
+`errorOccurred` lambda to skip `FailedToStart` errors (they will also fire
+`finished`), routing FailedToStart exclusively through the `finished` handler.
+This eliminates the double crash-credit accumulation and the rapid double-restart
+loop on a persistently-missing binary.
+
+### CR-03: `resolveCodePath()` result is not path-validated
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `5fc9ef3`
+**Applied fix:**
+After `resolveCodePath(manifest)` (which may return `codePathWin`/`codePathMac`
+bypassing the existing `isSafeUuidComponent` check on `pluginId`), added a
+separator/traversal guard: reject if code is empty, contains `/`, contains `\`,
+or contains `..`. This closes the T-18-PATHTRAV bypass for platform-override paths.
+
+Same commit also fixes WR-03: added `pluginUuid` variable that prefers
+`manifest.puuid` over `pluginId` (codePath-based key) for the `-pluginUUID`
+argument passed to `buildNodeArgv()`. PUUID is validated with `isSafeUuidComponent`
+when non-empty.
+
+### WR-01: Private Qt header `qquickwebenginescriptcollection_p.h` has no public-API path
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `07f0957`
+**Applied fix:**
+Added `static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0), ...)` adjacent to
+the `#include <QtWebEngineQuick/private/qquickwebenginescriptcollection_p.h>`.
+If a Qt minor-version bump moves the private header path, the build fails loudly
+at compile time rather than silently. Extended the comment to document the Qt API
+gap and the correct maintainer action.
+
+### WR-02: `onProcessFailed` restart branch re-spawns HTML plugins
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `7f58f93`
+**Applied fix:**
+Changed `if (it != m_live.end())` to `if (it != m_live.end() && it->second.process != nullptr)`.
+HTML/WebEngine plugins are stored in `m_live` with `process == nullptr` (they run
+in-process via Chromium). The missing null-process guard meant a spurious
+`onProcessFailed` call for an HTML UUID would re-invoke `spawn(manifest)`, causing
+a duplicate `profile->userScripts()->insert(makeMiraboxShim())`.
+
+### WR-03: `-pluginUUID` argument uses `codePath` filename instead of identity UUID
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `5fc9ef3` (included with CR-03)
+**Applied fix:**
+Added `QString const pluginUuid = manifest.puuid.isEmpty() ? pluginId : manifest.puuid;`
+and validated `pluginUuid` with `isSafeUuidComponent` when `manifest.puuid` is
+non-empty. Passed `pluginUuid` (instead of `pluginId`) to `buildNodeArgv()` as the
+`-pluginUUID` argument. Fallback to codePath-based `pluginId` when PUUID is absent
+preserves backwards compatibility.
+
+### IN-01: `discover()` reads manifest files without a size cap
+
+**Files modified:** `src/app/src/plugin_manager.cpp`
+**Commit:** `cb5315a`
+**Applied fix:**
+Added a 1 MiB size guard (`constexpr qint64 kMaxManifestBytes = 1LL * 1024 * 1024`)
+before `f.readAll()` in `discover()`. Files exceeding the cap are logged and skipped.
+Guards against multi-megabyte or corrupt manifest.json files being fully read into
+memory before the `QJsonDocument` parser could reject them, in the user-configurable
+plugins directory.
+
+## Security Tests Added
+
+**Commit:** `05fff2a`
+**File:** `tests/unit/test_plugin_lifecycle.cpp`
+
+6 new `PluginManagerTest` cases added:
+
+| Test name                                                | Covers                                                        |
+| -------------------------------------------------------- | ------------------------------------------------------------- |
+| `child env excludes secrets and includes PATH`           | CR-01: allowlist env contains safe keys, excludes banned keys |
+| `FailedToStart fires onProcessFailed only once`          | CR-02: single physical failure = one crash credit             |
+| `spawn rejects code path with directory separator`       | CR-03: '/' and '..' in codePath rejected                      |
+| `HTML plugin is not re-spawned on failure`               | WR-02: null-process guard                                     |
+| `spawn uses puuid as -pluginUUID when set`               | WR-03: PUUID passed as argv[4]                                |
+| `spawn uses codePath as -pluginUUID when puuid is empty` | WR-03: fallback to codePath                                   |
+
+______________________________________________________________________
+
+_Fixed: 2026-05-24T15:15:00Z_
+_Fixer: Claude (gsd-code-fixer)_
+_Iteration: 2_
