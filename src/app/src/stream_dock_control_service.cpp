@@ -74,9 +74,10 @@ StreamDockControlService::~StreamDockControlService() = default;
 // ---------------------------------------------------------------------------
 
 StreamDockControlService* StreamDockControlService::create(QQmlEngine*, QJSEngine*) {
-    if (g_instance != nullptr) {
-        QQmlEngine::setObjectOwnership(g_instance, QQmlEngine::CppOwnership);
-    }
+    Q_ASSERT_X(g_instance != nullptr,
+               "StreamDockControlService::create",
+               "registerInstance() must be called before the QML engine loads");
+    QQmlEngine::setObjectOwnership(g_instance, QQmlEngine::CppOwnership);
     return g_instance;
 }
 
