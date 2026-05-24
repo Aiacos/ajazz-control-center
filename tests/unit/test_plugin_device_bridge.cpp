@@ -396,7 +396,7 @@ TEST_CASE("PluginDeviceBridge ContextRegistry byCoord lookup", "[plugin-device-b
 
     [[maybe_unused]] auto regId = reg.registerContext(ctx);
 
-    auto const found = reg.byCoord(QStringLiteral("Keypad"), 1, 3);
+    auto const found = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 1, 3);
     REQUIRE(found.has_value());
     CHECK(found->row == 1);
     CHECK(found->column == 3);
@@ -417,7 +417,7 @@ TEST_CASE("PluginDeviceBridge ContextRegistry byCoord returns nullopt for unregi
     ensureQCoreApp();
 
     ContextRegistry reg;
-    auto const result = reg.byCoord(QStringLiteral("Keypad"), 0, 0);
+    auto const result = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 0);
     CHECK_FALSE(result.has_value());
 }
 
@@ -441,7 +441,7 @@ TEST_CASE("PluginDeviceBridge ContextRegistry retire removes a single context",
     reg.retire(ctxId);
     CHECK(reg.size() == 0);
     CHECK_FALSE(reg.byContext(ctxId).has_value());
-    CHECK_FALSE(reg.byCoord(QStringLiteral("Keypad"), 0, 0).has_value());
+    CHECK_FALSE(reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 0).has_value());
 }
 
 TEST_CASE("PluginDeviceBridge ContextRegistry retireDevice removes all contexts for that device",
@@ -470,14 +470,17 @@ TEST_CASE("PluginDeviceBridge ContextRegistry retireDevice removes all contexts 
     reg.retireDevice(QStringLiteral("akp05e"));
     CHECK(reg.size() == 1);
 
-    // The other_device context must survive.
-    auto const surviving = reg.byCoord(QStringLiteral("Keypad"), 0, 0);
-    // The only surviving entry is for other_device — but coord key is shared
-    // since both devices had row=0,col=0. After retireDevice("akp05e") the
-    // other_device entry should still be accessible by context id.
-    // The coord lookup for ("Keypad", 0, 0) might have been overwritten by the
-    // last registration. The registry size should be exactly 1.
-    CHECK(reg.size() == 1);
+    // CR-02: With deviceId in coordKey, the other_device context at (Keypad,0,0) is
+    // now independently keyed. After retireDevice("akp05e"), the other_device entry
+    // must still be reachable via byCoord with "other_device".
+    auto const surviving =
+        reg.byCoord(QStringLiteral("other_device"), QStringLiteral("Keypad"), 0, 0);
+    REQUIRE(surviving.has_value());
+    CHECK(surviving->deviceId == QStringLiteral("other_device"));
+
+    // The "akp05e" coord entry must have been removed.
+    auto const retired = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 0);
+    CHECK_FALSE(retired.has_value());
 }
 
 TEST_CASE("PluginDeviceBridge ContextRegistry retirePage removes only that page",
@@ -551,6 +554,53 @@ TEST_CASE("PluginDeviceBridge ContextRegistry registerContext is idempotent for 
     QString const id2 = reg.registerContext(ctx);
     CHECK(id1 == id2);
     CHECK(reg.size() == 1);
+}
+
+TEST_CASE("PluginDeviceBridge ContextRegistry CR-02 two devices same coord do not collide",
+          "[plugin-device-bridge][registry][security]") {
+    ensureQCoreApp();
+
+    // CR-02: two simultaneously-connected devices sharing the same controller/row/col
+    // must have independent coord entries and independent retire semantics.
+    ContextRegistry reg;
+
+    auto makeCtx = [](QString const& dev, QString const& plugin) {
+        ActionContext ctx;
+        ctx.deviceId = dev;
+        ctx.pageId = QStringLiteral("root");
+        ctx.row = 0;
+        ctx.column = 0;
+        ctx.controller = QStringLiteral("Keypad");
+        ctx.actionUUID = plugin + QStringLiteral(".action1");
+        ctx.pluginUuid = plugin;
+        return ctx;
+    };
+
+    QString const idA =
+        reg.registerContext(makeCtx(QStringLiteral("akp05e"), QStringLiteral("com.a.plug")));
+    QString const idB =
+        reg.registerContext(makeCtx(QStringLiteral("akp153"), QStringLiteral("com.b.plug")));
+
+    // Both contexts must be independently reachable by their respective device.
+    auto const foundA = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 0);
+    auto const foundB = reg.byCoord(QStringLiteral("akp153"), QStringLiteral("Keypad"), 0, 0);
+    REQUIRE(foundA.has_value());
+    REQUIRE(foundB.has_value());
+    CHECK(foundA->pluginUuid == QStringLiteral("com.a.plug"));
+    CHECK(foundB->pluginUuid == QStringLiteral("com.b.plug"));
+
+    // Retiring akp05e's context must NOT remove akp153's entry.
+    reg.retire(idA);
+    CHECK(reg.size() == 1);
+
+    auto const stillB = reg.byCoord(QStringLiteral("akp153"), QStringLiteral("Keypad"), 0, 0);
+    REQUIRE(stillB.has_value());
+    CHECK(stillB->pluginUuid == QStringLiteral("com.b.plug"));
+    CHECK(stillB->deviceId == QStringLiteral("akp153"));
+
+    // akp05e coord must be gone.
+    auto const goneA = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 0);
+    CHECK_FALSE(goneA.has_value());
 }
 
 // ==========================================================================
@@ -1301,6 +1351,80 @@ TEST_CASE("PluginDeviceBridgeE2E outbound event for other-plugin context does no
     // com.test.plug must NOT receive the keyDown (cross-plugin leakage prevention).
     auto const names = receivedEventNames(msgSpy);
     CHECK_FALSE(names.contains(QStringLiteral("keyDown")));
+}
+
+// ---------------------------------------------------------------------------
+// CR-02 e2e: two devices sharing the same coord -- events route to the correct
+// per-device plugin; retire of one device does not affect the other.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E CR-02 two-device isolation keyDown routes to correct plugin",
+          "[plugin-device-bridge][e2e][outbound][security][CR-02]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Register key 3 (1-based, row:0 col:2) for "akp05e" -> com.plugA.
+    ajazz::app::ActionContext ctxA;
+    ctxA.deviceId = QStringLiteral("akp05e");
+    ctxA.pageId = QStringLiteral("root");
+    ctxA.row = 0;
+    ctxA.column = 2;
+    ctxA.controller = QStringLiteral("Keypad");
+    ctxA.actionUUID = QStringLiteral("com.plugA.action1");
+    ctxA.pluginUuid = QStringLiteral("com.plugA");
+    [[maybe_unused]] auto idA = bridge->registry().registerContext(ctxA);
+
+    // Register the same coord (row:0 col:2) for "akp153" -> com.plugB.
+    ajazz::app::ActionContext ctxB;
+    ctxB.deviceId = QStringLiteral("akp153");
+    ctxB.pageId = QStringLiteral("root");
+    ctxB.row = 0;
+    ctxB.column = 2;
+    ctxB.controller = QStringLiteral("Keypad");
+    ctxB.actionUUID = QStringLiteral("com.plugB.action1");
+    ctxB.pluginUuid = QStringLiteral("com.plugB");
+    [[maybe_unused]] auto idB = bridge->registry().registerContext(ctxB);
+
+    // Connect both clients.
+    QWebSocket clientA;
+    QSignalSpy spyA(&clientA, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(clientA, server, QStringLiteral("com.plugA"), registeredSpy));
+
+    QSignalSpy registeredSpy2(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    QWebSocket clientB;
+    QSignalSpy spyB(&clientB, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(clientB, server, QStringLiteral("com.plugB"), registeredSpy2));
+
+    // Feed KeyPressed for key 3 (1-based) from "akp05e".
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    ev.index = 3; // 1-based key 3 -> row:0 col:2
+    ev.value = 0;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+
+    pump19(500);
+
+    // Only com.plugA (the akp05e owner) must receive keyDown; com.plugB must not.
+    auto const namesA = receivedEventNames(spyA);
+    auto const namesB = receivedEventNames(spyB);
+    CHECK(namesA.contains(QStringLiteral("keyDown")));
+    CHECK_FALSE(namesB.contains(QStringLiteral("keyDown")));
+
+    // Feed the same event from "akp153" — now com.plugB must receive it.
+    spyA.clear();
+    spyB.clear();
+    bridge->onDeviceEvent(QStringLiteral("akp153"), ev);
+    pump19(500);
+
+    auto const namesA2 = receivedEventNames(spyA);
+    auto const namesB2 = receivedEventNames(spyB);
+    CHECK_FALSE(namesA2.contains(QStringLiteral("keyDown")));
+    CHECK(namesB2.contains(QStringLiteral("keyDown")));
 }
 
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

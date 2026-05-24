@@ -123,11 +123,16 @@ public:
     [[nodiscard]] std::optional<ActionContext> byContext(QString const& context) const;
 
     /**
-     * @brief Look up the opaque context string for a given controller + coords.
+     * @brief Look up the opaque context string for a given device + controller + coords.
      *
      * Used when a DeviceEvent arrives and the bridge needs to find the plugin
      * that owns the pressed key/encoder (outbound direction).
      *
+     * deviceId is the first component of the coord key so that two simultaneously-
+     * connected devices sharing the same controller/row/col do not collide in
+     * m_byCoord (CR-02 / WR-04 multi-device isolation).
+     *
+     * @param deviceId    Device codename, e.g. "akp05e".
      * @param controller  "Keypad" or "Encoder".
      * @param row         0-based row (Keypad) or 0 (Encoder, see note below).
      * @param column      0-based column (Keypad) or encoder index (Encoder).
@@ -135,7 +140,7 @@ public:
      *                    std::nullopt otherwise.
      */
     [[nodiscard]] std::optional<ActionContext>
-    byCoord(QString const& controller, int row, int column) const;
+    byCoord(QString const& deviceId, QString const& controller, int row, int column) const;
 
     /**
      * @brief Remove a single registration by context string.
@@ -186,12 +191,16 @@ private:
     static QString deriveContextId(ActionContext const& ctx);
 
     /// Derive the coord-index key used in m_byCoord.
-    static QString coordKey(QString const& controller, int row, int column);
+    /// deviceId is the FIRST component so two devices sharing the same controller/row/col
+    /// do not collide (CR-02 multi-device isolation).
+    static QString
+    coordKey(QString const& deviceId, QString const& controller, int row, int column);
 
     /// context-string -> ActionContext (inbound resolve from setImage's `context`).
     QHash<QString, ActionContext> m_byContext;
 
-    /// controller+"#"+row+"#"+col -> context-string (outbound: DeviceEvent -> context).
+    /// deviceId+"#"+controller+"#"+row+"#"+col -> context-string (outbound: DeviceEvent ->
+    /// context).
     QHash<QString, QString> m_byCoord;
 };
 

@@ -50,14 +50,18 @@ QString ContextRegistry::deriveContextId(ActionContext const& ctx) {
 }
 
 // static private
-QString ContextRegistry::coordKey(QString const& controller, int row, int column) {
-    return controller + QChar('#') + QString::number(row) + QChar('#') + QString::number(column);
+QString
+ContextRegistry::coordKey(QString const& deviceId, QString const& controller, int row, int column) {
+    // CR-02: deviceId is the FIRST component so two devices sharing the same
+    // controller/row/col cannot collide in m_byCoord (multi-device isolation).
+    return deviceId + QChar('#') + controller + QChar('#') + QString::number(row) + QChar('#') +
+           QString::number(column);
 }
 
 QString ContextRegistry::registerContext(ActionContext const& ctx) {
     QString const ctxId = deriveContextId(ctx);
     m_byContext.insert(ctxId, ctx);
-    QString const ck = coordKey(ctx.controller, ctx.row, ctx.column);
+    QString const ck = coordKey(ctx.deviceId, ctx.controller, ctx.row, ctx.column);
     m_byCoord.insert(ck, ctxId);
     return ctxId;
 }
@@ -70,9 +74,11 @@ std::optional<ActionContext> ContextRegistry::byContext(QString const& context) 
     return *it;
 }
 
-std::optional<ActionContext>
-ContextRegistry::byCoord(QString const& controller, int row, int column) const {
-    QString const ck = coordKey(controller, row, column);
+std::optional<ActionContext> ContextRegistry::byCoord(QString const& deviceId,
+                                                      QString const& controller,
+                                                      int row,
+                                                      int column) const {
+    QString const ck = coordKey(deviceId, controller, row, column);
     auto it = m_byCoord.constFind(ck);
     if (it == m_byCoord.constEnd()) {
         return std::nullopt;
@@ -91,7 +97,7 @@ void ContextRegistry::retire(QString const& context) {
         return;
     }
     ActionContext const& ctx = *it;
-    m_byCoord.remove(coordKey(ctx.controller, ctx.row, ctx.column));
+    m_byCoord.remove(coordKey(ctx.deviceId, ctx.controller, ctx.row, ctx.column));
     m_byContext.erase(it);
 }
 
@@ -505,7 +511,10 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         // ev.index is 1-based (device.hpp: "index = 1-based key number").
         constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
         auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(ev.index), kDefaultKeyCols);
-        auto const ctxOpt = m_registry.byCoord(QStringLiteral("Keypad"), gc.row, gc.column);
+        // CR-02 / WR-04: pass deviceId to byCoord so events from one device cannot
+        // route to a plugin context registered for a different device.
+        auto const ctxOpt =
+            m_registry.byCoord(deviceId, QStringLiteral("Keypad"), gc.row, gc.column);
         if (!ctxOpt.has_value()) {
             return; // unbound coordinate — silent drop (T-19-leak)
         }
@@ -532,8 +541,9 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     case Kind::EncoderTurned: {
         // ev.index is 0-based encoder index; ev.value is signed delta (device.hpp).
         // Convention: encoder at (controller="Encoder", row=0, column=encoderIndex).
+        // CR-02 / WR-04: scope lookup to this device.
         auto const ctxOpt =
-            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+            m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
         if (!ctxOpt.has_value()) {
             return; // unbound encoder — silent drop
         }
@@ -552,7 +562,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     // ------------------------------------------------------------------
     case Kind::EncoderPressed: {
         auto const ctxOpt =
-            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+            m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
         if (!ctxOpt.has_value()) {
             return;
         }
@@ -572,7 +582,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     case Kind::EncoderReleased: {
         // Synthesised release from Phase 15's synthesiseEncoderRelease hook.
         auto const ctxOpt =
-            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+            m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
         if (!ctxOpt.has_value()) {
             return;
         }
@@ -608,7 +618,8 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         int const zone =
             std::min(static_cast<int>((x * kEncoderCount) / kTouchStripRangeX), kEncoderCount - 1);
 
-        auto const ctxOpt = m_registry.byCoord(QStringLiteral("Encoder"), 0, zone);
+        // CR-02 / WR-04: scope lookup to this device.
+        auto const ctxOpt = m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, zone);
         if (!ctxOpt.has_value()) {
             return;
         }
@@ -627,7 +638,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     case Kind::Disconnected:
         break;
     }
-    Q_UNUSED(deviceId); // deviceId available for future multi-device routing
+    // WR-04: deviceId is now used in all byCoord lookups above (Q_UNUSED removed).
 }
 
 // ---------------------------------------------------------------------------
