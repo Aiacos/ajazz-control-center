@@ -4,32 +4,39 @@
  * @brief App-layer service that drives the AKP05E Stream Dock LCD panel.
  *
  * StreamDockControlService is the single device-paint path for the v1.3 Stream
- * Dock feature slice (DISPLAY-06/07/08, DOCK-01/02). It closes the Phase-10 UAT
- * gap where the capture-verified wire layer (BAT/LIG/CLE/ULEND) existed but no
- * app code ever called it.
+ * Dock feature slice (DISPLAY-06/07/08/09, DOCK-01/02). It closes the Phase-10
+ * UAT gap where the capture-verified wire layer (BAT/LIG/CLE/ULEND) existed but
+ * no app code ever called it.
  *
  * Responsibilities:
  *  - Hold the active Stream Deck open for the session (single held-open
- *    shared_ptr<IDevice> across event-loop turns — ARCH-03 flyweight invariant).
- *  - Issue setBrightness() at open so the panel lights (DISPLAY-06 — the LIG
+ *    shared_ptr<IDevice> across event-loop turns -- ARCH-03 flyweight invariant).
+ *  - Issue setBrightness() at open so the panel lights (DISPLAY-06 -- the LIG
  *    that Akp05Device::open() deliberately does NOT send).
  *  - Coalesce key-image assignments through a single-shot QTimer drain
  *    (last-write-wins per key; Pattern 3 burst mitigation, DOCK-02).
  *  - Repaint all keys from the loaded profile on profileChanged (DISPLAY-08).
  *  - Surface the cached firmware VER string (DOCK-01).
+ *  - Expose Q_INVOKABLE setBrightness/clearAll for QML live control (DISPLAY-09,
+ *    Phase 16): user-driven brightness slider and clear-all button.
  *
  * Phases 15 (input), 16 (controls/persistence), and 19 (plugin bridge) all
- * build on this reuse surface — keep its public API stable.
+ * build on this reuse surface -- keep its public API stable.
  *
- * Design decisions (Phase 14 SUMMARY):
- *  - NOT QML-exposed for Phase 14: a plain QObject suffices; QML wiring is
- *    Phase 16's concern (active-device selection UI, brightness slider).
+ * Design decisions:
+ *  - Phase 14: NOT QML-exposed (plain QObject). Phase 16 adds QML_SINGLETON.
+ *  - Phase 16 (DISPLAY-09): QML_SINGLETON exposure added via
+ *    QML_NAMED_ELEMENT + QML_SINGLETON + create()/registerInstance() + static_assert.
+ *    Application calls registerInstance(m_streamDockControl.get()) in exposeToQml()
+ *    so the same instance owned by Application is what QML talks to.
+ *    NEVER the bare QML_SINGLETON macro alone (it spawns a second instance per
+ *    import -- CLAUDE.md Pitfall 2).
  *  - GUI-thread QTimer drain (Pitfall 3 / A2): avoids cross-thread
  *    shared_ptr<IDevice> hazards; revisit if hardware stalls measured in Phase 25.
  *  - Profile accessor seam: a std::function<core::Profile const&()> injected by
  *    Application so the service is testable without a real ProfileController.
  *  - Default brightness = 80 (Assumption A4); Phase 16 owns the slider.
- *  - Active-device selection: first connected Stream Deck (Phase 14 simplification);
+ *  - Active-device selection: first connected Stream Dock (Phase 14 simplification);
  *    full active-device selection UI is Phase 16.
  */
 #pragma once
@@ -41,11 +48,16 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
+#include <QtQmlIntegration>
 
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <type_traits>
+
+class QJSEngine;
+class QQmlEngine;
 
 namespace ajazz::app {
 
@@ -53,14 +65,17 @@ namespace ajazz::app {
  * @class StreamDockControlService
  * @brief App-layer device paint path for AKP05E Stream Dock panels.
  *
- * Not a QML singleton for Phase 14 — constructed and owned by Application,
- * which wires the DeviceLookup lambda and the profile accessor. A plain
- * QObject is sufficient; QML singletons are Phase 16.
+ * Exposed as `StreamDockControlService` in QML (Phase 16, DISPLAY-09). Pattern
+ * mirrors LightingService: non-default-constructible (static_assert build-break
+ * lock); QML factory create() returns the Application-owned instance registered
+ * via registerInstance(). NEVER the bare QML_SINGLETON macro alone.
  *
  * @note Not thread-safe; must be used on the Qt main (GUI) thread.
  */
 class StreamDockControlService : public QObject {
     Q_OBJECT
+    QML_NAMED_ELEMENT(StreamDockControlService)
+    QML_SINGLETON
 
 public:
     /// Codename -> shared_ptr<IDevice>; same shape as TimeSyncService / LightingService.
@@ -74,7 +89,7 @@ public:
      * @brief Construct the service with a device lookup and an optional profile
      *        accessor.
      *
-     * @param lookup   Codename → shared_ptr<IDevice> resolver (same DeviceLookup
+     * @param lookup   Codename -> shared_ptr<IDevice> resolver (same DeviceLookup
      *                 shape as TimeSyncService / LightingService).
      * @param parent   QObject parent for lifetime management.
      */
@@ -87,7 +102,7 @@ public:
      * Overload used when repaintFromProfile() needs to iterate the active profile
      * without a real ProfileController (unit tests, and Application wiring).
      *
-     * @param lookup          Codename → shared_ptr<IDevice> resolver.
+     * @param lookup          Codename -> shared_ptr<IDevice> resolver.
      * @param profileAccessor Returns the currently loaded profile by const-ref.
      * @param parent          QObject parent for lifetime management.
      */
@@ -97,12 +112,40 @@ public:
 
     ~StreamDockControlService() override;
 
+    // -------------------------------------------------------------------------
+    // QML_SINGLETON factory + build-break lock (Phase 16, DISPLAY-09).
+    // Mirrors LightingService pattern (lighting_service.hpp:59-66).
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief QML singleton factory -- returns the Application-owned instance.
+     *
+     * Called by the QML engine the first time the singleton is accessed per
+     * import. Returns the instance previously registered via registerInstance().
+     * Sets CppOwnership so QML does not try to delete it.
+     */
+    static StreamDockControlService* create(QQmlEngine* qml, QJSEngine* js);
+
+    /**
+     * @brief Register the Application-owned instance with the QML factory.
+     *
+     * Must be called in Application::exposeToQml() BEFORE the QML engine loads,
+     * so that create() returns the live instance (not nullptr).
+     *
+     * @param instance The Application-owned StreamDockControlService.
+     */
+    static void registerInstance(StreamDockControlService* instance) noexcept;
+
+    // -------------------------------------------------------------------------
+    // Core device-paint API (Phase 14)
+    // -------------------------------------------------------------------------
+
     /**
      * @brief Resolve the device by codename, hold the shared_ptr for the session,
      *        open it, and issue a brightness LIG so the panel lights (DISPLAY-06).
      *
      * Idempotent: if the same codename is already active the function re-resolves
-     * and re-opens (open() is idempotent in the backend) — safe to call on hot-plug
+     * and re-opens (open() is idempotent in the backend) -- safe to call on hot-plug
      * arrival to refresh the held handle after a yank+replug.
      *
      * @param codename Device codename, e.g. "akp05e".
@@ -150,12 +193,44 @@ public:
      * @brief Set (or replace) the profile accessor.
      *
      * Called by Application after constructing the service with the one-arg ctor.
-     * Unconditionally replaces any previously set accessor — Phase 16 may
+     * Unconditionally replaces any previously set accessor -- Phase 16 may
      * intentionally supply a richer accessor (persistence-backed slider value)
      * after the initial wiring. The two-arg ctor is preferred for tests where
      * the accessor is known at construction time.
      */
     void setProfileAccessor(ProfileAccessor accessor);
+
+    // -------------------------------------------------------------------------
+    // QML live controls (Phase 16, DISPLAY-09)
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Set the panel brightness for the named device (DISPLAY-09).
+     *
+     * Resolves the device (prefers the held m_activeDevice when codename matches,
+     * else m_lookup(codename)), dynamic_cast<IDisplayCapable*> with null-check,
+     * clamps percent to [0..100], and calls IDisplayCapable::setBrightness() ->
+     * LIG write. No-op if the device is not connected or is not IDisplayCapable.
+     *
+     * Thread: must be called on the GUI thread (same as all service methods).
+     *
+     * @param codename Device codename, e.g. "akp05e".
+     * @param percent  Brightness 0..100; values outside are clamped.
+     * @invokable Callable from QML as StreamDockControlService.setBrightness(codename, value).
+     */
+    Q_INVOKABLE void setBrightness(QString const& codename, int percent);
+
+    /**
+     * @brief Clear all keys on the named device (DISPLAY-09).
+     *
+     * Resolves the device, dynamic_cast<IDisplayCapable*> with null-check,
+     * and calls clearKey(0xFF) -> CLE write. No-op if the device is not
+     * connected or is not IDisplayCapable.
+     *
+     * @param codename Device codename, e.g. "akp05e".
+     * @invokable Callable from QML as StreamDockControlService.clearAll(codename).
+     */
+    Q_INVOKABLE void clearAll(QString const& codename);
 
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
@@ -181,5 +256,12 @@ private:
     /// Phase 16 replaces this with a user-persisted slider value.
     static constexpr std::uint8_t kDefaultBrightnessPercent = 80;
 };
+
+// Pitfall 4 build-break lock -- mirrors LightingService.
+// If someone adds a default constructor, the compile fails here rather than
+// silently spawning a dead QML-owned instance (CLAUDE.md QML_SINGLETON gotcha).
+static_assert(!std::is_default_constructible_v<StreamDockControlService>,
+              "StreamDockControlService must not be default-constructible -- see ctor note and "
+              "LightingService.");
 
 } // namespace ajazz::app

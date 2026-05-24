@@ -8,13 +8,17 @@
  * the single device-paint path that Phases 15 (input), 16 (controls/persistence),
  * and 19 (plugin bridge) all reuse.
  *
+ * Phase 16 Plan 16-01 (DISPLAY-09): added Q_INVOKABLE setBrightness/clearAll for
+ * QML live control (brightness slider -> LIG, clear-all button -> CLE). Added
+ * QML_SINGLETON factory (create/registerInstance) mirroring LightingService.
+ *
  * Key implementation notes:
  *   Pitfall 1 (T-14b-04): every dynamic_cast<IDisplayCapable*> is followed by a
  *     null-check within 3 lines.
  *   Pitfall 2 (T-14b-01): m_activeDevice holds the shared_ptr for the session;
  *     re-resolved only on setActiveDevice / hot-plug arrival.
  *   Pitfall 3 (T-14b-02): write queue drained via a single-shot QTimer on the GUI
- *     thread — no dedicated I/O thread (A2).
+ *     thread -- no dedicated I/O thread (A2).
  *
  * Key-index mapping: Profile::keys stores 0-based std::uint16_t indices;
  *   the device backend (Akp05Device::setKeyImage / keyIndexInRange) expects
@@ -28,13 +32,22 @@
 #include "ajazz/core/logger.hpp"
 
 #include <QImage>
+#include <QQmlEngine>
 #include <QTimer>
 
+#include <algorithm>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace ajazz::app {
+
+namespace {
+
+/// Module-level singleton instance pointer (mirrors LightingService pattern).
+StreamDockControlService* g_instance = nullptr;
+
+} // namespace
 
 StreamDockControlService::StreamDockControlService(DeviceLookup lookup, QObject* parent)
     : QObject(parent), m_lookup(std::move(lookup)), m_drainTimer(new QTimer(this)) {
@@ -55,9 +68,32 @@ StreamDockControlService::StreamDockControlService(DeviceLookup lookup,
 
 StreamDockControlService::~StreamDockControlService() = default;
 
+// ---------------------------------------------------------------------------
+// QML_SINGLETON factory (Phase 16, DISPLAY-09) -- mirrors LightingService.
+// ---------------------------------------------------------------------------
+
+StreamDockControlService* StreamDockControlService::create(QQmlEngine*, QJSEngine*) {
+    if (g_instance != nullptr) {
+        QQmlEngine::setObjectOwnership(g_instance, QQmlEngine::CppOwnership);
+    }
+    return g_instance;
+}
+
+void StreamDockControlService::registerInstance(StreamDockControlService* instance) noexcept {
+    g_instance = instance;
+}
+
+// ---------------------------------------------------------------------------
+// Profile accessor setter
+// ---------------------------------------------------------------------------
+
 void StreamDockControlService::setProfileAccessor(ProfileAccessor accessor) {
     m_profileAccessor = std::move(accessor);
 }
+
+// ---------------------------------------------------------------------------
+// Core device-paint API (Phase 14)
+// ---------------------------------------------------------------------------
 
 void StreamDockControlService::setActiveDevice(QString const& codename) {
     if (!m_lookup) {
@@ -78,7 +114,7 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
     m_activeCodename = codename;
 
     // open() is idempotent in the backend (returns early if transport already open)
-    // and probes firmware via VER GET_FEATURE. Do NOT send a LIG here — see below.
+    // and probes firmware via VER GET_FEATURE. Do NOT send a LIG here -- see below.
     // CR-01: open() is documented @throws std::runtime_error; catch so a device
     // yank between lookup and open() does not reach the Qt event loop and trigger
     // std::terminate().
@@ -95,7 +131,7 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
     }
 
     // DISPLAY-06: Akp05Device::open() deliberately does NOT send a LIG brightness
-    // packet (confirmed akp05.cpp:443 — no setBrightness call in open()). The app
+    // packet (confirmed akp05.cpp:443 -- no setBrightness call in open()). The app
     // service owns the "panel lights" decision (CONTEXT.md locked, Pitfall 4).
     // Pitfall 1 (T-14b-04): null-check within 3 lines of the cast.
     auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
@@ -106,9 +142,9 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
         return;
     }
     // CR-01: setBrightness() writes to the HID transport and can throw
-    // std::system_error. Non-fatal — device is open; panel may just be dark.
+    // std::system_error. Non-fatal -- device is open; panel may just be dark.
     try {
-        disp->setBrightness(kDefaultBrightnessPercent); // LIG — panel lights
+        disp->setBrightness(kDefaultBrightnessPercent); // LIG -- panel lights
     } catch (std::exception const& e) {
         AJAZZ_LOG_WARN("stream-dock-control",
                        "setActiveDevice: setBrightness failed for '{}': {}",
@@ -123,7 +159,7 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
     // The drain slot converts to RGBA8 and calls setKeyImage (Pattern 3).
     m_pendingWrites[keyIndex] = img;
     if (!m_drainTimer->isActive()) {
-        m_drainTimer->start(0); // single-shot, 0 ms → fires on next event-loop iteration
+        m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
     }
 }
 
@@ -166,7 +202,7 @@ void StreamDockControlService::repaintFromProfile() {
         if (binding.state.imagePath && !binding.state.imagePath->empty()) {
             img = QImage(QString::fromStdString(*binding.state.imagePath));
             if (img.isNull()) {
-                // Image load failed — fall through to background fill or skip.
+                // Image load failed -- fall through to background fill or skip.
                 AJAZZ_LOG_WARN("stream-dock-control",
                                "repaintFromProfile: failed to load image '{}'",
                                *binding.state.imagePath);
@@ -181,7 +217,7 @@ void StreamDockControlService::repaintFromProfile() {
                                binding.state.background->b,
                                255));
             } else {
-                // No image and no background — skip this key.
+                // No image and no background -- skip this key.
                 continue;
             }
         }
@@ -203,6 +239,72 @@ QString StreamDockControlService::firmwareVersionFor(QString const& codename) co
     return QString::fromStdString(dev->firmwareVersion());
 }
 
+// ---------------------------------------------------------------------------
+// QML live controls (Phase 16, DISPLAY-09)
+// ---------------------------------------------------------------------------
+
+void StreamDockControlService::setBrightness(QString const& codename, int percent) {
+    // Resolve device: prefer held handle when codename matches (avoids a
+    // redundant DeviceRegistry lookup on the hot path), else fall back to lookup.
+    std::shared_ptr<core::IDevice> dev;
+    if (!m_activeCodename.isEmpty() && m_activeCodename == codename) {
+        dev = m_activeDevice;
+    } else if (m_lookup) {
+        dev = m_lookup(codename);
+    }
+    if (!dev) {
+        return; // device not connected -- no-op
+    }
+    // Pitfall 1 (T-16a-02): null-check within 3 lines of the cast.
+    auto* disp = dynamic_cast<core::IDisplayCapable*>(dev.get());
+    if (disp == nullptr) {
+        return; // not an LCD-key device -- no-op
+    }
+    // T-16a-04: clamp at the service boundary (backend also clamps, belt+suspenders).
+    auto const safe = static_cast<std::uint8_t>(std::clamp(percent, 0, 100));
+    // CR-01 (inherited from Phase 14): setBrightness can throw on device yank.
+    try {
+        disp->setBrightness(safe);
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("stream-dock-control",
+                       "setBrightness: write failed for '{}': {}",
+                       codename.toStdString(),
+                       e.what());
+    }
+}
+
+void StreamDockControlService::clearAll(QString const& codename) {
+    // Resolve device: prefer held handle, else lookup.
+    std::shared_ptr<core::IDevice> dev;
+    if (!m_activeCodename.isEmpty() && m_activeCodename == codename) {
+        dev = m_activeDevice;
+    } else if (m_lookup) {
+        dev = m_lookup(codename);
+    }
+    if (!dev) {
+        return; // device not connected -- no-op
+    }
+    // Pitfall 1 (T-16a-02): null-check within 3 lines of the cast.
+    auto* disp = dynamic_cast<core::IDisplayCapable*>(dev.get());
+    if (disp == nullptr) {
+        return; // not an LCD-key device -- no-op
+    }
+    // 0xFF = clear all keys -> CLE opcode (per interfaces block, DISPLAY-09).
+    // CR-01: clearKey can throw on device yank.
+    try {
+        disp->clearKey(0xFF);
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("stream-dock-control",
+                       "clearAll: write failed for '{}': {}",
+                       codename.toStdString(),
+                       e.what());
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Drain slot (Phase 14)
+// ---------------------------------------------------------------------------
+
 void StreamDockControlService::drainPendingWrites() {
     if (!m_activeDevice) {
         m_pendingWrites.clear();
@@ -216,7 +318,7 @@ void StreamDockControlService::drainPendingWrites() {
     }
 
     for (auto const& [keyIndex, img] : m_pendingWrites) {
-        // Convert to RGBA8 if needed — the backend's setKeyImage expects RGBA8.
+        // Convert to RGBA8 if needed -- the backend's setKeyImage expects RGBA8.
         QImage const rgba = img.convertToFormat(QImage::Format_RGBA8888);
         if (rgba.isNull()) {
             continue;

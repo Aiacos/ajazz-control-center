@@ -517,6 +517,11 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     BatteryService::registerInstance(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
     FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
+    // Phase 16 Plan 16-01 (DISPLAY-09): QML_SINGLETON exposure for the Stream Dock
+    // control service -- brightness slider + clear-all button in the Keys tab.
+    // Registers the same Application-owned instance so QML talks to the held handle,
+    // not a separate instance (CLAUDE.md QML_SINGLETON gotcha / Pitfall 2).
+    StreamDockControlService::registerInstance(m_streamDockControl.get());
     // Before the vendor firmware tool is launched, drop our HID handle for the
     // matching device family so the vendor flasher can claim the USB interface
     // uncontested (FIRMWARE-UPDATES.md §Launch vendor app). The shared backend
