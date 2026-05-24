@@ -27,6 +27,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <stdexcept>
 #include <string_view>
 #include <utility>
 
@@ -115,7 +116,25 @@ std::size_t StreamDockInputService::pump() {
     if (!m_device) {
         return 0;
     }
-    return m_device->poll();
+    // CR-01: poll() -> ITransport::read() throws std::runtime_error on device
+    // yank (hid_read_timeout returns -1). Catch here so the exception cannot
+    // propagate through the QTimer::timeout slot into Qt's event loop, which
+    // would call std::terminate (Phase 14 CR-01/CR-02 same failure class).
+    // On yank: deregister the stale callback, release the handle, and stop
+    // both timers — same teardown as setActiveDevice(nullptr).
+    try {
+        return m_device->poll();
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("stream-dock-input", "poll() failed (device likely yanked): {}", e.what());
+        // Deregister this-capturing callback before releasing the handle so
+        // the still-alive backend (held by StreamDockControlService) does not
+        // retain a dangling pointer.
+        m_device->onEvent({});
+        m_device.reset();
+        m_pollTimer->stop();
+        m_coalesceTimer->stop();
+        return 0;
+    }
 }
 
 // ---------------------------------------------------------------------------
