@@ -116,6 +116,12 @@ add_executable(
     # (BAT+ULEND per bound key via StreamDockControlService + MockTransport).
     # profile_controller.cpp is already in the binary via the 14-02 entry above.
     test_profile_persistence.cpp
+    # Phase 16 Plan 16-03 (PROFILE-02): page-scoped repaintPage(pageId) assertions --
+    # root paints root bindings, child paints child bindings not root (Pitfall 1 closed),
+    # missing-page no-ops cleanly; plus carousel pageNavRequested(+/-1) tests and
+    # single-root no-op guard (Decision 2). stream_dock_input_service.cpp is already in
+    # the binary via the Phase 15 entry above.
+    test_profile_pages.cpp
     # qt_executor.cpp is already in the binary (test_qt_executor block above)
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
