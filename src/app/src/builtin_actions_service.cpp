@@ -292,9 +292,18 @@ void BuiltinActionsService::populate() {
         "com.hotspot.streamdock.page.change", [this](std::string_view settingsJson) {
             auto const obj = parseSettings(settingsJson, "page.change"sv);
             auto const dir = obj.value(QStringLiteral("direction")).toString();
-            int const d = (dir == QStringLiteral("CCW")) ? -1 : +1;
+            int navDir = +1; // default CW
+            if (dir == QStringLiteral("CCW")) {
+                navDir = -1;
+            } else if (dir != QStringLiteral("CW") && !dir.isEmpty()) {
+                // Unknown direction string: the schema specifies only "CW" and "CCW".
+                // Log so misconfigured profiles are surfaced (IN-02).
+                AJAZZ_LOG_WARN("builtin",
+                               "page.change: unknown direction '{}', defaulting to CW",
+                               dir.toStdString());
+            }
             if (m_navigate) {
-                m_navigate(d);
+                m_navigate(navDir);
             }
         });
 
