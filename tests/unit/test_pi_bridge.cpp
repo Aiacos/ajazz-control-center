@@ -424,3 +424,51 @@ TEST_CASE("cefQuery shim injects at DocumentCreation in MainWorld", "[pi-bridge]
     REQUIRE(s.name() == QStringLiteral("ajazz-cefquery-shim"));
 }
 #endif // defined(AJAZZ_HAVE_WEBENGINE)
+
+// ---------------------------------------------------------------------------
+// sdpi.css helper + bundled resource tests (PLUGIN-09 / 20-02)
+//
+// isSdpiCssRequest is in pi_url_policy.cpp (already linked); no new link needed.
+// The qrc presence test requires the test qrc to embed the CSS file under the
+// same prefix used at runtime (see tests/unit/CMakeLists.txt qt_add_resources).
+// ---------------------------------------------------------------------------
+#include <QFile>
+
+TEST_CASE("isSdpiCssRequest true for canonical sdpi.css paths", "[pi-bridge][sdpi]") {
+    using ajazz::app::isSdpiCssRequest;
+
+    // Standard Elgato PI reference: static/css/sdpi.css
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///pi/static/css/sdpi.css"))) == true);
+    // Direct reference by filename only
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///pi/sdpi.css"))) == true);
+    // https CDN variant (some PIs use an absolute URL)
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("https://cdn.example.com/sdpi.css"))) == true);
+    // Nested path
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///some/path/static/css/sdpi.css"))) ==
+            true);
+}
+
+TEST_CASE("isSdpiCssRequest false for non-sdpi.css paths", "[pi-bridge][sdpi]") {
+    using ajazz::app::isSdpiCssRequest;
+
+    // Different CSS file
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///pi/other.css"))) == false);
+    // Suffix-look-alike: evil extension appended
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///pi/sdpi.css.evil"))) == false);
+    // Prefix match only (directory named sdpi.css)
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral("file:///pi/sdpi.css/file.txt"))) == false);
+    // Empty URL
+    REQUIRE(isSdpiCssRequest(QUrl(QStringLiteral(""))) == false);
+}
+
+TEST_CASE("bundled sdpi.css qrc resource is present and non-empty", "[pi-bridge][sdpi]") {
+    ajazz::tests::qtApp();
+    QFile f(QStringLiteral(":/qt/qml/AjazzControlCenter/streamdock/sdpi.css"));
+    REQUIRE(f.exists());
+    REQUIRE(f.open(QIODevice::ReadOnly));
+    QByteArray const data = f.readAll();
+    REQUIRE(!data.isEmpty());
+    // Must contain the canonical Elgato sdpi-css class selectors.
+    REQUIRE(data.contains(".sdpi-item"));
+    REQUIRE(data.contains(".sdpi-wrapper"));
+}
