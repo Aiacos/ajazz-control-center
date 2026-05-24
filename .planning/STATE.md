@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: verifying
+status: executing
 stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T11:32:25.624Z'
+last_updated: '2026-05-24T12:04:50.543Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
   completed_phases: 5
   total_plans: 51
-  completed_plans: 17
+  completed_plans: 18
   percent: 29
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 17 — plugin-protocol-completion
+**Current focus:** Phase 18 — plugin-manifest-discovery-lifecycle-spawn
 
 ## Current Position
 
-Phase: 17 (plugin-protocol-completion) — EXECUTING
-Plan: 3 of 3
+Phase: 18 (plugin-manifest-discovery-lifecycle-spawn) — EXECUTING
+Plan: 2 of 4
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -54,7 +54,7 @@ Last activity: 2026-05-24
 
 **Velocity (v1.0 + v1.1 carried forward):**
 
-- Total plans completed: 34 (1 retro + 26 forward-planned in v1.1)
+- Total plans completed: 37 (1 retro + 26 forward-planned in v1.1)
 - v1.1 calendar duration: ~2 days end-to-end, ~80 commits
 
 **v1.2 baseline:** Counters reset to 0/5 phases, 0/? plans (plan counts TBD per phase).
@@ -87,6 +87,7 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: QtExecutor non-owning shared_ptr wrapper pattern: unique_ptr owned by Application, non-owning shared_ptr alias passed to ActionEngine (no-op deleter, lifetime guaranteed by Application)
 - \[Phase ?\]: StreamDockInputService owns ActionEngine: Application constructs then moves the engine into the service; m_actionEngine null after ctor; Phase 19 accesses engine via m_streamDockInput
 - \[Phase ?\]: Departure handler added to onHotplug for StreamDeck: setActiveDevice(nullptr) stops input poll pump on device removal (T-15-05 UAF mitigation)
+- \[Phase ?\]: Linux OS-accept locked (18-01)
 
 ### Pending Todos
 
@@ -142,10 +143,11 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 15-stream-dock-input-routing P02   | 8                                                                             | 1 tasks                           | 3 files                  |
 | Phase 17-plugin-protocol-completion P01  | 5                                                                             | 2 tasks                           | 3 files                  |
 | Phase 17 P03                             | 5                                                                             | 3 tasks                           | 3 files                  |
+| Phase 18 P01                             | 8                                                                             | 2 tasks                           | 9 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T11:32:25.616Z
+Last session: 2026-05-24T12:04:50.535Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 

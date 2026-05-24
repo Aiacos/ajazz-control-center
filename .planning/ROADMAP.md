@@ -315,7 +315,7 @@ Plans:
 
 Plans:
 
-- [ ] 18-01-PLAN.md - PluginManifest struct + parsePluginManifest + OS/MinimumVersion gate (Linux OS-accept rule); Controllers incl. Knob/SecondaryScreen (PLUGIN-06) (wave 1)
+- [x] 18-01-PLAN.md - PluginManifest struct + parsePluginManifest + OS/MinimumVersion gate (Linux OS-accept rule); Controllers incl. Knob/SecondaryScreen (PLUGIN-06) (wave 1)
 - [ ] 18-02-PLAN.md - NodeRunner: exact node argv builder + injectable node>=20 detection, asserted without launching node (PLUGIN-08 node runtime) (wave 2)
 - [ ] 18-03-PLAN.md - Mirabox compat shim: connectMiraBoxSDSocket -> connectElgatoStreamDeckSocket QWebEngineScript at DocumentCreation (PLUGIN-11) (wave 3)
 - [ ] 18-04-PLAN.md - PluginCrashTracker (3-in-30s) + PluginManager: discovery + reused zip-slip extraction + spawn dispatch (node/native/HTML) + crash/restart/disable + exitApp shutdown via SdPluginServer::sendEvent (PLUGIN-07/08) (wave 4)
@@ -472,7 +472,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
+| 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 1/4            | In Progress      |            |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
 | 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
