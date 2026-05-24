@@ -80,7 +80,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Plugin Store / Local Install (Phase 22)
 
-- [ ] **PLUGIN-14**: Plugins install from a local `.sdPlugin`/`.zip` into `installedPlugins/` via a **host-owned** catalog (the existing `PluginStore.qml` / catalog models) with **no phone-home** to Mirabox/Aliyun; a **signature/manifest-verification gate** (reuse `ManifestSignerConfig`) must pass before a plugin is trusted (sdk §6 — the vendor's no-signature behaviour is the gap we close).
+- [x] **PLUGIN-14**: Plugins install from a local `.sdPlugin`/`.zip` into `installedPlugins/` via a **host-owned** catalog (the existing `PluginStore.qml` / catalog models) with **no phone-home** to Mirabox/Aliyun; a **signature/manifest-verification gate** (reuse `ManifestSignerConfig`) must pass before a plugin is trusted (sdk §6 — the vendor's no-signature behaviour is the gap we close).
 
 ### Auxiliary Display Surfaces (Phase 23 — HARDWARE-GATED)
 
@@ -286,7 +286,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-09   | Phase 20 | Complete |
 | PLUGIN-13   | Phase 20 | Complete |
 | PLUGIN-12   | Phase 21 | Complete |
-| PLUGIN-14   | Phase 22 | Pending  |
+| PLUGIN-14   | Phase 22 | Complete |
 | DISPLAY-10  | Phase 23 | Pending  |
 | DEVICES-10  | Phase 24 | Pending  |
 | VERIFY-05   | Phase 25 | Pending  |

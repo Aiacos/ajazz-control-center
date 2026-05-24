@@ -390,7 +390,7 @@ Plans:
 
 Plans:
 
-- [ ] 22-01-PLAN.md — STOP-gate 18; un-gate the manifest_signer link/verifier defs (or fail-closed); reusable `verifyStagedPlugin` gate + apply it to the existing network `install()` and launch-sweep paths (wave 1)
+- [x] 22-01-PLAN.md — STOP-gate 18; un-gate the manifest_signer link/verifier defs (or fail-closed); reusable `verifyStagedPlugin` gate + apply it to the existing network `install()` and launch-sweep paths (wave 1)
 - [ ] 22-02-PLAN.md — `installFromFile` staging->verify->promote into Phase-18 `installedPlugins/`; kill the launch phone-home (opt-in default-off) + no-network test; PluginStore.qml FileDialog + opt-in online toggle (wave 2)
 
 ### Phase 23: Auxiliary Display Surfaces
@@ -476,7 +476,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 20. Property Inspector + Settings           | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 21. Built-in In-Process Actions             | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
+| 22. Plugin Store / Local Install            | v1.3      | 1/2            | In Progress      |            |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 0/?            | Not started      | —          |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/2            | Not started      | —          |

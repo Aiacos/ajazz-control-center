@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: ready_to_plan
-stopped_at: Phase 21 complete (3/3) — ready to discuss Phase 22
-last_updated: 2026-05-24T18:24:32.068000Z
+status: executing
+stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
+last_updated: '2026-05-24T18:40:40.652Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
   completed_phases: 9
   total_plans: 51
-  completed_plans: 30
+  completed_plans: 31
   percent: 53
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 22 — plugin store local install
+**Current focus:** Phase 22 — plugin-store-local-install
 
 ## Current Position
 
-Phase: 22
-Plan: Not started
+Phase: 22 (plugin-store-local-install) — EXECUTING
+Plan: 2 of 2
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Ready to plan
+Status: Ready to execute
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -159,10 +159,11 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 21 P01                                           | 35                                                                            | 2 tasks                           | 9 files                  |
 | Phase 21-builtin-in-process-actions P21-02             | 11                                                                            | 2 tasks                           | 6 files                  |
 | Phase 21 P03                                           | 210                                                                           | 2 tasks                           | 10 files                 |
+| Phase 22 P22-01                                        | 10                                                                            | 2 tasks                           | 7 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T17:59:50.364Z
+Last session: 2026-05-24T18:40:40.644Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 
