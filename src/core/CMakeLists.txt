@@ -20,6 +20,11 @@ add_library(
     src/input_synthesizer_linux.cpp
     src/input_synthesizer_win.cpp
     src/input_synthesizer_mac.cpp
+    # Phase 21-03: BuiltinActionRegistry — pure-core UUID->handler dispatch table (no Qt, no
+    # nlohmann; COD-031). The app tier (BuiltinActionsService) populates it with handlers for the
+    # ~24 com.hotspot.streamdock.* built-in UUIDs; the plugin executor short-circuits to it BEFORE
+    # the Phase-19 bridge path. settingsJson is passed verbatim (parsed app-tier).
+    src/builtin_action_registry.cpp
 )
 
 add_library(ajazz::core ALIAS ajazz_core)

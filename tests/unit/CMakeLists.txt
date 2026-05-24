@@ -158,6 +158,13 @@ add_executable(
     test_profile_io.cpp
     test_event_bus.cpp
     test_action_engine.cpp
+    # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
+    # and BuiltinActionsService per-UUID handler e2e tests (Task 2, added below via target_sources).
+    # The Task-1 portion (registry-only) uses only std headers + Catch2 — no Qt, no nlohmann.
+    # The Task-2 portion (app e2e) is added below in the AJAZZ_HAVE_WEBSOCKETS block and the
+    # unconditional target_sources block after the registry-only cases.
+    test_builtin_actions.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/src/builtin_action_registry.cpp
     # Streamdock catalogue fetcher: pure helpers + cache + fallback. The
     # fetcher source is compiled directly into the test binary so we don't
     # need to factor it out of the app target.
