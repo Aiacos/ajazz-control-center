@@ -300,9 +300,23 @@ Application::Application(QObject* parent)
                   }
               };
               // openUrl executor: QDesktopServices::openUrl (standard Qt cross-platform).
+              // WR-01: use strict QUrl construction (not QUrl::fromUserInput) and
+              // validate the scheme before dispatching. QUrl::fromUserInput converts
+              // bare local paths (e.g. "/etc/passwd", "~/secret.pdf") into file://
+              // URLs, which would silently open arbitrary local files -- especially
+              // dangerous when profiles can be loaded from external/plugin sources.
+              // Only http and https are permitted.
               execs.openUrl = [](std::string_view url) {
-                  QDesktopServices::openUrl(QUrl::fromUserInput(
-                      QString::fromUtf8(url.data(), static_cast<qsizetype>(url.size()))));
+                  QUrl const qurl(
+                      QString::fromUtf8(url.data(), static_cast<qsizetype>(url.size())));
+                  if (qurl.scheme() != QStringLiteral("http") &&
+                      qurl.scheme() != QStringLiteral("https")) {
+                      AJAZZ_LOG_WARN("input",
+                                     "openUrl: rejected non-http(s) URL scheme '{}'",
+                                     qurl.scheme().toStdString());
+                      return;
+                  }
+                  QDesktopServices::openUrl(qurl);
               };
               // plugin executor: STUB (Phase 19 seam, T-15-03 accepted).
               execs.plugin = [](std::string_view id, std::string_view /*settingsJson*/) {
