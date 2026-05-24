@@ -133,8 +133,11 @@ public:
      * Emits profileChanged() so the control service repaints and QML refreshes.
      * Does NOT save to disk — call saveActiveProfile() / saveProfile() to persist.
      *
-     * @param keyIndex    0-based or 1-based key index as used by KeyDesigner
-     *                    (Profile::keys are std::uint16_t — stored as-is).
+     * @param keyIndex    0-based key index (matches Profile::keys map keys). The
+     *                    paint service adds 1 when converting to the device's
+     *                    1-based scheme. Passing a 1-based index will silently
+     *                    paint the wrong key. Must be in [0, 65534]; out-of-range
+     *                    values are rejected with a warning (no-op).
      * @param iconPath    Absolute path or Qt resource URL; empty -> nullopt.
      * @param label       Overlay text; empty -> nullopt.
      * @param actionKind  cast from ajazz::core::ActionKind enum value.
