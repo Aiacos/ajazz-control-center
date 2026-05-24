@@ -182,9 +182,13 @@ void ProfileController::saveActiveProfile() {
     QString const path = defaultProfilePath(id);
 
     // Pitfall 5: parent directory must exist before writeProfileToDisk.
+    // WR-03: check mkpath() return value and emit saveFailed with an accurate
+    // message on failure rather than proceeding to writeProfileToDisk (which
+    // would throw ProfileIoError with a less informative "write failed" message).
     QDir dir = QFileInfo(path).absoluteDir();
-    if (!dir.exists()) {
-        dir.mkpath(QStringLiteral("."));
+    if (!dir.exists() && !dir.mkpath(QStringLiteral("."))) {
+        emit saveFailed(tr("Cannot create profiles directory: %1").arg(dir.absolutePath()));
+        return;
     }
 
     saveProfile(path);
