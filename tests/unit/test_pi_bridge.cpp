@@ -498,7 +498,14 @@ TEST_CASE("PIBridge relay - sendToPropertyInspector is connectable and fires",
     REQUIRE(received.contains(QStringLiteral("sendToPropertyInspector")));
 }
 
-TEST_CASE("PIBridge relay - sendToPlugin is a safe no-op stub today", "[pi-bridge][relay]") {
+// 17-02-SUMMARY.md IS present: SdPluginServer::sendEvent is live. The Application
+// wires bridge->toPluginRequested -> sendEvent via activeBridgeChanged (application.cpp).
+// This loopback test confirms the PIBridge end of that relay: calling sendToPlugin emits
+// toPluginRequested with the correct pluginUuid and raw JSON payload. The server-side
+// dispatch (sendEvent) is an integration concern verified on hardware in Phase 25.
+// A4 + Pitfall 5 (20-RESEARCH.md): the live plugin-process round-trip is Phase 25.
+TEST_CASE("PIBridge relay - sendToPlugin emits toPluginRequested with correct uuid and payload",
+          "[pi-bridge][relay]") {
     ajazz::tests::qtApp();
 
     ajazz::app::PIBridge bridge(nullptr,
@@ -506,15 +513,27 @@ TEST_CASE("PIBridge relay - sendToPlugin is a safe no-op stub today", "[pi-bridg
                                 QStringLiteral("act-relay-stub"),
                                 QStringLiteral("ctx-relay-stub-001"));
 
-    // sendToPlugin is a stub (M5 routes to plugin process via SdPluginServer::sendEvent).
-    // Must not crash; no signal must fire on the bridge.
-    bool fired = false;
+    // Connect a spy to toPluginRequested — the Application wires this to sendEvent.
+    QString capturedUuid;
+    QString capturedJson;
     QObject::connect(
-        &bridge, &ajazz::app::PIBridge::sendToPropertyInspector, [&](QString) { fired = true; });
+        &bridge, &ajazz::app::PIBridge::toPluginRequested, [&](QString uuid, QString json) {
+            capturedUuid = uuid;
+            capturedJson = json;
+        });
 
-    REQUIRE_NOTHROW(
-        bridge.sendToPlugin(QStringLiteral(R"({"event":"sendToPlugin","payload":{}})")));
-    REQUIRE(!fired); // stub must not emit sendToPropertyInspector (that's the opposite direction)
+    // Also guard: sendToPropertyInspector must NOT fire (opposite direction).
+    bool oppositeDir = false;
+    QObject::connect(&bridge, &ajazz::app::PIBridge::sendToPropertyInspector, [&](QString) {
+        oppositeDir = true;
+    });
+
+    QString const payload = QStringLiteral(R"({"event":"sendToPlugin","payload":{"k":"v"}})");
+    REQUIRE_NOTHROW(bridge.sendToPlugin(payload));
+
+    REQUIRE(capturedUuid == QStringLiteral("com.example.relay-stub"));
+    REQUIRE(capturedJson == payload);
+    REQUIRE(!oppositeDir); // sendToPlugin must not echo back to the PI
 }
 
 // ---------------------------------------------------------------------------

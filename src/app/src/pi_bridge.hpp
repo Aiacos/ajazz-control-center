@@ -138,6 +138,19 @@ signals:
     /// Forward a payload from the plugin process to this PI's JS.
     void sendToPropertyInspector(QString json);
 
+    /// Emitted when the PI calls sendToPlugin (§4.3). Carries the plugin
+    /// UUID and the raw JSON payload so the Application can route the
+    /// frame to the correct SdPluginServer::sendEvent target without
+    /// exposing a raw SdPluginServer* to the bridge.
+    ///
+    /// The Application wiring is: connect(bridge, &PIBridge::toPluginRequested,
+    /// [server](QString uuid, QString json) { server->sendEvent(uuid, "sendToPlugin",
+    ///     QJsonDocument::fromJson(json.toUtf8()).object()); });
+    ///
+    /// Phase 20 / 17-02 STOP gate: wired at Application layer when
+    /// SdPluginServer::sendEvent is present (17-02-SUMMARY.md exists).
+    void toPluginRequested(QString pluginUuid, QString json);
+
     /// Stream Deck SDK-2 handshake event — emitted once the page reports
     /// the channel is ready, carrying the JSON-encoded action info and
     /// app info envelope the SDK pages expect.

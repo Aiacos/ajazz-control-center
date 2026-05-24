@@ -335,7 +335,11 @@ void PIBridge::sendToPlugin(QString const& json) {
                    pluginUuid_.toStdString(),
                    actionUuid_.toStdString(),
                    static_cast<int>(json.size()));
-    // M5 routes to the plugin process via PluginHostController.
+    // Emit the relay signal so the Application can route to SdPluginServer::sendEvent.
+    // The connection is established at Application construction time when
+    // SdPluginServer::sendEvent is available (17-02-SUMMARY.md present, per the
+    // 20-03 STOP gate). Without a connected listener this is a safe no-op (stub M3/M4).
+    emit toPluginRequested(pluginUuid_, json);
 }
 
 void PIBridge::setTitle(QString const& title, QString const& context, int target) {

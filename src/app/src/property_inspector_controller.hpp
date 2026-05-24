@@ -72,6 +72,10 @@ Q_DECLARE_OPAQUE_POINTER(QQmlWebChannel*)
 
 namespace ajazz::app {
 
+// Forward declaration for the activeBridgeChanged signal. The full definition is
+// in pi_bridge.hpp (included only in the .cpp via the AJAZZ_HAVE_WEBENGINE guard).
+class PIBridge;
+
 /**
  * @class PropertyInspectorController
  * @brief Lifecycle owner of the Property Inspector WebEngine surface.
@@ -165,6 +169,21 @@ signals:
     /// from seeing intermediate states where the channel and URL
     /// disagree about which inspector they belong to.
     void activeInspectorChanged();
+
+    /// Emitted (only when AJAZZ_HAVE_WEBENGINE is defined) after a fresh
+    /// @c loadInspector completes and the new @c PIBridge object is live on
+    /// @c activeChannel. The Application should connect the bridge's
+    /// @c toPluginRequested signal to @c SdPluginServer::sendEvent in the
+    /// lambda connected here (Phase 20 / 17-02 STOP gate relay wiring).
+    ///
+    /// @note The bridge is owned by the active QWebChannel (parented to this
+    ///       controller). Callers MUST NOT cache the pointer — it becomes
+    ///       dangling on the next @c loadInspector or @c closeInspector call.
+    ///
+    /// @warning This signal is NOT emitted in non-WebEngine builds (the
+    ///          AJAZZ_HAVE_WEBENGINE guard applies). Safe to connect
+    ///          unconditionally from Application (no emission = no call).
+    void activeBridgeChanged(ajazz::app::PIBridge* bridge);
 
 private:
     bool hasHtmlInspector_ = false;

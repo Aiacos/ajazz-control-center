@@ -251,6 +251,9 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     webEngine_->activeBridge = bridge;
     activeUrl_ = QUrl::fromLocalFile(htmlAbsPath);
     emit activeInspectorChanged();
+    // Notify the Application so it can wire bridge->toPluginRequested to
+    // SdPluginServer::sendEvent (Phase 20 / 17-02 STOP gate relay wiring).
+    emit activeBridgeChanged(bridge);
 
     if (!hasHtmlInspector_) {
         hasHtmlInspector_ = true;

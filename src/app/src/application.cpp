@@ -32,6 +32,10 @@
 #include <QTimer>
 #include <QUrl>
 
+#if defined(AJAZZ_HAVE_WEBENGINE)
+#include "pi_bridge.hpp"
+#endif
+
 #ifdef AJAZZ_PYTHON_HOST
 #include "ajazz/plugins/manifest_signer.hpp"
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
@@ -418,7 +422,41 @@ Application::Application(QObject* parent)
                      &StreamDockControlService::pageNavigated,
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onActivePageChanged);
-#endif
+
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    // Phase 20-03 (PLUGIN-09): PI JS -> plugin-process relay.
+    //
+    // activeBridgeChanged fires each time loadInspector creates a fresh PIBridge for
+    // the newly selected action context. We capture the new bridge and wire its
+    // toPluginRequested signal to SdPluginServer::sendEvent so that the PI page's
+    // `$SD.sendToPlugin(json)` call reaches the live plugin process over the WebSocket.
+    //
+    // The bridge is owned by the QWebEnginePage (parented inside the controller).
+    // Capturing m_pluginServer.get() by raw pointer is safe: m_pluginServer is a member
+    // and outlives the connection (both are destroyed by ~Application in declaration order).
+    //
+    // STOP gate (20-03): wired only because 17-02-SUMMARY.md is present (sendEvent exists).
+    // The live plugin-process round-trip is verified on hardware in Phase 25.
+    QObject::connect(m_propertyInspector.get(),
+                     &PropertyInspectorController::activeBridgeChanged,
+                     this,
+                     [this](ajazz::app::PIBridge* bridge) {
+                         if (!bridge || !m_pluginServer) {
+                             return;
+                         }
+                         auto* server = m_pluginServer.get();
+                         QObject::connect(
+                             bridge,
+                             &ajazz::app::PIBridge::toPluginRequested,
+                             bridge, // parent as context: auto-disconnects when bridge dies
+                             [server](QString uuid, QString json) {
+                                 auto const payload =
+                                     QJsonDocument::fromJson(json.toUtf8()).object();
+                                 server->sendEvent(uuid, QStringLiteral("sendToPlugin"), payload);
+                             });
+                     });
+#endif // AJAZZ_HAVE_WEBENGINE
+#endif // AJAZZ_HAVE_WEBSOCKETS
 }
 
 Application::~Application() {
