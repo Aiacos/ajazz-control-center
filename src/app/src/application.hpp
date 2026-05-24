@@ -24,6 +24,7 @@
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
 #include "settings_service.hpp"
+#include "stream_dock_control_service.hpp"
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
 #include "tray_controller.hpp"
@@ -174,6 +175,16 @@ private:
                           ///< delegate-only per docs/architecture/FIRMWARE-UPDATES.md;
                           ///< no in-app flashing. Declared after m_appUpdate to keep
                           ///< the init list in member-declaration order (-Wreorder).
+    std::unique_ptr<StreamDockControlService>
+        m_streamDockControl; ///< Phase 14: app-layer Stream Dock panel control
+                             ///< (DISPLAY-06/07/08, DOCK-01/02). Holds the active
+                             ///< AKP05E open for the session, lights the panel at
+                             ///< open (LIG), pushes key images via a coalesced QTimer
+                             ///< drain (BAT->chunks->ULEND, no manual flush), repaints
+                             ///< all keys on profileChanged, and surfaces the cached
+                             ///< firmware VER string. Declared after m_firmwareUpdate
+                             ///< to keep the init list in member-declaration order
+                             ///< (-Wreorder). Reuse surface for Phases 15/16/19.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

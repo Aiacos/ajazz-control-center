@@ -196,6 +196,29 @@ Application::Application(QObject* parent)
               }
               return nullptr;
           })),
+      // Phase 14 Plan 14-02: StreamDockControlService — app-layer panel paint path
+      // (DISPLAY-06/07/08, DOCK-01/02). Same DeviceLookup pattern as TimeSyncService:
+      // codename -> shared_ptr<IDevice> via DeviceRegistry::open (flyweight). The
+      // service holds the returned shared_ptr for the session (single HID handle,
+      // ARCH-03). ProfileAccessor captures m_profileController.get() so repaint on
+      // profileChanged iterates the loaded Profile::keys without coupling the service
+      // to ProfileController's full API. Declared after m_firmwareUpdate to keep the
+      // init list in member-declaration order (-Wreorder).
+      m_streamDockControl(std::make_unique<StreamDockControlService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) != codename) {
+                      continue;
+                  }
+                  core::DeviceId const id{
+                      .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                  return m_deviceRegistry.open(id);
+              }
+              return nullptr;
+          },
+          [this]() -> core::Profile const& { return m_profileController->activeProfile(); },
+          this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -208,6 +231,13 @@ Application::Application(QObject* parent)
                      &HotplugDebouncer::coalesced,
                      m_deviceModel.get(),
                      [this](core::HotplugEvent const&) { m_deviceModel->refresh(); });
+
+    // Phase 14 Plan 14-02 (DISPLAY-08): wire profileChanged -> repaintFromProfile so
+    // loading a profile repaints every bound key on the active Stream Deck.
+    QObject::connect(m_profileController.get(),
+                     &ProfileController::profileChanged,
+                     m_streamDockControl.get(),
+                     &StreamDockControlService::repaintFromProfile);
 }
 
 Application::~Application() {
@@ -456,6 +486,18 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
         for (auto const& d : descriptors) {
             if (d.vendorId == ev.vid && d.productId == ev.pid) {
                 m_timeSync->onDeviceArrivedDebounced(QString::fromStdString(d.codename));
+
+                // Phase 14 Plan 14-02 (DISPLAY-06): when a Stream Dock arrives, call
+                // setActiveDevice so the panel lights and the held handle is refreshed.
+                // Phase 14 simplification: first connected Stream Dock wins; full
+                // active-device selection UI is Phase 16.
+                if (d.family == core::DeviceFamily::StreamDeck) {
+                    QTimer::singleShot(std::chrono::milliseconds(300),
+                                       m_streamDockControl.get(),
+                                       [this, codename = QString::fromStdString(d.codename)] {
+                                           m_streamDockControl->setActiveDevice(codename);
+                                       });
+                }
                 break;
             }
         }
