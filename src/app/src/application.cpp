@@ -356,15 +356,16 @@ Application::Application(QObject* parent)
                      m_streamDockControl.get(),
                      &StreamDockControlService::repaintFromProfile);
 
-    // Phase 15 Plan 15-02 (INPUT-03/04/05):
-    //
-    // pageNavRequested: connect to a logged sink for Phase 15.
-    // Phase 16 replaces this lambda with the real page-model consumer
-    // (active-page navigation via the page model owned by Phase 16).
-    QObject::connect(
-        m_streamDockInput.get(), &StreamDockInputService::pageNavRequested, this, [](int dir) {
-            AJAZZ_LOG_INFO("input", "page nav intent {} (page model arrives Phase 16)", dir);
-        });
+    // Phase 16 Plan 16-03 (PROFILE-02): wire pageNavRequested -> navigatePage so
+    // a touch-strip swipe drives the top-level-page carousel and repaints the
+    // new page via repaintPage(newPageId). The control service holds the carousel
+    // index and the profile accessor; it is the single page-state authority for
+    // the flat carousel (Decision 2). ActionEngine pushPage/popPage remain the
+    // authority for vertical folder nesting (OpenFolder/BackToParent).
+    QObject::connect(m_streamDockInput.get(),
+                     &StreamDockInputService::pageNavRequested,
+                     m_streamDockControl.get(),
+                     &StreamDockControlService::navigatePage);
 }
 
 Application::~Application() {
