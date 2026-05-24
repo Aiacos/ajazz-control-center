@@ -28,7 +28,6 @@
 #include <QFile>
 #include <QString>
 #include <QTemporaryDir>
-#include <QZipWriter>
 
 #include <cstdlib>
 #include <filesystem>
@@ -38,6 +37,7 @@
 #include <vector>
 
 #include <catch2/catch_test_macros.hpp>
+#include <private/qzipwriter_p.h>
 
 #ifdef _WIN32
 #include <cwctype>
@@ -195,7 +195,7 @@ TEST_CASE("PluginVerifyGate signer unavailable -> Refused no crash", "[plugin-ve
     // fails closed (exit != 0 / script missing).
     ManifestSignerConfig emptyCfg;
     emptyCfg.verifierScript = "/nonexistent-path/no-such-script.py";
-    emptyCfg.trustedPublishersFile = {};
+    emptyCfg.trustedPublishersFile = fs::path{};
 
     // verifyStagedPlugin with a non-existent script should return Refused.
     auto const outcome = verifyStagedPlugin("/nonexistent/manifest.json", emptyCfg);

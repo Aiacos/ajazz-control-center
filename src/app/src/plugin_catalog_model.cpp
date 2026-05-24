@@ -11,6 +11,7 @@
 
 #include "ajazz/core/logger.hpp"
 #include "opendeck_catalog_fetcher.hpp"
+#include "plugin_verify_gate.hpp"
 #include "sdplugin_extractor.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
@@ -107,7 +108,39 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     // Safe to run on every launch; an already-extracted install ends up
     // as a directory and is skipped by the file-only entry filter
     // inside the extractor (issue #62).
-    extractStandalonePluginArchives(userPluginsDir());
+    QString const pluginsDir = userPluginsDir();
+    extractStandalonePluginArchives(pluginsDir);
+
+    // PLUGIN-14 verify gate (T-22-backdoor): scan every freshly-extracted
+    // (or pre-existing) `.sdPlugin` directory and quarantine any whose
+    // manifest fails Ed25519 verification. This closes the launch-sweep
+    // back door: a tampered package dropped into the plugins dir is never
+    // left in a discoverable state for the Phase-18 PluginManager.
+    // Seam: verify after the sweep; do NOT modify sdplugin_extractor internals.
+    {
+        QDir const dir(pluginsDir);
+        QStringList const entries = dir.entryList(QStringList{QStringLiteral("*.sdPlugin")},
+                                                  QDir::Dirs | QDir::NoDotAndDotDot);
+        for (QString const& entry : entries) {
+            QString const manifestPath = dir.filePath(entry + QStringLiteral("/manifest.json"));
+            if (!QFile::exists(manifestPath)) {
+                continue; // no manifest -> not a valid plugin dir; skip
+            }
+            VerifyOutcome const vout = verifyStagedPlugin(manifestPath);
+            if (vout.verdict == VerifyVerdict::Refused) {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "launch-sweep verify: '{}' refused ({}); removing from plugins dir",
+                               entry.toStdString(),
+                               vout.reason.toStdString());
+                QDir(dir.filePath(entry)).removeRecursively();
+            } else {
+                AJAZZ_LOG_INFO("plugin-catalog",
+                               "launch-sweep verify: '{}' -> {}",
+                               entry.toStdString(),
+                               verdictToTrustLevel(vout.verdict).toStdString());
+            }
+        }
+    }
 
     // Wire the upstream fetcher: each successful snapshot replaces the
     // streamdock-sourced rows in place. Local / community rows are
@@ -574,13 +607,45 @@ bool PluginCatalogModel::install(QString const& uuid) {
         QFileInfo const archiveInfo(destCopy);
         QString const archiveDir = archiveInfo.absolutePath();
         QString const archiveName = archiveInfo.fileName();
-        if (extractSdPluginArchive(destCopy, archiveDir, archiveName)) {
+        bool const extractOk = extractSdPluginArchive(destCopy, archiveDir, archiveName);
+        if (extractOk) {
             QFile::remove(destCopy);
         } else {
             AJAZZ_LOG_WARN("plugin-catalog",
                            "install '{}' extract failed; archive left at {}",
                            uuidCopy.toStdString(),
                            destCopy.toStdString());
+        }
+
+        // PLUGIN-14 verify gate (T-22-backdoor): run Ed25519 signature
+        // verification on the extracted manifest BEFORE marking as installed.
+        // A tampered or unsigned package is refused here so it is never
+        // promoted by the network path. SelfSigned is allowed (explicit
+        // sideload UX is plan 02's concern; network path treats it as
+        // allowed-but-logged). Refused = quarantine the extracted dir.
+        if (extractOk) {
+            QString const extractedManifest =
+                QDir(archiveDir).filePath(archiveName + QStringLiteral("/manifest.json"));
+            VerifyOutcome const vout = verifyStagedPlugin(extractedManifest);
+            if (vout.verdict == VerifyVerdict::Refused) {
+                AJAZZ_LOG_WARN(
+                    "plugin-catalog",
+                    "install '{}': signature verification refused ({}); quarantining extracted dir",
+                    uuidCopy.toStdString(),
+                    vout.reason.toStdString());
+                // Remove the extracted directory so the refused package is not
+                // discoverable by the plugin host on next launch.
+                QDir(QDir(archiveDir).filePath(archiveName)).removeRecursively();
+                emit self->installFinished(
+                    uuidCopy,
+                    false,
+                    tr("Plugin signature verification failed: %1").arg(vout.reason));
+                return;
+            }
+            AJAZZ_LOG_INFO("plugin-catalog",
+                           "install '{}': signature verification OK ({})",
+                           uuidCopy.toStdString(),
+                           verdictToTrustLevel(vout.verdict).toStdString());
         }
 
         int const r = findRow(self->m_rows, uuidCopy);

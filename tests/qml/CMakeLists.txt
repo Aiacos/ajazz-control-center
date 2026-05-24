@@ -103,6 +103,12 @@ target_compile_definitions(
             AJAZZ_APP_ICON_QRC="${_qmlt_qrc_root}/branding/app.svg"
             AJAZZ_TRAY_ICON_QRC="${_qmlt_qrc_root}/branding/tray.svg"
             AJAZZ_THEME_QRC=":/qt/qml/AjazzControlCenter/branding/theme.json"
+            # Phase 22 Plan 22-01 (PLUGIN-14): verify gate needs the verifier/trust-root paths (same
+            # defs the app target carries) so plugin_verify_gate.cpp compiles correctly in this
+            # harness. Without them the gate falls back to fail-closed (safe), but the QML smoke
+            # test would never confirm a real verify path; pass them for completeness.
+            AJAZZ_PLUGIN_VERIFIER_SCRIPT="${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py"
+            AJAZZ_PLUGIN_TRUST_ROOTS="${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json"
 )
 
 target_include_directories(
@@ -116,6 +122,10 @@ target_link_libraries(
     ajazz_qml_tests
     PRIVATE ajazz::core
             ajazz::devices
+            # Phase 22 Plan 22-01 (PLUGIN-14): plugin_verify_gate.cpp (in ACC_QML_MODULE_SOURCES)
+            # calls ajazz::plugins::verifyManifest, so the full plugins library must be linked here
+            # — same reason the app target links it unconditionally after the un-gate.
+            ajazz::plugins
             ajazz::warnings
             Catch2::Catch2WithMain
             Qt6::Core
