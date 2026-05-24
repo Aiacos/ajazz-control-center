@@ -49,6 +49,15 @@ namespace {
 /// of magnitude above any realistic PI form payload.
 constexpr qint64 kMaxSettingsBytes = 1LL << 20; // 1 MiB
 
+/// Relay payload size cap (WR-02): same 1 MiB bound as the write path.
+/// Keeps sendToPlugin payloads from causing unbounded in-memory copies per
+/// relay hop (bridge -> Application lambda -> SdPluginServer::sendEvent).
+constexpr qint64 kMaxRelayBytes = kMaxSettingsBytes;
+
+/// Log-message size cap (WR-02): 64 KiB is generous for any log line and
+/// prevents hostile PIs from filling available disk via logMessage() loops.
+constexpr qint64 kMaxLogMessageBytes = 64LL * 1024; // 64 KiB
+
 /**
  * @brief Defence against path-traversal: reject any uuid that could escape
  *        the plugin sandbox if naively concatenated into a filesystem path.
@@ -330,6 +339,14 @@ void PIBridge::getGlobalSettings() {
 }
 
 void PIBridge::sendToPlugin(QString const& json) {
+    // WR-02: cap before any relay hop to avoid unbounded in-memory copies.
+    if (json.toUtf8().size() > kMaxRelayBytes) {
+        AJAZZ_LOG_ERROR("pi-bridge",
+                        "sendToPlugin: payload {} bytes exceeds {}-byte cap; refusing relay",
+                        static_cast<long long>(json.toUtf8().size()),
+                        static_cast<long long>(kMaxRelayBytes));
+        return;
+    }
     AJAZZ_LOG_INFO("pi-bridge",
                    "sendToPlugin: plugin={} action={} payload-bytes={}",
                    pluginUuid_.toStdString(),
@@ -408,6 +425,14 @@ void PIBridge::openUrl(QString const& url) {
 }
 
 void PIBridge::logMessage(QString const& message) {
+    // WR-02: cap log-message size to prevent hostile PIs from filling disk.
+    if (message.toUtf8().size() > kMaxLogMessageBytes) {
+        AJAZZ_LOG_ERROR("pi-bridge",
+                        "logMessage: message {} bytes exceeds {}-byte cap; truncated log",
+                        static_cast<long long>(message.toUtf8().size()),
+                        static_cast<long long>(kMaxLogMessageBytes));
+        return;
+    }
     // Plugin-authored log line. Routed through the PI bridge module name so
     // ops can grep for plugin-side noise; the plugin UUID + context UUID
     // are part of the formatted message so multiple plugins don't get
