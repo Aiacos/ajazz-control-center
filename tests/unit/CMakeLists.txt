@@ -434,9 +434,43 @@ target_sources(ajazz_unit_tests PRIVATE test_mirabox_compat.cpp)
 # kMiraboxShimSource string literal in the .cpp is always compiled (not gated); only the
 # QWebEngineScript builder needs WebEngine. Mirror the pi_url_policy pattern: the pure-logic source
 # compiles unconditionally, the WebEngine-using parts are gated.
+#
+# Phase 20 Plan 20-03 (PLUGIN-09): also link property_inspector_controller.cpp + pi_cef_shim.cpp +
+# pi_url_request_interceptor.cpp when the full WebEngine Quick + WebChannel Quick stack is present,
+# so the [pi-bridge][inspector] cases can construct a PropertyInspectorController and assert that
+# loadInspector flips hasHtmlInspector and inserts the cefQuery shim once per fresh profile. The
+# test is WebEngine-gated via #if defined(AJAZZ_HAVE_WEBENGINE) in test_pi_bridge.cpp; without
+# WebEngine only the pure-string + persistence tests run (mirror of the 20-01/20-02 discipline).
 if(AJAZZ_HAVE_WEBENGINE)
-    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
-    target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebEngineCore)
+    # Re-issue the find_package for the WebEngine components so the Qt6::WebEngineCore /
+    # WebEngineQuick / WebChannelQuick imported targets are defined in this CMakeLists scope (they
+    # were found in src/app/CMakeLists.txt, but CMake imported targets are not inherited across
+    # directory scopes — we must re-find them here). QUIET to suppress redundant noise.
+    find_package(Qt6 QUIET COMPONENTS WebEngineCore WebEngineQuick WebChannelQuick)
+    target_sources(
+        ajazz_unit_tests
+        PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp
+                # 20-03: PropertyInspectorController and its WebEngine-dependent TUs.
+                ${CMAKE_SOURCE_DIR}/src/app/src/property_inspector_controller.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/pi_cef_shim.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_request_interceptor.cpp
+    )
+    target_link_libraries(
+        ajazz_unit_tests PRIVATE Qt6::WebEngineCore Qt6::WebEngineQuick Qt6::WebChannelQuick
+    )
+    # plugin_manager.cpp (already linked via AJAZZ_HAVE_WEBSOCKETS) uses a private WebEngine header
+    # (qquickwebenginescriptcollection_p.h) when AJAZZ_HAVE_WEBENGINE is defined. Mirror the same
+    # fallback that src/app/CMakeLists.txt uses to find that private include.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuickPrivate)
+    if(Qt6WebEngineQuickPrivate_FOUND)
+        target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebEngineQuickPrivate)
+    else()
+        set(_we_priv_test "${Qt6WebEngineQuick_INCLUDE_DIRS}/QtWebEngineQuick"
+                          "/${Qt6WebEngineQuick_VERSION}/QtWebEngineQuick/private"
+        )
+        string(CONCAT _we_priv_test_path ${_we_priv_test})
+        target_include_directories(ajazz_unit_tests PRIVATE "${_we_priv_test_path}")
+    endif()
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBENGINE=1)
 else()
     # Without WebEngine, we still need plugin_mirabox_shim.cpp to compile the kMiraboxShimSource

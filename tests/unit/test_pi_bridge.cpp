@@ -423,7 +423,99 @@ TEST_CASE("cefQuery shim injects at DocumentCreation in MainWorld", "[pi-bridge]
     REQUIRE(s.runsOnSubFrames() == true);
     REQUIRE(s.name() == QStringLiteral("ajazz-cefquery-shim"));
 }
+
+// ---------------------------------------------------------------------------
+// PropertyInspectorController interface tests (PLUGIN-09 / 20-03)
+//
+// Constructing a QQuickWebEngineProfile in a unit-test binary requires a
+// fully initialised WebEngine runtime (QtWebEngineQuick::initialize() before
+// QGuiApplication, plus a GPU/compositing surface). The unit-test binary
+// uses a plain QCoreApplication from qtApp() — sufficient for the bridge
+// persistence tests (Qt::Core only) and the mirabox/cefquery shim-string
+// tests, but NOT for QQuickWebEngineProfile construction. Attempting it
+// produces a SIGABRT from the Chromium-based renderer.
+//
+// Therefore: the loadInspector full-profile integration test lives in the
+// QML offscreen harness (tests/qml/) or Phase 25 hardware verification,
+// NOT in ajazz_unit_tests. We assert only the PURE-LOGIC aspects here:
+//
+//   - webEngineAvailable() is true (confirming the WebEngine link is active
+//     and the macro is correctly propagated to the test binary)
+//   - hasHtmlInspector() starts false on a fresh controller (the PIMPL is
+//     constructed but no loadInspector has been called)
+//   - closeInspector() on a never-loaded controller is a safe no-op
+//
+// The loadInspector -> hasHtmlInspector flip, activeUrl, activeProfile, and
+// activeChannel are verified indirectly through the production app path and
+// Phase 25 hardware verification as specified in the plan.
+// ---------------------------------------------------------------------------
+#include "property_inspector_controller.hpp"
+
+TEST_CASE("PropertyInspectorController - webEngineAvailable is true in WebEngine builds",
+          "[pi-bridge][inspector]") {
+    ajazz::tests::qtApp();
+    ajazz::app::PropertyInspectorController ctrl{nullptr};
+    ajazz::app::PropertyInspectorController::registerInstance(&ctrl);
+    REQUIRE(ctrl.webEngineAvailable() == true);
+    REQUIRE(ctrl.hasHtmlInspector() == false); // no inspector loaded yet
+    REQUIRE(ctrl.activeUrl().isEmpty());
+    // closeInspector on a never-loaded controller is a safe no-op.
+    REQUIRE_NOTHROW(ctrl.closeInspector());
+    REQUIRE(ctrl.hasHtmlInspector() == false);
+}
 #endif // defined(AJAZZ_HAVE_WEBENGINE)
+
+// ---------------------------------------------------------------------------
+// Relay endpoint tests (PLUGIN-09 / 20-03)
+//
+// Confirms that sendToPropertyInspector is a connectable signal and that
+// sendToPlugin is a safe no-op stub today (M5). The live bridge<->server
+// connection is wired in the AJAZZ_HAVE_WEBSOCKETS block below (17-02
+// landed SdPluginServer::sendEvent, so the condition is met per the 20-03
+// STOP gate). A4 + Pitfall 5: the live plugin-process round-trip is gated
+// to the phase that verifies on hardware (Phase 25).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PIBridge relay - sendToPropertyInspector is connectable and fires",
+          "[pi-bridge][relay]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.relay"),
+                                QStringLiteral("act-relay"),
+                                QStringLiteral("ctx-relay-001"));
+
+    QString received;
+    QObject::connect(&bridge, &ajazz::app::PIBridge::sendToPropertyInspector, [&](QString json) {
+        received = json;
+    });
+
+    // Manually emit the signal (simulating a plugin pushing a payload to the PI).
+    emit bridge.sendToPropertyInspector(
+        QStringLiteral(R"({"event":"sendToPropertyInspector","payload":{"key":"val"}})"));
+
+    REQUIRE(!received.isEmpty());
+    REQUIRE(received.contains(QStringLiteral("sendToPropertyInspector")));
+}
+
+TEST_CASE("PIBridge relay - sendToPlugin is a safe no-op stub today", "[pi-bridge][relay]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.relay-stub"),
+                                QStringLiteral("act-relay-stub"),
+                                QStringLiteral("ctx-relay-stub-001"));
+
+    // sendToPlugin is a stub (M5 routes to plugin process via SdPluginServer::sendEvent).
+    // Must not crash; no signal must fire on the bridge.
+    bool fired = false;
+    QObject::connect(
+        &bridge, &ajazz::app::PIBridge::sendToPropertyInspector, [&](QString) { fired = true; });
+
+    REQUIRE_NOTHROW(
+        bridge.sendToPlugin(QStringLiteral(R"({"event":"sendToPlugin","payload":{}})")));
+    REQUIRE(!fired); // stub must not emit sendToPropertyInspector (that's the opposite direction)
+}
 
 // ---------------------------------------------------------------------------
 // sdpi.css helper + bundled resource tests (PLUGIN-09 / 20-02)
