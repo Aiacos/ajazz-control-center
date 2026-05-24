@@ -239,7 +239,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 
 Plans:
 
-- [ ] 14-01-PLAN.md — akp05e `hasClock=false` descriptor honesty fix (DEVICES-11) + regression test
+- [x] 14-01-PLAN.md — akp05e `hasClock=false` descriptor honesty fix (DEVICES-11) + regression test
 - [ ] 14-02-PLAN.md — StreamDockControlService: held-open handle, brightness-ON at open, coalesced BAT->chunk->ULEND key push, repaint-on-load, firmware surface (DISPLAY-06/07/08, DOCK-01/02)
 
 ### Phase 15: Stream Dock Input Routing
@@ -468,7 +468,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm   | v1.2      | 0/?            | Not started      | —          |
 | 12. AK980 PRO Promotion                     | v1.2      | 0/?            | Not started      | —          |
 | 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 0/?            | Not started      | —          |
-| 14. Stream Dock Control Service             | v1.3      | 0/?            | Not started      | —          |
+| 14. Stream Dock Control Service             | v1.3      | 1/2            | In Progress      |            |
 | 15. Stream Dock Input Routing               | v1.3      | 0/?            | Not started      | —          |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 0/?            | Not started      | —          |
 | 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |

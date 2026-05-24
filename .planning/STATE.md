@@ -2,15 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: roadmap-complete
-last_updated: '2026-05-23T14:30:00.000Z'
-last_activity: 2026-05-23
+status: executing
+stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
+last_updated: '2026-05-24T08:50:46.022Z'
+last_activity: 2026-05-24
 progress:
-  total_phases: 12
-  completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_phases: 17
+  completed_phases: 1
+  total_plans: 51
+  completed_plans: 8
+  percent: 6
 ---
 
 # Project State
@@ -20,16 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** v1.3 Stream Dock End-to-End / **Elgato-compatible Plugin SDK** — recreate the AJAZZ "Stream Dock" app 1:1: wire the v1.2 capture-verified backends into the app AND complete the partially-built Elgato Stream Deck v6-compatible plugin SDK. Phase 14 (Stream Dock Control Service) is the load-bearing foundation that puts the first app→device call onto the panel.
+**Current focus:** Phase 14 — stream-dock-control-service
 
 ## Current Position
 
-Phase: ALL of 14-25 PLANNED (0 executed) — full v1.3 plan set ready for review/execution
+Phase: 14 (stream-dock-control-service) — EXECUTING
+Plan: 2 of 2
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: v1.3 **replanned from scratch 2026-05-23** (Phases 14-25, 30 requirements). Whole milestone PLANNED, NOTHING executed. Ready for `/gsd-execute-phase 14` (then 15, 17 in parallel under the 2-agent cap, → 16/18/19 …). Build unblocked (qt6-qtbase-private-devel present). All phase gating proofs are hardware-free (MockTransport / loopback WebSocket); the live witnesses (a real `.sdPlugin` + the AKP05E) are the hardware-gated Phases 23 + 25.
+Status: Ready to execute
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
-Last activity: 2026-05-23 — planned ALL of Phases 14-25 ahead of execution (per user "plan ahead first" → "plan 19-25"). Reuse-first finding held across the milestone: the hard parts (SdPluginServer, ActionEngine, Profile schema, .sdPlugin extractor, Ed25519 manifest_signer, the PI QWebEngine/QWebChannel stack, all akp05/akp03/153/815 wire backends incl. ENC/MAI/DRA aux surfaces) already exist — most phases are app-layer wiring + the honesty gates (loopback-only bind, signature verification, no phone-home, opt-in hook, OBS auth-on).
+Last activity: 2026-05-24
 
 ### Execution dependency map (for the operator)
 
@@ -80,6 +82,7 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase 9\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
 - \[Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp05e and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
 - \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
+- \[Phase ?\]: DEVICES-11 scope: akp05e only; akp05/mirabox_n4 hasClock flip deferred to a later honesty sweep
 
 ### Pending Todos
 
@@ -130,12 +133,13 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 9 P05      | 3min                                                                          | 1 tasks                           | 2 files                  |
 | Phase 9 P06      | 3min                                                                          | 1 tasks                           | 2 files                  |
 | Phase 9 P07      | 7min                                                                          | 1 tasks                           | 6 files                  |
+| Phase 14 P14-01  | 8                                                                             | 2 tasks                           | 6 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-18T11:00:00.000Z
+Last session: 2026-05-24T08:50:46.014Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
-Resume file: .planning/HANDOFF-2026-05-18.md
+Resume file: None
 
 ## 2026-05-17 mid-milestone amendment update
 

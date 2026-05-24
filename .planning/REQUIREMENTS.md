@@ -36,7 +36,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 - [ ] **DISPLAY-08**: Loading a profile repaints all of the device's keys (and encoder/touch overlays) from the saved bindings.
 - [ ] **DOCK-01**: The control service probes firmware version (`CRT…VER`) at open and caches/surfaces it (no more "unknown") — gates protocol behaviour where firmware-dependent.
 - [ ] **DOCK-02**: An `ULEND` commit is emitted after each image burst (fixes the vendor "device freezes after rapid setKeyImage" defect; vendor §10 P0).
-- [ ] **DEVICES-11**: The `akp05e` descriptor advertises `hasClock=false` (`register.cpp`) — the Stream Dock family has no firmware RTC per ARCH-05; corrects the current `hasClock=true` and closes Phase-10 UAT #6.
+- [x] **DEVICES-11**: The `akp05e` descriptor advertises `hasClock=false` (`register.cpp`) — the Stream Dock family has no firmware RTC per ARCH-05; corrects the current `hasClock=true` and closes Phase-10 UAT #6.
 
 ### Stream Dock Input Routing (Phase 15)
 
@@ -266,7 +266,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | DISPLAY-08  | Phase 14 | Pending  |
 | DOCK-01     | Phase 14 | Pending  |
 | DOCK-02     | Phase 14 | Pending  |
-| DEVICES-11  | Phase 14 | Pending  |
+| DEVICES-11  | Phase 14 | Complete |
 | INPUT-03    | Phase 15 | Pending  |
 | INPUT-04    | Phase 15 | Pending  |
 | INPUT-05    | Phase 15 | Pending  |
