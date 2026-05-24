@@ -36,10 +36,29 @@ using akp_common::CmdStop;
 using akp_common::CmdVersion;
 using akp_common::UploadFinishedMarker;
 
-// USB ids observed on the HSV293S hardware family.
-inline constexpr std::uint16_t VendorId = 0x0300;               ///< USB Vendor ID.
-inline constexpr std::uint16_t ProductIdInternational = 0x1001; ///< AKP153 (international market).
-inline constexpr std::uint16_t ProductIdChinese = 0x1002;       ///< AKP153E (China market variant).
+// USB ids for the AKP153 family.
+//
+// NOTE: ProductIdInternational and ProductIdChinese below are pre-2026-05-14
+// placeholder PIDs kept for legacy descriptor compatibility in register.cpp.
+// They are NOT the canonical PIDs confirmed by [ajazz-sdk]:
+//   - AKP153 international canonical pair: VID=0x5548, PID=0x6674
+//     per [ajazz-sdk]/info.rs Kind::Akp153 (WR-02).
+//   - AKP153E (China market) canonical PID: VID=0x0300, PID=0x1010
+//     per [ajazz-sdk]/info.rs Kind::Akp153E (WR-02).
+// Do NOT use the legacy constants in new code.
+
+/// USB Vendor ID for the Mirabox V2 protocol family.
+inline constexpr std::uint16_t VendorId = 0x0300;
+
+/// @deprecated Pre-2026-05-14 placeholder PID. Kept for legacy descriptor compat.
+///             Canonical international AKP153 uses VID=0x5548, PID=0x6674
+///             per [ajazz-sdk]. Do NOT use in new code.
+inline constexpr std::uint16_t ProductIdInternational = 0x1001;
+
+/// @deprecated Pre-2026-05-14 placeholder PID. Kept for legacy descriptor compat.
+///             Canonical AKP153E (China) uses VID=0x0300, PID=0x1010
+///             per [ajazz-sdk]. Do NOT use in new code.
+inline constexpr std::uint16_t ProductIdChinese = 0x1002;
 
 // Display geometry: 15 keys arranged in a 3×5 grid, each 85×85 pixels, JPEG-encoded.
 inline constexpr std::uint8_t KeyCount = 15;     ///< Total number of key slots.
