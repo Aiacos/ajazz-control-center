@@ -264,6 +264,23 @@ TEST_CASE("PluginDeviceBridge decodeDataUriImage tolerates raw base64 body witho
     CHECK(result.image.height() == 1);
 }
 
+TEST_CASE("PluginDeviceBridge decodeDataUriImage rejects oversize base64 body T-19-img",
+          "[plugin-device-bridge][decode][security]") {
+    ensureQCoreApp();
+
+    // Build a base64 body that exceeds kMaxBase64Bytes (512 KB).
+    // Use 600 KB of 'A' characters — valid base64 alphabet, but over the cap.
+    // We do NOT allocate a real image; the size check fires before fromBase64.
+    constexpr qsizetype kOversize = 600 * 1024; // 600 KB > kMaxBase64Bytes (512 KB)
+    QString const bigBody =
+        QStringLiteral("data:image/png;base64,") + QString(kOversize, QLatin1Char('A'));
+    DecodedImage const result = decodeDataUriImage(bigBody);
+
+    // Must be rejected without OOM/crash (T-19-img size bound).
+    CHECK(result.ok == false);
+    CHECK(result.image.isNull());
+}
+
 // ==========================================================================
 // ownerForActionUuid
 // ==========================================================================

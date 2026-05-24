@@ -180,12 +180,28 @@ DecodedImage decodeDataUriImage(QString const& dataUri) {
         return {false, {}};
     }
 
+    // T-19-img: cap base64 body length before any allocation (ARCH-04 / security
+    // checklist). 512 KB of base64 encodes at most ~384 KB of raw bytes, which is
+    // comfortably above any real key icon (85x85 RGBA = 28,900 bytes). A malicious
+    // plugin on the loopback interface cannot allocate more than this via a data: URI.
+    constexpr qsizetype kMaxBase64Bytes = 512 * 1024; // 512 KB
+    if (bodyStr.size() > kMaxBase64Bytes) {
+        return {false, {}};
+    }
+
     // Decode base64. fromBase64 with the default IgnoreBase64DecodingErrors flag
     // silently ignores non-base64 characters rather than returning empty bytes.
     // An empty result indicates an all-whitespace or zero-length input.
     // loadFromData is the actual rejection gate for any garbage payload.
     QByteArray const raw = QByteArray::fromBase64(bodyStr.toUtf8());
     if (raw.isEmpty()) {
+        return {false, {}};
+    }
+
+    // T-19-img: cap raw byte count before QImage::loadFromData to prevent OOM via
+    // an adversarially-crafted compressed image (e.g. 16384x16384 RGBA = 1 GB decoded).
+    constexpr qsizetype kMaxRawBytes = 384 * 1024; // 384 KB
+    if (raw.size() > kMaxRawBytes) {
         return {false, {}};
     }
 
