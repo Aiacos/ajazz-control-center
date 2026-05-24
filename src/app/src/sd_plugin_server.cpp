@@ -233,6 +233,36 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
             return c.socket == client;
         });
         if (it != m_connections.end()) {
+            // --- CR-03: UUID collision guard (T-17-IMPERSONATION) ---
+            // Reject a new client that tries to claim a UUID already held by a
+            // different live socket. Without this guard, two entries share the
+            // same UUID, socketForUuid returns the first match (the legitimate
+            // one), and the impostor can emit routed actions as the real plugin.
+            auto existing = std::find_if(
+                m_connections.begin(), m_connections.end(), [&uuid, client](auto const& c) {
+                    return c.uuid == uuid && c.socket != nullptr && c.socket != client;
+                });
+            if (existing != m_connections.end()) {
+                AJAZZ_LOG_WARN("plugin-server",
+                               "registerPlugin for uuid={} already held by another socket; "
+                               "closing impostor",
+                               uuid.toStdString());
+                client->close();
+                return;
+            }
+
+            // --- WR-02: re-registration clean-up ---
+            // If this socket already holds a different UUID, emit pluginDisconnected
+            // for the old UUID before overwriting so the app layer does not retain
+            // a stale UUID binding.
+            if (!it->uuid.isEmpty() && it->uuid != uuid) {
+                AJAZZ_LOG_WARN("plugin-server",
+                               "socket re-registering: old uuid={} replaced by uuid={}",
+                               it->uuid.toStdString(),
+                               uuid.toStdString());
+                emit pluginDisconnected(it->uuid);
+            }
+
             it->uuid = uuid;
             // --- PLUGIN-05: passHello + auth handshake (17-03) ---
             // Generate a random per-connection salt and store it on the slot.
@@ -262,12 +292,25 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
                             "passHello sent to uuid={} (password={})",
                             uuid.toStdString(),
                             m_password.isEmpty() ? "none" : "set");
+
+            AJAZZ_LOG_INFO("plugin-server",
+                           "plugin registered: uuid={} event={}",
+                           uuid.toStdString(),
+                           eventName.toStdString());
+            // --- CR-02: defer pluginRegistered until auth completes (T-17-PREAUTH) ---
+            // When a password is configured, the app layer must not wire device
+            // backends to this UUID until authentication succeeds. Emit now only
+            // in the no-password (open) path; the authentication success branch
+            // below emits for the password path.
+            if (m_password.isEmpty()) {
+                emit pluginRegistered(uuid);
+            }
+        } else {
+            AJAZZ_LOG_WARN(
+                "plugin-server",
+                "registerPlugin for uuid={} but socket not in connection table; ignoring",
+                uuid.toStdString());
         }
-        AJAZZ_LOG_INFO("plugin-server",
-                       "plugin registered: uuid={} event={}",
-                       uuid.toStdString(),
-                       eventName.toStdString());
-        emit pluginRegistered(uuid);
         return;
     }
 
@@ -298,6 +341,10 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
             connIt->authenticated = true;
             AJAZZ_LOG_INFO(
                 "plugin-server", "authentication accepted for uuid={}", connIt->uuid.toStdString());
+            // --- CR-02: deferred pluginRegistered (T-17-PREAUTH) ---
+            // Only now is the connection fully authenticated — safe to tell the app
+            // layer that this plugin is live and may receive device events.
+            emit pluginRegistered(connIt->uuid);
         } else {
             ++connIt->authAttempts;
             AJAZZ_LOG_WARN("plugin-server",
@@ -372,6 +419,24 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         "stopAudioCapture",
         "sendUserInfo",
     };
+    // --- CR-01: pre-auth gate for routed actions (T-17-PREAUTH extension) ---
+    // A connection that has completed registerPlugin but has NOT yet sent a
+    // correct authentication reply must not reach the routed-action set.
+    // Without this gate, any local process can inject setTitle/sendToDevice/etc.
+    // into the app layer the moment registerPlugin completes, before auth.
+    // In the no-password path, authenticated is set to true in registerPlugin
+    // so this gate is a no-op (open-mode behaviour is preserved).
+    auto connForAuth = std::find_if(m_connections.begin(),
+                                    m_connections.end(),
+                                    [client](auto const& c) { return c.socket == client; });
+    if (connForAuth != m_connections.end() && !connForAuth->authenticated) {
+        AJAZZ_LOG_WARN("plugin-server",
+                       "unauthenticated client uuid={} sent action '{}'; ignoring",
+                       connForAuth->uuid.toStdString(),
+                       eventName.toStdString());
+        return;
+    }
+
     bool isAction = false;
     for (auto const* known : kRoutedActions) {
         if (eventName == QLatin1String(known)) {
