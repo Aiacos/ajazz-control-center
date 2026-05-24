@@ -51,6 +51,15 @@ qt_add_executable(
     # Wave-3 PluginManager calls QProcess::start(nodeExe, buildNodeArgv(...)); absence/old-version
     # surfaces as a disabled plugin. No bundled node (anti-feature, CONTEXT.md).
     src/node_runner.cpp
+    # Phase 18 Plan 18-04 (PLUGIN-07): PluginCrashTracker — pure 3-in-30s crash window. Clock is
+    # injected via an explicit nowMs parameter so tests feed synthetic timestamps. No QProcess, no
+    # real clock inside. COD-031: Qt-Core only.
+    src/plugin_crash_tracker.cpp
+    # Phase 18 Plan 18-04 (PLUGIN-07/08): PluginManager — discovery + extraction + spawn dispatch +
+    # crash lifecycle + exitApp shutdown. Composes manifest parser, extractor, node_runner, crash
+    # tracker, mirabox shim, and SdPluginServer::sendEvent (Phase 17 seam). Gated on
+    # AJAZZ_HAVE_WEBSOCKETS (SdPluginServer dep); the crash tracker compiles regardless.
+    src/plugin_manager.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
     # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13). Mirrors TimeSyncService

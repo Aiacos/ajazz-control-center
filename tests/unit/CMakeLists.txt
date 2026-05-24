@@ -428,6 +428,24 @@ else()
     target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
 endif()
 
+# Phase 18 Plan 18-04 (PLUGIN-07): PluginCrashTracker — pure 3-in-30s window with injected clock.
+# Pure Qt-Core-only; no QProcess, no real clock. All cases inject synthetic timestamps.
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_crash_tracker.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_crash_tracker.cpp
+)
+
+# Phase 18 Plan 18-04 (PLUGIN-07/08): PluginManager discovery + spawn + lifecycle tests. Needs
+# Qt6::CorePrivate (QZipWriter for fixture archives), Qt6::WebSockets for SdPluginServer, and
+# Qt6::Test for QSignalSpy. All process spawn is mocked — no real node or process is started.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_plugin_lifecycle.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_manager.cpp
+    )
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_PLUGIN_MANAGER=1)
+endif()
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.
