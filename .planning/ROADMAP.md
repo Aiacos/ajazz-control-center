@@ -353,7 +353,7 @@ Plans:
 
 Plans:
 
-- [ ] 20-01-PLAN.md — PLUGIN-13: settings + global restart round-trip test + path-traversal refusal; link pi_bridge.cpp into the test binary (wave 1)
+- [x] 20-01-PLAN.md — PLUGIN-13: settings + global restart round-trip test + path-traversal refusal; link pi_bridge.cpp into the test binary (wave 1)
 - [ ] 20-02-PLAN.md — PLUGIN-09: cefQuery polyfill (pi_cef_shim + PIBridge::invoke §8 dispatcher) + bundled sdpi.css served via the interceptor redirect (wave 2)
 - [ ] 20-03-PLAN.md — PLUGIN-09: registerPropertyInspector load handshake (action-select -> loadInspector -> didReceiveSettings) + cefQuery shim insertion + Inspector.qml trigger; relay endpoints test-pinned, live route deferred to 17/19/25 per STOP gate (wave 3)
 
@@ -474,7 +474,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
+| 20. Property Inspector + Settings           | v1.3      | 1/3            | In Progress      |            |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
