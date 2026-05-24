@@ -67,7 +67,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Device ↔ Plugin Bridge (Phase 19)
 
-- [ ] **PLUGIN-10**: `setImage` works end-to-end — the host strips the `data:` URI, `QImage::loadFromData`, scales to per-key dims, re-encodes JPEG q85, and routes through the Phase-14 control service to the physical key; on decode failure a placeholder is shown (sdk §5). The bridge connects `actionReceived` (`setImage`/`setTitle`/`setState`/`setBG`/`setFeedback`/`setText`) → device, and device input (`keyDown`/`keyUp`, `dialRotate`/`dialDown`/`dialUp`, `touchTap`) → the registered plugin, with `willAppear`/`deviceDidConnect` lifecycle.
+- [x] **PLUGIN-10**: `setImage` works end-to-end — the host strips the `data:` URI, `QImage::loadFromData`, scales to per-key dims, re-encodes JPEG q85, and routes through the Phase-14 control service to the physical key; on decode failure a placeholder is shown (sdk §5). The bridge connects `actionReceived` (`setImage`/`setTitle`/`setState`/`setBG`/`setFeedback`/`setText`) → device, and device input (`keyDown`/`keyUp`, `dialRotate`/`dialDown`/`dialUp`, `touchTap`) → the registered plugin, with `willAppear`/`deviceDidConnect` lifecycle.
 
 ### Property Inspector + Settings (Phase 20)
 
@@ -282,7 +282,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-07   | Phase 18 | Complete |
 | PLUGIN-08   | Phase 18 | Complete |
 | PLUGIN-11   | Phase 18 | Complete |
-| PLUGIN-10   | Phase 19 | Pending  |
+| PLUGIN-10   | Phase 19 | Complete |
 | PLUGIN-09   | Phase 20 | Pending  |
 | PLUGIN-13   | Phase 20 | Pending  |
 | PLUGIN-12   | Phase 21 | Pending  |

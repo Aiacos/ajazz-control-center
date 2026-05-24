@@ -335,7 +335,7 @@ Plans:
 
 Plans:
 
-- [ ] 19-01-PLAN.md — STOP-gate dep SUMMARY files + bridge shell, ContextRegistry, pure helpers (data-URI decode, keyIndex↔coords, owner-prefix resolution)
+- [x] 19-01-PLAN.md — STOP-gate dep SUMMARY files + bridge shell, ContextRegistry, pure helpers (data-URI decode, keyIndex↔coords, owner-prefix resolution)
 - [ ] 19-02-PLAN.md — inbound action routing: setImage decode→Phase-14 paint, context-ownership denial, placeholder; Application wiring + control-spy e2e
 - [ ] 19-03-PLAN.md — outbound DeviceEvent→§4.4 sendEvent (keyDown/dialRotate/touchTap) + willAppear/deviceDidConnect lifecycle; loopback receives-event e2e
 
@@ -473,7 +473,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
-| 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
+| 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 1/3            | In Progress      |            |
 | 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
