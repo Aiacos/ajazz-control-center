@@ -70,6 +70,7 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
         AJAZZ_LOG_INFO("stream-dock-control",
                        "setActiveDevice: device '{}' not currently connected",
                        codename.toStdString());
+        m_activeCodename.clear(); // keep codename in sync with device handle (WR-05)
         return;
     }
     m_activeCodename = codename;
