@@ -80,6 +80,12 @@ add_executable(
     # ULEND), out-of-range location refusal (zero writes), and
     # clearTouchStrip() full-panel black-fill envelope.
     test_akp05_touch_strip.cpp
+    # DEVICES-11 / ARCH-05 (Phase 14, Plan 14-01): descriptor honesty pin for
+    # akp05e (0x0300:0x3004). Asserts hasClock==false on the akp05e descriptor
+    # after ajazz::streamdeck::registerAll() so the phantom Sync-button
+    # affordance cannot silently regress. Also guards against an over-broad
+    # flip by asserting mirabox_n4 still has hasClock==true.
+    test_register_akp05e_clock.cpp
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
     # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and
