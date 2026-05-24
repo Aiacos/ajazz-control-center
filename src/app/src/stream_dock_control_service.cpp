@@ -166,6 +166,10 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
 }
 
 void StreamDockControlService::repaintFromProfile() {
+    // WR-01: new profile always starts at root (member contract: "reset when a
+    // new profile is loaded"). Reset here so navigatePage() after a profile
+    // switch advances from index 0 rather than from a stale position.
+    m_carouselIndex = 0;
     // Single paint path: delegate to repaintPage("root").
     repaintPage(QStringLiteral("root"));
 }
