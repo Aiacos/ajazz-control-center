@@ -336,6 +336,22 @@ Application::Application(QObject* parent)
           [this]() -> core::Profile const& { return m_profileController->activeProfile(); },
           std::move(m_actionEngine),
           this)),
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+      // Phase 17 / Phase 19-02: SdPluginServer — Elgato-compatible WebSocket plugin
+      // server (loopback-only). Constructed after m_streamDockInput to keep the init
+      // list in member-declaration order (-Wreorder). Port 0 = OS-assigned; the actual
+      // port is queryable via m_pluginServer->serverPort() after start().
+      // start() is called in startBackgroundServices() so the Qt event loop is running.
+      m_pluginServer(std::make_unique<SdPluginServer>(this)),
+      // Phase 19-02 (PLUGIN-10): PluginDeviceBridge — wires SdPluginServer::actionReceived
+      // to the StreamDockControlService paint path. Constructed after m_pluginServer +
+      // m_streamDockControl + m_streamDockInput (all non-owning seam pointers; lifetime
+      // guaranteed by member-declaration order: these members are destroyed AFTER the bridge).
+      m_pluginBridge(std::make_unique<PluginDeviceBridge>(m_pluginServer.get(),
+                                                          m_streamDockControl.get(),
+                                                          m_streamDockInput.get(),
+                                                          this)),
+#endif
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -568,6 +584,20 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     // Tray must be created after the QML engine has loaded the root window so
     // the menu's Show/Hide actions have a window to operate on.
     m_trayController->ensureTray(&engine);
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    // Phase 19-02 / Phase 17: start the WebSocket plugin server on an OS-assigned
+    // loopback port. Port 0 = any free port; plugins read the actual port from the
+    // registry file written by PluginManager (Phase 18). The event loop must be
+    // running before start() so QWebSocketServer can accept connections.
+    if (!m_pluginServer->start(0)) {
+        AJAZZ_LOG_WARN("app", "SdPluginServer failed to start — plugin functionality disabled");
+    } else {
+        AJAZZ_LOG_INFO("app",
+                       "SdPluginServer listening on port {}",
+                       static_cast<int>(m_pluginServer->serverPort()));
+    }
+#endif
 
     // Quit signal: route to the global Qt application so we shut down cleanly
     // even when the main window is hidden to the tray.

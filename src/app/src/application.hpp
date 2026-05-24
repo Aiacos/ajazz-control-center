@@ -28,6 +28,11 @@
 #include "settings_service.hpp"
 #include "stream_dock_control_service.hpp"
 #include "stream_dock_input_service.hpp"
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "plugin_device_bridge.hpp"
+#include "sd_plugin_server.hpp"
+#endif
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
 #include "tray_controller.hpp"
@@ -213,6 +218,19 @@ private:
                            ///< (ARCH-03 single-handle invariant — no second open()). Pumps
                            ///< poll() on an 8 ms QTimer and routes DeviceEvents to bound
                            ///< ActionChains in the active Profile via m_actionEngine.
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    std::unique_ptr<SdPluginServer>
+        m_pluginServer; ///< Phase 17: Elgato-compatible WebSocket plugin server (loopback-only).
+                        ///< Declared after m_streamDockInput to keep the init list in
+                        ///< member-declaration order (-Wreorder).
+    std::unique_ptr<PluginDeviceBridge>
+        m_pluginBridge; ///< Phase 19-02: bridge connecting SdPluginServer::actionReceived
+                        ///< to StreamDockControlService::assignKeyImage (setImage inbound
+                        ///< round-trip, PLUGIN-10). Declared after m_pluginServer to stay
+                        ///< in construction order (-Wreorder). Non-owning seam pointers
+                        ///< point at server/control/input (all Application members with
+                        ///< longer lifetimes per member-declaration order).
+#endif
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

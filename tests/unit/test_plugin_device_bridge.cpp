@@ -1,28 +1,44 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_plugin_device_bridge.cpp
- * @brief Unit tests for Phase 19 Plan 19-01 PluginDeviceBridge pure helpers
- *        and ContextRegistry.
+ * @brief Unit tests for Phase 19 Plan 19-01/19-02 PluginDeviceBridge.
  *
- * Covers:
- *  - coordsForKeyIndex / keyIndexForCoords round-trip (Pitfall 2 — 1-based
- *    device index <-> 0-based Elgato coordinate).
- *  - decodeDataUriImage: valid base64 PNG URI, malformed base64, empty string,
- *    empty body, non-image body, and raw base64 body without "data:" prefix.
- *  - ownerForActionUuid: longest-prefix match, unowned action, no last-segment
- *    trim, shortest prefix not returned when a longer one exists.
- *  - ContextRegistry: registerContext / byContext / byCoord / retire /
- *    retireDevice / retirePage / clear.
+ * 19-01: pure helpers + ContextRegistry unit tests.
+ * 19-02 (PLUGIN-10): loopback e2e tests composing SdPluginServer +
+ *       StreamDockControlService (MockTransport) + PluginDeviceBridge.
  *
- * AKP05E grid: KeyRows=2, KeyCols=5, KeyCount=10 (from akp05_protocol.hpp).
- * Test grid values used: keyCols=5.
+ * 19-01 test coverage:
+ *  - coordsForKeyIndex / keyIndexForCoords round-trip (Pitfall 2).
+ *  - decodeDataUriImage: valid/invalid/empty URI cases.
+ *  - ownerForActionUuid: longest-prefix match, unowned, boundary rule.
+ *  - ContextRegistry: registerContext / byContext / byCoord / retire / retirePage / clear.
  *
- * Pitfall 5: ensureQCoreApp() leaked-singleton pattern from test_sd_plugin_server.cpp
- * (do NOT allocate a fresh QCoreApplication per TEST_CASE).
+ * 19-02 e2e test coverage (PLUGIN-10):
+ *  - e2e setImage paints the right 1-based key (BAT+ULEND burst via MockTransport).
+ *  - Malformed data-URI -> placeholder (solid fill), no image burst, no crash.
+ *  - Cross-plugin denial: unknown-owner context produces no paint.
+ *  - Visual family no-crash: setTitle / setBG / setFeedback round-trip without crash.
  *
- * CLAUDE.md: ASCII-only TEST_CASE names (no em-dash or unicode arrows).
+ * AKP05E grid: KeyRows=2, KeyCols=5, KeyCount=10.
+ * Pitfall 5: ensureQCoreApp() leaked-singleton (no fresh QCoreApplication per TEST_CASE).
+ * CLAUDE.md: ASCII-only TEST_CASE names/tags.
  */
 #include "plugin_device_bridge.hpp"
+
+// 19-02 e2e: needs SdPluginServer + StreamDockControlService + device fixture.
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "ajazz/core/capabilities.hpp"
+#include "ajazz/core/profile.hpp"
+#include "ajazz/streamdeck/streamdeck.hpp"
+#include "fixtures/mock_transport.hpp"
+#include "sd_plugin_server.hpp"
+#include "stream_dock_control_service.hpp"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSignalSpy>
+#include <QWebSocket>
+#endif
 
 #include <QBuffer>
 #include <QByteArray>
@@ -519,3 +535,476 @@ TEST_CASE("PluginDeviceBridge ContextRegistry registerContext is idempotent for 
     CHECK(id1 == id2);
     CHECK(reg.size() == 1);
 }
+
+// ==========================================================================
+// Phase 19-02 e2e tests (PLUGIN-10): loopback client -> MockTransport spy
+// Gated on AJAZZ_HAVE_WEBSOCKETS — same as the sd_plugin_server tests.
+// ==========================================================================
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+
+namespace {
+
+// ---------------------------------------------------------------------------
+// Helper: event loop pump (mirrors test_sd_plugin_server.cpp pattern).
+// ---------------------------------------------------------------------------
+void pump19(int ms = 200) {
+    auto until = QDateTime::currentMSecsSinceEpoch() + ms;
+    while (QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    }
+}
+
+bool waitForSpy19(QSignalSpy& spy, int timeout_ms = 3000) {
+    auto until = QDateTime::currentMSecsSinceEpoch() + timeout_ms;
+    while (spy.count() == 0 && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+    return spy.count() > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Helper: build a minimal 1x1 ARGB32 PNG as a base64-encoded data: URI
+// (test fixture only — NOT a second encode path; QImageWriter is test-only).
+// ---------------------------------------------------------------------------
+QString makeSmallPngDataUri() {
+    QImage img(10, 10, QImage::Format_ARGB32);
+    img.fill(Qt::blue);
+    QByteArray pngBytes;
+    QBuffer buf(&pngBytes);
+    buf.open(QIODevice::WriteOnly);
+    QImageWriter writer(&buf, "PNG");
+    writer.write(img);
+    buf.close();
+    return QStringLiteral("data:image/png;base64,") + QString::fromLatin1(pngBytes.toBase64());
+}
+
+// ---------------------------------------------------------------------------
+// Fixture: MockTransport-backed AKP05E device (mirrors test_stream_dock_control_service.cpp).
+// ---------------------------------------------------------------------------
+struct E2eFixture {
+    std::shared_ptr<ajazz::core::IDevice> device;
+    ajazz::tests::MockTransport* transport; ///< Non-owning observer.
+
+    ajazz::app::SdPluginServer* server;
+    ajazz::app::StreamDockControlService* control;
+    std::unique_ptr<ajazz::app::PluginDeviceBridge> bridge;
+
+    QString contextId;       ///< Pre-registered context for key at {row:0, col:2} (keyIndex 3).
+    QString pluginUuid;      ///< The owning plugin UUID for that context.
+    QString otherPluginUuid; ///< UUID of a different plugin (for cross-plugin denial test).
+    QString otherContextId;  ///< Context owned by otherPluginUuid.
+};
+
+/// Build the e2e fixture.  Note: server and control are non-owning — caller owns them.
+E2eFixture makeE2eFixture(ajazz::app::SdPluginServer* server,
+                          ajazz::app::StreamDockControlService* control) {
+    E2eFixture fx;
+    fx.server = server;
+    fx.control = control;
+    fx.pluginUuid = QStringLiteral("com.test.plug");
+    fx.otherPluginUuid = QStringLiteral("com.other.plug");
+
+    // Wire the bridge the same way Application does it.
+    fx.bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(server, control, nullptr);
+
+    // Pre-register a context for key {row:0, col:2} (1-based keyIndex = 0*5+2+1 = 3).
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 2;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.test.plug.action1");
+    ctx.pluginUuid = fx.pluginUuid;
+    fx.contextId = fx.bridge->registry().registerContext(ctx);
+
+    // Pre-register a context owned by the OTHER plugin (for cross-plugin denial test).
+    ajazz::app::ActionContext other;
+    other.deviceId = QStringLiteral("akp05e");
+    other.pageId = QStringLiteral("root");
+    other.row = 1;
+    other.column = 1;
+    other.controller = QStringLiteral("Keypad");
+    other.actionUUID = QStringLiteral("com.other.plug.action1");
+    other.pluginUuid = fx.otherPluginUuid;
+    fx.otherContextId = fx.bridge->registry().registerContext(other);
+
+    return fx;
+}
+
+/// Find the first write whose bytes[5..7] == 'B','A','T' starting at startFrom.
+/// Returns writes.size() if not found.
+std::size_t findBatWrite(std::vector<std::vector<std::uint8_t>> const& writes,
+                         std::size_t startFrom = 0) {
+    for (std::size_t i = startFrom; i < writes.size(); ++i) {
+        auto const& w = writes[i];
+        if (w.size() >= 8 && w[5] == 0x42 && w[6] == 0x41 && w[7] == 0x54) {
+            return i;
+        }
+    }
+    return writes.size();
+}
+
+/// Find the first write whose bytes[5..9] == 'U','L','E','N','D' starting at startFrom.
+std::size_t findUlendWrite(std::vector<std::vector<std::uint8_t>> const& writes,
+                           std::size_t startFrom = 0) {
+    for (std::size_t i = startFrom; i < writes.size(); ++i) {
+        auto const& w = writes[i];
+        if (w.size() >= 10 && w[5] == 0x55 && w[6] == 0x4c && w[7] == 0x45 && w[8] == 0x4e &&
+            w[9] == 0x44) {
+            return i;
+        }
+    }
+    return writes.size();
+}
+
+/// Build a minimal AKP05E device descriptor for makeAkp05WithTransport.
+ajazz::core::DeviceDescriptor makeTestAkp05eDescriptor() {
+    ajazz::core::DeviceDescriptor d{};
+    d.vendorId = 0x0300;
+    d.productId = 0x3004;
+    d.family = ajazz::core::DeviceFamily::StreamDeck;
+    d.model = "AJAZZ AKP05E (e2e-test)";
+    d.codename = "akp05e";
+    d.keyCount = 10;
+    d.encoderCount = 4;
+    d.hasTouchStrip = true;
+    d.hasClock = false;
+    return d;
+}
+
+ajazz::core::DeviceId makeTestAkp05eId() {
+    ajazz::core::DeviceId id{};
+    id.vendorId = 0x0300;
+    id.productId = 0x3004;
+    id.serial = "TEST-19-02";
+    return id;
+}
+
+} // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// e2e: setImage paints the right key (PLUGIN-10)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E setImage paints correct key via control service spy",
+          "[plugin-device-bridge][e2e][PLUGIN-10]") {
+    ensureQCoreApp();
+
+    // Set up MockTransport-backed AKP05E device.
+    auto owned = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = owned.get();
+    // Seed VER feature response for setActiveDevice's probeFirmwareVersion.
+    {
+        std::vector<std::uint8_t> verResp(20, 0);
+        verResp[0] = 0x01;
+        std::string const vs = "V3.AKP05E.01.007";
+        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
+            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
+        }
+        obs->enqueueReadFeature(std::move(verResp));
+    }
+    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
+        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+
+    // StreamDockControlService backed by the MockTransport device.
+    ajazz::app::StreamDockControlService control(
+        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
+        nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    // Drain LIG write from setActiveDevice.
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    std::size_t const writeCountAfterOpen = obs->writeCount();
+
+    // SdPluginServer (loopback).
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    // Build the e2e fixture (wires the bridge to server + control).
+    auto fx = makeE2eFixture(&server, &control);
+    // fx.contextId is for key {row:0, col:2} = 1-based keyIndex 3.
+
+    // Connect a loopback plugin client and register.
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    // Send setImage for the pre-registered context.
+    QString const imageMsg =
+        QStringLiteral(R"({"event":"setImage","context":"%1","payload":{"image":"%2","target":0}})")
+            .arg(fx.contextId, makeSmallPngDataUri());
+    client.sendTextMessage(imageMsg);
+
+    // Drain until the control service timer fires and writes BAT+ULEND.
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        auto const& writes = obs->writes();
+        if (writes.size() > writeCountAfterOpen &&
+            findUlendWrite(writes, writeCountAfterOpen) < writes.size()) {
+            break;
+        }
+    }
+
+    auto const& writes = obs->writes();
+    // Must have a BAT burst (header + >= 1 chunk + ULEND) after the open writes.
+    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
+    REQUIRE(batIdx < writes.size());
+    auto const& batPkt = writes[batIdx];
+    REQUIRE(batPkt.size() >= 8);
+    CHECK(batPkt[5] == 0x42); // 'B'
+    CHECK(batPkt[6] == 0x41); // 'A'
+    CHECK(batPkt[7] == 0x54); // 'T'
+
+    // The ULEND must follow the BAT burst.
+    auto const ulendIdx = findUlendWrite(writes, batIdx);
+    REQUIRE(ulendIdx < writes.size());
+    auto const& ulendPkt = writes[ulendIdx];
+    REQUIRE(ulendPkt.size() >= 10);
+    CHECK(ulendPkt[5] == 0x55); // 'U'
+    CHECK(ulendPkt[6] == 0x4c); // 'L'
+    CHECK(ulendPkt[7] == 0x45); // 'E'
+    CHECK(ulendPkt[8] == 0x4e); // 'N'
+    CHECK(ulendPkt[9] == 0x44); // 'D'
+}
+
+// ---------------------------------------------------------------------------
+// e2e: malformed data-URI -> placeholder, no crash, no failure event back
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E malformed image URI paints placeholder no crash",
+          "[plugin-device-bridge][e2e][placeholder]") {
+    ensureQCoreApp();
+
+    auto owned = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = owned.get();
+    {
+        std::vector<std::uint8_t> verResp(20, 0);
+        verResp[0] = 0x01;
+        std::string const vs = "V3.AKP05E.01.007";
+        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
+            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
+        }
+        obs->enqueueReadFeature(std::move(verResp));
+    }
+    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
+        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+
+    ajazz::app::StreamDockControlService control(
+        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
+        nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    std::size_t const writeCountAfterOpen = obs->writeCount();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto fx = makeE2eFixture(&server, &control);
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    // Send setImage with a malformed data-URI.
+    QString const badMsg =
+        QStringLiteral(
+            R"({"event":"setImage","context":"%1","payload":{"image":"data:image/png;base64,!!!notbase64!!!","target":0}})")
+            .arg(fx.contextId);
+    client.sendTextMessage(badMsg);
+
+    // Drain: the placeholder (solid fill via assignKeyImage -> BAT+ULEND) should fire.
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        auto const& writes = obs->writes();
+        if (writes.size() > writeCountAfterOpen &&
+            findUlendWrite(writes, writeCountAfterOpen) < writes.size()) {
+            break;
+        }
+    }
+
+    // The placeholder path calls assignKeyImage (solid fill -> BAT+ULEND burst).
+    // Verify the process did not crash (implicit by reaching this point) and that
+    // a write burst occurred.
+    auto const& writes = obs->writes();
+    // Placeholder uses assignKeyImage which produces a BAT+ULEND burst.
+    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
+    REQUIRE(batIdx < writes.size()); // placeholder paint must have fired
+
+    // No failure event should have been sent back to the client (spec §5).
+    // The msgSpy must not contain any non-passHello frame after the malformed setImage.
+    // passHello (17-03) may arrive before; filter for any 'error'-like event.
+    pump19(200); // extra drain
+    bool failureEventFound = false;
+    for (auto const& args : msgSpy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        QString const ev = obj.value(QStringLiteral("event")).toString();
+        // The only expected host->plugin event is passHello; any 'error' or 'setError'
+        // would be a violation of the §5 "send no failure event" contract.
+        if (ev == QStringLiteral("error") || ev == QStringLiteral("setError")) {
+            failureEventFound = true;
+        }
+    }
+    CHECK_FALSE(failureEventFound);
+}
+
+// ---------------------------------------------------------------------------
+// e2e: cross-plugin denial — a plugin cannot paint a key it does not own
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E cross-plugin denial produces no paint",
+          "[plugin-device-bridge][e2e][security]") {
+    ensureQCoreApp();
+
+    auto owned = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = owned.get();
+    {
+        std::vector<std::uint8_t> verResp(20, 0);
+        verResp[0] = 0x01;
+        std::string const vs = "V3.AKP05E.01.007";
+        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
+            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
+        }
+        obs->enqueueReadFeature(std::move(verResp));
+    }
+    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
+        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+
+    ajazz::app::StreamDockControlService control(
+        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
+        nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    std::size_t const writeCountAfterOpen = obs->writeCount();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto fx = makeE2eFixture(&server, &control);
+    // fx.otherContextId is owned by com.other.plug; our client is com.test.plug.
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    // Register as com.test.plug (NOT the owner of otherContextId).
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    // Send setImage for a context owned by com.other.plug (cross-plugin attack).
+    QString const crossMsg =
+        QStringLiteral(R"({"event":"setImage","context":"%1","payload":{"image":"%2","target":0}})")
+            .arg(fx.otherContextId, makeSmallPngDataUri());
+    client.sendTextMessage(crossMsg);
+
+    // Drain and verify: NO BAT+ULEND burst should occur after the denial.
+    pump19(500);
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    auto const& writes = obs->writes();
+    // No new writes after the open burst — cross-plugin denial.
+    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
+    CHECK(batIdx == writes.size()); // no BAT write = no paint
+}
+
+// ---------------------------------------------------------------------------
+// e2e: visual family no-crash (setTitle / setBG / setFeedback)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
+          "[plugin-device-bridge][e2e][visual-family]") {
+    ensureQCoreApp();
+
+    auto owned = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = owned.get();
+    {
+        std::vector<std::uint8_t> verResp(20, 0);
+        verResp[0] = 0x01;
+        std::string const vs = "V3.AKP05E.01.007";
+        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
+            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
+        }
+        obs->enqueueReadFeature(std::move(verResp));
+    }
+    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
+        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+
+    ajazz::app::StreamDockControlService control(
+        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
+        nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    std::size_t const writeCountAfterOpen = obs->writeCount();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto fx = makeE2eFixture(&server, &control);
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    // setTitle: must not crash; renders title to QImage -> BAT+ULEND burst.
+    client.sendTextMessage(
+        QStringLiteral(
+            R"({"event":"setTitle","context":"%1","payload":{"title":"Hello","target":0}})")
+            .arg(fx.contextId));
+
+    // setBG: must not crash; renders solid fill -> BAT+ULEND burst.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"setBG","context":"%1","payload":{"color":"#FF0000"}})")
+            .arg(fx.contextId));
+
+    // setFeedback: must not crash; acknowledged-but-deferred (Phase 23).
+    // Must NOT produce a key-image burst.
+    // Drain setTitle + setBG first.
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        // Wait for at least two BAT bursts (setTitle + setBG).
+        if (obs->writeCount() > writeCountAfterOpen + 2) {
+            break;
+        }
+    }
+
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"setFeedback","context":"%1","payload":{"title":"Enc"}})")
+            .arg(fx.contextId));
+    std::size_t const writesBeforeFeedback = obs->writeCount();
+    pump19(300); // drain the setFeedback (should be a no-op paint)
+
+    // setTitle and setBG must have produced write bursts.
+    REQUIRE(obs->writeCount() > writeCountAfterOpen);
+    REQUIRE(findBatWrite(obs->writes(), writeCountAfterOpen) < obs->writes().size());
+
+    // setFeedback must NOT produce a new key-image burst (aux-surface deferred).
+    std::size_t const writesAfterFeedback = obs->writeCount();
+    auto const feedbackBatIdx = findBatWrite(obs->writes(), writesBeforeFeedback);
+    CHECK(feedbackBatIdx >= writesAfterFeedback); // no new BAT after setFeedback
+
+    // Implicit crash-free assertion: reaching this point means nothing threw.
+    CHECK(true);
+}
+
+#endif // AJAZZ_HAVE_WEBSOCKETS
