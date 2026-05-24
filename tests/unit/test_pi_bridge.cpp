@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 /**
  * @file test_pi_bridge.cpp
- * @brief Unit tests for the Property Inspector URL allow/deny helpers.
+ * @brief Unit tests for the Property Inspector URL policy helpers and
+ *        PIBridge persistence (PLUGIN-13 restart round-trip).
  *
  * The full @c PIBridge / @c PIUrlRequestInterceptor surface needs Qt
  * WebEngine to run end-to-end (a real @c QWebEnginePage with a URL
@@ -10,20 +11,36 @@
  * @ref ajazz::app::isOpenUrlAllowed, so we can pin the security contract
  * without booting WebEngine.
  *
- * Coverage:
+ * The PIBridge persistence path (setSettings / getSettings / setGlobalSettings /
+ * getGlobalSettings) uses only Qt6::Core (QSaveFile, QJsonDocument,
+ * QStandardPaths) and can therefore be tested without WebEngine. The
+ * tests below exercise:
  *
- *   - file:// inside the PI directory                               → allow
- *   - file:// outside the PI directory                              → deny
- *   - file:// with `..` traversal that resolves outside the PI dir  → deny
- *   - https:// to allowlist host (cdn.jsdelivr.net, unpkg.com)      → allow
- *   - https:// to a host not in the allowlist                       → deny
- *   - http:// always blocked (defence-in-depth)                     → deny
- *   - qrc:// / blob: / data:                                        → allow
- *   - exotic schemes (ftp:, file2:, …)                              → deny
- *   - openUrl: https → allow, http / javascript / file / mailto → deny
+ *   URL policy:
+ *   - file:// inside the PI directory                               -> allow
+ *   - file:// outside the PI directory                              -> deny
+ *   - file:// with `..` traversal that resolves outside the PI dir  -> deny
+ *   - https:// to allowlist host (cdn.jsdelivr.net, unpkg.com)      -> allow
+ *   - https:// to a host not in the allowlist                       -> deny
+ *   - http:// always blocked (defence-in-depth)                     -> deny
+ *   - qrc:// / blob: / data:                                        -> allow
+ *   - exotic schemes (ftp:, file2:, ...)                            -> deny
+ *   - openUrl: https -> allow, http / javascript / file / mailto -> deny
+ *
+ *   PIBridge persistence (PLUGIN-13):
+ *   - Per-context settings survive a fresh PIBridge (restart round-trip)
+ *   - Global settings survive a fresh PIBridge (restart round-trip)
+ *   - Settings written under ctx1 are NOT returned by a bridge using ctx2
+ *   - Path-traversal UUIDs are refused: no file written, getSettings emits "{}"
  */
+#include "pi_bridge.hpp"
 #include "pi_url_policy.hpp"
+#include "qt_app_fixture.hpp"
 
+#include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QStandardPaths>
 #include <QString>
 #include <QUrl>
 
@@ -189,4 +206,144 @@ TEST_CASE("PI openUrl policy: https is allowed, all other schemes refused",
     REQUIRE(isOpenUrlAllowed(QStringLiteral("")) == UrlDecision::DenyMalformed);
     REQUIRE(isOpenUrlAllowed(QStringLiteral("not a url")) == UrlDecision::DenyMalformed);
     REQUIRE(isOpenUrlAllowed(QStringLiteral("https://")) == UrlDecision::DenyMalformed); // no host
+}
+
+// ---------------------------------------------------------------------------
+// PIBridge persistence tests (PLUGIN-13 restart round-trip)
+//
+// These cases use QStandardPaths::setTestModeEnabled(true) (enabled by
+// qtApp()) so AppDataLocation resolves under a per-user sandbox tree rather
+// than the developer's real config directory.  Each case uses a unique
+// plugin/context UUID so cases are independent without needing QTemporaryDir
+// indirection (which cannot redirect AppDataLocation cross-platform in
+// test-mode). The emit from getSettings/getGlobalSettings is synchronous on
+// the same thread (direct connection), so a plain lambda capture is
+// sufficient — no event loop is needed.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PI settings round-trip survives a fresh PIBridge", "[pi-bridge][persistence]") {
+    ajazz::tests::qtApp();
+
+    // Write via first bridge (simulates first app run).
+    {
+        ajazz::app::PIBridge w(nullptr,
+                               QStringLiteral("com.example.roundtrip-ctx"),
+                               QStringLiteral("act-rt"),
+                               QStringLiteral("ctx-rt-001"));
+        w.setSettings(QStringLiteral(R"({"hello":"world"})"));
+    } // first bridge destroyed — simulates app exit
+
+    // Read via second bridge (simulates next app run with same UUIDs).
+    ajazz::app::PIBridge r(nullptr,
+                           QStringLiteral("com.example.roundtrip-ctx"),
+                           QStringLiteral("act-rt"),
+                           QStringLiteral("ctx-rt-001"));
+    QString seen;
+    QObject::connect(&r, &ajazz::app::PIBridge::didReceiveSettings, [&](QString j) { seen = j; });
+    r.getSettings();
+
+    // The persisted JSON must parse back to {"hello":"world"}.
+    REQUIRE(!seen.isEmpty());
+    REQUIRE(
+        QJsonDocument::fromJson(seen.toUtf8()).object().value(QStringLiteral("hello")).toString() ==
+        QStringLiteral("world"));
+}
+
+TEST_CASE("PI global settings round-trip survives a fresh PIBridge", "[pi-bridge][persistence]") {
+    ajazz::tests::qtApp();
+
+    // Write via first bridge.
+    {
+        ajazz::app::PIBridge w(nullptr,
+                               QStringLiteral("com.example.roundtrip-global"),
+                               QStringLiteral("act-rg"),
+                               QStringLiteral("ctx-rg-001"));
+        w.setGlobalSettings(QStringLiteral(R"({"version":42,"flag":true})"));
+    }
+
+    // Read via second bridge.
+    ajazz::app::PIBridge r(nullptr,
+                           QStringLiteral("com.example.roundtrip-global"),
+                           QStringLiteral("act-rg"),
+                           QStringLiteral("ctx-rg-001"));
+    QString seen;
+    QObject::connect(
+        &r, &ajazz::app::PIBridge::didReceiveGlobalSettings, [&](QString j) { seen = j; });
+    r.getGlobalSettings();
+
+    QJsonObject const obj = QJsonDocument::fromJson(seen.toUtf8()).object();
+    REQUIRE(obj.value(QStringLiteral("version")).toInt() == 42);
+    REQUIRE(obj.value(QStringLiteral("flag")).toBool() == true);
+}
+
+TEST_CASE("PI settings are isolated per context", "[pi-bridge][persistence]") {
+    ajazz::tests::qtApp();
+
+    // Write settings under ctx-iso-A.
+    {
+        ajazz::app::PIBridge w(nullptr,
+                               QStringLiteral("com.example.isolation"),
+                               QStringLiteral("act-iso"),
+                               QStringLiteral("ctx-iso-A"));
+        w.setSettings(QStringLiteral(R"({"key":"only-in-A"})"));
+    }
+
+    // A fresh bridge using ctx-iso-B must return "{}" (no cross-context leak).
+    ajazz::app::PIBridge r(nullptr,
+                           QStringLiteral("com.example.isolation"),
+                           QStringLiteral("act-iso"),
+                           QStringLiteral("ctx-iso-B"));
+    QString seen;
+    QObject::connect(&r, &ajazz::app::PIBridge::didReceiveSettings, [&](QString j) { seen = j; });
+    r.getSettings();
+
+    // Must be empty JSON — ctx-iso-B was never written.
+    REQUIRE(seen == QStringLiteral("{}"));
+}
+
+TEST_CASE("PI settings refuse path-traversal uuids", "[pi-bridge][persistence]") {
+    ajazz::tests::qtApp();
+
+    // Snapshot the plugins directory entry count before any malicious write.
+    QString const pluginsRoot = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) +
+                                QStringLiteral("/plugins");
+    QDir const pluginsDir(pluginsRoot);
+    qsizetype const countBefore =
+        pluginsDir.exists() ? pluginsDir.entryList(QDir::AllEntries).size() : 0;
+
+    // Case 1: malicious pluginUuid "../evil" — must not write outside sandbox.
+    {
+        ajazz::app::PIBridge evil(nullptr,
+                                  QStringLiteral("../evil"),
+                                  QStringLiteral("act-trav"),
+                                  QStringLiteral("ctx-trav-001"));
+        evil.setSettings(QStringLiteral(R"({"attack":"yes"})"));
+
+        // getSettings must emit "{}" for an invalid uuid.
+        QString result;
+        QObject::connect(
+            &evil, &ajazz::app::PIBridge::didReceiveSettings, [&](QString j) { result = j; });
+        evil.getSettings();
+        REQUIRE(result == QStringLiteral("{}"));
+    }
+
+    // Case 2: malicious contextUuid "../ctx" — same guard.
+    {
+        ajazz::app::PIBridge evil2(nullptr,
+                                   QStringLiteral("com.example.traversal-ctx"),
+                                   QStringLiteral("act-trav"),
+                                   QStringLiteral("../ctx"));
+        evil2.setSettings(QStringLiteral(R"({"attack":"yes"})"));
+
+        QString result;
+        QObject::connect(
+            &evil2, &ajazz::app::PIBridge::didReceiveSettings, [&](QString j) { result = j; });
+        evil2.getSettings();
+        REQUIRE(result == QStringLiteral("{}"));
+    }
+
+    // The plugins directory must not have grown (no file escaped the sandbox).
+    qsizetype const countAfter =
+        pluginsDir.exists() ? pluginsDir.entryList(QDir::AllEntries).size() : 0;
+    REQUIRE(countAfter == countBefore);
 }
