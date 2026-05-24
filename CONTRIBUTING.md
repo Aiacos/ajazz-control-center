@@ -79,6 +79,12 @@ a CI failure or run things by hand:
    the PR head as a `style:` commit, so the human reviewer always sees
    a green tree. Forks don't get this push (security boundary) — fork
    contributors should run `make lint-all` themselves before pushing.
+   - **Heads-up:** unless the repo has a `LINT_AUTOFIX_PAT` secret, that
+     `style:` commit is pushed with the default `GITHUB_TOKEN`, which does
+     **not** re-trigger the check suite. The required checks then sit
+     "waiting for status" on the fix commit. Push any follow-up commit (or
+     close/reopen the PR) to make them run. The simplest avoidance is to
+     run `make lint-all` locally so there is nothing left to auto-fix.
 
 If a hook is being noisy and the fix isn't trivially obvious, run
 `pre-commit run --hook-id <id> --all-files --verbose` to see exactly

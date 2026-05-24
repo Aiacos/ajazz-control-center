@@ -50,7 +50,16 @@ jobs:
           # For PRs from the same repo, check out the head branch so we
           # can push auto-fixes back.
           ref: ${{ github.event.pull_request.head.ref || github.ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
+          # Prefer a PAT so the auto-fix commit RE-TRIGGERS the check suite:
+          # commits pushed with the default GITHUB_TOKEN do NOT start new
+          # workflow runs (GitHub's recursion guard), so with required status
+          # checks the PR head ends up with no checks reported and the PR
+          # gets stuck "waiting for status". Add a repo secret
+          # LINT_AUTOFIX_PAT (a PAT or fine-grained token with `contents:write`
+          # + `workflows`/`actions`) to enable re-checks; falls back to
+          # GITHUB_TOKEN (auto-fix still pushes, but you must re-push or
+          # close/reopen the PR to get checks to run on the fix commit).
+          token: ${{ secrets.LINT_AUTOFIX_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
