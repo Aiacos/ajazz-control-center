@@ -23,12 +23,25 @@
 //   * `selectionLabel` — string shown in the header (e.g. "Key 3").
 //   * `hasSelection`   — when false, the Inspector renders an EmptyState
 //     instead of the form fields.
-//   * `binding`        — JS object with keys actionKind, actionParams,
-//     label, iconSource. When null/undefined the form goes blank.
+//   * `binding`        — JS object with keys actionKind, actionParams, label,
+//     iconSource, AND the optional PI fields: propertyInspectorPath, pluginUuid,
+//     actionUuid, contextUuid. When null/undefined the form goes blank and the
+//     HTML PI is closed.
 //
 // Emits:
 //   * `bindingFieldChanged(string field, var value)` — fired on every form
 //     edit. The parent persists the change into its own binding store.
+//
+// Property Inspector wiring (Plan 20-03 / PLUGIN-09):
+//   When `binding.propertyInspectorPath` is a non-empty string AND
+//   PropertyInspectorController.webEngineAvailable is true, Inspector calls
+//   PropertyInspectorController.loadInspector(pluginUuid, propertyInspectorPath,
+//   actionUuid, contextUuid) so the HTML PI loads in PIWebView. When the
+//   selected action has no PI path (built-in/native) or WebEngine is absent,
+//   closeInspector() is called so PropertyInspector.qml's Loader falls back
+//   to NativePropertyInspector. Selecting nothing (binding == null) also
+//   closes the inspector. The singleton is accessed by type name only, never
+//   instantiated.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
@@ -44,6 +57,35 @@ Rectangle {
     property var    binding: null
 
     signal bindingFieldChanged(string field, var value)
+
+    // -- Property Inspector wiring -------------------------------------------
+    // Called whenever `binding` changes to drive loadInspector / closeInspector.
+    // Reads the optional PI fields from the binding JS object; falls back to ""
+    // when absent so existing non-plugin bindings are unaffected.
+    function maybeLoadInspector() {
+        // Guard: no selection or WebEngine unavailable -> close the HTML PI so
+        // PropertyInspector.qml's Loader falls back to NativePropertyInspector.
+        if (!root.binding || !PropertyInspectorController.webEngineAvailable) {
+            PropertyInspectorController.closeInspector();
+            return;
+        }
+
+        var piPath = root.binding.propertyInspectorPath ? root.binding.propertyInspectorPath : "";
+        if (piPath === "") {
+            // Native / built-in action with no HTML PI -> native renderer takes over.
+            PropertyInspectorController.closeInspector();
+            return;
+        }
+
+        // Plugin action with a PI HTML path -> load the HTML PI.
+        var pluginUuid  = root.binding.pluginUuid    ? root.binding.pluginUuid    : "";
+        var actionUuid  = root.binding.actionUuid    ? root.binding.actionUuid    : "";
+        var contextUuid = root.binding.contextUuid   ? root.binding.contextUuid   : "";
+        PropertyInspectorController.loadInspector(pluginUuid, piPath, actionUuid, contextUuid);
+    }
+
+    // React to binding changes (new key selected, selection cleared, binding updated).
+    onBindingChanged: maybeLoadInspector()
 
     color: Theme.bgSidebar
 
