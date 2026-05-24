@@ -43,7 +43,7 @@ def warn(msg: str) -> None:
 def fetch(url: str) -> bytes:
     log(f"GET {url}")
     req = urllib.request.Request(url, headers={"User-Agent": "ajazz-sync"})
-    with urllib.request.urlopen(req, timeout=120) as r:  # noqa: S310 (trusted host)
+    with urllib.request.urlopen(req, timeout=120) as r:
         return r.read()
 
 
@@ -275,7 +275,7 @@ def sync_ubuntu(rel: Release) -> None:
         f"ajazz-control-center ({rel.version}-1~noble1) noble; urgency=medium\n\n"
         f"  * Release {rel.version}. See https://github.com/{REPO}/releases/tag/{rel.tag}\n\n"
         " -- AJAZZ Control Center contributors <noreply@github.com>  "
-        f"{subprocess.run(['date', '-R'], capture_output=True, text=True, check=False).stdout.strip()}\n\n"
+        f"{subprocess.run(['date', '-R'], capture_output=True, text=True, check=False).stdout.strip()}\n\n"  # noqa: E501
     )
     ch.write_text(entry + text, encoding="utf-8")
     log("ubuntu: prepended new debian/changelog entry")

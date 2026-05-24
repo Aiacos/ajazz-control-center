@@ -79,7 +79,10 @@ ignore = [
 "tests/**/*.py" = ["D", "ANN", "S101", "PLR2004", "ARG"]
 "python/ajazz_plugins/tests/**/*.py" = ["D", "ANN", "S101", "PLR2004", "ARG"]
 "python/ajazz_plugins/examples/**/*.py" = ["D", "ANN", "ARG"]
-"scripts/**/*.py" = ["D", "ANN", "PLR2004", "S603"]
+# Repo automation scripts intentionally call trusted tools by name (git,
+# msiinfo, date) and fetch our own release URLs, so the bandit subprocess
+# (S603/S607) and url-open (S310) audits are noise here.
+"scripts/**/*.py" = ["D", "ANN", "PLR2004", "S310", "S603", "S607"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
