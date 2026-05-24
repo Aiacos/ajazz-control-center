@@ -1,0 +1,39 @@
+{
+  "Name": "AJAZZ Knob Plugin",
+  "Author": "AJAZZ Test",
+  "Version": "2.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "AJAZZ",
+  "CategoryIcon": "icons/category.png",
+  "Description": "Tests AJAZZ extensions: IsK1Pro, RunAsAdministrator, Nodejs, PUUID, Knob controller, FSize/FFamily.",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "11.0" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Software": { "MinimumVersion": "0.1.0" },
+  "CodePath": "code/plugin.js",
+  "Nodejs": { "Version": "20" },
+  "RunAsAdministrator": true,
+  "IsK1Pro": true,
+  "PUUID": "AjazzKnobTestPlugin",
+  "APIVersion": "2.0",
+  "Actions": [
+    {
+      "UUID": "com.ajazz.test.knob",
+      "Name": "Knob Action",
+      "Icon": "icons/knob.png",
+      "Controllers": ["Knob", "SecondaryScreen"],
+      "States": [
+        {
+          "Image": "icons/state.png",
+          "FSize": "12",
+          "FFamily": "Courier New",
+          "FontStyle": "Regular",
+          "TitleColor": "#00FF00",
+          "TitleAlignment": "top"
+        }
+      ]
+    }
+  ]
+}

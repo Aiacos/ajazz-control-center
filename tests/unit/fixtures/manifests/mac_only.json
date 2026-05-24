@@ -1,0 +1,25 @@
+{
+  "Name": "Mac-Only Plugin",
+  "Author": "Mac Developer",
+  "Version": "1.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "Platform",
+  "CategoryIcon": "icons/category.png",
+  "Description": "A plugin that only declares macOS in its OS array.",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "11.0" }
+  ],
+  "Software": { "MinimumVersion": "0.1.0" },
+  "CodePath": "code/plugin.app",
+  "Actions": [
+    {
+      "UUID": "com.example.maconly.action",
+      "Name": "Mac Action",
+      "Icon": "icons/action.png",
+      "States": [
+        {}
+      ]
+    }
+  ]
+}

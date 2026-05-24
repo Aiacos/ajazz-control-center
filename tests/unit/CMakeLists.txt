@@ -384,6 +384,19 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()
 
+# Phase 18 Plan 18-01 (PLUGIN-06): PluginManifest parser + gate unit tests. Links
+# plugin_manifest.cpp directly (pure Qt-Core-only; no WebEngine/WebSockets dep).
+# AJAZZ_TEST_REPO_ROOT lets the test locate the JSON fixtures under tests/unit/fixtures/manifests/
+# regardless of CWD when ctest runs the binary.
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_manifest.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_manifest.cpp
+)
+set_source_files_properties(
+    test_plugin_manifest.cpp PROPERTIES COMPILE_DEFINITIONS
+                                        "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.

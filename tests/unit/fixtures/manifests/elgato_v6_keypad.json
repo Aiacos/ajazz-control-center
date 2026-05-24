@@ -1,0 +1,38 @@
+{
+  "Name": "Keypad Test Plugin",
+  "Author": "Test Author",
+  "Version": "1.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "Test",
+  "CategoryIcon": "icons/category.png",
+  "Description": "A full Elgato v6 keypad plugin for unit testing.",
+  "URL": "https://example.com",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.11" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Software": { "MinimumVersion": "0.1.0" },
+  "CodePath": "code/index.js",
+  "APIVersion": "1.0",
+  "Actions": [
+    {
+      "UUID": "com.example.test.keypad",
+      "Name": "Keypad Action",
+      "Icon": "icons/action.png",
+      "Tooltip": "Press to do something",
+      "PropertyInspectorPath": "pi/index.html",
+      "Controllers": ["Keypad"],
+      "States": [
+        {
+          "Image": "icons/state0.png",
+          "FontSize": "10",
+          "FontFamily": "Arial",
+          "FontStyle": "Bold",
+          "TitleColor": "#FFFFFF",
+          "TitleAlignment": "middle"
+        }
+      ]
+    }
+  ]
+}
