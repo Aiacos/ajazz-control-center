@@ -413,4 +413,120 @@ TEST_CASE("ObsClient setScene after Identified sends well-formed op6 request", "
     REQUIRE(requestData.value(QStringLiteral("sceneName")).toString() == QStringLiteral("Scene 2"));
 }
 
+// ---------------------------------------------------------------------------
+// 6. CR-01 regression: Hello with a non-object d.authentication value must
+//    emit authFailed and send ZERO Identify messages — not an unauthenticated
+//    Identify.  Covers: null, boolean true, plain string.
+// ---------------------------------------------------------------------------
+
+/// Helper: build a Hello(op:0) frame with a raw QJsonValue for d.authentication.
+/// Used to synthesise malformed frames that buildHello(true) cannot produce.
+static QString buildHelloWithRawAuth(QJsonValue const& authValue) {
+    QJsonObject d;
+    d[QStringLiteral("rpcVersion")] = 1;
+    d[QStringLiteral("authentication")] = authValue;
+    QJsonObject frame;
+    frame[QStringLiteral("op")] = kOpHello;
+    frame[QStringLiteral("d")] = d;
+    return QString::fromUtf8(QJsonDocument(frame).toJson(QJsonDocument::Compact));
+}
+
+TEST_CASE("ObsClient CR-01 regression - authentication:null emits authFailed and zero Identify",
+          "[obs-client]") {
+    ensureQCoreApp();
+
+    auto setup = makeMockServer();
+    REQUIRE(setup != nullptr);
+
+    ObsClient client;
+    QSignalSpy connectedSpy(&client, &ObsClient::connected);
+    QSignalSpy authFailedSpy(&client, &ObsClient::authFailed);
+
+    // Connect with a non-empty password to rule out the "no password" path.
+    client.connectToObs(
+        QStringLiteral("127.0.0.1"), setup->server->serverPort(), QStringLiteral("SomePassword"));
+
+    pump(300);
+    if (setup->server->hasPendingConnections()) {
+        acceptConn(*setup);
+    }
+    REQUIRE(setup->serverSocket != nullptr);
+
+    // Server sends Hello with authentication: null (non-object but defined).
+    setup->serverSocket->sendTextMessage(buildHelloWithRawAuth(QJsonValue::Null));
+
+    // Client MUST emit authFailed (malformed auth field = treat as auth-required).
+    REQUIRE(waitForSpy(authFailedSpy));
+    REQUIRE(authFailedSpy.count() == 1);
+    REQUIRE_FALSE(authFailedSpy.first().at(0).toString().isEmpty());
+
+    // The server MUST have received ZERO Identify messages.
+    pump(300);
+    REQUIRE(setup->received.count() == 0);
+    REQUIRE(connectedSpy.count() == 0);
+}
+
+TEST_CASE("ObsClient CR-01 regression - authentication:true emits authFailed and zero Identify",
+          "[obs-client]") {
+    ensureQCoreApp();
+
+    auto setup = makeMockServer();
+    REQUIRE(setup != nullptr);
+
+    ObsClient client;
+    QSignalSpy connectedSpy(&client, &ObsClient::connected);
+    QSignalSpy authFailedSpy(&client, &ObsClient::authFailed);
+
+    client.connectToObs(
+        QStringLiteral("127.0.0.1"), setup->server->serverPort(), QStringLiteral("SomePassword"));
+
+    pump(300);
+    if (setup->server->hasPendingConnections()) {
+        acceptConn(*setup);
+    }
+    REQUIRE(setup->serverSocket != nullptr);
+
+    // Server sends Hello with authentication: true (boolean, not an object).
+    setup->serverSocket->sendTextMessage(buildHelloWithRawAuth(QJsonValue(true)));
+
+    REQUIRE(waitForSpy(authFailedSpy));
+    REQUIRE(authFailedSpy.count() == 1);
+
+    pump(300);
+    REQUIRE(setup->received.count() == 0);
+    REQUIRE(connectedSpy.count() == 0);
+}
+
+TEST_CASE("ObsClient CR-01 regression - authentication:string emits authFailed and zero Identify",
+          "[obs-client]") {
+    ensureQCoreApp();
+
+    auto setup = makeMockServer();
+    REQUIRE(setup != nullptr);
+
+    ObsClient client;
+    QSignalSpy connectedSpy(&client, &ObsClient::connected);
+    QSignalSpy authFailedSpy(&client, &ObsClient::authFailed);
+
+    client.connectToObs(
+        QStringLiteral("127.0.0.1"), setup->server->serverPort(), QStringLiteral("SomePassword"));
+
+    pump(300);
+    if (setup->server->hasPendingConnections()) {
+        acceptConn(*setup);
+    }
+    REQUIRE(setup->serverSocket != nullptr);
+
+    // Server sends Hello with authentication: "some string" (not an object).
+    setup->serverSocket->sendTextMessage(
+        buildHelloWithRawAuth(QJsonValue(QStringLiteral("not-an-object"))));
+
+    REQUIRE(waitForSpy(authFailedSpy));
+    REQUIRE(authFailedSpy.count() == 1);
+
+    pump(300);
+    REQUIRE(setup->received.count() == 0);
+    REQUIRE(connectedSpy.count() == 0);
+}
+
 #endif // defined(AJAZZ_HAVE_WEBSOCKETS)

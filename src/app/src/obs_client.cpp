@@ -179,9 +179,25 @@ void ObsClient::onTextMessageReceived(QString const& message) {
     switch (op) {
     case kOpHello: {
         // d.authentication present ONLY when OBS requires auth.
+        // Per obs-websocket v5 protocol.md: the discriminant is ABSENT vs PRESENT —
+        // any defined value (including null, bool, string) signals auth-required.
+        // Only a genuine isUndefined() means auth-disabled (T-21-obsauth).
         QJsonValue const authVal = d.value(QStringLiteral("authentication"));
-        if (!authVal.isUndefined() && authVal.isObject()) {
+        if (!authVal.isUndefined()) {
             // Auth required.
+            if (!authVal.isObject()) {
+                // Malformed Hello: authentication key present but not a proper object.
+                // Treat as auth-required and refuse (T-21-obsauth: never send Identify
+                // to a server that signals auth-required, even if malformed).
+                AJAZZ_LOG_WARN("obs-client",
+                               "OBS Hello has d.authentication but it is not an object — "
+                               "treating as auth-required (T-21-obsauth)");
+                m_state = State::Disconnected;
+                m_socket->close();
+                emit authFailed(QStringLiteral(
+                    "OBS sent malformed authentication field; treating as auth-required"));
+                return;
+            }
             if (m_password.isEmpty()) {
                 // Auth default-on (LOCKED): REFUSE to send Identify — emit authFailed.
                 // T-21-obsauth: the client never connects plaintext to an auth-demanding OBS.
