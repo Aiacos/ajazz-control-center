@@ -257,7 +257,7 @@ Plans:
 
 Plans:
 
-- [ ] 15-01-PLAN.md — StreamDockInputService: QTimer poll-pump on the Phase-14 held handle, first ActionEngine instantiation, DeviceEvent->Binding dispatch, 16 ms rotation coalescer, encoder press->synthetic-release, provisional touch X->zone map + swipe page-nav intent; MockTransport-fed dispatch test (INPUT-03/04/05) (wave 1)
+- [x] 15-01-PLAN.md — StreamDockInputService: QTimer poll-pump on the Phase-14 held handle, first ActionEngine instantiation, DeviceEvent->Binding dispatch, 16 ms rotation coalescer, encoder press->synthetic-release, provisional touch X->zone map + swipe page-nav intent; MockTransport-fed dispatch test (INPUT-03/04/05) (wave 1)
 - [ ] 15-02-PLAN.md — Application wiring: own one QtExecutor-backed ActionEngine (keyPress stub / runCommand QProcess / openUrl QDesktopServices / plugin stub), share the Phase-14 held handle on Stream Deck arrival, wire the ProfileController::activeProfile() accessor + page-nav intent sink (INPUT-03/04/05) (wave 2)
 
 ### Phase 16: Device Controls + Binding Persistence + Pages
@@ -469,7 +469,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 12. AK980 PRO Promotion                     | v1.2      | 0/?            | Not started      | —          |
 | 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 0/?            | Not started      | —          |
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 15. Stream Dock Input Routing               | v1.3      | 0/?            | Not started      | —          |
+| 15. Stream Dock Input Routing               | v1.3      | 1/2            | In Progress      |            |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 0/?            | Not started      | —          |
 | 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |

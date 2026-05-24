@@ -40,9 +40,9 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Stream Dock Input Routing (Phase 15)
 
-- [ ] **INPUT-03**: A poll loop drives each connected Stream Deck; a physical key press/release fires its bound action via the core `ActionEngine` (instantiated in the app for the first time).
-- [ ] **INPUT-04**: Each of the **4 encoders** fires its bound actions on rotate **CW** vs **CCW** and on **press**; because the device emits a press only, the host **synthesises the release** (Companion convention) and delivers a genuine `EncoderReleased` (replacing the `value=0` half-step workaround at `akp05.cpp`); rotation is coalesced with a 16 ms `QTimer` (Pitfall 23 signal-storm closed).
-- [ ] **INPUT-05**: Touch-strip input routes — a **tap on one of the 4 zones triggers the action bound to the encoder under that zone**, and a **swipe left/right** drives previous/next page (provisional zone/coordinate map — hardware-gated, verified in Phase 25).
+- [x] **INPUT-03**: A poll loop drives each connected Stream Deck; a physical key press/release fires its bound action via the core `ActionEngine` (instantiated in the app for the first time).
+- [x] **INPUT-04**: Each of the **4 encoders** fires its bound actions on rotate **CW** vs **CCW** and on **press**; because the device emits a press only, the host **synthesises the release** (Companion convention) and delivers a genuine `EncoderReleased` (replacing the `value=0` half-step workaround at `akp05.cpp`); rotation is coalesced with a 16 ms `QTimer` (Pitfall 23 signal-storm closed).
+- [x] **INPUT-05**: Touch-strip input routes — a **tap on one of the 4 zones triggers the action bound to the encoder under that zone**, and a **swipe left/right** drives previous/next page (provisional zone/coordinate map — hardware-gated, verified in Phase 25).
 
 ### Device Controls + Binding Persistence + Pages (Phase 16)
 
@@ -267,9 +267,9 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | DOCK-01     | Phase 14 | Complete |
 | DOCK-02     | Phase 14 | Complete |
 | DEVICES-11  | Phase 14 | Complete |
-| INPUT-03    | Phase 15 | Pending  |
-| INPUT-04    | Phase 15 | Pending  |
-| INPUT-05    | Phase 15 | Pending  |
+| INPUT-03    | Phase 15 | Complete |
+| INPUT-04    | Phase 15 | Complete |
+| INPUT-05    | Phase 15 | Complete |
 | DISPLAY-09  | Phase 16 | Pending  |
 | PROFILE-01  | Phase 16 | Pending  |
 | PROFILE-02  | Phase 16 | Pending  |
