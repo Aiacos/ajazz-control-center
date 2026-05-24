@@ -30,6 +30,7 @@
 #include <QImage>
 #include <QTimer>
 
+#include <stdexcept>
 #include <utility>
 
 namespace ajazz::app {
@@ -77,7 +78,20 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
 
     // open() is idempotent in the backend (returns early if transport already open)
     // and probes firmware via VER GET_FEATURE. Do NOT send a LIG here — see below.
-    m_activeDevice->open();
+    // CR-01: open() is documented @throws std::runtime_error; catch so a device
+    // yank between lookup and open() does not reach the Qt event loop and trigger
+    // std::terminate().
+    try {
+        m_activeDevice->open();
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("stream-dock-control",
+                       "setActiveDevice: open() failed for '{}': {}",
+                       codename.toStdString(),
+                       e.what());
+        m_activeDevice.reset();
+        m_activeCodename.clear();
+        return;
+    }
 
     // DISPLAY-06: Akp05Device::open() deliberately does NOT send a LIG brightness
     // packet (confirmed akp05.cpp:443 — no setBrightness call in open()). The app
@@ -90,7 +104,17 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
                        codename.toStdString());
         return;
     }
-    disp->setBrightness(kDefaultBrightnessPercent); // LIG — panel lights
+    // CR-01: setBrightness() writes to the HID transport and can throw
+    // std::system_error. Non-fatal — device is open; panel may just be dark.
+    try {
+        disp->setBrightness(kDefaultBrightnessPercent); // LIG — panel lights
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("stream-dock-control",
+                       "setActiveDevice: setBrightness failed for '{}': {}",
+                       codename.toStdString(),
+                       e.what());
+        // Non-fatal: device is open; panel may just be dark.
+    }
 }
 
 void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage const& img) {
