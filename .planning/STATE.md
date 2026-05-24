@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: verifying
-stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T09:07:03.069Z'
+status: ready_to_plan
+stopped_at: Phase 14 complete (2/2) — ready to discuss Phase 15
+last_updated: 2026-05-24T09:31:11.591000Z
 last_activity: 2026-05-24
 progress:
   total_phases: 17
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 14 — stream-dock-control-service
+**Current focus:** Phase 15 — stream dock input routing
 
 ## Current Position
 
-Phase: 14 (stream-dock-control-service) — EXECUTING
-Plan: 2 of 2
+Phase: 15
+Plan: Not started
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Phase complete — ready for verification
+Status: Ready to plan
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -54,7 +54,7 @@ Last activity: 2026-05-24
 
 **Velocity (v1.0 + v1.1 carried forward):**
 
-- Total plans completed: 27 (1 retro + 26 forward-planned in v1.1)
+- Total plans completed: 29 (1 retro + 26 forward-planned in v1.1)
 - v1.1 calendar duration: ~2 days end-to-end, ~80 commits
 
 **v1.2 baseline:** Counters reset to 0/5 phases, 0/? plans (plan counts TBD per phase).

@@ -408,7 +408,7 @@ Plans:
 
 Plans:
 
-- [ ] 23-01-PLAN.md — STOP-gate Phase 14 + add assignMainImage/assignEncoderImage/assignTouchStripZone to the control service with MockTransport ENC/MAI/DRA wire tests (DISPLAY-10)
+- [x] 23-01-PLAN.md — STOP-gate Phase 14 + add assignMainImage/assignEncoderImage/assignTouchStripZone to the control service with MockTransport ENC/MAI/DRA wire tests (DISPLAY-10) (completed 2026-05-24)
 - [ ] 23-02-PLAN.md — repaintEncodersFromProfile (DRA zone default, ENC fallback) wired into the existing profileChanged path (DISPLAY-10)
 
 ### Phase 24: Family Coverage AKP03/153/815
