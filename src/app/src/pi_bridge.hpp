@@ -110,6 +110,23 @@ public:
     /// plugin developers debugging their PI from the browser console.
     Q_INVOKABLE void logMessage(QString const& message);
 
+    /**
+     * @brief Generic §8 invoke dispatcher — maps `{event,...}` JSON onto the
+     *        existing typed Q_INVOKABLE slots.
+     *
+     * Called by the cefQuery JS polyfill (pi_cef_shim.hpp) via
+     * `channel.objects["$SD"].invoke(opts.request)` — the §8-verbatim mapping
+     * (akp_plugin_sdk.md §8: `cefQuery({request,...})` → `bridge.invoke(json).then(...)`).
+     *
+     * The dispatch table is CLOSED: unknown events log at WARN and return `"{}"`.
+     * No default-to-arbitrary path; no C++ outside the fixed typed-slot set is
+     * ever reached from this method.
+     *
+     * @param json A JSON object string carrying at minimum an `"event"` key.
+     * @return `"{}"` always (the typed slots emit signals; callers use those).
+     */
+    Q_INVOKABLE QString invoke(QString const& json);
+
 signals:
     /// Emitted when @ref getSettings completes (M4) or after the plugin
     /// process pushes new settings (M5). JS subscribes to receive updates.

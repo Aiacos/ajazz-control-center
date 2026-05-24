@@ -323,6 +323,9 @@ set(ACC_QML_MODULE_SOURCES
     # (kMiraboxShimSource is inline constexpr, non-WebEngine builds can unit-test it); the .cpp is
     # in the WebEngine-gated block below (makeMiraboxShim uses QWebEngineScript).
     src/plugin_mirabox_shim.hpp
+    # Phase 20 Plan 20-02 (PLUGIN-09): cefQuery polyfill header. kCefQueryShimSource is always
+    # reachable (inline constexpr std::string_view, no WebEngine dep); the .cpp is WebEngine-gated.
+    src/pi_cef_shim.hpp
     src/plugin_catalog_model.cpp
     src/plugin_catalog_model.hpp
     src/loaded_plugins_model.cpp
@@ -483,6 +486,12 @@ if(AJAZZ_HAVE_WEBENGINE)
     # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
     # profile->userScripts()->insert(makeMiraboxShim()) before loading HTML plugin index.html.
     target_sources(ajazz-control-center PRIVATE src/plugin_mirabox_shim.cpp)
+    # Phase 20 Plan 20-02 (PLUGIN-09): cefQuery polyfill. kCefQueryShimSource is declared inline
+    # constexpr in the header (always reachable without WebEngine; unit-testable as a pure string
+    # per 18-03 discipline); makeCefQueryShim() body uses QWebEngineScript, so the .cpp is gated
+    # here. PropertyInspectorController::loadInspector() calls
+    # profile->scripts()->insert(makeCefQueryShim()) before loading the PI HTML.
+    target_sources(ajazz-control-center PRIVATE src/pi_cef_shim.cpp)
 endif()
 
 # ----------------------------------------------------------------------------

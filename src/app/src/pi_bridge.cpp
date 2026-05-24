@@ -415,4 +415,54 @@ void PIBridge::logMessage(QString const& message) {
                    message.toStdString());
 }
 
+QString PIBridge::invoke(QString const& json) {
+    // akp_plugin_sdk.md §8: cefQuery({request,...}) -> bridge.invoke(json).then(...)
+    // The dispatch table is CLOSED — unknown events log at WARN and return "{}".
+    // No arbitrary C++ is reachable from this method (T-20-SHIM security).
+    //
+    // COD-031: Qt JSON only (QJsonDocument / QJsonObject); no nlohmann.
+
+    QJsonParseError perr;
+    QJsonDocument const doc = QJsonDocument::fromJson(json.toUtf8(), &perr);
+    if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+        AJAZZ_LOG_WARN(
+            "pi-bridge", "invoke: invalid JSON ({}); ignoring", perr.errorString().toStdString());
+        return QStringLiteral("{}");
+    }
+
+    QJsonObject const obj = doc.object();
+    QString const event = obj.value(QStringLiteral("event")).toString();
+
+    if (event == QLatin1String("setSettings")) {
+        // Payload may carry a "settings" field or the whole object is the payload.
+        QJsonObject const payload = obj.value(QStringLiteral("payload")).toObject();
+        setSettings(QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact)));
+    } else if (event == QLatin1String("getSettings")) {
+        getSettings();
+    } else if (event == QLatin1String("setGlobalSettings")) {
+        QJsonObject const payload = obj.value(QStringLiteral("payload")).toObject();
+        setGlobalSettings(QString::fromUtf8(QJsonDocument(payload).toJson(QJsonDocument::Compact)));
+    } else if (event == QLatin1String("getGlobalSettings")) {
+        getGlobalSettings();
+    } else if (event == QLatin1String("sendToPlugin")) {
+        QString const payload = obj.value(QStringLiteral("payload")).toString();
+        sendToPlugin(payload);
+    } else if (event == QLatin1String("openUrl")) {
+        QString const url = obj.value(QStringLiteral("url")).toString();
+        openUrl(url);
+    } else if (event == QLatin1String("logMessage")) {
+        QString const message = obj.value(QStringLiteral("payload")).toString();
+        logMessage(message);
+    } else {
+        AJAZZ_LOG_WARN("pi-bridge",
+                       "invoke: unknown event '{}'; ignoring (plugin={} context={})",
+                       event.toStdString(),
+                       pluginUuid_.toStdString(),
+                       contextUuid_.toStdString());
+        return QStringLiteral("{}");
+    }
+
+    return QStringLiteral("{}");
+}
+
 } // namespace ajazz::app
