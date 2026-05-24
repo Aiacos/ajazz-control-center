@@ -147,8 +147,13 @@ public:
     [[nodiscard]] QString firmwareVersionFor(QString const& codename) const;
 
     /**
-     * @brief Set the profile accessor (called by Application after constructing the
-     *        service with the two-arg ctor; no-op if the accessor was already set).
+     * @brief Set (or replace) the profile accessor.
+     *
+     * Called by Application after constructing the service with the one-arg ctor.
+     * Unconditionally replaces any previously set accessor — Phase 16 may
+     * intentionally supply a richer accessor (persistence-backed slider value)
+     * after the initial wiring. The two-arg ctor is preferred for tests where
+     * the accessor is known at construction time.
      */
     void setProfileAccessor(ProfileAccessor accessor);
 
