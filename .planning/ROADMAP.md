@@ -79,7 +79,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 17: Plugin Protocol Completion** — On the existing `SdPluginServer`: `passHello`+salt/challenge auth, the **26 AJAZZ-only actions**, and all host→plugin events incl. encoder `dialRotate`/`dialDown`/`dialUp`. (PLUGIN-01/02/03/04/05) (completed 2026-05-24)
 - [x] **Phase 18: Plugin Manifest + Discovery + Lifecycle + Spawn** — Manifest schema (Elgato v6 + AJAZZ ext incl. `Controllers:["Knob"]`), discovery + extraction, spawn for **system node ≥20 / native exe / HTML (WebEngine)**, crash/restart/`exitApp`, Mirabox compat shim. (PLUGIN-06/07/08/11) (completed 2026-05-24)
 - [x] **Phase 19: Device ↔ Plugin Bridge (setImage e2e)** — `actionReceived`(setImage/setTitle/setState/setBG…) → control service → physical key; device input (keyDown/dialRotate/touchTap) → plugin; willAppear/deviceDidConnect lifecycle. **The convergence phase — first demoable plugin↔device round-trip.** (PLUGIN-10) (completed 2026-05-24)
-- [ ] **Phase 20: Property Inspector + Settings** — Per-action Property Inspector in `QWebEngineView`+`QWebChannel` (cefQuery polyfill, `sdpi.css` served); `get/set(+Global)Settings` persistence. (PLUGIN-09/13)
+- [x] **Phase 20: Property Inspector + Settings** — Per-action Property Inspector in `QWebEngineView`+`QWebChannel` (cefQuery polyfill, `sdpi.css` served); `get/set(+Global)Settings` persistence. (PLUGIN-09/13) (completed 2026-05-24)
 - [ ] **Phase 21: Built-in In-Process Actions** — page/profile nav, `device.brightness`, `system.hotkey` (opt-in global hook), multimedia, volume, plain text, browser/openUrl, multiactions, OBS (auth default-on). (PLUGIN-12)
 - [ ] **Phase 22: Plugin Store / Local Install** — Install from local `.sdPlugin`/`.zip` via a host-owned catalog (**no phone-home**), behind a signature/manifest-verification gate. (PLUGIN-14)
 - [ ] **Phase 23: Auxiliary Display Surfaces** — Per-encoder overlays (touch-strip zones; reconcile ENC-LCD vs DRA-zone model), main LCD strip, touch strip, and `DRA` rect-addressable partial upload. HARDWARE-GATED. (DISPLAY-10)
@@ -355,7 +355,7 @@ Plans:
 
 - [x] 20-01-PLAN.md — PLUGIN-13: settings + global restart round-trip test + path-traversal refusal; link pi_bridge.cpp into the test binary (wave 1)
 - [x] 20-02-PLAN.md — PLUGIN-09: cefQuery polyfill (pi_cef_shim + PIBridge::invoke §8 dispatcher) + bundled sdpi.css served via the interceptor redirect (wave 2)
-- [ ] 20-03-PLAN.md — PLUGIN-09: registerPropertyInspector load handshake (action-select -> loadInspector -> didReceiveSettings) + cefQuery shim insertion + Inspector.qml trigger; relay endpoints test-pinned, live route deferred to 17/19/25 per STOP gate (wave 3)
+- [x] 20-03-PLAN.md — PLUGIN-09: registerPropertyInspector load handshake (action-select -> loadInspector -> didReceiveSettings) + cefQuery shim insertion + Inspector.qml trigger; relay endpoints test-pinned, live route deferred to 17/19/25 per STOP gate (wave 3)
 
 ### Phase 21: Built-in In-Process Actions
 
@@ -474,7 +474,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 20. Property Inspector + Settings           | v1.3      | 2/3            | In Progress      |            |
+| 20. Property Inspector + Settings           | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
