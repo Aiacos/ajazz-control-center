@@ -166,6 +166,18 @@ std::vector<PluginManifest> PluginManager::discover() {
             qWarning("PluginManager: cannot open manifest at %s", qPrintable(manifestPath));
             continue;
         }
+        // IN-01: size cap before readAll() — guard against multi-megabyte or corrupt manifests.
+        // The plugins directory is nominally trusted but is user-configurable; an oversized
+        // manifest.json would be fully read into memory before the parser could reject it.
+        constexpr qint64 kMaxManifestBytes =
+            1LL * 1024 * 1024; // 1 MiB is generous for any real manifest
+        if (f.size() > kMaxManifestBytes) {
+            qWarning("PluginManager: manifest at %s is suspiciously large (%lld bytes); skipping",
+                     qPrintable(manifestPath),
+                     static_cast<long long>(f.size()));
+            f.close();
+            continue;
+        }
         QByteArray const data = f.readAll();
         f.close();
 
