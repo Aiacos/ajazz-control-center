@@ -438,6 +438,15 @@ Application::Application(QObject* parent)
                      m_streamDockControl.get(),
                      &StreamDockControlService::repaintFromProfile);
 
+    // Phase 21 (T-21-lunbo): wire profileChanged -> resetLunBoCursors so LunBo
+    // per-key carousel positions start fresh when a new profile loads.
+    // Without this, stale cursor positions from the previous profile persist and
+    // the first action after a profile change is determined by the leftover index.
+    QObject::connect(m_profileController.get(),
+                     &ProfileController::profileChanged,
+                     m_builtinActions.get(),
+                     &BuiltinActionsService::resetLunBoCursors);
+
     // Phase 16 Plan 16-03 (PROFILE-02): wire pageNavRequested -> navigatePage so
     // a touch-strip swipe drives the top-level-page carousel and repaints the
     // new page via repaintPage(newPageId). The control service holds the carousel
