@@ -76,7 +76,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 14: Stream Dock Control Service** — Persistent held-open control service: brightness ON at `open()`, live key-image push (`BAT`→chunks→`ULEND`, ~1s, no manual flush), repaint-on-load, `VER` firmware probe cached, and the `akp05e` `hasClock=false` honesty fix. The first app→device call that reaches the panel. (DISPLAY-06/07/08, DOCK-01/02, DEVICES-11) (completed 2026-05-24)
 - [x] **Phase 15: Stream Dock Input Routing** — Poll loop drives each connected Stream Deck; key press/release, **4-encoder rotate (CW/CCW) + press (synthesised release)**, and touch-strip tap-zone/swipe route to bound actions via the core `ActionEngine` (instantiated in the app for the first time); 16 ms rotation coalescer. (INPUT-03/04/05) (completed 2026-05-24)
 - [x] **Phase 16: Device Controls + Binding Persistence + Pages** — Brightness slider + "clear all" drive the device live; key/encoder/touch bindings persist to the profile and survive restart; multi-page/folder profiles drive host-side page navigation (swipe + page actions). (DISPLAY-09, PROFILE-01/02) (completed 2026-05-24)
-- [ ] **Phase 17: Plugin Protocol Completion** — On the existing `SdPluginServer`: `passHello`+salt/challenge auth, the **26 AJAZZ-only actions**, and all host→plugin events incl. encoder `dialRotate`/`dialDown`/`dialUp`. (PLUGIN-01/02/03/04/05)
+- [x] **Phase 17: Plugin Protocol Completion** — On the existing `SdPluginServer`: `passHello`+salt/challenge auth, the **26 AJAZZ-only actions**, and all host→plugin events incl. encoder `dialRotate`/`dialDown`/`dialUp`. (PLUGIN-01/02/03/04/05) (completed 2026-05-24)
 - [ ] **Phase 18: Plugin Manifest + Discovery + Lifecycle + Spawn** — Manifest schema (Elgato v6 + AJAZZ ext incl. `Controllers:["Knob"]`), discovery + extraction, spawn for **system node ≥20 / native exe / HTML (WebEngine)**, crash/restart/`exitApp`, Mirabox compat shim. (PLUGIN-06/07/08/11)
 - [ ] **Phase 19: Device ↔ Plugin Bridge (setImage e2e)** — `actionReceived`(setImage/setTitle/setState/setBG…) → control service → physical key; device input (keyDown/dialRotate/touchTap) → plugin; willAppear/deviceDidConnect lifecycle. **The convergence phase — first demoable plugin↔device round-trip.** (PLUGIN-10)
 - [ ] **Phase 20: Property Inspector + Settings** — Per-action Property Inspector in `QWebEngineView`+`QWebChannel` (cefQuery polyfill, `sdpi.css` served); `get/set(+Global)Settings` persistence. (PLUGIN-09/13)
@@ -297,7 +297,7 @@ Plans:
 
 - [x] 17-01-PLAN.md — PLUGIN-01/02/03: route all 39 plugin→host actions (13 standard + 26 AJAZZ) via actionReceived, re-pin LocalHost-only bind + envelope round-trip, invert the setBG→unhandled test (wave 1)
 - [x] 17-02-PLAN.md — PLUGIN-04: sendEvent host→plugin writer + uuid→socket lookup covering §4.4 events incl. dialRotate ticks/pressed/controller (wave 2)
-- [ ] 17-03-PLAN.md — PLUGIN-05: passHello + random per-connection nested salt/challenge auth (sha256(password+salt)), reject-after-5 socket close, test-only password setter (wave 3)
+- [x] 17-03-PLAN.md — PLUGIN-05: passHello + random per-connection nested salt/challenge auth (sha256(password+salt)), reject-after-5 socket close, test-only password setter (wave 3)
 
 ### Phase 18: Plugin Manifest + Discovery + Lifecycle + Spawn
 
@@ -471,7 +471,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 17. Plugin Protocol Completion              | v1.3      | 2/3            | In Progress      |            |
+| 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
 | 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
