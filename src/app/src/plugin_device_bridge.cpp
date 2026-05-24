@@ -131,6 +131,15 @@ int ContextRegistry::size() const noexcept {
     return static_cast<int>(m_byContext.count());
 }
 
+QList<std::pair<QString, ActionContext>> ContextRegistry::snapshot() const {
+    QList<std::pair<QString, ActionContext>> result;
+    result.reserve(static_cast<qsizetype>(m_byContext.size()));
+    for (auto it = m_byContext.cbegin(); it != m_byContext.cend(); ++it) {
+        result.append({it.key(), it.value()});
+    }
+    return result;
+}
+
 // ---------------------------------------------------------------------------
 // Pure helpers: coordinate conversion
 // ---------------------------------------------------------------------------
@@ -449,6 +458,374 @@ ContextRegistry& PluginDeviceBridge::registry() noexcept {
 
 ContextRegistry const& PluginDeviceBridge::registry() const noexcept {
     return m_registry;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-03: onDeviceEvent — DeviceEvent -> §4.4 envelope -> sendEvent
+// ---------------------------------------------------------------------------
+
+void PluginDeviceBridge::setProfileAccessor(std::function<core::Profile const&()> accessor) {
+    m_profileAccessor = std::move(accessor);
+}
+
+void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEvent const& ev) {
+    // T-19-sock: sendEvent re-resolves the live slot each call. Never cache socket*.
+    // T-19-leak: only sendEvent to the plugin that owns the context at this coord.
+    // COD-031: QJsonObject only; no nlohmann.
+
+    if (m_server == nullptr) {
+        return;
+    }
+
+    using Kind = core::DeviceEvent::Kind;
+
+    switch (ev.kind) {
+
+    // ------------------------------------------------------------------
+    // Key press / release -> keyDown / keyUp
+    // ------------------------------------------------------------------
+    case Kind::KeyPressed:
+    case Kind::KeyReleased: {
+        // ev.index is 1-based (device.hpp: "index = 1-based key number").
+        constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
+        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(ev.index), kDefaultKeyCols);
+        auto const ctxOpt = m_registry.byCoord(QStringLiteral("Keypad"), gc.row, gc.column);
+        if (!ctxOpt.has_value()) {
+            return; // unbound coordinate — silent drop (T-19-leak)
+        }
+        ActionContext const& ctx = *ctxOpt;
+        // Build §4.4 payload.
+        QJsonObject const coords{
+            {QStringLiteral("row"), gc.row},
+            {QStringLiteral("column"), gc.column},
+        };
+        QJsonObject const payload{
+            {QStringLiteral("coordinates"), coords},
+            {QStringLiteral("isInMultiAction"), false},
+        };
+        QString const eventName =
+            (ev.kind == Kind::KeyPressed) ? QStringLiteral("keyDown") : QStringLiteral("keyUp");
+        // sendEvent returns false safely if socket is closed (T-19-sock).
+        m_server->sendEvent(ctx.pluginUuid, eventName, payload);
+        break;
+    }
+
+    // ------------------------------------------------------------------
+    // Encoder turned -> dialRotate with signed ticks
+    // ------------------------------------------------------------------
+    case Kind::EncoderTurned: {
+        // ev.index is 0-based encoder index; ev.value is signed delta (device.hpp).
+        // Convention: encoder at (controller="Encoder", row=0, column=encoderIndex).
+        auto const ctxOpt =
+            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+        if (!ctxOpt.has_value()) {
+            return; // unbound encoder — silent drop
+        }
+        ActionContext const& ctx = *ctxOpt;
+        QJsonObject const payload{
+            {QStringLiteral("ticks"), ev.value}, // signed (int32) preserved
+            {QStringLiteral("pressed"), false},
+            {QStringLiteral("controller"), QStringLiteral("Encoder")},
+        };
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialRotate"), payload);
+        break;
+    }
+
+    // ------------------------------------------------------------------
+    // Encoder pressed -> dialDown + legacy keyDownCord alias
+    // ------------------------------------------------------------------
+    case Kind::EncoderPressed: {
+        auto const ctxOpt =
+            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+        if (!ctxOpt.has_value()) {
+            return;
+        }
+        ActionContext const& ctx = *ctxOpt;
+        QJsonObject const payload{
+            {QStringLiteral("controller"), QStringLiteral("Encoder")},
+        };
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialDown"), payload);
+        // AJAZZ legacy alias (§4.4 keyDownCord — AJAZZ-only).
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("keyDownCord"), payload);
+        break;
+    }
+
+    // ------------------------------------------------------------------
+    // Encoder released -> dialUp + legacy keyUpCord alias
+    // ------------------------------------------------------------------
+    case Kind::EncoderReleased: {
+        // Synthesised release from Phase 15's synthesiseEncoderRelease hook.
+        auto const ctxOpt =
+            m_registry.byCoord(QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
+        if (!ctxOpt.has_value()) {
+            return;
+        }
+        ActionContext const& ctx = *ctxOpt;
+        QJsonObject const payload{
+            {QStringLiteral("controller"), QStringLiteral("Encoder")},
+        };
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialUp"), payload);
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("keyUpCord"), payload);
+        break;
+    }
+
+    // ------------------------------------------------------------------
+    // Touch strip -> touchTap for gesture 0 (tap); swipes dropped
+    // ------------------------------------------------------------------
+    case Kind::TouchStrip: {
+        // Touch value packing: (gesture<<16)|X (same as stream_dock_input_service.cpp:219).
+        auto const gesture = static_cast<std::uint32_t>(ev.value) >> 16u;
+        auto const x = static_cast<int>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
+
+        // Only gesture 0 (tap) is a plugin event.
+        // Gestures 1 (swipe-left) and 2 (swipe-right) are page-nav intents
+        // owned by Phase 16 — dropped here (not plugin events).
+        if (gesture != 0u) {
+            return;
+        }
+
+        // Derive the encoder zone from X position (mirrors zoneForX in input service).
+        // The zone index is the 0-based encoder index; look up the encoder context.
+        // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
+        constexpr int kEncoderCount = 4;
+        constexpr int kTouchStripRangeX = 640;
+        int const zone =
+            std::min(static_cast<int>((x * kEncoderCount) / kTouchStripRangeX), kEncoderCount - 1);
+
+        auto const ctxOpt = m_registry.byCoord(QStringLiteral("Encoder"), 0, zone);
+        if (!ctxOpt.has_value()) {
+            return;
+        }
+        ActionContext const& ctx = *ctxOpt;
+        QJsonObject const payload{
+            {QStringLiteral("x"), x},
+            {QStringLiteral("y"), 0},
+            {QStringLiteral("hold"), false},
+        };
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("touchTap"), payload);
+        break;
+    }
+
+    // Connected/Disconnected are handled by onDeviceConnected/Disconnected lifecycle.
+    case Kind::Connected:
+    case Kind::Disconnected:
+        break;
+    }
+    Q_UNUSED(deviceId); // deviceId available for future multi-device routing
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-03: Lifecycle helpers
+// ---------------------------------------------------------------------------
+
+void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
+                                                       QString const& pluginUuid) {
+    // A6 simplification: scope to root page only (multi-page navigation is Phase 16).
+    // willAppear is sent per bound ActionKind::Plugin action on the root page.
+    if (!m_profileAccessor || m_server == nullptr) {
+        return;
+    }
+
+    auto const& prof = m_profileAccessor();
+    constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
+    QString const pageId = QStringLiteral("root");
+
+    // Enumerate key bindings (0-based uint16_t key index in Profile::keys).
+    for (auto const& [keyIdx0, binding] : prof.keys) {
+        for (auto const& action : binding.onPress) {
+            if (action.kind != core::ActionKind::Plugin) {
+                continue;
+            }
+            QString const actionId = QString::fromStdString(action.id);
+            if (actionId.isEmpty()) {
+                continue;
+            }
+            // Resolve the owner via longest-prefix match (T-19-owner).
+            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            if (owner.isEmpty()) {
+                continue;
+            }
+            // Filter: if pluginUuid is non-empty, only emit for that plugin.
+            if (!pluginUuid.isEmpty() && owner != pluginUuid) {
+                continue;
+            }
+            // Profile::keys use 0-based uint16_t index; device uses 1-based.
+            std::uint8_t const keyIdx1 = static_cast<std::uint8_t>(keyIdx0 + 1);
+            auto const gc = coordsForKeyIndex(keyIdx1, kDefaultKeyCols);
+
+            ActionContext ctx;
+            ctx.deviceId = deviceId;
+            ctx.pageId = pageId;
+            ctx.row = gc.row;
+            ctx.column = gc.column;
+            ctx.controller = QStringLiteral("Keypad");
+            ctx.actionUUID = actionId;
+            ctx.pluginUuid = owner;
+
+            QString const ctxId = m_registry.registerContext(ctx);
+
+            // Send willAppear (§4.4) — carries context + coordinates.
+            QJsonObject const coords{
+                {QStringLiteral("row"), gc.row},
+                {QStringLiteral("column"), gc.column},
+            };
+            QJsonObject const payload{
+                {QStringLiteral("context"), ctxId},
+                {QStringLiteral("coordinates"), coords},
+                {QStringLiteral("isInMultiAction"), false},
+            };
+            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+        }
+    }
+
+    // Enumerate encoder bindings (0-based encoder index in Profile::encoders).
+    for (auto const& [encIdx, encBinding] : prof.encoders) {
+        for (auto const& action : encBinding.onPress) {
+            if (action.kind != core::ActionKind::Plugin) {
+                continue;
+            }
+            QString const actionId = QString::fromStdString(action.id);
+            if (actionId.isEmpty()) {
+                continue;
+            }
+            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            if (owner.isEmpty()) {
+                continue;
+            }
+            if (!pluginUuid.isEmpty() && owner != pluginUuid) {
+                continue;
+            }
+
+            // Encoder convention: controller="Encoder", row=0, column=encoderIndex (0-based).
+            ActionContext ctx;
+            ctx.deviceId = deviceId;
+            ctx.pageId = pageId;
+            ctx.row = 0;
+            ctx.column = static_cast<int>(encIdx);
+            ctx.controller = QStringLiteral("Encoder");
+            ctx.actionUUID = actionId;
+            ctx.pluginUuid = owner;
+
+            QString const ctxId = m_registry.registerContext(ctx);
+
+            QJsonObject const coords{
+                {QStringLiteral("row"), 0},
+                {QStringLiteral("column"), static_cast<int>(encIdx)},
+            };
+            QJsonObject const payload{
+                {QStringLiteral("context"), ctxId},
+                {QStringLiteral("coordinates"), coords},
+                {QStringLiteral("isInMultiAction"), false},
+            };
+            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+        }
+    }
+}
+
+void PluginDeviceBridge::retirePageContexts(QString const& deviceId,
+                                            QString const& pageId,
+                                            QString const& pluginUuid) {
+    // Use the snapshot() accessor (Rule 2: added to ContextRegistry) to enumerate
+    // all currently registered contexts, filter by deviceId + pageId (+ optional
+    // pluginUuid), send willDisappear to each, then retire them individually.
+    // This avoids mutating the registry while iterating.
+    if (m_server == nullptr) {
+        return;
+    }
+
+    auto const entries = m_registry.snapshot();
+    for (auto const& [ctxId, ctx] : entries) {
+        if (ctx.deviceId != deviceId || ctx.pageId != pageId) {
+            continue;
+        }
+        if (!pluginUuid.isEmpty() && ctx.pluginUuid != pluginUuid) {
+            continue;
+        }
+        // Send willDisappear — plugin may have already disconnected (socket closed).
+        // sendEvent returns false safely (T-19-sock).
+        QJsonObject const coords{
+            {QStringLiteral("row"), ctx.row},
+            {QStringLiteral("column"), ctx.column},
+        };
+        QJsonObject const payload{
+            {QStringLiteral("context"), ctxId},
+            {QStringLiteral("coordinates"), coords},
+            {QStringLiteral("isInMultiAction"), false},
+        };
+        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("willDisappear"), payload);
+        m_registry.retire(ctxId);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Phase 19-03: Lifecycle slots
+// ---------------------------------------------------------------------------
+
+void PluginDeviceBridge::onPluginRegistered(QString const& pluginUuid) {
+    m_registeredPlugins.insert(pluginUuid);
+    // Populate contexts + willAppear for this plugin's actions on the active page.
+    // Phase 19 simplification: use "akp05e" as the canonical device codename.
+    // Phase 23+ will source from DeviceRegistry when multi-device support lands.
+    QString const deviceId = QStringLiteral("akp05e"); // canonical; Phase 23+ sources from registry
+    populateContextsForActivePage(deviceId, pluginUuid);
+}
+
+void PluginDeviceBridge::onPluginDisconnected(QString const& pluginUuid) {
+    m_registeredPlugins.remove(pluginUuid);
+    // Retire this plugin's contexts and send willDisappear (best-effort — socket
+    // may already be closed, sendEvent returns false safely; T-19-sock).
+    // Scope to root page + this plugin only to avoid retiring other plugins' contexts.
+    QString const deviceId = QStringLiteral("akp05e"); // canonical
+    QString const pageId = QStringLiteral("root");
+    retirePageContexts(deviceId, pageId, pluginUuid);
+}
+
+void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
+    // Populate contexts for the active page.
+    populateContextsForActivePage(deviceId);
+
+    // Send deviceDidConnect to all registered plugins (§4.4).
+    if (m_server == nullptr) {
+        return;
+    }
+    QJsonObject const deviceInfo{
+        {QStringLiteral("name"), deviceId},
+        {QStringLiteral("type"), QStringLiteral("streamdeck")},
+        {QStringLiteral("size"),
+         QJsonObject{
+             {QStringLiteral("columns"), 5},
+             {QStringLiteral("rows"), 2},
+         }},
+    };
+    QJsonObject const payload{{QStringLiteral("deviceInfo"), deviceInfo}};
+    for (QString const& uuid : m_registeredPlugins) {
+        m_server->sendEvent(uuid, QStringLiteral("deviceDidConnect"), payload);
+    }
+}
+
+void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
+    if (m_server == nullptr) {
+        return;
+    }
+    // Send deviceDidDisconnect to all registered plugins (§4.4).
+    QJsonObject const deviceInfo{
+        {QStringLiteral("name"), deviceId},
+        {QStringLiteral("type"), QStringLiteral("streamdeck")},
+    };
+    QJsonObject const payload{{QStringLiteral("deviceInfo"), deviceInfo}};
+    for (QString const& uuid : m_registeredPlugins) {
+        m_server->sendEvent(uuid, QStringLiteral("deviceDidDisconnect"), payload);
+    }
+    // Retire all contexts for this device (T-19-stale: post-retire events are dropped).
+    m_registry.retireDevice(deviceId);
+}
+
+void PluginDeviceBridge::onActivePageChanged(QString const& deviceId, QString const& pageId) {
+    // Retire old page contexts (willDisappear) then populate the new page (willAppear).
+    // A6: root-page only for Phase 19; multi-page navigation is Phase 16's authority.
+    retirePageContexts(deviceId, QStringLiteral("root"), {});
+    populateContextsForActivePage(deviceId);
+    Q_UNUSED(pageId); // multi-page scope deferred to Phase 16
 }
 
 } // namespace ajazz::app

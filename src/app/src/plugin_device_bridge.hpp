@@ -33,6 +33,9 @@
  */
 #pragma once
 
+#include "ajazz/core/device.hpp"
+#include "ajazz/core/profile.hpp"
+
 #include <QHash>
 #include <QImage>
 #include <QJsonObject>
@@ -41,6 +44,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <functional>
 #include <optional>
 
 // Forward declarations for seam pointers wired in 19-02.
@@ -164,6 +168,18 @@ public:
 
     /// @return Number of currently registered contexts.
     [[nodiscard]] int size() const noexcept;
+
+    /**
+     * @brief Return a snapshot of all registered ActionContexts.
+     *
+     * Used by PluginDeviceBridge to enumerate contexts before sending
+     * willDisappear and then retiring them. The snapshot is a copy so the
+     * caller may safely call retire() while iterating it.
+     *
+     * @return A list of {contextId, ActionContext} pairs for all registered
+     *         contexts at the moment of the call.
+     */
+    [[nodiscard]] QList<std::pair<QString, ActionContext>> snapshot() const;
 
 private:
     /// Derive the stable encoded-tuple context id from an ActionContext.
@@ -350,6 +366,71 @@ public slots:
      */
     void onAction(QString const& pluginUuid, QJsonObject const& action);
 
+    // ---- Phase 19-03: outbound device->plugin event routing ----------------
+
+    /**
+     * @brief Map a raw DeviceEvent to a §4.4 plugin event and deliver it.
+     *
+     * Connected to StreamDockInputService::deviceEvent (Phase 19 seam).
+     * Routes the event to the owning plugin via ContextRegistry::byCoord +
+     * SdPluginServer::sendEvent. An unbound coordinate is silently dropped
+     * (T-19-leak: no cross-plugin leakage, no crash).
+     *
+     * Event mapping:
+     *   KeyPressed/KeyReleased -> keyDown/keyUp with 0-based coordinates.
+     *   EncoderTurned          -> dialRotate with signed ticks + controller "Encoder".
+     *   EncoderPressed         -> dialDown + legacy keyDownCord alias.
+     *   EncoderReleased        -> dialUp + legacy keyUpCord alias.
+     *   TouchStrip gesture 0   -> touchTap {x, y:0, hold:false}.
+     *   TouchStrip gesture 1/2 -> dropped (page-nav intent owned by Phase 16).
+     *   Connected/Disconnected -> handled by onDeviceConnected/Disconnected.
+     *
+     * @param deviceId  Device codename from StreamDockInputService::deviceEvent.
+     * @param ev        The raw DeviceEvent from the input service.
+     */
+    void onDeviceEvent(QString const& deviceId, ajazz::core::DeviceEvent const& ev);
+
+    /**
+     * @brief Handle plugin registration: populate contexts + willAppear for
+     *        the newly-connected plugin's actions on the root page.
+     *
+     * @param pluginUuid  The registered plugin UUID (from SdPluginServer::pluginRegistered).
+     */
+    void onPluginRegistered(QString const& pluginUuid);
+
+    /**
+     * @brief Handle plugin disconnect: retire its contexts (willDisappear sent
+     *        for each retired context).
+     *
+     * @param pluginUuid  The disconnected plugin UUID (from SdPluginServer::pluginDisconnected).
+     */
+    void onPluginDisconnected(QString const& pluginUuid);
+
+    /**
+     * @brief Handle device connect: populate contexts + send deviceDidConnect
+     *        to all registered plugins.
+     *
+     * @param deviceId  Device codename of the newly-connected device.
+     */
+    void onDeviceConnected(QString const& deviceId);
+
+    /**
+     * @brief Handle device disconnect: retire contexts + send deviceDidDisconnect
+     *        to all registered plugins.
+     *
+     * @param deviceId  Device codename of the removed device.
+     */
+    void onDeviceDisconnected(QString const& deviceId);
+
+    /**
+     * @brief Handle page change: retire old-page contexts (willDisappear) then
+     *        populate new-page contexts (willAppear).
+     *
+     * @param deviceId  Device whose profile page changed.
+     * @param pageId    New active page id.
+     */
+    void onActivePageChanged(QString const& deviceId, QString const& pageId);
+
 private:
     /// Dispatch setImage: decode data-URI, check ownership, call assignKeyImage
     /// (or paintPlaceholder on decode failure). No failure event sent back (§5).
@@ -376,11 +457,60 @@ private:
     /// Sends NO failure event back to the plugin (spec §5).
     void paintPlaceholder(ActionContext const& ctx, std::uint8_t keyCols);
 
+    // ---- Phase 19-03 private helpers ---------------------------------------
+
+    /**
+     * @brief Register contexts + send willAppear for every bound ActionKind::Plugin
+     *        action on the root page of the active profile that belongs to the
+     *        given plugin (or all registered plugins if pluginUuid is empty).
+     *
+     * Scoped to the root page (A6 simplification: multi-page navigation authority
+     * lives in Phase 16; the bridge populates only what is currently visible).
+     *
+     * @param deviceId    Device codename, e.g. "akp05e".
+     * @param pluginUuid  If non-empty, only emit willAppear for this plugin's actions.
+     *                    If empty, emit for all registered plugins.
+     */
+    void populateContextsForActivePage(QString const& deviceId, QString const& pluginUuid = {});
+
+    /**
+     * @brief Send willDisappear for every context belonging to the given plugin
+     *        on the given device+page, then retire them from the registry.
+     *
+     * @param deviceId   Device codename.
+     * @param pageId     Page id to retire.
+     * @param pluginUuid If non-empty, only retire contexts owned by this plugin.
+     */
+    void retirePageContexts(QString const& deviceId,
+                            QString const& pageId,
+                            QString const& pluginUuid = {});
+
     SdPluginServer* m_server{nullptr};            // Phase 17 seam
     StreamDockControlService* m_control{nullptr}; // Phase 14 seam
     StreamDockInputService* m_input{nullptr};     // Phase 15 seam (used in 19-03)
 
     ContextRegistry m_registry;
+
+    /// Set of currently registered plugin UUIDs (from pluginRegistered signal).
+    /// Used for owner resolution and lifecycle gating (T-19-owner).
+    QSet<QString> m_registeredPlugins;
+
+    /// Accessor returning the currently active profile by const-ref.
+    /// Injected from Application after construction via setProfileAccessor().
+    /// Used by populateContextsForActivePage to enumerate bound plugin actions.
+    std::function<ajazz::core::Profile const&()> m_profileAccessor;
+
+public:
+    /**
+     * @brief Inject a profile accessor so the bridge can enumerate bound plugin
+     *        actions for willAppear population.
+     *
+     * Called by Application after constructing the bridge. If not set,
+     * populateContextsForActivePage is a no-op (graceful degradation).
+     *
+     * @param accessor  Lambda returning `Profile const&` for the active profile.
+     */
+    void setProfileAccessor(std::function<ajazz::core::Profile const&()> accessor);
 };
 
 } // namespace ajazz::app

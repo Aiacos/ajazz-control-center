@@ -130,6 +130,17 @@ target_link_libraries(
             Qt6::Widgets
 )
 
+# Phase 19 (PLUGIN-10): PluginDeviceBridge + SdPluginServer are included via ACC_QML_MODULE_SOURCES
+# and reference Qt6::WebSockets symbols. When WebSockets is available (same condition as the app
+# target) we must add sd_plugin_server.cpp and link Qt6::WebSockets here to resolve those symbols;
+# without this the QML smoke test fails to link even though the e2e behaviour is disabled at runtime
+# in the headless harness.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/sd_plugin_server.cpp")
+    target_link_libraries(ajazz_qml_tests PRIVATE Qt6::WebSockets)
+    target_compile_definitions(ajazz_qml_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+endif()
+
 # qmlcachegen emits generated C++ that trips GCC/Clang -Werror (null-deref on the loader,
 # qsizetype->int conversions). We don't own those sources — relax warnings-as-error for the
 # generated qmlcache TUs, mirroring src/app.

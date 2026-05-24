@@ -107,6 +107,7 @@ void StreamDockInputService::setActiveDevice(std::shared_ptr<core::IDevice> devi
 
     if (!device) {
         m_device.reset();
+        m_activeDeviceId.clear();
         return;
     }
 
@@ -120,6 +121,14 @@ void StreamDockInputService::setActiveDevice(std::shared_ptr<core::IDevice> devi
 
     // Start the poll pump.
     m_pollTimer->start();
+}
+
+// ---------------------------------------------------------------------------
+// setActiveDeviceCodename
+// ---------------------------------------------------------------------------
+
+void StreamDockInputService::setActiveDeviceCodename(QString const& codename) {
+    m_activeDeviceId = codename;
 }
 
 // ---------------------------------------------------------------------------
@@ -241,6 +250,11 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
     case core::DeviceEvent::Kind::Disconnected:
         break;
     }
+
+    // Phase 19 seam: emit the raw DeviceEvent so PluginDeviceBridge can map
+    // it to §4.4 plugin events. Emitted AFTER the action chain so the normal
+    // input dispatch happens first; the bridge is an observer, not an interceptor.
+    emit deviceEvent(m_activeDeviceId, ev);
 }
 
 // ---------------------------------------------------------------------------

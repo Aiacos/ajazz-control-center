@@ -115,6 +115,19 @@ public:
     void setActiveDevice(std::shared_ptr<core::IDevice> device);
 
     /**
+     * @brief Record the codename of the active device for use in deviceEvent().
+     *
+     * Phase 19 seam: Application calls this alongside setActiveDevice so the
+     * deviceEvent signal carries the device id that PluginDeviceBridge needs for
+     * registry lookups. Call BEFORE setActiveDevice so the first events carry
+     * the correct id.
+     *
+     * @param codename  Device codename, e.g. "akp05e". Pass an empty string to
+     *                  clear (matching a setActiveDevice(nullptr) call).
+     */
+    void setActiveDeviceCodename(QString const& codename);
+
+    /**
      * @brief Pump one poll cycle on the held device.
      *
      * Calls `m_device->poll()`, which invokes the registered onEvent callback
@@ -158,6 +171,22 @@ Q_SIGNALS:
      */
     void encoderReleaseSynthesised(std::uint16_t encoderIndex);
 
+    /**
+     * @brief Emitted for every DeviceEvent that passes through dispatch().
+     *
+     * Phase 19 seam: PluginDeviceBridge connects to this signal to receive the
+     * raw DeviceEvent stream and map it to §4.4 plugin events via sendEvent.
+     * Emitted AFTER the Action chain has been dispatched (input service
+     * executes its own bindings first, then the bridge observes the event).
+     *
+     * @param deviceId  The codename of the device that produced the event,
+     *                  e.g. "akp05e" (passed through from the active-device
+     *                  codename set by setActiveDevice via Application).
+     * @param ev        The DeviceEvent — index and value semantics per
+     *                  device.hpp DeviceEvent::Kind documentation.
+     */
+    void deviceEvent(QString const& deviceId, ajazz::core::DeviceEvent const& ev);
+
 private Q_SLOTS:
     /// Drain accumulated encoder deltas: fire one onCw / onCcw per encoder
     /// per 16 ms window, then zero the accumulators.
@@ -176,6 +205,10 @@ private:
 
     ProfileAccessor m_profileAccessor;
     std::unique_ptr<core::ActionEngine> m_engine;
+
+    /// Codename of the currently active device (set by setActiveDevice via Application).
+    /// Passed in the deviceEvent signal so PluginDeviceBridge can look up the context.
+    QString m_activeDeviceId;
 
     /// Held device handle (ARCH-03 single-handle invariant — Pitfall 2).
     std::shared_ptr<core::IDevice> m_device;
