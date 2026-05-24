@@ -205,25 +205,62 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         return;
     }
 
-    // For action-class messages (setTitle / setImage / showAlert / ... — see
-    // akp_plugin_sdk.md §4) the app layer wires emit-target lookups based on
-    // the action's "context" field. MVP just surfaces the JSON for the app
-    // layer; full dispatch tables land in follow-up commits.
-    static constexpr std::array<char const*, 13> kStandardActions = {"setTitle",
-                                                                     "setImage",
-                                                                     "showAlert",
-                                                                     "showOk",
-                                                                     "getSettings",
-                                                                     "setSettings",
-                                                                     "getGlobalSettings",
-                                                                     "setGlobalSettings",
-                                                                     "switchToProfile",
-                                                                     "openUrl",
-                                                                     "logMessage",
-                                                                     "registerPlugin",
-                                                                     "registerPropertyInspector"};
+    // Full routed-action set per akp_plugin_sdk.md §4.3 (spec 4.3 table).
+    // 15 standard Elgato routed + 26 AJAZZ-only = 41 total.
+    // The array is intentionally SIZELESS (CTAD) so the count is derived from
+    // the literal and can never drift out of sync with the list.
+    // NOTE: registerPlugin / registerPropertyInspector are NOT here — they are
+    // handled in the earlier branch (above, with early return).
+    // NOTE: `authentication` is handled separately by the auth slice (17-03).
+    static constexpr std::array kRoutedActions = {
+        // --- Standard Elgato routed (15) — spec 4.3 "Standard Elgato? yes",
+        //     minus registerPlugin / registerPropertyInspector (handled above).
+        "setTitle",
+        "setImage",
+        "setState",
+        "showAlert",
+        "showOk",
+        "getSettings",
+        "setSettings",
+        "getGlobalSettings",
+        "setGlobalSettings",
+        "switchToProfile",
+        "sendToPropertyInspector",
+        "sendToPlugin",
+        "openUrl",
+        "logMessage",
+        "setFeedback", // Stream Deck Plus encoder feedback — standard per spec 4.3
+        // --- AJAZZ-only routed (26) — spec 4.3 "Standard Elgato? AJAZZ-only".
+        //     setFeedback is NOT in this group (it is standard).
+        "setBG",
+        "setBackground",
+        "clearIcon",
+        "sendToDevice",
+        "openTouchbarSecondaryMenu",
+        "exitTouchbarSecondaryMenu",
+        "enterGatheringEvent",
+        "registrationScreenSaverEvent",
+        "unRegistrationScreenSaverEvent",
+        "setText",
+        "lockScreen",
+        "unLockScreen",
+        "getScreenshot",
+        "getSystemAudioVolume",
+        "getUserInfo",
+        "setAcImgTop",
+        "onSwitchToFolderProfile",
+        "onSwitchFromFolderProfile",
+        "deleteAction",
+        "stopBackground",
+        "exitFullScreen",
+        "touchTap",
+        "getDetectedSensorsData",
+        "startAudioCapture",
+        "stopAudioCapture",
+        "sendUserInfo",
+    };
     bool isAction = false;
-    for (auto const* known : kStandardActions) {
+    for (auto const* known : kRoutedActions) {
         if (eventName == QLatin1String(known)) {
             isAction = true;
             break;
@@ -234,9 +271,9 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         emit actionReceived(senderUuid, msg);
         return;
     }
-    // Anything else surfaces as unhandled — useful for tracing the 26
-    // AJAZZ-extension events (setBG, screenColorSent, etc.) we don't yet
-    // implement.
+    // Genuinely-unknown events still surface via unhandledEventReceived for
+    // forward-compat tracing (T-17-FWD). The 41 routed actions above narrow
+    // this surface; any event the spec does not yet define still reaches here.
     AJAZZ_LOG_INFO("plugin-server",
                    "unhandled event '{}' from plugin uuid={}",
                    eventName.toStdString(),

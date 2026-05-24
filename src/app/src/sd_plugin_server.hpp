@@ -6,9 +6,10 @@
  * Implements the protocol surface vendor Stream Dock SDLibrary1.dll exposes
  * via `SDPluginServer::startListen()` — see
  * docs/protocols/streamdeck/akp_plugin_sdk.md. The Elgato Stream Deck v6
- * protocol is implemented verbatim (13 standard events + 13 standard
- * actions); the 26 AJAZZ extensions (including the `setBG` per-key
- * background extension) land in follow-up commits.
+ * protocol is implemented verbatim (15 standard routed actions + 26 AJAZZ
+ * extension actions = 41 total routed, per spec §4.3). All plugin->host
+ * actions route via actionReceived; genuinely-unknown events still surface
+ * via unhandledEventReceived for forward-compat tracing.
  *
  * **Security delta from vendor**: vendor binds to `QHostAddress::Any`
  * (0.0.0.0 — any local interface, security regression). We bind to
@@ -33,8 +34,8 @@
  *
  * **NOT YET IMPLEMENTED** (defer to follow-up commits):
  *   - Spawning plugin processes (QProcess child management for Node.js)
- *   - 26 AJAZZ extensions (`setBG`, `screenColorSent`, etc.)
- *   - passHello/salt/challenge auth handshake
+ *   - passHello/salt/challenge auth handshake (17-03)
+ *   - Host-to-plugin sendEvent writer (17-02)
  *   - Per-plugin Property Inspector WebView integration
  *   - Persistence (settings cache + global settings)
  *   - Plugin store catalogue parsing (P3.17 carry-over)
