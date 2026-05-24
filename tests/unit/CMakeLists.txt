@@ -446,6 +446,17 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_PLUGIN_MANAGER=1)
 endif()
 
+# Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge pure-helper and ContextRegistry unit tests.
+# Gated on AJAZZ_HAVE_WEBSOCKETS — the bridge header composes SdPluginServer (forward-declared here;
+# wired in 19-02), and the test binary links Qt6::WebSockets for QCoreApplication + WS stack. Links
+# plugin_device_bridge.cpp directly (mirrors the sd_plugin_server.cpp pattern).
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_plugin_device_bridge.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
+    )
+endif()
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.
