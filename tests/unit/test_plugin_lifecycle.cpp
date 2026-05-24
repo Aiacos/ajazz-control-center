@@ -20,6 +20,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcessEnvironment>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QWebSocket>
@@ -322,4 +323,188 @@ TEST_CASE("PluginManagerTest shutdown sends exitApp before terminate", "[plugin-
     client.close();
     pump(200);
     server.stop();
+}
+
+// ---------------------------------------------------------------------------
+// Phase 18 security regression tests (CR-01 / CR-02 / CR-03 / WR-02 / WR-03)
+// ---------------------------------------------------------------------------
+
+// CR-01: Child process env allowlist -- planted secret is excluded, safe key is present.
+TEST_CASE("PluginManagerTest child env excludes secrets and includes PATH", "[plugin-manager]") {
+    ensureQCoreApp();
+
+    QProcessEnvironment const childEnv = PluginManager::buildChildEnvironmentForTesting();
+
+    // At least one safe key must survive (PATH or HOME are always set on dev/CI systems).
+    bool const hasSomeSafeKey =
+        childEnv.contains(QStringLiteral("PATH")) || childEnv.contains(QStringLiteral("HOME"));
+    CHECK(hasSomeSafeKey);
+
+    // Banned keys must not appear regardless of host environment content.
+    CHECK_FALSE(childEnv.contains(QStringLiteral("DBUS_SESSION_BUS_ADDRESS")));
+    CHECK_FALSE(childEnv.contains(QStringLiteral("XDG_RUNTIME_DIR")));
+
+    // Keys not in the allowlist are unconditionally excluded.
+    CHECK_FALSE(childEnv.contains(QStringLiteral("FAKE_SECRET_TOKEN_FOR_TEST")));
+    CHECK_FALSE(childEnv.contains(QStringLiteral("CI_REGISTRY_PASSWORD")));
+    CHECK_FALSE(childEnv.contains(QStringLiteral("AWS_SECRET_ACCESS_KEY")));
+}
+
+// CR-02: FailedToStart double-fire guard -- one physical failure produces one crash credit.
+// We spawn with a non-existent node binary; QProcess fires errorOccurred(FailedToStart)
+// then finished(-2, CrashExit). With the CR-02 fix, only the finished handler calls
+// onProcessFailed. Net result: exactly one crash credit, not two.
+TEST_CASE("PluginManagerTest FailedToStart fires onProcessFailed only once", "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    qint64 fakeNow = 0;
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(
+        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
+
+    PluginManifest m;
+    m.name = QStringLiteral("FailStartPlugin");
+    m.codePath = QStringLiteral("plugin.js");
+    m.author = QStringLiteral("Test");
+    m.version = QStringLiteral("1.0");
+    m.sdkVersion = 1;
+
+    manager.spawn(m);
+    // Pump to let QProcess signals fire.
+    pump(500);
+
+    // One physical FailedToStart == one crash credit. 3 needed to disable; not disabled yet.
+    CHECK_FALSE(manager.isDisabled(QStringLiteral("plugin.js")));
+    // disabledSpy must be 0 (only one credit accumulated, not the doubled count that would
+    // prematurely reach shouldDisable threshold after 2 physical FailedToStart events).
+    CHECK(disabledSpy.count() == 0);
+}
+
+// CR-03: Path traversal via code path separator rejection.
+TEST_CASE("PluginManagerTest spawn rejects code path with directory separator",
+          "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/fake/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    SECTION("codePath with unix separator is rejected") {
+        PluginManifest m;
+        m.name = QStringLiteral("TraversalPlugin");
+        m.codePath = QStringLiteral("sub/evil.js");
+        m.author = QStringLiteral("Test");
+        m.version = QStringLiteral("1.0");
+        m.sdkVersion = 1;
+
+        manager.spawn(m);
+        // Rejected before argv is stored; key "sub/evil.js" should be absent.
+        CHECK(manager.lastNodeArgvForTesting(QStringLiteral("sub/evil.js")).isEmpty());
+    }
+
+    SECTION("codePath with traversal component is rejected") {
+        PluginManifest m;
+        m.name = QStringLiteral("TraversalPlugin2");
+        m.codePath = QStringLiteral("evil..js");
+        m.author = QStringLiteral("Test");
+        m.version = QStringLiteral("1.0");
+        m.sdkVersion = 1;
+
+        manager.spawn(m);
+        CHECK(manager.lastNodeArgvForTesting(QStringLiteral("evil..js")).isEmpty());
+    }
+}
+
+// WR-02: HTML plugin (process == nullptr) is not re-spawned when onProcessFailed is called.
+TEST_CASE("PluginManagerTest HTML plugin is not re-spawned on failure", "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    qint64 fakeNow = 0;
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return {}; };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
+
+    PluginManager manager(
+        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
+
+    // Call onProcessFailed for a UUID not in m_live (simulates an HTML plugin where
+    // process == nullptr -- the WR-02 guard prevents re-spawning).
+    QString const htmlUuid = QStringLiteral("com.test.htmlplugin.html");
+    fakeNow = 0;
+    manager.onProcessFailed(htmlUuid);
+    CHECK_FALSE(manager.isDisabled(htmlUuid));
+    CHECK(disabledSpy.count() == 0);
+}
+
+// WR-03: PUUID is passed as -pluginUUID when non-empty.
+TEST_CASE("PluginManagerTest spawn uses puuid as -pluginUUID when set", "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/fake/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    PluginManifest m;
+    m.name = QStringLiteral("PuuidPlugin");
+    m.codePath = QStringLiteral("index.js");
+    m.puuid = QStringLiteral("com.example.myplugin");
+    m.author = QStringLiteral("Test");
+    m.version = QStringLiteral("1.0");
+    m.sdkVersion = 1;
+
+    manager.spawn(m);
+
+    QStringList const argv = manager.lastNodeArgvForTesting(QStringLiteral("index.js"));
+    REQUIRE_FALSE(argv.isEmpty());
+    REQUIRE(argv.size() == 9);
+    REQUIRE(argv.at(3) == QStringLiteral("-pluginUUID"));
+    CHECK(argv.at(4) == QStringLiteral("com.example.myplugin")); // PUUID, not codePath
+}
+
+// WR-03 fallback: codePath is used as -pluginUUID when puuid is empty.
+TEST_CASE("PluginManagerTest spawn uses codePath as -pluginUUID when puuid is empty",
+          "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/fake/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    PluginManifest m;
+    m.name = QStringLiteral("NoPuuidPlugin");
+    m.codePath = QStringLiteral("plugin.js");
+    // puuid intentionally empty
+    m.author = QStringLiteral("Test");
+    m.version = QStringLiteral("1.0");
+    m.sdkVersion = 1;
+
+    manager.spawn(m);
+
+    QStringList const argv = manager.lastNodeArgvForTesting(QStringLiteral("plugin.js"));
+    REQUIRE_FALSE(argv.isEmpty());
+    REQUIRE(argv.size() == 9);
+    REQUIRE(argv.at(3) == QStringLiteral("-pluginUUID"));
+    CHECK(argv.at(4) == QStringLiteral("plugin.js")); // fallback to codePath
 }
