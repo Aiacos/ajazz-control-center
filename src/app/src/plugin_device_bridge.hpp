@@ -504,6 +504,12 @@ private:
     /// Used for owner resolution and lifecycle gating (T-19-owner).
     QSet<QString> m_registeredPlugins;
 
+    /// Most-recently-connected device codename. Updated by onDeviceConnected /
+    /// onDeviceDisconnected. Used by onPluginRegistered / onPluginDisconnected as
+    /// the active device context for lifecycle operations (WR-03: eliminates the
+    /// hardcoded "akp05e" fallback). Empty when no device is connected.
+    QString m_activeDeviceId;
+
     /// Accessor returning the currently active profile by const-ref.
     /// Injected from Application after construction via setProfileAccessor().
     /// Used by populateContextsForActivePage to enumerate bound plugin actions.

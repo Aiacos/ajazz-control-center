@@ -790,24 +790,31 @@ void PluginDeviceBridge::retirePageContexts(QString const& deviceId,
 
 void PluginDeviceBridge::onPluginRegistered(QString const& pluginUuid) {
     m_registeredPlugins.insert(pluginUuid);
-    // Populate contexts + willAppear for this plugin's actions on the active page.
-    // Phase 19 simplification: use "akp05e" as the canonical device codename.
-    // Phase 23+ will source from DeviceRegistry when multi-device support lands.
-    QString const deviceId = QStringLiteral("akp05e"); // canonical; Phase 23+ sources from registry
+    // WR-03: use the actual active device codename maintained by onDeviceConnected /
+    // onDeviceDisconnected. Fall back to "akp05e" only when no device has yet
+    // connected (test shim path or startup race). This removes the hardcoded
+    // "akp05e" that silently broke multi-device setups where the active device
+    // is not an AKP05E.
+    QString const deviceId =
+        m_activeDeviceId.isEmpty() ? QStringLiteral("akp05e") : m_activeDeviceId;
     populateContextsForActivePage(deviceId, pluginUuid);
 }
 
 void PluginDeviceBridge::onPluginDisconnected(QString const& pluginUuid) {
     m_registeredPlugins.remove(pluginUuid);
-    // Retire this plugin's contexts and send willDisappear (best-effort — socket
-    // may already be closed, sendEvent returns false safely; T-19-sock).
-    // Scope to root page + this plugin only to avoid retiring other plugins' contexts.
-    QString const deviceId = QStringLiteral("akp05e"); // canonical
+    // WR-03: retire contexts using the actual active device codename so that
+    // contexts for a non-akp05e device are not stranded in the registry.
+    QString const deviceId =
+        m_activeDeviceId.isEmpty() ? QStringLiteral("akp05e") : m_activeDeviceId;
     QString const pageId = QStringLiteral("root");
     retirePageContexts(deviceId, pageId, pluginUuid);
 }
 
 void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
+    // WR-03: track the most-recently-connected device so that subsequent
+    // onPluginRegistered / onPluginDisconnected calls use the correct codename.
+    m_activeDeviceId = deviceId;
+
     // Populate contexts for the active page.
     populateContextsForActivePage(deviceId);
 
@@ -833,6 +840,10 @@ void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
 void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
     if (m_server == nullptr) {
         return;
+    }
+    // WR-03: clear the active device tracker when the active device disconnects.
+    if (m_activeDeviceId == deviceId) {
+        m_activeDeviceId.clear();
     }
     // WR-01: send willDisappear for every visible action context on this device
     // before retiring them. This matches the Elgato SDK spec (§4.4) requirement
