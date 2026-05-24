@@ -10,6 +10,7 @@
  */
 #include "profile_controller.hpp"
 
+#include "ajazz/core/logger.hpp"
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_io.hpp"
 
@@ -21,6 +22,7 @@
 
 #include <exception>
 #include <filesystem>
+#include <limits>
 #include <utility>
 
 namespace ajazz::app {
@@ -139,6 +141,24 @@ void ProfileController::commitKeyBinding(int keyIndex,
                                          QString const& label,
                                          int actionKind,
                                          QString const& settingsJson) {
+    // Validate keyIndex: must be in [0, 65534] (65535 is the uint16_t overflow sentinel).
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitKeyBinding: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return;
+    }
+    // Validate actionKind: must map to a defined ActionKind value (0..BackToParent).
+    constexpr int kMaxActionKind = static_cast<int>(ajazz::core::ActionKind::BackToParent);
+    if (actionKind < 0 || actionKind > kMaxActionKind) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitKeyBinding: actionKind {} out of range [0, {}], ignoring",
+                       actionKind,
+                       kMaxActionKind);
+        return;
+    }
+
     auto const idx = static_cast<std::uint16_t>(keyIndex);
     auto& binding = m_profile.keys[idx];
 
