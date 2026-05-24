@@ -425,7 +425,7 @@ Plans:
 
 Plans:
 
-- [ ] 24-01-PLAN.md — STOP-if-14/15-SUMMARY-absent gate + add makeAkp03/153/815WithTransport DI overloads (test seam; no wire edits)
+- [x] 24-01-PLAN.md — STOP-if-14/15-SUMMARY-absent gate + add makeAkp03/153/815WithTransport DI overloads (test seam; no wire edits)
 - [ ] 24-02-PLAN.md — make control + input services descriptor-driven (no AKP05 geometry) + family MockTransport byte test (AKP03 6keys+3enc, AKP153/815 15keys)
 
 ### Phase 25: Hardware Verification + Real Plugin
@@ -478,5 +478,5 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 21. Built-in In-Process Actions             | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 22. Plugin Store / Local Install            | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
-| 24. Family Coverage AKP03/153/815           | v1.3      | 0/?            | Not started      | —          |
+| 24. Family Coverage AKP03/153/815           | v1.3      | 1/2            | In Progress      |            |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/2            | Not started      | —          |

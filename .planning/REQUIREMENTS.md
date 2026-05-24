@@ -88,7 +88,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Family Coverage (Phase 24)
 
-- [ ] **DEVICES-10**: The same assign-image-and-press flow works on AKP03 / AKP153 / AKP815 via the capability-generic control service (per-family init sequence + image format/rotation honored, table-driven from the descriptor; AKP03 also has 3 encoders).
+- [x] **DEVICES-10**: The same assign-image-and-press flow works on AKP03 / AKP153 / AKP815 via the capability-generic control service (per-family init sequence + image format/rotation honored, table-driven from the descriptor; AKP03 also has 3 encoders).
 
 ### Hardware Verification (Phase 25 — HARDWARE-GATED)
 
@@ -288,7 +288,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-12   | Phase 21 | Complete |
 | PLUGIN-14   | Phase 22 | Complete |
 | DISPLAY-10  | Phase 23 | Pending  |
-| DEVICES-10  | Phase 24 | Pending  |
+| DEVICES-10  | Phase 24 | Complete |
 | VERIFY-05   | Phase 25 | Pending  |
 | VERIFY-06   | Phase 25 | Pending  |
 
