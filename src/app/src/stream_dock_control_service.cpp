@@ -215,12 +215,28 @@ void StreamDockControlService::drainPendingWrites() {
         auto const* bits = reinterpret_cast<std::uint8_t const*>(rgba.constBits());
         std::size_t const byteCount =
             static_cast<std::size_t>(rgba.width()) * static_cast<std::size_t>(rgba.height()) * 4u;
-        disp->setKeyImage(keyIndex,
-                          {bits, byteCount},
-                          static_cast<std::uint16_t>(rgba.width()),
-                          static_cast<std::uint16_t>(rgba.height()));
+        // CR-02: setKeyImage() is documented @throws std::system_error if the
+        // transport fails. Catch here so a device yank mid-burst does not propagate
+        // through QTimer::timeout into std::terminate(). On failure release the held
+        // handle so the next hot-plug arrival triggers a clean setActiveDevice() cycle.
+        try {
+            disp->setKeyImage(keyIndex,
+                              {bits, byteCount},
+                              static_cast<std::uint16_t>(rgba.width()),
+                              static_cast<std::uint16_t>(rgba.height()));
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("stream-dock-control",
+                           "drainPendingWrites: setKeyImage key {} failed: {}",
+                           static_cast<int>(keyIndex),
+                           e.what());
+            // Device likely yanked. Release held handle so next hot-plug arrival
+            // triggers a clean setActiveDevice() cycle.
+            m_activeDevice.reset();
+            m_activeCodename.clear();
+            break; // remaining keys in this burst cannot be sent
+        }
     }
-    m_pendingWrites.clear();
+    m_pendingWrites.clear(); // always clear, even after partial failure (CR-02)
 }
 
 } // namespace ajazz::app
