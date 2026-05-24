@@ -497,6 +497,14 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_PLUGIN_MANAGER=1)
 endif()
 
+# Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. Hardware-free
+# (AJAZZ_FEATURE_INPUT_SYNTH OFF = default) — no /dev/uinput, no OS permissions needed.
+# test_input_synth.cpp defines a FakeSynth recording subclass and exercises
+# makeDefaultInputSynthesizer() from ajazz::core (already linked above). No direct stub re-link
+# needed — makeDefaultInputSynthesizer() is already provided by ajazz::core (mirror of
+# test_action_engine.cpp pattern: include header + link core).
+target_sources(ajazz_unit_tests PRIVATE test_input_synth.cpp)
+
 # Phase 19 Plans 19-01/19-02 (PLUGIN-10): PluginDeviceBridge pure-helper, ContextRegistry, and e2e
 # loopback tests. Gated on AJAZZ_HAVE_WEBSOCKETS — the bridge header composes SdPluginServer (Phase
 # 17) and drives StreamDockControlService (Phase 14) via assignKeyImage. Links
