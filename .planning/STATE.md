@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: executing
-stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T18:40:40.652Z'
+status: verifying
+stopped_at: Completed 22-plugin-store-local-install plan 22-02 (PLUGIN-14)
+last_updated: '2026-05-24T18:58:21.266Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
-  completed_phases: 9
+  completed_phases: 10
   total_plans: 51
-  completed_plans: 31
-  percent: 53
+  completed_plans: 32
+  percent: 59
 ---
 
 # Project State
@@ -29,7 +29,7 @@ Phase: 22 (plugin-store-local-install) — EXECUTING
 Plan: 2 of 2
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -94,6 +94,9 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: IInputSynthesizer HID Usage IDs for platform-neutral key rep: Linux KEY\_*, Windows VK\_*, macOS kVK\_\*
 - \[Phase ?\]: captureHotkeys gate: OFF by default; stub always returns false; T-21-hook LOCKED (Phase 25 deferred for real grab)
 - \[Phase ?\]: AJAZZ_FEATURE_INPUT_SYNTH default OFF; self-emptying OS TUs; no libXtst (uinput Wayland-compatible)
+- \[Phase ?\]: 22-02: SelfSigned->explicit-confirm developer-sideload policy (userConfirmedUnsigned param); hard-Refused always quarantined
+- \[Phase ?\]: 22-02: g_pluginsDirOverride in TU-level anonymous namespace test seam (not private class member) for correct free-function access
+- \[Phase ?\]: 22-02: Phone-home kill via disabled sentinel; QSettings plugins/onlineCatalogEnabled default false; refreshOnline() exposes opt-in live fetch
 
 ### Pending Todos
 
@@ -160,11 +163,12 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 21-builtin-in-process-actions P21-02             | 11                                                                            | 2 tasks                           | 6 files                  |
 | Phase 21 P03                                           | 210                                                                           | 2 tasks                           | 10 files                 |
 | Phase 22 P22-01                                        | 10                                                                            | 2 tasks                           | 7 files                  |
+| Phase 22-plugin-store-local-install P02                | 60                                                                            | 2 tasks                           | 6 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T18:40:40.644Z
-Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
+Last session: 2026-05-24T18:58:21.258Z
+Stopped at: Completed 22-plugin-store-local-install plan 22-02 (PLUGIN-14)
 Resume file: None
 
 ## 2026-05-17 mid-milestone amendment update
