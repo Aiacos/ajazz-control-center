@@ -86,6 +86,11 @@ qt_add_executable(
     # all keys on profileChanged, and surfaces the cached firmware VER string. The reuse surface
     # that Phases 15 (input), 16 (controls), and 19 (plugin bridge) build on.
     src/stream_dock_control_service.cpp
+    # Phase 15 Plan 15-01: app-layer input dispatch service (INPUT-03/04/05). First instantiation of
+    # core ActionEngine in the app — QTimer pump -> DeviceEvent -> Profile binding lookup ->
+    # ActionEngine::run(). Includes 16 ms rotation coalescer, encoder press->synthetic-release
+    # pairing, provisional touch-strip zone map, and pageNavRequested signal for Phase 16.
+    src/stream_dock_input_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -305,6 +310,8 @@ set(ACC_QML_MODULE_SOURCES
     src/property_inspector_controller.hpp
     src/stream_dock_control_service.cpp
     src/stream_dock_control_service.hpp
+    src/stream_dock_input_service.cpp
+    src/stream_dock_input_service.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml

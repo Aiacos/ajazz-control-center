@@ -95,6 +95,17 @@ add_executable(
     test_stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/profile_controller.cpp
+    # Phase 15 Plan 15-01 (INPUT-03/04/05): MockTransport-fed dispatch assertions for
+    # StreamDockInputService. Proves key press/release routes to the bound onPress/onRelease
+    # chain (INPUT-03), encoder CW/CCW fire distinct chains after the 16 ms coalescer
+    # (INPUT-04a/c), encoder press fires onPress and synthesises a paired release without any
+    # wire release frame (INPUT-04b), touch tap at X=350 routes to encoder 2 onPress via the
+    # provisional zone map (INPUT-05a), swipe-left/right emit pageNavRequested(-1/+1) (INPUT-05b),
+    # Sleep defers via QtExecutor (non-blocking pump thread), and two pump() calls do not re-open
+    # the transport (held-handle invariant).
+    test_stream_dock_input_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_input_service.cpp
+    # qt_executor.cpp is already in the binary (test_qt_executor block above)
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
     # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and
