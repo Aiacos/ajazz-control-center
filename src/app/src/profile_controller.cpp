@@ -176,6 +176,16 @@ void ProfileController::loadActiveProfile() {
     loadProfile(defaultProfilePath(id));
 }
 
+void ProfileController::resetActiveProfile() {
+    // Clear all binding maps; preserve identity fields (id, name, deviceCodename).
+    m_profile.keys.clear();
+    m_profile.encoders.clear();
+    m_profile.mouseButtons.clear();
+    // Keep pages intact; user may have folder navigation they did not author here.
+    emit profileChanged();
+    saveActiveProfile();
+}
+
 void ProfileController::loadProfileById(QString const& profileId) {
     if (profileId.isEmpty()) {
         emit loadFailed(tr("Empty profile id"));

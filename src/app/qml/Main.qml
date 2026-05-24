@@ -134,17 +134,17 @@ ApplicationWindow {
                 id: editor
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                // TODO(profile-buttons): wire Apply / Revert to a real
-                // profile path — `ProfileController.saveProfile(path)` /
-                // `loadProfile(path)` need a default path resolution
-                // (QStandardPaths::AppDataLocation/profile.json) plus a
-                // file dialog for "Save as". Today these buttons toast
-                // "not implemented yet" rather than calling non-existent
-                // no-arg overloads (the previous code did the latter and
-                // silently no-op'd at runtime).
-                onApplyRequested: toast.show(qsTr("Save profile: not implemented yet"), "info")
-                onRevertRequested: toast.show(qsTr("Revert profile: not implemented yet"), "info")
-                onRestoreDefaultsRequested: toast.show(qsTr("Restore defaults: not implemented yet"), "info")
+                // Phase 16-02 (PROFILE-01): Apply -> saveActiveProfile persists
+                // the active profile to AppDataLocation/profiles/<id>.json via the
+                // atomic core writer (profileToJson + writeProfileToDisk). Revert ->
+                // loadActiveProfile reloads the last saved version from the same
+                // default path, resetting any unsaved edits (profileChanged fires and
+                // the UI refreshes). RestoreDefaults: explicit clear + save so the
+                // user always gets an honest behaviour (no silent no-op); the profile
+                // fields are reset to empty/defaults and saved at the default path.
+                onApplyRequested: ProfileController.saveActiveProfile()
+                onRevertRequested: ProfileController.loadActiveProfile()
+                onRestoreDefaultsRequested: ProfileController.resetActiveProfile()
             }
 
             // The per-key Inspector now lives inside KeyDesigner (Keys tab)

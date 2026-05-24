@@ -171,6 +171,19 @@ public:
     Q_INVOKABLE void loadActiveProfile();
 
     /**
+     * @brief Reset the active profile's key/encoder bindings to empty defaults and save.
+     *
+     * Clears all keys, encoders, mouseButtons maps on the active profile while
+     * preserving id, name, and deviceCodename. Then calls saveActiveProfile()
+     * so the reset is persisted atomically. Emits profileChanged + profileSaved
+     * on success. This provides an honest "Restore defaults" behaviour — it never
+     * silently no-ops (PROFILE-01 / plan decision for onRestoreDefaultsRequested).
+     *
+     * @invokable Callable from QML as ProfileController.resetActiveProfile().
+     */
+    Q_INVOKABLE void resetActiveProfile();
+
+    /**
      * @brief Return the currently loaded profile by const-ref.
      *
      * Provides read-only access to the active profile for sibling C++ services

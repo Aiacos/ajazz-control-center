@@ -15,12 +15,12 @@
 //   * `keyActivated(int index)` — user clicked / activated a key.
 //   * `keySelected(int index)`  — user moved focus to a key.
 //
-// Session scope: the per-key binding data lives in this component's
-// internal `bindings` ListModel. It is **not** persisted yet —
-// ProfileController wiring lands in the follow-up slice (see
-// .planning/quick/260514-1je-stream-dock-keydesigner/260514-1je-FINDINGS.md
-// §4 "What is explicitly deferred"). Selecting a different device or
-// restarting the app resets the bindings to empty defaults.
+// Persistence (Phase 16-02, PROFILE-01): updateSelectedBinding now calls
+// ProfileController.commitKeyBinding() after updating the local ListModel
+// so the C++ Profile is always in sync with the editor. The ListModel
+// remains the editor's view model; Profile is the source of truth for
+// persistence. Saving to disk happens via the Apply button in Main.qml
+// (ProfileController.saveActiveProfile()).
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
@@ -83,11 +83,27 @@ Item {
     // the new value. ListModel.setProperty triggers the Repeater
     // delegate at that index to re-evaluate its model bindings, which
     // updates the cell preview in real time.
+    //
+    // Phase 16-02 (PROFILE-01): after updating the ListModel we also push
+    // the full binding row into ProfileController so the C++ Profile stays
+    // in sync with every edit. The persistent write to disk is deferred to
+    // the Apply button (saveActiveProfile) so the user controls when to commit.
     function updateSelectedBinding(field, value) {
         if (root.selectedIndex < 0 || root.selectedIndex >= bindings.count) {
             return;
         }
         bindings.setProperty(root.selectedIndex, field, value);
+
+        // Commit the updated row to ProfileController.
+        // bindings.get() returns a JS object with all roles.
+        var row = bindings.get(root.selectedIndex);
+        ProfileController.commitKeyBinding(
+            root.selectedIndex,
+            row.iconSource,
+            row.label,
+            row.actionKind,
+            row.actionParams
+        );
     }
 
     // -------------------------------------------------------------
