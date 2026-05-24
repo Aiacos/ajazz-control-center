@@ -180,8 +180,10 @@ DecodedImage decodeDataUriImage(QString const& dataUri) {
         return {false, {}};
     }
 
-    // Decode base64. fromBase64 never throws; an empty/garbage input yields
-    // empty bytes (which loadFromData will reject).
+    // Decode base64. fromBase64 with the default IgnoreBase64DecodingErrors flag
+    // silently ignores non-base64 characters rather than returning empty bytes.
+    // An empty result indicates an all-whitespace or zero-length input.
+    // loadFromData is the actual rejection gate for any garbage payload.
     QByteArray const raw = QByteArray::fromBase64(bodyStr.toUtf8());
     if (raw.isEmpty()) {
         return {false, {}};
