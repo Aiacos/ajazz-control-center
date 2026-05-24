@@ -46,7 +46,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Device Controls + Binding Persistence + Pages (Phase 16)
 
-- [ ] **DISPLAY-09**: A brightness slider and a "clear all keys" control in the device panel drive the device live (`LIG` / `CLE`).
+- [x] **DISPLAY-09**: A brightness slider and a "clear all keys" control in the device panel drive the device live (`LIG` / `CLE`).
 - [ ] **PROFILE-01**: Key, **encoder**, and touch bindings (image, label, action chain) persist to the profile and survive restart, repainting the device on load (`Profile::deviceCodename` ⇄ `"device"` wire-key convention preserved).
 - [ ] **PROFILE-02**: Multi-page / folder profiles drive **host-side** page navigation (no device page opcode for N4/AKP05 — `STP` page-magic is legacy-only); page `prev`/`next`/`goto` + touch swipe switch pages and repaint, via `ActionEngine` `OpenFolder`/`BackToParent`.
 
@@ -270,7 +270,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | INPUT-03    | Phase 15 | Complete |
 | INPUT-04    | Phase 15 | Complete |
 | INPUT-05    | Phase 15 | Complete |
-| DISPLAY-09  | Phase 16 | Pending  |
+| DISPLAY-09  | Phase 16 | Complete |
 | PROFILE-01  | Phase 16 | Pending  |
 | PROFILE-02  | Phase 16 | Pending  |
 | PLUGIN-01   | Phase 17 | Pending  |
