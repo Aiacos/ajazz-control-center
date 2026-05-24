@@ -70,6 +70,18 @@ Q_DECLARE_OPAQUE_POINTER(QQuickWebEngineProfile*)
 Q_DECLARE_OPAQUE_POINTER(QQmlWebChannel*)
 #endif
 
+// `PIBridge*` is exposed by the `activeBridgeChanged` signal below. Its full
+// definition (pi_bridge.hpp) is included only in the .cpp (and only under the
+// AJAZZ_HAVE_WEBENGINE guard), so moc always sees an incomplete type — including
+// in the offscreen QML test target, which compiles this controller without the
+// WebEngine define. `Q_DECLARE_OPAQUE_POINTER` tells QMetaType to skip the
+// "must be a fully-defined type" assert, exactly as the WebEngine pointer types
+// above do. Must be at global scope before the Q_OBJECT that references it.
+namespace ajazz::app {
+class PIBridge;
+}
+Q_DECLARE_OPAQUE_POINTER(ajazz::app::PIBridge*)
+
 namespace ajazz::app {
 
 // Forward declaration for the activeBridgeChanged signal. The full definition is
