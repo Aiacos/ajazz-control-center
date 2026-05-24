@@ -397,6 +397,13 @@ set_source_files_properties(
                                         "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
 )
 
+# Phase 18 Plan 18-02 (PLUGIN-08): NodeRunner argv builder + injectable node detection. Links
+# node_runner.cpp directly (pure Qt-Core-only; no process launched at unit time). All cases inject a
+# fake NodeProbe — no live node is required or started.
+target_sources(
+    ajazz_unit_tests PRIVATE test_node_runner.cpp ${CMAKE_SOURCE_DIR}/src/app/src/node_runner.cpp
+)
+
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we
 # pull from the app target also needs its sibling `plugin_catalog_model.hpp` and the fetcher header
 # on the include path — hence the additional `src/app/src` entry.
