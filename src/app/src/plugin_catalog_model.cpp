@@ -613,11 +613,15 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
 
     if (vout.verdict == VerifyVerdict::SelfSigned && !userConfirmedUnsigned) {
         // Developer-sideload policy: SelfSigned requires explicit confirmation.
-        // Do NOT remove the staging dir — the confirm path will re-use it.
-        // (If the user cancels, the staging dir will be cleaned up on next launch.)
+        // WR-02 fix: the confirm path re-extracts from the source file into a
+        // fresh staging dir, so the old staging dir is never re-used. Remove it
+        // now so orphaned staging dirs do not accumulate across cancel/retry cycles.
         AJAZZ_LOG_INFO("plugin-catalog",
-                       "installFromFile '{}': SelfSigned — awaiting user confirm",
+                       "installFromFile '{}': SelfSigned — awaiting user confirm; "
+                       "removing staging dir",
                        localPath.toStdString());
+        QDir(QDir(stagingParent).filePath(archiveName)).removeRecursively();
+        QDir(stagingParent).rmdir(QStringLiteral("."));
         emit installFinished(
             localPath, false, QStringLiteral("self-signed plugin -- confirm to install"));
         return false;
@@ -637,18 +641,74 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
 
     bool const renamed = QDir().rename(stagedDir, promotedDir);
     if (!renamed) {
-        // Rename across filesystems can fail — fall back to copy+delete.
-        // For simplicity, try extracting directly into promotedDir.
+        // Rename across filesystems can fail — fall back to a file-by-file
+        // copy of the already-verified staged directory.
+        // CR-02 fix: do NOT re-extract from localPath here. localPath is
+        // user-controlled and a TOCTOU race could swap the file between the
+        // first extract (into staging) and this point. Instead copy the
+        // verified staged bits into promotedDir, then re-verify.
         AJAZZ_LOG_WARN("plugin-catalog",
-                       "installFromFile '{}': rename failed; falling back to re-extract",
+                       "installFromFile '{}': rename failed (cross-fs?); "
+                       "falling back to copy of staged dir",
                        localPath.toStdString());
         QDir().mkpath(promotedDir);
-        bool const reExtract = extractSdPluginArchive(localPath, pluginsDir, archiveName);
-        if (!reExtract) {
-            // Clean up the partial staging dir
+        bool copyOk = true;
+        {
+            QDir const srcDir(stagedDir);
+            QStringList const entries =
+                srcDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+            for (QString const& entry : entries) {
+                QString const srcPath = srcDir.filePath(entry);
+                QString const dstPath = QDir(promotedDir).filePath(entry);
+                QFileInfo const info(srcPath);
+                if (info.isDir()) {
+                    QDir().mkpath(dstPath);
+                    // Recurse one level (manifest + Code/ sub-directory is the
+                    // typical sdPlugin layout; deep trees are unusual).
+                    QDir const subSrc(srcPath);
+                    for (QString const& sub :
+                         subSrc.entryList(QDir::Files | QDir::NoDotAndDotDot)) {
+                        if (!QFile::copy(subSrc.filePath(sub), QDir(dstPath).filePath(sub))) {
+                            copyOk = false;
+                            break;
+                        }
+                    }
+                } else {
+                    if (!QFile::copy(srcPath, dstPath)) {
+                        copyOk = false;
+                    }
+                }
+                if (!copyOk) {
+                    break;
+                }
+            }
+        }
+        if (!copyOk) {
+            QDir(promotedDir).removeRecursively();
             QDir(stagedDir).removeRecursively();
             emit installFinished(
                 localPath, false, QStringLiteral("Failed to promote plugin to install directory."));
+            return false;
+        }
+
+        // CR-02: re-verify the freshly-copied result before treating it as
+        // promoted. The copy should be bit-identical to the staged dir, but
+        // re-verification is the invariant that must hold for every promoted
+        // plugin directory.
+        QString const copiedManifest = QDir(promotedDir).filePath(QStringLiteral("manifest.json"));
+        VerifyOutcome const vout2 = verifyStagedPlugin(copiedManifest);
+        if (vout2.verdict == VerifyVerdict::Refused) {
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "installFromFile '{}': re-verify after copy-fallback refused ({}); "
+                           "quarantining",
+                           localPath.toStdString(),
+                           vout2.reason.toStdString());
+            QDir(promotedDir).removeRecursively();
+            QDir(stagedDir).removeRecursively();
+            emit installFinished(
+                localPath,
+                false,
+                QStringLiteral("Re-verification after copy failed: %1").arg(vout2.reason));
             return false;
         }
     }
@@ -657,10 +717,10 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     QDir(stagingParent).removeRecursively();
 
     // Flip install state and emit signals (same pattern as network install()).
-    // Use localPath as the key in m_install since it may not have a UUID row.
-    auto& state = m_install[localPath];
-    state.installed = true;
-    state.enabled = true;
+    // WR-03 fix: key by UUID (not by localPath) so m_install stays bounded.
+    // The localPath key was never cleaned up by reload()/uninstall() and caused
+    // installedCount() to drift above the true count over repeated installs
+    // from different file paths.
     // Try to find a matching catalogue row by the promoted dir name (archiveName
     // may match a UUID in the catalogue if the user is re-installing).
     QString const candidateUuid =
