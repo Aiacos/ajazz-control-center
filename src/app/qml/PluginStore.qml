@@ -439,14 +439,20 @@ Page {
                         Accessible.name: text
                     }
                     // Retry — re-runs the live online fetch (refreshOnline).
-                    // This is the explicit opt-in action for the Streamdock tab.
-                    // Disabled while a fetch is already in flight.
+                    // WR-04: disabled when onlineCatalogEnabled is OFF so the
+                    // button cannot trigger outbound HTTP when the user has
+                    // explicitly opted out. The C++ refreshOnline() also
+                    // guards this, but the UI should reflect the state.
                     ToolButton {
                         text: "↻" // ↻
                         font.pixelSize: Theme.fontMd
-                        enabled: streamdockBanner.streamdockState !== "loading" && PluginCatalog
+                        enabled: streamdockBanner.streamdockState !== "loading"
+                            && PluginCatalog
+                            && PluginCatalog.onlineCatalogEnabled
                         onClicked: if (PluginCatalog) PluginCatalog.refreshOnline()
-                        ToolTip.text: qsTr("Refresh catalogue (fetches from the internet)")
+                        ToolTip.text: PluginCatalog && PluginCatalog.onlineCatalogEnabled
+                            ? qsTr("Refresh catalogue (fetches from the internet)")
+                            : qsTr("Enable the Online catalog switch to refresh")
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         Accessible.role: Accessible.Button
@@ -575,12 +581,17 @@ Page {
                         Accessible.role: Accessible.StaticText
                         Accessible.name: text
                     }
+                    // WR-04: same gate as the Streamdock Refresh button.
                     ToolButton {
                         text: "↻" // ↻
                         font.pixelSize: Theme.fontMd
-                        enabled: opendeckBanner.opendeckState !== "loading" && PluginCatalog
+                        enabled: opendeckBanner.opendeckState !== "loading"
+                            && PluginCatalog
+                            && PluginCatalog.onlineCatalogEnabled
                         onClicked: if (PluginCatalog) PluginCatalog.refreshOnline()
-                        ToolTip.text: qsTr("Refresh catalogue (fetches from the internet)")
+                        ToolTip.text: PluginCatalog && PluginCatalog.onlineCatalogEnabled
+                            ? qsTr("Refresh catalogue (fetches from the internet)")
+                            : qsTr("Enable the Online catalog switch to refresh")
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         Accessible.role: Accessible.Button

@@ -343,10 +343,11 @@ public:
     /**
      * @brief Trigger a live online catalogue refresh.
      *
-     * Calls the underlying fetcher @c refresh() unconditionally, regardless
-     * of the @ref onlineCatalogEnabled() setting. Intended for the QML
-     * "Refresh catalogue" button so the user can force an update without
-     * permanently enabling auto-fetch.
+     * Calls the underlying fetcher @c refresh() only when
+     * @ref onlineCatalogEnabled() is @c true (PLUGIN-14 / T-22-phonehome).
+     * When the flag is @c false this is a no-op — the Refresh button is also
+     * disabled in QML when the switch is off, but the C++ guard is the
+     * authoritative no-phone-home enforcement point.
      *
      * Use @ref reload() to also reset the local / mock rows in addition
      * to the live fetch.

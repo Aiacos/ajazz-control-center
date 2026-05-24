@@ -374,8 +374,15 @@ void PluginCatalogModel::setOnlineCatalogEnabled(bool enabled) {
 }
 
 void PluginCatalogModel::refreshOnline() {
-    // Unconditionally trigger the live fetch path, regardless of the
-    // persisted opt-in flag. This is the "Refresh catalogue" button handler.
+    // WR-04 fix (PLUGIN-14 / T-22-phonehome): honour the persisted opt-in flag.
+    // A user who has explicitly set onlineCatalogEnabled = false must not see
+    // outbound HTTP traffic just because the Refresh button is visible.
+    // The button is gated in QML too (disabled when the switch is off), but
+    // the C++ guard is the authoritative no-phone-home enforcement point.
+    if (!m_onlineCatalogEnabled) {
+        AJAZZ_LOG_INFO("plugin-catalog", "refreshOnline: skipped (onlineCatalogEnabled=false)");
+        return;
+    }
     if (m_streamdockFetcher) {
         m_streamdockFetcher->setCatalogUrlOverride(QString{}); // clear any "disabled" override
         m_streamdockFetcher->refresh();
