@@ -21,10 +21,11 @@
  *     thread -- no dedicated I/O thread (A2).
  *
  * Key-index mapping: Profile::keys stores 0-based std::uint16_t indices;
- *   the device backend (Akp05Device::setKeyImage / keyIndexInRange) expects
- *   1-based indices (1..KeyCount=10). The service adds 1 when iterating profile
- *   keys for repaintFromProfile(). Direct assignKeyImage() callers must pass
- *   1-based indices (documented in the header).
+ *   device backends expect 1-based indices (1..descriptor.keyCount). The
+ *   service adds 1 when iterating profile keys for repaintFromProfile().
+ *   Direct assignKeyImage() callers must pass 1-based indices (documented
+ *   in the header). The actual upper bound is per-family: AKP03=6, AKP05=10,
+ *   AKP153/AKP815=15 — enforced by each backend's own setKeyImage guard.
  */
 #include "stream_dock_control_service.hpp"
 
