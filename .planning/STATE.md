@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: executing
+status: verifying
 stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T09:42:54.385Z'
+last_updated: '2026-05-24T09:55:36.277Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 51
-  completed_plans: 10
-  percent: 12
+  completed_plans: 11
+  percent: 18
 ---
 
 # Project State
@@ -29,7 +29,7 @@ Phase: 15 (stream-dock-input-routing) — EXECUTING
 Plan: 2 of 2
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -83,6 +83,10 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp05e and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
 - \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
 - \[Phase ?\]: DEVICES-11 scope: akp05e only; akp05/mirabox_n4 hasClock flip deferred to a later honesty sweep
+- \[Phase ?\]: ARCH-03 flyweight handle share: DeviceRegistry::open(same devId) post-setActiveDevice returns same shared_ptr for input service
+- \[Phase ?\]: QtExecutor non-owning shared_ptr wrapper pattern: unique_ptr owned by Application, non-owning shared_ptr alias passed to ActionEngine (no-op deleter, lifetime guaranteed by Application)
+- \[Phase ?\]: StreamDockInputService owns ActionEngine: Application constructs then moves the engine into the service; m_actionEngine null after ctor; Phase 19 accesses engine via m_streamDockInput
+- \[Phase ?\]: Departure handler added to onHotplug for StreamDeck: setActiveDevice(nullptr) stops input poll pump on device removal (T-15-05 UAF mitigation)
 
 ### Pending Todos
 
@@ -135,10 +139,11 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 9 P07                              | 7min                                                                          | 1 tasks                           | 6 files                  |
 | Phase 14 P14-01                          | 8                                                                             | 2 tasks                           | 6 files                  |
 | Phase 14-stream-dock-control-service P02 | 90                                                                            | 3 tasks                           | 9 files                  |
+| Phase 15-stream-dock-input-routing P02   | 8                                                                             | 1 tasks                           | 3 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T09:42:54.377Z
+Last session: 2026-05-24T09:54:51.550Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 
