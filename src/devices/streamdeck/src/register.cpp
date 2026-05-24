@@ -167,11 +167,9 @@ void registerAll(core::DeviceRegistry& registry) {
 
     // ---- AKP815 (15 LCD keys, 5×3 grid, JPEG 100×100, LCD strip) -------
     //
-    // Wholly new SKU added by this PR. The backend reuses the AKP153
-    // implementation today; the per-revision differences (100×100 vs
-    // 85×85, `Rot180` vs `Rot90+mirror`, 800×480 strip vs 854×480 logo)
-    // will graduate into a dedicated `makeAkp815` factory in a future
-    // change.  Tracking: `TODO.md` → "AKP815 dedicated factory".
+    // AKP815 uses its own makeAkp815 factory (Akp815Device).
+    // Per-revision geometry differences (100×100 key image, 800×480 strip) are
+    // handled there; see akp815.cpp.
     reg.registerDevice(
         core::DeviceDescriptor{
             .vendorId = MiraboxVendorV1,
@@ -182,7 +180,9 @@ void registerAll(core::DeviceRegistry& registry) {
             .keyCount = akp815::KeyCount,
             .gridColumns = akp815::KeyCols,
             .encoderCount = 0,
-            .hasClock = true, // A-03 / D-03: every Stream Dock advertises Capability::Clock.
+            .hasClock = true, // A-03 / D-03: AKP815 has a firmware RTC. Note: AKP05E is
+                              // hasClock=false per DEVICES-11 / ARCH-05 -- check per-SKU
+                              // before assuming all Stream Docks support Clock.
         },
         &makeAkp815);
 
