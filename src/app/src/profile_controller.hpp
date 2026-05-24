@@ -22,6 +22,7 @@
 
 class QJSEngine;
 class QQmlEngine;
+class QDir;
 
 namespace ajazz::app {
 
@@ -101,6 +102,73 @@ public:
      * library work.
      */
     Q_INVOKABLE void loadProfileById(QString const& profileId);
+
+    // -------------------------------------------------------------------------
+    // Phase 16-02 (PROFILE-01): default path + commit + active-profile save/load
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Resolve the deterministic default save path for a profile id.
+     *
+     * Returns QStandardPaths::AppDataLocation/profiles/<sanitizedId>.json.
+     * The id is sanitized to a safe filename: only [A-Za-z0-9._-] are kept;
+     * path separators, "..", drive prefixes, and control characters are stripped.
+     * If the sanitized id is empty, falls back to "default".
+     * The profiles parent directory is NOT created here — call mkpath() before
+     * the first save (Pitfall 5 — done inside saveActiveProfile).
+     *
+     * @param profileId Profile id (e.g. a UUID string).
+     * @return Absolute path, e.g. "/home/user/.local/share/Aiacos/.../profiles/abc.json".
+     */
+    [[nodiscard]] QString defaultProfilePath(QString const& profileId) const;
+
+    /**
+     * @brief Commit a key-binding edit into the active Profile (keys map).
+     *
+     * Mutates m_profile.keys[keyIndex]:
+     *  - state.imagePath = iconPath (nullopt if empty)
+     *  - state.text      = label    (nullopt if empty)
+     *  - onPress         = single Action{kind, settingsJson}
+     *
+     * Emits profileChanged() so the control service repaints and QML refreshes.
+     * Does NOT save to disk — call saveActiveProfile() / saveProfile() to persist.
+     *
+     * @param keyIndex    0-based or 1-based key index as used by KeyDesigner
+     *                    (Profile::keys are std::uint16_t — stored as-is).
+     * @param iconPath    Absolute path or Qt resource URL; empty -> nullopt.
+     * @param label       Overlay text; empty -> nullopt.
+     * @param actionKind  cast from ajazz::core::ActionKind enum value.
+     * @param settingsJson Opaque JSON string forwarded to Action::settingsJson.
+     * @invokable Callable from QML as ProfileController.commitKeyBinding(...).
+     */
+    Q_INVOKABLE void commitKeyBinding(int keyIndex,
+                                      QString const& iconPath,
+                                      QString const& label,
+                                      int actionKind,
+                                      QString const& settingsJson);
+
+    /**
+     * @brief Save the active profile to its default path.
+     *
+     * Resolves defaultProfilePath(m_profile.id), creates the parent directory
+     * with QDir::mkpath() if needed (Pitfall 5), then calls saveProfile().
+     * Emits profileSaved on success or saveFailed on error.
+     * If the active profile id is empty, uses "default".
+     *
+     * @invokable Callable from QML as ProfileController.saveActiveProfile().
+     */
+    Q_INVOKABLE void saveActiveProfile();
+
+    /**
+     * @brief Reload the active profile from its default path.
+     *
+     * Resolves defaultProfilePath(m_profile.id), then calls loadProfile().
+     * Emits profileChanged on success or loadFailed on error.
+     * If the active profile id is empty, uses "default".
+     *
+     * @invokable Callable from QML as ProfileController.loadActiveProfile().
+     */
+    Q_INVOKABLE void loadActiveProfile();
 
     /**
      * @brief Return the currently loaded profile by const-ref.

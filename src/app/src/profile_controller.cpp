@@ -13,8 +13,10 @@
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_io.hpp"
 
+#include <QDir>
 #include <QFileInfo>
 #include <QQmlEngine>
+#include <QStandardPaths>
 #include <QString>
 
 #include <exception>
@@ -88,6 +90,90 @@ QString ProfileController::profileNameFor(QString const& profileId) const {
 
 ajazz::core::Profile const& ProfileController::activeProfile() const noexcept {
     return m_profile;
+}
+
+// ---------------------------------------------------------------------------
+// Phase 16-02 (PROFILE-01): default path + commit + active-profile save/load
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/**
+ * @brief Sanitize a profile id to a safe filename component.
+ *
+ * Keeps only [A-Za-z0-9._-]; strips everything else (path separators, "..",
+ * drive prefix, control chars). If the result is empty, returns "default".
+ * Mirrors the threat-model mitigation for T-16b-01.
+ */
+QString sanitizeProfileId(QString const& profileId) {
+    QString result;
+    result.reserve(profileId.size());
+    for (QChar const c : profileId) {
+        ushort const u = c.unicode();
+        bool const safe = (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') ||
+                          (u >= '0' && u <= '9') || u == '.' || u == '_' || u == '-';
+        if (safe) {
+            result += c;
+        }
+    }
+    // Strip leading dots to prevent hidden-file/traversal remnants like ".."
+    while (!result.isEmpty() && result[0] == QLatin1Char('.')) {
+        result.remove(0, 1);
+    }
+    if (result.isEmpty()) {
+        return QStringLiteral("default");
+    }
+    return result;
+}
+
+} // anonymous namespace
+
+QString ProfileController::defaultProfilePath(QString const& profileId) const {
+    QString const appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QString const safe = sanitizeProfileId(profileId);
+    return appData + QStringLiteral("/profiles/") + safe + QStringLiteral(".json");
+}
+
+void ProfileController::commitKeyBinding(int keyIndex,
+                                         QString const& iconPath,
+                                         QString const& label,
+                                         int actionKind,
+                                         QString const& settingsJson) {
+    auto const idx = static_cast<std::uint16_t>(keyIndex);
+    auto& binding = m_profile.keys[idx];
+
+    binding.state.imagePath =
+        iconPath.isEmpty() ? std::nullopt : std::optional<std::string>{iconPath.toStdString()};
+
+    binding.state.text =
+        label.isEmpty() ? std::nullopt : std::optional<std::string>{label.toStdString()};
+
+    ajazz::core::Action act{};
+    act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.settingsJson = settingsJson.toStdString();
+    binding.onPress = {std::move(act)};
+
+    emit profileChanged();
+}
+
+void ProfileController::saveActiveProfile() {
+    QString const id =
+        m_profile.id.empty() ? QStringLiteral("default") : QString::fromStdString(m_profile.id);
+    QString const path = defaultProfilePath(id);
+
+    // Pitfall 5: parent directory must exist before writeProfileToDisk.
+    QDir dir = QFileInfo(path).absoluteDir();
+    if (!dir.exists()) {
+        dir.mkpath(QStringLiteral("."));
+    }
+
+    saveProfile(path);
+}
+
+void ProfileController::loadActiveProfile() {
+    QString const id =
+        m_profile.id.empty() ? QStringLiteral("default") : QString::fromStdString(m_profile.id);
+    loadProfile(defaultProfilePath(id));
 }
 
 void ProfileController::loadProfileById(QString const& profileId) {
