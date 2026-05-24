@@ -47,6 +47,11 @@
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "plugin_mirabox_shim.hpp"
 #include "property_inspector_controller.hpp"
+// QQuickWebEngineScriptCollection is only declared (not defined) in the public
+// qquickwebengineprofile.h header. We need its complete definition to call
+// userScripts()->insert(). Include the Qt private header (requires
+// Qt6::WebEngineQuickPrivate in CMakeLists.txt to expose this path).
+#include <QtWebEngineQuick/private/qquickwebenginescriptcollection_p.h>
 #endif
 
 namespace ajazz::app {
@@ -247,12 +252,26 @@ void PluginManager::spawn(PluginManifest const& manifest) {
         if (m_piController) {
             // Attach Mirabox shim to the per-plugin profile before loading index.html.
             // akp_plugin_sdk.md §9 compat shim + Pattern 2 from 18-RESEARCH.md.
-            // (PropertyInspectorController::activeProfile() gives the QQuickWebEngineProfile.)
+            // userScripts() returns QQuickWebEngineScriptCollection* (Qt 6 API;
+            // scripts() does not exist on QQuickWebEngineProfile).
             auto* profile = m_piController->activeProfile();
             if (profile) {
-                profile->scripts()->insert(makeMiraboxShim());
+                profile->userScripts()->insert(makeMiraboxShim());
             }
-            m_piController->loadInspector(code, manifest.codePath, {});
+            // NOTE: in-process HTML plugin page-load (the Chromium view that renders
+            // the plugin's index.html as its main UI, not the per-action PI settings
+            // panel) requires the Phase-19 device<->plugin bridge surface and the
+            // Phase-20 WebEngine view-routing work. PropertyInspectorController::
+            // loadInspector() is the Phase-20 per-action PI loader (4-arg API:
+            // pluginUuid, htmlAbsPath, actionUuid, contextUuid) — calling it here with
+            // placeholder args would be a semantic misuse and would corrupt the active
+            // PI state. The plugin is registered in m_live below so lifecycle tracking
+            // (crash, shutdown, exitApp) is fully active; only the Chromium page-load
+            // is deferred. (Phase-19/20 will wire the plugin main view once the bridge
+            // surface is ready.)
+            qInfo("PluginManager: HTML plugin '%s' registered in m_live; "
+                  "in-process WebEngine page-load deferred to Phase 19/20 bridge work",
+                  qPrintable(manifest.name));
         }
 #else
         qWarning("PluginManager: HTML plugin '%s' requires WebEngine (not available)",

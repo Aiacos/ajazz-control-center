@@ -442,6 +442,22 @@ target_link_libraries(
 
 if(AJAZZ_HAVE_WEBENGINE)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannelQuick)
+    # Qt6::WebEngineQuickPrivate exposes the private include path required by plugin_manager.cpp to
+    # call profile->userScripts()->insert(...). QQuickWebEngineScriptCollection is only
+    # forward-declared in the public qquickwebengineprofile.h; its complete definition lives in the
+    # private header qquickwebenginescriptcollection_p.h. The symbols already live in
+    # Qt6::WebEngineQuick (already linked above) — WebEngineQuickPrivate only adds the include path.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuickPrivate)
+    if(Qt6WebEngineQuickPrivate_FOUND)
+        target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuickPrivate)
+    else()
+        # Fallback: splice the private include dir directly for older/slimmer Qt installs.
+        set(_we_priv "${Qt6WebEngineQuick_INCLUDE_DIRS}/QtWebEngineQuick"
+                     "/${Qt6WebEngineQuick_VERSION}/QtWebEngineQuick/private"
+        )
+        string(CONCAT _we_priv_path ${_we_priv})
+        target_include_directories(ajazz-control-center PRIVATE "${_we_priv_path}")
+    endif()
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
     # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
     # present. Adding it to the QML module list unconditionally would fail QML compilation on
@@ -453,7 +469,7 @@ if(AJAZZ_HAVE_WEBENGINE)
     # Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim. kMiraboxShimSource is declared
     # inline constexpr in the header (always reachable); makeMiraboxShim() body uses
     # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
-    # profile->scripts()->insert(makeMiraboxShim()) before loading HTML plugin index.html.
+    # profile->userScripts()->insert(makeMiraboxShim()) before loading HTML plugin index.html.
     target_sources(ajazz-control-center PRIVATE src/plugin_mirabox_shim.cpp)
 endif()
 
