@@ -537,6 +537,113 @@ TEST_CASE("PIBridge relay - sendToPlugin emits toPluginRequested with correct uu
 }
 
 // ---------------------------------------------------------------------------
+// CR-01 regression: invoke("sendToPlugin") with a JSON-object payload must
+// forward a non-empty string to toPluginRequested, not drop it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PIBridge invoke sendToPlugin with object payload forwards non-empty payload",
+          "[pi-bridge][cefquery][cr-01]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cr01"),
+                                QStringLiteral("act-cr01"),
+                                QStringLiteral("ctx-cr01-001"));
+
+    QString capturedUuid;
+    QString capturedJson;
+    QObject::connect(
+        &bridge, &ajazz::app::PIBridge::toPluginRequested, [&](QString uuid, QString json) {
+            capturedUuid = uuid;
+            capturedJson = json;
+        });
+
+    // Idiomatic SDK shape: payload is a JSON object, NOT a string.
+    // Before the CR-01 fix, QJsonValue::toString() returned "" for objects,
+    // causing the relay to fire with an empty payload (silent data drop).
+    QString const invocation =
+        QStringLiteral(R"({"event":"sendToPlugin","payload":{"key":"value","count":3}})");
+    bridge.invoke(invocation);
+
+    // The relay must have fired.
+    REQUIRE(capturedUuid == QStringLiteral("com.example.cr01"));
+    // The forwarded payload must be non-empty — the object was serialized.
+    REQUIRE(!capturedJson.isEmpty());
+    // The serialized payload must round-trip to the original object.
+    QJsonDocument const doc = QJsonDocument::fromJson(capturedJson.toUtf8());
+    REQUIRE(!doc.isNull());
+    QJsonObject const obj = doc.object();
+    REQUIRE(obj.value(QStringLiteral("key")).toString() == QStringLiteral("value"));
+    REQUIRE(obj.value(QStringLiteral("count")).toInt() == 3);
+}
+
+TEST_CASE("PIBridge invoke sendToPlugin with string payload forwards the string unchanged",
+          "[pi-bridge][cefquery][cr-01]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cr01-str"),
+                                QStringLiteral("act-cr01-str"),
+                                QStringLiteral("ctx-cr01-str-001"));
+
+    QString capturedJson;
+    QObject::connect(&bridge, &ajazz::app::PIBridge::toPluginRequested, [&](QString, QString json) {
+        capturedJson = json;
+    });
+
+    // Some PIs may pass a pre-serialized string payload.
+    QString const invocation =
+        QStringLiteral(R"({"event":"sendToPlugin","payload":"raw-string-payload"})");
+    bridge.invoke(invocation);
+
+    REQUIRE(capturedJson == QStringLiteral("raw-string-payload"));
+}
+
+// ---------------------------------------------------------------------------
+// WR-02: sendToPlugin and logMessage must reject payloads exceeding the cap.
+// WR-03: readJsonOrEmpty (exercised via getSettings) must not buffer oversize files.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PIBridge sendToPlugin rejects oversized payload", "[pi-bridge][relay][wr-02]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cap-send"),
+                                QStringLiteral("act-cap"),
+                                QStringLiteral("ctx-cap-send-001"));
+
+    bool relayFired = false;
+    QObject::connect(&bridge, &ajazz::app::PIBridge::toPluginRequested, [&](QString, QString) {
+        relayFired = true;
+    });
+
+    // Build a payload just over 1 MiB.
+    QString const huge = QString(1024 * 1024 + 1, QLatin1Char('x'));
+    REQUIRE_NOTHROW(bridge.sendToPlugin(huge));
+    // The relay must NOT have fired for an oversized payload.
+    REQUIRE(!relayFired);
+}
+
+TEST_CASE("PIBridge sendToPlugin accepts a payload at the boundary", "[pi-bridge][relay][wr-02]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cap-send-ok"),
+                                QStringLiteral("act-cap-ok"),
+                                QStringLiteral("ctx-cap-send-ok-001"));
+
+    bool relayFired = false;
+    QObject::connect(&bridge, &ajazz::app::PIBridge::toPluginRequested, [&](QString, QString) {
+        relayFired = true;
+    });
+
+    // Exactly 1 MiB of ASCII — must pass.
+    QString const boundary = QString(1024 * 1024, QLatin1Char('y'));
+    REQUIRE_NOTHROW(bridge.sendToPlugin(boundary));
+    REQUIRE(relayFired);
+}
+
+// ---------------------------------------------------------------------------
 // sdpi.css helper + bundled resource tests (PLUGIN-09 / 20-02)
 //
 // isSdpiCssRequest is in pi_url_policy.cpp (already linked); no new link needed.

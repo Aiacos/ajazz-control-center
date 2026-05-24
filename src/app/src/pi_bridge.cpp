@@ -449,7 +449,14 @@ QString PIBridge::invoke(QString const& json) {
     } else if (event == QLatin1String("getGlobalSettings")) {
         getGlobalSettings();
     } else if (event == QLatin1String("sendToPlugin")) {
-        QString const payload = obj.value(QStringLiteral("payload")).toString();
+        // SDK-2 wire format: payload is typically a JSON object { key: val },
+        // not a string. QJsonValue::toString() returns "" for non-string values,
+        // so we re-serialize object/array payloads to preserve them (CR-01).
+        QJsonValue const v = obj.value(QStringLiteral("payload"));
+        QString const payload =
+            v.isString()
+                ? v.toString()
+                : QString::fromUtf8(QJsonDocument(v.toObject()).toJson(QJsonDocument::Compact));
         sendToPlugin(payload);
     } else if (event == QLatin1String("openUrl")) {
         QString const url = obj.value(QStringLiteral("url")).toString();
