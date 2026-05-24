@@ -270,7 +270,7 @@ devices:
     keys: 10
     encoders: 4
     maturity: partial
-    capabilities: [display, encoder, touch, macros, clock]
+    capabilities: [display, encoder, touch, macros]
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Real retail AKP05E. Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO' (white-label dev string), which led to a brief mis-filing as the 6-key 'akp03_variant_3004'. A live CRT VER handshake on 2026-05-20 returned firmware string 'V3.AKP05E.01.007' — confirming AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Routed through makeAkp05."
 

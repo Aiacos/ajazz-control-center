@@ -302,7 +302,7 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
-            .hasClock = true, // A-03 / D-03: shares Akp05Device backend → same IClockCapable.
+            .hasClock = false, // DEVICES-11 / ARCH-05: Stream Dock family has no firmware RTC.
         },
         &makeAkp05);
 
