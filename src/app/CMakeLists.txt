@@ -121,6 +121,11 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # Gated on WebSockets because it will compose SdPluginServer (Phase 17) in 19-02/19-03. Pure
     # in-tree C++/Qt6; no new external packages (Package Legitimacy Gate N/A per 19-RESEARCH).
     target_sources(ajazz-control-center PRIVATE src/plugin_device_bridge.cpp)
+    # Phase 21 Plan 21-02 (PLUGIN-12): obs-websocket v5 client for the obsstudio built-in action.
+    # Auth default-on (LOCKED anti-feature T-21-obsauth): refuses Identify when OBS demands auth but
+    # no password is configured. App-tier QJsonDocument (COD-031: no nlohmann). 21-03 wires the
+    # obsstudio UUID to ObsClient; not QML-exposed here.
+    target_sources(ajazz-control-center PRIVATE src/obs_client.cpp)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()
@@ -363,6 +368,10 @@ set(ACC_QML_MODULE_SOURCES
     # pattern.
     src/plugin_device_bridge.cpp
     src/plugin_device_bridge.hpp
+    # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient Q_OBJECT header listed here so AUTOMOC finds the
+    # moc declaration. The .cpp is in the AJAZZ_HAVE_WEBSOCKETS-gated block above. The whole class
+    # is gated by #if defined(AJAZZ_HAVE_WEBSOCKETS) so moc is safe on minimal builds.
+    src/obs_client.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
