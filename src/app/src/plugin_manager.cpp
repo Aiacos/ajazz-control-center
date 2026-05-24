@@ -222,7 +222,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
 
-        // Wire crash signals BEFORE start (owned process — never startDetached).
+        // Wire crash signals BEFORE start (owned QProcess — crash signals require ownership).
         connect(rawProc, &QProcess::errorOccurred, this, [this, pluginId](QProcess::ProcessError) {
             onProcessFailed(pluginId);
         });
