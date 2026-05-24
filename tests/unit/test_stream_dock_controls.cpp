@@ -180,6 +180,39 @@ TEST_CASE("StreamDockControlService: setBrightness clamps out-of-range value to 
 }
 
 // ===========================================================================
+// DISPLAY-09: setBrightness clamps -50 -> 0 (lower-bound symmetric of above)
+// ===========================================================================
+
+TEST_CASE("StreamDockControlService: setBrightness clamps negative value to 0",
+          "[stream-dock-controls][DISPLAY-09]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    svc.setBrightness(QStringLiteral("akp05e"), -50); // negative -- must clamp to 0
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    REQUIRE(writes.size() > writeCountAfterOpen);
+
+    auto const ligIdx = findPacketByCmd(writes, 0x4C, 0x49, 0x47, writeCountAfterOpen);
+    REQUIRE(ligIdx < writes.size());
+    auto const& ligPkt = writes[ligIdx];
+    REQUIRE(ligPkt.size() >= 11);
+    // Brightness must be clamped to 0.
+    CHECK(ligPkt[10] == 0);
+}
+
+// ===========================================================================
 // DISPLAY-09: clearAll(codename) produces CLE write
 // ===========================================================================
 
