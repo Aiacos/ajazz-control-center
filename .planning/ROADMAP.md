@@ -295,7 +295,7 @@ Plans:
 
 Plans:
 
-- [ ] 17-01-PLAN.md — PLUGIN-01/02/03: route all 39 plugin→host actions (13 standard + 26 AJAZZ) via actionReceived, re-pin LocalHost-only bind + envelope round-trip, invert the setBG→unhandled test (wave 1)
+- [x] 17-01-PLAN.md — PLUGIN-01/02/03: route all 39 plugin→host actions (13 standard + 26 AJAZZ) via actionReceived, re-pin LocalHost-only bind + envelope round-trip, invert the setBG→unhandled test (wave 1)
 - [ ] 17-02-PLAN.md — PLUGIN-04: sendEvent host→plugin writer + uuid→socket lookup covering §4.4 events incl. dialRotate ticks/pressed/controller (wave 2)
 - [ ] 17-03-PLAN.md — PLUGIN-05: passHello + random per-connection nested salt/challenge auth (sha256(password+salt)), reject-after-5 socket close, test-only password setter (wave 3)
 
@@ -471,7 +471,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |
+| 17. Plugin Protocol Completion              | v1.3      | 1/3            | In Progress      |            |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
 | 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |

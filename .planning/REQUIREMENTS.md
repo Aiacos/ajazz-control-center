@@ -52,9 +52,9 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Plugin Protocol Completion (Phase 17)
 
-- [ ] **PLUGIN-01**: The plugin WebSocket server stays **`QHostAddress::LocalHost`-only** (never `Any`) on a random free port, with the loopback invariant test-pinned; optional `QTcpServer` dual-stack on the same port for legacy plugins (sdk §4.1). *(largely built — pin + extend.)*
-- [ ] **PLUGIN-02**: The JSON envelope (`event`/`context`/`device`/`action`/`payload`, plus `controller`/`coordinates`/`ticks`/`pressed`) round-trips for every supported message type (sdk §4.2).
-- [ ] **PLUGIN-03**: The **26 AJAZZ-only actions** are implemented (`setBG`, `setBackground`, `clearIcon`, `sendToDevice`, `openTouchbarSecondaryMenu`/`exitTouchbarSecondaryMenu`, `enterGatheringEvent`, screensaver reg/unreg, `setText`, `setFeedback`, `lockScreen`/`unLockScreen`, `getScreenshot`, `getSystemAudioVolume`, `getUserInfo`, `setAcImgTop`, `deleteAction`, `stopBackground`, `exitFullScreen`, `touchTap`, `getDetectedSensorsData`, audio capture, folder-nav notifies) on top of the 13 standard ones (sdk §4.3).
+- [x] **PLUGIN-01**: The plugin WebSocket server stays **`QHostAddress::LocalHost`-only** (never `Any`) on a random free port, with the loopback invariant test-pinned; optional `QTcpServer` dual-stack on the same port for legacy plugins (sdk §4.1). *(largely built — pin + extend.)*
+- [x] **PLUGIN-02**: The JSON envelope (`event`/`context`/`device`/`action`/`payload`, plus `controller`/`coordinates`/`ticks`/`pressed`) round-trips for every supported message type (sdk §4.2).
+- [x] **PLUGIN-03**: The **26 AJAZZ-only actions** are implemented (`setBG`, `setBackground`, `clearIcon`, `sendToDevice`, `openTouchbarSecondaryMenu`/`exitTouchbarSecondaryMenu`, `enterGatheringEvent`, screensaver reg/unreg, `setText`, `setFeedback`, `lockScreen`/`unLockScreen`, `getScreenshot`, `getSystemAudioVolume`, `getUserInfo`, `setAcImgTop`, `deleteAction`, `stopBackground`, `exitFullScreen`, `touchTap`, `getDetectedSensorsData`, audio capture, folder-nav notifies) on top of the 13 standard ones (sdk §4.3).
 - [ ] **PLUGIN-04**: All host→plugin **events** are wired (sdk §4.4): `keyDown`/`keyUp`, the encoder events `dialDown`/`dialUp`/`dialRotate` (+ AJAZZ-legacy `keyDownCord`/`keyUpCord`), `touchTap`, `willAppear`/`willDisappear`, `deviceDidConnect`/`deviceDidDisconnect`, `applicationDidLaunch`/`applicationDidTerminate`, `titleParametersDidChange`, `systemDidWakeUp`, `didReceiveSettings`/`didReceiveGlobalSettings`.
 - [ ] **PLUGIN-05**: The `passHello` + salt/challenge auth handshake is implemented (`sha256(password+salt)`; reject after N bad attempts; no TLS — loopback-only by design; sdk §4.5).
 
@@ -273,9 +273,9 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | DISPLAY-09  | Phase 16 | Complete |
 | PROFILE-01  | Phase 16 | Complete |
 | PROFILE-02  | Phase 16 | Complete |
-| PLUGIN-01   | Phase 17 | Pending  |
-| PLUGIN-02   | Phase 17 | Pending  |
-| PLUGIN-03   | Phase 17 | Pending  |
+| PLUGIN-01   | Phase 17 | Complete |
+| PLUGIN-02   | Phase 17 | Complete |
+| PLUGIN-03   | Phase 17 | Complete |
 | PLUGIN-04   | Phase 17 | Pending  |
 | PLUGIN-05   | Phase 17 | Pending  |
 | PLUGIN-06   | Phase 18 | Pending  |
