@@ -166,9 +166,15 @@ std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
  *  KeyCount are rejected.  ACK frames (bytes 0–2 == "ACK" = 0x41 0x43 0x4B)
  *  are silently discarded.
  *
- *  @note  The device emits a single "released" style report per transition;
- *         press/release state is maintained by the higher-level polling loop.
- *         This function always returns @c pressed = @c true for valid reports.
+ *  @note  This function currently always returns @c pressed = @c true.
+ *         The AKP153 release-byte/format is not yet documented in the RE
+ *         (akp153.md §Wire-protocol §Input-reports, 2026-05-24). Until a
+ *         hardware capture surfaces the release encoding, we do NOT invent
+ *         the wire format. This is a known open limitation (WR-03).
+ *         TODO(WR-03): implement release detection once akp153.md §Input-
+ *         reports is filled in from Phase-25 hardware capture. The fix
+ *         will require per-call state to diff successive reports, making
+ *         this function stateful (or adding a state-diff call-site wrapper).
  *
  *  @param frame  Raw HID report bytes (must be at least 16 bytes).
  *  @return       Decoded key event, or @c std::nullopt for ACK / invalid frames.
@@ -183,15 +189,16 @@ std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame) {
         return std::nullopt;
     }
 
-    // Key release has its payload at byte 9.
+    // Key index at byte 9.
     auto const keyIndex = frame[9];
     if (keyIndex == 0 || keyIndex > KeyCount) {
         return std::nullopt;
     }
 
-    // The AKP153 emits a "released" report on each press/release transition;
-    // a higher layer maintains the press/release state machine by diffing
-    // successive reports. For now we expose "pressed==true" as a single shot.
+    // TODO(WR-03): the AKP153 release-byte format is not documented in
+    // akp153.md §Input-reports as of 2026-05-24. Phase-25 hardware capture
+    // will supply the wire evidence needed to implement release detection.
+    // Until then, always report pressed=true (known honest limitation).
     return KeyEvent{.keyIndex = keyIndex, .pressed = true};
 }
 
