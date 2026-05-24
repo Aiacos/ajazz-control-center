@@ -39,8 +39,10 @@ namespace {
 // Protocol constants (mirrors akp05_protocol.hpp — do NOT alter wire decode).
 // ---------------------------------------------------------------------------
 
-/// Matches akp05::EncoderCount = 4 (akp05_protocol.hpp:72).
-inline constexpr std::uint8_t kEncoderCount = 4;
+// kEncoderCount removed: use StreamDockInputService::kEncoderCount (the class
+// static constexpr std::size_t) as the single source of truth. Having a
+// separate inline constexpr std::uint8_t here shadowed the class constant
+// inside this TU and created a silent divergence risk (WR-02).
 /// Matches akp05::TouchStripRangeX = 640 (akp05_protocol.hpp:82).
 inline constexpr std::uint16_t kTouchStripRangeX = 640;
 
@@ -157,10 +159,14 @@ std::size_t StreamDockInputService::pump() {
 std::uint16_t StreamDockInputService::zoneForX(std::uint16_t x) noexcept {
     // Bounded formula: result is in [0, EncoderCount-1].
     // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
-    auto const raw = static_cast<std::uint32_t>(x) * static_cast<std::uint32_t>(kEncoderCount) /
+    // WR-02: reference the class constant explicitly so the single source of
+    // truth (StreamDockInputService::kEncoderCount, std::size_t) is used here
+    // and in onEncoderTurned / drainCoalescedRotation consistently.
+    auto const raw = static_cast<std::uint32_t>(x) *
+                     static_cast<std::uint32_t>(StreamDockInputService::kEncoderCount) /
                      static_cast<std::uint32_t>(kTouchStripRangeX);
-    auto const capped =
-        std::min<std::uint32_t>(raw, static_cast<std::uint32_t>(kEncoderCount) - 1u);
+    auto const capped = std::min<std::uint32_t>(
+        raw, static_cast<std::uint32_t>(StreamDockInputService::kEncoderCount) - 1u);
     return static_cast<std::uint16_t>(capped);
 }
 
