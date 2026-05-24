@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: ready_to_plan
-stopped_at: Phase 20 complete (3/3) — ready to discuss Phase 21
-last_updated: 2026-05-24T17:09:54.261000Z
+status: executing
+stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
+last_updated: '2026-05-24T17:24:07.633Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
   completed_phases: 8
   total_plans: 51
-  completed_plans: 27
+  completed_plans: 28
   percent: 47
 ---
 
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 21 — builtin in process actions
+**Current focus:** Phase 21 — builtin-in-process-actions
 
 ## Current Position
 
-Phase: 21
-Plan: Not started
+Phase: 21 (builtin-in-process-actions) — EXECUTING
+Plan: 2 of 3
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Ready to plan
+Status: Ready to execute
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -91,6 +91,9 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: argv contract: codePath is argv[0], node binary NOT in list (PLUGIN-08/Pitfall3)
 - \[Phase ?\]: NodeProbe struct defaults uninitialised; makeDefaultNodeProbe() wires QStandardPaths+QProcess; tests inject fakes directly
 - \[Phase ?\]: PLUGIN-13 persistence round-trip proved by hermetic Catch2 tests: unique UUID isolation + QStandardPaths::setTestModeEnabled
+- \[Phase ?\]: IInputSynthesizer HID Usage IDs for platform-neutral key rep: Linux KEY\_*, Windows VK\_*, macOS kVK\_\*
+- \[Phase ?\]: captureHotkeys gate: OFF by default; stub always returns false; T-21-hook LOCKED (Phase 25 deferred for real grab)
+- \[Phase ?\]: AJAZZ_FEATURE_INPUT_SYNTH default OFF; self-emptying OS TUs; no libXtst (uinput Wayland-compatible)
 
 ### Pending Todos
 
@@ -153,10 +156,11 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 19-device-plugin-bridge P02                      | 95                                                                            | 2 tasks                           | 6 files                  |
 | Phase 19-device-plugin-bridge P03                      | 45                                                                            | 2 tasks                           | 7 files                  |
 | Phase 20-property-inspector-settings P01               | 7                                                                             | 2 tasks                           | 2 files                  |
+| Phase 21 P01                                           | 35                                                                            | 2 tasks                           | 9 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T16:45:27.602Z
+Last session: 2026-05-24T17:24:07.625Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 

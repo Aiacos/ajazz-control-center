@@ -76,7 +76,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Built-in In-Process Actions (Phase 21)
 
-- [ ] **PLUGIN-12**: The core built-in actions are implemented in-process (sdk §1): page nav (`page.previous`/`next`/`goto`/`indicator`/`change`), profile nav (`profile.openchild`/`backtoparent`/`rotate`), `device.brightness`, `system.hotkey` (**opt-in** global hook — never always-on), `system.multimedia`, `system.volume`, `plain.text`, `browser`/`openUrl`, `multiactions` (+ carousel), and `obsstudio` (auth **default-on**).
+- [x] **PLUGIN-12**: The core built-in actions are implemented in-process (sdk §1): page nav (`page.previous`/`next`/`goto`/`indicator`/`change`), profile nav (`profile.openchild`/`backtoparent`/`rotate`), `device.brightness`, `system.hotkey` (**opt-in** global hook — never always-on), `system.multimedia`, `system.volume`, `plain.text`, `browser`/`openUrl`, `multiactions` (+ carousel), and `obsstudio` (auth **default-on**).
 
 ### Plugin Store / Local Install (Phase 22)
 
@@ -285,7 +285,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-10   | Phase 19 | Complete |
 | PLUGIN-09   | Phase 20 | Complete |
 | PLUGIN-13   | Phase 20 | Complete |
-| PLUGIN-12   | Phase 21 | Pending  |
+| PLUGIN-12   | Phase 21 | Complete |
 | PLUGIN-14   | Phase 22 | Pending  |
 | DISPLAY-10  | Phase 23 | Pending  |
 | DEVICES-10  | Phase 24 | Pending  |

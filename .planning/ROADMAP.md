@@ -372,7 +372,7 @@ Plans:
 
 Plans:
 
-- [ ] 21-01-PLAN.md — STOP-gate 15/16/19 SUMMARY files + pure-core `IInputSynthesizer` (Linux uinput real, Win/mac stubbed-compiling) behind `AJAZZ_FEATURE_INPUT_SYNTH` + opt-in capture gate OFF + fake-backend test (wave 1)
+- [x] 21-01-PLAN.md — STOP-gate 15/16/19 SUMMARY files + pure-core `IInputSynthesizer` (Linux uinput real, Win/mac stubbed-compiling) behind `AJAZZ_FEATURE_INPUT_SYNTH` + opt-in capture gate OFF + fake-backend test (wave 1)
 - [ ] 21-02-PLAN.md — `ObsClient` obs-websocket v5 (auth default-on, refuse unauthenticated) + the four-request subset + mock-OBS `QWebSocketServer` auth test, gated `AJAZZ_HAVE_WEBSOCKETS` (wave 1)
 - [ ] 21-03-PLAN.md — pure-core `BuiltinActionRegistry` + app `BuiltinActionsService` (nav/profile/brightness/synthesis/OBS/multiactions+LunBo/browser) + plugin-executor short-circuit + spy/fake e2e test (wave 2, depends 21-01+21-02)
 
@@ -475,7 +475,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 20. Property Inspector + Settings           | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
+| 21. Built-in In-Process Actions             | v1.3      | 1/3            | In Progress      |            |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 0/?            | Not started      | —          |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 0/?            | Not started      | —          |
