@@ -482,3 +482,63 @@ TEST_CASE("Held handle: pump() twice does not re-open the transport", "[stream-d
     // Additionally confirm the transport is still open (not double-closed)
     REQUIRE(obs->isOpen());
 }
+
+// ===========================================================================
+// IN-01: setActiveDevice(nullptr) / device-removal path (T-15-05)
+// ===========================================================================
+
+TEST_CASE("IN-01: setActiveDevice(nullptr) stops poll and subsequent pump() is a no-op",
+          "[stream-dock-input]") {
+    ajazz::tests::qtApp();
+
+    auto transport = std::make_unique<ajazz::tests::MockTransport>();
+    auto* obs = transport.get();
+    obs->open();
+    auto dev =
+        streamdeck::makeAkp05WithTransport(makeDescriptor(), makeDeviceId(), std::move(transport));
+
+    int keyPressCount = 0;
+    ActionExecutors spies;
+    spies.keyPress = [&](std::string_view) { ++keyPressCount; };
+
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.keys[1].onPress = {Action{.kind = ActionKind::KeyPress}};
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+
+    SECTION("pump() dispatches events while device is active") {
+        svc.setActiveDevice(dev);
+        obs->enqueueRead(makeKeyFrame(1, true));
+        auto const n = svc.pump();
+        REQUIRE(n > 0);
+        REQUIRE(keyPressCount == 1);
+    }
+
+    SECTION("setActiveDevice(nullptr) then pump() returns 0 and no action fires") {
+        svc.setActiveDevice(dev);
+        // Confirm a first pump works
+        obs->enqueueRead(makeKeyFrame(1, true));
+        svc.pump();
+        REQUIRE(keyPressCount == 1);
+
+        // Now simulate device removal
+        svc.setActiveDevice(nullptr);
+
+        // Subsequent pump() must be a no-op: return 0, no extra dispatches
+        obs->enqueueRead(makeKeyFrame(1, true));
+        auto const n = svc.pump();
+        REQUIRE(n == 0);
+        REQUIRE(keyPressCount == 1); // still 1, not 2
+    }
+
+    SECTION("setActiveDevice(nullptr) does not close the transport (control service owns that)") {
+        svc.setActiveDevice(dev);
+        svc.setActiveDevice(nullptr);
+        // The input service must NOT call close() on the transport -- that is
+        // StreamDockControlService's responsibility (ARCH-03 single-handle invariant).
+        REQUIRE(obs->isOpen());
+    }
+}
