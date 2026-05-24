@@ -192,6 +192,148 @@ TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
     REQUIRE(unhandledSpy.first().at(1).toString() == QStringLiteral("setBG"));
 }
 
+// ============================================================================
+// Protocol-routing tests — Task 1 RED (kRoutedActions: 15 standard + 26 AJAZZ = 41)
+// ============================================================================
+
+TEST_CASE("SdPluginProtocolTest all routed actions route none unhandled",
+          "[plugin-server][actions]") {
+    // This table must stay in lockstep with kRoutedActions in sd_plugin_server.cpp.
+    // The expected count is derived from this list's size (currently 41), NOT a hardcoded
+    // literal. A comment below asserts it must equal kRoutedActions.size() in the source.
+    //
+    // Standard Elgato routed (15) — spec 4.3, excluding registerPlugin /
+    // registerPropertyInspector (handled in the earlier branch):
+    static constexpr char const* kAllRoutedNames[] = {
+        "setTitle",                // standard
+        "setImage",                // standard
+        "setState",                // standard
+        "showAlert",               // standard
+        "showOk",                  // standard
+        "getSettings",             // standard
+        "setSettings",             // standard
+        "getGlobalSettings",       // standard
+        "setGlobalSettings",       // standard
+        "switchToProfile",         // standard
+        "sendToPropertyInspector", // standard
+        "sendToPlugin",            // standard
+        "openUrl",                 // standard
+        "logMessage",              // standard
+        "setFeedback",             // standard (Stream Deck Plus encoder feedback)
+        // AJAZZ-only (26) — spec 4.3 "Standard Elgato? AJAZZ-only":
+        "setBG",
+        "setBackground",
+        "clearIcon",
+        "sendToDevice",
+        "openTouchbarSecondaryMenu",
+        "exitTouchbarSecondaryMenu",
+        "enterGatheringEvent",
+        "registrationScreenSaverEvent",
+        "unRegistrationScreenSaverEvent",
+        "setText",
+        "lockScreen",
+        "unLockScreen",
+        "getScreenshot",
+        "getSystemAudioVolume",
+        "getUserInfo",
+        "setAcImgTop",
+        "onSwitchToFolderProfile",
+        "onSwitchFromFolderProfile",
+        "deleteAction",
+        "stopBackground",
+        "exitFullScreen",
+        "touchTap",
+        "getDetectedSensorsData",
+        "startAudioCapture",
+        "stopAudioCapture",
+        "sendUserInfo",
+    };
+    // kAllRoutedNames.size() == 41 (currently); must equal kRoutedActions.size() in source.
+    constexpr int kExpectedCount =
+        static_cast<int>(sizeof(kAllRoutedNames) / sizeof(kAllRoutedNames[0]));
+
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy actionSpy(&server, &SdPluginServer::actionReceived);
+    QSignalSpy unhandledSpy(&server, &SdPluginServer::unhandledEventReceived);
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.allrouted"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    for (auto const* name : kAllRoutedNames) {
+        QString const msg = QStringLiteral(R"({"event":"%1","context":"ctx1","payload":{}})")
+                                .arg(QLatin1String(name));
+        client.sendTextMessage(msg);
+    }
+    // Drain until we have received all expected actions or timeout.
+    auto until = QDateTime::currentMSecsSinceEpoch() + 5000;
+    while (actionSpy.count() < kExpectedCount && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+
+    REQUIRE(unhandledSpy.count() == 0);
+    REQUIRE(actionSpy.count() == kExpectedCount);
+}
+
+TEST_CASE("SdPluginProtocolTest envelope round trips event context device action payload",
+          "[plugin-server][actions][envelope]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy actionSpy(&server, &SdPluginServer::actionReceived);
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.envelope"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    // All five envelope keys (spec 4.2): event / context / device / action / payload
+    client.sendTextMessage(QStringLiteral(
+        R"({"event":"setImage","context":"ctx-42","device":"dev-1","action":"com.test.plugin.action1","payload":{"image":"data:image/png;base64,abc="}})"));
+    REQUIRE(waitForSpy(actionSpy));
+
+    REQUIRE(actionSpy.count() == 1);
+    auto const args = actionSpy.first();
+    auto const obj = args.at(1).value<QJsonObject>();
+    REQUIRE(obj.value(QStringLiteral("event")).toString() == QStringLiteral("setImage"));
+    REQUIRE(obj.value(QStringLiteral("context")).toString() == QStringLiteral("ctx-42"));
+    REQUIRE(obj.value(QStringLiteral("device")).toString() == QStringLiteral("dev-1"));
+    REQUIRE(obj.value(QStringLiteral("action")).toString() ==
+            QStringLiteral("com.test.plugin.action1"));
+    REQUIRE(
+        obj.value(QStringLiteral("payload")).toObject().value(QStringLiteral("image")).toString() ==
+        QStringLiteral("data:image/png;base64,abc="));
+}
+
+TEST_CASE("SdPluginServer bind loopback only on random port",
+          "[plugin-server][security][loopback-only]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    REQUIRE(server.start(0));
+    // PLUGIN-01: bind address is always LocalHost — never Any/AnyIPv4/AnyIPv6.
+    REQUIRE(server.bindAddress() == QHostAddress(QHostAddress::LocalHost));
+    REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::Any));
+    REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::AnyIPv4));
+    REQUIRE(server.bindAddress() != QHostAddress(QHostAddress::AnyIPv6));
+    // OS-assigned port is non-zero.
+    REQUIRE(server.serverPort() != 0);
+}
+
+// ============================================================================
+// End protocol-routing RED tests
+// ============================================================================
+
 TEST_CASE("SdPluginServer multiple sequential start/stop cycles do not leak ports",
           "[plugin-server][lifecycle]") {
     ensureQCoreApp();
