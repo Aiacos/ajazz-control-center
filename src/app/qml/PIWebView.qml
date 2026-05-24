@@ -32,7 +32,7 @@
 // charge of its own page while keeping per-plugin isolation, the
 // `$SD` bridge, and the URL interceptor (set on the profile in C++).
 //
-// Security posture (M2 baseline):
+// Security posture (M2 baseline + WR-01 navigation guard):
 //   * Background colour matches the inspector pane so the WebEngine
 //     surface doesn't flash white before the page paints.
 //   * `WebEngineSettings` flags are configured declaratively below —
@@ -42,6 +42,11 @@
 //     revision; the per-profile `PIUrlRequestInterceptor` (set in
 //     `PropertyInspectorController::loadInspector`) further bounds
 //     network access to the PI directory + the CDN allowlist.
+//   * `onNavigationRequested` handler (WR-01): the URL interceptor guards
+//     sub-resource loads; top-level navigations (window.location, <a href>
+//     clicks) may not be caught by the interceptor on all Qt builds. The
+//     handler allows only the initial PI file:// URL and rejects all other
+//     navigations as defence-in-depth.
 //   * No drag-and-drop into the view (`acceptedButtons: Qt.NoButton`)
 //     prevents a plugin from receiving file drops the user intended for
 //     the host UI.
@@ -72,6 +77,21 @@ Item {
         settings.pluginsEnabled: false
         settings.fullScreenSupportEnabled: false
         settings.screenCaptureEnabled: false
+
+        // WR-01: deny-by-default navigation guard (defence-in-depth).
+        // The URL interceptor handles sub-resource policy; this handler
+        // prevents the PI page from redirecting the view itself (e.g. via
+        // window.location or a clicked link) to an arbitrary URL.
+        // Only the initial PI file:// entry URL is allowed; every other
+        // navigation — including navigations to the same host — is blocked.
+        onNavigationRequested: function(request) {
+            var allowed = PropertyInspectorController.activeUrl;
+            if (request.url.toString() === allowed.toString()) {
+                request.action = WebEngineNavigationRequest.AcceptRequest;
+            } else {
+                request.action = WebEngineNavigationRequest.IgnoreRequest;
+            }
+        }
     }
 
     // Block all mouse-button input to the underlying page surface
