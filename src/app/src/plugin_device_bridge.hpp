@@ -295,9 +295,18 @@ struct DecodedImage {
  * Phase 19-02 wires inbound actions (setImage/setTitle/setState/…) → device.
  * Phase 19-03 wires device input events → sendEvent to the bound plugin.
  *
- * Construction: the service pointers are commented "wired in 19-02"; the
- * constructor body is a stub in this plan so the QObject compiles and the
- * pure helpers + ContextRegistry are already unit-testable.
+ * **Inbound action routing (Phase 19-02):**
+ *   `SdPluginServer::actionReceived(pluginUuid, action)` → `onAction` dispatches the
+ *   visual action family (setImage/setTitle/setState/setBG/setFeedback/setText) via
+ *   the context registry with ownership enforcement (T-19-xplugin). All other action
+ *   names are no-ops (handled in later phases).
+ *
+ * **Security (Phase 19-02):**
+ *   T-19-img    — decodeDataUriImage + ok:false → paintPlaceholder (solid fill via
+ *                 assignKeyImage); no null QImage to device; no failure event back.
+ *   T-19-xplugin — context ownership: ctx.pluginUuid == sending pluginUuid required.
+ *   T-19-stale  — unknown context → no-op.
+ *   T-19-input  — all JSON reads are defensive (toString/toInt(default)).
  *
  * COD-031: app-layer QJson/QImage only; never nlohmann.
  */
@@ -306,16 +315,16 @@ class PluginDeviceBridge : public QObject {
 
 public:
     /**
-     * @brief Construct the bridge shell (Phase 19-01 — seam pointers wired in 19-02).
+     * @brief Construct the bridge (Phase 19-02 — seams wired and connected).
      *
-     * @param server   Phase-17 SdPluginServer (wired in 19-02).
-     * @param control  Phase-14 StreamDockControlService (wired in 19-02).
-     * @param input    Phase-15 StreamDockInputService (wired in 19-02).
+     * @param server   Phase-17 SdPluginServer (non-owning observing pointer).
+     * @param control  Phase-14 StreamDockControlService (non-owning).
+     * @param input    Phase-15 StreamDockInputService (non-owning, unused until 19-03).
      * @param parent   QObject parent for lifetime management.
      */
-    explicit PluginDeviceBridge(SdPluginServer* server,            // wired in 19-02
-                                StreamDockControlService* control, // wired in 19-02
-                                StreamDockInputService* input,     // wired in 19-02
+    explicit PluginDeviceBridge(SdPluginServer* server,
+                                StreamDockControlService* control,
+                                StreamDockInputService* input,
                                 QObject* parent = nullptr);
 
     ~PluginDeviceBridge() override;
@@ -324,10 +333,52 @@ public:
     [[nodiscard]] ContextRegistry& registry() noexcept;
     [[nodiscard]] ContextRegistry const& registry() const noexcept;
 
+public slots:
+    /**
+     * @brief Route an inbound plugin action to the device.
+     *
+     * Connected to SdPluginServer::actionReceived in Application (19-02).
+     * Dispatches the six visual actions (setImage/setTitle/setState/setBG/
+     * setFeedback/setText) via the context registry with ownership enforcement.
+     * All other event names are no-ops.
+     *
+     * Security: T-19-xplugin (ownership check), T-19-stale (unknown context),
+     * T-19-input (defensive JSON reads), T-19-img (placeholder on decode failure).
+     *
+     * @param pluginUuid Sending plugin UUID (from SdPluginServer::actionReceived).
+     * @param action     Verbatim action JSON object from the WebSocket frame.
+     */
+    void onAction(QString const& pluginUuid, QJsonObject const& action);
+
 private:
-    SdPluginServer* m_server{nullptr};            // Phase 17 seam (wired in 19-02)
-    StreamDockControlService* m_control{nullptr}; // Phase 14 seam (wired in 19-02)
-    StreamDockInputService* m_input{nullptr};     // Phase 15 seam (wired in 19-02)
+    /// Dispatch setImage: decode data-URI, check ownership, call assignKeyImage
+    /// (or paintPlaceholder on decode failure). No failure event sent back (§5).
+    void onSetImage(QString const& pluginUuid,
+                    QJsonObject const& action,
+                    ActionContext const& ctx,
+                    std::uint8_t keyCols);
+
+    /// Dispatch setTitle: render the title text to a QImage and call assignKeyImage.
+    /// Phase 19 renders the title as a text overlay on a solid background.
+    void onSetTitle(QString const& pluginUuid,
+                    QJsonObject const& action,
+                    ActionContext const& ctx,
+                    std::uint8_t keyCols);
+
+    /// Dispatch setBG: render a solid background color and call assignKeyImage.
+    void onSetBG(QString const& pluginUuid,
+                 QJsonObject const& action,
+                 ActionContext const& ctx,
+                 std::uint8_t keyCols);
+
+    /// Paint a crash-free placeholder on the key when decodeDataUriImage fails (§5).
+    /// Uses assignKeyImage with a neutral solid-fill QImage — never a null image.
+    /// Sends NO failure event back to the plugin (spec §5).
+    void paintPlaceholder(ActionContext const& ctx, std::uint8_t keyCols);
+
+    SdPluginServer* m_server{nullptr};            // Phase 17 seam
+    StreamDockControlService* m_control{nullptr}; // Phase 14 seam
+    StreamDockInputService* m_input{nullptr};     // Phase 15 seam (used in 19-03)
 
     ContextRegistry m_registry;
 };
