@@ -47,6 +47,7 @@ import QtCore
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import AjazzControlCenter
 import "components"
@@ -92,10 +93,84 @@ Page {
     /// QVariantMap with no per-key change-notification.
     property int catalogRevision: 0
 
+    /// Path of the last local-install attempt; used by the self-signed
+    /// confirmation dialog to re-issue installFromFile with confirm=true.
+    property string pendingLocalInstallPath: ""
+
+    /// Status text shown in the install-from-file banner (success / error).
+    property string localInstallStatus: ""
+
     Connections {
         target: PluginCatalog
         function onInstalledCountChanged() { root.catalogRevision += 1; }
         function onCountChanged()         { root.catalogRevision += 1; }
+        function onInstallFinished(path, success, error) {
+            // Only handle local-install outcomes here; tile-level installs
+            // are handled by the tile Connections block below.
+            if (!path.startsWith("/") && !path.startsWith("file:")) {
+                return;
+            }
+            if (success) {
+                root.localInstallStatus = qsTr("Plugin installed successfully.");
+                root.pendingLocalInstallPath = "";
+                root.catalogRevision += 1;
+            } else if (error === "self-signed plugin -- confirm to install") {
+                // Self-signed plugin: show the confirmation dialog.
+                selfSignedDialog.open();
+            } else {
+                root.localInstallStatus = qsTr("Install failed: %1").arg(error);
+                root.pendingLocalInstallPath = "";
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // FileDialog: local .sdPlugin / .zip file picker (PLUGIN-14).
+    // The selectedFile is a file:// URL — passed directly to installFromFile
+    // which normalises it via QUrl::fromUserInput / toLocalFile.
+    // ------------------------------------------------------------------
+    FileDialog {
+        id: fileDialog
+        title: qsTr("Install plugin from file")
+        nameFilters: [qsTr("Plugin files (*.sdPlugin *.zip)"), qsTr("All files (*)")]
+        onAccepted: {
+            if (!PluginCatalog) return;
+            root.pendingLocalInstallPath = selectedFile.toString();
+            root.localInstallStatus = "";
+            // installFromFile without confirm; the Connections block above
+            // handles the self-signed -> confirm flow.
+            PluginCatalog.installFromFile(selectedFile.toString(), false);
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Self-signed plugin confirmation dialog.
+    // Shown when installFromFile emits "self-signed plugin -- confirm to install".
+    // ------------------------------------------------------------------
+    Dialog {
+        id: selfSignedDialog
+        title: qsTr("Self-signed plugin")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+        anchors.centerIn: parent
+        Label {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: qsTr("This plugin has a self-signed signature and has not been "
+                + "verified by a trusted publisher. It may have been created by "
+                + "a developer for local testing.\n\n"
+                + "Do you want to install it anyway?")
+        }
+        onAccepted: {
+            if (!PluginCatalog || root.pendingLocalInstallPath.length === 0) return;
+            // Re-issue installFromFile with explicit user confirmation.
+            PluginCatalog.installFromFile(root.pendingLocalInstallPath, true);
+            root.pendingLocalInstallPath = "";
+        }
+        onRejected: {
+            root.pendingLocalInstallPath = "";
+            root.localInstallStatus = qsTr("Install cancelled.");
+        }
     }
 
     // ----------------------------------------------------------------------
@@ -130,6 +205,60 @@ Page {
                     .arg(PluginCatalog.count)
                     .arg(PluginCatalog.installedCount)
                 : qsTr("Plugin catalogue unavailable")
+        }
+
+        // -- Local install + online catalog opt-in row -----------------
+        // PLUGIN-14 anti-feature: install from a local .sdPlugin/.zip file.
+        // The online catalog is opt-in (default OFF); the user can enable it
+        // via the Switch and refresh manually via the "Refresh" button.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingMd
+
+            Button {
+                text: qsTr("Install from file...")
+                Material.background: Theme.accent2
+                Material.foreground: "white"
+                onClicked: fileDialog.open()
+                Accessible.role: Accessible.Button
+                Accessible.name: qsTr("Install a plugin from a local .sdPlugin or .zip file")
+                ToolTip.text: qsTr("Install a local .sdPlugin or .zip archive")
+                ToolTip.visible: hovered
+                ToolTip.delay: 400
+            }
+
+            // Status label for local-install outcomes.
+            Label {
+                Layout.fillWidth: true
+                text: root.localInstallStatus
+                color: root.localInstallStatus.startsWith(qsTr("Install failed"))
+                    ? "#ef5350"
+                    : Theme.accent
+                font.pixelSize: Theme.fontSm
+                wrapMode: Text.WordWrap
+                visible: root.localInstallStatus.length > 0
+                elide: Text.ElideRight
+            }
+
+            Item { Layout.fillWidth: true; visible: root.localInstallStatus.length === 0 }
+
+            // Online catalog opt-in toggle (PLUGIN-14 / T-22-phonehome).
+            Switch {
+                id: onlineCatalogSwitch
+                text: qsTr("Online catalog")
+                checked: PluginCatalog ? PluginCatalog.onlineCatalogEnabled : false
+                onToggled: {
+                    if (PluginCatalog) {
+                        PluginCatalog.setOnlineCatalogEnabled(checked);
+                    }
+                }
+                ToolTip.text: qsTr("Enable live fetch from the Streamdock and OpenDeck "
+                    + "online catalogues. Off by default (local install only).")
+                ToolTip.visible: hovered
+                ToolTip.delay: 400
+                Accessible.role: Accessible.CheckBox
+                Accessible.name: qsTr("Enable online catalog fetch")
+            }
         }
 
         // -- Tab + search row -------------------------------------------
@@ -303,21 +432,19 @@ Page {
                         Accessible.role: Accessible.StaticText
                         Accessible.name: text
                     }
-                    // Retry — re-runs PluginCatalog.reload() which kicks both
-                    // fetchers. Disabled while a fetch is already in flight
-                    // (the fetcher's own re-entry guard would no-op the call
-                    // anyway, but disabling the button gives the user a
-                    // clearer affordance).
+                    // Retry — re-runs the live online fetch (refreshOnline).
+                    // This is the explicit opt-in action for the Streamdock tab.
+                    // Disabled while a fetch is already in flight.
                     ToolButton {
                         text: "↻" // ↻
                         font.pixelSize: Theme.fontMd
                         enabled: streamdockBanner.streamdockState !== "loading" && PluginCatalog
-                        onClicked: if (PluginCatalog) PluginCatalog.reload()
-                        ToolTip.text: qsTr("Refresh catalogue")
+                        onClicked: if (PluginCatalog) PluginCatalog.refreshOnline()
+                        ToolTip.text: qsTr("Refresh catalogue (fetches from the internet)")
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("Refresh Streamdock catalogue")
+                        Accessible.name: qsTr("Refresh Streamdock catalogue online")
                     }
                 }
             }
@@ -446,12 +573,12 @@ Page {
                         text: "↻" // ↻
                         font.pixelSize: Theme.fontMd
                         enabled: opendeckBanner.opendeckState !== "loading" && PluginCatalog
-                        onClicked: if (PluginCatalog) PluginCatalog.reload()
-                        ToolTip.text: qsTr("Refresh catalogue")
+                        onClicked: if (PluginCatalog) PluginCatalog.refreshOnline()
+                        ToolTip.text: qsTr("Refresh catalogue (fetches from the internet)")
                         ToolTip.visible: hovered
                         ToolTip.delay: 400
                         Accessible.role: Accessible.Button
-                        Accessible.name: qsTr("Refresh OpenDeck catalogue")
+                        Accessible.name: qsTr("Refresh OpenDeck catalogue online")
                     }
                 }
             }
