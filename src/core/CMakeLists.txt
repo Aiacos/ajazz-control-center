@@ -12,6 +12,14 @@ add_library(
     src/notification_service.cpp
     src/logger.cpp
     src/hotplug_monitor.cpp
+    # Phase 21-01: IInputSynthesizer — always-compiled stub (AJAZZ_FEATURE_INPUT_SYNTH OFF by
+    # default keeps the gating test hardware-free). The OS TUs are added unconditionally below
+    # so they participate in every build; each TU is self-empty unless both
+    # AJAZZ_FEATURE_INPUT_SYNTH and the platform #if are satisfied.
+    src/input_synthesizer_stub.cpp
+    src/input_synthesizer_linux.cpp
+    src/input_synthesizer_win.cpp
+    src/input_synthesizer_mac.cpp
 )
 
 add_library(ajazz::core ALIAS ajazz_core)
@@ -41,3 +49,14 @@ elseif(WIN32)
 endif()
 
 set_target_properties(ajazz_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ----------------------------------------------------------------------------
+# Phase 21-01: AJAZZ_FEATURE_INPUT_SYNTH — native OS input synthesis backends. When ON, the per-OS
+# TUs (Linux uinput / Windows SendInput / macOS CGEvent) are active and
+# makePlatformInputSynthesizer() is defined. Default OFF so the gating test stays hardware-free (no
+# /dev/uinput, no OS permissions needed). COD-031: no Qt added to the core target for this feature.
+# ----------------------------------------------------------------------------
+if(AJAZZ_FEATURE_INPUT_SYNTH)
+    target_compile_definitions(ajazz_core PRIVATE AJAZZ_FEATURE_INPUT_SYNTH=1)
+    message(STATUS "AJAZZ_FEATURE_INPUT_SYNTH ON — native OS input synthesis backends enabled")
+endif()
