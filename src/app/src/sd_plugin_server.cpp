@@ -7,9 +7,12 @@
 
 #include "ajazz/core/logger.hpp"
 
+#include <QByteArray>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QEvent>
 #include <QJsonDocument>
+#include <QRandomGenerator>
 #include <QWebSocket>
 #include <QWebSocketServer>
 
@@ -24,6 +27,40 @@ namespace {
 /// SDPluginServer::startListen so an Elgato plugin connecting blind sees
 /// the expected server identity.
 constexpr char const* kServerName = "Stream Dock";
+
+/// Maximum bad authentication attempts before the socket is closed (T-17-BRUTE).
+/// PLUGIN-05: brute-force mitigation — after 5 wrong challenges the host
+/// closes the connection (PluginAuthTest::rejectsAfter5BadAttempts).
+constexpr int kMaxAuthAttempts = 5;
+
+/// Generate a cryptographically-random hex-encoded salt for the passHello
+/// auth handshake (T-17-REPLAY: per-connection salt makes captured challenges
+/// useless on a new connection). Uses QRandomGenerator::system() — the
+/// OS-seeded generator, not rand().
+static QString makeRandomSaltHex() {
+    QByteArray bytes(16, Qt::Uninitialized);
+    // Fill 4 uint32_t (= 16 bytes) from the system entropy source.
+    for (int i = 0; i < 4; ++i) {
+        quint32 const word = QRandomGenerator::system()->generate();
+        bytes[i * 4 + 0] = static_cast<char>((word >> 24) & 0xFF);
+        bytes[i * 4 + 1] = static_cast<char>((word >> 16) & 0xFF);
+        bytes[i * 4 + 2] = static_cast<char>((word >> 8) & 0xFF);
+        bytes[i * 4 + 3] = static_cast<char>(word & 0xFF);
+    }
+    return QString::fromLatin1(bytes.toHex());
+}
+
+/// Compute sha256(password + saltHex) as a lower-case hex string.
+///
+/// This is the challenge both sides must agree on. The concatenation is
+/// UTF-8(password) + UTF-8(saltHex). The "+" is byte-level concatenation;
+/// saltHex is the hex string itself (not binary bytes) — our OWN contract
+/// verified by PluginAuthTest::acceptsCorrectChallenge (§17-RESEARCH A3).
+/// Mirrors the in-tree idiom from single_instance_guard.cpp:85 exactly.
+static QString challengeFor(QString const& password, QString const& saltHex) {
+    QByteArray const data = password.toUtf8() + saltHex.toUtf8();
+    return QString::fromLatin1(QCryptographicHash::hash(data, QCryptographicHash::Sha256).toHex());
+}
 
 } // namespace
 
@@ -130,7 +167,8 @@ void SdPluginServer::onNewConnection() {
             client, &QWebSocket::textMessageReceived, this, &SdPluginServer::onClientTextMessage);
         connect(client, &QWebSocket::disconnected, this, &SdPluginServer::onClientDisconnected);
         // Empty UUID until the first registerPlugin message arrives.
-        m_connections.push_back({QString{}, client});
+        // Salt and auth state are filled when registerPlugin arrives.
+        m_connections.push_back({QString{}, client, QString{}, 0, false});
         AJAZZ_LOG_INFO("plugin-server",
                        "client connected (pending registration), total slots {}",
                        m_connections.size());
@@ -196,6 +234,34 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         });
         if (it != m_connections.end()) {
             it->uuid = uuid;
+            // --- PLUGIN-05: passHello + auth handshake (17-03) ---
+            // Generate a random per-connection salt and store it on the slot.
+            // T-17-REPLAY: a new salt each connection makes captured challenges
+            // useless on reconnect.
+            it->salt = makeRandomSaltHex();
+            // Default (no password) = accepted immediately after passHello.
+            it->authenticated = m_password.isEmpty();
+
+            // Build the passHello payload with NESTED authentication:{challenge,salt}.
+            // Spec §4.5 step 2 shows top-level salt, but §4.4 + CONTEXT.md both
+            // show authentication:{challenge, salt} nested under payload — the CONTEXT
+            // locked decision wins. The host-side challenge is empty when no password
+            // is configured (only the salt matters; the plugin is the one that computes
+            // sha256(password+salt) in its challenge reply).
+            QJsonObject const authObj{
+                {QStringLiteral("challenge"), QString{}}, // empty host-side challenge (§4.5 Q2)
+                {QStringLiteral("salt"), it->salt},
+            };
+            QJsonObject const helloPayload{
+                {QStringLiteral("device"), msg.value(QStringLiteral("device"))},
+                {QStringLiteral("deviceInfo"), QJsonObject{}}, // placeholder; Phase 19 fills this
+                {QStringLiteral("authentication"), authObj},
+            };
+            sendEvent(uuid, QStringLiteral("passHello"), helloPayload);
+            AJAZZ_LOG_DEBUG("plugin-server",
+                            "passHello sent to uuid={} (password={})",
+                            uuid.toStdString(),
+                            m_password.isEmpty() ? "none" : "set");
         }
         AJAZZ_LOG_INFO("plugin-server",
                        "plugin registered: uuid={} event={}",
@@ -205,13 +271,60 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         return;
     }
 
+    // --- PLUGIN-05: authentication challenge verification (17-03) ---
+    // Handle BEFORE the 39-action routing set so "authentication" is never
+    // treated as a routed action and never reaches unhandledEventReceived
+    // (T-17-PREAUTH).
+    if (eventName == QStringLiteral("authentication")) {
+        auto connIt = std::find_if(m_connections.begin(),
+                                   m_connections.end(),
+                                   [client](auto const& c) { return c.socket == client; });
+        if (connIt == m_connections.end()) {
+            AJAZZ_LOG_WARN("plugin-server", "authentication from unknown client; ignoring");
+            return;
+        }
+        if (m_password.isEmpty()) {
+            // No password configured — loopback-only, so mark authenticated.
+            connIt->authenticated = true;
+            return;
+        }
+        // Password configured: verify sha256(password+salt) == msg["challenge"].
+        // T-17-TIMING: plain QString == is acceptable for this loopback/no-TLS
+        // threat model; a constant-time compare is not warranted here (documented,
+        // not a blocker — see T-17-TIMING in the plan threat register).
+        QString const expected = challengeFor(m_password, connIt->salt);
+        QString const received = msg.value(QStringLiteral("challenge")).toString();
+        if (expected == received) {
+            connIt->authenticated = true;
+            AJAZZ_LOG_INFO(
+                "plugin-server", "authentication accepted for uuid={}", connIt->uuid.toStdString());
+        } else {
+            ++connIt->authAttempts;
+            AJAZZ_LOG_WARN("plugin-server",
+                           "bad authentication challenge from uuid={} (attempt {}/{})",
+                           connIt->uuid.toStdString(),
+                           connIt->authAttempts,
+                           kMaxAuthAttempts);
+            if (connIt->authAttempts >= kMaxAuthAttempts) {
+                AJAZZ_LOG_WARN("plugin-server",
+                               "max auth attempts reached for uuid={}; closing socket (T-17-BRUTE)",
+                               connIt->uuid.toStdString());
+                // Close the socket. Do NOT touch connIt after close() — the
+                // onClientDisconnected slot will erase the entry (T-17-UAF /
+                // Pitfall 4: sendEvent re-resolves each call and returns false).
+                connIt->socket->close();
+            }
+        }
+        return;
+    }
+
     // Full routed-action set per akp_plugin_sdk.md §4.3 (spec 4.3 table).
     // 15 standard Elgato routed + 26 AJAZZ-only = 41 total.
     // The array is intentionally SIZELESS (CTAD) so the count is derived from
     // the literal and can never drift out of sync with the list.
     // NOTE: registerPlugin / registerPropertyInspector are NOT here — they are
     // handled in the earlier branch (above, with early return).
-    // NOTE: `authentication` is handled separately by the auth slice (17-03).
+    // NOTE: `authentication` is handled in the branch directly above (17-03).
     static constexpr std::array kRoutedActions = {
         // --- Standard Elgato routed (15) — spec 4.3 "Standard Elgato? yes",
         //     minus registerPlugin / registerPropertyInspector (handled above).
@@ -304,6 +417,10 @@ QWebSocket* SdPluginServer::socketForUuid(QString const& uuid) const {
         return nullptr;
     }
     return it->socket;
+}
+
+void SdPluginServer::setPasswordForTesting(QString const& password) {
+    m_password = password;
 }
 
 bool SdPluginServer::sendEvent(QString const& targetUuid,

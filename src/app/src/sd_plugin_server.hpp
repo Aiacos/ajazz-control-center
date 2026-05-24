@@ -18,14 +18,17 @@
  * `bindLoopbackOnly()` API. There is no opt-in to broaden the bind
  * address; future remote-control scenarios must use a separate transport.
  *
- * **Authentication**: vendor uses a `passHello`/`salt`/`challenge`
- * handshake on plugin spawn — see roadmap §3.16 + akp_plugin_sdk.md §6.
- * MVP scope here ships only the standard Elgato `registerPlugin`
- * handshake; the AJAZZ auth challenge lands once the plugin-process
- * spawn surface is implemented (which is deferred — see "Lifecycle"
- * below).
+ * **Authentication** (PLUGIN-05, 17-03):
+ *   After `registerPlugin`, the host sends `passHello` with a random
+ *   per-connection NESTED `authentication:{challenge, salt}` payload (per
+ *   CONTEXT.md — spec §4.5 top-level salt is superseded). When a password
+ *   is configured, the plugin replies `{event:"authentication", challenge:
+ *   sha256(password+salt)}`; the host verifies and closes the socket after
+ *   5 bad attempts (T-17-BRUTE). Default (no password) = accepted after
+ *   passHello. No TLS — loopback-only by design (accepted constraint).
+ *   A test-only `setPasswordForTesting()` setter enables the auth test cases.
  *
- * **Lifecycle** (MVP scope):
+ * **Lifecycle** (current scope):
  *   1. App creates one `SdPluginServer`, calls `start()` with port 0 (auto-assigned).
  *   2. Server creates `QWebSocketServer`, binds loopback, accepts connections.
  *   3. Each connecting `QWebSocket` runs through the JSON message dispatch.
@@ -40,7 +43,6 @@
  *
  * **NOT YET IMPLEMENTED** (defer to follow-up commits):
  *   - Spawning plugin processes (QProcess child management for Node.js)
- *   - passHello/salt/challenge auth handshake (17-03)
  *   - Per-plugin Property Inspector WebView integration
  *   - Persistence (settings cache + global settings)
  *   - Plugin store catalogue parsing (P3.17 carry-over)
@@ -117,7 +119,7 @@ public:
     /// **Pitfall 4 / T-17-UAF guard**: the live socket is re-resolved on
     /// every call via `socketForUuid()` — the raw pointer is NEVER cached
     /// between calls. If the plugin disconnects between two calls (e.g.
-    /// after an auth rejection in 17-03), the lookup returns nullptr and
+    /// after an auth rejection), the lookup returns nullptr and
     /// this method returns false without crashing.
     ///
     /// This is the seam Phase 19 calls with real device input — e.g.
@@ -131,6 +133,16 @@ public:
     /// @return true if the frame was written; false if no live socket matches.
     bool
     sendEvent(QString const& targetUuid, QString const& eventName, QJsonObject const& payload = {});
+
+    /// **Test-only**: configure a password for the passHello/challenge auth
+    /// handshake (PLUGIN-05 / T-17-BRUTE).
+    ///
+    /// Enables `PluginAuthTest::rejectsAfter5BadAttempts` — the test calls
+    /// this before `start()` to exercise the rejection path. Production
+    /// default is empty (no password = connection accepted after passHello).
+    ///
+    /// @warning Do NOT use in production code.  Call only from unit tests.
+    void setPasswordForTesting(QString const& password);
 
 signals:
     /// Server started successfully and is now accepting plugin connections.
@@ -180,8 +192,17 @@ private:
     struct PluginConnection {
         QString uuid;
         QWebSocket* socket{nullptr};
+        // Auth state (PLUGIN-05 / 17-03):
+        QString salt;              ///< Hex-encoded random per-connection salt.
+        int authAttempts{0};       ///< Bad-challenge counter; socket closed at kMaxAuthAttempts.
+        bool authenticated{false}; ///< True once the connection has passed auth (or no password).
     };
     std::vector<PluginConnection> m_connections;
+
+    /// Configured password for the passHello/challenge auth gate.
+    /// Empty (default) = no-password-accept: passHello is sent and the
+    /// connection is immediately treated as authenticated.
+    QString m_password;
 };
 
 } // namespace ajazz::app
