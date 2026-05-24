@@ -495,6 +495,34 @@ target_sources(
                              ${CMAKE_SOURCE_DIR}/src/app/src/plugin_crash_tracker.cpp
 )
 
+# Phase 22 Plan 22-01 (PLUGIN-14): plugin_verify_gate unit suite. Tests the three-way verdict
+# (signed->SelfSigned, tampered->Refused, unsigned->Refused, signer-unavailable->Refused) and the
+# verdictToTrustLevel vocabulary contract. plugin_verify_gate.cpp calls verifyManifest from the
+# manifest_signer TU already compiled into this binary (WIN32 / else blocks above).
+# AJAZZ_TEST_REPO_ROOT lets verifyStagedPlugin locate scripts/sign-plugin-manifest.py when the test
+# builds a ManifestSignerConfig from AJAZZ_PLUGIN_VERIFIER_SCRIPT (which for the test binary points
+# at the source-tree script, same as test_manifest_signer.cpp).
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_verify_gate.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_verify_gate.cpp
+)
+set(_pvg_defs
+    "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+    "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""
+    "AJAZZ_PLUGIN_TRUST_ROOTS=\"${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json\""
+)
+set_source_files_properties(
+    test_plugin_verify_gate.cpp PROPERTIES COMPILE_DEFINITIONS "${_pvg_defs}"
+)
+set(_pvg_gate_defs
+    "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""
+    "AJAZZ_PLUGIN_TRUST_ROOTS=\"${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json\""
+)
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_verify_gate.cpp PROPERTIES COMPILE_DEFINITIONS
+                                                                      "${_pvg_gate_defs}"
+)
+
 # Phase 18 Plan 18-04 (PLUGIN-07/08): PluginManager discovery + spawn + lifecycle tests. Needs
 # Qt6::CorePrivate (QZipWriter for fixture archives), Qt6::WebSockets for SdPluginServer, and
 # Qt6::Test for QSignalSpy. All process spawn is mocked — no real node or process is started.

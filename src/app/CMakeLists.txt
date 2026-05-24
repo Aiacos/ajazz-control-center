@@ -385,6 +385,13 @@ set(ACC_QML_MODULE_SOURCES
     # already gated by #ifdef AJAZZ_HAVE_WEBSOCKETS in the .cpp).
     src/builtin_actions_service.cpp
     src/builtin_actions_service.hpp
+    # Phase 22 Plan 22-01 (PLUGIN-14): Ed25519 verify gate — fail-closed trust choke point for all
+    # install paths. Listed unconditionally (not inside the AJAZZ_BUILD_PYTHON_HOST guard) because
+    # the gate must be present regardless of whether the full Python host is built: a reduced build
+    # returns Refused rather than silently trusting an unverified package (D-05 fail-closed
+    # contract).
+    src/plugin_verify_gate.cpp
+    src/plugin_verify_gate.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
@@ -550,8 +557,22 @@ target_compile_definitions(
             AJAZZ_THEME_QRC=":/qt/qml/AjazzControlCenter/branding/theme.json"
 )
 
+# Phase 22 Plan 22-01 (PLUGIN-14 / COD-031): ajazz::plugins is linked unconditionally so the Ed25519
+# verify gate (plugin_verify_gate.{hpp,cpp}) is always available. The signer subprocess-calls python
+# at runtime; it does NOT need the python *host* to be built. The two verifier-specific defs
+# (AJAZZ_PLUGIN_VERIFIER_SCRIPT and AJAZZ_PLUGIN_TRUST_ROOTS) move out of the
+# AJAZZ_BUILD_PYTHON_HOST guard so the gate is never silently bypassed on a
+# -DAJAZZ_BUILD_PYTHON_HOST=OFF build — it returns Refused instead (D-05 fail-closed). The host-only
+# defs (AJAZZ_PYTHON_HOST, AJAZZ_PLUGIN_HOST_SCRIPT, AJAZZ_PLUGIN_PYTHONPATH) stay inside the guard
+# because they are only consumed by Application::initPluginHost().
+target_link_libraries(ajazz-control-center PRIVATE ajazz::plugins)
+target_compile_definitions(
+    ajazz-control-center
+    PRIVATE AJAZZ_PLUGIN_VERIFIER_SCRIPT="${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py"
+            AJAZZ_PLUGIN_TRUST_ROOTS="${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json"
+)
+
 if(AJAZZ_BUILD_PYTHON_HOST)
-    target_link_libraries(ajazz-control-center PRIVATE ajazz::plugins)
     # Resource paths consumed by Application::initPluginHost() at runtime. Today they point at the
     # in-tree dev layout; install support lands when the resources gain `install(FILES …)` rules.
     # The compile definitions let `Application` resolve the four artefacts (child script, sdk
@@ -561,8 +582,6 @@ if(AJAZZ_BUILD_PYTHON_HOST)
         PRIVATE AJAZZ_PYTHON_HOST=1
                 AJAZZ_PLUGIN_HOST_SCRIPT="${CMAKE_SOURCE_DIR}/python/ajazz_plugins/_host_child.py"
                 AJAZZ_PLUGIN_PYTHONPATH="${CMAKE_SOURCE_DIR}/python"
-                AJAZZ_PLUGIN_VERIFIER_SCRIPT="${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py"
-                AJAZZ_PLUGIN_TRUST_ROOTS="${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json"
     )
 endif()
 
