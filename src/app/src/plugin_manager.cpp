@@ -47,10 +47,15 @@
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "plugin_mirabox_shim.hpp"
 #include "property_inspector_controller.hpp"
-// QQuickWebEngineScriptCollection is only declared (not defined) in the public
-// qquickwebengineprofile.h header. We need its complete definition to call
-// userScripts()->insert(). Include the Qt private header (requires
-// Qt6::WebEngineQuickPrivate in CMakeLists.txt to expose this path).
+// MAINTAINER NOTE (WR-01): QQuickWebEngineScriptCollection is only forward-declared in the
+// public qquickwebengineprofile.h header; its complete type definition lives in the private
+// header below. There is no public-API alternative in Qt 6.7 that lets callers call
+// userScripts()->insert() without the private header. This is a known Qt API gap.
+// If this include fails after a Qt minor-version bump, verify the private header path
+// has not moved and update Qt6::WebEngineQuickPrivate in CMakeLists.txt accordingly.
+// Tracked against Qt bug tracker for a public QQuickWebEngineScriptCollection declaration.
+static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0),
+              "qquickwebenginescriptcollection_p.h layout may have changed; verify include path");
 #include <QtWebEngineQuick/private/qquickwebenginescriptcollection_p.h>
 #endif
 
