@@ -107,7 +107,13 @@ Page {
         function onInstallFinished(path, success, error) {
             // Only handle local-install outcomes here; tile-level installs
             // are handled by the tile Connections block below.
-            if (!path.startsWith("/") && !path.startsWith("file:")) {
+            // WR-01: use a portable check that covers Unix paths (/...),
+            // file: URLs, and Windows absolute paths (C:\... or C:/...).
+            // UUID-keyed signals (tile installs) never start with these.
+            const isLocalPath = path.startsWith("/")
+                || path.startsWith("file:")
+                || /^[A-Za-z]:[\\/]/.test(path);
+            if (!isLocalPath) {
                 return;
             }
             if (success) {
