@@ -65,6 +65,7 @@
 // QProcess must be a complete type wherever unique_ptr<QProcess> is destroyed.
 // Including QProcess here ensures any TU that includes this header can destroy LivePlugin.
 #include <QProcess>
+#include <QProcessEnvironment>
 
 namespace ajazz::app {
 
@@ -196,6 +197,18 @@ public:
      * the exact token list without a live process (plan acceptance criterion).
      */
     [[nodiscard]] QStringList lastNodeArgvForTesting(QString const& uuid) const;
+
+    /**
+     * @brief Test seam: return the child process environment built by buildChildEnv().
+     *
+     * Exposes the allowlist QProcessEnvironment that spawn() sets on every child
+     * QProcess. Tests use this to assert:
+     *   - Known-safe keys (PATH, HOME) are present when set in the host env.
+     *   - Banned keys (DBUS_SESSION_BUS_ADDRESS, *_TOKEN, *_SECRET, XDG_RUNTIME_DIR) are absent.
+     *
+     * This is a pure accessor — it does not start any process.
+     */
+    [[nodiscard]] static QProcessEnvironment buildChildEnvironmentForTesting();
 
 signals:
     /**

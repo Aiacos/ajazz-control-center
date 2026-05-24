@@ -34,6 +34,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QProcessEnvironment>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
@@ -88,6 +89,42 @@ namespace ajazz::app {
         return false;
     }
     return true;
+}
+
+// ---------------------------------------------------------------------------
+// buildChildEnv() — minimal allowlist environment for plugin children (T-18-CHILD-ENV).
+// Only propagates variables the plugin runtime legitimately needs. Critically EXCLUDES:
+//   - DBUS_SESSION_BUS_ADDRESS (dbus socket access, host resource leak)
+//   - XDG_RUNTIME_DIR (user runtime dir, Wayland sockets, etc.)
+//   - any *_TOKEN / *_SECRET / *_KEY / *_PASSWORD variables (CI and shell credentials)
+//   - DBUS_* family (session bus address variants)
+// ---------------------------------------------------------------------------
+[[nodiscard]] static QProcessEnvironment buildChildEnv() {
+    // QProcessEnvironment() default-constructs an empty environment (Qt 6.7 compatible).
+    // Qt 6.8+ renamed this to QProcessEnvironment::empty() but the default ctor is stable.
+    QProcessEnvironment childEnv;
+    QProcessEnvironment const sysEnv = QProcessEnvironment::systemEnvironment();
+    // Explicitly-allowed keys only (T-18-CHILD-ENV mitigation).
+    for (auto const* key : {
+             "PATH",
+             "HOME",
+             "TMPDIR",
+             "TEMP",
+             "TMP",
+             "LANG",
+             "LC_ALL",
+             "LC_CTYPE",
+             "DISPLAY",         // X11 display — node plugins that open windows need this
+             "WAYLAND_DISPLAY", // Wayland display socket name
+             // Intentionally NOT forwarded: DBUS_SESSION_BUS_ADDRESS, XDG_RUNTIME_DIR,
+             // or any *_TOKEN/*_SECRET/*_KEY/*_PASSWORD credentials.
+         }) {
+        QString const val = sysEnv.value(QLatin1String(key));
+        if (!val.isEmpty()) {
+            childEnv.insert(QLatin1String(key), val);
+        }
+    }
+    return childEnv;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,14 +307,25 @@ void PluginManager::spawn(PluginManifest const& manifest) {
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
 
-        // Wire crash signals BEFORE start (owned QProcess — crash signals require ownership).
-        connect(rawProc, &QProcess::errorOccurred, this, [this, pluginId](QProcess::ProcessError) {
-            onProcessFailed(pluginId);
-        });
+        // T-18-CHILD-ENV: apply explicit allowlist env — do NOT inherit full host env.
+        rawProc->setProcessEnvironment(buildChildEnv());
+
+        // CR-02: guard against double-fire of onProcessFailed on FailedToStart.
+        // Qt emits both errorOccurred(FailedToStart) AND finished(-2, CrashExit).
+        // Route FailedToStart exclusively through finished; errorOccurred handles only
+        // other errors that do not produce a finished signal.
+        connect(
+            rawProc, &QProcess::errorOccurred, this, [this, pluginId](QProcess::ProcessError err) {
+                if (err != QProcess::FailedToStart) {
+                    // FailedToStart: Qt also fires finished(CrashExit) — handle there only.
+                    onProcessFailed(pluginId);
+                }
+            });
         connect(rawProc,
                 &QProcess::finished,
                 this,
                 [this, pluginId](int exitCode, QProcess::ExitStatus status) {
+                    // Covers FailedToStart (emits finished(-2, CrashExit)) and abnormal exits.
                     if (status == QProcess::CrashExit || exitCode != 0) {
                         onProcessFailed(pluginId);
                     }
@@ -347,9 +395,16 @@ void PluginManager::spawn(PluginManifest const& manifest) {
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
 
-        connect(rawProc, &QProcess::errorOccurred, this, [this, pluginId](QProcess::ProcessError) {
-            onProcessFailed(pluginId);
-        });
+        // T-18-CHILD-ENV: apply explicit allowlist env — do NOT inherit full host env.
+        rawProc->setProcessEnvironment(buildChildEnv());
+
+        // CR-02: guard against double-fire of onProcessFailed on FailedToStart.
+        connect(
+            rawProc, &QProcess::errorOccurred, this, [this, pluginId](QProcess::ProcessError err) {
+                if (err != QProcess::FailedToStart) {
+                    onProcessFailed(pluginId);
+                }
+            });
         connect(rawProc,
                 &QProcess::finished,
                 this,
@@ -419,6 +474,14 @@ bool PluginManager::isDisabled(QString const& uuid) const {
 
 QStringList PluginManager::lastNodeArgvForTesting(QString const& uuid) const {
     return m_lastNodeArgv.value(uuid);
+}
+
+// ---------------------------------------------------------------------------
+// buildChildEnvironmentForTesting()
+// ---------------------------------------------------------------------------
+
+QProcessEnvironment PluginManager::buildChildEnvironmentForTesting() {
+    return buildChildEnv();
 }
 
 // ---------------------------------------------------------------------------
