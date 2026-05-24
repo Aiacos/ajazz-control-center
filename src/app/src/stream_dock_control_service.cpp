@@ -39,6 +39,7 @@
 #include <limits>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 namespace ajazz::app {
 
@@ -164,6 +165,11 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
 }
 
 void StreamDockControlService::repaintFromProfile() {
+    // Single paint path: delegate to repaintPage("root").
+    repaintPage(QStringLiteral("root"));
+}
+
+void StreamDockControlService::repaintPage(QString const& pageId) {
     if (!m_activeDevice) {
         return;
     }
@@ -174,25 +180,45 @@ void StreamDockControlService::repaintFromProfile() {
     }
 
     if (!m_profileAccessor) {
-        AJAZZ_LOG_INFO("stream-dock-control", "repaintFromProfile: no profile accessor set");
+        AJAZZ_LOG_INFO("stream-dock-control", "repaintPage: no profile accessor set");
         return;
     }
 
     core::Profile const& prof = m_profileAccessor();
-    if (prof.keys.empty()) {
-        return;
+
+    // Resolve the binding set for this page.
+    // "root" -> Profile::keys; other id -> look up in Profile::pages.
+    std::unordered_map<std::uint16_t, core::Binding> const* bindingSet = nullptr;
+    if (pageId == QStringLiteral("root") || pageId.isEmpty()) {
+        if (prof.keys.empty()) {
+            return; // no-op: root has no bindings
+        }
+        bindingSet = &prof.keys;
+    } else {
+        // T-16c-01: use find(), not unguarded at() -- missing page is a no-op.
+        auto const it = prof.pages.find(pageId.toStdString());
+        if (it == prof.pages.end()) {
+            AJAZZ_LOG_INFO("stream-dock-control",
+                           "repaintPage: unknown page id '{}', no-op",
+                           pageId.toStdString());
+            return;
+        }
+        if (it->second.keys.empty()) {
+            return; // page exists but has no bindings -- no-op
+        }
+        bindingSet = &it->second.keys;
     }
 
     // Key-index mapping: Profile::keys uses 0-based std::uint16_t map keys;
     // the AKP05E backend requires 1-based indices (1..10). Add 1.
-    for (auto const& [profileKeyIndex, binding] : prof.keys) {
+    // (Identical to the loop that was in repaintFromProfile -- single path.)
+    for (auto const& [profileKeyIndex, binding] : *bindingSet) {
         // WR-03: profileKeyIndex is uint16_t; adding 1 can overflow uint8_t for
         // indices >= 255. Skip with a warning rather than silently wrapping to 0
         // (index 0 is rejected by keyIndexInRange(), image never sent).
         if (profileKeyIndex >= std::numeric_limits<std::uint8_t>::max()) {
             AJAZZ_LOG_WARN("stream-dock-control",
-                           "repaintFromProfile: profile key index {} exceeds uint8_t "
-                           "range, skipping",
+                           "repaintPage: profile key index {} exceeds uint8_t range, skipping",
                            static_cast<int>(profileKeyIndex));
             continue;
         }
@@ -204,7 +230,7 @@ void StreamDockControlService::repaintFromProfile() {
             if (img.isNull()) {
                 // Image load failed -- fall through to background fill or skip.
                 AJAZZ_LOG_WARN("stream-dock-control",
-                               "repaintFromProfile: failed to load image '{}'",
+                               "repaintPage: failed to load image '{}'",
                                *binding.state.imagePath);
             }
         }
@@ -223,6 +249,36 @@ void StreamDockControlService::repaintFromProfile() {
         }
         assignKeyImage(deviceKeyIndex, img);
     }
+}
+
+void StreamDockControlService::navigatePage(int direction) {
+    if (!m_profileAccessor) {
+        return;
+    }
+    core::Profile const& prof = m_profileAccessor();
+
+    // Build the ordered flat list of top-level pages for the carousel (Decision 2):
+    //   [0] = "root"
+    //   [1..N] = profile's ProfilePage ids in sorted (deterministic) order.
+    // Profile::pages is an unordered_map; sort by id string for a stable ordering.
+    std::vector<std::string> pageList;
+    pageList.reserve(1 + prof.pages.size());
+    pageList.emplace_back("root");
+    for (auto const& [id, _page] : prof.pages) {
+        pageList.push_back(id);
+    }
+    std::sort(pageList.begin() + 1, pageList.end()); // root stays first
+
+    // Decision 2: single-root profile -> no-op.
+    if (pageList.size() <= 1) {
+        return;
+    }
+
+    // T-16c-02: clamp index to [0, list.size()-1] -- no wrap.
+    auto const listSize = static_cast<int>(pageList.size());
+    m_carouselIndex = std::clamp(m_carouselIndex + direction, 0, listSize - 1);
+
+    repaintPage(QString::fromStdString(pageList[static_cast<std::size_t>(m_carouselIndex)]));
 }
 
 QString StreamDockControlService::firmwareVersionFor(QString const& codename) const {

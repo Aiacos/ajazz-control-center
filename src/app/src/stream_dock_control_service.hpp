@@ -168,14 +168,53 @@ public:
     /**
      * @brief Repaint every bound key from the currently loaded profile (DISPLAY-08).
      *
-     * Iterates the active profile's keys map and enqueues an image for each bound
-     * key through the coalesced drain path. Profile key indices are 0-based
-     * (std::uint16_t map keys in Profile::keys); the service adds 1 to map to the
-     * device's 1-based scheme.
+     * Delegates to repaintPage("root") (single paint path -- see repaintPage).
      *
      * No-op if no device is active or the device lacks IDisplayCapable.
      */
     void repaintFromProfile();
+
+    /**
+     * @brief Repaint the bound keys for a specific profile page (PROFILE-02).
+     *
+     * Resolves the binding set for @p pageId:
+     *   - "root"        -> uses @c Profile::keys (root page).
+     *   - other id      -> looks up @c Profile::pages.find(pageId); if not found,
+     *                       logs a warning and returns (no-op, no throw -- T-16c-01).
+     *
+     * Iterates the resolved binding set and enqueues an image for each bound key
+     * through the same coalesced drain path as repaintFromProfile (BAT -> chunks
+     * -> ULEND). Profile key indices are 0-based (std::uint16_t); the service
+     * adds 1 to map to the device's 1-based scheme (same as repaintFromProfile).
+     *
+     * repaintFromProfile() is implemented as repaintPage("root") — there is only
+     * one paint loop.
+     *
+     * No-op if no device is active or the device lacks IDisplayCapable.
+     *
+     * @param pageId  Page identifier: "root" or a ProfilePage::id.
+     */
+    void repaintPage(QString const& pageId);
+
+    /**
+     * @brief Navigate the page carousel by @p direction and repaint (PROFILE-02).
+     *
+     * Intended as a slot connected to StreamDockInputService::pageNavRequested.
+     * Implements the carousel semantics from Decision 2:
+     *   - Builds an ordered flat list of the profile's top-level pages: "root"
+     *     first, then the profile's ProfilePage entries in a deterministic sorted
+     *     order (sorted by id string, stable across profile re-loads).
+     *   - If the list has only 1 entry (root only), the call is a no-op.
+     *   - @p direction == +1: advance index by one (clamp at the end).
+     *   - @p direction == -1: go back one (clamp at zero).
+     *   - After changing the index, call repaintPage(newPageId).
+     *
+     * Folder nesting (OpenFolder/BackToParent) is handled by ActionEngine and
+     * dispatched separately; this method only drives the flat top-level carousel.
+     *
+     * @param direction  +1 (next) or -1 (previous).
+     */
+    Q_SLOT void navigatePage(int direction);
 
     /**
      * @brief Return the cached firmware VER string for the given codename (DOCK-01).
@@ -251,6 +290,10 @@ private:
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};
+
+    /// Current carousel position index (0 = root, 1+ = sorted page ids).
+    /// Maintained across navigate() calls; reset when a new profile is loaded.
+    int m_carouselIndex{0};
 
     /// Default brightness sent at open (DISPLAY-06 / Assumption A4).
     /// Phase 16 replaces this with a user-persisted slider value.
