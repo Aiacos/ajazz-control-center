@@ -67,7 +67,11 @@ void ProfileController::saveProfile(QString const& path) {
         ajazz::core::writeProfileToDisk(fsPath, m_profile);
         m_path = path;
         emit profileSaved(path);
-        emit profilesChanged();
+        // WR-04: profilesChanged() is NOT emitted here. saveProfile() is a low-level
+        // write that does not alter the list of known profiles -- it only mutates the
+        // content of an existing entry. Callers that introduce a new profile id into
+        // the library (e.g. saveActiveProfile on first save) emit profilesChanged()
+        // themselves after verifying that the id is actually new.
     } catch (ajazz::core::ProfileIoError const& e) {
         emit saveFailed(QString::fromUtf8(e.what()));
     } catch (std::exception const& e) {
@@ -191,7 +195,16 @@ void ProfileController::saveActiveProfile() {
         return;
     }
 
+    // WR-04: emit profilesChanged() only when this is the first save of this id
+    // (i.e., the path was not previously persisted). In-place re-saves do not
+    // change the profile library list and must not trigger library-rebuild listeners.
+    bool const isNewId = m_path != path;
     saveProfile(path);
+    // saveProfile() sets m_path on success; if m_path now equals path, the save
+    // succeeded. Only emit profilesChanged when the id is new to the library.
+    if (isNewId && m_path == path) {
+        emit profilesChanged();
+    }
 }
 
 void ProfileController::loadActiveProfile() {
