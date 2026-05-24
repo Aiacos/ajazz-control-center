@@ -236,8 +236,21 @@ void ObsClient::onTextMessageReceived(QString const& message) {
 
     case kOpRequestResponse: {
         QString const reqId = d.value(QStringLiteral("requestId")).toString();
+        QJsonObject const status = d.value(QStringLiteral("requestStatus")).toObject();
+        // requestStatus.result == false means OBS rejected the request (scene not found,
+        // wrong state, etc.). Default true to be permissive when the field is absent
+        // (forward-compat with OBS versions that omit it).
+        bool const ok = status.value(QStringLiteral("result")).toBool(true);
         if (!reqId.isEmpty()) {
-            emit requestSucceeded(reqId);
+            if (ok) {
+                emit requestSucceeded(reqId);
+            } else {
+                int const code = status.value(QStringLiteral("code")).toInt(-1);
+                AJAZZ_LOG_WARN("obs-client",
+                               "OBS request {} failed: status code {}",
+                               reqId.toStdString(),
+                               code);
+            }
         }
         break;
     }
