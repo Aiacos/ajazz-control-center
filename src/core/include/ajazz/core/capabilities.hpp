@@ -138,7 +138,9 @@ public:
      * to the appropriate codec before transmitting. Callers may pass any
      * resolution; the backend normalises it.
      *
-     * @param keyIndex Zero-based key index within the display grid.
+     * @param keyIndex 1-based key index within the display grid (1 .. keyCount).
+     *                 Every concrete backend enforces this via keyIndexInRange()
+     *                 which rejects 0. Pass 0xFF only via clearKey() (see below).
      * @param rgba     Tightly packed RGBA8 pixels, length == width * height * 4.
      * @param width    Source image width in pixels.
      * @param height   Source image height in pixels.
@@ -157,7 +159,7 @@ public:
      * Useful for placeholders and tests. Backends may internally synthesise
      * a minimal JPEG/PNG of the requested color.
      *
-     * @param keyIndex Zero-based key index.
+     * @param keyIndex 1-based key index (1 .. keyCount); same contract as setKeyImage().
      * @param color    Desired solid RGB fill color.
      */
     virtual void setKeyColor(std::uint8_t keyIndex, Rgb color) = 0;
@@ -165,7 +167,7 @@ public:
     /**
      * @brief Clear a single key or all keys.
      *
-     * @param keyIndex Zero-based key index; pass 0xFF to clear all keys.
+     * @param keyIndex 1-based key index (1 .. keyCount); pass 0xFF to clear all keys.
      */
     virtual void clearKey(std::uint8_t keyIndex) = 0;
 
