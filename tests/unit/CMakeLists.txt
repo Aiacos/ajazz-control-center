@@ -105,6 +105,14 @@ add_executable(
     # the transport (held-handle invariant).
     test_stream_dock_input_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_input_service.cpp
+    # Phase 24 Plan 24-02 (DEVICES-10): per-family MockTransport byte tests proving the SAME
+    # capability-generic StreamDockControlService + StreamDockInputService drive AKP03 (6 keys +
+    # 3 encoders), AKP153 (15 keys), and AKP815 (15 keys). Asserts per-family image header
+    # (CmdImage/CmdBat "BAT" at bytes 5-7) + ULEND terminator, descriptor-driven max-key-index
+    # burst (no AKP05 10-key clamp), AKP03 all-3-encoder press/CW/CCW routing, and
+    # encoderCount=0 inert path for AKP153/AKP815 (no crash). Live confirmation: Phase 25.
+    # stream_dock_control_service.cpp + stream_dock_input_service.cpp are already linked above.
+    test_stream_dock_family.cpp
     # Phase 16 Plan 16-01 (DISPLAY-09): MockTransport wire assertions for the
     # StreamDockControlService DISPLAY-09 extension -- Q_INVOKABLE setBrightness
     # (-> LIG) and clearAll (-> CLE). Covers brightness clamping (150->100),
