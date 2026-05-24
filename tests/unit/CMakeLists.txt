@@ -105,6 +105,12 @@ add_executable(
     # the transport (held-handle invariant).
     test_stream_dock_input_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_input_service.cpp
+    # Phase 16 Plan 16-01 (DISPLAY-09): MockTransport wire assertions for the
+    # StreamDockControlService DISPLAY-09 extension -- Q_INVOKABLE setBrightness
+    # (-> LIG) and clearAll (-> CLE). Covers brightness clamping (150->100),
+    # the CLE "clear all keys" path, and the no-op contract for non-display
+    # devices. Hardware-free gating proof; live witness is Phase 25.
+    test_stream_dock_controls.cpp
     # qt_executor.cpp is already in the binary (test_qt_executor block above)
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
