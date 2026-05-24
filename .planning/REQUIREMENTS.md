@@ -61,7 +61,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 ### Plugin Manifest + Discovery + Lifecycle + Spawn (Phase 18)
 
 - [x] **PLUGIN-06**: A manifest parser accepts the Elgato v6 schema **plus AJAZZ extensions** (`IsK1Pro`, `RunAsAdministrator`, `FSize`/`FFamily`, `Nodejs.Version`, `PUUID`, and `Controllers` including **`"Knob"`** for encoders and `"SecondaryScreen"` for the touch strip); rejects on `OS` / `Software.MinimumVersion` mismatch (sdk §2).
-- [ ] **PLUGIN-07**: Plugin discovery (`defaultPlugins/` + `installedPlugins/`) + `.sdPlugin` extraction (reuse the zip-slip-guarded extractor) + lifecycle: spawn, crash-3×-within-30s → disable + notify, restart, and shutdown via the `exitApp` event (sdk §3).
+- [x] **PLUGIN-07**: Plugin discovery (`defaultPlugins/` + `installedPlugins/`) + `.sdPlugin` extraction (reuse the zip-slip-guarded extractor) + lifecycle: spawn, crash-3×-within-30s → disable + notify, restart, and shutdown via the `exitApp` event (sdk §3).
 - [x] **PLUGIN-08**: Plugin process spawn for all three runtimes — **system Node.js ≥20** (detected, rejected otherwise; **not bundled**), native `.exe`/`.app` via `QProcess` (optional elevation), and `.html` via **`QWebEngineView` + `QWebChannel`** (sdk §3, §9).
 - [x] **PLUGIN-11**: A compatibility shim aliases `connectMiraBoxSDSocket(...)` → `connectElgatoStreamDeckSocket(...)` so existing Elgato/Mirabox `.sdPlugin` packages load unmodified (sdk §9).
 
@@ -279,7 +279,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-04   | Phase 17 | Complete |
 | PLUGIN-05   | Phase 17 | Complete |
 | PLUGIN-06   | Phase 18 | Complete |
-| PLUGIN-07   | Phase 18 | Pending  |
+| PLUGIN-07   | Phase 18 | Complete |
 | PLUGIN-08   | Phase 18 | Complete |
 | PLUGIN-11   | Phase 18 | Complete |
 | PLUGIN-10   | Phase 19 | Pending  |
