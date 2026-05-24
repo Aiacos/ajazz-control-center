@@ -30,6 +30,7 @@
 #include <QImage>
 #include <QTimer>
 
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -149,6 +150,16 @@ void StreamDockControlService::repaintFromProfile() {
     // Key-index mapping: Profile::keys uses 0-based std::uint16_t map keys;
     // the AKP05E backend requires 1-based indices (1..10). Add 1.
     for (auto const& [profileKeyIndex, binding] : prof.keys) {
+        // WR-03: profileKeyIndex is uint16_t; adding 1 can overflow uint8_t for
+        // indices >= 255. Skip with a warning rather than silently wrapping to 0
+        // (index 0 is rejected by keyIndexInRange(), image never sent).
+        if (profileKeyIndex >= std::numeric_limits<std::uint8_t>::max()) {
+            AJAZZ_LOG_WARN("stream-dock-control",
+                           "repaintFromProfile: profile key index {} exceeds uint8_t "
+                           "range, skipping",
+                           static_cast<int>(profileKeyIndex));
+            continue;
+        }
         auto const deviceKeyIndex = static_cast<std::uint8_t>(profileKeyIndex + 1);
         // Render KeyState: imagePath takes priority; fall back to background fill.
         QImage img;
