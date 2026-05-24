@@ -129,6 +129,13 @@ QString sanitizeProfileId(QString const& profileId) {
     if (result.isEmpty()) {
         return QStringLiteral("default");
     }
+    // IN-02: cap at 200 characters to stay comfortably under filename limits on all
+    // platforms (Linux 255 bytes, macOS 255 UTF-8 chars, Windows non-extended 260
+    // total path chars). A profile id with 300 safe chars produces a 305-char
+    // filename ("<id>.json") that can silently exceed PATH_MAX on Windows.
+    if (result.size() > 200) {
+        result.truncate(200);
+    }
     return result;
 }
 
