@@ -91,16 +91,28 @@ void StreamDockInputService::setActiveDevice(std::shared_ptr<core::IDevice> devi
     m_coalesceTimer->stop();
     m_encAccum.fill(0);
 
+    // CR-03: always deregister the [this]-capturing callback on the outgoing
+    // device BEFORE releasing the handle. The backend (Akp05Device) retains
+    // the last lambda passed to onEvent(); after m_device.reset() this service
+    // no longer owns the backend but StreamDockControlService still holds a
+    // shared_ptr to it (ARCH-03 flyweight). If anything drives poll() on that
+    // shared backend later, the stale callback would fire through a dangling
+    // this-pointer -- a future UAF. Clearing with {} makes the stored lambda
+    // a no-op std::function (empty).
+    if (m_device) {
+        m_device->onEvent({});
+    }
+
     if (!device) {
         m_device.reset();
         return;
     }
 
-    // Hold the shared_ptr for the session (ARCH-03 — Pitfall 2: no raw ptr).
+    // Hold the shared_ptr for the session (ARCH-03 -- Pitfall 2: no raw ptr).
     m_device = std::move(device);
 
     // Register the onEvent callback (synchronously invoked by poll() on the
-    // GUI thread — device.hpp:199 says "I/O thread", which here IS the GUI
+    // GUI thread -- device.hpp:199 says "I/O thread", which here IS the GUI
     // thread because we pump on it).
     m_device->onEvent([this](core::DeviceEvent const& ev) { dispatch(ev); });
 
