@@ -233,11 +233,17 @@ add_executable(
     # wrappers, intentionally not exercised here.
     test_firmware_update_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/firmware_update_service.cpp
-    # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
-    # link the source directly into this test binary without dragging the
-    # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
+    # Property Inspector URL policy + PIBridge settings persistence: pure C++
+    # helpers (no QtWebEngine) linked directly so the test binary does not pull
+    # in the WebEngine dependency. pi_bridge.cpp uses only Qt6::Core (QSaveFile,
+    # QJsonDocument, QStandardPaths) for the persistence path; the WebEngine
+    # path is guarded by AJAZZ_HAVE_WEBENGINE and is NOT compiled here. AUTOMOC
+    # (set below) handles the Q_OBJECT moc pass for PIBridge. Coverage in
+    # test_pi_bridge.cpp (URL policy + PLUGIN-13 restart round-trip + path-
+    # traversal refusal).
     test_pi_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/pi_bridge.cpp
     # Phase 7 / Plan 07-02 / TRUST-03: loadTrustRoots corpus — positive cases
     # (BOM, escape sequences, top-level array, boundary entry counts 1/2/100/1024),
     # negative cases (>1 MB byte cap, 1025-entry overcount, truncated JSON, malformed
