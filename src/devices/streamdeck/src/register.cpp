@@ -40,12 +40,16 @@ namespace {
 // Mirabox V1 vendor ID per `[ajazz-sdk]/protocol/codes.rs::VENDOR_ID_MIRABOX_V1`.
 inline constexpr std::uint16_t MiraboxVendorV1 = 0x5548;
 
-// Mirabox N3 family vendor IDs surfaced by `[opendeck-akp03]`.
+// Mirabox N3 family old vendor ID surfaced by `[opendeck-akp03]`.
 inline constexpr std::uint16_t MiraboxN3VendorOld = 0x6602;
-inline constexpr std::uint16_t MiraboxN3VendorNew = 0x6603;
 
-// Mirabox N4 (AKP05 family) per `[opendeck-akp05]/40-opendeck-akp05.rules`.
-inline constexpr std::uint16_t MiraboxN4Vendor = 0x6603;
+// VID 0x6603 is used by both Mirabox N3 (AKP03 protocol) and N4 (AKP05 protocol)
+// families per `[opendeck-akp03]` and `[opendeck-akp05]`. PID distinguishes the family:
+//   N3 family: 0x1002 (N3 rev.3), 0x1003 (N3EN)
+//   N4 family: 0x1007 (canonical Mirabox N4 / AKP05)
+inline constexpr std::uint16_t MiraboxVendorV2 = 0x6603;
+
+// Mirabox N4 (AKP05 family) PID per `[opendeck-akp05]/40-opendeck-akp05.rules`.
 inline constexpr std::uint16_t MiraboxN4Pid = 0x1007;
 
 // AKP153 / AKP815 PIDs canonicalised by `[ajazz-sdk]/protocol/codes.rs`.
@@ -229,7 +233,7 @@ void registerAll(core::DeviceRegistry& registry) {
     // MBox-N3E (rev 1, old-vendor variant) — surfaced by Stream Dock vendor
     // deep RE 2026-05-17 (`docs/protocols/streamdeck/akp_device_matrix.md`
     // §4). Was missing from prior catalogue; the new-vendor sibling
-    // (`MiraboxN3VendorNew + 0x1003` = mirabox_n3en) was already registered.
+    // (`MiraboxVendorV2 + 0x1003` = mirabox_n3en) was already registered.
     {
         auto d =
             akp03_descriptor(MiraboxN3VendorOld, 0x1003, "Mirabox N3E (rev. 1)", "mirabox_n3e");
@@ -238,12 +242,12 @@ void registerAll(core::DeviceRegistry& registry) {
     }
     {
         auto d =
-            akp03_descriptor(MiraboxN3VendorNew, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3");
+            akp03_descriptor(MiraboxVendorV2, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3");
         d.hasClock = true;
         reg.registerDevice(d, &makeAkp03);
     }
     {
-        auto d = akp03_descriptor(MiraboxN3VendorNew, 0x1003, "Mirabox N3EN", "mirabox_n3en");
+        auto d = akp03_descriptor(MiraboxVendorV2, 0x1003, "Mirabox N3EN", "mirabox_n3en");
         d.hasClock = true;
         reg.registerDevice(d, &makeAkp03);
     }
@@ -272,7 +276,7 @@ void registerAll(core::DeviceRegistry& registry) {
     // as the authoritative match for the AKP05 / N4 family.
     reg.registerDevice(
         core::DeviceDescriptor{
-            .vendorId = MiraboxN4Vendor,
+            .vendorId = MiraboxVendorV2,
             .productId = MiraboxN4Pid,
             .family = core::DeviceFamily::StreamDeck,
             .model = "Mirabox N4 / AJAZZ AKP05 family",
