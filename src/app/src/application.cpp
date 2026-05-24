@@ -20,10 +20,17 @@
 #include "hotplug_debouncer.hpp"
 
 #include <QCoreApplication>
+#include <QDesktopServices>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QMetaObject>
+#include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QStringList>
 #include <QTimer>
+#include <QUrl>
 
 #ifdef AJAZZ_PYTHON_HOST
 #include "ajazz/plugins/manifest_signer.hpp"
@@ -219,6 +226,102 @@ Application::Application(QObject* parent)
           },
           [this]() -> core::Profile const& { return m_profileController->activeProfile(); },
           this)),
+      // Phase 15 Plan 15-02: QtExecutor, ActionEngine, StreamDockInputService.
+      //
+      // Construction order MUST match member-declaration order in application.hpp
+      // (GCC -Wreorder is -Werror). The three members are declared in this order:
+      // m_qtExecutor -> m_actionEngine -> m_streamDockInput.
+      //
+      // m_qtExecutor: non-blocking Sleep Executor (audit A2). Owned here so it
+      // outlives m_actionEngine (qt_executor.hpp lifetime note).
+      m_qtExecutor(std::make_unique<QtExecutor>(this)),
+      // m_actionEngine: the first ActionEngine instantiation in the app.
+      // ActionExecutors:
+      //   - keyPress:   STUBBED with a log line (OS key injection is cross-platform
+      //                 uinput/SendInput/CGEvent, deferred to Phase 21 per T-15-03 /
+      //                 Open Question 4 / Assumption A5).
+      //   - runCommand: QProcess::startDetached(program, args) -- never system() or
+      //                 a shell string (T-15-02 mitigated). settingsJson is parsed
+      //                 minimally/defensively; Phase 20 owns the full PI schema.
+      //   - openUrl:    QDesktopServices::openUrl (standard Qt cross-platform).
+      //   - plugin:     STUBBED with a log line (Phase 19 seam, T-15-03 accepted).
+      //
+      // m_qtExecutor is passed as the shared_ptr<Executor> so Sleep/delayMs defer
+      // via QTimer::singleShot instead of blocking the poll thread (T-15-04 / A2).
+      m_actionEngine(std::make_unique<core::ActionEngine>(
+          [&] {
+              core::ActionExecutors execs;
+              // keyPress executor: STUB (Phase 21 / T-15-03 accepted)
+              execs.keyPress = [](std::string_view settingsJson) {
+                  AJAZZ_LOG_INFO("input",
+                                 "keyPress action ignored (OS key injection arrives Phase 21): {}",
+                                 settingsJson);
+              };
+              // runCommand executor: QProcess::startDetached with an explicit argv list.
+              // Never system() / never a shell string (T-15-02). settingsJson is
+              // expected to be a JSON object with at least a "program" key and an
+              // optional "args" array.  Phase 20 owns the full PI schema; Phase 15
+              // parses minimally: if the JSON does not parse, log and skip.
+              execs.runCommand = [](std::string_view settingsJson) {
+                  // Minimal / defensive parse: look for "program":"..." substring.
+                  // Full structured parse (QJsonDocument) lands in Phase 20 when the
+                  // PI schema for RunCommand is finalised.  Until then, attempt a
+                  // best-effort extract to preserve runCommand usability with simple
+                  // bindings authored against the schema preview.
+                  auto const json = QString::fromUtf8(settingsJson.data(),
+                                                      static_cast<qsizetype>(settingsJson.size()));
+                  auto const doc = QJsonDocument::fromJson(json.toUtf8());
+                  if (!doc.isObject()) {
+                      AJAZZ_LOG_INFO("input",
+                                     "runCommand: malformed settingsJson (not a JSON object): {}",
+                                     settingsJson);
+                      return;
+                  }
+                  auto const obj = doc.object();
+                  auto const program = obj.value(QStringLiteral("program")).toString();
+                  if (program.isEmpty()) {
+                      AJAZZ_LOG_INFO("input",
+                                     "runCommand: missing 'program' key in settingsJson: {}",
+                                     settingsJson);
+                      return;
+                  }
+                  QStringList args;
+                  auto const argsVal = obj.value(QStringLiteral("args"));
+                  if (argsVal.isArray()) {
+                      for (auto const& a : argsVal.toArray()) {
+                          args << a.toString();
+                      }
+                  }
+                  // QProcess::startDetached: no blocking, no shell string, explicit argv.
+                  if (!QProcess::startDetached(program, args)) {
+                      AJAZZ_LOG_INFO("input",
+                                     "runCommand: QProcess::startDetached failed for program: {}",
+                                     program.toStdString());
+                  }
+              };
+              // openUrl executor: QDesktopServices::openUrl (standard Qt cross-platform).
+              execs.openUrl = [](std::string_view url) {
+                  QDesktopServices::openUrl(QUrl::fromUserInput(
+                      QString::fromUtf8(url.data(), static_cast<qsizetype>(url.size()))));
+              };
+              // plugin executor: STUB (Phase 19 seam, T-15-03 accepted).
+              execs.plugin = [](std::string_view id, std::string_view /*settingsJson*/) {
+                  AJAZZ_LOG_INFO(
+                      "input", "plugin action {} ignored (plugin host arrives Phase 19)", id);
+              };
+              return execs;
+          }(),
+          // QtExecutor as the shared_ptr<Executor>: Sleep defers via QTimer::singleShot,
+          // never blocking the GUI/poll thread (T-15-04 / audit A2).
+          std::shared_ptr<core::Executor>(m_qtExecutor.get(), [](core::Executor*) {}))),
+      // m_streamDockInput: constructed with the ProfileAccessor seam (mirrors
+      // StreamDockControlService precedent) and the pre-built ActionEngine.
+      // The service receives the active device handle via setActiveDevice() in the
+      // onHotplug arrival path (see below), not at construction time.
+      m_streamDockInput(std::make_unique<StreamDockInputService>(
+          [this]() -> core::Profile const& { return m_profileController->activeProfile(); },
+          std::move(m_actionEngine),
+          this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
@@ -238,6 +341,16 @@ Application::Application(QObject* parent)
                      &ProfileController::profileChanged,
                      m_streamDockControl.get(),
                      &StreamDockControlService::repaintFromProfile);
+
+    // Phase 15 Plan 15-02 (INPUT-03/04/05):
+    //
+    // pageNavRequested: connect to a logged sink for Phase 15.
+    // Phase 16 replaces this lambda with the real page-model consumer
+    // (active-page navigation via the page model owned by Phase 16).
+    QObject::connect(
+        m_streamDockInput.get(), &StreamDockInputService::pageNavRequested, this, [](int dir) {
+            AJAZZ_LOG_INFO("input", "page nav intent {} (page model arrives Phase 16)", dir);
+        });
 }
 
 Application::~Application() {
@@ -491,13 +604,43 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                 // setActiveDevice so the panel lights and the held handle is refreshed.
                 // Phase 14 simplification: first connected Stream Dock wins; full
                 // active-device selection UI is Phase 16.
+                //
+                // Phase 15 Plan 15-02 (INPUT-03/04/05): after the control service opens
+                // the device, share the SAME held handle with the input service (ARCH-03
+                // single-handle invariant — no second open()). The DeviceRegistry flyweight
+                // guarantees that open() with the same (vid, pid, serial) returns the same
+                // backend shared_ptr that the control service holds. Both services hold a
+                // reference to the same shared_ptr<IDevice>; neither creates a second HID
+                // session.
                 if (d.family == core::DeviceFamily::StreamDeck) {
-                    QTimer::singleShot(std::chrono::milliseconds(300),
-                                       m_streamDockControl.get(),
-                                       [this, codename = QString::fromStdString(d.codename)] {
-                                           m_streamDockControl->setActiveDevice(codename);
-                                       });
+                    core::DeviceId const devId{
+                        .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
+                    QTimer::singleShot(
+                        std::chrono::milliseconds(300),
+                        m_streamDockControl.get(),
+                        [this, codename = QString::fromStdString(d.codename), devId] {
+                            // 1. Let the control service open the device and light the panel.
+                            m_streamDockControl->setActiveDevice(codename);
+                            // 2. Share the held handle with the input service (ARCH-03).
+                            //    The flyweight open() returns the same shared_ptr<IDevice>
+                            //    that the control service holds; no second HID open occurs.
+                            auto handle = m_deviceRegistry.open(devId);
+                            m_streamDockInput->setActiveDevice(std::move(handle));
+                        });
                 }
+                break;
+            }
+        }
+    } else if (ev.action == core::HotplugAction::Removed) {
+        // Phase 15 Plan 15-02: on Stream Deck departure, stop the input poll pump
+        // and release the held handle to avoid use-after-free (T-15-05 mitigated).
+        // StreamDockInputService::setActiveDevice(nullptr) stops the timer and
+        // resets m_device (zombie-contract: no-op if already null).
+        auto const descriptors = m_deviceRegistry.enumerate();
+        for (auto const& d : descriptors) {
+            if (d.vendorId == ev.vid && d.productId == ev.pid &&
+                d.family == core::DeviceFamily::StreamDeck) {
+                m_streamDockInput->setActiveDevice(nullptr);
                 break;
             }
         }

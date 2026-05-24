@@ -11,6 +11,7 @@
  */
 #pragma once
 
+#include "ajazz/core/action_engine.hpp"
 #include "ajazz/core/device_registry.hpp"
 #include "app_update_service.hpp"
 #include "autostart_service.hpp"
@@ -23,8 +24,10 @@
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
+#include "qt_executor.hpp"
 #include "settings_service.hpp"
 #include "stream_dock_control_service.hpp"
+#include "stream_dock_input_service.hpp"
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
 #include "tray_controller.hpp"
@@ -185,6 +188,31 @@ private:
                              ///< firmware VER string. Declared after m_firmwareUpdate
                              ///< to keep the init list in member-declaration order
                              ///< (-Wreorder). Reuse surface for Phases 15/16/19.
+    // Phase 15 Plan 15-02 — ActionEngine + QtExecutor + StreamDockInputService.
+    // Declaration order matches the init-list construction order below; GCC
+    // -Wreorder is -Werror so these three members MUST stay in this sequence
+    // (qtExecutor -> actionEngine -> streamDockInput) and after m_streamDockControl
+    // so the input service can receive the control service's held handle on arrival.
+    //
+    // m_qtExecutor must outlive m_actionEngine (qt_executor.hpp lifetime note).
+    // m_actionEngine must outlive m_streamDockInput (the service calls engine->run()).
+    std::unique_ptr<QtExecutor>
+        m_qtExecutor; ///< Phase 15: non-blocking Executor for ActionEngine Sleep steps
+                      ///< (audit A2 — prevents Sleep from blocking the HID poll thread).
+                      ///< Owned here so it outlives m_actionEngine.
+    std::unique_ptr<core::ActionEngine>
+        m_actionEngine; ///< Phase 15: first ActionEngine instantiation in the app.
+                        ///< Constructed with the real app ActionExecutors (keyPress
+                        ///< stub / runCommand QProcess::startDetached / openUrl
+                        ///< QDesktopServices / plugin stub) and m_qtExecutor as the
+                        ///< Executor so Sleep defers via QTimer (T-15-04 mitigated).
+                        ///< Phase 19 replaces the plugin stub with the real bridge.
+    std::unique_ptr<StreamDockInputService>
+        m_streamDockInput; ///< Phase 15: app-layer input dispatch service (INPUT-03/04/05).
+                           ///< Holds the same shared_ptr<IDevice> as m_streamDockControl
+                           ///< (ARCH-03 single-handle invariant — no second open()). Pumps
+                           ///< poll() on an 8 ms QTimer and routes DeviceEvents to bound
+                           ///< ActionChains in the active Profile via m_actionEngine.
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

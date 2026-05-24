@@ -308,6 +308,8 @@ set(ACC_QML_MODULE_SOURCES
     src/app_update_service.hpp
     src/property_inspector_controller.cpp
     src/property_inspector_controller.hpp
+    src/qt_executor.cpp
+    src/qt_executor.hpp
     src/stream_dock_control_service.cpp
     src/stream_dock_control_service.hpp
     src/stream_dock_input_service.cpp
