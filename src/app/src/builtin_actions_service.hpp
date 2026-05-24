@@ -192,6 +192,12 @@ private:
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     std::unique_ptr<ObsClient> m_obs;
     bool m_obsConnected{false};
+    /// Set on ObsClient::authFailed; cleared on ObsClient::connected.
+    /// When true the lazy-connect path in the obsstudio handler is skipped,
+    /// preventing an unbounded per-button-press retry loop (WR-01).
+    /// Cleared automatically when a successful Identified arrives; can also
+    /// be cleared explicitly if the user updates the OBS password in settings.
+    bool m_obsAuthFailed{false};
 #endif
 
     // ---- Opt-in capture state (T-21-hook, LOCKED OFF by default) ----

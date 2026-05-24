@@ -476,10 +476,14 @@ void BuiltinActionsService::populate() {
     m_obs = std::make_unique<ObsClient>(this);
     QObject::connect(m_obs.get(), &ObsClient::connected, this, [this]() {
         m_obsConnected = true;
+        m_obsAuthFailed = false; // clear any prior auth-failure so settings changes take effect
         AJAZZ_LOG_INFO("builtin", "obsstudio: connected to OBS");
     });
-    QObject::connect(m_obs.get(), &ObsClient::authFailed, this, [](QString const& reason) {
-        AJAZZ_LOG_WARN("builtin", "obsstudio: auth failed -- {}", reason.toStdString());
+    QObject::connect(m_obs.get(), &ObsClient::authFailed, this, [this](QString const& reason) {
+        m_obsAuthFailed = true; // suppress retries until password changes in settings (WR-01)
+        AJAZZ_LOG_WARN("builtin",
+                       "obsstudio: auth failed -- {}; retries suppressed until settings update",
+                       reason.toStdString());
     });
     QObject::connect(m_obs.get(), &ObsClient::errorOccurred, this, [this](QString const& reason) {
         m_obsConnected = false;
@@ -493,7 +497,9 @@ void BuiltinActionsService::populate() {
             auto const sceneName = obj.value(QStringLiteral("sceneName")).toString();
 
             // Ensure connected (lazy connect on first action).
-            if (!m_obsConnected) {
+            // m_obsAuthFailed gates retries: once auth has failed the loop is broken
+            // until the user updates the OBS password in settings (WR-01).
+            if (!m_obsConnected && !m_obsAuthFailed) {
                 QSettings qs;
                 auto const host =
                     qs.value(QStringLiteral("obs/host"), QStringLiteral("127.0.0.1")).toString();
@@ -505,6 +511,10 @@ void BuiltinActionsService::populate() {
                 // and OBS demands auth, ObsClient will emit authFailed
                 // and refuse to send Identify.
                 m_obs->connectToObs(host, port, password);
+            } else if (m_obsAuthFailed) {
+                AJAZZ_LOG_WARN("builtin",
+                               "obsstudio: auth previously failed; "
+                               "update obs/password in settings to retry");
             }
 
             // Route to the appropriate ObsClient method.
