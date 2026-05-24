@@ -201,7 +201,13 @@ void ProfileController::resetActiveProfile() {
     m_profile.keys.clear();
     m_profile.encoders.clear();
     m_profile.mouseButtons.clear();
-    // Keep pages intact; user may have folder navigation they did not author here.
+    // WR-02: also clear per-page key bindings while preserving the page structure
+    // (folder navigation entries). Without this, root keys are cleared but folder
+    // pages still carry old bindings -- the device shows folder key images after a
+    // carousel navigation, contradicting the "Restore defaults" intent.
+    for (auto& [id, page] : m_profile.pages) {
+        page.keys.clear();
+    }
     emit profileChanged();
     saveActiveProfile();
 }
