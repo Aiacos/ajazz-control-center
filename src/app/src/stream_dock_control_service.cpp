@@ -241,8 +241,13 @@ void StreamDockControlService::repaintPage(QString const& pageId) {
         }
         if (img.isNull()) {
             if (binding.state.background) {
-                // Solid background fill: create an 85x85 image (device native size).
-                img = QImage(85, 85, QImage::Format_RGBA8888);
+                // Solid background fill at the device's native key resolution.
+                // Read from IDisplayCapable::displayInfo() -- descriptor-driven
+                // (AKP03=60x60, AKP05=85x85, AKP153=85x85, AKP815=100x100).
+                auto const info = disp->displayInfo();
+                auto const w = info.widthPx > 0 ? static_cast<int>(info.widthPx) : 85;
+                auto const h = info.heightPx > 0 ? static_cast<int>(info.heightPx) : 85;
+                img = QImage(w, h, QImage::Format_RGBA8888);
                 img.fill(qRgba(binding.state.background->r,
                                binding.state.background->g,
                                binding.state.background->b,

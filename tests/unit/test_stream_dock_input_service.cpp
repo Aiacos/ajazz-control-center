@@ -96,6 +96,10 @@ core::DeviceDescriptor makeDescriptor() {
     d.family = core::DeviceFamily::StreamDeck;
     d.model = "AKP05E (test)";
     d.codename = "akp05e_test";
+    // AKP05E geometry: 4 encoders + touch strip. Required so the input service
+    // sizes its accumulator correctly (descriptor-driven; Phase 24-02).
+    d.encoderCount = 4;
+    d.hasTouchStrip = true;
     return d;
 }
 

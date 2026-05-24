@@ -39,11 +39,11 @@ namespace {
 // Protocol constants (mirrors akp05_protocol.hpp — do NOT alter wire decode).
 // ---------------------------------------------------------------------------
 
-// kEncoderCount removed: use StreamDockInputService::kEncoderCount (the class
-// static constexpr std::size_t) as the single source of truth. Having a
-// separate inline constexpr std::uint8_t here shadowed the class constant
-// inside this TU and created a silent divergence risk (WR-02).
-/// Matches akp05::TouchStripRangeX = 640 (akp05_protocol.hpp:82).
+// kEncoderCount is now m_encoderCount (runtime, from descriptor.encoderCount).
+// AKP05-specific zoneForX uses a local kAkp05EncoderCount=4 constant.
+/// AKP05 touch-strip width in pixels (= 640, akp05_protocol.hpp:82).
+/// AKP05-specific: only used by the touch-strip dispatch path (other families
+/// never emit TouchStrip events because hasTouchStrip=false in their descriptors).
 inline constexpr std::uint16_t kTouchStripRangeX = 640;
 
 /// Touch gesture indices packed into the upper 16 bits of DeviceEvent::value
@@ -91,7 +91,7 @@ void StreamDockInputService::setActiveDevice(std::shared_ptr<core::IDevice> devi
     // Stop polling if we had a device before.
     m_pollTimer->stop();
     m_coalesceTimer->stop();
-    m_encAccum.fill(0);
+    std::fill(m_encAccum.begin(), m_encAccum.end(), 0);
 
     // CR-03: always deregister the [this]-capturing callback on the outgoing
     // device BEFORE releasing the handle. The backend (Akp05Device) retains
@@ -108,11 +108,24 @@ void StreamDockInputService::setActiveDevice(std::shared_ptr<core::IDevice> devi
     if (!device) {
         m_device.reset();
         m_activeDeviceId.clear();
+        m_encoderCount = 0;
+        m_encAccum.clear();
+        m_hasTouchStrip = false;
         return;
     }
 
     // Hold the shared_ptr for the session (ARCH-03 -- Pitfall 2: no raw ptr).
     m_device = std::move(device);
+
+    // Descriptor-driven geometry: AKP03=3 encoders, AKP05=4, AKP153/815=0.
+    // Size the accumulator to match so each family takes the correct path.
+    auto const& desc = m_device->descriptor();
+    m_encoderCount = static_cast<std::size_t>(desc.encoderCount);
+    m_encAccum.assign(m_encoderCount, 0);
+    // Touch-strip flag: AKP05=true, AKP03/153/815=false. Used to gate the
+    // TouchStrip dispatch branch (defence-in-depth; backends are already
+    // responsible for only emitting events they support).
+    m_hasTouchStrip = desc.hasTouchStrip;
 
     // Register the onEvent callback (synchronously invoked by poll() on the
     // GUI thread -- device.hpp:199 says "I/O thread", which here IS the GUI
@@ -165,17 +178,18 @@ std::size_t StreamDockInputService::pump() {
 // ---------------------------------------------------------------------------
 
 // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
+// This function is AKP05-specific: only AKP05 emits TouchStrip events (it
+// is the only family member with hasTouchStrip=true). AKP03/153/815 never
+// call this path because their backends never emit DeviceEvent::Kind::TouchStrip.
+// The zone formula uses the AKP05 encoder count (4) since the touch strip
+// maps its X coordinate to 4 encoder zones on that device.
 std::uint16_t StreamDockInputService::zoneForX(std::uint16_t x) noexcept {
-    // Bounded formula: result is in [0, EncoderCount-1].
+    // AKP05 has 4 encoders and a 640-px touch strip.
     // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
-    // WR-02: reference the class constant explicitly so the single source of
-    // truth (StreamDockInputService::kEncoderCount, std::size_t) is used here
-    // and in onEncoderTurned / drainCoalescedRotation consistently.
-    auto const raw = static_cast<std::uint32_t>(x) *
-                     static_cast<std::uint32_t>(StreamDockInputService::kEncoderCount) /
+    static constexpr std::uint32_t kAkp05EncoderCount = 4u;
+    auto const raw = static_cast<std::uint32_t>(x) * kAkp05EncoderCount /
                      static_cast<std::uint32_t>(kTouchStripRangeX);
-    auto const capped = std::min<std::uint32_t>(
-        raw, static_cast<std::uint32_t>(StreamDockInputService::kEncoderCount) - 1u);
+    auto const capped = std::min<std::uint32_t>(raw, kAkp05EncoderCount - 1u);
     return static_cast<std::uint16_t>(capped);
 }
 
@@ -224,6 +238,13 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
 
     // ---- Touch strip (INPUT-05) ------------------------------------------
     case core::DeviceEvent::Kind::TouchStrip: {
+        // Gate on descriptor.hasTouchStrip: AKP03/153/815 have no touch strip
+        // and should never emit TouchStrip events, but guard here for defence-
+        // in-depth so the zoneForX (AKP05-specific formula) is never called on
+        // a non-touch device even if a stray event were somehow delivered.
+        if (!m_hasTouchStrip) {
+            break;
+        }
         // Touch value packing: (gesture<<16)|X (akp05.cpp:513-517).
         auto const gesture = static_cast<std::uint32_t>(ev.value) >> 16u;
         auto const x = static_cast<std::uint16_t>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
@@ -262,8 +283,8 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
 // ---------------------------------------------------------------------------
 
 void StreamDockInputService::onEncoderTurned(std::uint16_t encIndex, std::int32_t delta) {
-    if (encIndex >= kEncoderCount) {
-        return; // Guard: backend already validates index < EncoderCount
+    if (encIndex >= m_encoderCount) {
+        return; // Guard: sized by descriptor.encoderCount (AKP03=3, AKP05=4, AKP153/815=0)
     }
     m_encAccum[encIndex] += delta;
     // Arm the single-shot 16 ms coalescer if not already running.
@@ -278,12 +299,12 @@ void StreamDockInputService::onEncoderTurned(std::uint16_t encIndex, std::int32_
 
 void StreamDockInputService::drainCoalescedRotation() {
     if (!m_profileAccessor) {
-        m_encAccum.fill(0);
+        std::fill(m_encAccum.begin(), m_encAccum.end(), 0);
         return;
     }
     auto const& prof = m_profileAccessor();
 
-    for (std::uint16_t e = 0; e < kEncoderCount; ++e) {
+    for (std::uint16_t e = 0; e < static_cast<std::uint16_t>(m_encoderCount); ++e) {
         if (m_encAccum[e] == 0) {
             continue;
         }

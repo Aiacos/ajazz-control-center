@@ -59,10 +59,10 @@
 #include <QObject>
 #include <QTimer>
 
-#include <array>
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <vector>
 
 namespace ajazz::app {
 
@@ -239,10 +239,19 @@ private:
     /// Rotation coalescer timer: single-shot 16 ms (Qt::CoarseTimer).
     QTimer* m_coalesceTimer{nullptr};
 
+    /// Whether the active device has a touch strip (AKP05=true; AKP03/153/815=false).
+    /// Set from descriptor.hasTouchStrip on setActiveDevice(). Used to gate the
+    /// TouchStrip dispatch branch so it is inert for non-touch families even if a
+    /// TouchStrip event were somehow emitted (defence-in-depth; in practice only
+    /// AKP05's backend ever emits DeviceEvent::Kind::TouchStrip).
+    bool m_hasTouchStrip{false};
+
     /// Per-encoder signed delta accumulator for the rotation coalescer.
-    /// Matches akp05::EncoderCount = 4 (akp05_protocol.hpp:72).
-    static constexpr std::size_t kEncoderCount = 4;
-    std::array<std::int32_t, kEncoderCount> m_encAccum{};
+    /// Sized dynamically from the active device's descriptor.encoderCount on
+    /// setActiveDevice() (descriptor-driven: AKP03=3, AKP05=4, AKP153/815=0).
+    /// An empty vector means no encoders -- the coalescer loop is inert.
+    std::size_t m_encoderCount{0};
+    std::vector<std::int32_t> m_encAccum{};
 
     /// Poll cadence in milliseconds.
     static constexpr int kPollIntervalMs = 8;
