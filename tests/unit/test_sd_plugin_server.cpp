@@ -168,11 +168,16 @@ TEST_CASE("SdPluginServer action message emits actionReceived with parsed JSON",
     REQUIRE(action.value(QStringLiteral("context")).toString() == QStringLiteral("abc"));
 }
 
-TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
+TEST_CASE("SdPluginServer routes setBG to actionReceived and genuinely-unknown events to "
+          "unhandledEventReceived",
           "[plugin-server][extensions]") {
+    // INVERTED from the MVP test: setBG is now a routed AJAZZ-only action (17-01).
+    // Only a truly-unknown event name should still reach unhandledEventReceived
+    // (forward-compat trace; T-17-FWD).
     ensureQCoreApp();
     SdPluginServer server;
     QSignalSpy unhandledSpy(&server, &SdPluginServer::unhandledEventReceived);
+    QSignalSpy actionSpy(&server, &SdPluginServer::actionReceived);
     QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
     REQUIRE(server.start(0));
 
@@ -182,19 +187,22 @@ TEST_CASE("SdPluginServer surfaces unknown events via unhandledEventReceived",
     REQUIRE(waitForSpy(clientConnectedSpy));
     client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
     REQUIRE(waitForSpy(registeredSpy));
-    // setBG is an AJAZZ-only extension - MVP doesn't implement it, but the
-    // server must surface it via the unhandled signal so the app layer can
-    // log / extend without losing the event.
-    client.sendTextMessage(QStringLiteral(R"({"event":"setBG","payload":{"color":"#FF0000"}})"));
+
+    // setBG is now a routed AJAZZ-only action - it must reach actionReceived.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"setBG","context":"c1","payload":{"color":"#FF0000"}})"));
+    REQUIRE(waitForSpy(actionSpy));
+    REQUIRE(actionSpy.count() == 1);
+    REQUIRE(
+        actionSpy.first().at(1).value<QJsonObject>().value(QStringLiteral("event")).toString() ==
+        QStringLiteral("setBG"));
+
+    // A genuinely-unknown event still surfaces via unhandledEventReceived (forward-compat).
+    client.sendTextMessage(QStringLiteral(R"({"event":"someEventThatDoesNotExist","payload":{}})"));
     REQUIRE(waitForSpy(unhandledSpy));
-
     REQUIRE(unhandledSpy.count() == 1);
-    REQUIRE(unhandledSpy.first().at(1).toString() == QStringLiteral("setBG"));
+    REQUIRE(unhandledSpy.first().at(1).toString() == QStringLiteral("someEventThatDoesNotExist"));
 }
-
-// ============================================================================
-// Protocol-routing tests — Task 1 RED (kRoutedActions: 15 standard + 26 AJAZZ = 41)
-// ============================================================================
 
 TEST_CASE("SdPluginProtocolTest all routed actions route none unhandled",
           "[plugin-server][actions]") {
@@ -329,10 +337,6 @@ TEST_CASE("SdPluginServer bind loopback only on random port",
     // OS-assigned port is non-zero.
     REQUIRE(server.serverPort() != 0);
 }
-
-// ============================================================================
-// End protocol-routing RED tests
-// ============================================================================
 
 TEST_CASE("SdPluginServer multiple sequential start/stop cycles do not leak ports",
           "[plugin-server][lifecycle]") {
