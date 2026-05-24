@@ -31,11 +31,11 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Stream Dock Control Service (Phase 14)
 
-- [ ] **DISPLAY-06**: A persistent control service keeps the active Stream Deck open and sets brightness ON at open, so the panel is visible (the backend `open()` previously left it dark). Single held-open HID handle (v1.1 ARCH-03 weak_ptr flyweight preserved), not open/close per push.
-- [ ] **DISPLAY-07**: Assigning an image to a key pushes it to the physical key within ~1s (encode → `BAT` header → 1024-byte chunks → `ULEND`), with no manual flush.
-- [ ] **DISPLAY-08**: Loading a profile repaints all of the device's keys (and encoder/touch overlays) from the saved bindings.
-- [ ] **DOCK-01**: The control service probes firmware version (`CRT…VER`) at open and caches/surfaces it (no more "unknown") — gates protocol behaviour where firmware-dependent.
-- [ ] **DOCK-02**: An `ULEND` commit is emitted after each image burst (fixes the vendor "device freezes after rapid setKeyImage" defect; vendor §10 P0).
+- [x] **DISPLAY-06**: A persistent control service keeps the active Stream Deck open and sets brightness ON at open, so the panel is visible (the backend `open()` previously left it dark). Single held-open HID handle (v1.1 ARCH-03 weak_ptr flyweight preserved), not open/close per push.
+- [x] **DISPLAY-07**: Assigning an image to a key pushes it to the physical key within ~1s (encode → `BAT` header → 1024-byte chunks → `ULEND`), with no manual flush.
+- [x] **DISPLAY-08**: Loading a profile repaints all of the device's keys (and encoder/touch overlays) from the saved bindings.
+- [x] **DOCK-01**: The control service probes firmware version (`CRT…VER`) at open and caches/surfaces it (no more "unknown") — gates protocol behaviour where firmware-dependent.
+- [x] **DOCK-02**: An `ULEND` commit is emitted after each image burst (fixes the vendor "device freezes after rapid setKeyImage" defect; vendor §10 P0).
 - [x] **DEVICES-11**: The `akp05e` descriptor advertises `hasClock=false` (`register.cpp`) — the Stream Dock family has no firmware RTC per ARCH-05; corrects the current `hasClock=true` and closes Phase-10 UAT #6.
 
 ### Stream Dock Input Routing (Phase 15)
@@ -261,11 +261,11 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | VERIFY-02   | Phase 13 | Pending  |
 | VERIFY-03   | Phase 13 | Pending  |
 | VERIFY-04   | Phase 13 | Pending  |
-| DISPLAY-06  | Phase 14 | Pending  |
-| DISPLAY-07  | Phase 14 | Pending  |
-| DISPLAY-08  | Phase 14 | Pending  |
-| DOCK-01     | Phase 14 | Pending  |
-| DOCK-02     | Phase 14 | Pending  |
+| DISPLAY-06  | Phase 14 | Complete |
+| DISPLAY-07  | Phase 14 | Complete |
+| DISPLAY-08  | Phase 14 | Complete |
+| DOCK-01     | Phase 14 | Complete |
+| DOCK-02     | Phase 14 | Complete |
 | DEVICES-11  | Phase 14 | Complete |
 | INPUT-03    | Phase 15 | Pending  |
 | INPUT-04    | Phase 15 | Pending  |

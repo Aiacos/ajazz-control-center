@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: executing
+status: verifying
 stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T08:50:46.022Z'
+last_updated: '2026-05-24T09:07:03.069Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 51
-  completed_plans: 8
-  percent: 6
+  completed_plans: 9
+  percent: 12
 ---
 
 # Project State
@@ -29,7 +29,7 @@ Phase: 14 (stream-dock-control-service) — EXECUTING
 Plan: 2 of 2
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Branch: feat/streamdock (off develop) — ~40 planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-24
 
@@ -119,25 +119,26 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Deferred Items
 
-| Category         | Item                                                                          | Status                            | Deferred At              |
-| ---------------- | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
-| v1.3+ (KEYBOARD) | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
-| v1.2.x (DISPLAY) | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
-| v1.2.x / v1.3    | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
-| v1.2.x           | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
-| v1.2.x           | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
-| v1.2.x           | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
-| v1.2.x           | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
-| Phase 9 P03      | 6min                                                                          | 2 tasks                           | 2 files                  |
-| Phase 9 P04      | 4min                                                                          | 3 tasks                           | 5 files                  |
-| Phase 9 P05      | 3min                                                                          | 1 tasks                           | 2 files                  |
-| Phase 9 P06      | 3min                                                                          | 1 tasks                           | 2 files                  |
-| Phase 9 P07      | 7min                                                                          | 1 tasks                           | 6 files                  |
-| Phase 14 P14-01  | 8                                                                             | 2 tasks                           | 6 files                  |
+| Category                                 | Item                                                                          | Status                            | Deferred At              |
+| ---------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
+| v1.3+ (KEYBOARD)                         | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
+| v1.2.x (DISPLAY)                         | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
+| v1.2.x / v1.3                            | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
+| v1.2.x                                   | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
+| v1.2.x                                   | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
+| v1.2.x                                   | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
+| v1.2.x                                   | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
+| Phase 9 P03                              | 6min                                                                          | 2 tasks                           | 2 files                  |
+| Phase 9 P04                              | 4min                                                                          | 3 tasks                           | 5 files                  |
+| Phase 9 P05                              | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P06                              | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P07                              | 7min                                                                          | 1 tasks                           | 6 files                  |
+| Phase 14 P14-01                          | 8                                                                             | 2 tasks                           | 6 files                  |
+| Phase 14-stream-dock-control-service P02 | 90                                                                            | 3 tasks                           | 9 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T08:50:46.014Z
+Last session: 2026-05-24T09:07:03.061Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 
