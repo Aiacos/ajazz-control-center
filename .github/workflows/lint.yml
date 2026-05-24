@@ -1,13 +1,23 @@
 name: Lint
 
-# Runs every pre-commit hook on push + PR. On a PR from within the same
-# repo (i.e. not a fork), if any hook auto-fixed something, the fixes are
-# pushed back as a follow-up commit so reviewers get a clean tree without
-# the contributor having to re-run anything locally.
+# Runs every pre-commit hook on push + PR. If any hook auto-fixed
+# something, the fixes are pushed back as a follow-up commit so reviewers
+# get a clean tree without the contributor having to re-run anything
+# locally. This applies BOTH to:
+#   * PRs from within the same repo (not forks) -> pushed to the PR head
+#     branch (the feature branch). This is the primary GitFlow path:
+#     feature -> develop, develop -> main.
+#   * direct pushes to main / develop -> pushed back to that branch. With
+#     "require a pull request before merging" branch protection enabled,
+#     this only succeeds if github-actions[bot] is on the bypass list;
+#     otherwise the PR path above has already produced a clean tree and
+#     this is a harmless no-op (nothing to fix on the merge commit).
+# The step re-runs after pushing; because the hooks are idempotent the
+# second run finds nothing to fix and goes green, so there is no loop.
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
   workflow_dispatch:
 
@@ -75,11 +85,21 @@ jobs:
         run: |
           pre-commit run --all-files --show-diff-on-failure --color always
 
-      - name: Commit auto-fixes (PR from same repo)
+      - name: Commit auto-fixes (PR head branch or direct push to main/develop)
+        # continue-on-error so a push REJECTED by "require a pull request
+        # before merging" branch protection (when github-actions[bot] is not
+        # on the bypass list) does not turn the whole job red. On a PR the
+        # head branch is unprotected so the push succeeds; on a protected
+        # main/develop the PR that produced the merge has already applied the
+        # same fixes, so a rejected push here is benign.
+        continue-on-error: true
         if: |
           steps.run.outcome == 'failure' &&
-          github.event_name == 'pull_request' &&
-          github.event.pull_request.head.repo.full_name == github.repository
+          (
+            (github.event_name == 'pull_request' &&
+             github.event.pull_request.head.repo.full_name == github.repository)
+            || github.event_name == 'push'
+          )
         uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9  # v7.1.0
         with:
           commit_message: "style: apply pre-commit auto-fixes"

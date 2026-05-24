@@ -16,10 +16,14 @@ For anything beyond a typo fix or a small bug, open a GitHub issue and describe 
 
 ### 2. Fork, branch, pull request
 
-- Fork the repository to your account.
-- Create a topic branch: `feat/akp03-backend`, `fix/qml-profile-drag-crash`, `docs/adding-a-device`.
+- Fork the repository to your account (external contributors), or branch
+  directly (maintainers).
+- Create a topic branch **off `develop`**: `feat/akp03-backend`,
+  `fix/qml-profile-drag-crash`, `docs/adding-a-device`.
 - Keep commits focused and reviewable. Squash trivia; preserve logically distinct steps.
-- Open a PR against `main`. Link the issue it closes.
+- Open a PR **against `develop`** (the default branch). Link the issue it
+  closes. `main` is release-only: it receives a single promotion PR from
+  `develop` when a release is cut, never feature PRs directly.
 
 ### 3. Commit style
 
@@ -170,4 +174,6 @@ By submitting a PR you certify that your contribution complies with the [Develop
 
 ## Release cadence
 
-Release branches are cut from `main` when the support matrix advances. Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
+A release is cut by promoting `develop` into `main` via a pull request;
+tags `v*` are then created from `main` and trigger the release workflow.
+Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
