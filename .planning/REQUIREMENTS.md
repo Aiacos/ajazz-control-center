@@ -71,7 +71,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Property Inspector + Settings (Phase 20)
 
-- [ ] **PLUGIN-09**: The per-action Property Inspector renders in **`QWebEngineView` + `QWebChannel`** (never QCefView); a `cefQuery` polyfill delegates to the bridge; `sendToPlugin`/`sendToPropertyInspector` are relayed; Elgato `sdpi.css` is served from a built-in URL (sdk §7, §8).
+- [x] **PLUGIN-09**: The per-action Property Inspector renders in **`QWebEngineView` + `QWebChannel`** (never QCefView); a `cefQuery` polyfill delegates to the bridge; `sendToPlugin`/`sendToPropertyInspector` are relayed; Elgato `sdpi.css` is served from a built-in URL (sdk §7, §8).
 - [x] **PLUGIN-13**: Per-context `getSettings`/`setSettings` and plugin-wide `getGlobalSettings`/`setGlobalSettings` persist and survive an app restart (sdk §4.3).
 
 ### Built-in In-Process Actions (Phase 21)
@@ -283,7 +283,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-08   | Phase 18 | Complete |
 | PLUGIN-11   | Phase 18 | Complete |
 | PLUGIN-10   | Phase 19 | Complete |
-| PLUGIN-09   | Phase 20 | Pending  |
+| PLUGIN-09   | Phase 20 | Complete |
 | PLUGIN-13   | Phase 20 | Complete |
 | PLUGIN-12   | Phase 21 | Pending  |
 | PLUGIN-14   | Phase 22 | Pending  |
