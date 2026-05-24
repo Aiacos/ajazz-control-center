@@ -506,6 +506,18 @@ target_sources(
     ajazz_unit_tests PRIVATE test_plugin_verify_gate.cpp
                              ${CMAKE_SOURCE_DIR}/src/app/src/plugin_verify_gate.cpp
 )
+
+# Phase 22 Plan 22-02 (PLUGIN-14): installFromFile staging->verify->promote unit suite. Tests:
+# signed+confirm->promoted, tampered->Refused (staging-before-promote invariant), self-signed
+# without confirm->not promoted, non-zip/oversized->rejected, file:// URL accepted.
+# plugin_catalog_model.cpp is already compiled into this binary (test_plugin_catalog_proxy_model
+# entry above). plugin_verify_gate.cpp is already compiled (22-01 entry above). AJAZZ_TEST_REPO_ROOT
+# lets the test locate scripts/sign-plugin-manifest.py for keygen/sign.
+target_sources(ajazz_unit_tests PRIVATE test_plugin_install_from_file.cpp)
+set_source_files_properties(
+    test_plugin_install_from_file.cpp PROPERTIES COMPILE_DEFINITIONS
+                                                 "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
 set(_pvg_defs
     "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
     "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""

@@ -129,6 +129,8 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_PROPERTY(
         qint64 opendeckFetchedAtUnixMs READ opendeckFetchedAtUnixMs NOTIFY opendeckStateChanged)
     Q_PROPERTY(int opendeckCount READ opendeckCount NOTIFY countChanged)
+    Q_PROPERTY(bool onlineCatalogEnabled READ onlineCatalogEnabled WRITE setOnlineCatalogEnabled
+                   NOTIFY onlineCatalogEnabledChanged)
 
 public:
     /// QML singleton factory — see BrandingService::create for the pattern.
@@ -248,6 +250,48 @@ public:
     Q_INVOKABLE bool install(QString const& uuid);
 
     /**
+     * @brief Install a plugin from a local `.sdPlugin` or `.zip` file.
+     *
+     * Implements the staging→verify→promote sequence (T-22-toctou):
+     *
+     *   1. Read the file (capped at @c kMaxPluginDownloadBytes) and run
+     *      @ref validateDownloadedArchive — on error, emit
+     *      @c installFinished(path, false, err) and return false.
+     *   2. @ref extractSdPluginArchive into a STAGING directory (never
+     *      directly into @c installedPlugins/).
+     *   3. @ref verifyStagedPlugin on the extracted @c manifest.json:
+     *      - @c Refused: quarantine (remove) staging dir, emit
+     *        @c installFinished(false, reason), return false.
+     *      - @c SelfSigned without @p userConfirmedUnsigned: emit
+     *        @c installFinished(false, "self-signed plugin -- confirm to install")
+     *        so QML can show a warning dialog; return false.
+     *      - @c SelfSigned with @p userConfirmedUnsigned=true, or
+     *        @c Trusted: promote staging dir into the Phase-18
+     *        @c installedPlugins/ layout (atomic rename).
+     *   4. On promote: emit @c dataChanged + @c installedCountChanged +
+     *      @c installFinished(path, true, "").
+     *
+     * @p localPathOrUrl accepts either a filesystem path or a @c file://
+     *   URL (e.g. from @c FileDialog.selectedFile); it is normalised via
+     *   @c QUrl::fromUserInput / @c toLocalFile internally.
+     *
+     * @param localPathOrUrl Local path or @c file:// URL of the archive.
+     * @param userConfirmedUnsigned Pass @c true when the user has
+     *        explicitly confirmed installation of a self-signed plugin
+     *        via the QML warning dialog. Default is @c false (refuse
+     *        without explicit confirmation).
+     * @return False when the install was refused synchronously (size/
+     *         magic check, signature Refused, self-signed without
+     *         confirm). True when the install succeeded and the plugin
+     *         was promoted into @c installedPlugins/.
+     *
+     * Terminal outcome is always delivered via @ref installFinished.
+     * Uses the local path as the key (uuid equivalent) in that signal.
+     */
+    Q_INVOKABLE bool installFromFile(QString const& localPathOrUrl,
+                                     bool userConfirmedUnsigned = false);
+
+    /**
      * @brief Validate a freshly-downloaded `.sdPlugin` blob before it is
      *        written to disk (WR-04): enforces a size cap and the ZIP magic.
      *
@@ -261,6 +305,69 @@ public:
 
     /// Mark a plugin as removed. Returns true on success.
     Q_INVOKABLE bool uninstall(QString const& uuid);
+
+    // ------------------------------------------------------------------
+    // No-phone-home opt-in (PLUGIN-14 anti-feature, T-22-phonehome).
+    //
+    // The online Streamdock + OpenDeck catalogue fetchers do NOT run
+    // automatically on construction. The user must explicitly enable the
+    // live fetch via a QSettings-backed flag (default: false). The
+    // offline snapshot (cache + bundled fallback) still populates the
+    // store rows regardless of the flag.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Whether the online catalogue fetch is enabled.
+     *
+     * When false (the default), only the cached / bundled snapshot is
+     * served; no outbound request is made. When true, @ref reload()
+     * triggers a live fetch from the upstream Streamdock / OpenDeck
+     * endpoints.
+     *
+     * The value is persisted via @c QSettings under
+     * @c plugins/onlineCatalogEnabled so the user's choice survives
+     * app restarts.
+     */
+    [[nodiscard]] Q_INVOKABLE bool onlineCatalogEnabled() const;
+
+    /**
+     * @brief Set and persist the online-catalogue-enabled flag.
+     *
+     * Callable from QML as
+     * @c PluginCatalog.setOnlineCatalogEnabled(true/false).
+     * When enabled, immediately triggers @ref refreshOnline() to
+     * populate the streamdock / opendeck rows.
+     */
+    Q_INVOKABLE void setOnlineCatalogEnabled(bool enabled);
+
+    /**
+     * @brief Trigger a live online catalogue refresh.
+     *
+     * Calls the underlying fetcher @c refresh() unconditionally, regardless
+     * of the @ref onlineCatalogEnabled() setting. Intended for the QML
+     * "Refresh catalogue" button so the user can force an update without
+     * permanently enabling auto-fetch.
+     *
+     * Use @ref reload() to also reset the local / mock rows in addition
+     * to the live fetch.
+     */
+    Q_INVOKABLE void refreshOnline();
+
+    // ------------------------------------------------------------------
+    // Test seam: override the plugins directory so unit tests write to a
+    // temp dir instead of the real QStandardPaths::AppDataLocation.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Override the plugins directory for tests.
+     *
+     * When non-empty, @ref userPluginsDir() returns this path instead of
+     * deriving it from @c QStandardPaths::AppDataLocation. Must be set
+     * before any @ref installFromFile or @ref install call.
+     *
+     * @note This is a test seam — production callers must not call this.
+     */
+    static void setPluginsDirOverride(QString const& dir);
 
     /**
      * @brief Open the plugin's upstream catalogue page in the user's
@@ -309,6 +416,8 @@ signals:
     void streamdockStateChanged();
     /// Emitted whenever @ref opendeckState changes.
     void opendeckStateChanged();
+    /// Emitted when the online-catalogue-enabled flag changes.
+    void onlineCatalogEnabledChanged();
 
     /**
      * @brief Per-row download progress in [0, 100].
@@ -357,6 +466,9 @@ private:
 
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
+
+    /// QSettings-backed opt-in flag; default false (no phone-home on launch).
+    bool m_onlineCatalogEnabled = false;
 
     /// Shared QNetworkAccessManager for plugin downloads (install path).
     /// Created lazily on the first `install()` call so the cheap mock

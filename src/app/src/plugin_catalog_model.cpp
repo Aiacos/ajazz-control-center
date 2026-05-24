@@ -25,6 +25,7 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QQmlEngine>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QtGlobal>
 #include <QUrl>
@@ -37,6 +38,10 @@ namespace {
 
 /// Pointer set by PluginCatalogModel::registerInstance, consumed by ::create.
 PluginCatalogModel* s_pluginCatalogInstance = nullptr;
+
+/// Test seam: non-empty overrides userPluginsDir(). Set via
+/// PluginCatalogModel::setPluginsDirOverride (test-only API).
+QString g_pluginsDirOverride{};
 
 /// Forward declaration for the constructor sweep — the body lives in the
 /// install-path helpers namespace further down because that's where the
@@ -101,6 +106,13 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     : QAbstractListModel(parent),
       m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)),
       m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)) {
+    // PLUGIN-14 anti-feature (T-22-phonehome): load the persisted opt-in flag.
+    // Default is false — no outbound network request on construction.
+    {
+        QSettings settings;
+        m_onlineCatalogEnabled =
+            settings.value(QStringLiteral("plugins/onlineCatalogEnabled"), false).toBool();
+    }
     // First-launch (or post-upgrade) sweep: convert any `.sdPlugin`
     // archive files left in the user plugins directory by older code
     // (the install path in df01d3b wrote zips without extracting them)
@@ -183,10 +195,12 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                      });
 
     // Populate with the mock fixture so the QML grid has rows in dev
-    // builds. The Streamdock + OpenDeck rows are merged in
-    // asynchronously by their respective fetchers — first from the
-    // on-disk cache (or bundled fallback) and then from the upstream
-    // HTTP catalogue once each returns.
+    // builds. The offline cached / bundled snapshot is always served
+    // (no outbound request). A live fetch only happens when the user
+    // explicitly enables online catalog (T-22-phonehome / PLUGIN-14).
+    //
+    // Call reload() which resets mock rows; the live fetch inside
+    // reload() is now gated on m_onlineCatalogEnabled.
     reload();
 }
 
@@ -294,14 +308,19 @@ void PluginCatalogModel::reload() {
     emit countChanged();
     emit installedCountChanged();
 
-    // Kick the live upstream Streamdock + OpenDeck catalogues: each
-    // fetcher emits the cached / fallback snapshot synchronously and
-    // then the HTTP fetch result asynchronously, both via the
-    // matching `replace*Rows` slot.
+    // PLUGIN-14 anti-feature (T-22-phonehome): only fire the live HTTP fetch
+    // when the user has explicitly opted in. The "disabled" sentinel on
+    // setCatalogUrlOverride makes the fetcher emit the offline snapshot only
+    // (cache first, bundled fallback if cache is empty) without issuing any
+    // outbound network request.
+    QString const liveUrlOverride = m_onlineCatalogEnabled ? QString{} : QStringLiteral("disabled");
+
     if (m_streamdockFetcher) {
+        m_streamdockFetcher->setCatalogUrlOverride(liveUrlOverride);
         m_streamdockFetcher->refresh();
     }
     if (m_opendeckFetcher) {
+        m_opendeckFetcher->setCatalogUrlOverride(liveUrlOverride);
         m_opendeckFetcher->refresh();
     }
 }
@@ -332,6 +351,43 @@ int PluginCatalogModel::opendeckCount() const {
         }
     }
     return n;
+}
+
+bool PluginCatalogModel::onlineCatalogEnabled() const {
+    return m_onlineCatalogEnabled;
+}
+
+void PluginCatalogModel::setOnlineCatalogEnabled(bool enabled) {
+    if (m_onlineCatalogEnabled == enabled) {
+        return;
+    }
+    m_onlineCatalogEnabled = enabled;
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/onlineCatalogEnabled"), enabled);
+    }
+    emit onlineCatalogEnabledChanged();
+    if (enabled) {
+        // Immediately trigger the live fetch so the user sees updated rows.
+        refreshOnline();
+    }
+}
+
+void PluginCatalogModel::refreshOnline() {
+    // Unconditionally trigger the live fetch path, regardless of the
+    // persisted opt-in flag. This is the "Refresh catalogue" button handler.
+    if (m_streamdockFetcher) {
+        m_streamdockFetcher->setCatalogUrlOverride(QString{}); // clear any "disabled" override
+        m_streamdockFetcher->refresh();
+    }
+    if (m_opendeckFetcher) {
+        m_opendeckFetcher->setCatalogUrlOverride(QString{});
+        m_opendeckFetcher->refresh();
+    }
+}
+
+void PluginCatalogModel::setPluginsDirOverride(QString const& dir) {
+    g_pluginsDirOverride = dir;
 }
 
 void PluginCatalogModel::replaceStreamdockRows(std::vector<CatalogEntry> rows) {
@@ -434,7 +490,18 @@ inline constexpr char kZipMagic[4] = {'P', 'K', 0x03, 0x04};
 ///   - Linux:   `~/.local/share/AJAZZ Control Center/plugins`
 ///   - macOS:   `~/Library/Application Support/AJAZZ Control Center/plugins`
 ///   - Windows: `%APPDATA%/AJAZZ Control Center/plugins`
+///
+/// Test seam: when g_pluginsDirOverride is non-empty the override path
+/// is returned directly (tests write to a temp dir instead of the real
+/// QStandardPaths::AppDataLocation).
 [[nodiscard]] QString userPluginsDir() {
+    if (!g_pluginsDirOverride.isEmpty()) {
+        QDir const overrideDir(g_pluginsDirOverride);
+        if (!overrideDir.exists()) {
+            overrideDir.mkpath(QStringLiteral("."));
+        }
+        return overrideDir.absolutePath();
+    }
     QString const base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
     QDir const dir(base + QStringLiteral("/plugins"));
     if (!dir.exists()) {
@@ -457,6 +524,163 @@ QString PluginCatalogModel::validateDownloadedArchive(QByteArray const& body) {
         return QStringLiteral("Downloaded file is not a valid .sdPlugin (zip) archive.");
     }
     return {};
+}
+
+bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
+                                         bool userConfirmedUnsigned) {
+    // Normalise: accept either a local path or a file:// URL (FileDialog).
+    QUrl const asUrl = QUrl::fromUserInput(localPathOrUrl);
+    QString const localPath = asUrl.isLocalFile() ? asUrl.toLocalFile() : localPathOrUrl;
+
+    if (localPath.isEmpty()) {
+        emit installFinished(localPathOrUrl, false, QStringLiteral("Invalid file path or URL."));
+        return false;
+    }
+
+    // Step 1: read the file and apply the size + ZIP magic gate (WR-04 /
+    // T-22-bomb). Mirrors the download-path guard so the rules are identical.
+    QFile f(localPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        QString const err = QStringLiteral("Cannot open file: %1").arg(f.errorString());
+        AJAZZ_LOG_WARN("plugin-catalog", "installFromFile: {}", err.toStdString());
+        emit installFinished(localPath, false, err);
+        return false;
+    }
+    // Cap the read at kMaxPluginDownloadBytes — do NOT read the whole file
+    // if it is larger; that is the decompression-bomb defence.
+    QByteArray const body = f.read(kMaxPluginDownloadBytes + 1);
+    f.close();
+    if (QString const err = validateDownloadedArchive(body); !err.isEmpty()) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "installFromFile '{}': {}",
+                       localPath.toStdString(),
+                       err.toStdString());
+        emit installFinished(localPath, false, err);
+        return false;
+    }
+
+    // Step 2: extract into a STAGING directory (sibling of installedPlugins/,
+    // NOT inside it — T-22-toctou staging-before-promote invariant).
+    QString const pluginsDir = userPluginsDir();
+    if (pluginsDir.isEmpty()) {
+        emit installFinished(
+            localPath, false, QStringLiteral("Cannot resolve user plugins directory."));
+        return false;
+    }
+    // Derive a stable archive name from the file's basename.
+    QFileInfo const fi(localPath);
+    QString const archiveName =
+        fi.fileName().isEmpty() ? QStringLiteral("install.sdPlugin") : fi.fileName();
+    // Staging parent: a sibling of the plugins/ directory so the discovered
+    // path (installedPlugins/ == pluginsDir) is never touched until promote.
+    QString const stagingParent =
+        QDir(pluginsDir).absoluteFilePath(QStringLiteral("../.plugin_staging"));
+    QDir().mkpath(stagingParent);
+
+    // extractSdPluginArchive extracts into stagingParent/<archiveName>/
+    bool const extractOk = extractSdPluginArchive(localPath, stagingParent, archiveName);
+    if (!extractOk) {
+        QString const err = QStringLiteral("Failed to extract plugin archive.");
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "installFromFile '{}': {}",
+                       localPath.toStdString(),
+                       err.toStdString());
+        emit installFinished(localPath, false, err);
+        return false;
+    }
+
+    // Step 3: verify the staged manifest (T-22-toctou, T-22-tamper-local,
+    // T-22-unsigned). The staging dir is NOT in installedPlugins/ so even on
+    // Refused the discoverable directory is unaffected.
+    QString const stagedManifest =
+        QDir(stagingParent).filePath(archiveName + QStringLiteral("/manifest.json"));
+
+    VerifyOutcome const vout = verifyStagedPlugin(stagedManifest);
+
+    if (vout.verdict == VerifyVerdict::Refused) {
+        // Tampered OR unsigned (hard-refuse) — quarantine staging dir.
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "installFromFile '{}': signature Refused ({}); quarantining",
+                       localPath.toStdString(),
+                       vout.reason.toStdString());
+        QDir(QDir(stagingParent).filePath(archiveName)).removeRecursively();
+        QString const reason =
+            vout.reason.isEmpty() ? QStringLiteral("signature verification failed") : vout.reason;
+        emit installFinished(
+            localPath, false, tr("Plugin signature verification failed: %1").arg(reason));
+        return false;
+    }
+
+    if (vout.verdict == VerifyVerdict::SelfSigned && !userConfirmedUnsigned) {
+        // Developer-sideload policy: SelfSigned requires explicit confirmation.
+        // Do NOT remove the staging dir — the confirm path will re-use it.
+        // (If the user cancels, the staging dir will be cleaned up on next launch.)
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "installFromFile '{}': SelfSigned — awaiting user confirm",
+                       localPath.toStdString());
+        emit installFinished(
+            localPath, false, QStringLiteral("self-signed plugin -- confirm to install"));
+        return false;
+    }
+
+    // Step 4: promote — atomic rename from staging into installedPlugins/.
+    // The Phase-18 layout expects: <pluginsDir>/<name>.sdPlugin/manifest.json
+    // so we rename the staging subdir into pluginsDir directly.
+    QString const stagedDir = QDir(stagingParent).filePath(archiveName);
+    QString const promotedDir = QDir(pluginsDir).filePath(archiveName);
+
+    // Remove any existing install at the target path before rename
+    // (idempotent re-install case).
+    if (QDir(promotedDir).exists()) {
+        QDir(promotedDir).removeRecursively();
+    }
+
+    bool const renamed = QDir().rename(stagedDir, promotedDir);
+    if (!renamed) {
+        // Rename across filesystems can fail — fall back to copy+delete.
+        // For simplicity, try extracting directly into promotedDir.
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "installFromFile '{}': rename failed; falling back to re-extract",
+                       localPath.toStdString());
+        QDir().mkpath(promotedDir);
+        bool const reExtract = extractSdPluginArchive(localPath, pluginsDir, archiveName);
+        if (!reExtract) {
+            // Clean up the partial staging dir
+            QDir(stagedDir).removeRecursively();
+            emit installFinished(
+                localPath, false, QStringLiteral("Failed to promote plugin to install directory."));
+            return false;
+        }
+    }
+
+    // Clean up staging parent if empty.
+    QDir(stagingParent).removeRecursively();
+
+    // Flip install state and emit signals (same pattern as network install()).
+    // Use localPath as the key in m_install since it may not have a UUID row.
+    auto& state = m_install[localPath];
+    state.installed = true;
+    state.enabled = true;
+    // Try to find a matching catalogue row by the promoted dir name (archiveName
+    // may match a UUID in the catalogue if the user is re-installing).
+    QString const candidateUuid =
+        archiveName.endsWith(QStringLiteral(".sdPlugin")) ? archiveName.chopped(9) : archiveName;
+    int const r = findRow(m_rows, candidateUuid);
+    if (r >= 0) {
+        auto& rowState = m_install[candidateUuid];
+        rowState.installed = true;
+        rowState.enabled = true;
+        QModelIndex const idx = index(r);
+        emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
+    }
+    emit installedCountChanged();
+    AJAZZ_LOG_INFO("plugin-catalog",
+                   "installFromFile '{}' OK -> {} ({})",
+                   localPath.toStdString(),
+                   promotedDir.toStdString(),
+                   verdictToTrustLevel(vout.verdict).toStdString());
+    emit installFinished(localPath, true, QString{});
+    return true;
 }
 
 bool PluginCatalogModel::install(QString const& uuid) {
