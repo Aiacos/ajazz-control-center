@@ -78,7 +78,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 16: Device Controls + Binding Persistence + Pages** — Brightness slider + "clear all" drive the device live; key/encoder/touch bindings persist to the profile and survive restart; multi-page/folder profiles drive host-side page navigation (swipe + page actions). (DISPLAY-09, PROFILE-01/02) (completed 2026-05-24)
 - [x] **Phase 17: Plugin Protocol Completion** — On the existing `SdPluginServer`: `passHello`+salt/challenge auth, the **26 AJAZZ-only actions**, and all host→plugin events incl. encoder `dialRotate`/`dialDown`/`dialUp`. (PLUGIN-01/02/03/04/05) (completed 2026-05-24)
 - [x] **Phase 18: Plugin Manifest + Discovery + Lifecycle + Spawn** — Manifest schema (Elgato v6 + AJAZZ ext incl. `Controllers:["Knob"]`), discovery + extraction, spawn for **system node ≥20 / native exe / HTML (WebEngine)**, crash/restart/`exitApp`, Mirabox compat shim. (PLUGIN-06/07/08/11) (completed 2026-05-24)
-- [ ] **Phase 19: Device ↔ Plugin Bridge (setImage e2e)** — `actionReceived`(setImage/setTitle/setState/setBG…) → control service → physical key; device input (keyDown/dialRotate/touchTap) → plugin; willAppear/deviceDidConnect lifecycle. **The convergence phase — first demoable plugin↔device round-trip.** (PLUGIN-10)
+- [x] **Phase 19: Device ↔ Plugin Bridge (setImage e2e)** — `actionReceived`(setImage/setTitle/setState/setBG…) → control service → physical key; device input (keyDown/dialRotate/touchTap) → plugin; willAppear/deviceDidConnect lifecycle. **The convergence phase — first demoable plugin↔device round-trip.** (PLUGIN-10) (completed 2026-05-24)
 - [ ] **Phase 20: Property Inspector + Settings** — Per-action Property Inspector in `QWebEngineView`+`QWebChannel` (cefQuery polyfill, `sdpi.css` served); `get/set(+Global)Settings` persistence. (PLUGIN-09/13)
 - [ ] **Phase 21: Built-in In-Process Actions** — page/profile nav, `device.brightness`, `system.hotkey` (opt-in global hook), multimedia, volume, plain text, browser/openUrl, multiactions, OBS (auth default-on). (PLUGIN-12)
 - [ ] **Phase 22: Plugin Store / Local Install** — Install from local `.sdPlugin`/`.zip` via a host-owned catalog (**no phone-home**), behind a signature/manifest-verification gate. (PLUGIN-14)
@@ -337,7 +337,7 @@ Plans:
 
 - [x] 19-01-PLAN.md — STOP-gate dep SUMMARY files + bridge shell, ContextRegistry, pure helpers (data-URI decode, keyIndex↔coords, owner-prefix resolution)
 - [x] 19-02-PLAN.md — inbound action routing: setImage decode→Phase-14 paint, context-ownership denial, placeholder; Application wiring + control-spy e2e
-- [ ] 19-03-PLAN.md — outbound DeviceEvent→§4.4 sendEvent (keyDown/dialRotate/touchTap) + willAppear/deviceDidConnect lifecycle; loopback receives-event e2e
+- [x] 19-03-PLAN.md — outbound DeviceEvent→§4.4 sendEvent (keyDown/dialRotate/touchTap) + willAppear/deviceDidConnect lifecycle; loopback receives-event e2e
 
 ### Phase 20: Property Inspector + Settings
 
@@ -473,7 +473,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
-| 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 2/3            | In Progress      |            |
+| 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 20. Property Inspector + Settings           | v1.3      | 0/3            | Not started      | —          |
 | 21. Built-in In-Process Actions             | v1.3      | 0/?            | Not started      | —          |
 | 22. Plugin Store / Local Install            | v1.3      | 0/?            | Not started      | —          |
