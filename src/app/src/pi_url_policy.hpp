@@ -125,4 +125,32 @@ UrlDecision isOpenUrlAllowed(QUrl const& url);
 /// String overload — parses with @c QUrl::fromUserInput-equivalent strictness.
 UrlDecision isOpenUrlAllowed(QString const& url);
 
+/**
+ * @brief Decide whether a URL represents the canonical Elgato sdpi.css request.
+ *
+ * Returns `true` iff the URL path ends in exactly `/sdpi.css` or
+ * `/static/css/sdpi.css` — the two forms used by standard Elgato PI HTML pages:
+ *
+ * ```html
+ * <link rel="stylesheet" href="sdpi.css">
+ * <link rel="stylesheet" href="static/css/sdpi.css">
+ * ```
+ *
+ * The check is case-sensitive (path comparison), suffix-exact (rejects
+ * `sdpi.css.evil`), and scheme-independent (works on file://, https://, etc.).
+ *
+ * The caller (@ref PIUrlRequestInterceptor::interceptRequest) uses this to
+ * redirect matching requests to the bundled qrc resource BEFORE the allow/deny
+ * policy check, so the redirect is transparent to the policy layer.
+ *
+ * Security (T-20-CSS-REDIR): the redirect target is a fixed
+ * `qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css` constant, not derived
+ * from the request URL. Only the DETECTION is based on the URL; the target is
+ * hardcoded.
+ *
+ * @param url The request URL (parsed by the caller).
+ * @return `true` if the request should be redirected to the bundled sdpi.css.
+ */
+bool isSdpiCssRequest(QUrl const& url);
+
 } // namespace ajazz::app

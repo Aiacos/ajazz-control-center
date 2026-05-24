@@ -152,4 +152,33 @@ UrlDecision isOpenUrlAllowed(QString const& url) {
     return isOpenUrlAllowed(parsed);
 }
 
+bool isSdpiCssRequest(QUrl const& url) {
+    // Detect the two canonical forms Elgato PI HTML pages use to reference sdpi.css:
+    //   <link rel="stylesheet" href="sdpi.css">
+    //   <link rel="stylesheet" href="static/css/sdpi.css">
+    //
+    // Security (T-20-CSS-REDIR): this function only DETECTS the request pattern.
+    // The redirect TARGET is a fixed qrc: constant in the interceptor — never derived
+    // from the request URL. Suffix-exact match rejects sdpi.css.evil and directory
+    // paths like sdpi.css/file.txt.
+    if (!url.isValid() || url.isEmpty()) {
+        return false;
+    }
+    QString const path = url.path();
+    if (path.isEmpty()) {
+        return false;
+    }
+    // Accept paths ending in exactly "/sdpi.css" (includes the filename).
+    // endsWith on a non-empty path means the path component IS "sdpi.css"
+    // or ends with "/sdpi.css" — both are the Elgato convention.
+    if (!path.endsWith(QLatin1String("/sdpi.css")) && path != QLatin1String("sdpi.css")) {
+        return false;
+    }
+    // Reject suffix variants: the path must end at ".css" with no further
+    // characters. endsWith("/sdpi.css") + no further suffix check isn't needed
+    // because endsWith() is inherently a suffix check — "sdpi.css.evil" does
+    // NOT end with "/sdpi.css".
+    return true;
+}
+
 } // namespace ajazz::app

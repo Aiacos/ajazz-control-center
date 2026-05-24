@@ -60,6 +60,21 @@ void PIUrlRequestInterceptor::setPiDir(QString const& piDir) {
 
 void PIUrlRequestInterceptor::interceptRequest(QWebEngineUrlRequestInfo& info) {
     QUrl const url = info.requestUrl();
+
+    // sdpi.css redirect (BEFORE the allow/deny check so the qrc: redirect passes
+    // the existing policy — qrc: is already Allow in isLoadUrlAllowed).
+    // Security (T-20-CSS-REDIR): the redirect TARGET is a fixed qrc: constant;
+    // it is NOT derived from the request URL (attacker-controlled suffix only
+    // triggers the redirect — the target is always the bundled resource).
+    if (isSdpiCssRequest(url)) {
+        AJAZZ_LOG_INFO("plugin-pi",
+                       "sdpi.css redirect: plugin={} url='{}' -> bundled qrc",
+                       pluginUuid_.toStdString(),
+                       url.toString().toStdString());
+        info.redirect(QUrl(QStringLiteral("qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css")));
+        return;
+    }
+
     UrlDecision const decision = isLoadUrlAllowed(url, piDir_);
     if (decision == UrlDecision::Allow) {
         return;

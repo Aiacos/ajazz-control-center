@@ -355,6 +355,17 @@ qt_add_resources(
     ${_acc_opendeck_fallback}
 )
 
+# Embed the bundled sdpi.css under the same QRC path the runtime binary uses
+# (`qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css`), so the qrc-presence test in
+# test_pi_bridge.cpp can assert QFile::exists() on it without needing a full app binary (mirrors the
+# streamdock/opendeck fallback pattern above).
+set(_acc_sdpi_css ${CMAKE_SOURCE_DIR}/resources/streamdeck/sdpi.css)
+set_source_files_properties(${_acc_sdpi_css} PROPERTIES QT_RESOURCE_ALIAS streamdock/sdpi.css)
+qt_add_resources(
+    ajazz_unit_tests "sdpi_css_test_resource" PREFIX "/qt/qml/AjazzControlCenter" FILES
+    ${_acc_sdpi_css}
+)
+
 target_link_libraries(
     ajazz_unit_tests
     PRIVATE ajazz::core

@@ -210,6 +210,14 @@ set(ACC_DOC_PRIVACY ${CMAKE_SOURCE_DIR}/docs/PRIVACY.md)
 set_source_files_properties(${ACC_DOC_CHANGELOG} PROPERTIES QT_RESOURCE_ALIAS CHANGELOG.md)
 set_source_files_properties(${ACC_DOC_PRIVACY} PROPERTIES QT_RESOURCE_ALIAS PRIVACY.md)
 
+# Bundled Elgato sdpi.css for Property Inspector pages (PLUGIN-09 / Phase 20 Plan 20-02). PI HTML
+# pages reference `static/css/sdpi.css` or `sdpi.css` (Elgato convention); the
+# PIUrlRequestInterceptor redirects those requests to this bundled qrc resource so each plugin need
+# not ship its own copy. Redirect target is a fixed qrc: constant (T-20-CSS-REDIR). qrc path:
+# qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css
+set(ACC_SDPI_CSS ${CMAKE_SOURCE_DIR}/resources/streamdeck/sdpi.css)
+set_source_files_properties(${ACC_SDPI_CSS} PROPERTIES QT_RESOURCE_ALIAS streamdock/sdpi.css)
+
 # Bundled offline fixture for the AJAZZ Streamdock catalogue tab. Loaded by
 # StreamdockCatalogFetcher::loadBundledFallback() when neither the upstream catalogue nor the
 # on-disk mirror is available (first launch on an air-gapped host, CI smoke runs, etc.). Stable QRC
@@ -402,6 +410,7 @@ set(ACC_QML_MODULE_RESOURCES
     ${ACC_OPENDECK_FALLBACK}
     ${ACC_UI_ICONS}
     ${ACC_DEVICE_PRODUCTS}
+    ${ACC_SDPI_CSS}
 )
 
 # Export the module lists + this source dir so tests/qml can rebuild an identical AjazzControlCenter
