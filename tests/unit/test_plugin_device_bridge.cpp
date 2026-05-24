@@ -1007,4 +1007,283 @@ TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
     CHECK(true);
 }
 
-#endif // AJAZZ_HAVE_WEBSOCKETS
+// ==========================================================================
+// Phase 19-03 e2e tests (PLUGIN-10): outbound device->plugin event routing
+//
+// These tests feed a canned DeviceEvent directly into the bridge's
+// onDeviceEvent() slot (no real device needed) and assert that the bound
+// loopback client receives the correct §4.4 event envelope.
+// Still inside the AJAZZ_HAVE_WEBSOCKETS guard opened above.
+// ==========================================================================
+
+namespace {
+
+/// Parse the text WebSocket frames received by a loopback client and return
+/// the event names (the "event" field from each JSON frame).
+QStringList receivedEventNames(QSignalSpy const& spy) {
+    QStringList names;
+    for (auto const& args : spy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        QString const ev = obj.value(QStringLiteral("event")).toString();
+        if (!ev.isEmpty()) {
+            names << ev;
+        }
+    }
+    return names;
+}
+
+/// Return the first JSON payload object from a spy that matches the given event name.
+QJsonObject firstPayloadForEvent(QSignalSpy const& spy, QString const& eventName) {
+    for (auto const& args : spy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        if (obj.value(QStringLiteral("event")).toString() == eventName) {
+            return obj.value(QStringLiteral("payload")).toObject();
+        }
+    }
+    return {};
+}
+
+/// Connect a loopback QWebSocket client to server and register with pluginUuid.
+/// Returns the connected client (caller must keep it alive).
+/// REQUIRES: spy for SdPluginServer::pluginRegistered is set up before calling this.
+bool connectAndRegister(QWebSocket& client,
+                        ajazz::app::SdPluginServer& server,
+                        QString const& pluginUuid,
+                        QSignalSpy& registeredSpy) {
+    QSignalSpy connSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    if (!waitForSpy19(connSpy)) {
+        return false;
+    }
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})").arg(pluginUuid));
+    return waitForSpy19(registeredSpy);
+}
+
+} // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// 19-03 e2e: keyDown delivered with 0-based coordinates (PLUGIN-10)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E outbound keyDown delivers to bound plugin with coordinates",
+          "[plugin-device-bridge][e2e][outbound][PLUGIN-10]") {
+    ensureQCoreApp();
+
+    // Server + bridge (no real device needed for outbound tests — only registry + sendEvent).
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    // Construct bridge without a control service (outbound test only needs server + registry).
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Pre-register a context for key 3 (0-based {row:0, col:2}) for "com.test.plug".
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 2;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.test.plug.action1");
+    ctx.pluginUuid = QStringLiteral("com.test.plug");
+    [[maybe_unused]] auto ctxId1 = bridge->registry().registerContext(ctx);
+
+    // Connect a loopback client as "com.test.plug".
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Feed a KeyPressed for index=3 (1-based) into the bridge.
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    ev.index = 3; // 1-based key 3 -> {row:0, col:2}
+    ev.value = 0;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+
+    // Pump and assert the client received a keyDown with the correct coordinates.
+    pump19(500);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("keyDown")));
+
+    auto const payload = firstPayloadForEvent(msgSpy, QStringLiteral("keyDown"));
+    auto const coords = payload.value(QStringLiteral("coordinates")).toObject();
+    CHECK(coords.value(QStringLiteral("row")).toInt() == 0);
+    CHECK(coords.value(QStringLiteral("column")).toInt() == 2);
+    CHECK(payload.value(QStringLiteral("isInMultiAction")).toBool() == false);
+}
+
+// ---------------------------------------------------------------------------
+// 19-03 e2e: dialRotate with signed ticks (PLUGIN-10)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E outbound dialRotate delivers signed ticks to bound plugin",
+          "[plugin-device-bridge][e2e][outbound][PLUGIN-10]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Pre-register an encoder context for encoder index 0 (column=0, row=0, Encoder).
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 0; // encoder index 0
+    ctx.controller = QStringLiteral("Encoder");
+    ctx.actionUUID = QStringLiteral("com.test.plug.enc.action");
+    ctx.pluginUuid = QStringLiteral("com.test.plug");
+    [[maybe_unused]] auto encCtxId = bridge->registry().registerContext(ctx);
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Feed EncoderTurned with negative delta (CCW rotation).
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::EncoderTurned;
+    ev.index = 0;  // 0-based encoder 0
+    ev.value = -2; // signed delta
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+
+    pump19(500);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("dialRotate")));
+
+    auto const payload = firstPayloadForEvent(msgSpy, QStringLiteral("dialRotate"));
+    CHECK(payload.value(QStringLiteral("ticks")).toInt() == -2);
+    CHECK(payload.value(QStringLiteral("controller")).toString() == QStringLiteral("Encoder"));
+    CHECK(payload.value(QStringLiteral("pressed")).toBool() == false);
+}
+
+// ---------------------------------------------------------------------------
+// 19-03 e2e: willAppear on plugin registration (PLUGIN-10)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E willAppear sent on plugin registration with bound action",
+          "[plugin-device-bridge][e2e][lifecycle][PLUGIN-10]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    // Bridge with a profile accessor that exposes a key 3 (0-based profile index 2)
+    // bound to a plugin action owned by "com.test.plug".
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Build a Profile with key 2 (0-based) bound to com.test.plug.action1.
+    ajazz::core::Profile prof;
+    prof.id = "test-profile";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    // Key index 2 (0-based in Profile::keys) = 1-based device key 3 = {row:0, col:2}.
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.action1";
+    binding.onPress.push_back(act);
+    prof.keys[2] = std::move(binding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Connect a loopback client as "com.test.plug".
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Simulate the bridge receiving the pluginRegistered signal.
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+
+    // Pump and assert the client received willAppear.
+    pump19(500);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("willAppear")));
+
+    auto const payload = firstPayloadForEvent(msgSpy, QStringLiteral("willAppear"));
+    auto const coords = payload.value(QStringLiteral("coordinates")).toObject();
+    CHECK(coords.value(QStringLiteral("row")).toInt() == 0);
+    CHECK(coords.value(QStringLiteral("column")).toInt() == 2);
+    CHECK_FALSE(payload.value(QStringLiteral("context")).toString().isEmpty());
+}
+
+// ---------------------------------------------------------------------------
+// 19-03 e2e: unbound-coordinate drop (T-19-leak) + no cross-plugin leak
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E outbound unbound coordinate sends no event no crash",
+          "[plugin-device-bridge][e2e][outbound][security]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+    // No contexts registered — every key press should be silently dropped.
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Feed a KeyPressed for key 3 (unbound — no context registered).
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    ev.index = 3;
+    ev.value = 0;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+
+    pump19(500);
+
+    // The client must receive NO keyDown event (silent drop, T-19-leak).
+    auto const names = receivedEventNames(msgSpy);
+    CHECK_FALSE(names.contains(QStringLiteral("keyDown")));
+}
+
+TEST_CASE("PluginDeviceBridgeE2E outbound event for other-plugin context does not reach us",
+          "[plugin-device-bridge][e2e][outbound][security]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Register key 4 (1-based) owned by "com.other.plug" (at {row:0, col:3}).
+    ajazz::app::ActionContext otherCtx;
+    otherCtx.deviceId = QStringLiteral("akp05e");
+    otherCtx.pageId = QStringLiteral("root");
+    otherCtx.row = 0;
+    otherCtx.column = 3; // 1-based key 4 -> {row:0, col:3}
+    otherCtx.controller = QStringLiteral("Keypad");
+    otherCtx.actionUUID = QStringLiteral("com.other.plug.action1");
+    otherCtx.pluginUuid = QStringLiteral("com.other.plug");
+    [[maybe_unused]] auto otherCtxId = bridge->registry().registerContext(otherCtx);
+
+    // Connect "com.test.plug" (NOT the owner of key 4's context).
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Feed KeyPressed for key 4 (owned by "com.other.plug").
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    ev.index = 4; // 1-based key 4 -> {row:0, col:3}
+    ev.value = 0;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+
+    pump19(500);
+
+    // com.test.plug must NOT receive the keyDown (cross-plugin leakage prevention).
+    auto const names = receivedEventNames(msgSpy);
+    CHECK_FALSE(names.contains(QStringLiteral("keyDown")));
+}
+
+#endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

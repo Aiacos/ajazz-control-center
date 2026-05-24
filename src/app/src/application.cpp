@@ -382,6 +382,34 @@ Application::Application(QObject* parent)
                      &StreamDockInputService::pageNavRequested,
                      m_streamDockControl.get(),
                      &StreamDockControlService::navigatePage);
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    // Phase 19-03 (PLUGIN-10): outbound device -> plugin event routing.
+    //
+    // 1. Inject the profile accessor so populateContextsForActivePage can
+    //    enumerate bound plugin actions (willAppear on connect/registration).
+    m_pluginBridge->setProfileAccessor(
+        [this]() -> core::Profile const& { return m_profileController->activeProfile(); });
+
+    // 2. DeviceEvent tap: StreamDockInputService::deviceEvent -> bridge::onDeviceEvent.
+    //    The input service emits the raw DeviceEvent after dispatching the ActionChain.
+    //    The bridge maps it to §4.4 plugin events via sendEvent (T-19-leak: byCoord lookup).
+    QObject::connect(m_streamDockInput.get(),
+                     &StreamDockInputService::deviceEvent,
+                     m_pluginBridge.get(),
+                     &PluginDeviceBridge::onDeviceEvent);
+
+    // 3. Plugin lifecycle: pluginRegistered / pluginDisconnected -> bridge lifecycle.
+    //    Populates contexts + willAppear on registration; retires on disconnect.
+    QObject::connect(m_pluginServer.get(),
+                     &SdPluginServer::pluginRegistered,
+                     m_pluginBridge.get(),
+                     &PluginDeviceBridge::onPluginRegistered);
+    QObject::connect(m_pluginServer.get(),
+                     &SdPluginServer::pluginDisconnected,
+                     m_pluginBridge.get(),
+                     &PluginDeviceBridge::onPluginDisconnected);
+#endif
 }
 
 Application::~Application() {
@@ -674,8 +702,14 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                             // 2. Share the held handle with the input service (ARCH-03).
                             //    The flyweight open() returns the same shared_ptr<IDevice>
                             //    that the control service holds; no second HID open occurs.
+                            m_streamDockInput->setActiveDeviceCodename(codename);
                             auto handle = m_deviceRegistry.open(devId);
                             m_streamDockInput->setActiveDevice(std::move(handle));
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+                            // 3. Phase 19-03: notify the bridge so it populates contexts
+                            //    and sends deviceDidConnect to registered plugins.
+                            m_pluginBridge->onDeviceConnected(codename);
+#endif
                         });
                 }
                 break;
@@ -696,7 +730,15 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                 // on the GUI thread -- matching the Arrived path's QTimer::singleShot.
                 QMetaObject::invokeMethod(
                     m_streamDockInput.get(),
-                    [this] { m_streamDockInput->setActiveDevice(nullptr); },
+                    [this, codename = QString::fromStdString(d.codename)] {
+                        m_streamDockInput->setActiveDevice(nullptr);
+                        m_streamDockInput->setActiveDeviceCodename({});
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+                        // Phase 19-03: notify the bridge so it retires contexts
+                        // and sends deviceDidDisconnect to registered plugins.
+                        m_pluginBridge->onDeviceDisconnected(codename);
+#endif
+                    },
                     Qt::QueuedConnection);
                 break;
             }
