@@ -10,6 +10,9 @@
 
 #include <QCoreApplication>
 #include <QHostAddress>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QSet>
 #include <QSignalSpy>
 #include <QTcpSocket>
 #include <QWebSocket>
@@ -389,4 +392,140 @@ TEST_CASE("SdPluginServer reclaims the connection slot on disconnect + same-UUID
     REQUIRE(waitForSpy(registeredSpy));
     // Exactly one live slot for the reused UUID — never two.
     REQUIRE(server.connectedPluginCount() == 1);
+}
+
+// ---------------------------------------------------------------------------
+// 17-02: host->plugin sendEvent seam (PLUGIN-04)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("SdPluginProtocolTest roundTrip dialRotate carries ticks pressed controller",
+          "[plugin-server][events][encoder]") {
+    // RED: sendEvent does not exist yet — this fails to compile until 17-02 impl lands.
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    // Register so the server has a live uuid->socket mapping.
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.x"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    // Spy on frames arriving at the client (host->plugin direction).
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+
+    // Host sends a dialRotate event to the registered plugin.
+    bool const sent =
+        server.sendEvent(QStringLiteral("com.test.x"),
+                         QStringLiteral("dialRotate"),
+                         QJsonObject{{QStringLiteral("ticks"), 2},
+                                     {QStringLiteral("pressed"), false},
+                                     {QStringLiteral("controller"), QStringLiteral("Encoder")}});
+    REQUIRE(sent);
+    REQUIRE(waitForSpy(msgSpy));
+
+    // Parse the received frame and check envelope shape.
+    // Use msgSpy.last() so this test is resilient if a passHello frame
+    // arrives before dialRotate once 17-03 lands.
+    QString lastFrame;
+    for (auto const& args : msgSpy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        if (obj.value(QStringLiteral("event")).toString() == QStringLiteral("dialRotate")) {
+            lastFrame = args.at(0).toString();
+        }
+    }
+    REQUIRE_FALSE(lastFrame.isEmpty());
+    auto const env = QJsonDocument::fromJson(lastFrame.toUtf8()).object();
+    REQUIRE(env.value(QStringLiteral("event")).toString() == QStringLiteral("dialRotate"));
+    auto const payload = env.value(QStringLiteral("payload")).toObject();
+    REQUIRE(payload.value(QStringLiteral("ticks")).toInt() == 2);
+    REQUIRE(payload.value(QStringLiteral("pressed")).toBool() == false);
+    REQUIRE(payload.value(QStringLiteral("controller")).toString() == QStringLiteral("Encoder"));
+}
+
+TEST_CASE("SdPluginProtocolTest sendEvent returns false for unknown uuid",
+          "[plugin-server][events]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+
+    // No registerPlugin sent — uuid is unknown.
+    bool const sent = server.sendEvent(
+        QStringLiteral("com.not.registered"), QStringLiteral("keyDown"), QJsonObject{});
+    REQUIRE_FALSE(sent);
+
+    // Give any spurious frames a chance to arrive — none expected.
+    pump(100);
+    REQUIRE(msgSpy.count() == 0);
+}
+
+TEST_CASE("SdPluginProtocolTest host to plugin events arrive", "[plugin-server][events]") {
+    // Representative subset of spec 4.4 host->plugin event names.
+    // Each should arrive at the loopback client with the matching event field.
+    static constexpr char const* kHostToPluginEvents[] = {
+        "keyDown",
+        "keyUp",
+        "dialDown",
+        "dialUp",
+        "keyDownCord",
+        "touchTap",
+        "willAppear",
+        "deviceDidConnect",
+        "titleParametersDidChange",
+        "didReceiveSettings",
+    };
+
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.eventsurface"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+
+    constexpr int kCount =
+        static_cast<int>(sizeof(kHostToPluginEvents) / sizeof(kHostToPluginEvents[0]));
+
+    for (auto const* evtName : kHostToPluginEvents) {
+        bool const sent = server.sendEvent(
+            QStringLiteral("com.test.eventsurface"), QLatin1String(evtName), QJsonObject{});
+        // All should return true for a registered uuid.
+        REQUIRE(sent);
+    }
+
+    // Drain until all events arrive or timeout.
+    auto const until = QDateTime::currentMSecsSinceEpoch() + 5000;
+    while (msgSpy.count() < kCount && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+
+    // Collect received event names (filter by matching; passHello in 17-03 may arrive too).
+    QSet<QString> receivedEvents;
+    for (auto const& args : msgSpy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        receivedEvents.insert(obj.value(QStringLiteral("event")).toString());
+    }
+
+    for (auto const* evtName : kHostToPluginEvents) {
+        REQUIRE(receivedEvents.contains(QLatin1String(evtName)));
+    }
 }
