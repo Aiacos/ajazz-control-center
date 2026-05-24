@@ -291,4 +291,48 @@ QString SdPluginServer::uuidForClient(QWebSocket* client) const {
     return it->uuid;
 }
 
+QWebSocket* SdPluginServer::socketForUuid(QString const& uuid) const {
+    // Mirror of uuidForClient, but in the forward direction (uuid -> socket).
+    // Only returns a slot whose socket pointer is non-null (live connection).
+    // Called on every sendEvent — re-resolves the live slot each time so a
+    // future auth rejection that closes the socket cannot produce a dangling
+    // pointer (T-17-UAF, Pitfall 4).
+    auto it = std::find_if(m_connections.begin(), m_connections.end(), [&uuid](auto const& c) {
+        return c.uuid == uuid && c.socket != nullptr;
+    });
+    if (it == m_connections.end()) {
+        return nullptr;
+    }
+    return it->socket;
+}
+
+bool SdPluginServer::sendEvent(QString const& targetUuid,
+                               QString const& eventName,
+                               QJsonObject const& payload) {
+    // Re-resolve the live socket on every call (Pitfall 4 / T-17-UAF guard).
+    QWebSocket* sock = socketForUuid(targetUuid);
+    if (!sock) {
+        AJAZZ_LOG_DEBUG("plugin-server",
+                        "sendEvent '{}' -> uuid='{}': no live socket (plugin not registered or "
+                        "disconnected)",
+                        eventName.toStdString(),
+                        targetUuid.toStdString());
+        return false;
+    }
+    // Build the JSON envelope: {"event": eventName} + optional "payload" key.
+    QJsonObject env;
+    env.insert(QStringLiteral("event"), eventName);
+    if (!payload.isEmpty()) {
+        env.insert(QStringLiteral("payload"), payload);
+    }
+    auto const frame = QString::fromUtf8(QJsonDocument(env).toJson(QJsonDocument::Compact));
+    sock->sendTextMessage(frame);
+    AJAZZ_LOG_DEBUG("plugin-server",
+                    "sendEvent '{}' -> uuid='{}' ({} bytes)",
+                    eventName.toStdString(),
+                    targetUuid.toStdString(),
+                    frame.size());
+    return true;
+}
+
 } // namespace ajazz::app
