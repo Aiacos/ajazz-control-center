@@ -4,10 +4,14 @@
  * @brief AJAZZ AKP03 / Mirabox N3 device backend.
  *
  * Implements IDevice, IDisplayCapable, and IEncoderCapable for the AKP03:
- * a 6-key (2×3) stream deck with 72×72 PNG images per key and one rotary
- * encoder. The wire protocol is a close cousin of the AKP153 (same "CRT"
- * prefix and 512-byte packet size) with a PNG-typed image command ("PNG"
- * instead of "BAT") and encoder input events.
+ * a 6-key (2×3) stream deck with 60×60 JPEG images per key and three rotary
+ * encoders (1 large + 2 small). The wire protocol is a close cousin of the
+ * AKP153 (same "CRT" prefix and 512-byte packet size) using the BAT image
+ * command (JPEG batch-transfer — not a PNG command).
+ *
+ * RE source: docs/protocols/streamdeck/akp03.md §Image-upload confirms
+ * 60×60 JPEG Rot0; §Hardware confirms 3 rotary encoders; akp03_protocol.hpp
+ * CmdImage = BAT (0x42 0x41 0x54).
  *
  * Everything here is reconstructed in a clean-room fashion from
  * docs/protocols/streamdeck/akp03.md; no third-party code is incorporated.
@@ -116,21 +120,24 @@ std::array<std::uint8_t, PacketSize> buildUploadFinished() {
 }
 
 /**
- * @brief Build the first packet of a `Set PNG image` transfer.
+ * @brief Build the first packet of a `Set image` (BAT/JPEG) transfer.
  *
- * Offsets 10..11 = big-endian PNG payload size, offset 12 = keyIndex.
- * The raw PNG blob follows in 512-byte chunks.
+ * Offsets 10..11 = big-endian JPEG payload size, offset 12 = keyIndex.
+ * The raw JPEG blob follows in 512-byte chunks. The on-wire command is
+ * CmdImage=BAT (JPEG batch-transfer); CmdImagePng is a deprecated alias.
  *
- * @param keyIndex 1-based key index, 1..KeyCount.
- * @param pngSize  Total PNG payload size in bytes.
+ * RE source: akp03.md §Image-upload — 60×60 JPEG, Rot0, no mirror.
+ *
+ * @param keyIndex  1-based key index, 1..DisplayKeyCount.
+ * @param imageSize Total JPEG payload size in bytes.
  * @return 512-byte header packet.
  */
 std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
-                                                      std::uint16_t pngSize) {
-    auto pkt = buildCmdHeader(CmdImagePng);
+                                                      std::uint16_t imageSize) {
+    auto pkt = buildCmdHeader(CmdImage);
     // Big-endian 16-bit payload size at offsets 10..11, key index at 12.
-    pkt[10] = static_cast<std::uint8_t>((pngSize >> 8) & 0xffu);
-    pkt[11] = static_cast<std::uint8_t>(pngSize & 0xffu);
+    pkt[10] = static_cast<std::uint8_t>((imageSize >> 8) & 0xffu);
+    pkt[11] = static_cast<std::uint8_t>(imageSize & 0xffu);
     pkt[12] = keyIndex;
     return pkt;
 }
@@ -282,10 +289,13 @@ std::once_flag s_warned_akp03;
 /**
  * @brief Concrete device backend for the AJAZZ AKP03 / Mirabox N3.
  *
- * Aggregates IDevice, IDisplayCapable (6-key 72×72 PNG grid), and
- * IEncoderCapable (one pressable rotary encoder with no screen). poll()
+ * Aggregates IDevice, IDisplayCapable (6-key 60×60 JPEG grid), and
+ * IEncoderCapable (three pressable rotary encoders with no screen). poll()
  * drains up to 8 pending HID reports per call and dispatches them via
  * the registered EventCallback.
+ *
+ * RE source: akp03.md §Hardware — 6 LCD keys, 3 encoders, 3 non-LCD side
+ * buttons; akp03_protocol.hpp KeyWidthPx=60, EncoderCount=3, CmdImage=BAT.
  *
  * @note The callback is copied under a mutex inside poll() so that the
  *       lock is not held while user code runs.
@@ -450,9 +460,9 @@ public:
                            static_cast<int>(akp03::DisplayKeyCount));
             return;
         }
-        // The caller is expected to pass already-PNG-encoded bytes for now.
+        // The caller is expected to pass already-JPEG-encoded bytes for now.
         // When the image pipeline lands (phase 2) this method will resize to
-        // 72×72 and encode to PNG itself.
+        // 60×60 and encode to JPEG itself (akp03.md §Image-upload: 60×60 JPEG, Rot0).
         (void)width;
         (void)height;
         sendImage(keyIndex, rgba);
@@ -526,33 +536,35 @@ public:
 
 private:
     /**
-     * @brief Transmit a PNG image to a key slot in 512-byte chunks.
+     * @brief Transmit a JPEG image to a key slot in 512-byte chunks.
      *
      * Sends the image-header packet first (built by akp03::buildImageHeader()),
-     * then streams the raw PNG bytes in zero-padded 512-byte chunk packets.
+     * then streams the raw JPEG bytes in zero-padded 512-byte chunk packets.
+     * The on-wire image command is BAT (JPEG batch-transfer); see CmdImage in
+     * akp03_protocol.hpp and akp03.md §Image-upload (60×60 JPEG, Rot0).
      *
-     * @param keyIndex 1-based key index, 1..akp03::KeyCount.
-     * @param png      Raw PNG bytes; must be ≤ 65535 bytes.
+     * @param keyIndex 1-based key index, 1..akp03::DisplayKeyCount.
+     * @param jpeg     Raw JPEG bytes; must be ≤ 65535 bytes.
      */
-    void sendImage(std::uint8_t keyIndex, std::span<std::uint8_t const> png) {
+    void sendImage(std::uint8_t keyIndex, std::span<std::uint8_t const> jpeg) {
         // SEC-008 / COD-013 / CWE-190: refuse oversize payload rather than
         // truncating only the header length.
-        if (png.size() > 0xFFFFu) {
+        if (jpeg.size() > 0xFFFFu) {
             AJAZZ_LOG_WARN("akp03",
                            "sendImage: payload {} bytes exceeds 65535-byte protocol max; "
                            "refusing",
-                           png.size());
+                           jpeg.size());
             return;
         }
         auto const header =
-            akp03::buildImageHeader(keyIndex, static_cast<std::uint16_t>(png.size()));
+            akp03::buildImageHeader(keyIndex, static_cast<std::uint16_t>(jpeg.size()));
         (void)m_transport->write(header);
 
         std::size_t offset = 0;
-        while (offset < png.size()) {
+        while (offset < jpeg.size()) {
             std::array<std::uint8_t, akp03::PacketSize> chunk{};
-            auto const take = std::min<std::size_t>(akp03::PacketSize, png.size() - offset);
-            std::memcpy(chunk.data(), png.data() + offset, take);
+            auto const take = std::min<std::size_t>(akp03::PacketSize, jpeg.size() - offset);
+            std::memcpy(chunk.data(), jpeg.data() + offset, take);
             (void)m_transport->write(chunk);
             offset += take;
         }

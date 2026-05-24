@@ -179,17 +179,21 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex);
 
 /**
- * @brief Build the first packet of a `Set PNG image` transfer.
+ * @brief Build the first packet of a `Set image` (BAT/JPEG) transfer.
  *
- * Packet layout: offset 10..11 = big-endian PNG size, offset 12 = keyIndex.
- * The raw PNG blob follows in subsequent 512-byte chunks (one per write()).
+ * Packet layout: offset 10..11 = big-endian JPEG payload size, offset 12 =
+ * keyIndex. The raw JPEG blob follows in subsequent 512-byte chunks (one per
+ * write()). The image command byte is CmdImage=BAT (JPEG batch-transfer);
+ * the old name `CmdImagePng` is kept as a deprecated alias in akp03_protocol.hpp.
  *
- * @param keyIndex 1-based key index, 1..KeyCount.
- * @param pngSize  Total size of the PNG payload in bytes.
+ * RE source: akp03.md §Image-upload — 60×60 JPEG, Rot0, no mirror.
+ *
+ * @param keyIndex  1-based key index, 1..DisplayKeyCount.
+ * @param imageSize Total size of the JPEG payload in bytes.
  * @return 512-byte header packet.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildImageHeader(std::uint8_t keyIndex,
-                                                                    std::uint16_t pngSize);
+                                                                    std::uint16_t imageSize);
 
 /**
  * @brief Input event parsed from a raw 512-byte HID input report.
