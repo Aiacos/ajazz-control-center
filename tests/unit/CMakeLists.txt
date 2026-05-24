@@ -518,6 +518,13 @@ set_source_files_properties(
     test_plugin_install_from_file.cpp PROPERTIES COMPILE_DEFINITIONS
                                                  "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
 )
+
+# Phase 22 Plan 22-02 (PLUGIN-14): no-phone-home / offline-default assertion suite. Tests:
+# construction with online=OFF makes no live HTTP request; opt-in enabled exercises live branch;
+# installFromFile triggers no online fetch; onlineCatalogEnabled defaults false. Uses
+# ACC_STREAMDOCK_CATALOG_URL=disabled env seam + QStandardPaths::setTestModeEnabled.
+# plugin_catalog_model.cpp already compiled (test_plugin_catalog_proxy_model entry above).
+target_sources(ajazz_unit_tests PRIVATE test_catalog_offline.cpp)
 set(_pvg_defs
     "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
     "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""
