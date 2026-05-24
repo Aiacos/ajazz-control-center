@@ -42,6 +42,10 @@ qt_add_executable(
     # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded
     # directory tree (issue #62). Used by the install path and a first-launch sweep.
     src/sdplugin_extractor.cpp
+    # Phase 18 Plan 18-01 (PLUGIN-06): standalone manifest parser for the Elgato v6 schema + AJAZZ
+    # extensions. Pure Qt-Core-only; no nlohmann (COD-031). Used by discovery (18-04) and any future
+    # catalog enrichment. manifestRunnableHere() gates OS + Software.MinimumVersion.
+    src/plugin_manifest.cpp
     src/loaded_plugins_model.cpp
     src/time_sync_service.cpp
     # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13). Mirrors TimeSyncService
@@ -292,6 +296,8 @@ set(ACC_QML_MODULE_SOURCES
     src/device_model.hpp
     src/profile_controller.cpp
     src/profile_controller.hpp
+    src/plugin_manifest.cpp
+    src/plugin_manifest.hpp
     src/plugin_catalog_model.cpp
     src/plugin_catalog_model.hpp
     src/loaded_plugins_model.cpp
