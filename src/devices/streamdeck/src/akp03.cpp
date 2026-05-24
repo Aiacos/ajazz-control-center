@@ -439,12 +439,15 @@ public:
                      std::span<std::uint8_t const> rgba,
                      std::uint16_t width,
                      std::uint16_t height) override {
-        // WR-02: keys are 1-based 1..KeyCount; reject out-of-range before write.
-        if (keyIndex == 0 || keyIndex > akp03::KeyCount) {
+        // CR-01: keys are 1-based 1..DisplayKeyCount (6). Side buttons 7..9 have
+        // no LCD surface; sending a BAT image burst to those slots is a firmware
+        // no-op at best and a desync risk at worst. Reject anything above
+        // DisplayKeyCount (6), not above KeyCount (9).
+        if (keyIndex == 0 || keyIndex > akp03::DisplayKeyCount) {
             AJAZZ_LOG_WARN("akp03",
                            "setKeyImage: keyIndex {} out of range 1..{}; refusing",
                            static_cast<int>(keyIndex),
-                           static_cast<int>(akp03::KeyCount));
+                           static_cast<int>(akp03::DisplayKeyCount));
             return;
         }
         // The caller is expected to pass already-PNG-encoded bytes for now.
@@ -463,13 +466,14 @@ public:
     }
 
     void clearKey(std::uint8_t keyIndex) override {
-        // 0xff is the deliberate "clear all" broadcast; any other out-of-range
-        // index is rejected (WR-02).
-        if (keyIndex != 0xffU && (keyIndex == 0 || keyIndex > akp03::KeyCount)) {
+        // CR-01: 0xff is the deliberate "clear all" broadcast; any other
+        // out-of-range index is rejected. The upper bound is DisplayKeyCount (6),
+        // not KeyCount (9) — the 3 side buttons have no LCD surface to clear.
+        if (keyIndex != 0xffU && (keyIndex == 0 || keyIndex > akp03::DisplayKeyCount)) {
             AJAZZ_LOG_WARN("akp03",
                            "clearKey: keyIndex {} out of range 1..{} (0xff = all); refusing",
                            static_cast<int>(keyIndex),
-                           static_cast<int>(akp03::KeyCount));
+                           static_cast<int>(akp03::DisplayKeyCount));
             return;
         }
         auto const pkt =
