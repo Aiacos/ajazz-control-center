@@ -37,13 +37,13 @@ def main():
                 poll[1] = 0xF7  # status poll opcode
                 try:
                     dev.send_feature_report(bytes(poll))
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     print(f"  F7 len={length} send err: {exc}")
                     continue
                 time.sleep(0.03)
                 try:
                     r = bytes(dev.get_feature_report(0x05, 65))
-                except Exception as exc:  # noqa: BLE001
+                except Exception as exc:
                     print(f"  read 0x05 err: {exc}")
                     continue
                 charge = r[3] if len(r) > 3 else None

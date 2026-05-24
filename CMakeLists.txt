@@ -147,24 +147,23 @@ qt_standard_project_setup(REQUIRES 6.7)
 #
 # Default: vendored via FetchContent for reproducible CI / dev builds.
 #
-# AJAZZ_USE_SYSTEM_DEPS=ON instead resolves both with find_package. This is
-# required for the Flatpak build: flatpak-builder runs the build in a sandbox
-# with NO network, so a FetchContent git clone fails with
-# "Could not resolve host: github.com". The Flatpak manifest
-# (packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml) provides hidapi and
-# nlohmann_json as their own modules (fetched during the networked source phase)
-# and sets this option ON for the app module.
+# AJAZZ_USE_SYSTEM_DEPS=ON instead resolves both with find_package. This is required for the Flatpak
+# build: flatpak-builder runs the build in a sandbox with NO network, so a FetchContent git clone
+# fails with "Could not resolve host: github.com". The Flatpak manifest
+# (packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml) provides hidapi and nlohmann_json as
+# their own modules (fetched during the networked source phase) and sets this option ON for the app
+# module.
 include(FetchContent)
 option(AJAZZ_USE_SYSTEM_DEPS
        "Resolve hidapi + nlohmann_json via find_package (provided externally, e.g. \
-Flatpak manifest modules) instead of FetchContent. Required for offline builds."
-       OFF)
+Flatpak manifest modules) instead of FetchContent. Required for offline builds." OFF
+)
 
 if(AJAZZ_USE_SYSTEM_DEPS)
     find_package(hidapi REQUIRED)
-    # hidapi's installed config exports per-backend targets (e.g. hidapi::hidraw
-    # on Linux). The codebase links the umbrella name `hidapi::hidapi`; synthesise
-    # it from whichever backend(s) the config provided when it is absent.
+    # hidapi's installed config exports per-backend targets (e.g. hidapi::hidraw on Linux). The
+    # codebase links the umbrella name `hidapi::hidapi`; synthesise it from whichever backend(s) the
+    # config provided when it is absent.
     if(NOT TARGET hidapi::hidapi)
         add_library(ajazz_hidapi_compat INTERFACE)
         foreach(_be hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
@@ -187,20 +186,21 @@ else()
     )
     set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
     set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
-    # hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under libusb/.
-    # CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x emits
-    # `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored project
-    # targets a floor below 3.10. Force a 3.10 policy floor for the subproject only so the fetched
-    # CMakeLists are accepted without patching *and* without triggering a deprecation warning (violates
-    # our zero-warnings invariant). Revisit when hidapi upstream bumps its own minimum.
+    # hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under
+    # libusb/. CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x
+    # emits `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored
+    # project targets a floor below 3.10. Force a 3.10 policy floor for the subproject only so the
+    # fetched CMakeLists are accepted without patching *and* without triggering a deprecation
+    # warning (violates our zero-warnings invariant). Revisit when hidapi upstream bumps its own
+    # minimum.
     set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
     FetchContent_MakeAvailable(hidapi)
     unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
 
-    # nlohmann::json — vendored via FetchContent for reproducibility. PRIVATE-linked to `ajazz_plugins`
-    # only (see `src/plugins/CMakeLists.txt`); MUST NOT appear in `ajazz_core` or any installed public
-    # header (COD-031 invariant per Phase 3 / ARCH-01). Version pinned to v3.12.0 in lockstep with
-    # `vcpkg.json`.
+    # nlohmann::json — vendored via FetchContent for reproducibility. PRIVATE-linked to
+    # `ajazz_plugins` only (see `src/plugins/CMakeLists.txt`); MUST NOT appear in `ajazz_core` or
+    # any installed public header (COD-031 invariant per Phase 3 / ARCH-01). Version pinned to
+    # v3.12.0 in lockstep with `vcpkg.json`.
     FetchContent_Declare(
         nlohmann_json
         GIT_REPOSITORY https://github.com/nlohmann/json.git
@@ -235,15 +235,17 @@ endif()
 # Install (shared resources: udev, desktop entry, icon, AppStream)
 # -----------------------------------------------------------------------------
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    # The udev rule is a HOST resource (grants /dev/hidraw* access) and installs
-    # to an absolute system path. Skip it for the Flatpak build: its sandbox has
-    # a read-only /usr (so the absolute copy fails) and device access is handled
-    # by portals + the host's own udev rule, not a rule inside the sandbox.
+    # The udev rule is a HOST resource (grants /dev/hidraw* access) and installs to an absolute
+    # system path. Skip it for the Flatpak build: its sandbox has a read-only /usr (so the absolute
+    # copy fails) and device access is handled by portals + the host's own udev rule, not a rule
+    # inside the sandbox.
     option(AJAZZ_INSTALL_UDEV_RULES
-           "Install the Linux udev rule to /usr/lib/udev/rules.d (off for Flatpak)" ON)
+           "Install the Linux udev rule to /usr/lib/udev/rules.d (off for Flatpak)" ON
+    )
     if(AJAZZ_INSTALL_UDEV_RULES)
         install(FILES resources/linux/70-ajazz.rules DESTINATION /usr/lib/udev/rules.d
-                COMPONENT udev)
+                COMPONENT udev
+        )
     endif()
     install(FILES resources/linux/ajazz-control-center.desktop DESTINATION share/applications
             COMPONENT desktop

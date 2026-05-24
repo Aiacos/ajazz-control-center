@@ -6,16 +6,16 @@ Each package manager is then a separate, mostly-moderated submission.
 
 ## Channel index
 
-| Channel | Manifest | Submission guide |
-|---------|----------|------------------|
-| winget | `packaging/winget/<ver>/` | this file (below) |
-| Chocolatey | `packaging/chocolatey/` | this file (below) |
-| Flathub | `packaging/flathub/` | [`flathub/SUBMITTING.md`](flathub/SUBMITTING.md) |
-| Fedora (Copr / official) | `packaging/fedora/` | [`fedora/SUBMITTING.md`](fedora/SUBMITTING.md) |
-| Ubuntu (PPA) | `packaging/ubuntu/debian/` | [`ubuntu/SUBMITTING.md`](ubuntu/SUBMITTING.md) |
-| Arch (AUR) | `packaging/aur/` | [`aur/SUBMITTING.md`](aur/SUBMITTING.md) |
-| Snap | `packaging/snap/` | [`snap/SUBMITTING.md`](snap/SUBMITTING.md) |
-| Homebrew (macOS) | `packaging/homebrew/` | [`homebrew/SUBMITTING.md`](homebrew/SUBMITTING.md) |
+| Channel                  | Manifest                   | Submission guide                                   |
+| ------------------------ | -------------------------- | -------------------------------------------------- |
+| winget                   | `packaging/winget/<ver>/`  | this file (below)                                  |
+| Chocolatey               | `packaging/chocolatey/`    | this file (below)                                  |
+| Flathub                  | `packaging/flathub/`       | [`flathub/SUBMITTING.md`](flathub/SUBMITTING.md)   |
+| Fedora (Copr / official) | `packaging/fedora/`        | [`fedora/SUBMITTING.md`](fedora/SUBMITTING.md)     |
+| Ubuntu (PPA)             | `packaging/ubuntu/debian/` | [`ubuntu/SUBMITTING.md`](ubuntu/SUBMITTING.md)     |
+| Arch (AUR)               | `packaging/aur/`           | [`aur/SUBMITTING.md`](aur/SUBMITTING.md)           |
+| Snap                     | `packaging/snap/`          | [`snap/SUBMITTING.md`](snap/SUBMITTING.md)         |
+| Homebrew (macOS)         | `packaging/homebrew/`      | [`homebrew/SUBMITTING.md`](homebrew/SUBMITTING.md) |
 
 ## Automated sync on release
 
@@ -28,16 +28,16 @@ hand-editing — then commits the bumped manifests to `main`.
 Re-submission to each store is then auto-run **only for channels whose secret is
 configured** (otherwise skipped, so the workflow is safe with no secrets):
 
-| Channel | Repo secret | Mechanism |
-|---------|-------------|-----------|
-| winget | `WINGET_TOKEN` (GitHub PAT, public_repo) | `wingetcreate update --submit` job (wired) |
-| Chocolatey | `CHOCO_API_KEY` | `choco push` (add a job; see Chocolatey below) |
-| AUR | `AUR_SSH_KEY` (deploy key on the AUR repo) | `git push ssh://aur@aur.archlinux.org/...` |
-| Snap | `SNAPCRAFT_TOKEN` (`snapcraft export-login`) | `snapcraft upload --release=stable` |
-| Homebrew tap | `HOMEBREW_TAP_TOKEN` | push the bumped cask to `Aiacos/homebrew-tap` |
-| Flathub | — | the Flathub bot proposes update PRs after the first merge |
-| Fedora Copr | Copr SCM webhook | Copr auto-rebuilds from the tag |
-| Ubuntu PPA | GPG key | `debuild -S` + `dput` (sign locally; PPA recipe can also auto-build) |
+| Channel      | Repo secret                                  | Mechanism                                                            |
+| ------------ | -------------------------------------------- | -------------------------------------------------------------------- |
+| winget       | `WINGET_TOKEN` (GitHub PAT, public_repo)     | `wingetcreate update --submit` job (wired)                           |
+| Chocolatey   | `CHOCO_API_KEY`                              | `choco push` (add a job; see Chocolatey below)                       |
+| AUR          | `AUR_SSH_KEY` (deploy key on the AUR repo)   | `git push ssh://aur@aur.archlinux.org/...`                           |
+| Snap         | `SNAPCRAFT_TOKEN` (`snapcraft export-login`) | `snapcraft upload --release=stable`                                  |
+| Homebrew tap | `HOMEBREW_TAP_TOKEN`                         | push the bumped cask to `Aiacos/homebrew-tap`                        |
+| Flathub      | —                                            | the Flathub bot proposes update PRs after the first merge            |
+| Fedora Copr  | Copr SCM webhook                             | Copr auto-rebuilds from the tag                                      |
+| Ubuntu PPA   | GPG key                                      | `debuild -S` + `dput` (sign locally; PPA recipe can also auto-build) |
 
 Local manual run: `python scripts/sync-packaging.py --tag vX.Y.Z` then review
 `git diff packaging/`.
@@ -51,12 +51,12 @@ package manager — both go through human/automated review before users can inst
 
 The per-release facts you need (from the MSI built by CI):
 
-| Field | v0.1.0 value |
-|-------|--------------|
-| Installer URL | `https://github.com/Aiacos/ajazz-control-center/releases/download/v0.1.0/ajazz-control-center-0.1.0-win64.msi` |
-| SHA256 | `3A91E4A5C438BB2C705941888431F8DB8D76D4C11D6986F1D5AD3737289424BA` (matches the release `SHA256SUMS`) |
-| ProductCode | `{95C04736-6ED7-49B6-879E-534784599357}` |
-| ProductVersion | `0.1.0` |
+| Field          | v0.1.0 value                                                                                                   |
+| -------------- | -------------------------------------------------------------------------------------------------------------- |
+| Installer URL  | `https://github.com/Aiacos/ajazz-control-center/releases/download/v0.1.0/ajazz-control-center-0.1.0-win64.msi` |
+| SHA256         | `3A91E4A5C438BB2C705941888431F8DB8D76D4C11D6986F1D5AD3737289424BA` (matches the release `SHA256SUMS`)          |
+| ProductCode    | `{95C04736-6ED7-49B6-879E-534784599357}`                                                                       |
+| ProductVersion | `0.1.0`                                                                                                        |
 
 > The MSI is **unsigned** until a code-signing cert is wired into the release
 > workflow (`WIN_CERT_BASE64` secret). Both stores accept unsigned installers,

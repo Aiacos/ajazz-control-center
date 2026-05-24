@@ -1,8 +1,7 @@
 # AJ-series mouse battery — how the wireless charge read works
 
 > **Status:** ✅ working, hardware-verified on Windows 2026-05-22 with a physical
-> AJAZZ 2.4G 8K (`0x3151:0x5007`). The app logs `[battery] queried
-> ajazz_24g_8k: 100%` and the sidebar chip shows the charge.
+> AJAZZ 2.4G 8K (`0x3151:0x5007`). The app logs `[battery] queried ajazz_24g_8k: 100%` and the sidebar chip shows the charge.
 >
 > This page is the solution narrative. The byte-level frame table lives in
 > [`aj_series_opcode_table.md` §4](aj_series_opcode_table.md); the device-wide
@@ -19,16 +18,18 @@ brings up the 2.4 GHz telemetry link. So `AjSeriesMouse::batteryPercent()` does:
 1. **SET_FEATURE the `0xF7` status poll** on the `0xFFFF`/usage-`0x02` control
    collection (interface 2 / MI_02 — the same collection used for the clock and
    all control writes):
+
    - report-id byte (index 0) = `0x00`
    - opcode (index 1) = `0xF7`
    - everything else `0x00` (no payload, no checksum needed)
 
    This replicates the heartbeat the vendor `iot_driver` sends ~1×/second.
 
-2. **Wait ~30 ms** for the basetta to round-trip the mouse over 2.4 GHz.
+1. **Wait ~30 ms** for the basetta to round-trip the mouse over 2.4 GHz.
 
-3. **GET_FEATURE status report `0x05`** and read the charge. `parseBatteryCharge()`
+1. **GET_FEATURE status report `0x05`** and read the charge. `parseBatteryCharge()`
    locates it by the leading byte:
+
    - **Windows:** hidapi keeps the requested report-id at index 0, so the frame
      is `05 00 00 64 01 01 01 02` → **charge at byte 3** (`0x64` = 100 %).
    - **Linux hidraw:** the unnumbered frame has no report-id prefix → **charge at

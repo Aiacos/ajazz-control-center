@@ -15,7 +15,7 @@ Both paths consume the same `.spec` and the same source RPM (SRPM).
 All `docs.fedoraproject.org` links below are the canonical sources for each
 step.
 
----
+______________________________________________________________________
 
 ## Prerequisites (both paths)
 
@@ -56,7 +56,7 @@ mock -r fedora-rawhide-x86_64 ~/rpmbuild/SRPMS/ajazz-control-center-0.1.0-1.*.sr
 `mock` build configs:
 <https://docs.fedoraproject.org/en-US/package-maintainers/Using_Mock_to_test_package_builds/>
 
----
+______________________________________________________________________
 
 ## Path A — Copr (self-service, immediate)
 
@@ -66,13 +66,14 @@ releases and architectures and publish a `dnf`-enableable repo. No review, no
 sponsor.
 
 Docs:
+
 - Copr user docs: <https://docs.pagure.org/copr.copr/user_documentation.html>
 - copr-cli quick reference: <https://developer.fedoraproject.org/deployment/copr/copr-cli.html>
 
 ### A1. One-time setup
 
 1. Log in at <https://copr.fedorainfracloud.org/> with your FAS account.
-2. Open <https://copr.fedorainfracloud.org/api/> and copy the generated token
+1. Open <https://copr.fedorainfracloud.org/api/> and copy the generated token
    block into `~/.config/copr`.
 
 ```bash
@@ -127,7 +128,7 @@ sudo dnf install ajazz-control-center
 
 Put exactly those three lines in the project README's install section.
 
----
+______________________________________________________________________
 
 ## Path B — Official Fedora repositories (review + sponsorship)
 
@@ -137,6 +138,7 @@ must also be **sponsored** into the `packager` group. Plan on days-to-weeks of
 back-and-forth.
 
 Authoritative process docs:
+
 - New Package Process for New Contributors:
   <https://docs.fedoraproject.org/en-US/package-maintainers/New_Package_Process_for_New_Contributors/>
 - Package Review Process:
@@ -152,36 +154,41 @@ Authoritative process docs:
 
 1. Create a Fedora Account System (FAS) account:
    <https://accounts.fedoraproject.org/> and sign the contributor agreement.
-2. Create a Red Hat Bugzilla account using the **same email** as FAS:
+1. Create a Red Hat Bugzilla account using the **same email** as FAS:
    <https://bugzilla.redhat.com/> (reviews are filed there).
 
 ### B2. Self-check against the guidelines
 
 1. Build the SRPM (see Prerequisites) and run a clean mock build for Rawhide
    plus the current stable release.
-2. Run the automated reviewer locally and read its report:
+
+1. Run the automated reviewer locally and read its report:
 
    ```bash
    fedora-review -n ajazz-control-center \
        -m fedora-rawhide-x86_64        # or run it against the bug later with -b <BUG_ID>
    ```
 
-3. Run `rpmlint` on **both** the SRPM and every produced binary RPM; paste the
+1. Run `rpmlint` on **both** the SRPM and every produced binary RPM; paste the
    output (and explain any remaining warnings) in the review.
 
 ### B3. File the review request
 
 1. Host the `.spec` and the `.src.rpm` at public URLs (e.g. attach them to a
    GitHub release, or use Copr's build output URLs from Path A).
-2. File a **Package Review** bug on Red Hat Bugzilla:
+
+1. File a **Package Review** bug on Red Hat Bugzilla:
+
    - Product: **Fedora**, Component: **Package Review**.
    - Summary: `Review Request: ajazz-control-center - Cross-platform control center for AJAZZ devices`
    - Include the Spec URL, SRPM URL, a short description, the Copr/koji
      scratch-build link, and your `rpmlint` output.
-3. Because you are not yet a packager, mark the bug as **blocking
+
+1. Because you are not yet a packager, mark the bug as **blocking
    `FE-NEEDSPONSOR`** (Bugzilla bug id **177841**) so a sponsor can find it:
    <https://bugzilla.redhat.com/show_bug.cgi?id=177841>
-4. (Recommended) Submit a Koji **scratch build** to prove it builds in the real
+
+1. (Recommended) Submit a Koji **scratch build** to prove it builds in the real
    buildsystem and link it in the bug:
 
    ```bash
@@ -231,7 +238,7 @@ fedpkg update                      # creates the Bodhi update for testing -> sta
 
 Rawhide does not need a Bodhi update; branched stable releases (e.g. F41) do.
 
----
+______________________________________________________________________
 
 ## Per-release update checklist
 
@@ -242,13 +249,13 @@ Run this every time upstream tags a new `vX.Y.Z`.
    - Reset `Release:` to `1%{?dist}`.
    - Add a new `%changelog` entry **at the top** (newest first), dated, with
      your name/email and a one-line summary. Keep older entries.
-2. **Refresh the source + checksum:**
+1. **Refresh the source + checksum:**
    ```bash
    spectool -g -R packaging/fedora/ajazz-control-center.spec
    sha256sum ~/rpmbuild/SOURCES/ajazz-control-center-X.Y.Z.tar.gz
    ```
    Update the SHA-256 noted in this file's Prerequisites section.
-3. **Rebuild + lint:**
+1. **Rebuild + lint:**
    ```bash
    rpmbuild -bs packaging/fedora/ajazz-control-center.spec
    rpmlint packaging/fedora/ajazz-control-center.spec
@@ -256,12 +263,12 @@ Run this every time upstream tags a new `vX.Y.Z`.
    ```
    Watch for new Qt point-release warnings and any new/dropped `BuildRequires`
    (e.g. a new Qt module pulled in by upstream).
-4. **Copr (Path A):**
+1. **Copr (Path A):**
    ```bash
    copr-cli build ajazz-control-center \
        ~/rpmbuild/SRPMS/ajazz-control-center-X.Y.Z-1.*.src.rpm
    ```
-5. **Official Fedora (Path B), if maintaining there:**
+1. **Official Fedora (Path B), if maintaining there:**
    ```bash
    cd <dist-git clone>
    git switch rawhide
@@ -272,7 +279,7 @@ Run this every time upstream tags a new `vX.Y.Z`.
    # then for each stable branch:
    git switch fNN && git merge rawhide && git push && fedpkg build && fedpkg update
    ```
-6. **Only when packaging itself changes** (not a version bump): bump `Release:`
+1. **Only when packaging itself changes** (not a version bump): bump `Release:`
    and add a `%changelog` entry explaining the packaging change.
 
 > Note on `BuildRequires`/options that are easy to get wrong on a bump:

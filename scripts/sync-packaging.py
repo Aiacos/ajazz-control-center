@@ -15,6 +15,7 @@ It only edits files in-place; it never commits or pushes (the workflow does).
 Missing optional inputs (e.g. ``msiinfo`` for the ProductCode) warn and leave
 the existing value rather than failing the whole sync.
 """
+
 from __future__ import annotations
 
 import argparse
@@ -117,13 +118,22 @@ class Release:
     def commit(self) -> str:
         if self._commit is None:
             out = subprocess.run(
-                ["git", "ls-remote", f"https://github.com/{REPO}.git", f"refs/tags/{self.tag}^{{}}"],
-                capture_output=True, text=True, check=False,
+                [
+                    "git",
+                    "ls-remote",
+                    f"https://github.com/{REPO}.git",
+                    f"refs/tags/{self.tag}^{{}}",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
             ).stdout.strip()
             if not out:  # un-annotated tag: no peeled ref
                 out = subprocess.run(
                     ["git", "ls-remote", f"https://github.com/{REPO}.git", f"refs/tags/{self.tag}"],
-                    capture_output=True, text=True, check=False,
+                    capture_output=True,
+                    text=True,
+                    check=False,
                 ).stdout.strip()
             self._commit = out.split()[0] if out else ""
             if not self._commit:
@@ -139,7 +149,9 @@ class Release:
                 tmp.write_bytes(fetch(self.msi_url))
                 props = subprocess.run(
                     ["msiinfo", "export", str(tmp), "Property"],
-                    capture_output=True, text=True, check=False,
+                    capture_output=True,
+                    text=True,
+                    check=False,
                 ).stdout
                 m = re.search(r"^ProductCode\t(\{[0-9A-Fa-f-]+\})", props, re.MULTILINE)
                 self._product_code = m.group(1).upper() if m else None
@@ -183,7 +195,8 @@ def sync_chocolatey(rel: Release) -> None:
     nuspec = PKG / "chocolatey" / "ajazz-control-center.nuspec"
     replace_once(nuspec, r"<version>[^<]*</version>", f"<version>{rel.version}</version>")
     replace_once(
-        nuspec, r"<releaseNotes>[^<]*</releaseNotes>",
+        nuspec,
+        r"<releaseNotes>[^<]*</releaseNotes>",
         f"<releaseNotes>https://github.com/{REPO}/releases/tag/{rel.tag}</releaseNotes>",
     )
     replace_once(nuspec, r"/v[0-9][^/]*/resources", f"/{rel.tag}/resources")  # iconUrl tag
@@ -215,7 +228,8 @@ def sync_aur(rel: Release) -> None:
         replace_once(srcinfo, r"pkgrel = .*$", "pkgrel = 1")
         # Preserve the `name::url` rename the PKGBUILD uses.
         replace_once(
-            srcinfo, r"source = .*$",
+            srcinfo,
+            r"source = .*$",
             f"source = ajazz-control-center-{rel.version}.tar.gz::{rel.tarball_url}",
         )
         replace_once(srcinfo, r"sha256sums = .*$", f"sha256sums = {rel.tarball_sha}")
@@ -261,7 +275,7 @@ def sync_ubuntu(rel: Release) -> None:
         f"ajazz-control-center ({rel.version}-1~noble1) noble; urgency=medium\n\n"
         f"  * Release {rel.version}. See https://github.com/{REPO}/releases/tag/{rel.tag}\n\n"
         " -- AJAZZ Control Center contributors <noreply@github.com>  "
-        f"{subprocess.run(['date', '-R'], capture_output=True, text=True).stdout.strip()}\n\n"
+        f"{subprocess.run(['date', '-R'], capture_output=True, text=True, check=False).stdout.strip()}\n\n"
     )
     ch.write_text(entry + text, encoding="utf-8")
     log("ubuntu: prepended new debian/changelog entry")
@@ -280,14 +294,18 @@ def main() -> int:
     log(f"tag commit   = {rel.commit or '(unknown)'}")
     log(f"ProductCode  = {rel.product_code or '(unchanged)'}")
     for name, fn in [
-        ("winget", sync_winget), ("chocolatey", sync_chocolatey), ("homebrew", sync_homebrew),
-        ("aur", sync_aur), ("flathub", sync_flathub), ("fedora", sync_fedora),
+        ("winget", sync_winget),
+        ("chocolatey", sync_chocolatey),
+        ("homebrew", sync_homebrew),
+        ("aur", sync_aur),
+        ("flathub", sync_flathub),
+        ("fedora", sync_fedora),
         ("ubuntu", sync_ubuntu),
     ]:
         log(f"--- {name} ---")
         try:
             fn(rel)
-        except Exception as exc:  # noqa: BLE001 — one channel must not abort the rest
+        except Exception as exc:
             warn(f"{name}: {exc}")
     log("done — review `git diff packaging/` and commit.")
     return 0

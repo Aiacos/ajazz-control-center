@@ -11,13 +11,14 @@ notability and Gatekeeper expectations our currently-unsigned DMG likely does
 not meet.
 
 > Reference docs (read these for current rules):
+>
 > - Cask Cookbook — <https://docs.brew.sh/Cask-Cookbook>
 > - Acceptable Casks — <https://docs.brew.sh/Acceptable-Casks>
 > - Adding Software to Homebrew — <https://docs.brew.sh/Adding-Software-to-Homebrew>
 > - How to Create and Maintain a Tap — <https://docs.brew.sh/How-to-Create-and-Maintain-a-Tap>
 > - Taps (Third-Party Repositories) — <https://docs.brew.sh/Taps>
 
----
+______________________________________________________________________
 
 ## Path A — Personal tap (`Aiacos/homebrew-tap`) — recommended first
 
@@ -82,7 +83,7 @@ brew install --cask aiacos/tap/ajazz-control-center
 Upgrades come automatically via `brew upgrade` once you push a new version to
 the tap (see the per-release checklist at the bottom).
 
----
+______________________________________________________________________
 
 ## Path B — Official `Homebrew/homebrew-cask`
 
@@ -97,7 +98,7 @@ with no tap step. Per **Acceptable Casks**, there are gates we must clear first.
    not hard guarantees — maintainers have discretion. As of v0.1.0 this project
    is very unlikely to clear the self-submission bar yet.
 
-2. **Gatekeeper / signing.** Acceptable Casks **rejects apps that fail with
+1. **Gatekeeper / signing.** Acceptable Casks **rejects apps that fail with
    Gatekeeper enabled** on supported macOS versions. Our DMG is currently
    **unsigned and un-notarized**; on Apple Silicon an unsigned/un-notarized app
    often will not launch for a normal user, which is grounds for rejection.
@@ -105,7 +106,7 @@ with no tap step. Per **Acceptable Casks**, there are gates we must clear first.
    actually run under Gatekeeper. **Sign + notarize the build before attempting
    Path B.**
 
-3. No SIP-disable requirement, no `allow_untrusted`, must be maintained, no
+1. No SIP-disable requirement, no `allow_untrusted`, must be maintained, no
    open security issues.
 
 Bottom line: do **not** open a `homebrew-cask` PR until (a) the app is signed +
@@ -150,7 +151,7 @@ style + an install test on a fresh runner; fix anything it flags.
 > manually, add `no_autobump! because: :requires_manual_review` (or another
 > documented reason) per the Cask Cookbook.
 
----
+______________________________________________________________________
 
 ## Per-release update checklist
 
@@ -160,32 +161,32 @@ personal tap and (if accepted) the official cask.
 1. Confirm the release assets exist on GitHub:
    - `ajazz-control-center-X.Y.Z-Darwin.dmg`
    - `SHA256SUMS`
-2. Get the new checksum (do NOT trust an old value):
+1. Get the new checksum (do NOT trust an old value):
    ```sh
    curl -fsSL https://github.com/Aiacos/ajazz-control-center/releases/download/vX.Y.Z/SHA256SUMS \
      | grep 'Darwin.dmg'
    # or, by downloading the dmg:
    # shasum -a 256 ajazz-control-center-X.Y.Z-Darwin.dmg
    ```
-3. Edit `Casks/ajazz-control-center.rb`:
+1. Edit `Casks/ajazz-control-center.rb`:
    - bump `version "X.Y.Z"`
    - replace `sha256 "..."` with the new Darwin.dmg hash
    - (the `url` is version-templated via `#{version}`, so it needs no edit)
-4. Re-validate:
+1. Re-validate:
    ```sh
    brew style  Casks/ajazz-control-center.rb
    brew audit --cask --online Casks/ajazz-control-center.rb
    ```
-5. Commit with the conventional message
+1. Commit with the conventional message
    `ajazz-control-center X.Y.Z (update)` and push to the tap (Path A) or open a
    bump PR / let `brew bump-cask-pr` handle it for the official cask (Path B):
    ```sh
    brew bump-cask-pr --version X.Y.Z ajazz-control-center
    ```
-6. If the bundle ever gains an Apple Developer ID signature + notarization,
+1. If the bundle ever gains an Apple Developer ID signature + notarization,
    drop the unsigned caveat from the cask and reconsider Path B.
 
----
+______________________________________________________________________
 
 ## Notes / things to verify per release
 
