@@ -9,6 +9,7 @@
 #include "sd_plugin_server.hpp"
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QHostAddress>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -528,4 +529,156 @@ TEST_CASE("SdPluginProtocolTest host to plugin events arrive", "[plugin-server][
     for (auto const* evtName : kHostToPluginEvents) {
         REQUIRE(receivedEvents.contains(QLatin1String(evtName)));
     }
+}
+
+// ---------------------------------------------------------------------------
+// 17-03: passHello / salt / challenge auth gate (PLUGIN-05)
+// RED phase: these tests MUST FAIL until 17-03 implementation lands.
+// ---------------------------------------------------------------------------
+
+/// Helper: given a spy on textMessageReceived, find and return the first frame
+/// whose "event" field matches the given name. Returns empty string on timeout.
+static QString findFrameByEvent(QSignalSpy& spy, QString const& eventName, int timeout_ms = 3000) {
+    auto const until = QDateTime::currentMSecsSinceEpoch() + timeout_ms;
+    while (QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        for (auto const& args : spy) {
+            auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+            if (obj.value(QStringLiteral("event")).toString() == eventName) {
+                return args.at(0).toString();
+            }
+        }
+    }
+    return {};
+}
+
+TEST_CASE("PluginAuthTest passHello carries salt after registerPlugin",
+          "[plugin-server][auth][handshake]") {
+    // After registerPlugin (default no-password), the client must receive a
+    // passHello frame whose payload.authentication.salt is a non-empty string.
+    // RED: fails until passHello emission + PluginConnection.salt land in 17-03.
+    ensureQCoreApp();
+    SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    // Send registerPlugin.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.auth.salt"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    // Wait for passHello frame.
+    QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
+    REQUIRE_FALSE(frame.isEmpty());
+
+    // Parse and assert NESTED authentication.salt (per CONTEXT.md -- spec
+    // §4.5 top-level salt is SUPERSEDED by §4.4 + CONTEXT nested shape).
+    auto const env = QJsonDocument::fromJson(frame.toUtf8()).object();
+    REQUIRE(env.value(QStringLiteral("event")).toString() == QStringLiteral("passHello"));
+    // passHello uses the "payload" key (sent via sendEvent which wraps in payload).
+    auto const payload = env.value(QStringLiteral("payload")).toObject();
+    auto const auth = payload.value(QStringLiteral("authentication")).toObject();
+    REQUIRE_FALSE(auth.value(QStringLiteral("salt")).toString().isEmpty());
+}
+
+TEST_CASE("PluginAuthTest acceptsCorrectChallenge", "[plugin-server][auth]") {
+    // With a password configured, a correct sha256(password+salt) challenge is
+    // accepted (socket stays open, no disconnected signal).
+    // RED: fails until authentication handling + setPasswordForTesting land.
+    ensureQCoreApp();
+    SdPluginServer server;
+    // setPasswordForTesting: test-only setter so the auth path is exercisable;
+    // production default is empty = no-password-accept.
+    server.setPasswordForTesting(QStringLiteral("pw"));
+
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    QSignalSpy clientDisconnectedSpy(&client, &QWebSocket::disconnected);
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.auth.accept"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    // Receive passHello and extract salt.
+    QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
+    REQUIRE_FALSE(frame.isEmpty());
+    auto const payload = QJsonDocument::fromJson(frame.toUtf8())
+                             .object()
+                             .value(QStringLiteral("payload"))
+                             .toObject();
+    QString const saltHex = payload.value(QStringLiteral("authentication"))
+                                .toObject()
+                                .value(QStringLiteral("salt"))
+                                .toString();
+    REQUIRE_FALSE(saltHex.isEmpty());
+
+    // Compute expected challenge = sha256(password + salt) in UTF-8 bytes.
+    // This mirrors challengeFor() in the implementation (17-03).
+    QString const expected = QString::fromLatin1(
+        QCryptographicHash::hash(QByteArray("pw") + saltHex.toUtf8(), QCryptographicHash::Sha256)
+            .toHex());
+
+    // Send the correct authentication reply.
+    QString const authMsg =
+        QStringLiteral(R"({"event":"authentication","challenge":"%1"})").arg(expected);
+    client.sendTextMessage(authMsg);
+
+    // Give time to process -- socket must NOT be closed.
+    pump(300);
+    REQUIRE(clientDisconnectedSpy.count() == 0);
+    REQUIRE(client.state() == QAbstractSocket::ConnectedState);
+}
+
+TEST_CASE("PluginAuthTest rejectsAfter5BadAttempts", "[plugin-server][auth]") {
+    // With a password configured, sending 5 wrong challenges closes the socket.
+    // Fewer than 5 attempts must NOT close (assert still-connected after 4).
+    // RED: fails until authentication rejection + kMaxAuthAttempts=5 land.
+    ensureQCoreApp();
+    SdPluginServer server;
+    server.setPasswordForTesting(QStringLiteral("pw"));
+
+    QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy clientConnectedSpy(&client, &QWebSocket::connected);
+    QSignalSpy clientDisconnectedSpy(&client, &QWebSocket::disconnected);
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(clientConnectedSpy));
+
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.auth.reject"})"));
+    REQUIRE(waitForSpy(registeredSpy));
+
+    // Wait for passHello to arrive (ensures server is ready to process auth).
+    QString const frame = findFrameByEvent(msgSpy, QStringLiteral("passHello"));
+    REQUIRE_FALSE(frame.isEmpty());
+
+    constexpr int kMaxAttempts = 5;
+
+    // Send 4 wrong challenges -- socket must stay open.
+    for (int i = 0; i < kMaxAttempts - 1; ++i) {
+        client.sendTextMessage(QStringLiteral(R"({"event":"authentication","challenge":"wrong"})"));
+        pump(80);
+        REQUIRE(clientDisconnectedSpy.count() == 0);
+        REQUIRE(client.state() == QAbstractSocket::ConnectedState);
+    }
+
+    // 5th bad attempt -- server must close the socket.
+    client.sendTextMessage(QStringLiteral(R"({"event":"authentication","challenge":"wrong"})"));
+    REQUIRE(waitForSpy(clientDisconnectedSpy, 3000));
+    REQUIRE(clientDisconnectedSpy.count() >= 1);
 }
