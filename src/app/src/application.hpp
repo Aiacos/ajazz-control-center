@@ -17,6 +17,7 @@
 #include "autostart_service.hpp"
 #include "battery_service.hpp"
 #include "branding_service.hpp"
+#include "builtin_actions_service.hpp"
 #include "device_model.hpp"
 #include "firmware_update_service.hpp"
 #include "lighting_service.hpp"
@@ -218,6 +219,14 @@ private:
                            ///< (ARCH-03 single-handle invariant — no second open()). Pumps
                            ///< poll() on an 8 ms QTimer and routes DeviceEvents to bound
                            ///< ActionChains in the active Profile via m_actionEngine.
+    std::unique_ptr<BuiltinActionsService>
+        m_builtinActions; ///< Phase 21-03 (PLUGIN-12): built-in in-process action dispatcher.
+                          ///< Populates the BuiltinActionRegistry with the ~24 locked
+                          ///< com.hotspot.streamdock.* UUID handlers and replaces the Phase-15
+                          ///< plugin executor stub with the registry short-circuit (handles ->
+                          ///< dispatch; non-builtin UUIDs forward to the Phase-19 path).
+                          ///< Declared after m_streamDockInput to keep the init list in
+                          ///< member-declaration order (-Wreorder).
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     std::unique_ptr<SdPluginServer>
         m_pluginServer; ///< Phase 17: Elgato-compatible WebSocket plugin server (loopback-only).

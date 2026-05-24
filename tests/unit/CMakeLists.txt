@@ -159,12 +159,14 @@ add_executable(
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
-    # and BuiltinActionsService per-UUID handler e2e tests (Task 2, added below via target_sources).
-    # The Task-1 portion (registry-only) uses only std headers + Catch2 — no Qt, no nlohmann.
-    # The Task-2 portion (app e2e) is added below in the AJAZZ_HAVE_WEBSOCKETS block and the
-    # unconditional target_sources block after the registry-only cases.
+    # + BuiltinActionsService per-UUID handler e2e tests (Task 2). The Task-1 portion uses only
+    # std headers + Catch2 (no Qt). The Task-2 portion links builtin_actions_service.cpp (which
+    # includes QJsonDocument + QSettings). builtin_action_registry.cpp is linked directly as a
+    # re-compiled core TU (same pattern as test_action_engine + stream_dock_control_service).
+    # stream_dock_input_service.cpp is already in the binary (Phase 15 entry above).
     test_builtin_actions.cpp
     ${CMAKE_SOURCE_DIR}/src/core/src/builtin_action_registry.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/builtin_actions_service.cpp
     # Streamdock catalogue fetcher: pure helpers + cache + fallback. The
     # fetcher source is compiled directly into the test binary so we don't
     # need to factor it out of the app target.

@@ -128,6 +128,14 @@ public:
     void setActiveDeviceCodename(QString const& codename);
 
     /**
+     * @brief Return the codename of the currently active device (or empty string).
+     *
+     * Phase 21-03 seam: BuiltinActionsService's BrightnessSink needs the active codename
+     * to route setBrightness to the right device.
+     */
+    [[nodiscard]] QString activeDeviceCodename() const noexcept { return m_activeDeviceId; }
+
+    /**
      * @brief Pump one poll cycle on the held device.
      *
      * Calls `m_device->poll()`, which invokes the registered onEvent callback
@@ -149,6 +157,18 @@ public:
      * @return   Zone index in [0, EncoderCount-1].
      */
     static std::uint16_t zoneForX(std::uint16_t x) noexcept;
+
+    /**
+     * @brief Access the owned ActionEngine (non-owning pointer).
+     *
+     * Phase 21-03 seam: BuiltinActionsService needs a pointer to the single
+     * ActionEngine owned by this service so it can call pushPage/popPage and
+     * run() for multiactions. The engine is constructed before this service and
+     * moved-in; the pointer is valid for the lifetime of this service.
+     *
+     * @return Non-owning pointer to the ActionEngine (never null after ctor).
+     */
+    [[nodiscard]] core::ActionEngine* engine() const noexcept { return m_engine.get(); }
 
 Q_SIGNALS:
     /**

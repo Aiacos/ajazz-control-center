@@ -322,10 +322,18 @@ Application::Application(QObject* parent)
                   }
                   QDesktopServices::openUrl(qurl);
               };
-              // plugin executor: STUB (Phase 19 seam, T-15-03 accepted).
-              execs.plugin = [](std::string_view id, std::string_view /*settingsJson*/) {
-                  AJAZZ_LOG_INFO(
-                      "input", "plugin action {} ignored (plugin host arrives Phase 19)", id);
+              // plugin executor: Phase 21-03 registry short-circuit (PLUGIN-12).
+              // Captures `this` so the lambda can reach m_builtinActions AFTER the
+              // Application constructor has finished. The lambda is only called from
+              // the Qt event loop (GUI thread) — after all members are constructed.
+              // Built-in UUIDs (com.hotspot.streamdock.*) short-circuit to the registry
+              // via BuiltinActionsService::onPluginAction; third-party UUIDs pass
+              // through to the Phase-19 logged stub (the prior Phase-15 fallback is
+              // now injected into BuiltinActionsService as m_fallback).
+              execs.plugin = [this](std::string_view id, std::string_view settingsJson) {
+                  if (m_builtinActions) {
+                      m_builtinActions->onPluginAction(id, settingsJson);
+                  }
               };
               return execs;
           }(),
@@ -339,6 +347,60 @@ Application::Application(QObject* parent)
       m_streamDockInput(std::make_unique<StreamDockInputService>(
           [this]() -> core::Profile const& { return m_profileController->activeProfile(); },
           std::move(m_actionEngine),
+          this)),
+      // Phase 21-03 (PLUGIN-12): BuiltinActionsService — the built-in in-process action
+      // dispatcher. Replaces the Phase-15 plugin executor stub with the registry short-circuit.
+      // Injection seams:
+      //   - BrightnessSink -> StreamDockControlService::setBrightness (codename from active device)
+      //   - NavigateSink   -> StreamDockControlService::navigatePage (page carousel)
+      //   - OpenUrlFn      -> reuse the app's existing openUrl path via QDesktopServices
+      //   - engine         -> the ActionEngine owned by m_streamDockInput (via engine())
+      //   - fallback       -> the Phase-15 logged stub (Phase-19 bridge path is wired via the
+      //                       execs.plugin lambda that calls onPluginAction; non-builtin UUIDs
+      //                       fall through to this logged no-op stub pending Phase-19 re-wire).
+      //
+      // -Wreorder: declared after m_streamDockInput so its engine() accessor is valid.
+      m_builtinActions(std::make_unique<BuiltinActionsService>(
+          // BrightnessSink: brightness is set on the first connected Stream Dock (codename
+          // recorded by m_streamDockControl at setActiveDevice time). For now route to the
+          // control service with a fixed codename lookup via m_streamDockControl's held handle.
+          // Phase 25 will wire the codename from the active device codename.
+          [this](int level) {
+              // m_streamDockControl holds the active codename; call setBrightness with it.
+              // The service clamps 0..100 internally; we pass the already-clamped level.
+              auto const codename =
+                  m_streamDockInput ? m_streamDockInput->activeDeviceCodename() : QString{};
+              if (!codename.isEmpty()) {
+                  m_streamDockControl->setBrightness(codename, level);
+              }
+          },
+          // NavigateSink: route to the page carousel (Phase-16 / StreamDockControlService).
+          [this](int direction) {
+              if (m_streamDockControl) {
+                  m_streamDockControl->navigatePage(direction);
+              }
+          },
+          // OpenUrlFn: reuse the app's existing QDesktopServices openUrl path with scheme
+          // validation (WR-01 from Phase-20). The BuiltinActionsService handler also
+          // validates the scheme; this is a double-validation defence-in-depth.
+          [](std::string_view url) {
+              QUrl const qurl(QString::fromUtf8(url.data(), static_cast<qsizetype>(url.size())));
+              if (qurl.scheme() != QStringLiteral("http") &&
+                  qurl.scheme() != QStringLiteral("https")) {
+                  AJAZZ_LOG_WARN("input",
+                                 "openUrl (builtin): rejected non-http(s) URL scheme '{}'",
+                                 qurl.scheme().toStdString());
+                  return;
+              }
+              QDesktopServices::openUrl(qurl);
+          },
+          // ActionEngine*: the engine owned by m_streamDockInput (moved-in; always non-null).
+          m_streamDockInput ? m_streamDockInput->engine() : nullptr,
+          // Phase-19 fallback: logged stub (same as the prior Phase-15 plugin executor body).
+          [](std::string_view id, std::string_view /*settingsJson*/) {
+              AJAZZ_LOG_INFO(
+                  "input", "plugin action {} ignored (plugin host arrives Phase 19)", id);
+          },
           this)),
 #ifdef AJAZZ_HAVE_WEBSOCKETS
       // Phase 17 / Phase 19-02: SdPluginServer — Elgato-compatible WebSocket plugin

@@ -109,6 +109,13 @@ qt_add_executable(
     # ActionEngine::run(). Includes 16 ms rotation coalescer, encoder press->synthetic-release
     # pairing, provisional touch-strip zone map, and pageNavRequested signal for Phase 16.
     src/stream_dock_input_service.cpp
+    # Phase 21-03 (PLUGIN-12): BuiltinActionsService — populates the BuiltinActionRegistry with the
+    # ~24 com.hotspot.streamdock.* built-in UUID handlers and provides the plugin-executor
+    # short-circuit (handles -> dispatch; non-builtin UUIDs forward to Phase-19 path). Per-UUID
+    # handlers parse settingsJson app-tier (QJsonDocument, COD-031). LunBo per-key cursor
+    # (T-21-lunbo). Opt-in capture gate (T-21-hook OFF by default). OBS auth default-on
+    # (T-21-obsauth, inherited from ObsClient). Not QML-exposed.
+    src/builtin_actions_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -372,6 +379,12 @@ set(ACC_QML_MODULE_SOURCES
     # moc declaration. The .cpp is in the AJAZZ_HAVE_WEBSOCKETS-gated block above. The whole class
     # is gated by #if defined(AJAZZ_HAVE_WEBSOCKETS) so moc is safe on minimal builds.
     src/obs_client.hpp
+    # Phase 21-03 (PLUGIN-12): BuiltinActionsService Q_OBJECT header + source. Not QML-exposed;
+    # listed here so AUTOMOC runs the moc pass for the Q_OBJECT declaration. The .cpp is in the
+    # unconditional target_sources block above (no WebSockets gate — the ObsClient code inside is
+    # already gated by #ifdef AJAZZ_HAVE_WEBSOCKETS in the .cpp).
+    src/builtin_actions_service.cpp
+    src/builtin_actions_service.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
