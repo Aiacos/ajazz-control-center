@@ -640,7 +640,14 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
         for (auto const& d : descriptors) {
             if (d.vendorId == ev.vid && d.productId == ev.pid &&
                 d.family == core::DeviceFamily::StreamDeck) {
-                m_streamDockInput->setActiveDevice(nullptr);
+                // CR-02: onHotplug runs on the HotplugMonitor background thread.
+                // setActiveDevice is NOT thread-safe (touches QTimers and m_device
+                // on the GUI thread). Marshal via Qt::QueuedConnection so it executes
+                // on the GUI thread -- matching the Arrived path's QTimer::singleShot.
+                QMetaObject::invokeMethod(
+                    m_streamDockInput.get(),
+                    [this] { m_streamDockInput->setActiveDevice(nullptr); },
+                    Qt::QueuedConnection);
                 break;
             }
         }
