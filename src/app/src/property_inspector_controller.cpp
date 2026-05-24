@@ -35,13 +35,23 @@
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include "pi_bridge.hpp"
+#include "pi_cef_shim.hpp"
 #include "pi_url_request_interceptor.hpp"
+#include "plugin_mirabox_shim.hpp"
 
 #include <QFileInfo>
 #include <QHash>
 #include <QQmlEngine>
 #include <QtWebChannelQuick/QQmlWebChannel>
 #include <QtWebEngineQuick/QQuickWebEngineProfile>
+// MAINTAINER NOTE (WR-01): QQuickWebEngineScriptCollection is only forward-declared in the
+// public qquickwebengineprofile.h header; the complete definition lives in this private
+// header. Required to call userScripts()->insert(). If this breaks on a Qt minor bump,
+// verify the private header path and update Qt6::WebEngineQuickPrivate in CMakeLists.txt.
+// The same pattern is used in plugin_manager.cpp.
+static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0),
+              "qquickwebenginescriptcollection_p.h layout may have changed; verify include path");
+#include <QtWebEngineQuick/private/qquickwebenginescriptcollection_p.h>
 
 #include <utility>
 #endif
@@ -202,6 +212,26 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
         interceptor->setPiDir(piDir);
     }
 
+    // Inject JS polyfill shims into the per-plugin profile's user-script
+    // collection once per fresh profile (T-20-SHIM-ONCE: guarded on
+    // freshProfile so re-loading another PI for the same plugin does NOT
+    // insert a duplicate script). Both shims must be present before the
+    // PI's own <script> tags run — DocumentCreation injection point
+    // guarantees this (akp_plugin_sdk.md §8; 18-RESEARCH.md Pitfall 4).
+    //
+    //   * makeCefQueryShim()  — maps window.cefQuery({request,...}) to the
+    //     QWebChannel $SD bridge (PLUGIN-09 / pi_cef_shim.hpp). Required by
+    //     every standard Elgato PI that calls cefQuery instead of QWebChannel
+    //     directly.
+    //
+    //   * makeMiraboxShim()   — aliases connectMiraBoxSDSocket to the Elgato
+    //     API so Mirabox-targeted PIs keep working unchanged (PLUGIN-11 /
+    //     plugin_mirabox_shim.hpp).
+    if (freshProfile) {
+        profile->userScripts()->insert(makeCefQueryShim());
+        profile->userScripts()->insert(makeMiraboxShim());
+    }
+
     // Tear down the previous channel + bridge (if any) before creating a
     // new pair so the next PI sees a fresh `$SD` and we never leak. Both
     // are parented to the controller / channel so deleteLater() cascades
@@ -226,6 +256,15 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
         hasHtmlInspector_ = true;
         emit hasHtmlInspectorChanged();
     }
+
+    // §7 handshake: emit the action's persisted settings on load so the PI
+    // receives its current per-context settings as soon as it is ready
+    // (akp_plugin_sdk.md §7: host replies passHello + didReceiveSettings).
+    // getSettings() reads from disk and emits didReceiveSettings synchronously.
+    // passHello is Phase-17's deliverable (SdPluginServer::sendEvent); deferred
+    // per the 20-03 STOP gate (17-02-SUMMARY.md exists but the bridge<->server
+    // connection wiring is done at Application construction, not here).
+    bridge->getSettings();
 #else
     // No WebEngine — keep the M1 stub semantics: log + ensure we report
     // no active HTML inspector so QML stays on the native renderer.
