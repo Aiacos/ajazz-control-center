@@ -75,7 +75,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 
 - [x] **Phase 14: Stream Dock Control Service** — Persistent held-open control service: brightness ON at `open()`, live key-image push (`BAT`→chunks→`ULEND`, ~1s, no manual flush), repaint-on-load, `VER` firmware probe cached, and the `akp05e` `hasClock=false` honesty fix. The first app→device call that reaches the panel. (DISPLAY-06/07/08, DOCK-01/02, DEVICES-11) (completed 2026-05-24)
 - [x] **Phase 15: Stream Dock Input Routing** — Poll loop drives each connected Stream Deck; key press/release, **4-encoder rotate (CW/CCW) + press (synthesised release)**, and touch-strip tap-zone/swipe route to bound actions via the core `ActionEngine` (instantiated in the app for the first time); 16 ms rotation coalescer. (INPUT-03/04/05) (completed 2026-05-24)
-- [ ] **Phase 16: Device Controls + Binding Persistence + Pages** — Brightness slider + "clear all" drive the device live; key/encoder/touch bindings persist to the profile and survive restart; multi-page/folder profiles drive host-side page navigation (swipe + page actions). (DISPLAY-09, PROFILE-01/02)
+- [x] **Phase 16: Device Controls + Binding Persistence + Pages** — Brightness slider + "clear all" drive the device live; key/encoder/touch bindings persist to the profile and survive restart; multi-page/folder profiles drive host-side page navigation (swipe + page actions). (DISPLAY-09, PROFILE-01/02) (completed 2026-05-24)
 - [ ] **Phase 17: Plugin Protocol Completion** — On the existing `SdPluginServer`: `passHello`+salt/challenge auth, the **26 AJAZZ-only actions**, and all host→plugin events incl. encoder `dialRotate`/`dialDown`/`dialUp`. (PLUGIN-01/02/03/04/05)
 - [ ] **Phase 18: Plugin Manifest + Discovery + Lifecycle + Spawn** — Manifest schema (Elgato v6 + AJAZZ ext incl. `Controllers:["Knob"]`), discovery + extraction, spawn for **system node ≥20 / native exe / HTML (WebEngine)**, crash/restart/`exitApp`, Mirabox compat shim. (PLUGIN-06/07/08/11)
 - [ ] **Phase 19: Device ↔ Plugin Bridge (setImage e2e)** — `actionReceived`(setImage/setTitle/setState/setBG…) → control service → physical key; device input (keyDown/dialRotate/touchTap) → plugin; willAppear/deviceDidConnect lifecycle. **The convergence phase — first demoable plugin↔device round-trip.** (PLUGIN-10)
@@ -277,7 +277,7 @@ Plans:
 
 - [x] 16-01-PLAN.md — DISPLAY-09: Q_INVOKABLE setBrightness/clearAll on the control service (LIG/CLE) + QML-expose it + debounced brightness Slider + Clear-all button in the Keys tab (wave 1)
 - [x] 16-02-PLAN.md — PROFILE-01: default profile path (AppDataLocation/profiles/<id>.json) + KeyDesigner→Profile commit + Main Apply/Revert real save/load + fresh-controller round-trip (keys/encoders/touch/pages) + repaint-on-load (wave 1)
-- [ ] 16-03-PLAN.md — PROFILE-02: page-scoped repaintPage(pageId) + pageNavRequested(±1) carousel over top-level pages + repaint via the reused ActionEngine page state; no device page opcode (wave 2, depends 16-01+16-02)
+- [x] 16-03-PLAN.md — PROFILE-02: page-scoped repaintPage(pageId) + pageNavRequested(±1) carousel over top-level pages + repaint via the reused ActionEngine page state; no device page opcode (wave 2, depends 16-01+16-02)
 
 ### Phase 17: Plugin Protocol Completion
 
@@ -470,7 +470,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 0/?            | Not started      | —          |
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 16. Device Controls + Persistence + Pages   | v1.3      | 2/3            | In Progress      |            |
+| 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 17. Plugin Protocol Completion              | v1.3      | 0/3            | Not started      | —          |
 | 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 0/?            | Not started      | —          |
 | 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 0/?            | Not started      | —          |
