@@ -347,3 +347,80 @@ TEST_CASE("PI settings refuse path-traversal uuids", "[pi-bridge][persistence]")
         pluginsDir.exists() ? pluginsDir.entryList(QDir::AllEntries).size() : 0;
     REQUIRE(countAfter == countBefore);
 }
+
+// ---------------------------------------------------------------------------
+// cefQuery shim tests (PLUGIN-09 / 20-02)
+//
+// kCefQueryShimSource is a pure constexpr string — no WebEngine needed.
+// The dispatcher tests construct PIBridge(nullptr, ...) and verify that
+// invoke() fans out to the existing typed slots. The WebEngine-gated
+// injection-point case is compiled only when AJAZZ_HAVE_WEBENGINE is defined.
+// ---------------------------------------------------------------------------
+#include "pi_cef_shim.hpp"
+
+TEST_CASE("cefQuery shim source contains required JS tokens", "[pi-bridge][cefquery]") {
+    QString const src = QString::fromUtf8(ajazz::app::kCefQueryShimSource.data(),
+                                          int(ajazz::app::kCefQueryShimSource.size()));
+    REQUIRE(src.contains(QStringLiteral("window.cefQuery")));
+    REQUIRE(src.contains(QStringLiteral("onSuccess")));
+    REQUIRE(src.contains(QStringLiteral("onFailure")));
+    REQUIRE(src.contains(QStringLiteral("$SD")));
+}
+
+TEST_CASE("PIBridge invoke dispatches getSettings to didReceiveSettings", "[pi-bridge][cefquery]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cefq"),
+                                QStringLiteral("act-cefq"),
+                                QStringLiteral("ctx-cefq-001"));
+    // Seed some settings so getSettings emits a non-empty payload.
+    bridge.setSettings(QStringLiteral(R"({"key":"cefq-value"})"));
+
+    QString seen;
+    QObject::connect(
+        &bridge, &ajazz::app::PIBridge::didReceiveSettings, [&](QString j) { seen = j; });
+
+    // invoke with a getSettings event body (sdk §8: event field selects the slot).
+    QString const result = bridge.invoke(QStringLiteral(R"({"event":"getSettings"})"));
+
+    REQUIRE(!seen.isEmpty());
+    QJsonObject const obj = QJsonDocument::fromJson(seen.toUtf8()).object();
+    REQUIRE(obj.value(QStringLiteral("key")).toString() == QStringLiteral("cefq-value"));
+    // invoke must return a valid JSON string (empty object at minimum).
+    REQUIRE(!result.isEmpty());
+}
+
+TEST_CASE("PIBridge invoke with unknown event returns {} and emits nothing",
+          "[pi-bridge][cefquery]") {
+    ajazz::tests::qtApp();
+
+    ajazz::app::PIBridge bridge(nullptr,
+                                QStringLiteral("com.example.cefq-unknown"),
+                                QStringLiteral("act-cefq-unk"),
+                                QStringLiteral("ctx-cefq-unk-001"));
+
+    bool settingsFired = false;
+    bool globalFired = false;
+    QObject::connect(
+        &bridge, &ajazz::app::PIBridge::didReceiveSettings, [&](QString) { settingsFired = true; });
+    QObject::connect(&bridge, &ajazz::app::PIBridge::didReceiveGlobalSettings, [&](QString) {
+        globalFired = true;
+    });
+
+    QString const result = bridge.invoke(QStringLiteral(R"({"event":"unknownEvent"})"));
+
+    REQUIRE(result == QStringLiteral("{}"));
+    REQUIRE(!settingsFired);
+    REQUIRE(!globalFired);
+}
+
+#if defined(AJAZZ_HAVE_WEBENGINE)
+TEST_CASE("cefQuery shim injects at DocumentCreation in MainWorld", "[pi-bridge][cefquery]") {
+    auto const s = ajazz::app::makeCefQueryShim();
+    REQUIRE(s.injectionPoint() == QWebEngineScript::DocumentCreation);
+    REQUIRE(s.worldId() == QWebEngineScript::MainWorld);
+    REQUIRE(s.runsOnSubFrames() == true);
+    REQUIRE(s.name() == QStringLiteral("ajazz-cefquery-shim"));
+}
+#endif // defined(AJAZZ_HAVE_WEBENGINE)
