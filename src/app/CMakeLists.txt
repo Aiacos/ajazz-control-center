@@ -116,6 +116,11 @@ qt_add_executable(
 # functionality is disabled at runtime.
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz-control-center PRIVATE src/sd_plugin_server.cpp)
+    # Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge — bridge QObject shell + ContextRegistry +
+    # pure helpers (decodeDataUriImage, coordsForKeyIndex, keyIndexForCoords, ownerForActionUuid).
+    # Gated on WebSockets because it will compose SdPluginServer (Phase 17) in 19-02/19-03. Pure
+    # in-tree C++/Qt6; no new external packages (Package Legitimacy Gate N/A per 19-RESEARCH).
+    target_sources(ajazz-control-center PRIVATE src/plugin_device_bridge.cpp)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()
@@ -340,6 +345,13 @@ set(ACC_QML_MODULE_SOURCES
     src/stream_dock_control_service.hpp
     src/stream_dock_input_service.cpp
     src/stream_dock_input_service.hpp
+    # Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge shell + ContextRegistry + pure helpers.
+    # Listed here so AUTOMOC runs on the Q_OBJECT header (moc generation). The .cpp is in the
+    # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above; the header is listed here so moc finds
+    # the Q_OBJECT declaration. Mirror of the branding_service / stream_dock_control_service
+    # pattern.
+    src/plugin_device_bridge.cpp
+    src/plugin_device_bridge.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
