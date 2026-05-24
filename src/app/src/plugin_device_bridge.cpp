@@ -32,10 +32,8 @@
 #include "sd_plugin_server.hpp"
 #include "stream_dock_control_service.hpp"
 
-#include <QBuffer>
 #include <QByteArray>
 #include <QColor>
-#include <QImageReader>
 
 #include <algorithm>
 
