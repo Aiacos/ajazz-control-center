@@ -4,13 +4,13 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: 'P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending'
-last_updated: '2026-05-24T12:04:50.543Z'
+last_updated: '2026-05-24T12:11:49.975Z'
 last_activity: 2026-05-24
 progress:
   total_phases: 17
   completed_phases: 5
   total_plans: 51
-  completed_plans: 18
+  completed_plans: 19
   percent: 29
 ---
 
@@ -26,7 +26,7 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 ## Current Position
 
 Phase: 18 (plugin-manifest-discovery-lifecycle-spawn) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) = 31 plans across 12 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget) — recommend `/gsd-plan-phase 23 --reviews`-style check or a checker pass before executing those three.
 Status: Ready to execute
@@ -88,6 +88,8 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: StreamDockInputService owns ActionEngine: Application constructs then moves the engine into the service; m_actionEngine null after ctor; Phase 19 accesses engine via m_streamDockInput
 - \[Phase ?\]: Departure handler added to onHotplug for StreamDeck: setActiveDevice(nullptr) stops input poll pump on device removal (T-15-05 UAF mitigation)
 - \[Phase ?\]: Linux OS-accept locked (18-01)
+- \[Phase ?\]: argv contract: codePath is argv[0], node binary NOT in list (PLUGIN-08/Pitfall3)
+- \[Phase ?\]: NodeProbe struct defaults uninitialised; makeDefaultNodeProbe() wires QStandardPaths+QProcess; tests inject fakes directly
 
 ### Pending Todos
 
@@ -124,30 +126,31 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Deferred Items
 
-| Category                                 | Item                                                                          | Status                            | Deferred At              |
-| ---------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
-| v1.3+ (KEYBOARD)                         | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
-| v1.2.x (DISPLAY)                         | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
-| v1.2.x / v1.3                            | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
-| v1.2.x                                   | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
-| v1.2.x                                   | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
-| v1.2.x                                   | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
-| v1.2.x                                   | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
-| Phase 9 P03                              | 6min                                                                          | 2 tasks                           | 2 files                  |
-| Phase 9 P04                              | 4min                                                                          | 3 tasks                           | 5 files                  |
-| Phase 9 P05                              | 3min                                                                          | 1 tasks                           | 2 files                  |
-| Phase 9 P06                              | 3min                                                                          | 1 tasks                           | 2 files                  |
-| Phase 9 P07                              | 7min                                                                          | 1 tasks                           | 6 files                  |
-| Phase 14 P14-01                          | 8                                                                             | 2 tasks                           | 6 files                  |
-| Phase 14-stream-dock-control-service P02 | 90                                                                            | 3 tasks                           | 9 files                  |
-| Phase 15-stream-dock-input-routing P02   | 8                                                                             | 1 tasks                           | 3 files                  |
-| Phase 17-plugin-protocol-completion P01  | 5                                                                             | 2 tasks                           | 3 files                  |
-| Phase 17 P03                             | 5                                                                             | 3 tasks                           | 3 files                  |
-| Phase 18 P01                             | 8                                                                             | 2 tasks                           | 9 files                  |
+| Category                                               | Item                                                                          | Status                            | Deferred At              |
+| ------------------------------------------------------ | ----------------------------------------------------------------------------- | --------------------------------- | ------------------------ |
+| v1.3+ (KEYBOARD)                                       | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)    | Pending captures                  | v1.2 milestone-bootstrap |
+| v1.2.x (DISPLAY)                                       | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)               | Capture in Phase 9; impl deferred | v1.2 milestone-bootstrap |
+| v1.2.x / v1.3                                          | AKP815 + Mirabox N3 promotion (devices not physically connected)              | Blocked on captures               | v1.1 close               |
+| v1.2.x                                                 | Explicit `Toast.qml` cap=1 implementation (A-05)                              | Carried                           | v1.1 close               |
+| v1.2.x                                                 | TimeSyncService Pitfall-13 contextual INFO message                            | Carried                           | v1.1 close               |
+| v1.2.x                                                 | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows) | Carried                           | v1.1 close               |
+| v1.2.x                                                 | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                  | Upstream                          | v1.1 close               |
+| Phase 9 P03                                            | 6min                                                                          | 2 tasks                           | 2 files                  |
+| Phase 9 P04                                            | 4min                                                                          | 3 tasks                           | 5 files                  |
+| Phase 9 P05                                            | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P06                                            | 3min                                                                          | 1 tasks                           | 2 files                  |
+| Phase 9 P07                                            | 7min                                                                          | 1 tasks                           | 6 files                  |
+| Phase 14 P14-01                                        | 8                                                                             | 2 tasks                           | 6 files                  |
+| Phase 14-stream-dock-control-service P02               | 90                                                                            | 3 tasks                           | 9 files                  |
+| Phase 15-stream-dock-input-routing P02                 | 8                                                                             | 1 tasks                           | 3 files                  |
+| Phase 17-plugin-protocol-completion P01                | 5                                                                             | 2 tasks                           | 3 files                  |
+| Phase 17 P03                                           | 5                                                                             | 3 tasks                           | 3 files                  |
+| Phase 18 P01                                           | 8                                                                             | 2 tasks                           | 9 files                  |
+| Phase 18-plugin-manifest-discovery-lifecycle-spawn P02 | 4                                                                             | 2 tasks                           | 5 files                  |
 
 ## Session Continuity
 
-Last session: 2026-05-24T12:04:50.535Z
+Last session: 2026-05-24T12:11:42.310Z
 Stopped at: P3.6 AK980 CMD_FINISH 0xF0 landed (issue #58 closed); audit-3 user-visible feature stack complete on `main`; STATE/HANDOFF/README updated; PR #56 (dependabot rebase) requested; Phase 9.x captures + remaining P3.x patches still pending
 Resume file: None
 
