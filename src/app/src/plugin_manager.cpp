@@ -356,11 +356,14 @@ void PluginManager::onProcessFailed(QString const& uuid) {
         m_live.erase(uuid);
     } else {
         // Fewer/slower crashes: restart (teardown + re-spawn).
+        // WR-02: guard against re-spawning HTML/WebEngine plugins (process == nullptr in m_live).
+        // An HTML plugin runs in-process via Chromium and has no owned QProcess. Re-spawning it
+        // would re-inject the Mirabox shim script, causing duplicate inserts into the WebEngine
+        // profile. Only restart plugins that have an actual process-backed entry.
         auto it = m_live.find(uuid);
-        if (it != m_live.end()) {
+        if (it != m_live.end() && it->second.process != nullptr) {
             PluginManifest const manifest = it->second.manifest;
             m_live.erase(it);
-            // Re-spawn only if the process was previously live (not an HTML plugin).
             spawn(manifest);
         }
     }
