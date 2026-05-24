@@ -218,7 +218,32 @@ void PluginManager::spawn(PluginManifest const& manifest) {
         return;
     }
 
+    // CR-03: Validate the ACTUAL resolved code path (not just pluginId).
+    // resolveCodePath() may return codePathWin or codePathMac which bypass the
+    // isSafeUuidComponent check above. Reject any path containing directory separators
+    // or traversal components regardless of which platform-override was selected
+    // (T-18-PATHTRAV bypass fix).
     QString const code = resolveCodePath(manifest);
+    if (code.isEmpty() || code.contains(QLatin1Char('/')) || code.contains(QLatin1Char('\\')) ||
+        code.contains(QLatin1String(".."))) {
+        qWarning("PluginManager: rejecting plugin '%s': resolved code path '%s' is unsafe "
+                 "(contains directory separator or traversal component)",
+                 qPrintable(manifest.name),
+                 qPrintable(code));
+        return;
+    }
+
+    // WR-03: Use manifest.puuid as the plugin identity UUID passed to the child process
+    // (akp_plugin_sdk.md §2 PUUID field). Fall back to pluginId (codePath-based key) only
+    // when PUUID is absent. Validate puuid with the same guard when non-empty.
+    QString const pluginUuid = manifest.puuid.isEmpty() ? pluginId : manifest.puuid;
+    if (!manifest.puuid.isEmpty() && !isSafeUuidComponent(pluginUuid)) {
+        qWarning("PluginManager: rejecting plugin '%s': PUUID '%s' is unsafe",
+                 qPrintable(manifest.name),
+                 qPrintable(pluginUuid));
+        return;
+    }
+
     QString const ext = QFileInfo(code).suffix().toLower();
 
     if (ext == QLatin1String("js") || ext == QLatin1String("mjs") || ext == QLatin1String("cjs")) {
@@ -236,7 +261,8 @@ void PluginManager::spawn(PluginManifest const& manifest) {
             port = m_server->serverPort();
         }
 #endif
-        QStringList const argv = buildNodeArgv(code, port, pluginId, infoJson);
+        // Pass pluginUuid (PUUID when available) as the -pluginUUID argument (WR-03).
+        QStringList const argv = buildNodeArgv(code, port, pluginUuid, infoJson);
 
         // Store argv for test assertions (no process launched in tests via inject).
         m_lastNodeArgv[pluginId] = argv;
