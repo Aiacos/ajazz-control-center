@@ -86,6 +86,15 @@ add_executable(
     # affordance cannot silently regress. Also guards against an over-broad
     # flip by asserting mirabox_n4 still has hasClock==true.
     test_register_akp05e_clock.cpp
+    # Phase 14 Plan 14-02 (DISPLAY-06/07/08, DOCK-01/02): MockTransport-based
+    # wire assertions for StreamDockControlService. Proves the panel lights at
+    # open (LIG, DISPLAY-06), key images arrive via BAT->chunks->ULEND without
+    # explicit flush (DISPLAY-07, DOCK-02), profileChanged repaints all bound
+    # keys (DISPLAY-08), firmwareVersionFor returns the seeded VER string (DOCK-01),
+    # and the transport is opened only once across multiple assigns (Pitfall 2).
+    test_stream_dock_control_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_control_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/profile_controller.cpp
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
     # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and

@@ -80,6 +80,12 @@ qt_add_executable(
     # docs/architecture/FIRMWARE-UPDATES.md: detects + launches the vendor firmware tool, or opens
     # the per-family download page. No in-app flashing.
     src/firmware_update_service.cpp
+    # Phase 14 Plan 14-02: app-layer Stream Dock panel control (DISPLAY-06/07/08, DOCK-01/02). Holds
+    # the active device open for the session (single HID handle), issues brightness LIG at open,
+    # pushes key images via a coalesced QTimer drain (BAT->chunks->ULEND, no manual flush), repaints
+    # all keys on profileChanged, and surfaces the cached firmware VER string. The reuse surface
+    # that Phases 15 (input), 16 (controls), and 19 (plugin bridge) build on.
+    src/stream_dock_control_service.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -297,6 +303,8 @@ set(ACC_QML_MODULE_SOURCES
     src/app_update_service.hpp
     src/property_inspector_controller.cpp
     src/property_inspector_controller.hpp
+    src/stream_dock_control_service.cpp
+    src/stream_dock_control_service.hpp
 )
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
