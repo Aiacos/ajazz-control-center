@@ -409,6 +409,15 @@ Application::Application(QObject* parent)
                      &SdPluginServer::pluginDisconnected,
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onPluginDisconnected);
+
+    // 4. Page navigation: StreamDockControlService::pageNavigated -> bridge::onActivePageChanged.
+    //    WR-02: fired from navigatePage() (connected to pageNavRequested in Phase 16) after
+    //    the carousel index advances. The bridge retires old-page contexts (willDisappear)
+    //    and populates new-page contexts (willAppear) so plugin lifecycles track page changes.
+    QObject::connect(m_streamDockControl.get(),
+                     &StreamDockControlService::pageNavigated,
+                     m_pluginBridge.get(),
+                     &PluginDeviceBridge::onActivePageChanged);
 #endif
 }
 

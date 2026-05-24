@@ -271,6 +271,19 @@ public:
      */
     Q_INVOKABLE void clearAll(QString const& codename);
 
+signals:
+    /**
+     * @brief Emitted after navigatePage() successfully advances to a new page.
+     *
+     * Connected to PluginDeviceBridge::onActivePageChanged (WR-02 / Phase 19-03):
+     * the bridge retires old-page contexts (willDisappear) and populates new-page
+     * contexts (willAppear) each time the carousel advances.
+     *
+     * @param deviceId  Active device codename, e.g. "akp05e".
+     * @param pageId    New active page id: "root" or a ProfilePage::id.
+     */
+    void pageNavigated(QString const& deviceId, QString const& pageId);
+
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
     /// clear the map. Runs on the GUI thread via QTimer::singleShot (Pitfall 3).

@@ -283,7 +283,14 @@ void StreamDockControlService::navigatePage(int direction) {
     auto const listSize = static_cast<int>(pageList.size());
     m_carouselIndex = std::clamp(m_carouselIndex + direction, 0, listSize - 1);
 
-    repaintPage(QString::fromStdString(pageList[static_cast<std::size_t>(m_carouselIndex)]));
+    QString const newPageId =
+        QString::fromStdString(pageList[static_cast<std::size_t>(m_carouselIndex)]);
+    repaintPage(newPageId);
+
+    // WR-02: notify observers (e.g. PluginDeviceBridge::onActivePageChanged) that the
+    // active page has changed so they can retire old-page plugin contexts (willDisappear)
+    // and populate new-page contexts (willAppear).
+    emit pageNavigated(m_activeCodename, newPageId);
 }
 
 QString StreamDockControlService::firmwareVersionFor(QString const& codename) const {
