@@ -11,7 +11,16 @@ add_subdirectory(integration)
 # QML load-time smoke harness (health report 2026-05-22, finding #3). Rebuilds the
 # AjazzControlCenter QML module in a standalone target and load-tests every component through a real
 # QQmlEngine. Runs headless (QT_QPA_PLATFORM=offscreen).
-add_subdirectory(qml)
+#
+# Gated on AJAZZ_BUILD_APP: the harness reuses the QML module SOURCES/QML_FILES/RESOURCES exported
+# by src/app (ACC_QML_MODULE_SOURCES / ACC_APP_SOURCE_DIR), so it cannot configure when the app is
+# disabled. The sanitizer CI job builds with -DAJAZZ_BUILD_APP=OFF and only targets the unit +
+# integration binaries, so skip the QML smoke test there instead of hard-failing configure.
+if(AJAZZ_BUILD_APP)
+    add_subdirectory(qml)
+else()
+    message(STATUS "tests/qml: skipped (AJAZZ_BUILD_APP=OFF -- no app QML module to smoke-test)")
+endif()
 
 # Phase 7 / Plan 07-03: opt-in libFuzzer harnesses. Gated on AJAZZ_BUILD_FUZZ_TESTS (default OFF in
 # the root CMakeLists). The Clang-only requirement is checked here at configure time — better to
