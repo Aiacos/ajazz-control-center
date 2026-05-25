@@ -203,8 +203,14 @@ TEST_CASE("LinuxBwrapSandbox: DBus permissions can bind the session bus when pre
     // The bus-bind always uses the same path on src and dst. Assert on
     // ITS presence specifically rather than a total `--ro-bind` count
     // (the baseline now also binds `/usr` and the script's parent dir).
-    std::string const expected = std::string{xdg} + "/bus";
-    bool const sawBusBind = containsBind(spawn.args, "--ro-bind", expected, expected);
+    // Guard the null: XDG_RUNTIME_DIR is unset on the macOS CI runner, and
+    // `std::string{nullptr}` is UB (SIGSEGV). When it's unset there is no
+    // bus path to bind, so sawBusBind is correctly false.
+    bool sawBusBind = false;
+    if (xdg != nullptr) {
+        std::string const expected = std::string{xdg} + "/bus";
+        sawBusBind = containsBind(spawn.args, "--ro-bind", expected, expected);
+    }
     if (busExists) {
         REQUIRE(sawBusBind);
     } else {
