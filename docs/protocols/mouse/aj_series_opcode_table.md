@@ -666,11 +666,11 @@ byte 4..7 : status flags — 01 01 01 02 when the telemetry link is up, all-zero
 
 Observed frames (Windows, bytes 0..7):
 
-| Frame                     | Meaning                                            |
-| ------------------------- | -------------------------------------------------- |
-| `05 00 00 64 01 01 01 02` | stable, 100% (verified live after the 0xF7 poll)   |
-| `05 00 00 00 00 00 00 00` | link not ready (no/ineffective poll) → grey        |
-| `05 ad 04 …`              | transient garbage (byte 1 ≠ 0) → rejected          |
+| Frame                     | Meaning                                          |
+| ------------------------- | ------------------------------------------------ |
+| `05 00 00 64 01 01 01 02` | stable, 100% (verified live after the 0xF7 poll) |
+| `05 00 00 00 00 00 00 00` | link not ready (no/ineffective poll) → grey      |
+| `05 ad 04 …`              | transient garbage (byte 1 ≠ 0) → rejected        |
 
 `batteryPercent()` (current): SET_FEATURE `0xF7` poll (report-id `0x00`), ~30 ms
 settle, GET_FEATURE report `0x05`; `parseBatteryCharge()` takes the charge at

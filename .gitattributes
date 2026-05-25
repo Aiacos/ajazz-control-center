@@ -1,0 +1,45 @@
+# ============================================================================
+# Line-ending normalisation.
+#
+# The working tree is LF on every platform so the LF-expecting linters wired
+# through pre-commit (yamllint, shfmt, shellcheck, mdformat, clang-format)
+# behave identically on Windows as on Linux/macOS, regardless of a
+# contributor's `core.autocrlf` setting. Without this, Windows checkouts get
+# CRLF and yamllint fails with "wrong new line character" only locally —
+# never reproducible in CI. See CLAUDE.md "Cross-platform build strictness".
+# ============================================================================
+
+* text=auto eol=lf
+
+# Windows-native scripts must keep CRLF or cmd.exe / older shells choke.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# ----------------------------------------------------------------------------
+# Binary assets — Git must never apply text/eol filters to these.
+# ----------------------------------------------------------------------------
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.icns   binary
+*.svg    text eol=lf
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+*.xz     binary
+*.7z     binary
+*.dmg    binary
+*.msi    binary
+*.deb    binary
+*.rpm    binary
+*.flatpak binary
+*.rtf    binary
+*.qm     binary
+*.ttf    binary
+*.otf    binary
+*.woff   binary
+*.woff2  binary
+*.pcap   binary
+*.pcapng binary

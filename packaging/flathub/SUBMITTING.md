@@ -12,6 +12,7 @@ git sources, unlike `packaging/flatpak/*.yml` which builds from a local
 `type: dir` for our own release CI.
 
 > Sources (read these first, they are authoritative):
+>
 > - Submission process: <https://docs.flathub.org/docs/for-app-authors/submission>
 > - Requirements: <https://docs.flathub.org/docs/for-app-authors/requirements>
 > - MetaInfo guidelines: <https://docs.flathub.org/docs/for-app-authors/metainfo-guidelines>
@@ -20,7 +21,7 @@ git sources, unlike `packaging/flatpak/*.yml` which builds from a local
 > - Linter / build checks: <https://docs.flathub.org/docs/for-app-authors/linter>
 > - Maintenance / updating: <https://docs.flathub.org/docs/for-app-authors/maintenance>
 
----
+______________________________________________________________________
 
 ## 0. Prerequisites
 
@@ -36,13 +37,14 @@ git sources, unlike `packaging/flatpak/*.yml` which builds from a local
   ```
 - Some familiarity with Git and Flatpak (Flathub assumes this).
 
----
+______________________________________________________________________
 
 ## 1. Pre-submission requirements checklist
 
 Flathub enforces these. Tick every box before opening a PR.
 
 ### Application ID
+
 - [x] Reverse-DNS, 3–5 components, chars `[A-Za-z0-9_]` (dash only in last
   component). `io.github.Aiacos.AjazzControlCenter` is valid.
 - [x] Code-hosting prefix `io.github.` is correct because the project is hosted at
@@ -50,6 +52,7 @@ Flathub enforces these. Tick every box before opening a PR.
   GitHub account.
 
 ### Runtime (EOL policy)
+
 - [x] Must use a **non-EOL runtime available at submission time**. Flathub rejects
   apps on EOL runtimes/extensions. `org.kde.Platform` **6.6 and earlier are EOL**;
   6.7 is aging out. The manifest targets **6.8** (current Qt 6.8 LTS-based KDE
@@ -58,6 +61,7 @@ Flathub enforces these. Tick every box before opening a PR.
   with network access are outright prohibited.
 
 ### Build from source / no binaries
+
 - [x] All sources are publicly accessible and built from source. The app module
   uses `type: git` pinned to **tag `v0.1.0` + its commit**; hidapi/pybind11/
   nlohmann-json are likewise pinned git tags + commits. No `type: dir`, no
@@ -65,18 +69,21 @@ Flathub enforces these. Tick every box before opening a PR.
   we have none.)
 
 ### Permissions (keep minimal; prefer portals)
+
 - [x] Static permissions are minimal: `ipc`, `wayland` + `fallback-x11`, `dri`,
   `--device=usb` (fine-grained HID/USB via the device portal — preferred by the
   linter over `--device=all`), and two scoped `xdg-config`/`xdg-data` subdirs.
   No broad `--filesystem=host`, no `--talk-name` bus access.
 
 ### Stable release only
+
 - [x] Flathub forbids beta/nightly builds. Submit a tagged stable release
   (`v0.1.0`). **Note:** the app is described as "Initial alpha scaffolding" in the
   metainfo; if it is genuinely pre-alpha, consider whether it is ready for a
   general-audience store before submitting.
 
 ### Metainfo (AppStream) — REQUIRED, must pass validation
+
 The metainfo currently lives at
 `resources/linux/io.github.Aiacos.AjazzControlCenter.appdata.xml` and is installed
 to `/app/share/metainfo/`. The following **must** be true for the Flathub build to
@@ -114,6 +121,7 @@ pass (`appstreamcli compose` + linter run on every build):
   with or endorsed by AJAZZ." (treat as a blocker for review).
 
 ### Desktop file + icon
+
 - [x] `.desktop` is renamed to the app-id by post-install and `Icon=` repointed to
   the app-id.
 - [x] Icon installed as the app-id (PNG hicolor sizes; min 256×256 PNG, SVG
@@ -122,10 +130,11 @@ pass (`appstreamcli compose` + linter run on every build):
   minimum).
 
 ### License redistribution
+
 - [x] GPL-3.0-or-later permits redistribution. Optionally install the license to
   `$FLATPAK_DEST/share/licenses/$FLATPAK_ID/`.
 
----
+______________________________________________________________________
 
 ## 2. Build and test locally (do this BEFORE opening a PR)
 
@@ -137,8 +146,7 @@ flatpak-builder --user --install --force-clean build-dir \
   io.github.Aiacos.AjazzControlCenter.yml
 ```
 
-(Equivalently `flatpak run org.flatpak.Builder --user --install --force-clean
-build-dir <manifest>`.) Then run it:
+(Equivalently `flatpak run org.flatpak.Builder --user --install --force-clean build-dir <manifest>`.) Then run it:
 
 ```sh
 flatpak run io.github.Aiacos.AjazzControlCenter
@@ -147,7 +155,7 @@ flatpak run io.github.Aiacos.AjazzControlCenter
 Plug in an AJAZZ device and confirm it is detected (HID/USB access via the
 `--device=usb` portal grant).
 
----
+______________________________________________________________________
 
 ## 3. Run the Flathub linter (must pass — the build-bot runs it too)
 
@@ -173,7 +181,7 @@ Fix every error (and ideally every warning) before submitting. Common ones for
 this app: missing screenshots, `--device=all` (use `--device=usb`), and AppStream
 validation failures.
 
----
+______________________________________________________________________
 
 ## 4. Open the submission PR
 
@@ -183,16 +191,18 @@ The submission is a PR against the **`new-pr`** branch of
 1. Fork `github.com/flathub/flathub`. When forking, **uncheck "Copy the master
    branch only"** so you get the `new-pr` branch.
 
-2. Clone your fork's `new-pr` branch and create a submission branch:
+1. Clone your fork's `new-pr` branch and create a submission branch:
+
    ```sh
    git clone --branch=new-pr git@github.com:YOUR_USERNAME/flathub.git
    cd flathub
    git checkout -b ajazz-control-center new-pr
    ```
 
-3. Add the submission files at the repo root. At minimum the manifest. If you keep
+1. Add the submission files at the repo root. At minimum the manifest. If you keep
    the metainfo/screenshots in-tree for the submission, add them too; otherwise the
    build pulls them from the pinned git source.
+
    ```sh
    cp /path/to/packaging/flathub/io.github.Aiacos.AjazzControlCenter.yml .
    git add io.github.Aiacos.AjazzControlCenter.yml
@@ -200,11 +210,12 @@ The submission is a PR against the **`new-pr`** branch of
    git push -u origin ajazz-control-center
    ```
 
-4. Open a PR on GitHub:
+1. Open a PR on GitHub:
+
    - **Base branch:** `new-pr` (NOT `master`).
    - **Title:** `Add io.github.Aiacos.AjazzControlCenter`.
 
----
+______________________________________________________________________
 
 ## 5. Review and build-bot flow
 
@@ -225,7 +236,7 @@ The submission is a PR against the **`new-pr`** branch of
 - Publishing typically takes ~1–2 hours after merge; the app appears on
   flathub.org within a few hours after that.
 
----
+______________________________________________________________________
 
 ## 6. Per-release update checklist
 
@@ -240,25 +251,24 @@ For each new tagged release `vX.Y.Z`:
    ```sh
    git rev-list -n 1 vX.Y.Z
    ```
-2. **Update the app module source** in
+1. **Update the app module source** in
    `io.github.Aiacos.AjazzControlCenter.yml`:
    - `tag: vX.Y.Z`
    - `commit: <the SHA from step 1>`
-   (Both must be updated — Flathub requires the commit to be pinned, not just the
-   tag.)
-3. **Bump the metainfo `<releases>`** with a new `<release version="X.Y.Z"
-   date="YYYY-MM-DD">` and release notes. AppStream validation expects the latest
+     (Both must be updated — Flathub requires the commit to be pinned, not just the
+     tag.)
+1. **Bump the metainfo `<releases>`** with a new `<release version="X.Y.Z" date="YYYY-MM-DD">` and release notes. AppStream validation expects the latest
    release entry to match the version being shipped.
-4. **Refresh screenshots** if the UI changed (re-point image URLs at the new tag,
+1. **Refresh screenshots** if the UI changed (re-point image URLs at the new tag,
    not a branch).
-5. **Check the runtime is still non-EOL.** If `org.kde.Platform` `runtime-version`
+1. **Check the runtime is still non-EOL.** If `org.kde.Platform` `runtime-version`
    has gone EOL, bump it (and `org.kde.Sdk`) to the current branch and re-test.
    Flathub emails maintainers and the build will warn when the runtime is EOL.
-6. **Re-pin dependency modules** (hidapi/pybind11/nlohmann-json) only if you bump
+1. **Re-pin dependency modules** (hidapi/pybind11/nlohmann-json) only if you bump
    their versions; keep tag+commit in sync with the root `CMakeLists.txt`
    FetchContent tags.
-7. **Rebuild and lint locally** (sections 2 and 3). All checks green.
-8. **Commit and PR** to the app repo's `master`; comment `bot, build` if a fresh
+1. **Rebuild and lint locally** (sections 2 and 3). All checks green.
+1. **Commit and PR** to the app repo's `master`; comment `bot, build` if a fresh
    build is needed; merge to publish.
 
 > Tip: enable Flathub's external-data / update bots later if you switch the app

@@ -1,4 +1,7 @@
 # Maintainer: Lorenzo Argentieri <uni.lorenzo.a@gmail.com>
+# shellcheck shell=bash disable=SC2034,SC2154
+# (PKGBUILD is sourced by makepkg, which both consumes these "unused"
+#  variables and provides $pkgdir/$srcdir at build time.)
 pkgname=ajazz-control-center
 pkgver=0.1.0
 pkgrel=1

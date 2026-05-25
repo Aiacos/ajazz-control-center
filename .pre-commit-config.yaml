@@ -225,8 +225,11 @@ repos:
       # excluded paths. See docs/policies/capture-data-hygiene.md.
       - id: reject-raw-captures
         name: Reject raw USB capture files (CAPTURE-01 / Pitfall 17)
-        entry: scripts/reject-raw-captures.sh
-        language: system
+        # Pure-Python (language: python) so the check fires at commit time on
+        # Windows too, without Git-Bash on PATH. The old `language: system`
+        # bash variant silently no-op'd where `bash` wasn't resolvable.
+        entry: python scripts/reject_raw_captures.py
+        language: python
         pass_filenames: true
         always_run: true
 
@@ -236,8 +239,9 @@ repos:
       # codepage; this hook blocks the recurrence at commit time.
       - id: check-test-names-ascii
         name: TEST_CASE / SECTION titles must be ASCII only
-        entry: scripts/check-test-names-ascii.sh
-        language: system
+        # Pure-Python so it runs at commit time on Windows without Git-Bash.
+        entry: python scripts/check_test_names_ascii.py
+        language: python
         files: '^tests/.*\.cpp$'
         pass_filenames: true
 

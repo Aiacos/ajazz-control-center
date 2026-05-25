@@ -4,9 +4,9 @@ name: Secret scan
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   schedule:
     - cron: '23 4 * * 1'
 

@@ -22,7 +22,7 @@ the capture window. This is a security incident, not a cosmetic mistake —
 see `.planning/research/PITFALLS.md` Pitfall 17 for the full risk write-up.
 
 This policy is enforced at **commit time** by the
-`scripts/reject-raw-captures.sh` pre-commit hook. The hook MUST land
+`scripts/reject_raw_captures.py` pre-commit hook. The hook MUST land
 *before* any researcher takes a first capture; that is why CAPTURE-01 is
 the MUST-FIX-FIRST plan (09-01) of v1.2 Phase 9.
 
@@ -96,7 +96,7 @@ hygiene boundary lands.
 
 ## Pre-commit enforcement
 
-The pre-commit hook is `scripts/reject-raw-captures.sh`, registered as a
+The pre-commit hook is `scripts/reject_raw_captures.py`, registered as a
 local hook in `.pre-commit-config.yaml` (search for `reject-raw-captures`).
 It runs on every `git commit` and inspects each staged path:
 

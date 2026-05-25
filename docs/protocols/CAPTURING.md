@@ -17,7 +17,7 @@ once, to produce a sanitised hex fixture that ends up under
 `tests/integration/fixtures/<codename>/<label>.h`.
 
 > **RAW CAPTURE FILES NEVER LEAVE YOUR LOCAL MACHINE.** The pre-commit
-> hook (`scripts/reject-raw-captures.sh`, plan 09-01) rejects any
+> hook (`scripts/reject_raw_captures.py`, plan 09-01) rejects any
 > `*.pcap` / `*.pcapng` at any path. The only thing that gets committed
 > is the sanitised C++ array literal under
 > `tests/integration/fixtures/<codename>/`. The raw `.pcap` and the
