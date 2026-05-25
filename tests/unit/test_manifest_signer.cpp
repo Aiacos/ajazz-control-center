@@ -61,6 +61,14 @@ fs::path repoRoot() {
     return fs::path{AJAZZ_TEST_REPO_ROOT};
 }
 
+/// Absolute path of the interpreter that owns the `cryptography` module,
+/// pinned by CMake (AJAZZ_TEST_PYTHON3 = Python3_EXECUTABLE). Used for BOTH
+/// signing and verifying so the two never diverge across the bare-name vs
+/// vetted-dir resolution gap on macOS/Windows runners (see CMakeLists.txt).
+std::string pythonExe() {
+    return AJAZZ_TEST_PYTHON3;
+}
+
 /// Run a child process and return its exit code, or -1 on spawn
 /// failure. Mirrors the platform split of the production verifier
 /// (`fork`+`execvp` on POSIX, `_wspawnvp` on Windows) so the tests
@@ -183,7 +191,7 @@ std::string readFile(fs::path const& p) {
 
 ManifestSignerConfig makeConfig(fs::path const& trustRoots = {}) {
     ManifestSignerConfig c;
-    c.pythonExecutable = "python3";
+    c.pythonExecutable = pythonExe();
     c.verifierScript = verifierScript();
     c.trustedPublishersFile = trustRoots;
     return c;
@@ -197,10 +205,11 @@ TEST_CASE("manifest verifier: signed manifest passes", "[manifest-signer]") {
     auto const keys = tmp / "keys";
     auto const manifest = tmp / "manifest.json";
 
-    REQUIRE(runChild(
-                {"python3", verifierScript().string(), "keygen", "--out-dir", keys.string()}) == 0);
+    REQUIRE(
+        runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()}) ==
+        0);
     writeFile(manifest, kMinimalManifestJson);
-    REQUIRE(runChild({"python3",
+    REQUIRE(runChild({pythonExe(),
                       verifierScript().string(),
                       "sign",
                       "--manifest",
@@ -224,9 +233,9 @@ TEST_CASE("manifest verifier: tampered manifest fails", "[manifest-signer]") {
     auto const keys = tmp / "keys";
     auto const manifest = tmp / "manifest.json";
 
-    runChild({"python3", verifierScript().string(), "keygen", "--out-dir", keys.string()});
+    runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()});
     writeFile(manifest, kMinimalManifestJson);
-    runChild({"python3",
+    runChild({pythonExe(),
               verifierScript().string(),
               "sign",
               "--manifest",
@@ -274,10 +283,11 @@ TEST_CASE("manifest verifier: unresolvable interpreter fails closed (CWE-426)",
     auto const keys = tmp / "keys";
     auto const manifest = tmp / "manifest.json";
 
-    REQUIRE(runChild(
-                {"python3", verifierScript().string(), "keygen", "--out-dir", keys.string()}) == 0);
+    REQUIRE(
+        runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()}) ==
+        0);
     writeFile(manifest, kMinimalManifestJson);
-    REQUIRE(runChild({"python3",
+    REQUIRE(runChild({pythonExe(),
                       verifierScript().string(),
                       "sign",
                       "--manifest",
@@ -304,9 +314,9 @@ TEST_CASE("manifest verifier: trust-roots match resolves publisher name", "[mani
     auto const manifest = tmp / "manifest.json";
     auto const trustFile = tmp / "trust.json";
 
-    runChild({"python3", verifierScript().string(), "keygen", "--out-dir", keys.string()});
+    runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()});
     writeFile(manifest, kMinimalManifestJson);
-    runChild({"python3",
+    runChild({pythonExe(),
               verifierScript().string(),
               "sign",
               "--manifest",
