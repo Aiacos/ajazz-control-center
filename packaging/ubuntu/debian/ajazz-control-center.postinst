@@ -15,8 +15,7 @@ case "$1" in
             udevadm trigger --subsystem-match=usb --subsystem-match=hidraw || true
         fi
         ;;
-    abort-upgrade|abort-remove|abort-deconfigure)
-        ;;
+    abort-upgrade | abort-remove | abort-deconfigure) ;;
 esac
 
 #DEBHELPER#

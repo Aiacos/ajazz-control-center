@@ -15,9 +15,16 @@ For full context: `.planning/PROJECT.md`. For current state: `.planning/STATE.md
 
 ## Workflow conventions
 
-- **Direct-to-`main` workflow.** No long-lived feature branches. Fetch + rebase
-  before every push; expect 3–5 remote commits per session. Never force-push
-  to `main`.
+- **GitFlow-lite.** Two long-lived branches: `develop` (integration, the
+  default branch) and `main` (release-only). Do work on short-lived topic
+  branches (`feat/…`, `fix/…`, `chore/…`) cut from `develop`; open a PR
+  **into `develop`**. `main` only ever receives a PR **from `develop`** (the
+  release promotion); release tags `v*` are cut from `main`. Never push
+  directly to `develop` or `main`, and never force-push either.
+  - *Why this changed:* the project ran direct-to-`main` through v1.1; the
+    move to PR-gated `develop` lets the Lint workflow auto-fix formatting on
+    the topic branch before it ever reaches an integration branch, so CI on
+    `develop`/`main` stays green. See `.github/workflows/lint.yml`.
 - **Atomic commits.** Each commit is one independently-revertable change.
   Don't bundle unrelated fixes.
 - **Conventional Commits.** `feat:`, `fix:`, `chore:`, `docs:`, `test:`,

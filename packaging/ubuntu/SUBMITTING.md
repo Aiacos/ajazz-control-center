@@ -31,15 +31,15 @@ ______________________________________________________________________
 
 ## What's in `debian/`
 
-| File | Purpose |
-| --- | --- |
-| `control` | Source + Binary stanzas; `Build-Depends` (debhelper-compat 13, cmake, ninja-build, Qt 6 `-dev`, libhidapi-dev, etc.) and runtime `Depends` (`${shlibs:Depends}`, `${misc:Depends}`, QML modules). |
-| `rules` | `dh` sequencer with `--buildsystem=cmake+ninja`; passes the project flags (tests OFF, WERROR OFF, `AJAZZ_USE_SYSTEM_DEPS=ON`). |
-| `changelog` | `0.1.0-1~noble1`, targeting the `noble` series. |
-| `copyright` | Machine-readable DEP-5, GPL-3.0-or-later. |
-| `source/format` | `3.0 (quilt)` - the standard non-native format. |
-| `*.install` | Selects the binary, udev rule, desktop entry, AppStream metainfo and hicolor icons into the package. |
-| `*.postinst` / `*.postrm` | Reload + retrigger udev so the `uaccess` rule applies without a reboot. |
+| File                      | Purpose                                                                                                                                                                                           |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `control`                 | Source + Binary stanzas; `Build-Depends` (debhelper-compat 13, cmake, ninja-build, Qt 6 `-dev`, libhidapi-dev, etc.) and runtime `Depends` (`${shlibs:Depends}`, `${misc:Depends}`, QML modules). |
+| `rules`                   | `dh` sequencer with `--buildsystem=cmake+ninja`; passes the project flags (tests OFF, WERROR OFF, `AJAZZ_USE_SYSTEM_DEPS=ON`).                                                                    |
+| `changelog`               | `0.1.0-1~noble1`, targeting the `noble` series.                                                                                                                                                   |
+| `copyright`               | Machine-readable DEP-5, GPL-3.0-or-later.                                                                                                                                                         |
+| `source/format`           | `3.0 (quilt)` - the standard non-native format.                                                                                                                                                   |
+| `*.install`               | Selects the binary, udev rule, desktop entry, AppStream metainfo and hicolor icons into the package.                                                                                              |
+| `*.postinst` / `*.postrm` | Reload + retrigger udev so the `uaccess` rule applies without a reboot.                                                                                                                           |
 
 > **No `debian/compat` file.** Modern debhelper expresses the compat level via
 > `Build-Depends: debhelper-compat (= 13)` in `debian/control`. Shipping *both*
@@ -54,7 +54,7 @@ ______________________________________________________________________
    [Ubuntu Code of Conduct](https://launchpad.net/codeofconduct) (required before
    you can upload).
 
-2. **Generate (or reuse) an OpenPGP key** and publish it so Launchpad can verify
+1. **Generate (or reuse) an OpenPGP key** and publish it so Launchpad can verify
    your signatures:
 
    ```sh
@@ -67,12 +67,12 @@ ______________________________________________________________________
    <https://launchpad.net/~/+editpgpkeys> and confirm the encrypted email
    Launchpad sends back.
 
-3. **Register the PPA.** On your Launchpad profile choose *"Create a new PPA"*,
+1. **Register the PPA.** On your Launchpad profile choose *"Create a new PPA"*,
    name it `ajazz-control-center`. Its dput target is then
    `ppa:aiacos/ajazz-control-center`.
    (Replace `aiacos` with your actual Launchpad username if different.)
 
-4. **Install the packaging toolchain** on your Ubuntu build host:
+1. **Install the packaging toolchain** on your Ubuntu build host:
 
    ```sh
    sudo apt update
@@ -97,14 +97,14 @@ release already publishes a source tarball:
    cd ajazz-control-center-0.1.0
    ```
 
-2. **Drop in this packaging directory** (copy `debian/` from this repo's
+1. **Drop in this packaging directory** (copy `debian/` from this repo's
    `packaging/ubuntu/`):
 
    ```sh
    cp -r /path/to/ajazz-control-center/packaging/ubuntu/debian .
    ```
 
-3. **Build the SIGNED source package.** `-S` = source-only build (Launchpad
+1. **Build the SIGNED source package.** `-S` = source-only build (Launchpad
    refuses binary uploads); `-sa` = include the `.orig.tar.gz` (mandatory for a
    brand-new package's first upload to a series):
 
@@ -117,14 +117,14 @@ release already publishes a source tarball:
    `debuild -S -sa -k<KEYID>`. The same email/key MUST match your Launchpad
    account.
 
-4. **Lint before upload** (Launchpad runs its own checks, but catch issues
+1. **Lint before upload** (Launchpad runs its own checks, but catch issues
    early):
 
    ```sh
    lintian ../ajazz-control-center_0.1.0-1~noble1_source.changes
    ```
 
-5. **Upload to the PPA:**
+1. **Upload to the PPA:**
 
    ```sh
    dput ppa:aiacos/ajazz-control-center \
@@ -180,7 +180,7 @@ When a new upstream tag (e.g. `v0.2.0`) ships:
 1. **Refresh the orig tarball** to the new tag and rename it
    `ajazz-control-center_0.2.0.orig.tar.gz`.
 
-2. **Add a new `debian/changelog` stanza** (use `dch`):
+1. **Add a new `debian/changelog` stanza** (use `dch`):
 
    ```sh
    dch -v 0.2.0-1~noble1 --distribution noble "Update to upstream 0.2.0."
@@ -189,10 +189,10 @@ When a new upstream tag (e.g. `v0.2.0`) ships:
    For each additional series, add a stanza with the matching version suffix
    (`~oracular1`, ...).
 
-3. **Re-check dependencies.** If upstream adds a Qt module or other lib, update
+1. **Re-check dependencies.** If upstream adds a Qt module or other lib, update
    `Build-Depends` / `Depends` in `debian/control` in the same change.
 
-4. **Rebuild + relint + reupload:**
+1. **Rebuild + relint + reupload:**
 
    ```sh
    debuild -S -sa        # -sa on the first upload of a new upstream version

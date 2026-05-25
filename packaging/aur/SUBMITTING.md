@@ -29,17 +29,17 @@ ______________________________________________________________________
 
 1. Create an account at <https://aur.archlinux.org/register>.
 
-2. Generate an SSH key pair dedicated to the AUR (skip if you reuse an
+1. Generate an SSH key pair dedicated to the AUR (skip if you reuse an
    existing key):
 
    ```sh
    ssh-keygen -f ~/.ssh/aur
    ```
 
-3. Add the **public** key to your AUR profile: My Account → "SSH Public Key",
+1. Add the **public** key to your AUR profile: My Account → "SSH Public Key",
    paste the contents of `~/.ssh/aur.pub`, Save.
 
-4. Point SSH at the right key for the AUR host. Add to `~/.ssh/config`:
+1. Point SSH at the right key for the AUR host. Add to `~/.ssh/config`:
 
    ```
    Host aur.archlinux.org
@@ -47,7 +47,7 @@ ______________________________________________________________________
      User aur
    ```
 
-5. Verify auth (expects an "interactive shell is disabled" greeting, which
+1. Verify auth (expects an "interactive shell is disabled" greeting, which
    means the key works):
 
    ```sh
@@ -131,7 +131,7 @@ When a new upstream tag (e.g. `v0.2.0`) ships:
    `pkgrel=1`. (Only bump `pkgrel` instead, leaving `pkgver`, when the *package*
    changes but upstream source does not.)
 
-2. **Refresh `sha256sums`.** Recompute against the new tag tarball:
+1. **Refresh `sha256sums`.** Recompute against the new tag tarball:
 
    ```sh
    curl -L https://github.com/Aiacos/ajazz-control-center/archive/refs/tags/v0.2.0.tar.gz \
@@ -144,21 +144,21 @@ When a new upstream tag (e.g. `v0.2.0`) ships:
    updpkgsums
    ```
 
-3. **Regenerate `.SRCINFO`** (mandatory — the AUR shows the version from
+1. **Regenerate `.SRCINFO`** (mandatory — the AUR shows the version from
    `.SRCINFO`, not the PKGBUILD):
 
    ```sh
    makepkg --printsrcinfo > .SRCINFO
    ```
 
-4. **Re-test:**
+1. **Re-test:**
 
    ```sh
    namcap PKGBUILD
    makepkg -si        # or: extra-x86_64-build
    ```
 
-5. **Commit + push:**
+1. **Commit + push:**
 
    ```sh
    git add PKGBUILD .SRCINFO

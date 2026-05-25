@@ -7,8 +7,7 @@ locally, testing the unsigned snap on your own machine, and publishing to the
 Canonical **Snap Store**, including the `raw-usb` auto-connect store request.
 
 The recipe is `packaging/snap/snapcraft.yaml`. It targets **`core24`** with the
-**`kde-neon-6`** extension (Qt 6 + KDE Frameworks 6 runtime), `confinement:
-strict`, `grade: stable`.
+**`kde-neon-6`** extension (Qt 6 + KDE Frameworks 6 runtime), `confinement: strict`, `grade: stable`.
 
 > All commands below are run from `packaging/snap/` unless noted. `snapcraft`
 > auto-discovers `snapcraft.yaml` in the current directory.
@@ -183,16 +182,16 @@ To make `raw-usb` connect automatically on install, file a request in the Snap
 Store forum. This is reviewed by Canonical's store team:
 
 1. Publish at least one revision (edge is fine) so the snap exists in the store.
-2. Open a thread in the **store-requests** / **privileged-interfaces**
+1. Open a thread in the **store-requests** / **privileged-interfaces**
    category: <https://forum.snapcraft.io/c/store-requests> (sign in with your
    Ubuntu One / snapcraft account).
-3. Title it e.g. *"Auto-connection request for `ajazz-control-center`:
+1. Title it e.g. *"Auto-connection request for `ajazz-control-center`:
    raw-usb + hardware-observe"* and justify it: this is a hardware control
    panel for a whole family of AJAZZ HID devices (VID prefixes 0300, 3151,
    0c45, 248a, 249a, 3554) that cannot use the per-device `hidraw` interface
    because `hidraw` slots match exactly one `/dev/hidrawN` node or one
    `VID:PID` pair, not a multi-VID device family.
-4. Reference precedents (`arduino`, `simple-scan`, `zwave-js-ui`, `chromium`
+1. Reference precedents (`arduino`, `simple-scan`, `zwave-js-ui`, `chromium`
    WebUSB) which were granted `raw-usb` auto-connect for the same reason.
 
 Until the request is granted, the snap still works — the user just connects the
@@ -215,27 +214,27 @@ ______________________________________________________________________
 For every new upstream release tag:
 
 1. [ ] Tag the release in git (`vX.Y.Z`) and check it out — `override-pull`
-       derives the snap version from `git describe`.
-2. [ ] Bump nothing in `snapcraft.yaml` for the version (it's auto-adopted);
-       only edit it for genuine recipe changes (new dep, new interface).
-3. [ ] Verify `cmake-parameters` still match `release.yml`
-       (`AJAZZ_BUILD_TESTS=OFF`, `AJAZZ_ENABLE_WERROR=OFF`,
-       `AJAZZ_INSTALL_UDEV_RULES=OFF`).
-4. [ ] `snapcraft clean && snapcraft` — clean build to catch stale-cache drift.
-5. [ ] `sudo snap install --dangerous ./*.snap` and run the §2 interface
-       checks against real hardware (raw-usb + hardware-observe connected).
-6. [ ] `snapcraft upload --release=edge ./*.snap`; install from edge; smoke-test.
-7. [ ] `snapcraft release ajazz-control-center <revision> candidate` (optional
-       gate) → then `stable`.
-8. [ ] `snapcraft status ajazz-control-center` — confirm the stable channel now
-       points at the new revision.
-9. [ ] If this is the first store revision: complete §4 (raw-usb auto-connect
-       request). For later revisions, confirm the grant still holds with
-       `snap connections`.
-10. [ ] Confirm the listing metadata (icon, screenshots, summary) on
-        <https://snapcraft.io/ajazz-control-center> — these are managed via the
-        web dashboard or `snapcraft.yaml`/store metadata, not baked into the
-        revision.
+   derives the snap version from `git describe`.
+1. [ ] Bump nothing in `snapcraft.yaml` for the version (it's auto-adopted);
+   only edit it for genuine recipe changes (new dep, new interface).
+1. [ ] Verify `cmake-parameters` still match `release.yml`
+   (`AJAZZ_BUILD_TESTS=OFF`, `AJAZZ_ENABLE_WERROR=OFF`,
+   `AJAZZ_INSTALL_UDEV_RULES=OFF`).
+1. [ ] `snapcraft clean && snapcraft` — clean build to catch stale-cache drift.
+1. [ ] `sudo snap install --dangerous ./*.snap` and run the §2 interface
+   checks against real hardware (raw-usb + hardware-observe connected).
+1. [ ] `snapcraft upload --release=edge ./*.snap`; install from edge; smoke-test.
+1. [ ] `snapcraft release ajazz-control-center <revision> candidate` (optional
+   gate) → then `stable`.
+1. [ ] `snapcraft status ajazz-control-center` — confirm the stable channel now
+   points at the new revision.
+1. [ ] If this is the first store revision: complete §4 (raw-usb auto-connect
+   request). For later revisions, confirm the grant still holds with
+   `snap connections`.
+1. [ ] Confirm the listing metadata (icon, screenshots, summary) on
+   <https://snapcraft.io/ajazz-control-center> — these are managed via the
+   web dashboard or `snapcraft.yaml`/store metadata, not baked into the
+   revision.
 
 ______________________________________________________________________
 
