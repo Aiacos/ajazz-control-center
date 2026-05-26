@@ -184,6 +184,14 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
 // ---------------------------------------------------------------------------
 
 void StreamDockControlService::assignMainImage(QImage const& img) {
+    // WR-01: explicit guard matches repaintPage / repaintEncodersFromProfile style.
+    // dynamic_cast(nullptr) is defined (returns nullptr), so this is not a crash
+    // fix -- it is a defensive-depth parity fix so callers get a consistent guard
+    // across all assign methods rather than the subtle "no device" vs "no capability"
+    // conflation (both returned without distinguishing the two cases).
+    if (!m_activeDevice) {
+        return;
+    }
     // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
     auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
     if (disp == nullptr) {
@@ -196,6 +204,10 @@ void StreamDockControlService::assignMainImage(QImage const& img) {
 }
 
 void StreamDockControlService::assignEncoderImage(std::uint8_t encoderIndex, QImage const& img) {
+    // WR-01: explicit m_activeDevice guard (defensive-depth parity with repaintPage).
+    if (!m_activeDevice) {
+        return;
+    }
     // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
     auto* enc = dynamic_cast<core::IEncoderCapable*>(m_activeDevice.get());
     if (enc == nullptr) {
@@ -210,6 +222,10 @@ void StreamDockControlService::assignEncoderImage(std::uint8_t encoderIndex, QIm
 }
 
 void StreamDockControlService::assignTouchStripZone(std::uint8_t zone, QImage const& img) {
+    // WR-01: explicit m_activeDevice guard (defensive-depth parity with repaintPage).
+    if (!m_activeDevice) {
+        return;
+    }
     // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
     auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(m_activeDevice.get());
     if (strip == nullptr) {
