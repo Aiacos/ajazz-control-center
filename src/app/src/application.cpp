@@ -443,6 +443,15 @@ Application::Application(QObject* parent)
     // Reuses the SAME m_profileController signal and the SAME m_streamDockControl
     // handle + coalesced drain (no second monitor, accessor, or QTimer -- RESEARCH A5).
     // Keys and encoder overlays repaint together on every profileChanged emission.
+    //
+    // IN-02 ordering invariant: this connection is registered AFTER the
+    // repaintFromProfile connection above. Qt delivers direct-connection slots in
+    // registration order on the same thread, so repaintFromProfile fires first.
+    // repaintFromProfile resets m_carouselIndex = 0 before calling repaintPage;
+    // repaintEncodersFromProfile must NOT reset m_carouselIndex (it does not today).
+    // If either method is later changed to read or write m_carouselIndex, the
+    // ordering of these two connects becomes load-bearing -- reorder explicitly
+    // rather than relying on registration order alone.
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_streamDockControl.get(),
