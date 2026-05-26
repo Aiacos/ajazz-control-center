@@ -438,6 +438,16 @@ Application::Application(QObject* parent)
                      m_streamDockControl.get(),
                      &StreamDockControlService::repaintFromProfile);
 
+    // Phase 23 Plan 23-02 (DISPLAY-10 repaint): wire profileChanged ->
+    // repaintEncodersFromProfile so encoder overlays also come back on profile load.
+    // Reuses the SAME m_profileController signal and the SAME m_streamDockControl
+    // handle + coalesced drain (no second monitor, accessor, or QTimer -- RESEARCH A5).
+    // Keys and encoder overlays repaint together on every profileChanged emission.
+    QObject::connect(m_profileController.get(),
+                     &ProfileController::profileChanged,
+                     m_streamDockControl.get(),
+                     &StreamDockControlService::repaintEncodersFromProfile);
+
     // Phase 21 (T-21-lunbo): wire profileChanged -> resetLunBoCursors so LunBo
     // per-key carousel positions start fresh when a new profile loads.
     // Without this, stale cursor positions from the previous profile persist and
