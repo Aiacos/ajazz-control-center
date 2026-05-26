@@ -84,7 +84,7 @@ PROVISIONAL — where hardware contradicts it, the hardware wins and the RE doc 
 
 ### Auxiliary Display Surfaces (Phase 23 — HARDWARE-GATED)
 
-- [ ] **DISPLAY-10**: The auxiliary surfaces accept assigned images — the **per-encoder overlays** (rendered as the 4 touch-strip zones — reconcile the in-code `ENC` per-encoder-LCD model against the akp05.md "no separate encoder LCD" finding), the **main LCD strip**, and the **touch strip**, including the **`DRA` rect-addressable** partial-zone upload (avoids re-encoding the whole 800×480 strip per encoder-zone change; vendor §10 P0). Per-surface framing is provisional until confirmed on the device.
+- [x] **DISPLAY-10**: The auxiliary surfaces accept assigned images — the **per-encoder overlays** (rendered as the 4 touch-strip zones — reconcile the in-code `ENC` per-encoder-LCD model against the akp05.md "no separate encoder LCD" finding), the **main LCD strip**, and the **touch strip**, including the **`DRA` rect-addressable** partial-zone upload (avoids re-encoding the whole 800×480 strip per encoder-zone change; vendor §10 P0). Per-surface framing is provisional until confirmed on the device.
 
 ### Family Coverage (Phase 24)
 
@@ -287,7 +287,7 @@ Empty initially. Populated by the gsd-roadmapper agent during ROADMAP.md generat
 | PLUGIN-13   | Phase 20 | Complete |
 | PLUGIN-12   | Phase 21 | Complete |
 | PLUGIN-14   | Phase 22 | Complete |
-| DISPLAY-10  | Phase 23 | Pending  |
+| DISPLAY-10  | Phase 23 | Complete |
 | DEVICES-10  | Phase 24 | Complete |
 | VERIFY-05   | Phase 25 | Pending  |
 | VERIFY-06   | Phase 25 | Pending  |
