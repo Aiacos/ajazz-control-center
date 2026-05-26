@@ -82,7 +82,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 20: Property Inspector + Settings** — Per-action Property Inspector in `QWebEngineView`+`QWebChannel` (cefQuery polyfill, `sdpi.css` served); `get/set(+Global)Settings` persistence. (PLUGIN-09/13) (completed 2026-05-24)
 - [x] **Phase 21: Built-in In-Process Actions** — page/profile nav, `device.brightness`, `system.hotkey` (opt-in global hook), multimedia, volume, plain text, browser/openUrl, multiactions, OBS (auth default-on). (PLUGIN-12) (completed 2026-05-24)
 - [x] **Phase 22: Plugin Store / Local Install** — Install from local `.sdPlugin`/`.zip` via a host-owned catalog (**no phone-home**), behind a signature/manifest-verification gate. (PLUGIN-14) (completed 2026-05-24)
-- [ ] **Phase 23: Auxiliary Display Surfaces** — Per-encoder overlays (touch-strip zones; reconcile ENC-LCD vs DRA-zone model), main LCD strip, touch strip, and `DRA` rect-addressable partial upload. HARDWARE-GATED. (DISPLAY-10)
+- [x] **Phase 23: Auxiliary Display Surfaces** — Per-encoder overlays (touch-strip zones; reconcile ENC-LCD vs DRA-zone model), main LCD strip, touch strip, and `DRA` rect-addressable partial upload. HARDWARE-GATED. (DISPLAY-10) (completed 2026-05-26)
 - [x] **Phase 24: Family Coverage AKP03/153/815** — Same assign-image-and-press flow via the capability-generic service (per-family init + image format honored; AKP03 has 3 encoders). (DEVICES-10) (completed 2026-05-24)
 - [ ] **Phase 25: Hardware Verification + Real Plugin** — AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) verified end-to-end (image, key press, encoder rotate+press, touch tap/swipe, brightness, clear); provisional §5 wire items reconciled; `hasClock=false` confirmed; **a real third-party `.sdPlugin` runs live**. HARDWARE-GATED. (VERIFY-05/06)
 
@@ -409,7 +409,7 @@ Plans:
 Plans:
 
 - [x] 23-01-PLAN.md — STOP-gate Phase 14 + add assignMainImage/assignEncoderImage/assignTouchStripZone to the control service with MockTransport ENC/MAI/DRA wire tests (DISPLAY-10) (completed 2026-05-24)
-- [ ] 23-02-PLAN.md — repaintEncodersFromProfile (DRA zone default, ENC fallback) wired into the existing profileChanged path (DISPLAY-10)
+- [x] 23-02-PLAN.md — repaintEncodersFromProfile (DRA zone default, ENC fallback) wired into the existing profileChanged path (DISPLAY-10)
 
 ### Phase 24: Family Coverage AKP03/153/815
 
@@ -477,6 +477,6 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 20. Property Inspector + Settings           | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 21. Built-in In-Process Actions             | v1.3      | 3/3            | Complete         | 2026-05-24 |
 | 22. Plugin Store / Local Install            | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 23. Auxiliary Display Surfaces (HW)         | v1.3      | 1/2            | In Progress      |            |
+| 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2 | Complete   | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/2            | Not started      | —          |
