@@ -165,6 +165,76 @@ public:
      */
     void assignKeyImage(std::uint8_t keyIndex, QImage const& img);
 
+    // -------------------------------------------------------------------------
+    // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
+    //
+    // PROVISIONAL §5 NOTE (akp05_vendor.md §5 / akp05.md §Layout):
+    //   The AKP05 wire protocol includes two paths for encoder-adjacent graphics:
+    //     - ENC (CmdEncImage): per-encoder 100x100 LCD path, as modelled in-code.
+    //     - DRA (CmdSecondaryScreen): rect-addressable touch-strip zones; the spec
+    //       states "no separate encoder LCD — overlays are touch-strip zones (DRA)".
+    //   BOTH paths are wired and NEITHER is deleted. The encoder-zone -> DRA rect
+    //   geometry (zone i: location=i, x=i*200, y=0, rectWidth=200, rectHeight=100)
+    //   is a Ghidra-derived hypothesis (akp05_vendor.md §5). Phase 25 (VERIFY-05)
+    //   is the live hardware witness that reconciles which path the firmware honors
+    //   and updates the RE doc + code. Do NOT assert this geometry as confirmed.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Assign an image to the AKP05E main LCD strip (MAI, 800x100).
+     *
+     * Routes through dynamic_cast<IDisplayCapable*> with null-check and calls
+     * setMainImage(rgba, w, h). The backend resizes to 800x100 and emits
+     * MAI header + chunks + ULEND. This is an editor/explicit action —
+     * no profile field is read here (RESEARCH A4).
+     *
+     * No-op if no device is active or the device lacks IDisplayCapable.
+     *
+     * @param img Source image at any resolution; backend resizes to 800x100.
+     */
+    void assignMainImage(QImage const& img);
+
+    /**
+     * @brief Assign an image to a per-encoder LCD (ENC path, 0-based index).
+     *
+     * Routes through dynamic_cast<IEncoderCapable*> with null-check and calls
+     * setEncoderImage(encoderIndex, rgba, w, h). The 0-based index is passed
+     * THROUGH to the backend unchanged — the backend range-checks < EncoderCount
+     * (4) and refuses out-of-range (Pitfall 3 / T-23-02). Backend emits ENC
+     * header with index at byte 12 + chunks + ULEND.
+     *
+     * PROVISIONAL: akp05.md states the AKP05E has no separate encoder LCDs;
+     * per-encoder graphics render as touch-strip zones via DRA. Both ENC and DRA
+     * paths are kept reachable for Phase-25 hardware reconciliation (VERIFY-05).
+     *
+     * No-op if no device is active or the device lacks IEncoderCapable.
+     *
+     * @param encoderIndex 0-based encoder index (0..3 for AKP05E; backend refuses >=4).
+     * @param img          Source image; backend resizes to 100x100.
+     */
+    void assignEncoderImage(std::uint8_t encoderIndex, QImage const& img);
+
+    /**
+     * @brief Assign an image to a touch-strip zone via the DRA rect path.
+     *
+     * Routes through dynamic_cast<ITouchStripDisplayCapable*> with null-check
+     * and calls setTouchStripImage(rgba, srcW, srcH, location=zone, x=zone*200,
+     * y=0, rectWidth=200, rectHeight=100). The zone id is passed THROUGH to the
+     * backend — the backend range-checks < zoneCount (4) and refuses out-of-range
+     * (Pitfall 3 / T-23-02). Backend emits DRA rect header + chunks + ULEND.
+     *
+     * PROVISIONAL geometry (akp05_vendor.md §5): zone i -> (x=i*200, y=0,
+     * w=200, h=100). This is a Ghidra-derived hypothesis; Phase 25 (VERIFY-05)
+     * verifies it against physical hardware and reconciles the ENC-vs-DRA
+     * question.
+     *
+     * No-op if no device is active or the device lacks ITouchStripDisplayCapable.
+     *
+     * @param zone 0-based zone index (0..3 for AKP05E; backend refuses >=4).
+     * @param img  Source image; backend resizes to 200x100 for this zone rect.
+     */
+    void assignTouchStripZone(std::uint8_t zone, QImage const& img);
+
     /**
      * @brief Repaint every bound key from the currently loaded profile (DISPLAY-08).
      *
@@ -298,8 +368,28 @@ private:
     std::shared_ptr<core::IDevice> m_activeDevice;
     QString m_activeCodename;
 
-    /// Pending write map: last-write-wins per 1-based key index (Pattern 3).
-    std::map<std::uint8_t, QImage> m_pendingWrites;
+    /// Surface-tag discriminant for the pending write map (Phase 23, DISPLAY-10).
+    /// Distinguishes key images from auxiliary-surface images in the same drain map.
+    /// The tag value encodes the surface type; the index encodes the sub-address:
+    ///   - Key images:      tag=0, index=keyIndex (1-based, 1..10).
+    ///   - Main image:      tag=1, index=0 (whole-strip; no sub-address).
+    ///   - Encoder images:  tag=2, index=encoderIndex (0-based, 0..3).
+    ///   - Touch-strip zone: tag=3, index=zone (0-based, 0..3).
+    /// Last-write-wins per (tag, index) pair (Pattern 3 / DOCK-02).
+    enum class SurfaceTag : std::uint8_t { Key = 0, Main = 1, Encoder = 2, TouchZone = 3 };
+    struct PendingKey {
+        SurfaceTag tag;
+        std::uint8_t index;
+        [[nodiscard]] bool operator<(PendingKey const& o) const noexcept {
+            if (tag != o.tag) {
+                return static_cast<std::uint8_t>(tag) < static_cast<std::uint8_t>(o.tag);
+            }
+            return index < o.index;
+        }
+    };
+
+    /// Pending write map: last-write-wins per (surface, sub-index) pair (Pattern 3).
+    std::map<PendingKey, QImage> m_pendingWrites;
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};

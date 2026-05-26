@@ -160,9 +160,66 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
 void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage const& img) {
     // Record in the pending map (last-write-wins) and arm the drain timer.
     // The drain slot converts to RGBA8 and calls setKeyImage (Pattern 3).
-    m_pendingWrites[keyIndex] = img;
+    m_pendingWrites[PendingKey{SurfaceTag::Key, keyIndex}] = img;
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
+//
+// PROVISIONAL §5 NOTE (akp05_vendor.md §5 / akp05.md §Layout):
+//   The AKP05 wire protocol offers two paths for encoder-adjacent graphics:
+//     - ENC (CmdEncImage): per-encoder 100x100 LCD path, as modelled in-code.
+//     - DRA (CmdSecondaryScreen): rect-addressable touch-strip zone upload;
+//       akp05.md states "no separate encoder LCD — overlays are touch-strip
+//       zones (DRA)."
+//   BOTH paths are wired and NEITHER is deleted (hardware wins in Phase 25).
+//   The encoder-zone -> DRA rect geometry (zone i: location=i, x=i*200, y=0,
+//   rectWidth=200, rectHeight=100) is a Ghidra-derived hypothesis
+//   (akp05_vendor.md §5). Phase 25 (VERIFY-05) is the live hardware witness
+//   that reconciles which path the firmware honors and updates RE doc + code.
+//   Do NOT assert this geometry as confirmed.
+// ---------------------------------------------------------------------------
+
+void StreamDockControlService::assignMainImage(QImage const& img) {
+    // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
+    auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
+    if (disp == nullptr) {
+        return; // no device active or device lacks IDisplayCapable -- no-op
+    }
+    m_pendingWrites[PendingKey{SurfaceTag::Main, 0}] = img;
+    if (!m_drainTimer->isActive()) {
+        m_drainTimer->start(0);
+    }
+}
+
+void StreamDockControlService::assignEncoderImage(std::uint8_t encoderIndex, QImage const& img) {
+    // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
+    auto* enc = dynamic_cast<core::IEncoderCapable*>(m_activeDevice.get());
+    if (enc == nullptr) {
+        return; // no device active or device lacks IEncoderCapable -- no-op
+    }
+    // Pass encoderIndex THROUGH unchanged -- the backend range-checks < EncoderCount
+    // (4) and refuses out-of-range (Pitfall 3 / T-23-02). Do NOT pre-validate.
+    m_pendingWrites[PendingKey{SurfaceTag::Encoder, encoderIndex}] = img;
+    if (!m_drainTimer->isActive()) {
+        m_drainTimer->start(0);
+    }
+}
+
+void StreamDockControlService::assignTouchStripZone(std::uint8_t zone, QImage const& img) {
+    // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
+    auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(m_activeDevice.get());
+    if (strip == nullptr) {
+        return; // no device active or device lacks ITouchStripDisplayCapable -- no-op
+    }
+    // Pass zone THROUGH unchanged -- the backend range-checks < zoneCount (4)
+    // and refuses out-of-range (Pitfall 3 / T-23-02). Do NOT pre-validate.
+    m_pendingWrites[PendingKey{SurfaceTag::TouchZone, zone}] = img;
+    if (!m_drainTimer->isActive()) {
+        m_drainTimer->start(0);
     }
 }
 
@@ -384,43 +441,97 @@ void StreamDockControlService::drainPendingWrites() {
         m_pendingWrites.clear();
         return;
     }
-    // Pitfall 1 (T-14b-04): null-check within 3 lines of the cast.
+
+    // Resolve capability pointers once per drain cycle (Pitfall 1 / T-23-04):
+    // null-check all three casts immediately. Any of them may be nullptr on
+    // non-aux-capable devices -- the per-entry dispatch below handles nullptr
+    // gracefully (no-op for that surface).
     auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
-    if (disp == nullptr) {
+    auto* enc = dynamic_cast<core::IEncoderCapable*>(m_activeDevice.get());
+    auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(m_activeDevice.get());
+
+    if (disp == nullptr && enc == nullptr && strip == nullptr) {
+        // Device has none of the expected capabilities -- clear and bail.
         m_pendingWrites.clear();
         return;
     }
 
-    for (auto const& [keyIndex, img] : m_pendingWrites) {
-        // Convert to RGBA8 if needed -- the backend's setKeyImage expects RGBA8.
+    for (auto const& [key, img] : m_pendingWrites) {
+        // Convert to RGBA8 -- all backend methods expect RGBA8.
         QImage const rgba = img.convertToFormat(QImage::Format_RGBA8888);
         if (rgba.isNull()) {
             continue;
         }
-        // ARCH-04: setKeyImage handles JPEG encode -> BAT header -> chunks -> ULEND.
-        // Cast to const uchar* and build span for IDisplayCapable::setKeyImage.
         auto const* bits = reinterpret_cast<std::uint8_t const*>(rgba.constBits());
         std::size_t const byteCount =
             static_cast<std::size_t>(rgba.width()) * static_cast<std::size_t>(rgba.height()) * 4u;
-        // CR-02: setKeyImage() is documented @throws std::system_error if the
-        // transport fails. Catch here so a device yank mid-burst does not propagate
-        // through QTimer::timeout into std::terminate(). On failure release the held
-        // handle so the next hot-plug arrival triggers a clean setActiveDevice() cycle.
+        auto const w = static_cast<std::uint16_t>(rgba.width());
+        auto const h = static_cast<std::uint16_t>(rgba.height());
+
         try {
-            disp->setKeyImage(keyIndex,
-                              {bits, byteCount},
-                              static_cast<std::uint16_t>(rgba.width()),
-                              static_cast<std::uint16_t>(rgba.height()));
+            switch (key.tag) {
+            case SurfaceTag::Key:
+                // ARCH-04: key image -> BAT header -> chunks -> ULEND.
+                // CR-02: setKeyImage() can throw std::system_error on device yank.
+                if (disp != nullptr) {
+                    disp->setKeyImage(key.index, {bits, byteCount}, w, h);
+                }
+                break;
+
+            case SurfaceTag::Main:
+                // DISPLAY-10 MAI: whole main LCD strip (800x100). Backend
+                // resizes to native + JPEG-encodes. setMainImage does NOT throw
+                // on out-of-range (no index); it can throw on transport failure.
+                if (disp != nullptr) {
+                    disp->setMainImage({bits, byteCount}, w, h);
+                }
+                break;
+
+            case SurfaceTag::Encoder:
+                // DISPLAY-10 ENC (PROVISIONAL -- see PROVISIONAL §5 comment above):
+                // per-encoder LCD path. Pass 0-based index through; backend
+                // range-checks < EncoderCount (4) and refuses out-of-range.
+                // setEncoderImage is a VOID return; backend logs WARN on out-of-range.
+                if (enc != nullptr) {
+                    enc->setEncoderImage(key.index, {bits, byteCount}, w, h);
+                }
+                break;
+
+            case SurfaceTag::TouchZone:
+                // DISPLAY-10 DRA (PROVISIONAL -- see PROVISIONAL §5 comment above):
+                // rect-addressable touch-strip zone. zone i -> (location=i,
+                // x=i*200, y=0, rectWidth=200, rectHeight=100).
+                // PROVISIONAL geometry (akp05_vendor.md §5; confirm Phase 25).
+                // setTouchStripImage returns false on out-of-range location or
+                // transport failure; log but do not abort the drain loop.
+                if (strip != nullptr) {
+                    auto const zone = key.index;
+                    auto const zoneX = static_cast<std::uint16_t>(zone * 200u);
+                    static constexpr std::uint16_t kZoneWidth = 200u;
+                    static constexpr std::uint16_t kZoneHeight = 100u;
+                    static constexpr std::uint16_t kZoneY = 0u;
+                    bool const ok = strip->setTouchStripImage(
+                        {bits, byteCount}, w, h, zone, zoneX, kZoneY, kZoneWidth, kZoneHeight);
+                    if (!ok) {
+                        AJAZZ_LOG_WARN("stream-dock-control",
+                                       "drainPendingWrites: setTouchStripImage zone {} failed "
+                                       "(out-of-range or transport error)",
+                                       static_cast<int>(zone));
+                    }
+                }
+                break;
+            }
         } catch (std::exception const& e) {
             AJAZZ_LOG_WARN("stream-dock-control",
-                           "drainPendingWrites: setKeyImage key {} failed: {}",
-                           static_cast<int>(keyIndex),
+                           "drainPendingWrites: surface write failed (tag={}, index={}): {}",
+                           static_cast<int>(key.tag),
+                           static_cast<int>(key.index),
                            e.what());
             // Device likely yanked. Release held handle so next hot-plug arrival
             // triggers a clean setActiveDevice() cycle.
             m_activeDevice.reset();
             m_activeCodename.clear();
-            break; // remaining keys in this burst cannot be sent
+            break; // remaining writes in this burst cannot be sent
         }
     }
     m_pendingWrites.clear(); // always clear, even after partial failure (CR-02)
