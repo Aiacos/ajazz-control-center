@@ -4,7 +4,7 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: verifying
 stopped_at: Completed 24-family-coverage-akp03-153-815/24-02-PLAN.md (DEVICES-10 final)
-last_updated: "2026-05-26T22:06:26.097Z"
+last_updated: '2026-05-26T22:06:26.097Z'
 last_activity: 2026-05-26
 progress:
   total_phases: 17
@@ -168,7 +168,7 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 | Phase 22-plugin-store-local-install P02                | 60                                                                            | 2 tasks                           | 6 files                  |
 | Phase 24-family-coverage-akp03-153-815 P02             | 95                                                                            | 2 tasks                           | 6 files                  |
 | Phase 23 P01                                           | 50                                                                            | 2 tasks                           | 3 files                  |
-| Phase 23-auxiliary-display-surfaces P23-02 | 25 | 2 tasks | 4 files |
+| Phase 23-auxiliary-display-surfaces P23-02             | 25                                                                            | 2 tasks                           | 4 files                  |
 
 ## Session Continuity
 

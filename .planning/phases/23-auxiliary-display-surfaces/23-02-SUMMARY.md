@@ -59,7 +59,7 @@ completed: 2026-05-26T22:04:00Z
 
 ## Accomplishments
 
-- Implemented `repaintEncodersFromProfile()` on `StreamDockControlService`, mirroring `repaintPage` for encoders: iterates `Profile::encoders` (0-based `std::uint16_t` keys -> `EncoderBinding`), renders each bound entry's `KeyState` via the SAME imagePath/background render logic as key repaint, and routes each overlay through `assignTouchStripZone(encoderIndex, img)` (DRA default, x=encoderIndex*200, PROVISIONAL §5).
+- Implemented `repaintEncodersFromProfile()` on `StreamDockControlService`, mirroring `repaintPage` for encoders: iterates `Profile::encoders` (0-based `std::uint16_t` keys -> `EncoderBinding`), renders each bound entry's `KeyState` via the SAME imagePath/background render logic as key repaint, and routes each overlay through `assignTouchStripZone(encoderIndex, img)` (DRA default, x=encoderIndex\*200, PROVISIONAL §5).
 - Confirmed profile encoder-index base: 0-based, no +1 offset (unlike `Profile::keys`). Index passed THROUGH to backend range-check.
 - ENC fallback (`assignEncoderImage`) kept reachable as a commented call path inside `repaintEncodersFromProfile`, with PROVISIONAL §5 note routing reconciliation to Phase 25 (VERIFY-05). `assignEncoderImage` is NOT deleted.
 - Wired `repaintEncodersFromProfile` into `Application` via a second `QObject::connect` on the existing `ProfileController::profileChanged` signal -- no second monitor, accessor, or QTimer (RESEARCH A5 compliant).
@@ -74,15 +74,15 @@ completed: 2026-05-26T22:04:00Z
 ## Task Commits
 
 1. **Task 1 RED: failing repaintEncodersFromProfile tests** - `3adcfc4` (test)
-2. **Task 1 GREEN: repaintEncodersFromProfile implementation** - `3b69dbc` (feat)
-3. **Task 2: wire into Application profileChanged** - `8c4bf01` (feat)
+1. **Task 1 GREEN: repaintEncodersFromProfile implementation** - `3b69dbc` (feat)
+1. **Task 2: wire into Application profileChanged** - `8c4bf01` (feat)
 
 ## Files Created/Modified
 
 - `src/app/src/stream_dock_control_service.hpp` -- Added `repaintEncodersFromProfile()` public declaration with full Doxygen doc block (encoder-index base, DRA default, ENC fallback, PROVISIONAL §5 note)
 - `src/app/src/stream_dock_control_service.cpp` -- Added `repaintEncodersFromProfile()` implementation: same profileAccessor seam as `repaintPage`; iterates `prof.encoders`; renders imagePath or background fill (200x100) per the PROVISIONAL §5 zone geometry; calls `assignTouchStripZone`; skips unbound entries; uint16_t overflow guard (WR-03 mirror); PROVISIONAL §5 ENC commented sibling
 - `src/app/src/application.cpp` -- Added second `QObject::connect(m_profileController.get(), &ProfileController::profileChanged, m_streamDockControl.get(), &StreamDockControlService::repaintEncodersFromProfile)` immediately after the existing key-repaint connection
-- `tests/unit/test_stream_dock_control_service.cpp` -- Added 3 new `[stream-dock-control][DISPLAY-10][repaint-encoders]` TEST_CASEs (ASCII-only titles); MockTransport assertions for DRA bytes[5..7]=D,R,A; byte[12]=encoderIndex; BE16 x at bytes[17..18]=encoderIndex*200; ULEND tail
+- `tests/unit/test_stream_dock_control_service.cpp` -- Added 3 new `[stream-dock-control][DISPLAY-10][repaint-encoders]` TEST_CASEs (ASCII-only titles); MockTransport assertions for DRA bytes[5..7]=D,R,A; byte[12]=encoderIndex; BE16 x at bytes[17..18]=encoderIndex\*200; ULEND tail
 
 ## Key Design Decisions
 
@@ -93,9 +93,11 @@ completed: 2026-05-26T22:04:00Z
 ### ENC Fallback Representation (PROVISIONAL §5)
 
 The ENC fallback is kept as a commented-out call inside `repaintEncodersFromProfile`:
+
 ```cpp
 // assignEncoderImage(static_cast<std::uint8_t>(encoderIndex), img)
 ```
+
 with a comment block stating the ENC path is not called here (DRA is the vendor-preferred path) but is NOT deleted. `assignEncoderImage` continues to exist as a public method. Phase 25 (VERIFY-05) will determine which path the firmware honors and update the RE doc + code. LOCKED: hardware wins.
 
 ### Application Wiring: Second Connect on Existing Signal
@@ -114,20 +116,20 @@ None. Plan executed exactly as written.
 
 ## Follow-up Items (Not Phase 23-02 Scope)
 
-| Item | Phase | Reason deferred |
-|------|-------|-----------------|
-| Live hardware confirmation (ENC vs DRA, DRA rect geometry) | 25 | VERIFY-05: physical AKP05E + uaccess ACL required |
-| Editor UX for aux-surface assignment (per-encoder overlay assignment in Phase-16 UI) | 16/future | Phase 23 wires the service; editor UI is out of scope |
-| Family coverage (AKP03/153/815 encoder surfaces) | 24 | Out of scope for AKP05E Phase 23 |
-| Phase 16 posture for untrusted imagePath (T-23b-02 accepted) | 16/19 | Phase 23 uses Qt safe decoders; deep validation is Phase 16/19 |
+| Item                                                                                 | Phase     | Reason deferred                                                |
+| ------------------------------------------------------------------------------------ | --------- | -------------------------------------------------------------- |
+| Live hardware confirmation (ENC vs DRA, DRA rect geometry)                           | 25        | VERIFY-05: physical AKP05E + uaccess ACL required              |
+| Editor UX for aux-surface assignment (per-encoder overlay assignment in Phase-16 UI) | 16/future | Phase 23 wires the service; editor UI is out of scope          |
+| Family coverage (AKP03/153/815 encoder surfaces)                                     | 24        | Out of scope for AKP05E Phase 23                               |
+| Phase 16 posture for untrusted imagePath (T-23b-02 accepted)                         | 16/19     | Phase 23 uses Qt safe decoders; deep validation is Phase 16/19 |
 
 ## Threat Mitigations Applied
 
-| Threat | Mitigation |
-|--------|------------|
-| T-23b-01: burst of encoder repaints | Routes through Phase-14 coalesced drain via assignTouchStripZone; last-write-wins per (SurfaceTag::TouchZone, index) in m_pendingWrites |
-| T-23b-02: untrusted imagePath in profile | Reuses SAME Qt safe-decoder path as repaintPage (accepted for Phase 23; deep validation Phase 16/19) |
-| T-23b-03: out-of-range encoder index | Index passed THROUGH to backend range-check (<4); unbound skip covers the no-imagePath/no-background case |
+| Threat                                    | Mitigation                                                                                                                                                         |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| T-23b-01: burst of encoder repaints       | Routes through Phase-14 coalesced drain via assignTouchStripZone; last-write-wins per (SurfaceTag::TouchZone, index) in m_pendingWrites                            |
+| T-23b-02: untrusted imagePath in profile  | Reuses SAME Qt safe-decoder path as repaintPage (accepted for Phase 23; deep validation Phase 16/19)                                                               |
+| T-23b-03: out-of-range encoder index      | Index passed THROUGH to backend range-check (\<4); unbound skip covers the no-imagePath/no-background case                                                         |
 | T-23b-04: device yank mid encoder-repaint | drainPendingWrites already catches std::exception and releases handle (Phase 23-01 mitigated); repaintEncodersFromProfile only queues -- the catch is in the drain |
 
 ## Known Stubs
