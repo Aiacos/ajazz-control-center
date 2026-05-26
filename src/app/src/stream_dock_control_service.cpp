@@ -626,6 +626,12 @@ void StreamDockControlService::drainPendingWrites() {
                            e.what());
             // Device likely yanked. Release held handle so next hot-plug arrival
             // triggers a clean setActiveDevice() cycle.
+            // IN-01: log how many pending writes are being discarded so Phase-25
+            // hardware debugging can correlate partial-flush events with yank timing.
+            AJAZZ_LOG_WARN("stream-dock-control",
+                           "drainPendingWrites: device yanked mid-drain, {} pending write(s) "
+                           "discarded (m_pendingWrites will be cleared below)",
+                           static_cast<int>(m_pendingWrites.size()));
             m_activeDevice.reset();
             m_activeCodename.clear();
             break; // remaining writes in this burst cannot be sent
