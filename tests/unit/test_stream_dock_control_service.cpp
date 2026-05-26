@@ -490,6 +490,166 @@ TEST_CASE("StreamDockControlService: assignTouchStripZone zone>=4 produces zero 
 }
 
 // ===========================================================================
+// DISPLAY-10 repaint: repaintEncodersFromProfile iterates Profile::encoders
+//                     and emits DRA zone bursts for bound encoders.
+// ===========================================================================
+
+TEST_CASE(
+    "StreamDockControlService: repaintEncodersFromProfile - bound encoder emits DRA zone burst",
+    "[stream-dock-control][DISPLAY-10][repaint-encoders]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    // Profile with encoder 1 bound to a background fill (0-based index).
+    core::Profile fakeProfile;
+    fakeProfile.id = "enc-repaint-test";
+    fakeProfile.name = "Encoder Repaint Test";
+    fakeProfile.deviceCodename = "akp05e";
+    {
+        core::EncoderBinding eb;
+        eb.state.background = core::Rgb{0, 128, 255};
+        fakeProfile.encoders[1] = std::move(eb);
+    }
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; },
+        [&fakeProfile]() -> core::Profile const& { return fakeProfile; },
+        nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    svc.repaintEncodersFromProfile();
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    REQUIRE(writes.size() > writeCountAfterOpen);
+
+    // DRA burst for encoder 1: bytes[5..7]==D,R,A; byte[12]==1 (location=zone=1);
+    // BE16 x at bytes[17..18]==0x00,0xC8 (1*200=200).
+    auto const draIdx = findWriteByCmd0(writes, 0x44, writeCountAfterOpen); // 'D' of DRA
+    REQUIRE(draIdx < writes.size());
+    auto const& draPkt = writes[draIdx];
+    REQUIRE(draPkt.size() >= 19);
+    CHECK(draPkt[5] == 0x44);  // 'D'
+    CHECK(draPkt[6] == 0x52);  // 'R'
+    CHECK(draPkt[7] == 0x41);  // 'A'
+    CHECK(draPkt[12] == 0x01); // location = zone = encoderIndex = 1
+    CHECK(draPkt[17] == 0x00); // BE16 x high byte (200 >> 8)
+    CHECK(draPkt[18] == 0xc8); // BE16 x low byte (200 & 0xFF)
+
+    // ULEND must be the last write in the burst.
+    auto const& ulendPkt = writes.back();
+    REQUIRE(ulendPkt.size() >= 10);
+    CHECK(ulendPkt[5] == 0x55); // 'U'
+    CHECK(ulendPkt[6] == 0x4c); // 'L'
+    CHECK(ulendPkt[7] == 0x45); // 'E'
+    CHECK(ulendPkt[8] == 0x4e); // 'N'
+    CHECK(ulendPkt[9] == 0x44); // 'D'
+}
+
+TEST_CASE(
+    "StreamDockControlService: repaintEncodersFromProfile - two bound encoders each emit DRA burst",
+    "[stream-dock-control][DISPLAY-10][repaint-encoders]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    // Two bound encoders: index 0 and index 2.
+    core::Profile fakeProfile;
+    fakeProfile.id = "enc-two-repaint-test";
+    fakeProfile.name = "Encoder Two Repaint";
+    fakeProfile.deviceCodename = "akp05e";
+    {
+        core::EncoderBinding eb0;
+        eb0.state.background = core::Rgb{255, 0, 0};
+        fakeProfile.encoders[0] = std::move(eb0);
+
+        core::EncoderBinding eb2;
+        eb2.state.background = core::Rgb{0, 255, 0};
+        fakeProfile.encoders[2] = std::move(eb2);
+    }
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; },
+        [&fakeProfile]() -> core::Profile const& { return fakeProfile; },
+        nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    svc.repaintEncodersFromProfile();
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    REQUIRE(writes.size() > writeCountAfterOpen);
+
+    // Count DRA headers emitted after open.
+    // Encoder 0 -> DRA location=0, x=0; encoder 2 -> DRA location=2, x=400 (0x01,0x90).
+    std::size_t draCount = 0;
+    bool foundZone0 = false;
+    bool foundZone2 = false;
+    for (std::size_t i = writeCountAfterOpen; i < writes.size(); ++i) {
+        auto const& pkt = writes[i];
+        if (pkt.size() >= 19 && pkt[5] == 0x44 && pkt[6] == 0x52 && pkt[7] == 0x41) {
+            ++draCount;
+            if (pkt[12] == 0x00 && pkt[17] == 0x00 && pkt[18] == 0x00) {
+                foundZone0 = true; // encoder 0: x=0
+            }
+            if (pkt[12] == 0x02 && pkt[17] == 0x01 && pkt[18] == 0x90) {
+                foundZone2 = true; // encoder 2: x=400=0x0190
+            }
+        }
+    }
+    CHECK(draCount >= 2);
+    CHECK(foundZone0);
+    CHECK(foundZone2);
+}
+
+TEST_CASE(
+    "StreamDockControlService: repaintEncodersFromProfile - unbound encoder produces no write",
+    "[stream-dock-control][DISPLAY-10][repaint-encoders]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    // Profile with an encoder entry that has neither imagePath nor background.
+    core::Profile fakeProfile;
+    fakeProfile.id = "enc-unbound-test";
+    fakeProfile.name = "Encoder Unbound Test";
+    fakeProfile.deviceCodename = "akp05e";
+    {
+        core::EncoderBinding eb;
+        // state.imagePath and state.background both absent -> unbound
+        fakeProfile.encoders[0] = std::move(eb);
+    }
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; },
+        [&fakeProfile]() -> core::Profile const& { return fakeProfile; },
+        nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    svc.repaintEncodersFromProfile();
+    drainQueue();
+
+    // Zero additional writes: unbound encoder is skipped.
+    CHECK(obs->writeCount() == writeCountAfterOpen);
+}
+
+// ===========================================================================
 // Held handle (Pitfall 2): transport opened only once across two assigns.
 // ===========================================================================
 
