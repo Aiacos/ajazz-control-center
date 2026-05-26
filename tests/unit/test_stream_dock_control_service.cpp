@@ -285,6 +285,211 @@ TEST_CASE("StreamDockControlService: repaintFromProfile repaints all bound keys 
 }
 
 // ===========================================================================
+// DISPLAY-10 MAI: assignMainImage emits MAI header + ULEND through held handle.
+// ===========================================================================
+
+TEST_CASE("StreamDockControlService: assignMainImage emits MAI header then ULEND (DISPLAY-10)",
+          "[stream-dock-control][DISPLAY-10][aux-surface]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    // 800x100 RGBA image for the main LCD strip (any size -- backend resizes).
+    QImage img(100, 50, QImage::Format_RGBA8888);
+    img.fill(qRgba(0, 128, 255, 255));
+    svc.assignMainImage(img);
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    // Must have emitted at least 3 more writes: MAI header + >=1 chunk + ULEND.
+    REQUIRE(writes.size() > writeCountAfterOpen + 2);
+
+    // First write after open must be a MAI header (bytes[5..7] == M,A,I).
+    auto const maiIdx = findWriteByCmd0(writes, 0x4d, writeCountAfterOpen); // 'M' of MAI
+    REQUIRE(maiIdx < writes.size());
+    auto const& maiPkt = writes[maiIdx];
+    REQUIRE(maiPkt.size() >= 8);
+    CHECK(maiPkt[5] == 0x4d); // 'M'
+    CHECK(maiPkt[6] == 0x41); // 'A'
+    CHECK(maiPkt[7] == 0x49); // 'I'
+
+    // ULEND must be the last write in the burst.
+    auto const& ulendPkt = writes.back();
+    REQUIRE(ulendPkt.size() >= 10);
+    CHECK(ulendPkt[5] == 0x55); // 'U'
+    CHECK(ulendPkt[6] == 0x4c); // 'L'
+    CHECK(ulendPkt[7] == 0x45); // 'E'
+    CHECK(ulendPkt[8] == 0x4e); // 'N'
+    CHECK(ulendPkt[9] == 0x44); // 'D'
+}
+
+// ===========================================================================
+// DISPLAY-10 ENC: assignEncoderImage emits ENC header with 0-based index at
+//                 byte 12 + ULEND.
+// ===========================================================================
+
+TEST_CASE(
+    "StreamDockControlService: assignEncoderImage emits ENC header with index byte (DISPLAY-10)",
+    "[stream-dock-control][DISPLAY-10][aux-surface]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    // 100x100 image for encoder 2 (0-based).
+    QImage img(100, 100, QImage::Format_RGBA8888);
+    img.fill(qRgba(255, 64, 0, 255));
+    svc.assignEncoderImage(2, img); // 0-based encoder index
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    REQUIRE(writes.size() > writeCountAfterOpen + 2);
+
+    // ENC header: bytes[5..7] == E,N,C; byte[12] == 0x02 (0-based index).
+    auto const encIdx = findWriteByCmd0(writes, 0x45, writeCountAfterOpen); // 'E' of ENC
+    REQUIRE(encIdx < writes.size());
+    auto const& encPkt = writes[encIdx];
+    REQUIRE(encPkt.size() >= 13);
+    CHECK(encPkt[5] == 0x45);  // 'E'
+    CHECK(encPkt[6] == 0x4e);  // 'N'
+    CHECK(encPkt[7] == 0x43);  // 'C'
+    CHECK(encPkt[12] == 0x02); // 0-based encoder index = 2
+
+    // ULEND commit sentinel.
+    auto const& ulendPkt = writes.back();
+    REQUIRE(ulendPkt.size() >= 10);
+    CHECK(ulendPkt[5] == 0x55); // 'U'
+    CHECK(ulendPkt[6] == 0x4c); // 'L'
+    CHECK(ulendPkt[7] == 0x45); // 'E'
+    CHECK(ulendPkt[8] == 0x4e); // 'N'
+    CHECK(ulendPkt[9] == 0x44); // 'D'
+}
+
+// ===========================================================================
+// DISPLAY-10 DRA: assignTouchStripZone(1) emits DRA header with location=1
+//                 and BE16 x=200 (zone*200) at bytes[17..18].
+// ===========================================================================
+
+TEST_CASE("StreamDockControlService: assignTouchStripZone emits DRA header x=zone*200 (DISPLAY-10)",
+          "[stream-dock-control][DISPLAY-10][aux-surface]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    // Zone 1: location=1, x=1*200=200 (0x00C8).
+    QImage img(100, 100, QImage::Format_RGBA8888);
+    img.fill(qRgba(0, 200, 100, 255));
+    svc.assignTouchStripZone(1, img);
+    drainQueue();
+
+    auto const& writes = obs->writes();
+    REQUIRE(writes.size() > writeCountAfterOpen + 2);
+
+    // DRA header: bytes[5..7] == D,R,A; byte[12] == 0x01 (location=zone);
+    // BE16 x at bytes[17..18] == 0x00,0xC8 (200 = zone 1 * 200).
+    auto const draIdx = findWriteByCmd0(writes, 0x44, writeCountAfterOpen); // 'D' of DRA
+    REQUIRE(draIdx < writes.size());
+    auto const& draPkt = writes[draIdx];
+    REQUIRE(draPkt.size() >= 19);
+    CHECK(draPkt[5] == 0x44);  // 'D'
+    CHECK(draPkt[6] == 0x52);  // 'R'
+    CHECK(draPkt[7] == 0x41);  // 'A'
+    CHECK(draPkt[12] == 0x01); // location = zone = 1
+    CHECK(draPkt[17] == 0x00); // BE16 x high byte (200 >> 8)
+    CHECK(draPkt[18] == 0xc8); // BE16 x low byte (200 & 0xFF)
+
+    // ULEND commit sentinel.
+    auto const& ulendPkt = writes.back();
+    REQUIRE(ulendPkt.size() >= 10);
+    CHECK(ulendPkt[5] == 0x55); // 'U'
+    CHECK(ulendPkt[6] == 0x4c); // 'L'
+    CHECK(ulendPkt[7] == 0x45); // 'E'
+    CHECK(ulendPkt[8] == 0x4e); // 'N'
+    CHECK(ulendPkt[9] == 0x44); // 'D'
+}
+
+// ===========================================================================
+// Range refusal (T-23-02): out-of-range encoder/zone index produces zero writes.
+// ===========================================================================
+
+TEST_CASE("StreamDockControlService: assignEncoderImage index>=4 produces zero wire writes",
+          "[stream-dock-control][DISPLAY-10][range-guard]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    // encoderIndex=4 is out-of-range (AKP05E has 4 encoders: 0..3).
+    // The backend (setEncoderImage) refuses >=4. Service must NOT bypass the guard.
+    QImage img(100, 100, QImage::Format_RGBA8888);
+    img.fill(qRgba(128, 128, 128, 255));
+    svc.assignEncoderImage(4, img);
+    drainQueue();
+
+    // Zero additional writes: backend range-check honored.
+    CHECK(obs->writeCount() == writeCountAfterOpen);
+}
+
+TEST_CASE("StreamDockControlService: assignTouchStripZone zone>=4 produces zero wire writes",
+          "[stream-dock-control][DISPLAY-10][range-guard]") {
+    ajazz::tests::qtApp();
+
+    auto fx = makeFixture();
+    auto devPtr = fx.device;
+    auto* obs = fx.transport;
+
+    app::StreamDockControlService svc(
+        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+    auto const writeCountAfterOpen = obs->writeCount();
+
+    // zone=4 is out-of-range (AKP05E has 4 zones: 0..3).
+    QImage img(100, 100, QImage::Format_RGBA8888);
+    img.fill(qRgba(64, 64, 64, 255));
+    svc.assignTouchStripZone(4, img);
+    drainQueue();
+
+    // Zero additional writes: backend range-check honored.
+    CHECK(obs->writeCount() == writeCountAfterOpen);
+}
+
+// ===========================================================================
 // Held handle (Pitfall 2): transport opened only once across two assigns.
 // ===========================================================================
 
