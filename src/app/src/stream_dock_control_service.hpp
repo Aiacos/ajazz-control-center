@@ -245,6 +245,34 @@ public:
     void repaintFromProfile();
 
     /**
+     * @brief Repaint every bound encoder overlay from the currently loaded profile
+     *        (DISPLAY-10 profile-repaint half).
+     *
+     * Iterates @c Profile::encoders (encoder index -> EncoderBinding; each
+     * @c EncoderBinding::state is a @c KeyState carrying imagePath/background).
+     * For each bound entry (imagePath OR background present), renders the overlay
+     * QImage using the SAME helper as the key repaint (imagePath -> loaded QImage
+     * via Qt safe decoders; else background -> solid fill at 200x100), then routes
+     * it through @c assignTouchStripZone(encoderIndex, img) — the vendor-preferred
+     * DRA zone path (x=encoderIndex*200, PROVISIONAL; akp05_vendor.md §5).
+     *
+     * Reuses the SAME profile-accessor seam, SAME held handle, and SAME coalesced
+     * drain as repaintFromProfile (RESEARCH A5 — no second accessor or timer).
+     *
+     * Profile encoder indices are 0-based (std::uint16_t); they are passed THROUGH
+     * to @c assignTouchStripZone unchanged (the backend range-checks < TouchZoneCount).
+     *
+     * PROVISIONAL: both ENC and DRA paths are wired and neither is deleted.
+     * @c assignEncoderImage (ENC) remains reachable as the documented fallback.
+     * Phase 25 (VERIFY-05) is the live hardware witness that reconciles which path
+     * the firmware honors and updates the RE doc + code (LOCKED: hardware wins).
+     *
+     * No-op if no device is active, no profile accessor is set, or the encoder map
+     * is empty.
+     */
+    void repaintEncodersFromProfile();
+
+    /**
      * @brief Repaint the bound keys for a specific profile page (PROFILE-02).
      *
      * Resolves the binding set for @p pageId:

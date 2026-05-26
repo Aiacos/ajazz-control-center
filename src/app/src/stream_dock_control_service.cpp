@@ -232,6 +232,90 @@ void StreamDockControlService::repaintFromProfile() {
     repaintPage(QStringLiteral("root"));
 }
 
+void StreamDockControlService::repaintEncodersFromProfile() {
+    // Guard: device must be active with at least ITouchStripDisplayCapable
+    // (DRA default path) and a profile accessor must be set.
+    if (!m_activeDevice) {
+        return;
+    }
+    // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
+    auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(m_activeDevice.get());
+    if (strip == nullptr) {
+        return; // no device active or device lacks ITouchStripDisplayCapable -- no-op
+    }
+
+    if (!m_profileAccessor) {
+        AJAZZ_LOG_INFO("stream-dock-control",
+                       "repaintEncodersFromProfile: no profile accessor set");
+        return;
+    }
+
+    core::Profile const& prof = m_profileAccessor(); // SAME accessor seam as repaintPage
+
+    if (prof.encoders.empty()) {
+        return; // no encoder bindings -- no-op
+    }
+
+    // Iterate Profile::encoders (0-based encoder index -> EncoderBinding).
+    // Profile encoder indices are 0-based; pass THROUGH to assignTouchStripZone
+    // (which passes them THROUGH to the backend range-check < TouchZoneCount=4).
+    // No +1 offset needed here (unlike Profile::keys which are 0-based but map
+    // to 1-based device key indices).
+    for (auto const& [encoderIndex, binding] : prof.encoders) {
+        // Render the KeyState the SAME way repaintPage renders key bindings:
+        //   imagePath -> loaded QImage via Qt safe decoders;
+        //   else background -> solid-fill QImage at the encoder-zone dimensions (200x100).
+        //
+        // PROVISIONAL §5 (akp05_vendor.md §5 / akp05.md §Layout):
+        //   DRA zone geometry: zone i -> (location=i, x=i*200, y=0, w=200, h=100).
+        //   This is a Ghidra-derived hypothesis; Phase 25 (VERIFY-05) verifies it.
+        //   ALTERNATIVE (ENC path -- kept reachable, NOT deleted):
+        //     assignEncoderImage(static_cast<std::uint8_t>(encoderIndex), img)
+        //   ENC path is NOT called here because DRA is the vendor-preferred path per
+        //   akp05.md §Layout. Phase 25 hardware witness decides which path to keep.
+        //   Do NOT delete ENC (LOCKED: hardware wins in Phase 25).
+        QImage img;
+        if (binding.state.imagePath && !binding.state.imagePath->empty()) {
+            img = QImage(QString::fromStdString(*binding.state.imagePath));
+            if (img.isNull()) {
+                AJAZZ_LOG_WARN("stream-dock-control",
+                               "repaintEncodersFromProfile: failed to load image '{}'",
+                               *binding.state.imagePath);
+            }
+        }
+        if (img.isNull()) {
+            if (binding.state.background) {
+                // Solid fill at the DRA zone dimensions (200x100 per the PROVISIONAL §5
+                // rect layout). The backend resizes to its internal canvas; use the
+                // provisional zone dimensions so the fill maps cleanly.
+                static constexpr int kZoneWidthPx = 200;
+                static constexpr int kZoneHeightPx = 100;
+                img = QImage(kZoneWidthPx, kZoneHeightPx, QImage::Format_RGBA8888);
+                img.fill(qRgba(binding.state.background->r,
+                               binding.state.background->g,
+                               binding.state.background->b,
+                               255));
+            } else {
+                // No image and no background -- skip this encoder.
+                continue;
+            }
+        }
+
+        // Route through the DRA zone path (vendor-preferred, PROVISIONAL §5).
+        // Pass encoderIndex THROUGH: the backend range-checks < TouchZoneCount (4).
+        // WR-03: encoderIndex is uint16_t; guard overflow before cast to uint8_t.
+        if (encoderIndex > std::numeric_limits<std::uint8_t>::max()) {
+            AJAZZ_LOG_WARN("stream-dock-control",
+                           "repaintEncodersFromProfile: encoder index {} exceeds uint8_t, skipping",
+                           static_cast<int>(encoderIndex));
+            continue;
+        }
+        assignTouchStripZone(static_cast<std::uint8_t>(encoderIndex), img);
+        // (ENC fallback -- NOT called here; kept reachable by assignEncoderImage's
+        //  existing declaration. Phase 25 VERIFY-05 reconciles ENC-vs-DRA on hardware.)
+    }
+}
+
 void StreamDockControlService::repaintPage(QString const& pageId) {
     if (!m_activeDevice) {
         return;
