@@ -233,15 +233,12 @@ void StreamDockControlService::repaintFromProfile() {
 }
 
 void StreamDockControlService::repaintEncodersFromProfile() {
-    // Guard: device must be active with at least ITouchStripDisplayCapable
-    // (DRA default path) and a profile accessor must be set.
+    // Guard: device must be active and a profile accessor must be set.
+    // assignTouchStripZone performs its own ITouchStripDisplayCapable capability
+    // check per-call (matching repaintFromProfile's pattern of delegating the
+    // capability guard to the assign methods -- WR-02).
     if (!m_activeDevice) {
         return;
-    }
-    // Pitfall 1 (T-23-04): null-check within 3 lines of the cast.
-    auto* strip = dynamic_cast<core::ITouchStripDisplayCapable*>(m_activeDevice.get());
-    if (strip == nullptr) {
-        return; // no device active or device lacks ITouchStripDisplayCapable -- no-op
     }
 
     if (!m_profileAccessor) {
