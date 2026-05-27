@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: verifying
-stopped_at: Completed 24-family-coverage-akp03-153-815/24-02-PLAN.md (DEVICES-10 final)
-last_updated: '2026-05-26T22:06:26.097Z'
-last_activity: 2026-05-26
+stopped_at: Reconciled Phase 10/11/12 GSD tracking to shipped code (retrospective summaries + ROADMAP honesty pass, 2026-05-27)
+last_updated: '2026-05-27T07:00:00.000Z'
+last_activity: 2026-05-27
 progress:
   total_phases: 17
   completed_phases: 12
@@ -187,6 +187,22 @@ Two atomic commits landed ahead of Phase 10 schedule (autonomous research + exec
 - **9787962** `feat(keyboard): implement AK980 PRO firmware RTC setTime (ARCH-05.1)` — partial flip of ARCH-05 default verdict. Two independent corpora (gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node, both targeting Sonix SN32F299 family at VID:PID 0x0c45:0x8009) document a host-settable firmware RTC at opcode 0x28. ProprietaryKeyboard::setTime() now writes the 3-packet (preamble + data + save) envelope. 6 new [clock]-tagged unit tests (203 assertions) pin byte-precise layout. ak980pro.maturity promoted scaffolded → partial. Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent) gates partial → functional promotion. ARCH-05 stands for Stream Dock family (AKP03/AKP05/Mirabox N3/N4) — Companion streamdock.ts audit confirms zero time opcodes there; clock widget on AKP05 main LCD strip is a v1.2.x deferred host-rendered TftClockWidget via the new image_pipeline.
 
 ARCH-05.1 ADR: `.planning/phases/09-research-captures-hygiene/ARCH-05.1.md`.
+
+## 2026-05-27 — Phase 10/11/12 tracking reconciliation
+
+**Discovery:** the device-promotion work for Phases 10/11/12 SHIPPED ad-hoc across many commits ahead of GSD bookkeeping (no SUMMARY files, unticked ROADMAP). Triggered by inspecting the user's RE ground truth at `~/MEGAsync/ajazz-reverse-engineering/` (Frida-hooked vendor-driver + Ghidra dossiers — NOT live pcaps; sanitised, committable). Verified tree green: **640/640 ctest pass (linux-release)**. Reconciled (verify + retrospective summaries, NO code churn):
+
+- **Phase 10 (AKP05E) — `partial`:** 10-01 shipped (image_pipeline + 1024-byte AKP05 packets + setKeyImage/setKeyColor + wire tests); 10-02 PARTIAL (EncoderReleased + `hasClock=false` shipped; **16ms encoder_coalescer NOT built**); 10-03 **deferred → Phase 25** (LIVE-HW render smoke never shipped). AKP05 image wire bytes are Ghidra-derived, NOT live-captured (dossier §7.4); Linux `0x00` report-id render bug unconfirmed (§2.2). Stays honestly `partial`.
+- **Phase 11 (8K mouse) — `functional`:** substantially shipped (DPI `0x54` / poll `0x04`+`_RateToNum` / RGB `0x07` / clock `0x28` / battery `0x05`+`0xF7`, all tested). **Opcode supersession:** plan's `0x21/0x22/0x23` were a pre-corpus guess; shipped code uses the corpus-correct `0x54/0x53/0x04`. Open: USB-2.0 SOF-cap UI warning unbound (HW-free).
+- **Phase 12 (AK980 PRO) — `functional`:** clock (4-packet `0xFF13` + 30ms handshake) + battery (`0x20 0x01`, 65-byte buf) + 20-mode RGB `0x13` shipped & hardware-confirmed. **Unshipped (mostly HW-free):** wireless RGB rate-limiter (Pitfall 24), RGB `direction` plumbing (caller hardcodes 0), dedicated `0x17` sleep-timer, Save-vs-Push UX (Pitfall 25). TFT `0x7F` PROVISIONAL (no capture); `0x0A`-vs-`0x20/0x04` per-key RGB unify deferred (CR-01).
+
+**Genuinely-remaining work after reconciliation:**
+
+- HW-free backlog (could land now): P12 rate-limiter + direction + dedicated 0x17 sleep-timer + Save/Push UX; P10 encoder_coalescer; P11 SOF-cap UI warning.
+- LIVE-HW (need physical AKP05E): P10-03 render smoke, AKP05 wire-byte confirmation + Linux render-bug fix verification → all roll into **Phase 25**.
+- Still untouched: **Phase 13** (microdia_dongle_7016 catalogue slice [HW-free] + 4 v1.1 UI verifies [operator]) and **Phase 25** (full UAT + real `.sdPlugin`).
+
+Maturity tiers (mouse/keyboard `functional`, akp05e `partial`) were set deliberately by hardware-informed commits (b09302b/07c5902) and rest on the hardware-confirmed core; the open items above are documented per the Pitfall-29 honesty contract rather than hidden behind a green checkbox.
 
 ## Operator Next Steps
 

@@ -38,9 +38,9 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 **Milestone Goal:** Promote the 4 currently-connected scaffolded devices (3 catalogued + 1 unknown PID) to full advertised-capability parity with the native AJAZZ control software, driven by real-hardware USB protocol captures. Phase 9 is captures-driven research (no further `/gsd-research-phase` needed for it — it IS the research); Phase 10 establishes the device-promotion template; Phases 11-12 reuse the template at increasing risk/scope; Phase 13 closes the catalogue and back-fills v1.1 real-hardware UI verifies.
 
 - [ ] **Phase 9: Research, Captures, Hygiene** *(PARTIAL-SCOPE: 7/7 non-capture plans shipped + ARCH-04/05/06 default verdicts ratified; CAPTURE-05/06 sanitised fixtures + ARCH finalization gated on operator Phase 9.x capture run — see STATE.md)* — Capture-data-hygiene policy + Wireshark/`usbmon` runbook + per-device sanitised wire-format fixtures + ARCH-04/05/06 ratification. Gates every implementation phase.
-- [ ] **Phase 10: AKP05E (0x3004) Promotion** — One-line PacketSize 512→1024 fix (unblocks 13 Stream Dock sibling SKUs) + real `setKeyImage`/encoder/brightness wired to the 0x3004 LCD (10 LCD keys / 4 endless encoders / LCD touch strip) + `clock` honest demotion. `scaffolded` → `functional`.
-- [ ] **Phase 11: AJAZZ 2.4G 8K Mouse Probe-and-Confirm** — Zero-OSS-corpus probe-and-confirm session on `3151:5007`; DPI cycle / per-stage / polling-rate / LOD / per-zone RGB; possible factory split if AJ199 Max-fork. `scaffolded` → `partial` or `functional` per capture coverage.
-- [ ] **Phase 12: AK980 PRO Promotion** — RGB 20-mode + brightness/speed/direction + sleep-timer + `isWireless` rate-limiter + host-save-vs-device-flash UX separation + `clock` honest demotion. `scaffolded` → `partial`.
+- [ ] **Phase 10: AKP05E (0x3004) Promotion** *(PARTIAL — reconciled 2026-05-27: image pipeline + 1024-byte packets + EncoderReleased + `hasClock=false` shipped; `akp05e` at `partial`. Open: 16ms encoder_coalescer not built; 10-03 LIVE-HW render smoke deferred → Phase 25; AKP05 wire bytes still Ghidra-derived + Linux render bug unconfirmed)* — real `setKeyImage`/encoder/brightness wired to the 0x3004 LCD (10 LCD keys / 4 endless encoders / LCD touch strip) + `clock` honest demotion.
+- [ ] **Phase 11: AJAZZ 2.4G 8K Mouse Probe-and-Confirm** *(SUBSTANTIALLY SHIPPED — reconciled 2026-05-27: `ajazz_24g_8k` at `functional`; DPI 0x54 / poll 0x04 / RGB 0x07 / clock 0x28 / battery 0x05 shipped & tested. Open: USB-2.0 SOF-cap UI warning unbound. Opcodes corrected vs stale plan)* — DPI cycle / per-stage / polling-rate / LOD / per-zone RGB.
+- [ ] **Phase 12: AK980 PRO Promotion** *(PARTIAL — reconciled 2026-05-27: `ak980pro` at `functional`; clock 0x28 + battery 0x20/01 + 20-mode RGB shipped & hardware-confirmed. Open (HW-free): wireless RGB rate-limiter (Pitfall 24), RGB direction plumbing, dedicated 0x17 sleep-timer, Save-vs-Push UX)* — RGB 20-mode + brightness/speed/direction + sleep-timer + `isWireless` rate-limiter + `clock` per ARCH-05.1.
 - [ ] **Phase 13: Catalogue + v1.1 UI Verifies Back-Fill** — `microdia_dongle_7016` entered at `probed` with topology evidence + ARCH-06 negative ratified + four real-hardware visual verifies from v1.1 (Sync button visibility, Settings auto-sync persistence, glyph-only-no-toast, MaturityRole tooltip).
 
 **Milestone constraints (load-bearing — do not lose these):**
@@ -144,9 +144,9 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 
 **Plans**: 3 plans (3 waves)
 
-- [ ] 10-01-PLAN.md — DISPLAY-01/02/03: PacketSize 512→1024 + setKeyImage/setKeyColor via image_pipeline + MockTransport wire tests (wave 1)
-- [ ] 10-02-PLAN.md — INPUT-01/02 + DEVICES-05: genuine EncoderReleased + 16ms encoder coalescer + devices.yaml clock demotion to functional (wave 2)
-- [ ] 10-03-PLAN.md — DISPLAY-04: real-hardware 100-image power-cycle smoke test, AJAZZ_REAL_HARDWARE-gated + operator runbook (wave 3)
+- [x] 10-01-PLAN.md — DISPLAY-01/02/03: 1024-byte AKP05 packets + setKeyImage/setKeyColor via image_pipeline + MockTransport wire tests (wave 1) *(shipped ad-hoc; reconciled 2026-05-27, see 10-01-SUMMARY.md — work landed in akp05*, not akp03; no 512→1024 migration since AKP05 was authored at 1024)\*
+- [ ] 10-02-PLAN.md — INPUT-01/02 + DEVICES-05: genuine EncoderReleased + 16ms encoder coalescer + devices.yaml clock demotion (wave 2) *(PARTIAL — EncoderReleased + clock demotion shipped; **16ms encoder_coalescer NOT built** (file absent); maturity stayed `partial` not `functional`)*
+- [ ] 10-03-PLAN.md — DISPLAY-04: real-hardware 100-image power-cycle smoke test, AJAZZ_REAL_HARDWARE-gated + operator runbook (wave 3) *(DEFERRED → Phase 25; LIVE-HW, never shipped)*
 
 **Phase notes**:
 
@@ -160,6 +160,9 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 **Goal**: A user with a `3151:5007` 8K mouse plugged in can cycle through 8 DPI stages (field-determined count — `devices.yaml dpi_stages: 8`, corrected 2026-05-20 from the earlier 6 assumption; cycle ORDER vendor-captured, NOT naive `+1`), set per-stage DPI / colour / LOD independently, set polling rate up to 8000 Hz (with an honest USB 2.0 cap warning), and set per-zone RGB — and the `devices.yaml` row reflects the captured AJ199 V1.0-vs-Max envelope outcome. Maturity `scaffolded` → `partial` or `functional` per capture coverage.
 **Depends on**: Phase 9 (AJ199 V1.0-vs-Max envelope reconciliation captured; 8K mouse cmd 0x21/0x22/0x23/0x24/0x30/0x40/0x50 captures + diff doc committed; `MockTransport` available).
 **Requirements**: MOUSE-01, MOUSE-02, MOUSE-03, MOUSE-04, MOUSE-05, DEVICES-07
+
+> **Opcode supersession (reconciled 2026-05-27):** the `0x21/0x22/0x23/0x30` DPI/poll/LOD/RGB map in this section is a **pre-corpus guess**. The 2026-05-21 RE corpus (`~/MEGAsync/ajazz-reverse-engineering/dossier/aj-series-mouse.md`) corrected it — shipped code uses DPI table `0x54` (atomic 8-stage), omnibus settings/LOD `0x53`, poll rate `0x04` via `_RateToNum`, LED `0x07`. `0x21/0x22/0x24` are OLED picture/GIF opcodes, NOT DPI/poll. RE/hardware wins (CLAUDE.md). Code is correct; the success criteria below quote the stale opcodes.
+
 **Success Criteria** (what must be TRUE):
 
 1. `docs/protocols/mouse/aj_series.md` is extended with the first-party-captured AJ199 V1.0-vs-Max envelope reconciliation outcome for `3151:5007`; if the device uses the Max envelope materially divergent from the current `aj_series.cpp` V1.0 assumption, `makeAjSeries` factory splits per Pattern B and a new `makeAjazz24g8k` factory entry is added; if V1.0 holds, the existing factory shape is preserved with the reconciliation documented (MOUSE-01).
@@ -169,7 +172,15 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 1. A user can set per-zone RGB on `ajazz_24g_8k` (cmd 0x30); zone count + names are derived from the device capability descriptor, NOT hardcoded (Pitfall 22 mitigation) (MOUSE-05).
 1. `docs/_data/devices.yaml` row for `ajazz_24g_8k` updates `notes:` with the first-party-captured wire-format reconciliation result; maturity promotes `scaffolded` → `partial` if any advertised capability is uncaptured, `scaffolded` → `functional` only if all `[dpi, rgb]` capabilities pass the three-witness rule (capture + observable state change + negative test) (DEVICES-07; Pitfall 29 honesty contract).
 
-**Plans**: TBD
+**Plans**: 4 plans (shipped ad-hoc ahead of bookkeeping; reconciled 2026-05-27 — see 11-0N-SUMMARY.md)
+
+- [x] 11-01-PLAN.md — MOUSE-01 wire-format footing: control collection usage 0x02, BIT7 checksum, AJ159 APEX naming *(shipped)*
+- [x] 11-02-PLAN.md — MOUSE-02/03 DPI table (0x54 atomic 8-stage) + LOD (0x53 omnibus) *(shipped; opcodes corrected vs plan)*
+- [x] 11-03-PLAN.md — MOUSE-04/05 poll rate (0x04/\_RateToNum) + RGB (0x07, single-zone) *(PARTIAL — wire shipped; **USB-2.0 SOF-cap warning in MousePanel.qml NOT bound** (ComboBox unwired))*
+- [x] 11-04-PLAN.md — DEVICES-07 devices.yaml row: `dpi_stages: 8`, `maturity: functional`, battery + APEX name *(shipped; maturity functional vs plan's "partial" — justified by hardware-confirmed clock/battery/control, config opcodes are decompile-confidence)*
+
+Beyond plan: OLED clock `0x28` + battery telemetry (`0x05` byte-3 + `0xF7` poll) shipped (hardware-confirmed 2026-05-21).
+
 **Phase notes**:
 
 - Highest single-device risk in v1.2 (zero 3rd-party OSS corpus exists for this PID). Failure here does not block Phase 12 — phase ordering is fail-fast on highest uncertainty.
@@ -191,7 +202,15 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 1. **Honesty-critical promotion gate**: `ak980pro` device record carries `isWireless = true`; `ProprietaryKeyboard::writeRgb` enforces a `≤10 writes/sec` rate-limit when `isWireless` is true, and a real-hardware RGB-transition smoke test confirms that keystrokes are NOT stalled during a 60-second RGB sweep (Pitfall 24 closed — wireless dongle queue overflow does not bleed into keystroke loss). Rate-limiter is opt-in per-device, NOT a global throttle. The UI also separates "Save profile" (instant, host-disk) from "Push to device" (deliberate, NVM-flash, ≤1/min) to prevent NVM wear (Pitfall 25 closed) (KEYBOARD-04).
 1. `docs/_data/devices.yaml` row for `ak980pro` **retains** `clock` in `capabilities:` — ARCH-05.1 (2026-05-17, FINAL) flipped the ARCH-05 default verdict for this device after locating the real firmware RTC (4-packet `0x18`/`0x28`/data/`0x02` HID Feature Report envelope, corroborated by gohv + KyleBoyer + vendor-binary disassembly). `IClockCapable::setTime` is implemented end-to-end (returns `Ok`/`IoError`, never a lying no-op `Ok`); the `notes:` line cites ARCH-05.1. Maturity promotes `scaffolded` → `partial`; clock promotion `partial` → `functional` gates on the Phase 9.x physical round-trip witness (TFT shows the time we sent). RGB + sleep-timer functional; macros / layers / per-key RGB / battery stay `feature_summary.pending:` per Pitfall 29 honesty contract (DEVICES-06). **NOTE:** this is the OPPOSITE of DEVICES-05 (`akp05e`), where ARCH-05 stands and `clock` IS removed — the Stream Dock family has no firmware RTC.
 
-**Plans**: TBD
+**Plans**: 4 plans (core shipped ad-hoc; reconciled 2026-05-27 — see 12-0N-SUMMARY.md). **PARTIAL: several plan deliverables never shipped.**
+
+- [ ] 12-01-PLAN.md — KEYBOARD-04 wireless RGB rate-limiter (`isWireless` + `writeRgb` funnel, Pitfall 24) *(**NOT SHIPPED** — no rate-limit funnel; a code comment delegates rate-limit to the OS write queue. Pitfall-24 keystroke-stall threat unmitigated. HW-free, still open.)*
+- [ ] 12-02-PLAN.md — KEYBOARD-01/02 firmware RGB: 20-mode table (0x13, 5-packet) + direction *(PARTIAL — 20-mode picker + brightness/speed shipped; **`direction` NOT plumbed** — builder accepts it but caller hardcodes 0. HW-free, still open.)*
+- [ ] 12-03-PLAN.md — KEYBOARD-03 dedicated 0x17 sleep-timer + discrete picker *(**NOT SHIPPED** — sleep still rides the 0x07/0x10 settings batch; no dedicated 0x17 path. HW-free, still open.)*
+- [x] 12-04-PLAN.md — DEVICES-06 honesty + clock (ARCH-05.1) + battery *(clock 4-packet 0xFF13 + 30ms handshake + battery 0x20/0x01 shipped & hardware-confirmed; **Save-vs-Push UX (Pitfall 25) NOT built**; `ak980pro.md` doc not created)*
+
+Maturity is `functional` in devices.yaml — rests on hardware-confirmed clock/battery/0xFF13 control; RGB (no live witness) + TFT `0x7F` (PROVISIONAL, no capture) + the unshipped items above remain open.
+
 **Phase notes**:
 
 - Largest capability surface + biggest risk in v1.2. Establishes the rate-limiter pattern + host-save-vs-device-flash UX separation that future wireless / NVM-heavy backends will reuse.
