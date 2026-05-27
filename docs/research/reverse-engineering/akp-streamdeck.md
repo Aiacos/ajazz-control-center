@@ -63,7 +63,16 @@ AKP153/AKP815 = 512 OUT/IN; AKP03 = 512 in-tree (vendor v2 = 1024, migration que
 Action/tag byte at **offset 9**; reports <16 bytes discarded (SEC-008); `'A','C','K'` frames dropped; `tag==0x00` = NOP.
 - **AKP153:** byte 9 = key idx 1..15; **no byte-10 polarity** — one frame per transition (backend must diff for release edges; current bug: always `pressed=true`).
 - **AKP03:** byte 9 tag — `0x01..0x06` LCD key (byte 10 edge), `0x25/0x30/0x31` side buttons 7/8/9 (release-only), `0x90/0x91`/`0x50/0x51`/`0x60/0x61` encoder 0/1/2 CCW/CW, `0x33/0x35/0x34` encoder 0/1/2 press.
-- **AKP05:** `0x01..0x0A` keys (byte 10 edge); `0x20..0x2F` encoders (low nibble idx, byte 10 = int8 delta, byte 11 = button edge); `0x30..0x3F` touch strip (low nibble gesture 0 tap/1 swipe-left/2 swipe-right/3 long-press, bytes 10..11 = BE16 X 0..639).
+- **AKP05:** `0x01..0x0A` keys, byte 10 = press/release edge — **[CONFIRMED 2026-05-27]**. Encoders + touch: the earlier `0x20..0x2F` / `0x30..0x3F` low-nibble model is **[REFUTED]** — see §2.5.
+
+### 2.5 AKP05E input decode — correction (2026-05-27 Ghidra RE)
+
+A fresh decompile of `SDDevice::readDataFromHidDevice` (SDLibrary1.dll @ RVA `0x180021280`) + `SDActionCanvasWidget::handleKeyEvents` (Stream Dock AJAZZ.exe @ `0x1400d02b0`, symbols from the 69 MB PDB) cross-checked against a live AKP05E corrected the encoder + touch model. Public clean-room write-up: `docs/protocols/streamdeck/akp05_input_corrections.md`. Raw dumps backed up in `../raw-workdir/` (`akp05_input_parse.json`, `akp05_keyevent_slot.json`, `akp05_jumptable.json`).
+
+- **[CONFIRMED] keys.** Input is HID via `hid_read_timeout` (not WinUSB). Key code @ report[9], press/release @ report[10] (vendor `keyCode` / `state`). The in-tree `akp05.cpp` key path is vendor-correct — keep. (Caveat: the EXE runs `keyCode` through `Utilities::mapToSoftwareLocation`; for the simple family the code *is* the 1-based location — confirm `report[9] ∈ {1..10}` in the live capture.)
+- **[CONFIRMED WRONG] encoders.** There is **no rotation-delta byte**. Rotation direction is encoded in the **value of report[9]** and routed through a per-family jump table to `KnobActionType ∈ {KnobClockwiseRotation, KnobCounterclockwiseRotation, KnobPressed}` → `SDActionCanvasLabel::performActionKnob`. One report = one detent in a fixed direction. Therefore `frame[10]` is NOT an int8 delta and `frame[11]` is NOT a button edge; the `0x20..0x2F` low-nibble mask was an OSS-corpus guess, not the vendor binary. Decode encoders from a `report[9] → (index, CW/CCW/press)` table; emit `EncoderTurned ±1` / `EncoderPressed` (release synthesised host-side, as AKP03 already does).
+- **[CONFIRMED WRONG] touch strip.** Touch X is the **single byte report[10]** (0..255), passed straight to `SDActionTouchBarWidget::getTouchbarLoactionFromX(state)` — NOT a BE16 over report[10..11], so the `TouchStripRangeX = 640` clamp is also wrong (one byte cannot encode 0..639). Event type is a **distinct report[9] code** (`0x98` touch-down / `0x99` up / `0x97` move; `0x78/0x79` setCoreX; `0xb1/0xb2` N4-Pro touchbar-mode toggle), NOT a `0x30` low-nibble gesture. **Swipe-left/right is not a firmware event** — the vendor derives tap-vs-swipe host-side from the down→up X delta; X→zone (4 zones aligned to the 4 encoders) is computed by `getTouchbarLoactionFromX`.
+- **[PROVISIONAL]** The exact `report[9]` codes per (encoder, direction, press) and the touch X scale / X→zone mapping are **NOT pinned** — they need one live native-Linux hidraw capture (corrections doc §7). Do **not** hard-code them as fact. The `0x10→CCW / 0x11→CW` pair was seen in *a* family branch of `handleKeyEvents` but was not proven to be the AKP05E branch.
 
 ---
 
@@ -111,7 +120,8 @@ Host-side RGBA8 → JPEG/PNG via Qt6 `QImage::scaled(SmoothTransformation)` + `Q
 ## 5. RE methods & sources
 - **Vendor binary audit** (`akp05_vendor.md`): Ghidra headless on `SDLibrary1.dll` (+ PDB) → `ghidra_SDLibrary1_dll.json` (127 call sites, 81 functions). PDB symbol map (RVAs from base `0x180000000`): `getQUCMDCommand 0x18001de80`, `getSecondaryScreenPicInfo 0x18001e310`, `getClearCommand 0x18001d0f0`, `getFinishCommand 0x18001d340`, `getUploadFinishedCommand 0x18001e6f0`, `sendGetHardwareFirmwareVersion 0x180023440`, `sendLogoSizeCommand 0x180023a70`, `isOld293Version 0x18001ed80`. Source paths indicate upstream Gitee `F:\STreamDock\Gitee\…`.
 - **OSS corpora** (read-only, never vendored): `[ajazz-sdk]` mishamyrt (MPL — `info.rs`/`codes.rs`/PIDs), `[opendeck-akp03]`/`[opendeck-akp05]` 4ndv/naerschhersch (GPL — N3/N4 USB IDs + touch-strip), `[mirajazz]` (proto-version taxonomy), `[elgato-rs]` OpenActionAPI (MPL — canonical AKP153/03 v0.10.2), `[pyajazz]` superdeee (MIT — 18-position layout, Rot90, EXIF brick warning), `[ajazz-akp03e-py]` tomekceszke (MIT), `[uriziel-akp153]`/`[zcube]` (raw captures), `[companion]` Bitfocus (press/release-edge synthesis).
-- **Live hardware:** the 2026-05-20 `CRT VER` handshake → `V3.AKP05E.01.007` (the AKP05E reclassification).
+- **Input-decode audit (2026-05-27):** a second Ghidra pass over `SDLibrary1.dll` (read path, project `sd_sdk`) + `Stream Dock AJAZZ.exe` + PDB (action-slot layer, project `sd_exe`; both backed up under `../raw-workdir/ghidra_projects/ghidra_sd_proj/`) → dumps `akp05_input_parse.json` / `akp05_keyevent_slot.json` / `akp05_jumptable.json` via scripts `DumpAkp05Input.java` / `DumpKeyEventSlot.java` / `DumpJumpTable.java`. Corrected the encoder + touch wire model (§2.5).
+- **Live hardware:** the 2026-05-20 `CRT VER` handshake → `V3.AKP05E.01.007` (the AKP05E reclassification); the 2026-05-27 audit confirmed the *structure* of the input path against the device but the exact encoder/touch codes still await a live hidraw capture.
 
 ---
 
@@ -127,7 +137,7 @@ Host-side RGBA8 → JPEG/PNG via Qt6 `QImage::scaled(SmoothTransformation)` + `Q
 | Mirabox N3 | `0x6602:0x1002` | partial | inherited |
 | AKP05 (placeholder) | `0x0300:0x5001` | scaffolded | **no public source** |
 | Mirabox N4 | `0x6603:0x1007` | scaffolded | corpus-only |
-| **AKP05E** | `0x0300:0x3004` | scaffolded | **hardware-witnessed** (`V3.AKP05E.01.007`); wire bytes still hypothesised |
+| **AKP05E** | `0x0300:0x3004` | scaffolded | **hardware-witnessed** (`V3.AKP05E.01.007`); input **key** path CONFIRMED, encoder/touch *structure* CONFIRMED but codes PROVISIONAL (§2.5); image wire bytes still hypothesised |
 
 Every Stream Dock backend inherits `IClockCapable` but `setTime()` → `NotImplemented` — **no AJAZZ Stream Dock firmware exposes a host-settable RTC** (contrast the AK980 keyboard + AJ mouse, which both have an opcode-0x28 clock).
 
@@ -143,3 +153,4 @@ Every Stream Dock backend inherits `IClockCapable` but `setTime()` → `NotImple
 7. **DFU/firmware update** (`akp_dfu_protocol.md`): Allwinner-style USB-upgrade via `FirmwareUpgradeTool.exe` (the only binary linking libusb) — `AIC.FW` magic, `aKDFU` AES-GCM sentinel, CBW/CSW Bulk-Only, UU-device re-enumeration (conventionally Allwinner BROM `0x1f3a:0xefe8/9`, not captured). **Do NOT reimplement** (COD-031); backend should only detect VID/PID disappearance → DFU → resume.
 8. **GIF/animation** (v3): `waitForGIFACKTime=300000ms`, host `gifToBin`; `GIFVER` opcode sighted, unbound.
 9. **QUCMD catalogue** (sleep/idle/rotation/screen-off byte combos) undecoded except `LIG`.
+10. **AKP05E encoder/touch input codes** (§2.5): the corrected decode *structure* is confirmed, but the exact `report[9]` codes per (encoder, direction, press) and the touch X scale / X→zone mapping are provisional. Needs one native-Linux hidraw capture: per-control `report[9]`/`report[10]` for the 10 keys, the 4 encoders ×{CW, CCW, press}, and touch down/move/up across the 4 zones (corrections doc §7). Until then the in-tree parser keeps the provisional decode, explicitly marked PROVISIONAL.
