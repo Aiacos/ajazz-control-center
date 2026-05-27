@@ -68,8 +68,18 @@ QByteArray makeNodeManifest(QString const& uuid, QString const& codePath) {
     manifest[QStringLiteral("SDKVersion")] = 1;
     manifest[QStringLiteral("CodePath")] = codePath;
 
+    // Declare the host platform so discover()'s runnability gate
+    // (manifestRunnableHere <-> currentPlatformString) keeps the fixture
+    // runnable on every CI OS — a hardcoded "linux" made this case silently
+    // skip (result empty) on the Windows and macOS matrix legs.
     QJsonObject osEntry;
+#if defined(_WIN32)
+    osEntry[QStringLiteral("Platform")] = QStringLiteral("windows");
+#elif defined(__APPLE__)
+    osEntry[QStringLiteral("Platform")] = QStringLiteral("mac");
+#else
     osEntry[QStringLiteral("Platform")] = QStringLiteral("linux");
+#endif
     osEntry[QStringLiteral("MinimumVersion")] = QStringLiteral("0.0.1");
     manifest[QStringLiteral("OS")] = QJsonArray{osEntry};
 
