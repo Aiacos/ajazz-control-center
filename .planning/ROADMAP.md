@@ -37,7 +37,7 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 
 **Milestone Goal:** Promote the 4 currently-connected scaffolded devices (3 catalogued + 1 unknown PID) to full advertised-capability parity with the native AJAZZ control software, driven by real-hardware USB protocol captures. Phase 9 is captures-driven research (no further `/gsd-research-phase` needed for it — it IS the research); Phase 10 establishes the device-promotion template; Phases 11-12 reuse the template at increasing risk/scope; Phase 13 closes the catalogue and back-fills v1.1 real-hardware UI verifies.
 
-- [ ] **Phase 9: Research, Captures, Hygiene** — Capture-data-hygiene policy + Wireshark/`usbmon` runbook + per-device sanitised wire-format fixtures + ARCH-04/05/06 ratification. Gates every implementation phase.
+- [ ] **Phase 9: Research, Captures, Hygiene** *(PARTIAL-SCOPE: 7/7 non-capture plans shipped + ARCH-04/05/06 default verdicts ratified; CAPTURE-05/06 sanitised fixtures + ARCH finalization gated on operator Phase 9.x capture run — see STATE.md)* — Capture-data-hygiene policy + Wireshark/`usbmon` runbook + per-device sanitised wire-format fixtures + ARCH-04/05/06 ratification. Gates every implementation phase.
 - [ ] **Phase 10: AKP05E (0x3004) Promotion** — One-line PacketSize 512→1024 fix (unblocks 13 Stream Dock sibling SKUs) + real `setKeyImage`/encoder/brightness wired to the 0x3004 LCD (10 LCD keys / 4 endless encoders / LCD touch strip) + `clock` honest demotion. `scaffolded` → `functional`.
 - [ ] **Phase 11: AJAZZ 2.4G 8K Mouse Probe-and-Confirm** — Zero-OSS-corpus probe-and-confirm session on `3151:5007`; DPI cycle / per-stage / polling-rate / LOD / per-zone RGB; possible factory split if AJ199 Max-fork. `scaffolded` → `partial` or `functional` per capture coverage.
 - [ ] **Phase 12: AK980 PRO Promotion** — RGB 20-mode + brightness/speed/direction + sleep-timer + `isWireless` rate-limiter + host-save-vs-device-flash UX separation + `clock` honest demotion. `scaffolded` → `partial`.
@@ -113,7 +113,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 
 **Plans**: 7 plans (partial-scope execution — non-capture deliverables only; CAPTURE-05/06 + ARCH-04/05/06 finalization deferred to a follow-up Phase 9.x run after the user produces captures)
 
-- [ ] 09-01-PLAN.md — CAPTURE-01 hygiene policy + gitignore + pre-commit hook (MUST-FIRST per D-01)
+- [x] 09-01-PLAN.md — CAPTURE-01 hygiene policy + gitignore + pre-commit hook (MUST-FIRST per D-01)
 - [x] 09-02-PLAN.md — CAPTURE-02 CAPTURING.md Wireshark + usbmon + dumpcap runbook
 - [x] 09-03-PLAN.md — CAPTURE-03 hex-to-cpparray.py + pytest smoke test
 - [x] 09-04-PLAN.md — CAPTURE-04 MockTransport header-only fixture + AjSeriesMouse smoke test
