@@ -372,8 +372,10 @@ set(ACC_QML_MODULE_SOURCES
     # Listed here so AUTOMOC runs on the Q_OBJECT header (moc generation). The .cpp is in the
     # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above; the header is listed here so moc finds
     # the Q_OBJECT declaration. Mirror of the branding_service / stream_dock_control_service
-    # pattern.
-    src/plugin_device_bridge.cpp
+    # pattern. Only the .hpp is listed here (for AUTOMOC); the .cpp is compiled SOLELY in the
+    # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above. The header class is itself
+    # #if defined(AJAZZ_HAVE_WEBSOCKETS)-gated, so AUTOMOC is a no-op on minimal (no-WebSockets)
+    # builds and ajazz-control-center.exe links without the module (was: LNK1120 on SdPluginServer).
     src/plugin_device_bridge.hpp
     # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient Q_OBJECT header listed here so AUTOMOC finds the
     # moc declaration. The .cpp is in the AJAZZ_HAVE_WEBSOCKETS-gated block above. The whole class

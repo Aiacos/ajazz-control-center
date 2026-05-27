@@ -25,6 +25,11 @@
  *          QImage::save. It passes a QImage to assignKeyImage; the backend + pipeline
  *          handle RGBA->resize->JPEG->BAT->chunks->ULEND.
  */
+// AJAZZ_HAVE_WEBSOCKETS gate: this entire TU compiles away when the WebSockets module is
+// absent (the bridge composes SdPluginServer). Mirrors obs_client.cpp. Belt-and-suspenders
+// against the CMake source list re-adding this .cpp on a minimal build.
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+
 #include "plugin_device_bridge.hpp"
 
 #include "ajazz/core/capabilities.hpp"
@@ -876,3 +881,5 @@ void PluginDeviceBridge::onActivePageChanged(QString const& deviceId, QString co
 }
 
 } // namespace ajazz::app
+
+#endif // defined(AJAZZ_HAVE_WEBSOCKETS)

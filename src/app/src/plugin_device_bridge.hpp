@@ -47,6 +47,12 @@
 #include <functional>
 #include <optional>
 
+// AJAZZ_HAVE_WEBSOCKETS gate: the whole PluginDeviceBridge surface compiles away when the
+// WebSockets module is absent (it composes SdPluginServer). Mirrors obs_client.hpp /
+// sd_plugin_server.hpp; every includer (application.hpp, test_plugin_device_bridge.cpp) is
+// already AJAZZ_HAVE_WEBSOCKETS-gated, so AUTOMOC on this header is a no-op on minimal builds.
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+
 // Forward declarations for seam pointers wired in 19-02.
 namespace ajazz::app {
 class SdPluginServer;           // Phase 17
@@ -529,3 +535,5 @@ public:
 };
 
 } // namespace ajazz::app
+
+#endif // defined(AJAZZ_HAVE_WEBSOCKETS)
