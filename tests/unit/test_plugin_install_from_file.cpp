@@ -40,6 +40,8 @@
 #include <private/qzipwriter_p.h>
 
 #ifdef _WIN32
+#include "win32_python_resolve.hpp"
+
 #include <cwctype>
 
 #include <process.h>
@@ -64,6 +66,12 @@ int runChild(std::vector<std::string> argv) {
     if (argv.empty()) {
         return -1;
     }
+    // Resolve "python3" to a concrete interpreter past the Microsoft Store
+    // App Execution Alias stub (a default python.org install ships python.exe
+    // but no python3.exe; the literal "python3" otherwise launches the stub
+    // and exits 9009). Routes through the same production resolver the host
+    // uses so the test exercises the real resolution path.
+    argv[0] = ajazz::plugins::win32::resolveRealPython(argv[0]);
     std::vector<std::wstring> wide;
     wide.reserve(argv.size());
     for (auto const& s : argv) {
