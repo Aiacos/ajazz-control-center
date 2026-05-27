@@ -80,6 +80,14 @@ add_executable(
     # ULEND), out-of-range location refusal (zero writes), and
     # clearTouchStrip() full-panel black-fill envelope.
     test_akp05_touch_strip.cpp
+    # 2026-05-27: executable companion to akp05_input_corrections.md. GROUP A pins
+    # the RE-CONFIRMED input invariants (ACK discard, key code@9 + edge@10, VER
+    # on-wire layout, live-captured "V3.AKP05E.01.007" parse). GROUP B uses Catch2
+    # [!shouldfail] to characterise the encoder/touch decoding DEFECTS the Ghidra
+    # RE of SDActionCanvasWidget::handleKeyEvents exposed (no rotation-magnitude
+    # byte; touch X is a single byte at report[10], not BE16) — they flip to red
+    # (un-tag them) once parseInputReport is reworked.
+    test_akp05_input_corrections.cpp
     # DEVICES-11 / ARCH-05 (Phase 14, Plan 14-01): descriptor honesty pin for
     # akp05e (0x0300:0x3004). Asserts hasClock==false on the akp05e descriptor
     # after ajazz::streamdeck::registerAll() so the phantom Sync-button
