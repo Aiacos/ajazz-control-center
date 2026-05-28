@@ -482,13 +482,13 @@ devices:
 
   - codename: ak980pro_dongle_24g
     family: dongle
-    name: "AJAZZ AK980 PRO 2.4GHz USB Receiver"
+    name: "Microdia / SONiX 2.4GHz USB Receiver (0c45:7016)"
     vid: "0x0c45"
     pid: "0x7016"
     maturity: probed
     capabilities: []
-    protocol_doc: docs/protocols/keyboard/proprietary.md
-    notes: "2.4GHz USB receiver dongle paired with AJAZZ AK980 PRO (`ak980pro`, VID:PID 0c45:8009). Identified 2026-05-15 via HID report-descriptor parsing on real hardware: Interface 0 advertises a 6KRO boot keyboard + 64-byte vendor Feature Report on Consumer Page — the exact control-channel signature that TaxMachine documented for AK820 Pro / AK980 PRO at the wired VID:PID. Interface 1 is a 4-in-1 composite (mouse + system + consumer/media + 120-key NKRO keyboard) typical of SONiX wireless mech-keyboard receivers. When the host has both the USB-C wired connection AND the 2.4GHz dongle active, the same physical keyboard enumerates twice — once as `ak980pro` (wired path) and once via this dongle (RF-tunneled). No standalone capabilities advertised; the dongle is a transport, not a device — capability work belongs on the `ak980pro` codename and applies regardless of connection path. ARCH-06 default verdict (Phase 9 partial-scope, 2026-05-15) ratified composite-HID dedup NOT firing — topology (Full-Speed 12Mbps vs the AK980 PRO's High-Speed 480Mbps, separate USB bus branch) refutes the composite-interface hypothesis."
+    protocol_doc: docs/protocols/keyboard/microdia_dongle.md
+    notes: "Separate wireless 2.4GHz Microdia/SONiX receiver dongle — NOT a composite/secondary interface of `ak980pro` (the ARCH-06 separate-dongle verdict). Topology evidence from live `lsusb` 2026-05-15: different USB bus branch (`usb1/1-13/1-13.1/1-13.1.2` vs ak980pro's `usb1/1-10`); Full-Speed 12 Mbps link speed; two boot-keyboard HID interfaces with 8-byte EPs (IF0 + IF1); `iManufacturer=\"SONiX\"` / `iProduct=\"USB DEVICE\"` / `bcdDevice 1.03` — the canonical signature of a SONiX OEM 2.4 GHz receiver. Paired downstream input device unknown — pending an `evtest` / `/dev/hidrawN` session per the DEVICES-09 identification methodology. Existing codename `ak980pro_dongle_24g` retained for catalogue/AUTOGEN stability; ARCH-06 §Binding records the canonical alias `microdia_dongle_7016` (used as the stub doc filename for forward-discoverability by anyone keying off the ADR). ARCH-06 status: **DEFAULT VERDICT (PENDING CAPTURE CONFIRMATION)** — composite-HID dedup NOT firing in `DeviceRegistry::enumerate`. Finalization gate: 2-minute physical unplug test (unplug the `ak980pro` 2.4G receiver; confirm `0c45:7016` does NOT disappear simultaneously) — Phase 9.x deferred."
     feature_summary:
       works:
         - "Identified via HID report-descriptor parsing on dev box hardware (2026-05-15)"
@@ -496,7 +496,7 @@ devices:
       partial: []
       pending:
         - "Runtime entry in `src/devices/keyboard/src/register.cpp` (or new `src/devices/dongle/`) — this is catalog-only for now; sidebar visibility requires register.cpp + `DeviceFamily::Dongle` enum addition"
-        - "Captures-confirmation 2-minute physical unplug test (unplug `ak980pro` USB-C and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred"
+        - "Captures-confirmation 2-minute physical unplug test (unplug the `ak980pro` 2.4G receiver and verify the dongle does NOT simultaneously disappear) — Phase 9.x deferred; gates ARCH-06 promotion from DEFAULT VERDICT to Locked"
 
 # ---------------------------------------------------------------------------
 # Platform support matrix (used in README build-from-source table)
