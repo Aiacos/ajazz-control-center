@@ -6,7 +6,10 @@
  * REQ-26-B acceptance (Phase 26 Plan 26-05):
  *   DeviceViewGeometry -- verifies keyCellsRendered / encoderDialsRendered /
  *     touchZonesRendered accessor counts for three device SKU classes:
- *       AKP05E 5x2+4+4, AKP153 3x5+0+0, AKP03 2x3+3+0
+ *       AKP05E keyRows=2, gridColumns=5, 10 keys + 4 encoders + 4 zones
+ *       AKP153 keyRows=3, gridColumns=5, 15 keys + 0 encoders + 0 zones
+ *       AKP03  keyRows=2, gridColumns=3,  6 keys + 3 encoders + 0 zones
+ *     Values match akp05e/akp153/akp03 descriptors in register.cpp (REQ-26-C).
  *
  *   DeviceViewDragDrop -- verifies that ProfileController commit methods are
  *     invoked (or not, for the cross-controller rejection case) as the drop
@@ -102,7 +105,8 @@ TEST_CASE("DeviceViewGeometry::test_akp05e_renders_5x2_grid_plus_4_dials_plus_4_
 
 TEST_CASE("DeviceViewGeometry::test_akp153_renders_3x5_grid_no_dials_no_zones",
           "[qml][device_view][geometry]") {
-    QObject* dv = createDeviceView(15, 5, 3, 0, 0, QStringLiteral("akp153"));
+    // keyRows=3, gridColumns=5 aligned with akp153_descriptor (REQ-26-C, WR-03).
+    QObject* dv = createDeviceView(15, 3, 5, 0, 0, QStringLiteral("akp153"));
     REQUIRE(dv != nullptr);
     CHECK(intProp(dv, "keyCellsRendered") == 15);
     CHECK(intProp(dv, "encoderDialsRendered") == 0);
@@ -112,7 +116,8 @@ TEST_CASE("DeviceViewGeometry::test_akp153_renders_3x5_grid_no_dials_no_zones",
 
 TEST_CASE("DeviceViewGeometry::test_akp03_renders_2x3_grid_plus_3_dials_no_zones",
           "[qml][device_view][geometry]") {
-    QObject* dv = createDeviceView(6, 3, 2, 3, 0, QStringLiteral("akp03"));
+    // keyRows=2, gridColumns=3 aligned with akp03_descriptor (REQ-26-C, WR-03).
+    QObject* dv = createDeviceView(6, 2, 3, 3, 0, QStringLiteral("akp03"));
     REQUIRE(dv != nullptr);
     CHECK(intProp(dv, "keyCellsRendered") == 6);
     CHECK(intProp(dv, "encoderDialsRendered") == 3);

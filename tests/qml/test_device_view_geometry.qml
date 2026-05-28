@@ -12,6 +12,11 @@
 //
 // Run under QT_QPA_PLATFORM=offscreen; no GPU or display required.
 // Test names are ASCII-only (CLAUDE.md).
+//
+// Geometry values match register.cpp descriptors (REQ-26-C, WR-03 fix):
+//   AKP05E keyRows=2, gridColumns=5, 10 keys + 4 encoders + 4 zones
+//   AKP153 keyRows=3, gridColumns=5, 15 keys + 0 encoders + 0 zones
+//   AKP03  keyRows=2, gridColumns=3,  6 keys + 3 encoders + 0 zones
 import QtQuick
 import QtTest
 import AjazzControlCenter
@@ -23,7 +28,7 @@ TestCase {
     // Repeaters actually complete model delegation before we read back counts.
     when: windowShown
 
-    // ---- AKP05E: 5 columns x 2 rows (10 keys) + 4 encoders + 4 touch zones -
+    // ---- AKP05E: keyRows=2, gridColumns=5 (10 keys) + 4 encoders + 4 touch zones -
 
     DeviceView {
         id: dvAkp05e
@@ -44,7 +49,8 @@ TestCase {
         compare(dvAkp05e.touchZonesRendered,   4, "AKP05E touch zones")
     }
 
-    // ---- AKP153: 3 columns x 5 rows (15 keys) + 0 encoders + 0 touch zones --
+    // ---- AKP153: keyRows=3, gridColumns=5 (15 keys) + 0 encoders + 0 touch zones --
+    // Values aligned with akp153_descriptor in register.cpp (REQ-26-C, WR-03).
 
     DeviceView {
         id: dvAkp153
@@ -52,8 +58,8 @@ TestCase {
         width: 800
         height: 480
         keyCount:      15
-        keyRows:        5
-        gridColumns:    3
+        keyRows:        3   // akp153_descriptor: keyRows=3 (3 rows x 5 cols)
+        gridColumns:    5   // akp153_descriptor: gridColumns=5
         encoderCount:   0
         touchZoneCount: 0
         codename:      "akp153"
@@ -65,7 +71,8 @@ TestCase {
         compare(dvAkp153.touchZonesRendered,    0, "AKP153 touch zones")
     }
 
-    // ---- AKP03: 2 columns x 3 rows (6 keys) + 3 encoders + 0 touch zones ----
+    // ---- AKP03: keyRows=2, gridColumns=3 (6 keys) + 3 encoders + 0 touch zones ----
+    // Values aligned with akp03_descriptor in register.cpp (REQ-26-C, WR-03).
 
     DeviceView {
         id: dvAkp03
@@ -73,8 +80,8 @@ TestCase {
         width: 800
         height: 480
         keyCount:       6
-        keyRows:        3
-        gridColumns:    2
+        keyRows:        2   // akp03_descriptor: keyRows=2 (2 rows x 3 cols)
+        gridColumns:    3   // akp03_descriptor: gridColumns=3
         encoderCount:   3
         touchZoneCount: 0
         codename:      "akp03"
