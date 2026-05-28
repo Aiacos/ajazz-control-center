@@ -84,7 +84,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 22: Plugin Store / Local Install** — Install from local `.sdPlugin`/`.zip` via a host-owned catalog (**no phone-home**), behind a signature/manifest-verification gate. (PLUGIN-14) (completed 2026-05-24)
 - [x] **Phase 23: Auxiliary Display Surfaces** — Per-encoder overlays (touch-strip zones; reconcile ENC-LCD vs DRA-zone model), main LCD strip, touch strip, and `DRA` rect-addressable partial upload. HARDWARE-GATED. (DISPLAY-10) (completed 2026-05-26)
 - [x] **Phase 24: Family Coverage AKP03/153/815** — Same assign-image-and-press flow via the capability-generic service (per-family init + image format honored; AKP03 has 3 encoders). (DEVICES-10) (completed 2026-05-24)
-- [ ] **Phase 25: Hardware Verification + Real Plugin** *(PARTIAL — reconciled 2026-05-28: 25-01 shipped (UAT runbook); 25-02 PARTIAL after operator walkthrough — 3 PASS (brightness, clear, hasClock honesty), 1 FAIL (Test 1 image-upload 3-layer regression: L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26), 1 NO_AFFORDANCE (Test 6 — no touch-strip drop target), 6 BLOCKED (demo unit 0x3004 input-streaming gap, awaits retail AKP05E/Mirabox N4/Frida path), 5 NOT_WALKED (gated on Phase 26 + real sdPlugin). Two new gaps GAP-25A/B routed to Phase 26.)* — AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) verified end-to-end (image, key press, encoder rotate+press, touch tap/swipe, brightness, clear); provisional §5 wire items reconciled; `hasClock=false` confirmed; **a real third-party `.sdPlugin` runs live**. HARDWARE-GATED. (VERIFY-05/06)
+- [x] **Phase 25: Hardware Verification + Real Plugin** *(PARTIAL — reconciled 2026-05-28: 25-01 shipped (UAT runbook); 25-02 PARTIAL after operator walkthrough — 3 PASS (brightness, clear, hasClock honesty), 1 FAIL (Test 1 image-upload 3-layer regression: L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26), 1 NO_AFFORDANCE (Test 6 — no touch-strip drop target), 6 BLOCKED (demo unit 0x3004 input-streaming gap, awaits retail AKP05E/Mirabox N4/Frida path), 5 NOT_WALKED (gated on Phase 26 + real sdPlugin). Two new gaps GAP-25A/B routed to Phase 26.)* — AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) verified end-to-end (image, key press, encoder rotate+press, touch tap/swipe, brightness, clear); provisional §5 wire items reconciled; `hasClock=false` confirmed; **a real third-party `.sdPlugin` runs live**. HARDWARE-GATED. (VERIFY-05/06) (completed 2026-05-28)
 - [ ] **Phase 26: OpenDeck-shaped Device Editor** *(NEW 2026-05-28; closes GAP-25A + GAP-25B from Phase 25 partial)* — Replace the generic `KeyDesigner.qml` NxN tile grid with an Elgato Stream Deck / OpenDeck-pattern device-shaped editor: per-SKU geometry (AKP05E = 5×2 key grid + 4 encoder dials + 1 touch strip; AKP153 = 3×5; AKP03 = 2×3; AK980 = keyboard view; AJ-mouse = DPI/RGB-only panel), drag-drop action library, per-key + per-encoder-LCD + per-touch-strip-zone drop targets, **auto-wire `StreamDockControlService::setActiveDevice()` on sidebar selection-changed (closes GAP-25A)**. Research deliverable: comprehensive analysis of `nekename/OpenDeck` (Tauri/SvelteKit), `naerschhersch/opendeck-akp05` (Mirajazz plugin), and `4ndv/mirajazz` (Rust reference) — covering ALL AJAZZ / Mirabox SKUs OpenDeck supports, not just AKP05E. Delivers VERIFY-05 affordances + unblocks Phase 25 UAT resume. (UI-01, DISPLAY-11)
 
 **Milestone constraints (load-bearing — do not lose these):**
@@ -504,7 +504,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 26-07-PLAN.md — REQ-26-E operator-gated re-walk of 25-UAT.md Tests 1 + 6 on live AKP05E demo unit; HARDWARE-GATED, autonomous=false (wave 5)
+- [x] 26-07-PLAN.md — REQ-26-E operator-gated re-walk of 25-UAT.md Tests 1 + 6 on live AKP05E demo unit; HARDWARE-GATED, autonomous=false (wave 5)
 
 ## Progress
 
@@ -540,4 +540,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 6/7            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 7/7            | Complete         | 2026-05-28 |
