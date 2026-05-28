@@ -466,6 +466,26 @@ Plans:
 - [x] 25-01-PLAN.md — Author the 25-UAT.md operator runbook + correct akp05e hasClock=false (autonomous)
 - [ ] 25-02-PLAN.md — Operator walks VERIFY-05/06 on the AKP05E + reconciles provisional §5 (hardware wins; operator-gated)
 
+### Phase 26: OpenDeck-shaped Device Editor
+
+**Goal**: Replace the generic `KeyDesigner.qml` NxN tile grid with a device-shaped editor that renders the physical geometry of each LCD-key AJAZZ / Mirabox SKU (key grid + optional encoder-dial row + optional touch-strip-zone row), drives drag-drop from an action library onto every drop target, and wires `StreamDockControlService::setActiveDevice` on sidebar selection — closing GAP-25A + GAP-25B from the Phase 25 partial walkthrough so Phase 25 25-UAT.md Tests 1 + 6 convert FAIL/NO_AFFORDANCE → PASS on the live AKP05E.
+**Depends on**: Phase 14 (StreamDockControlService — `setActiveDevice`, `assignMainImage`, `assignEncoderImage`, `assignTouchStripZone` wire layer already shipped + tested); Phase 23 (touch-strip zone wire); Phase 25 (UAT runbook + identified GAP-25A/B). UI-only — no protocol or wire-format changes.
+**Requirements**: REQ-26-A, REQ-26-B, REQ-26-C, REQ-26-D, REQ-26-E (locked in `26-SPEC.md`; no parent `.planning/REQUIREMENTS.md` IDs — Phase 26 is a follow-up that closes Phase 25 gaps).
+**Success Criteria**:
+
+1. `Main.qml:onDeviceSelected` invokes `StreamDockControlService.setActiveDevice(codename)` before assigning `editor.codename`; `m_activeDevice` is non-null after sidebar selection; the next binding edit produces wire writes (BAT header + chunks + ULEND) on hidraw (closes GAP-25A — REQ-26-A).
+1. A new `DeviceView.qml` (replacing `KeyDesigner.qml`) renders three stacked rows discriminated by `DeviceDescriptor` geometry: an LCD-key grid (`keyRows × keyColumns`), an optional encoder-dial row (`encoderCount`), and an optional touch-strip-zone row (`touchZoneCount`). AKP05E → 5×2 + 4 + 4; AKP153 → 3×5 + 0 + 0; AKP03 → 2×3 + 3 + 0. `KeyDesigner.qml` deleted atomically with `DeviceView.qml`'s first render (REQ-26-B).
+1. `DeviceDescriptor` extended with 4 additive zero-default geometry fields (`keyRows`, `touchZoneCount`, `mainScreenWidthPx`, `mainScreenHeightPx`); every LCD-key SKU descriptor row in `src/devices/streamdeck/src/register.cpp` populated (AKP05/05E family with `touchZoneCount=4`; AKP153 family incl. AKP153R; AKP03 family; Mirabox N3/N3E/N4). AKP815 row stays at `keyRows=0` as a deferred sentinel (REQ-26-C).
+1. A Catch2 regression test (`tests/unit/test_streamdeck_register_geometry.cpp` or equiv) iterates every `DeviceDescriptor` with `keyCount > 0` and asserts `keyRows > 0` for LCD-key SKUs minus an explicit AKP815 allow-list; visible in `ctest -N -R Geometry`; passes (REQ-26-D).
+1. On the live AKP05E demo unit (`0300:3004`, fw `V3.AKP05E.01.007`), after Phase 26 lands the operator re-walks 25-UAT.md Tests 1 + 6 and records PASS; `25-UAT.md` Summary `passed:` ≥ 5 (REQ-26-E). Drag-drop wire from action library tile → key / encoder / touch-strip-zone drop target → `ProfileController.commitKeyBinding` / `commitEncoderBinding` / `commitTouchZoneBinding` works in an offscreen QML test with a mock `ProfileController`.
+1. `ctest --preset linux-release -E qml` ≥ 645 passed, 0 failed (no regressions in the existing suite). AK820/AK980 keyboard and AJ-series mouse SKUs continue routing to their existing specialised panels (`MousePanel`, `RgbPicker`, `SettingsRow`, `FirmwarePanel`) untouched.
+
+**Plans**: TBD plans (planner-decided wave structure; CONTEXT.md suggests 6 waves — GAP-25A one-liner first; descriptor extension + geometry test; profile schema bump + migration; DeviceView + companion components + layout JSON; per-SKU layout JSONs + photo assets; operator UAT re-walk). · **Phase notes**: UI-only follow-up to Phase 25 PARTIAL; no protocol changes; hard-replacement atomic commits per CLAUDE.md; layout JSONs at `resources/device-layouts/<codename>.json` (D-06), photos at `resources/device-photos/<codename>.png` (D-05) with outline-frame fallback (D-07); `Profile::touchZones` map + schema v2 with auto-migrate (D-11, D-12); AKP815 deferral sentinel `keyRows=0` with allow-list (D-13). **UI hint**: yes (UI-SPEC NOT required — patterns + components fully specified in CONTEXT.md and 26-SPEC.md).
+
+Plans:
+
+- [ ] _TBD by planner_
+
 ## Progress
 
 **Execution Order:**
