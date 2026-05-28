@@ -33,6 +33,11 @@
  * built with the python host) would spawn a child process; component load only
  * needs the singletons registered, not populated. An empty DeviceModel is fine
  * for load-time smoke testing.
+ *
+ * Phase 26 Plan 26-05: world() and its helpers are now defined with external
+ * linkage (outside anonymous namespace) so test_device_view_tests.cpp can
+ * share the same QApplication + Application + QQmlApplicationEngine without
+ * creating duplicates.
  */
 #include "application.hpp"
 
@@ -53,40 +58,41 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-namespace {
-
 // ---------------------------------------------------------------------------
 // Captured QML warnings. Binding loops surface as qWarning() at create() time
 // (NOT as QQmlComponent::errors()), so we install a message handler and scan
 // the captured lines. We deliberately only treat genuinely actionable QML
 // diagnostics as failures so the harness doesn't go red on benign offscreen
 // platform chatter.
+//
+// External linkage so test_device_view_tests.cpp can use clearWarnings() /
+// defectWarnings() without duplicating the infrastructure.
 // ---------------------------------------------------------------------------
-std::mutex g_warnMutex;
-std::vector<QString> g_warnings;
-QtMessageHandler g_previousHandler = nullptr;
+std::mutex g_qmlTestWarnMutex;
+std::vector<QString> g_qmlTestWarnings;
+QtMessageHandler g_qmlTestPreviousHandler = nullptr;
 
-void captureHandler(QtMsgType type, QMessageLogContext const& ctx, QString const& msg) {
+static void captureHandler(QtMsgType type, QMessageLogContext const& ctx, QString const& msg) {
     if (type == QtWarningMsg || type == QtCriticalMsg || type == QtFatalMsg) {
-        std::lock_guard<std::mutex> lock(g_warnMutex);
-        g_warnings.push_back(msg);
+        std::lock_guard<std::mutex> lock(g_qmlTestWarnMutex);
+        g_qmlTestWarnings.push_back(msg);
     }
-    if (g_previousHandler != nullptr) {
-        g_previousHandler(type, ctx, msg);
+    if (g_qmlTestPreviousHandler != nullptr) {
+        g_qmlTestPreviousHandler(type, ctx, msg);
     }
 }
 
 void clearWarnings() {
-    std::lock_guard<std::mutex> lock(g_warnMutex);
-    g_warnings.clear();
+    std::lock_guard<std::mutex> lock(g_qmlTestWarnMutex);
+    g_qmlTestWarnings.clear();
 }
 
 // Return the subset of captured warnings that indicate a real QML defect this
 // harness is meant to catch. Binding loops are the headline case.
 std::vector<QString> defectWarnings() {
-    std::lock_guard<std::mutex> lock(g_warnMutex);
+    std::lock_guard<std::mutex> lock(g_qmlTestWarnMutex);
     std::vector<QString> hits;
-    for (auto const& w : g_warnings) {
+    for (auto const& w : g_qmlTestWarnings) {
         if (w.contains(QStringLiteral("Binding loop")) ||
             w.contains(QStringLiteral("Unable to assign")) ||
             w.contains(QStringLiteral("is not a type")) ||
@@ -99,9 +105,10 @@ std::vector<QString> defectWarnings() {
 
 // ---------------------------------------------------------------------------
 // A single live QGuiApplication + Application + QQmlEngine shared by every
-// TEST_CASE. Constructing more than one QGuiApplication per process is illegal,
-// and re-registering the singletons twice would trip their create()-time
-// asserts, so we build the world exactly once.
+// TEST_CASE in this executable (including test_device_view_tests.cpp which
+// declares world() as extern). Constructing more than one QGuiApplication per
+// process is illegal, and re-registering the singletons twice would trip their
+// create()-time asserts, so we build the world exactly once.
 // ---------------------------------------------------------------------------
 struct QmlWorld {
     ajazz::app::Application* controller = nullptr;
@@ -131,7 +138,7 @@ QmlWorld& world() {
         static char* argv[] = {arg0, nullptr};
         new QApplication(argc, argv);
 
-        g_previousHandler = qInstallMessageHandler(captureHandler);
+        g_qmlTestPreviousHandler = qInstallMessageHandler(captureHandler);
 
         QmlWorld built;
         built.controller = new ajazz::app::Application();
@@ -201,6 +208,8 @@ loadComponent(QString const& typeName, bool instantiate, QVariantMap const& init
     return result;
 }
 
+namespace {
+
 struct InstantiableComponent {
     char const* typeName;
     QVariantMap initialProps; // values for any root-level `required property`
@@ -245,7 +254,10 @@ char const* const kCompileOnlyComponents[] = {
     "Main",
     "DeviceList",
     "ProfileEditor",
-    "KeyDesigner",
+    // KeyDesigner was deleted in Phase 26 Plan 26-04 (commit 6c746a1);
+    // replaced by DeviceView + ActionLibraryPane below.
+    "DeviceView",
+    "ActionLibraryPane",
     "EncoderPanel",
     "MousePanel",
     "Inspector",

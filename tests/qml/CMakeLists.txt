@@ -14,6 +14,13 @@
 # minimal-Qt fallback module (no PIWebView.qml, no QtWebEngine/QtWebChannel
 # dependency), which keeps the headless build self-contained. The HTML Property
 # Inspector path is covered separately by test_pi_bridge.cpp.
+#
+# Phase 26 Plan 26-05 (REQ-26-B) adds two sets of tests to this same target:
+#   test_device_view_tests.cpp    -- Catch2 C++ driver for geometry + drag-drop
+#   test_device_view_geometry.qml -- QtTest QML spec for 3 SKU geometry checks
+#   test_device_view_drag_drop.qml -- QtTest QML spec for commit-method wiring
+# The .qml files are added to the module's QML_FILES so they are accessible as
+# AjazzControlCenter/test_device_view_geometry and .../test_device_view_drag_drop.
 # ----------------------------------------------------------------------------
 
 if(NOT DEFINED ACC_QML_MODULE_SOURCES OR NOT DEFINED ACC_APP_SOURCE_DIR)
@@ -49,6 +56,8 @@ set_source_files_properties(
 qt_add_executable(
     ajazz_qml_tests
     test_qml_smoke.cpp
+    # Phase 26 Plan 26-05 (REQ-26-B): DeviceView geometry + drag-drop Catch2 tests.
+    test_device_view_tests.cpp
     # Application controller + its non-module deps. These are recompiled here (rather than linked
     # from the app executable, which is not a library) so the test owns the full singleton-wiring
     # path.
@@ -90,6 +99,10 @@ qt_add_qml_module(
     VERSION 1.0 IMPORTS ${ACC_QML_IMPORTS}
     SOURCES ${_qmlt_sources}
     QML_FILES ${_qmlt_qml_files}
+              # Phase 26 Plan 26-05 (REQ-26-B): DeviceView test QML files added to the module so
+              # they are loadable as AjazzControlCenter/test_device_view_geometry etc.
+              test_device_view_geometry.qml
+              test_device_view_drag_drop.qml
 )
 
 # Branding compile defines consumed by branding_service.cpp / property_inspector_controller.cpp.
@@ -151,6 +164,11 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # AUTOMOC) so its Q_OBJECT symbols must be resolved here — mirror the sd_plugin_server pattern
     # above.
     target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/obs_client.cpp")
+    # Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge .cpp was missing from this target, causing
+    # undefined-reference link errors for all PluginDeviceBridge::on* virtual methods. The .hpp is
+    # already in ACC_QML_MODULE_SOURCES for AUTOMOC; the .cpp must match (pre-existing latent issue
+    # fixed in Phase 26 Plan 26-05).
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_device_bridge.cpp")
     target_link_libraries(ajazz_qml_tests PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz_qml_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()
