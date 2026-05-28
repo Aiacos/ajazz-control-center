@@ -265,6 +265,9 @@ void ProfileController::resetActiveProfile() {
     m_profile.keys.clear();
     m_profile.encoders.clear();
     m_profile.mouseButtons.clear();
+    m_profile.touchZones.clear(); // Phase 26 D-11 map — must be cleared alongside keys/encoders
+                                  // so "Restore defaults" does not silently leave stale touch-strip
+                                  // bindings that survive to the next saveActiveProfile() call.
     // WR-02: also clear per-page key bindings while preserving the page structure
     // (folder navigation entries). Without this, root keys are cleared but folder
     // pages still carry old bindings -- the device shows folder key images after a
