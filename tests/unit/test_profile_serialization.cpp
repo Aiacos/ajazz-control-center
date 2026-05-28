@@ -262,6 +262,43 @@ TEST_CASE("v2 profile touchZones round-trip", "[profile][touchzone]") {
     REQUIRE(r3.state.text.value() == "Z3");
 }
 
+/// CR-01 / WR-06 regression: touchZones BEFORE _schemaVersion must not be discarded.
+///
+/// RFC 8259 does not specify JSON key order, so a compliant serialiser or
+/// hand-edited file may emit "touchZones" before "_schemaVersion". Before the
+/// CR-01 fix, schemaVersion was still 1 at the point "touchZones" was parsed,
+/// causing the branch to fall through to r.skipValue() and silently discard
+/// all touch-zone data. After the fix the branch is unconditional.
+TEST_CASE("v2 profile with touchZones key before _schemaVersion round-trips",
+          "[profile][migration][ordering]") {
+    using namespace ajazz::core;
+
+    // Keys are in reversed order relative to the writer output: touchZones comes
+    // BEFORE _schemaVersion. This is valid JSON per RFC 8259.
+    constexpr char const* kReorderedJson =
+        R"({)"
+        R"("id":"x",)"
+        R"("touchZones":{"0":{"onTap":[{"id":"media.play","label":"Play"}],"state":{}}},)"
+        R"("_schemaVersion":2,)"
+        R"("name":"Y",)"
+        R"("device":"akp05e",)"
+        R"("keys":{},)"
+        R"("encoders":{})"
+        R"(})";
+
+    Profile const p = profileFromJson(kReorderedJson);
+
+    // Must have exactly 1 touch zone; if it has 0, the ordering bug is still live.
+    REQUIRE(p.touchZones.size() == 1);
+    REQUIRE(p.touchZones.count(0) == 1);
+    auto const& tz = p.touchZones.at(0);
+    REQUIRE(tz.onTap.size() == 1);
+    REQUIRE(tz.onTap.front().id == "media.play");
+    REQUIRE(tz.onTap.front().label == "Play");
+    REQUIRE(p.id == "x");
+    REQUIRE(p.deviceCodename == "akp05e");
+}
+
 /// profileFromJson() must report a byte offset on malformed input.
 TEST_CASE("profile reader fails with byte offset on malformed input", "[profile][error]") {
     using namespace ajazz::core;

@@ -841,12 +841,13 @@ Profile profileFromJson(std::string_view json) {
     if (r.tryConsume('}')) {
         return profile;
     }
-    // Track the schema version so touchZones is only parsed on v2+ profiles.
-    // Absence of _schemaVersion (v1 profile) or value 1 → treat touchZones
-    // as absent and default-construct an empty map (D-12 backward compat).
-    // Unknown future versions >= 2 are treated as v2 (T-26-07: forward compat
-    // — read touchZones if present, ignore other unknown root keys).
-    int schemaVersion = 1;
+    // Parse _schemaVersion for future dispatch (CR-01 fix: no longer used to guard
+    // touchZones — see the touchZones branch below). Marked maybe_unused so the
+    // compiler does not warn when the value is consumed only by readUInt() and not
+    // subsequently read (the field must still be consumed from the stream).
+    // Future schema versions > 2 that require different read semantics can re-arm
+    // this variable.
+    [[maybe_unused]] int schemaVersion = 1;
     while (true) {
         std::string const key = r.readString();
         r.expect(':');
@@ -865,9 +866,17 @@ Profile profileFromJson(std::string_view json) {
             readUintKeyedMap(
                 r, profile.encoders, [](JsonReader& rr) { return readEncoderBinding(rr); });
         } else if (key == "touchZones") {
-            // Only parse when schema version >= 2; skip for v1 profiles so
-            // their empty touchZones map is preserved (D-12 migration).
-            if (schemaVersion >= 2) {
+            // Parse unconditionally when the key is present: a file that carries a
+            // "touchZones" object is implicitly v2 regardless of where "_schemaVersion"
+            // appears in the JSON object. RFC 8259 does not guarantee key ordering, so
+            // guarding on schemaVersion here would silently discard all touch-zone data
+            // whenever an external tool or hand-edit emits "touchZones" before
+            // "_schemaVersion" (CR-01 / WR-06 ordering-dependency fix).
+            //
+            // Safety on genuine v1 profiles: v1 files contain no "touchZones" key at
+            // all, so this branch is never reached for them — the default empty map is
+            // correctly preserved (D-12 backward compat holds).
+            {
                 r.expect('{');
                 if (!r.tryConsume('}')) {
                     while (true) {
@@ -890,8 +899,6 @@ Profile profileFromJson(std::string_view json) {
                         break;
                     }
                 }
-            } else {
-                r.skipValue();
             }
         } else if (key == "mouseButtons") {
             // String-keyed (button name) map of key-style Bindings. Wire key
