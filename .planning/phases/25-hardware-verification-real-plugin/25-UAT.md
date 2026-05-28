@@ -435,3 +435,161 @@ Demo-unit input-streaming items (Tests 2-5, 15-16) are NOT gaps; they
 are documented hardware behaviour (CLAUDE.md AKP05E glossary §7.1).
 Convert BLOCKED → PASS only with a retail AKP05E / Mirabox N4 / Frida-
 on-Windows path.
+
+______________________________________________________________________
+
+## Phase 26 walkthrough — pending operator walk
+
+**Status:** AWAITING_OPERATOR
+**Phase 26 tip SHA (feat/streamdock at time of this note):** `67facf6a6ba7924120ddfbc1ba99f5a7911e626a`
+**Plans landed:** 26-01 (setActiveDevice wiring) + 26-02 (DeviceDescriptor geometry) +
+26-03 (touchZones schema v2) + 26-04 (DeviceView.qml + KeyDesigner deletion) +
+26-05 (offscreen QML tests) + 26-06 (per-SKU layout JSONs)
+
+**Purpose:** Re-walk Tests 1 + 6 on the live AKP05E demo unit (`0x0300:0x3004`,
+fw `V3.AKP05E.01.007`) to close REQ-26-E. Both tests target OUTPUT paths only
+(image upload, drag-drop affordance) — they are not blocked by the demo-unit
+input-streaming gap (CLAUDE.md AKP05E glossary §7.1).
+
+### Setup (operator runs once before both tests)
+
+```bash
+# 1. Confirm you are on feat/streamdock and it is up to date
+git -C /path/to/ajazz-control-center rev-parse HEAD
+# Must match: 67facf6a6ba7924120ddfbc1ba99f5a7911e626a
+# (or a later commit if more work landed after plan 26-06)
+
+# 2. Confirm device is accessible
+ls -la /dev/hidraw*
+# At least one node must be rw for your user.
+# If root-only after a re-enumeration storm, physically replug the AKP05E
+# OR (dev-only transient): sudo setfacl -m u:$(id -u):rw /dev/hidraw<N>
+
+# 3. Build (if not already current)
+cmake --build --preset linux-release --target ajazz-control-center
+
+# 4. Open a second terminal for live log monitoring
+journalctl --user -f -n 0
+
+# 5. Launch the app
+./build/linux-release/src/app/ajazz-control-center
+```
+
+### Test 1 — Push image to an LCD key (re-walk)
+
+**What changed in Phase 26 that closes the original FAIL:**
+Plan 26-01 wired `StreamDockControlService.setActiveDevice(codename)` from
+`Main.qml:onDeviceSelected`. This closes GAP-25A: `m_activeDevice` is now
+non-null when the sidebar selection fires, so `repaintPage()` no longer
+early-returns at the `!m_activeDevice` guard.
+
+**Steps:**
+
+1. In the app sidebar, click the AKP05E row.
+
+   - **Expected:** Within 1 second the journalctl terminal shows
+     `[akp05] device opened: AJAZZ AKP05E (Stream Dock Plus)`.
+     This line confirms Plan 26-01's `setActiveDevice` wire is firing.
+   - **If absent:** The wire is not reaching the device; record FAIL
+     and describe which step + log output.
+
+1. Observe the editor area.
+
+   - **Expected:** DeviceView renders the AKP05E geometry:
+     a 5x2 grid of LCD-key cells (top), a row of 4 round encoder-dial
+     cells (middle), and a row of 4 touch-strip-zone cells (bottom).
+     This confirms Plans 26-02 + 26-04 + 26-06 are live.
+
+1. Click LCD key 1 (top-left cell). The Inspector pane shows the empty
+   binding state for that key.
+
+1. In the Inspector, use the file-picker icon to select a JPEG or PNG
+   image. Any image from `~/Pictures` works; an 85x85 test image is
+   ideal. If `resources/dev/` has a sample image, prefer that.
+
+1. Wait 2-3 seconds after picking the image.
+
+   - **Expected (PASS):** The physical LCD key 1 on the AKP05E displays
+     the selected image. The BAT-header + chunks + ULEND write sequence
+     fires over hidraw (visible as `[stream-dock-control] repaintPage`
+     lines in journalctl).
+   - **Failure (FAIL):** Key 1 stays blank. Capture any journalctl
+     lines, any QML qWarning output, and which step first showed
+     no response.
+
+### Test 6 — Push image to a touch-strip zone (re-walk)
+
+**What changed in Phase 26 that closes the original NO_AFFORDANCE:**
+Plan 26-04 replaced `KeyDesigner.qml` (generic NxN grid) with
+`DeviceView.qml`. `DeviceView.qml` renders a `TouchStripLane` row with
+`touchZoneCount` drop targets for touch-strip-zone cells. Drag-drop
+from `ActionLibraryPane` tiles is wired to
+`ProfileController.commitTouchZoneBinding`.
+
+**Steps:**
+
+1. Sidebar is still on AKP05E. DeviceView from Test 1 is visible.
+
+1. In the left ActionLibraryPane, locate the "Open URL" tile (or any
+   built-in action tile).
+
+1. Click and hold on the tile; drag it onto touch-strip zone 0 (the
+   bottom-left zone in the touch-strip row, below encoder dial 0).
+
+   - **Expected during drag-over:** The touch-strip zone 0 cell scales
+     up to ~1.05x (the D-10 hover animation from DeviceView.qml). This
+     confirms the DropArea is active and the drag is over a valid target.
+
+1. Release the tile over zone 0.
+
+   - **Expected (PASS):** Touch-strip zone 0 shows the action's icon
+     overlay (e.g., a "link" Material icon for "Open URL"). The
+     Inspector reflects the new binding when zone 0 is selected.
+   - **Failure (FAIL):** No scale animation during drag-over OR the
+     drop is silently ignored (zone shows no icon after release).
+
+1. Also drag a tile onto encoder dial 0 (the round cell in the middle
+   row).
+
+   - **Expected:** Encoder dial 0 also accepts the drop with the same
+     scale-up animation; the dial cell shows the bound action's icon.
+
+1. Cross-controller drag sanity check (not a numbered UAT row):
+
+   - Drag an occupied KeyCell tile (LCD key) onto an encoder dial.
+   - **Expected:** The drop is REJECTED — no scale animation, silent
+     ignore. The KeyCell remains bound; the dial stays as it was.
+     This confirms the D-09 drag-grammar strictness.
+
+### Result recording (operator action)
+
+After running both tests:
+
+**If both PASS:**
+
+1. In this file (`25-UAT.md`), change:
+
+   - Test 1 `result:` from `FAIL ...` to `PASS`.
+     Append session note:
+     `PASS YYYY-MM-DD (Phase 26 commit <SHA>): image renders on AKP05E LCD key 1; journalctl [akp05] device opened confirmed.`
+   - Test 6 `result:` from `NO_AFFORDANCE ...` to `PASS`.
+     Append session note:
+     `PASS YYYY-MM-DD (Phase 26 commit <SHA>): touch-strip zone 0 accepted drag-drop; zone shows link icon; Inspector reflects binding.`
+   - `Summary.passed:` from `3` to `5` (or higher).
+
+1. Commit as:
+   `docs(25): mark UAT Test 1 + Test 6 PASS after Phase 26 landed (REQ-26-E)`
+   Conventional commit, atomic.
+
+**If either test FAILS:**
+
+- Do NOT change any `result:` field to PASS.
+- Return a failure description with: which step failed, what was
+  expected, what was observed, any journalctl snippet, any QML
+  qWarning lines.
+- Phase 26 stays PARTIAL until a hot-fix plan lands.
+
+**Do NOT attempt Tests 2-5, 15-16** (encoder rotate/press, touch tap/swipe,
+plugin key/dial events). These remain BLOCKED on the demo unit's
+input-streaming gap per CLAUDE.md AKP05E glossary §7.1 and are not
+changed by Phase 26.
