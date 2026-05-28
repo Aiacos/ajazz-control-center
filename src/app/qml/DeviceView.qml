@@ -70,6 +70,13 @@ Item {
         ? keyRows
         : Math.max(1, Math.ceil(keyCount / Math.max(1, gridColumns > 0 ? gridColumns : 5)))
 
+    // ---- Observability accessors for tests (Phase 26 Plan 26-05, REQ-26-B) -
+    // Pure read-only mirrors of the Repeater counts exposed for offscreen QML
+    // tests (test_device_view_geometry.qml).  No behaviour change at runtime.
+    readonly property int keyCellsRendered:   keyCount          // equals bindings.count after _ensureBindings
+    readonly property int encoderDialsRendered: encoderCount    // drives encoder Repeater model directly
+    readonly property int touchZonesRendered: touchZoneCount    // drives TouchStripLane.touchZoneCount
+
     // ---- Per-key binding model (mirrors KeyDesigner.qml) -------------------
     ListModel { id: bindings }
 
