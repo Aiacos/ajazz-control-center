@@ -118,6 +118,20 @@ struct EncoderBinding {
 };
 
 /**
+ * @brief Touch-strip-zone binding (Phase 26 D-11).
+ *
+ * Fired on a tap of the corresponding zone on the AKP05/N4 4-zone touch
+ * strip; semantically distinct from a key press but shares the @ref KeyState
+ * for icon/label rendering on the host-side editor. Stored in a separate map
+ * from @ref Binding (cleaner type signatures; explicit semantic separation
+ * between LCD keys and touch zones per Phase 26 D-11).
+ */
+struct TouchZoneBinding {
+    std::vector<Action> onTap; ///< Actions fired on a tap of the zone.
+    KeyState state;            ///< Visual appearance for this zone slot.
+};
+
+/**
  * @brief A page of bindings, used to model nested folders on AKP devices.
  *
  * `id` is a stable string id (UUIDv4 recommended) referenced by
@@ -153,7 +167,10 @@ struct Profile {
     std::string deviceCodename;
     std::unordered_map<std::uint16_t, Binding> keys; ///< Key index → binding (root page).
     std::unordered_map<std::uint16_t, EncoderBinding> encoders; ///< Encoder index → binding.
-    std::unordered_map<std::string, Binding> mouseButtons;      ///< Button name → binding.
+    /// Zone index → touch-zone binding; on-disk schema v2 (Phase 26 D-11).
+    /// uint8 matches DeviceDescriptor::touchZoneCount. Empty for v1 profiles.
+    std::unordered_map<std::uint8_t, TouchZoneBinding> touchZones;
+    std::unordered_map<std::string, Binding> mouseButtons; ///< Button name → binding.
 
     /**
      * @brief Optional folder pages — keyed by ProfilePage::id.
