@@ -210,6 +210,38 @@ public:
                                             QString const& settingsJson);
 
     /**
+     * @brief Atomically swap two encoder bindings.
+     *
+     * Fixes the Phase 26 UI-REVIEW.md data-loss bug where
+     * DeviceView.qml onEncoderSwapRequested was calling commitEncoderBinding
+     * with empty params on both sides — destroying both bindings instead of
+     * swapping. The QML side lacked a read-back path; this method does the
+     * swap atomically on the C++ side where m_profile.encoders is directly
+     * accessible.
+     *
+     * Out-of-range indices (negative or > uint16_t max - 1) are logged and
+     * ignored. Equal indices are a no-op. Missing source or destination
+     * bindings (not yet in the map) are treated as empty defaults — swapping
+     * with an empty slot effectively moves the populated binding.
+     *
+     * Emits profileChanged() exactly once on success.
+     *
+     * @invokable Callable from QML as ProfileController.swapEncoderBindings(...).
+     */
+    Q_INVOKABLE void swapEncoderBindings(int srcIndex, int dstIndex);
+
+    /**
+     * @brief Atomically swap two touch-zone bindings.
+     *
+     * Touch-zone analog of swapEncoderBindings. Same rationale + safety
+     * envelope; fixes the corresponding DeviceView.qml onZoneSwapRequested
+     * data-loss bug (Phase 26 UI-REVIEW.md).
+     *
+     * @invokable Callable from QML as ProfileController.swapTouchZoneBindings(...).
+     */
+    Q_INVOKABLE void swapTouchZoneBindings(int srcIndex, int dstIndex);
+
+    /**
      * @brief Save the active profile to its default path.
      *
      * Resolves defaultProfilePath(m_profile.id), creates the parent directory

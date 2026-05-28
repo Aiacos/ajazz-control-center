@@ -56,8 +56,12 @@ ItemDelegate {
         // Full-circle background -- matches EncoderCard.qml pattern.
         radius: Math.min(width, height) / 2
         color: root.hovered ? Theme.tileHover : Theme.tile
-        border.width: root.activeFocus || root.selected ? Theme.focusRingWidth : 2
-        border.color: Theme.accent
+        // UI-REVIEW.md fix: drag-rejected state overrides the default accent
+        // border with errorAccent during cross-controller drag-over.
+        border.width: dropArea.dragRejected
+            ? Theme.focusRingWidth
+            : (root.activeFocus || root.selected ? Theme.focusRingWidth : 2)
+        border.color: dropArea.dragRejected ? Theme.errorAccent : Theme.accent
     }
 
     contentItem: Item {
@@ -128,16 +132,38 @@ ItemDelegate {
 
     // ----- Drop target (always) --------------------------------------------
     DropArea {
+        id: dropArea
         anchors.fill: parent
         keys: ["application/x-ajazz-action", "application/x-ajazz-binding"]
 
+        // UI-REVIEW.md fix: dragRejected exposes a reject state so the encoder
+        // dial can show the errorAccent border + no scale-up for cross-controller
+        // drags, instead of falsely accepting then failing silently in onDropped.
+        property bool dragRejected: false
+
         onEntered: function(drag) {
+            if (drag.hasFormat("application/x-ajazz-binding")) {
+                var ok = false;
+                try {
+                    var p = JSON.parse(drag.getDataAsString("application/x-ajazz-binding"));
+                    ok = (p.controller === "Encoder");
+                } catch (e) {
+                    ok = false;
+                }
+                if (!ok) {
+                    dragRejected = true;
+                    drag.accepted = false;
+                    return;
+                }
+            }
+            dragRejected = false;
             cellScale.xScale = 1.05;
             cellScale.yScale = 1.05;
             drag.accepted = true;
         }
 
         onExited: function() {
+            dragRejected = false;
             cellScale.xScale = 1.0;
             cellScale.yScale = 1.0;
         }
@@ -145,6 +171,7 @@ ItemDelegate {
         onDropped: function(drop) {
             cellScale.xScale = 1.0;
             cellScale.yScale = 1.0;
+            dragRejected = false;
 
             if (drop.hasFormat("application/x-ajazz-action")) {
                 var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));

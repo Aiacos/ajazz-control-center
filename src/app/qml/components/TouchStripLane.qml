@@ -115,9 +115,15 @@ Item {
             anchors.fill: parent
             radius: Theme.radiusSm
             color: zoneDelegate.hovered ? Theme.tileHover : Theme.tile
-            border.width: 1
-            border.color: zoneDelegate.activeFocus || zoneDelegate.selected
-                          ? Theme.accent : Theme.borderSubtle
+            // UI-REVIEW.md fix: drag-rejected state shows errorAccent border
+            // for cross-controller drag-over.
+            border.width: zoneDropArea.dragRejected
+                ? Theme.focusRingWidth
+                : 1
+            border.color: zoneDropArea.dragRejected
+                ? Theme.errorAccent
+                : (zoneDelegate.activeFocus || zoneDelegate.selected
+                   ? Theme.accent : Theme.borderSubtle)
         }
 
         // Thickened top accent border for LED-strip visual hint.
@@ -204,16 +210,37 @@ Item {
 
         // ----- Drop target (always) ----------------------------------------
         DropArea {
+            id: zoneDropArea
             anchors.fill: parent
             keys: ["application/x-ajazz-action", "application/x-ajazz-binding"]
 
+            // UI-REVIEW.md fix: dragRejected drives the no-go visual on the
+            // zone background (errorAccent border) for cross-controller drag-over.
+            property bool dragRejected: false
+
             onEntered: function(drag) {
+                if (drag.hasFormat("application/x-ajazz-binding")) {
+                    var ok = false;
+                    try {
+                        var p = JSON.parse(drag.getDataAsString("application/x-ajazz-binding"));
+                        ok = (p.controller === "TouchZone");
+                    } catch (e) {
+                        ok = false;
+                    }
+                    if (!ok) {
+                        dragRejected = true;
+                        drag.accepted = false;
+                        return;
+                    }
+                }
+                dragRejected = false;
                 zoneCellScale.xScale = 1.05;
                 zoneCellScale.yScale = 1.05;
                 drag.accepted = true;
             }
 
             onExited: function() {
+                dragRejected = false;
                 zoneCellScale.xScale = 1.0;
                 zoneCellScale.yScale = 1.0;
             }
@@ -221,6 +248,7 @@ Item {
             onDropped: function(drop) {
                 zoneCellScale.xScale = 1.0;
                 zoneCellScale.yScale = 1.0;
+                dragRejected = false;
 
                 if (drop.hasFormat("application/x-ajazz-action")) {
                     var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));

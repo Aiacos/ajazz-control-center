@@ -185,15 +185,44 @@ Item {
                 : qsTr("Device editor")
 
             // Chassis content: photo path OR outline-frame fallback.
-            // Phase 26 v1: outline-frame always active (layout JSONs land in Plan 26-06).
+            // UI-REVIEW.md fix: D-04 photo background now actually renders.
+            // When _hasPhoto is true (layout JSON declares a photo, Plan 26-06
+            // shipped 17 layout JSONs), the Image{} below provides the Elgato-
+            // pattern background and the outlineFrame Rectangle yields the
+            // visual to the photo. When _hasPhoto is false (layout missing,
+            // photo field absent, or image fails to load), D-07 outline-frame
+            // remains the always-renders fallback.
             Item {
                 id: chassisArea
                 anchors.fill: parent
 
-                // ---- Outline-frame fallback (D-07) always shown in v1 -----
-                // When _hasPhoto is true and layout JSONs exist, this Rectangle
-                // becomes the chassis background behind the photo image. For
-                // v1 it is the primary visual.
+                // ---- D-04 photo background (Elgato-pattern primary visual) ----
+                // Renders behind the cell-grid Flickable when a layout JSON declares
+                // a photo and the asset resolves. fillMode = PreserveAspectFit so
+                // the photo respects its native aspect ratio inside the chassis area.
+                Image {
+                    id: chassisPhoto
+                    anchors.fill: parent
+                    anchors.margins: Theme.spacingMd
+                    fillMode: Image.PreserveAspectFit
+                    asynchronous: true
+                    smooth: true
+                    visible: root._hasPhoto && status === Image.Ready
+                    // Photos live under the qrc tree at icons/devices/products/
+                    // per components/DeviceImage.qml convention (CMake auto-globs
+                    // resources/devices/products/product-<codename>.png there).
+                    source: root._hasPhoto
+                        ? "qrc:/qt/qml/AjazzControlCenter/icons/devices/products/" + root._layout.photo
+                        : ""
+                    // Accessibility: photo is decorative; cell-grid below carries
+                    // the actionable Accessible descriptions.
+                    Accessible.ignored: true
+                }
+
+                // ---- Outline-frame fallback (D-07) ----
+                // Active when _hasPhoto is false OR the image is still loading /
+                // failed to load. The editor is NEVER broken — always renders
+                // something useful from DeviceDescriptor geometry alone.
                 Rectangle {
                     id: outlineFrame
                     anchors.fill: parent
@@ -201,7 +230,7 @@ Item {
                     border.color: Theme.borderSubtle
                     border.width: 1
                     radius: Theme.radiusLg
-                    visible: true
+                    visible: !chassisPhoto.visible
 
                     // Scrollable chassis content.
                     Flickable {
@@ -304,12 +333,11 @@ Item {
                                             root.encoderSelected(index);
                                         }
                                         onEncoderSwapRequested: function(src, dst) {
-                                            // Phase 26 v1: encoder swap via commitEncoderBinding
-                                            // on both sides (swap semantics; clears + resets).
-                                            ProfileController.commitEncoderBinding(
-                                                src, "", "", 0, "");
-                                            ProfileController.commitEncoderBinding(
-                                                dst, "", "", 0, "");
+                                            // UI-REVIEW.md fix: use the dedicated atomic
+                                            // swap Q_INVOKABLE instead of two commits with
+                                            // empty params (which silently destroyed both
+                                            // bindings instead of swapping).
+                                            ProfileController.swapEncoderBindings(src, dst);
                                         }
                                     }
                                 }
@@ -337,10 +365,10 @@ Item {
                                         : Math.max(0, root._activeDragCount - 1);
                                 }
                                 onZoneSwapRequested: function(src, dst) {
-                                    // Phase 26 v1: zone swap calls commitTouchZoneBinding
-                                    // with empty params on both sides (effectively resets).
-                                    ProfileController.commitTouchZoneBinding(src, "", "", 0, "");
-                                    ProfileController.commitTouchZoneBinding(dst, "", "", 0, "");
+                                    // UI-REVIEW.md fix: atomic swap Q_INVOKABLE replaces
+                                    // the previous two-empty-commits pattern that destroyed
+                                    // both zone bindings instead of swapping.
+                                    ProfileController.swapTouchZoneBindings(src, dst);
                                 }
                             }
                         }

@@ -72,8 +72,14 @@ ItemDelegate {
     background: Rectangle {
         radius: Theme.radiusLg
         color: root.hovered ? Theme.tileHover : Theme.tile
-        border.width: root.activeFocus || root.selected ? Theme.focusRingWidth : 1
-        border.color: root.activeFocus || root.selected ? Theme.accent : Theme.borderSubtle
+        // UI-REVIEW.md fix: drag-rejected state uses errorAccent border so the
+        // user sees a clear "no-go" signal during cross-controller drag-over.
+        border.width: dropArea.dragRejected
+            ? Theme.focusRingWidth
+            : (root.activeFocus || root.selected ? Theme.focusRingWidth : 1)
+        border.color: dropArea.dragRejected
+            ? Theme.errorAccent
+            : (root.activeFocus || root.selected ? Theme.accent : Theme.borderSubtle)
     }
 
     contentItem: Item {
@@ -156,13 +162,39 @@ ItemDelegate {
         anchors.fill: parent
         keys: ["application/x-ajazz-action", "application/x-ajazz-binding"]
 
+        // UI-REVIEW.md fix: dragRejected exposes a reject state so the cell can
+        // render the no-go visual (dashed errorAccent border, no scale-up)
+        // instead of falsely accepting a cross-controller drop and then failing
+        // silently in onDropped. Cleared on exited / dropped.
+        property bool dragRejected: false
+
         onEntered: function(drag) {
+            // For a "binding" drag (cell-to-cell), reject up front if the source
+            // controller is not "Keypad" -- this is the cross-controller drag
+            // path. Library "action" drags are always accepted by any cell.
+            if (drag.hasFormat("application/x-ajazz-binding")) {
+                var raw = drag.getDataAsString("application/x-ajazz-binding");
+                var ok = false;
+                try {
+                    var payload = JSON.parse(raw);
+                    ok = (payload.controller === "Keypad");
+                } catch (e) {
+                    ok = false;
+                }
+                if (!ok) {
+                    dragRejected = true;
+                    drag.accepted = false;  // visually signal reject
+                    return;
+                }
+            }
+            dragRejected = false;
             cellScale.xScale = 1.05;
             cellScale.yScale = 1.05;
             drag.accepted = true;
         }
 
         onExited: function() {
+            dragRejected = false;
             cellScale.xScale = 1.0;
             cellScale.yScale = 1.0;
         }
@@ -170,6 +202,7 @@ ItemDelegate {
         onDropped: function(drop) {
             cellScale.xScale = 1.0;
             cellScale.yScale = 1.0;
+            dragRejected = false;
 
             if (drop.hasFormat("application/x-ajazz-action")) {
                 var actionPayload = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));

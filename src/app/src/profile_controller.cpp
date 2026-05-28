@@ -269,6 +269,51 @@ void ProfileController::commitTouchZoneBinding(int zoneIndex,
     emit profileChanged();
 }
 
+void ProfileController::swapEncoderBindings(int srcIndex, int dstIndex) {
+    // Fixes UI-REVIEW.md Phase 26 encoder-swap data-loss bug.
+    // Validate both indices.
+    constexpr int kMaxIdx = static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1);
+    if (srcIndex < 0 || srcIndex > kMaxIdx || dstIndex < 0 || dstIndex > kMaxIdx) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "swapEncoderBindings: index out of range (src={}, dst={}), ignoring",
+                       srcIndex,
+                       dstIndex);
+        return;
+    }
+    if (srcIndex == dstIndex) {
+        return; // No-op for self-swap.
+    }
+    auto const s = static_cast<std::uint16_t>(srcIndex);
+    auto const d = static_cast<std::uint16_t>(dstIndex);
+    // operator[] on an absent key default-constructs an empty binding, which is
+    // the correct semantics for "swap with empty slot moves the binding".
+    auto src_copy = m_profile.encoders[s];
+    m_profile.encoders[s] = m_profile.encoders[d];
+    m_profile.encoders[d] = std::move(src_copy);
+    emit profileChanged();
+}
+
+void ProfileController::swapTouchZoneBindings(int srcIndex, int dstIndex) {
+    // Fixes UI-REVIEW.md Phase 26 touch-zone-swap data-loss bug. Same shape as
+    // swapEncoderBindings; touchZone indices use uint8_t range [0, 255].
+    if (srcIndex < 0 || srcIndex > 255 || dstIndex < 0 || dstIndex > 255) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "swapTouchZoneBindings: index out of range (src={}, dst={}), ignoring",
+                       srcIndex,
+                       dstIndex);
+        return;
+    }
+    if (srcIndex == dstIndex) {
+        return;
+    }
+    auto const s = static_cast<std::uint8_t>(srcIndex);
+    auto const d = static_cast<std::uint8_t>(dstIndex);
+    auto src_copy = m_profile.touchZones[s];
+    m_profile.touchZones[s] = m_profile.touchZones[d];
+    m_profile.touchZones[d] = std::move(src_copy);
+    emit profileChanged();
+}
+
 void ProfileController::saveActiveProfile() {
     QString const id =
         m_profile.id.empty() ? QStringLiteral("default") : QString::fromStdString(m_profile.id);
