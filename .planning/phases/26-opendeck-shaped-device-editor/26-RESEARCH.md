@@ -898,15 +898,21 @@ schema work needed for Phase 26.**
    26's success criterion is image-upload + drag-drop UX, NOT
    end-to-end key-press round-trip.
 
-## 9. Open Questions for Discuss-Phase
+## 9. Open Questions for Discuss-Phase (RESOLVED)
 
-These are NOT decided in this research — surface them in
-`gsd-discuss-phase 26`:
+> All six questions raised here were resolved during `/gsd-discuss-phase 26`
+> (2026-05-28) and locked as decisions D-01..D-13 in
+> `26-CONTEXT.md`. This section is preserved for traceability — see
+> CONTEXT.md for the authoritative answers.
 
 1. **Library pane LEFT or RIGHT of grid?** OpenDeck = right; we have
    Inspector on the right today. Mirror the layout (library right,
    move Inspector below or to a popover) OR break the OpenDeck
    convention and put library on the LEFT?
+
+   **RESOLVED → CONTEXT.md D-01:** Library pane LEFT; three-column
+   layout (library | editor | inspector). Inspector stays on the right.
+
 1. **Device chassis silhouette behind the grid — v1 or follow-up?**
    The Phase 26 CONTEXT wording "Elgato Stream Deck-pattern device-
    shaped editor" could be interpreted either as just-an-abstract-grid
@@ -914,22 +920,47 @@ These are NOT decided in this research — surface them in
    directive 2026-05-28 13:10 says "rendere la UI come quella di
    Elgato StreamDeck" — Elgato's own editor uses a device photo
    background.
+
+   **RESOLVED → CONTEXT.md D-04 + D-07:** Per-SKU device photo
+   background is the v1 visual (Elgato pattern, not abstract grid),
+   with outline-frame fallback (D-07) when a photo/layout is missing.
+
 1. **Per-cell pixel size — fixed 96×96 (current `KeyCell.qml:37-38`)
    or device-scaled (e.g. 112×112 for AKP05, 60×60 for AKP03)?**
    OpenDeck uses 144×144 for everything except XL (192×192). Suggest
    fixed visual size with the actual hardware dim being a wire-layer
    concern.
+
+   **RESOLVED → CONTEXT.md D-08:** Cell visual size is device-scaled
+   from the per-SKU layout JSON (`w`/`h` in viewBox coordinates), NOT
+   a fixed 96×96 or 144×144.
+
 1. **Action library content for v1.** Phase 26 CONTEXT defers
    plugin-action drag-drop to Phase 20-21 follow-up. Initial library
    = the 5 built-in `ActionKind` entries from `Inspector.qml:215-221`?
+
+   **RESOLVED → CONTEXT.md D-02 + D-03:** Library v1 = the 5 built-in
+   `ActionKind` entries (OpenUrl, OpenPath, RunCommand, Multimedia +
+   one more); tile icons come from Qt / Material Symbols (D-03).
+
 1. **Touch-strip-zone editor for AKP815's 800×480 wide strip.** The
    AKP815 is the odd one out — single rect-addressable strip, not
    4 zones. Scope it for v1 (extra `MainScreenEditor.qml` component)
    or defer to follow-up?
+
+   **RESOLVED → CONTEXT.md D-13:** AKP815 deferred. Sentinel value
+   `keyRows = 0` in the descriptor row with an explicit allow-list in
+   the geometry-check test (`kDeferredLcdSkus`).
+
 1. **`Profile::keys` offset convention for touch zones.** Reuse the
    `keys` map at offsets `keyCount..keyCount+touchZoneCount` (OpenDeck
    model) OR add a new `Profile::touchZones` map (cleaner schema, but
    breaks the on-disk JSON format)?
+
+   **RESOLVED → CONTEXT.md D-11 + D-12:** New `Profile::touchZones`
+   map (separate from `keys` map for cleaner type signatures); on-disk
+   JSON bumps to schema v2 with auto-migrate on load (v1 profiles
+   load as v2 with empty `touchZones`).
 
 ## 10. References
 

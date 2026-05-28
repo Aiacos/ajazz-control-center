@@ -484,12 +484,26 @@ Plans:
 
 Plans:
 
+**Wave 1**
+
 - [ ] 26-01-PLAN.md — REQ-26-A one-liner setActiveDevice wire in Main.qml onDeviceSelected (closes GAP-25A) (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 26-02-PLAN.md — REQ-26-C/D DeviceDescriptor extension (keyRows, touchZoneCount, mainScreenWidth/Height) + populate ~15 LCD-key descriptor rows (AKP815 stays sentinel) + Catch2 geometry regression test (wave 2)
 - [ ] 26-03-PLAN.md — D-11/D-12 Profile::touchZones map + schema v2 auto-migrate (hand-rolled JSON, COD-031 preserved) + ProfileController::commitTouchZoneBinding Q_INVOKABLE (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 26-04-PLAN.md — REQ-26-B DeviceView.qml + EncoderDial + TouchStripLane + ActionLibraryPane + KeyCell DropArea/Drag extension + ProfileEditor LCD-key branch flip + ATOMIC KeyDesigner.qml deletion (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 26-05-PLAN.md — REQ-26-B offscreen QML tests (geometry 3 SKU classes + drag-drop wire to each commit method); resolves tests/qml link issue (wave 4)
 - [ ] 26-06-PLAN.md — D-04/05/06/07 per-SKU layout JSONs (AKP05E first; then AKP05/N4, AKP153 family, AKP03 family, Mirabox N3 variants) + attribution README (fair-use) (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 26-07-PLAN.md — REQ-26-E operator-gated re-walk of 25-UAT.md Tests 1 + 6 on live AKP05E demo unit; HARDWARE-GATED, autonomous=false (wave 5)
 
 ## Progress
