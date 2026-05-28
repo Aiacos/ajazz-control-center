@@ -33,6 +33,9 @@ Item {
     /// Emitted when the user taps (clicks) a zone cell; carries the 0-based zone index.
     /// Connected by DeviceView.qml to update selectedZoneIndex and drive the Inspector.
     signal zoneTapped(int idx)
+    /// Emitted when any zone cell drag starts (true) or all zone drags end (false).
+    /// DeviceView.qml watches this to maintain anyDragActive (WR-02).
+    signal zoneDragActiveChanged(bool active)
 
     // Implicit size: fits the row of cells.
     implicitWidth:  touchZoneCount * 120 + Math.max(0, touchZoneCount - 1) * Theme.spacingXs
@@ -61,6 +64,9 @@ Item {
                 onZoneTapped: function(tappedIdx) {
                     root.zoneTapped(tappedIdx);
                 }
+                onDragActiveChanged: function(active) {
+                    root.zoneDragActiveChanged(active);
+                }
             }
         }
     }
@@ -78,6 +84,8 @@ Item {
         property int    zoneIndex:  0
         property url    iconSource: ""
         property string zoneLabel:  ""
+        /// True while this zone cell is being dragged (WR-02).
+        readonly property bool dragActive: Drag.active
 
         signal zoneSwapRequested(int srcIndex, int dstIndex)
         /// Emitted when the user taps this zone cell; forwarded by TouchStripLane to DeviceView.

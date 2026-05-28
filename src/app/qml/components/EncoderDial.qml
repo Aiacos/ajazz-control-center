@@ -26,6 +26,9 @@ ItemDelegate {
     required property url    iconSource
     property string          label: ""
     property bool            selected: false
+    /// True while this encoder cell is being dragged. DeviceView watches this
+    /// to set anyDragActive (WR-02: trash-zone 100% opacity during any cell drag).
+    readonly property bool dragActive: Drag.active
 
     // Emitted when a same-controller cell-to-cell binding arrives.
     signal encoderSwapRequested(int srcIndex, int dstIndex)

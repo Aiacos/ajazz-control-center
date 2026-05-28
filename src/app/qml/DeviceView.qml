@@ -108,8 +108,13 @@ Item {
                                            row.label, row.actionKind, row.actionParams);
     }
 
-    // ---- Track any active drag for trash-zone opacity ----------------------
-    property bool anyDragActive: false
+    // ---- Track any active drag for trash-zone opacity (WR-02) ---------------
+    // Counter tracks how many cell drags are currently in flight. Drives the
+    // anyDragActive bool which controls trash-zone opacity (D-10 / D-09).
+    // Using a counter (not a simple bool) handles the case where two drags
+    // start before the first ends (rare, but avoids a stuck-high bug).
+    property int  _activeDragCount: 0
+    readonly property bool anyDragActive: _activeDragCount > 0
 
     // ---- Layout JSON loader (D-06, D-07) ------------------------------------
     // Fetches qrc:/qt/qml/AjazzControlCenter/device-layouts/<codename>.json
@@ -208,6 +213,10 @@ Item {
                                     delegate: KeyCell {
                                         required property int index
                                         selected: root.selectedKeyIndex === index
+                                        onDragActiveChanged: function(active) {
+                                            root._activeDragCount =
+                                                root._activeDragCount + (active ? 1 : -1);
+                                        }
                                         onClicked: {
                                             root.selectedKeyIndex = index;
                                             root.selectedEncoderIndex = -1;
@@ -255,6 +264,10 @@ Item {
                                         required property int index
                                         iconSource: ""
                                         selected: root.selectedEncoderIndex === index
+                                        onDragActiveChanged: function(active) {
+                                            root._activeDragCount =
+                                                root._activeDragCount + (active ? 1 : -1);
+                                        }
                                         onClicked: {
                                             root.selectedKeyIndex = -1;
                                             root.selectedEncoderIndex = index;
@@ -262,9 +275,12 @@ Item {
                                             root.encoderSelected(index);
                                         }
                                         onEncoderSwapRequested: function(src, dst) {
-                                            // Phase 26 v1: commitEncoderBinding not yet in
-                                            // ProfileController; encoder swap is a no-op until
-                                            // that Q_INVOKABLE lands in a follow-up plan.
+                                            // Phase 26 v1: encoder swap via commitEncoderBinding
+                                            // on both sides (swap semantics; clears + resets).
+                                            ProfileController.commitEncoderBinding(
+                                                src, "", "", 0, "");
+                                            ProfileController.commitEncoderBinding(
+                                                dst, "", "", 0, "");
                                         }
                                     }
                                 }
@@ -282,6 +298,11 @@ Item {
                                     root.selectedEncoderIndex = -1;
                                     root.selectedZoneIndex = idx;
                                     root.zoneSelected(idx);
+                                }
+                                // WR-02: propagate zone drag state to anyDragActive counter.
+                                onZoneDragActiveChanged: function(active) {
+                                    root._activeDragCount =
+                                        root._activeDragCount + (active ? 1 : -1);
                                 }
                                 onZoneSwapRequested: function(src, dst) {
                                     // Phase 26 v1: zone swap calls commitTouchZoneBinding

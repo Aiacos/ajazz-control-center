@@ -42,6 +42,9 @@ ItemDelegate {
     required property url iconSource
     required property string label
     property bool selected: false
+    /// True while this cell is being dragged. DeviceView watches this to set
+    /// anyDragActive (WR-02: trash-zone 100% opacity during any cell drag).
+    readonly property bool dragActive: Drag.active
 
     // Emitted when a cell-to-cell binding arrives; the DeviceView parent
     // orchestrates the actual swap (it owns both source and destination state).
