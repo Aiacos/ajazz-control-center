@@ -187,6 +187,46 @@ void ProfileController::commitKeyBinding(int keyIndex,
     emit profileChanged();
 }
 
+void ProfileController::commitTouchZoneBinding(int zoneIndex,
+                                               QString const& iconPath,
+                                               QString const& label,
+                                               int actionKind,
+                                               QString const& settingsJson) {
+    // Validate zoneIndex: must be in [0, 255] (uint8_t range; touchZoneCount is uint8).
+    // Out-of-range values indicate a runaway QML caller (T-26-09 mitigation).
+    if (zoneIndex < 0 || zoneIndex > 255) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitTouchZoneBinding: zoneIndex {} out of valid range [0, 255], ignoring",
+                       zoneIndex);
+        return;
+    }
+    // Validate actionKind: must map to a defined ActionKind value (0..BackToParent).
+    constexpr int kMaxActionKind = static_cast<int>(ajazz::core::ActionKind::BackToParent);
+    if (actionKind < 0 || actionKind > kMaxActionKind) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitTouchZoneBinding: actionKind {} out of range [0, {}], ignoring",
+                       actionKind,
+                       kMaxActionKind);
+        return;
+    }
+
+    auto const idx = static_cast<std::uint8_t>(zoneIndex);
+    auto& binding = m_profile.touchZones[idx];
+
+    binding.state.imagePath =
+        iconPath.isEmpty() ? std::nullopt : std::optional<std::string>{iconPath.toStdString()};
+
+    binding.state.text =
+        label.isEmpty() ? std::nullopt : std::optional<std::string>{label.toStdString()};
+
+    ajazz::core::Action act{};
+    act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.settingsJson = settingsJson.toStdString();
+    binding.onTap = {std::move(act)};
+
+    emit profileChanged();
+}
+
 void ProfileController::saveActiveProfile() {
     QString const id =
         m_profile.id.empty() ? QStringLiteral("default") : QString::fromStdString(m_profile.id);

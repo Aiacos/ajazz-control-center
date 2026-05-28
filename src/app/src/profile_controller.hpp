@@ -151,6 +151,34 @@ public:
                                       QString const& settingsJson);
 
     /**
+     * @brief Commit a touch-strip-zone binding into the active Profile (touchZones map).
+     *
+     * REQ-26-B touch strip zone binding (Phase 26 D-11).
+     *
+     * Mutates m_profile.touchZones[zoneIndex]:
+     *  - state.imagePath = iconPath (nullopt if empty)
+     *  - state.text      = label    (nullopt if empty)
+     *  - onTap           = single Action{kind, settingsJson}
+     *
+     * Emits profileChanged() so QML drop-targets and the repaint service update.
+     * Does NOT save to disk — call saveActiveProfile() to persist.
+     *
+     * @param zoneIndex   0-based touch-zone index (maps to uint8 key in touchZones
+     *                    map). AKP05/N4 exposes 4 zones (indices 0..3). Out-of-range
+     *                    values [0, 255] are rejected with a warning (no-op).
+     * @param iconPath    Absolute path or Qt resource URL; empty -> nullopt.
+     * @param label       Overlay text; empty -> nullopt.
+     * @param actionKind  cast from ajazz::core::ActionKind enum value.
+     * @param settingsJson Opaque JSON string forwarded to Action::settingsJson.
+     * @invokable Callable from QML as ProfileController.commitTouchZoneBinding(...).
+     */
+    Q_INVOKABLE void commitTouchZoneBinding(int zoneIndex,
+                                            QString const& iconPath,
+                                            QString const& label,
+                                            int actionKind,
+                                            QString const& settingsJson);
+
+    /**
      * @brief Save the active profile to its default path.
      *
      * Resolves defaultProfilePath(m_profile.id), creates the parent directory
