@@ -1,7 +1,8 @@
 ---
 phase: 26
 slug: opendeck-shaped-device-editor
-status: draft
+status: approved
+reviewed_at: 2026-05-28
 shadcn_initialized: false
 preset: none
 created: 2026-05-28
@@ -36,6 +37,8 @@ ______________________________________________________________________
 ## Spacing Scale
 
 Project-defined 4-point scale from `Theme.qml`. No exceptions for this phase.
+
+**Note on `spacingMd = 12px`:** 12px is not in the canonical {4, 8, 16, 24, 32, 48, 64} set quoted in some style audits, but it IS a multiple of 4 (12 = 3×4) and is a pre-existing project token in `Theme.qml` (not introduced by Phase 26). It intentionally fills the gap between `spacingSm` (8px) and `spacingLg` (16px) for cases where 8px is too tight and 16px is too loose (e.g. row gaps between encoder-dial cells, internal padding inside the chassis panel). Honoring `Theme.qml` keeps cross-component visual rhythm consistent.
 
 | Token | QML Token         | Value | Usage in Phase 26                                                                 |
 | ----- | ----------------- | ----- | --------------------------------------------------------------------------------- |
