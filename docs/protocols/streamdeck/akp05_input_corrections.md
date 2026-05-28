@@ -8,6 +8,7 @@
 > **key** decoding is vendor-confirmed correct.
 >
 > **Confidence legend** used throughout:
+>
 > - **[CONFIRMED]** — proven from the decompiled binary (and, for VER, from
 >   live hardware).
 > - **[PROVISIONAL]** — architecture proven, but the exact numeric constants for
@@ -18,11 +19,11 @@ ______________________________________________________________________
 
 ## 0. Provenance (reproducible)
 
-| Artifact | Location | How produced |
-| --- | --- | --- |
-| `SDDevice::readDataFromHidDevice` @ RVA `0x180021280` | `reverse-eng-workdir/akp05_input_parse.json` | Ghidra 12.1 headless, project `C:\temp\ghidra_sd_proj` name `sd_sdk` (SDLibrary1.dll), `DumpAkp05Input.java` |
-| `SDActionCanvasWidget::handleKeyEvents` @ `0x1400d02b0` | `reverse-eng-workdir/akp05_keyevent_slot.json` | project `sd_exe` (Stream Dock AJAZZ.exe + 69 MB PDB), `DumpKeyEventSlot.java` |
-| dispatch jump tables `DAT_1400d9dcc` etc. | `reverse-eng-workdir/akp05_jumptable.json` | `DumpJumpTable.java` |
+| Artifact                                                | Location                                       | How produced                                                                                                 |
+| ------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `SDDevice::readDataFromHidDevice` @ RVA `0x180021280`   | `reverse-eng-workdir/akp05_input_parse.json`   | Ghidra 12.1 headless, project `C:\temp\ghidra_sd_proj` name `sd_sdk` (SDLibrary1.dll), `DumpAkp05Input.java` |
+| `SDActionCanvasWidget::handleKeyEvents` @ `0x1400d02b0` | `reverse-eng-workdir/akp05_keyevent_slot.json` | project `sd_exe` (Stream Dock AJAZZ.exe + 69 MB PDB), `DumpKeyEventSlot.java`                                |
+| dispatch jump tables `DAT_1400d9dcc` etc.               | `reverse-eng-workdir/akp05_jumptable.json`     | `DumpJumpTable.java`                                                                                         |
 
 All raw RE material stays under `C:\Users\unilo\reverse-eng-workdir` (NOT the
 repo, per the clean-room policy). Only the findings below are public.
@@ -36,12 +37,12 @@ vendor interface (MI_00) — *not* WinUSB. `SDDevice::readDataFromHidDevice` rea
 a report, emits `sigReadData` (raw bytes) when enabled, then dispatches by the
 leading bytes:
 
-| Leading bytes | Meaning |
-| --- | --- |
-| `HANLDER` | finish-write notification |
-| `error` | device error |
-| `ACK` (0..2) + `O`,`K` (5,6) + `00` (9) | write-acknowledgement |
-| `V1.` / `V2.` / `V3.` | firmware-version response |
+| Leading bytes                           | Meaning                   |
+| --------------------------------------- | ------------------------- |
+| `HANDLER`                               | finish-write notification |
+| `error`                                 | device error              |
+| `ACK` (0..2) + `O`,`K` (5,6) + `00` (9) | write-acknowledgement     |
+| `V1.` / `V2.` / `V3.`                   | firmware-version response |
 
 For a **modern** device (codename **not** `StreamDock[293]`/`[295]`/`XF-A3501`),
 the read thread does, verbatim:
@@ -138,16 +139,15 @@ case 0x11: KVar35 = KnobClockwiseRotation;        break;   // CW
 SDActionCanvasLabel::performActionKnob(label, KVar35, false);
 ```
 
-`KnobActionType ∈ { KnobClockwiseRotation, KnobCounterclockwiseRotation,
-KnobPressed }`. There is **no rotation-magnitude byte** anywhere in the path —
+`KnobActionType ∈ { KnobClockwiseRotation, KnobCounterclockwiseRotation, KnobPressed }`. There is **no rotation-magnitude byte** anywhere in the path —
 one report = one detent in a fixed direction. Consequences:
 
 1. `frame[10]` is **not** a signed rotation delta. Reading it as `int8` delta is
    wrong; on a real CW click our code would mis-read direction/magnitude.
-2. The encoder identity + direction live in `frame[9]`, not in a `0x20..0x2f`
+1. The encoder identity + direction live in `frame[9]`, not in a `0x20..0x2f`
    low-nibble. The `(tag & 0xf0)==0x20` mask is a guess from the OSS corpus and
    is **not** what the vendor binary does.
-3. `frame[11]` is **not** a button edge.
+1. `frame[11]` is **not** a button edge.
 
 ### Proposed correction
 
@@ -205,16 +205,16 @@ if ((tag & 0xf0u) == 0x30u) {
 
 In `handleKeyEvents`, the touch strip is handled by `SDActionTouchBarWidget`, and
 the **X coordinate is the single `state` argument (report byte 10)** — passed
-straight into `getTouchbarLoactionFromX`:
+straight into `getTouchbarLocationFromX`:
 
 ```c
 // handleKeyEvents, touch branch (distinct keyCodes, NOT a 0x30-tag low nibble):
-//   keyCode 0x98 -> performActionKeyDownItem(getTouchbarLoactionFromX(state))  // touch down
-//   keyCode 0x99 -> performActionKeyUpItem  (getTouchbarLoactionFromX(state))  // touch up
-//   keyCode 0x97 -> getTouchbarLoactionFromX(state)                            // move
+//   keyCode 0x98 -> performActionKeyDownItem(getTouchbarLocationFromX(state))  // touch down
+//   keyCode 0x99 -> performActionKeyUpItem  (getTouchbarLocationFromX(state))  // touch up
+//   keyCode 0x97 -> getTouchbarLocationFromX(state)                            // move
 //   keyCode 0x78/0x79 -> setCoreX(state)
 //   keyCode 0xb1/0xb2 -> changeN4ProTouchbarMode(...)                          // mode toggle
-iVar18 = SDActionTouchBarWidget::getTouchbarLoactionFromX(touchbar, /*X=*/state);
+iVar18 = SDActionTouchBarWidget::getTouchbarLocationFromX(touchbar, /*X=*/state);
 ```
 
 Consequences:
@@ -223,12 +223,12 @@ Consequences:
    big-endian 16-bit value spanning `frame[10..11]`. A one-byte field structurally
    cannot encode `0..639`, so both the `(frame[10]<<8)|frame[11]` read **and**
    the `TouchStripRangeX = 640` clamp are wrong.
-2. The event type (down / up / move) is a **distinct `keyCode` at `frame[9]`**,
+1. The event type (down / up / move) is a **distinct `keyCode` at `frame[9]`**,
    not a low-nibble gesture code under a `0x30` tag.
-3. **"Swipe left/right" is not a firmware event.** The firmware reports
+1. **"Swipe left/right" is not a firmware event.** The firmware reports
    down/move/up + an X position; the vendor derives swipe vs tap **host-side**
    (from the X delta between down and up) and maps X→zone via
-   `getTouchbarLoactionFromX`. Our `TouchSwipeLeft/Right` kinds are therefore a
+   `getTouchbarLocationFromX`. Our `TouchSwipeLeft/Right` kinds are therefore a
    host-side abstraction, not a wire fact.
 
 ### Proposed correction
@@ -237,7 +237,7 @@ Consequences:
 // PSEUDO — exact codes [PROVISIONAL] until §7.
 if (auto t = lookupTouchCode(frame[9])) {     // {Down, Up, Move}
     std::uint8_t const x = frame[10];          // single byte, 0..255
-    // zone = mapXToZone(x)  (0..TouchZoneCount-1), mirroring getTouchbarLoactionFromX
+    // zone = mapXToZone(x)  (0..TouchZoneCount-1), mirroring getTouchbarLocationFromX
     // tap vs swipe is derived host-side from the Down->Up X delta, NOT here.
     ev.value = x;
     ev.index = mapXToZone(x);
@@ -245,8 +245,7 @@ if (auto t = lookupTouchCode(frame[9])) {     // {Down, Up, Move}
 }
 ```
 
-- Touch X is `frame[10]` (0..255). Replace the BE16 read and the `TouchStripRangeX
-  = 640` clamp; the real X scale + whether it is absolute pixels (scaled),
+- Touch X is `frame[10]` (0..255). Replace the BE16 read and the `TouchStripRangeX = 640` clamp; the real X scale + whether it is absolute pixels (scaled),
   a 0..255 fraction, or already a zone index is **[PROVISIONAL]** — confirm in §7.
 - Derive **zone (0..3)** from X (the device aligns 4 zones to the 4 encoders);
   keep `TouchZoneCount = 4`.
@@ -257,14 +256,14 @@ ______________________________________________________________________
 
 ## 5. Downstream impact
 
-| Site | Change |
-| --- | --- |
-| `akp05_protocol.hpp:286-302` `InputEvent` | `EncoderTurned.value` stays a signed step but is now `±1` derived from the code, not a delta byte. Touch `value` is a single-byte X (0..255). Reconsider the `TouchSwipeLeft/Right`/`TouchTap`/`TouchLongPress` kinds: prefer `TouchDown/TouchUp/TouchMove` at the wire layer and synthesise tap/swipe above `parseInputReport`. |
-| `akp05_protocol.hpp:281-284, 291, 294-297` doc comments | Rewrite: byte 9 is an *action code* (not a `1..N / 0x20.. / 0x30..` tag range); byte 10 is edge (keys) **or** single-byte X (touch); encoders carry no delta. |
-| `akp05_protocol.hpp:82` `TouchStripRangeX = 640` | Wrong (X is one byte). Replace with the real range from §7, or drop the clamp and validate against `TouchZoneCount`. |
-| `akp05.cpp:493-503` `poll()` encoder mapping | Still OK: `EncoderTurned`(±1) / `EncoderPressed`(1) / `EncoderReleased`(0). Keep synthesising the encoder-press release. |
-| `akp05.cpp:504-519` `poll()` touch packing | The `gesture<<16 | X` packing assumes a 0..639 X and 4 gesture kinds; revisit once X is one byte and tap/swipe is host-derived. |
-| `tests/unit/test_akp05_protocol.cpp`, `tests/unit/test_akp05_touch_strip.cpp` | These currently lock the **wrong** encoder-delta and BE16-X behaviour. They must be updated to the corrected model and re-pinned against the §7 capture fixtures (do NOT treat the current expected bytes as ground truth). |
+| Site                                                                          | Change                                                                                                                                                                                                                                                                                                                           |
+| ----------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `akp05_protocol.hpp:286-302` `InputEvent`                                     | `EncoderTurned.value` stays a signed step but is now `±1` derived from the code, not a delta byte. Touch `value` is a single-byte X (0..255). Reconsider the `TouchSwipeLeft/Right`/`TouchTap`/`TouchLongPress` kinds: prefer `TouchDown/TouchUp/TouchMove` at the wire layer and synthesise tap/swipe above `parseInputReport`. |
+| `akp05_protocol.hpp:281-284, 291, 294-297` doc comments                       | Rewrite: byte 9 is an *action code* (not a `1..N / 0x20.. / 0x30..` tag range); byte 10 is edge (keys) **or** single-byte X (touch); encoders carry no delta.                                                                                                                                                                    |
+| `akp05_protocol.hpp:82` `TouchStripRangeX = 640`                              | Wrong (X is one byte). Replace with the real range from §7, or drop the clamp and validate against `TouchZoneCount`.                                                                                                                                                                                                             |
+| `akp05.cpp:493-503` `poll()` encoder mapping                                  | Still OK: `EncoderTurned`(±1) / `EncoderPressed`(1) / `EncoderReleased`(0). Keep synthesising the encoder-press release.                                                                                                                                                                                                         |
+| `akp05.cpp:504-519` `poll()` touch packing                                    | The \`gesture\<<16                                                                                                                                                                                                                                                                                                               |
+| `tests/unit/test_akp05_protocol.cpp`, `tests/unit/test_akp05_touch_strip.cpp` | These currently lock the **wrong** encoder-delta and BE16-X behaviour. They must be updated to the corrected model and re-pinned against the §7 capture fixtures (do NOT treat the current expected bytes as ground truth).                                                                                                      |
 
 ______________________________________________________________________
 
@@ -292,19 +291,84 @@ streams once the vendor app has it). The cheapest reliable finalisation is a
    reports while the device streams. (Our backend's open path already targets
    this interface; if it does not stream, push a profile/image first to mirror
    the vendor "connected" state.)
-2. For **each** control, record `report[9]` (code) and `report[10]` (context):
+1. For **each** control, record `report[9]` (code) and `report[10]` (context):
    - 10 keys press+release → confirm `report[9] ∈ {1..10}`, `report[10]` edge.
    - each of the 4 encoders: one CW click, one CCW click, one press → capture the
      distinct `report[9]` code per (encoder, direction/press); confirm `report[10]`.
    - touch: down + move + up at several X positions across the strip, in each of
      the 4 zones → capture the distinct `report[9]` codes (down/up/move) and the
      `report[10]` X values; derive the X→zone mapping and the X range.
-3. Land the captured codes as `tests/integration/fixtures/akp05e/*.h` (via
+1. Land the captured codes as `tests/integration/fixtures/akp05e/*.h` (via
    `scripts/hex-to-cpparray.py`), fill the `kEncoderCodes` / `lookupTouchCode`
    tables, and rewrite the unit tests.
 
 Until then, this note + the Ghidra dumps are the source of truth for the
 *structure*; the *values* remain provisional.
+
+### 7.1 Tested 2026-05-28: §7's "push a profile/image first" assumption is **REFUTED on this unit**
+
+A live attempt to execute §7's plan on the physically-connected white-label
+`0x0300:0x3004` ("HOTSPOTEKUSB HID DEMO") unit did **not** produce any input.
+The full ground-truth audit:
+
+- **Output works** (kernel + framing both correct): `CRT LIG` / `CLE` /
+  `DIS` / `CONNECT` keep-alive / full `BAT` image push on `/dev/hidraw16`
+  with the POSIX `0x00` report-id prepend all visibly drove the panel; an
+  85×85 JPEG pushed to `BAT keyIndex=1` rendered on the touch strip (matching
+  the wire-byte map in commit `037bd8d` — strip is byte 5, NOT key 1; the
+  re-confirmation also closes §2.2 "renders on Linux" positively for AKP05).
+- **Comms work**: `GET_FEATURE` report-id `0x01` returns
+  `V3.AKP05E.01.007` (the proven mirajazz firmware probe, commit `5ec18d9`).
+- **Kernel-side input path is correct**: `usbmon` confirms the interrupt-IN
+  URB is armed on EP `0x82` at hidraw-open (`S Ii:1:NNN:2 -115:1 512 <`),
+  i.e. the host is correctly polling the device's input endpoint.
+- **Device-side: silent.** Across every host-readable path — hidraw raw
+  read, GET_REPORT polling (HIDIOCGINPUT / HIDIOCGFEATURE), evdev
+  `event264`, and raw `usbmon` filtered to the device — **zero input
+  reports arrive on press**, regardless of activation state (bare open,
+  after `VER`, after `DIS`+`LIG`, after a periodic `CRT CONNECT`
+  keep-alive at 1 s cadence, after a full `BAT`→chunks→`ULEND` image push).
+- **Reference library also captures nothing.** A minimal binary built
+  against `4ndv/mirajazz` (its own `async_hid` backend, its private
+  `initialize()` = `CRT DIS` + `CRT LIG`, `Device::connect(dev, 3, 10, 4)`
+  matching the AKP05E geometry) opened the device successfully and read
+  for ~60 s with zero `(key, state)` events on press, twice — including
+  immediately after a fresh USB replug. mirajazz is the authoritative
+  library this project's firmware probe was modelled on.
+
+**Conclusion:** input streaming on this `0x3004` *white-label / "HID DEMO"*
+unit is not reachable via Linux HID — not by our backend, not by mirajazz,
+not by any documented activation sequence. The kernel does its part; the
+device declines to emit. Most likely: demo/engineering-firmware variant
+with the input-reporting path disabled or stubbed (this is a deliberate
+non-retail "DEMO" SKU per §14.1 of `akp05_vendor.md`).
+
+**What remains viable for the §7 capture:**
+
+- **Frida-on-Windows vendor-app** (the *decisive* method per
+  `dossier/methods-and-tooling.md` §2 — the same method that cracked the
+  AK980 keyboard time-sync + the AJ mouse `0x28` clock). Hook
+  `Stream Dock AJAZZ.exe`'s `HidD_SetFeature` / `WriteFile` / interrupt
+  reads against a retail device to capture the live `report[9]`/`report[10]`
+  values. Pre-requisite is a Windows host + a unit where the vendor app
+  receives input (i.e. NOT this white-label).
+- **Retail AKP05E / Mirabox N4** — repeating the Linux hidraw capture
+  pattern below on a non-demo unit would isolate "demo firmware" vs
+  "AKP05E family-wide". Not currently possible.
+
+Until either is available, the encoder/touch decode rework in §7 remains
+genuinely **blocked on hardware** — but no longer on a missing technique
+or undiscovered enable command. We exhausted the documented vendor protocol
+plus the reference library on the only physically-available unit.
+
+**Capture pattern used (reproducible)** — for the retail-unit retest:
+open `/dev/hidraw*` matching `0x0300:0x3004` usage-page `0xFFA0` `O_RDWR`;
+send `CRT DIS` then `CRT LIG` on the same handle (each = 1-byte `0x00`
+report-id prepend + 1024-byte CRT-framed payload); start a periodic
+`CRT CONNECT` keep-alive (~1 s) on that handle; then `select()`/read it
+in a loop, printing `buf[9]`/`buf[10]` per arriving report. Confirmation
+of the kernel side: `usbmon` should show `S Ii:1:<addr>:2 -115:1 512 <`
+after the open (URB armed); data arrival prints as a `C Ii:...` line.
 
 ______________________________________________________________________
 
