@@ -187,6 +187,48 @@ void ProfileController::commitKeyBinding(int keyIndex,
     emit profileChanged();
 }
 
+void ProfileController::commitEncoderBinding(int encoderIndex,
+                                             QString const& iconPath,
+                                             QString const& label,
+                                             int actionKind,
+                                             QString const& settingsJson) {
+    // Validate encoderIndex: must be in [0, 65534] (uint16_t range; mirrors commitKeyBinding).
+    if (encoderIndex < 0 ||
+        encoderIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitEncoderBinding: encoderIndex {} out of valid range [0, 65534],"
+                       " ignoring",
+                       encoderIndex);
+        return;
+    }
+    // Validate actionKind.
+    constexpr int kMaxActionKind = static_cast<int>(ajazz::core::ActionKind::BackToParent);
+    if (actionKind < 0 || actionKind > kMaxActionKind) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitEncoderBinding: actionKind {} out of range [0, {}], ignoring",
+                       actionKind,
+                       kMaxActionKind);
+        return;
+    }
+
+    auto const idx = static_cast<std::uint16_t>(encoderIndex);
+    auto& binding = m_profile.encoders[idx];
+
+    binding.state.imagePath =
+        iconPath.isEmpty() ? std::nullopt : std::optional<std::string>{iconPath.toStdString()};
+
+    binding.state.text =
+        label.isEmpty() ? std::nullopt : std::optional<std::string>{label.toStdString()};
+
+    // Library drag-drop assigns to onPress; CW/CCW editors are a follow-up (Phase 26 D-09).
+    ajazz::core::Action act{};
+    act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.settingsJson = settingsJson.toStdString();
+    binding.onPress = {std::move(act)};
+
+    emit profileChanged();
+}
+
 void ProfileController::commitTouchZoneBinding(int zoneIndex,
                                                QString const& iconPath,
                                                QString const& label,

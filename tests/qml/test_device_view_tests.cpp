@@ -147,11 +147,9 @@ TEST_CASE("DeviceViewDragDrop::test_drop_library_tile_on_keycell_calls_commitKey
 
 TEST_CASE("DeviceViewDragDrop::test_drop_library_tile_on_encoder_calls_commitEncoderBinding",
           "[qml][device_view][drag_drop]") {
-    // commitEncoderBinding is a Phase 26 v1 known stub: the Q_INVOKABLE does not
-    // exist on ProfileController yet (documented in 26-04 SUMMARY Known Stubs).
-    // EncoderDial.qml calls ProfileController.commitEncoderBinding(...); the
-    // call resolves as a QML warning no-op.  Verify no profileChanged fires.
-    // Update to CHECK(fired == 1) when commitEncoderBinding lands.
+    // Phase 26 CR-04: commitEncoderBinding Q_INVOKABLE now exists on ProfileController.
+    // EncoderDial.qml calls ProfileController.commitEncoderBinding(...) on drop; the
+    // call must persist the binding and emit profileChanged().
     auto* pc = profileController();
     REQUIRE(pc != nullptr);
 
@@ -159,9 +157,12 @@ TEST_CASE("DeviceViewDragDrop::test_drop_library_tile_on_encoder_calls_commitEnc
     auto conn =
         QObject::connect(pc, &ajazz::app::ProfileController::profileChanged, [&fired] { ++fired; });
 
-    // No commitEncoderBinding method -- firing nothing is the correct v1 behaviour.
-    CHECK(fired == 0);
+    // Simulate: EncoderDial DropArea onDropped with "application/x-ajazz-action",
+    // actionKind=4 ("Open URL"), encoderIndex=1 (valid for AKP05E 4 encoders).
+    pc->commitEncoderBinding(
+        1, QStringLiteral(""), QStringLiteral("Open URL"), 4, QStringLiteral(""));
 
+    CHECK(fired == 1);
     QObject::disconnect(conn);
 }
 

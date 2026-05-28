@@ -151,6 +151,37 @@ public:
                                       QString const& settingsJson);
 
     /**
+     * @brief Commit a rotary-encoder binding into the active Profile (encoders map).
+     *
+     * Phase 26 CR-04: adds the Q_INVOKABLE so EncoderDial.qml drop handlers can
+     * persist a binding via the same pattern as commitKeyBinding and
+     * commitTouchZoneBinding.
+     *
+     * Mutates m_profile.encoders[encoderIndex]:
+     *  - state.imagePath = iconPath (nullopt if empty)
+     *  - state.text      = label    (nullopt if empty)
+     *  - onPress         = single Action{kind, settingsJson}
+     *    (library drag-drop assigns to onPress; full CW/CCW editor is a follow-up)
+     *
+     * Emits profileChanged() so QML drop-targets and the repaint service update.
+     * Does NOT save to disk — call saveActiveProfile() to persist.
+     *
+     * @param encoderIndex 0-based encoder index (maps to uint16 key in encoders
+     *                     map). AKP05/N4 exposes 4 encoders (indices 0..3). Values
+     *                     outside [0, 65534] are rejected with a warning (no-op).
+     * @param iconPath     Absolute path or Qt resource URL; empty -> nullopt.
+     * @param label        Overlay text; empty -> nullopt.
+     * @param actionKind   cast from ajazz::core::ActionKind enum value.
+     * @param settingsJson Opaque JSON string forwarded to Action::settingsJson.
+     * @invokable Callable from QML as ProfileController.commitEncoderBinding(...).
+     */
+    Q_INVOKABLE void commitEncoderBinding(int encoderIndex,
+                                          QString const& iconPath,
+                                          QString const& label,
+                                          int actionKind,
+                                          QString const& settingsJson);
+
+    /**
      * @brief Commit a touch-strip-zone binding into the active Profile (touchZones map).
      *
      * REQ-26-B touch strip zone binding (Phase 26 D-11).
