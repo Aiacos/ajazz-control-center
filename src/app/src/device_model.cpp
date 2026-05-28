@@ -130,6 +130,15 @@ QVariant DeviceModel::data(QModelIndex const& index, int role) const {
         return d.hasSettings;
     case MaturityRole:
         return maturityFor(d.codename);
+    // Phase 26 REQ-26-C geometry roles (WR-04).
+    case KeyRowsRole:
+        return static_cast<int>(d.keyRows);
+    case TouchZoneCountRole:
+        return static_cast<int>(d.touchZoneCount);
+    case MainScreenWidthPxRole:
+        return static_cast<int>(d.mainScreenWidthPx);
+    case MainScreenHeightPxRole:
+        return static_cast<int>(d.mainScreenHeightPx);
     default:
         return {};
     }
@@ -153,6 +162,14 @@ QHash<int, QByteArray> DeviceModel::roleNames() const {
         {HasBatteryRole, "deviceHasBattery"},
         {HasSettingsRole, "deviceHasSettings"},
         {MaturityRole, "maturity"},
+        // Phase 26 REQ-26-C geometry roles (WR-04): expose as first-class list-view
+        // roles so QML delegates can bind directly (model.keyRows etc.) instead of
+        // calling capabilitiesFor() per-row. Keeps the role-name surface consistent
+        // with what capabilitiesFor() already exposes in its QVariantMap.
+        {KeyRowsRole, "keyRows"},
+        {TouchZoneCountRole, "touchZoneCount"},
+        {MainScreenWidthPxRole, "mainScreenWidthPx"},
+        {MainScreenHeightPxRole, "mainScreenHeightPx"},
     };
 }
 

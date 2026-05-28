@@ -82,6 +82,13 @@ public:
                          ///< gate per-device visibility of the Fn-layer/sleep/response tab.
         MaturityRole,    ///< Maturity tier from devices.yaml:
                          ///< scaffolded/probed/partial/functional/verified (Phase 8 DEVICES-02).
+        // Phase 26 REQ-26-C geometry fields (WR-04: first-class roles for ListView delegates).
+        KeyRowsRole,            ///< Key row count in the LCD grid (DeviceDescriptor::keyRows).
+        TouchZoneCountRole,     ///< Touch-strip zone count (DeviceDescriptor::touchZoneCount).
+        MainScreenWidthPxRole,  ///< Main LCD strip width in px
+                                ///< (DeviceDescriptor::mainScreenWidthPx).
+        MainScreenHeightPxRole, ///< Main LCD strip height in px
+                                ///< (DeviceDescriptor::mainScreenHeightPx).
     };
 
     /**
