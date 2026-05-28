@@ -1023,3 +1023,49 @@ These are NOT decided in this research — surface them in
 - mirajazz: MPL-2.0 (`/tmp/phase26-research/mirajazz/LICENSE`).
 - Our project: GPL-3.0-or-later. Direct code copy from OpenDeck and opendeck-akp05 is
   license-compatible; we choose patterns-only learning for cleaner attribution.
+
+______________________________________________________________________
+
+## Validation Architecture
+
+> Added 2026-05-28 to satisfy the Nyquist Dimension-8 gate. Cross-references `26-VALIDATION.md` for the per-task verification map.
+
+### Test infrastructure (already in tree)
+
+- **Framework:** Catch2 v3 (vendored at `external/Catch2/`) — same as the rest of the project.
+- **Build preset:** `linux-release` (`cmake --preset linux-release && cmake --build --preset linux-release`).
+- **Suite runner:** `ctest --preset linux-release` — runs ~645 unit cases + integration; ~408 ctest entries (filter prefix `streamdeck_`, `profile_`, `device_` for relevant subsets).
+- **QML offscreen harness:** `tests/qml/ajazz_qml_tests` — already wired (Qt Test offscreen platform). **Pre-existing link issue:** `PluginDeviceBridge::onPluginRegistered`/`onPluginDisconnected`/`onActivePageChanged` undefined-reference per CLAUDE.md "Latent items"; tracked separately. Phase 26 QML tests must build green either via `application.cpp.o` link extension OR via a slimmer test target that only links what the new components need. Plan-phase decides.
+
+### Per-REQ validation lens
+
+| REQ       | Type                       | How verified                                                                                                                                                                                           | New test file (proposed)                                                                 |
+| --------- | -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------- |
+| REQ-26-A  | grep + manual              | `grep -n "setActiveDevice" src/app/qml/Main.qml` must hit `onDeviceSelected` handler. Live verify: select AKP05E → journalctl shows `[akp05] device opened` + next binding edit produces BAT chunks.   | none (one-line wire-up; covered by REQ-26-E walk).                                       |
+| REQ-26-B  | QML offscreen unit         | Instantiate `DeviceView.qml` with synthetic `DeviceDescriptor` for AKP05E (5×2 + 4 + 4), AKP153 (3×5 + 0 + 0), AKP03 (2×3 + 3 + 0); count cells of each type; fire synthetic drag events on each cell. | `tests/qml/test_device_view_geometry.qml` (or `.cpp` driver).                            |
+| REQ-26-C  | unit                       | Iterate `DeviceRegistry::all()`, assert each LCD-key SKU has `keyRows >= 1` and (if `touchZoneCount > 0`) `mainScreenWidthPx > 0` and `mainScreenHeightPx > 0`.                                        | `tests/unit/test_streamdeck_register_geometry.cpp` (the REQ-26-D test covers this lens). |
+| REQ-26-D  | unit (regression)          | This IS the new test. Allow-list `kDeferredLcdSkus = {"akp815"}`. Visible in `ctest -N -R Geometry`.                                                                                                   | `tests/unit/test_streamdeck_register_geometry.cpp`.                                      |
+| REQ-26-E  | manual hardware (operator) | Operator re-walks 25-UAT.md Tests 1 + 6 on live AKP05E (`0300:3004` fw `V3.AKP05E.01.007`); records PASS with Phase 26 commit SHA; `25-UAT.md` Summary `passed:` ≥ 5.                                  | none (manual UAT; closes Phase 25 PARTIAL).                                              |
+| Schema    | unit (migration)           | Round-trip a v1 profile JSON → load → assert `_schemaVersion=2` + `touchZones={}` after save (D-11/D-12).                                                                                              | `tests/unit/test_profile_serialiser.cpp` (extend existing).                              |
+| Drag-drop | QML offscreen              | Synthesise drag from ActionLibraryPane tile onto each cell type; assert `ProfileController.commitKeyBinding` / `commitEncoderBinding` / `commitTouchZoneBinding` invoked with expected args.           | `tests/qml/test_device_view_drag_drop.qml`.                                              |
+
+### Sampling rate
+
+- **Per atomic commit:** `ctest --preset linux-release -E qml -R "geom|profile_serial"` (~5s) — the geometry test + serialiser migration; the planner wires both into Wave 2/3 acceptance.
+- **Per wave:** `ctest --preset linux-release -E qml` (~30s) — full unit + integration suite; baseline 645/645.
+- **Before phase verify:** `ctest --preset linux-release` including QML (~60s if QML link is fixed; otherwise documented skip per CLAUDE.md "Latent items"). REQ-26-E adds operator-gated hardware walk.
+
+### Wave 0 setup
+
+No new test framework. No new dependencies. The Catch2 + ctest harness is already in place. The QML offscreen harness `tests/qml/ajazz_qml_tests` is already wired but has a documented latent link issue that may need addressing before Wave 4 ships `tests/qml/test_device_view_*` — planner decides whether to fix the link issue or use a slimmer test target.
+
+### Cross-cutting verification (project-wide)
+
+- `ctest --preset linux-release -E qml` MUST remain ≥ 645 passed, 0 failed (no regressions in shipped unit suite) — anchors success criterion #6 in ROADMAP.
+- pre-commit hooks (clang-format, mdformat, gitleaks, conventional-commit, typos, ASCII test names) MUST pass on every Phase 26 commit.
+
+### What this section does NOT cover
+
+- **Visual regression** (screenshot diffs of `DeviceView.qml`) — not in scope; UI-SPEC component states are spec-only.
+- **Performance** (drag-drop frame timing) — not in scope; profiler runs are an audit-level concern.
+- **Localisation** (qsTr coverage of new strings) — UI-SPEC declares qsTr() everywhere; not formally test-gated.
