@@ -118,30 +118,47 @@ Item {
 
     // ---- Layout JSON loader (D-06, D-07) ------------------------------------
     // Fetches qrc:/qt/qml/AjazzControlCenter/device-layouts/<codename>.json
-    // synchronously. Returns parsed JS object on 200/OK, null on any error.
-    // JSONparse is wrapped in try/catch (T-26-11 mitigate).
+    // asynchronously (WR-05: sync XHR deprecated in Qt 6.8+; async avoids
+    // blocking the QML main thread). Sets root._layout as a side effect;
+    // bindings on _layout update when the async load completes.
+    // JSON parse is wrapped in try/catch (T-26-11 mitigate).
     function loadLayout(cn) {
-        if (cn === "") return null;
-        var url = "qrc:/qt/qml/AjazzControlCenter/device-layouts/" + cn + ".json";
-        var xhr = Qt.createQmlObject('import QtQml 2.15; XMLHttpRequest {}', root);
-        xhr.open("GET", url, false);   // synchronous; tiny static qrc resource
-        try {
-            xhr.send();
-            if (xhr.status === 200) {
-                return JSON.parse(xhr.responseText);
-            }
-        } catch (e) {
-            // Parse failure or network error -- fall through to null (D-07 fallback).
+        if (cn === "") {
+            root._layout = null;
+            return;
         }
-        return null;
+        var url = "qrc:/qt/qml/AjazzControlCenter/device-layouts/" + cn + ".json";
+        var xhr = new XMLHttpRequest();   // WR-05/IN-04: standard constructor, not Qt.createQmlObject
+        xhr.open("GET", url, true);       // async=true; avoids deprecated sync-XHR warning
+        xhr.onreadystatechange = function() {
+            if (xhr.readyState === XMLHttpRequest.DONE) {
+                if (xhr.status === 200) {
+                    try {
+                        root._layout = JSON.parse(xhr.responseText);
+                    } catch (e) {
+                        // Parse failure -- fall through to null (D-07 outline-frame fallback).
+                        root._layout = null;
+                    }
+                } else {
+                    root._layout = null;
+                }
+            }
+        };
+        xhr.send();
+        // _layout starts null; binding updates when the async request completes.
     }
 
     property var _layout: null
 
     onCodenameChanged: {
-        _layout = loadLayout(root.codename);
+        root._layout = null;   // reset immediately so stale layout does not flicker
+        loadLayout(root.codename);
     }
 
+    // TODO(Phase 26 Plan 26-06): _hasPhoto gates per-SKU photo rendering. Currently
+    // the outline-frame fallback is always active (v1 note, lines 22-25). When device-
+    // layouts/ JSONs land with a "photo" key, this binding activates the photo layer.
+    // Until then, _hasPhoto is computed but not yet consumed by any visual element.
     readonly property bool _hasPhoto: _layout !== null && _layout.photo !== undefined
                                        && _layout.photo !== ""
 
