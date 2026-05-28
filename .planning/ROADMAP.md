@@ -486,7 +486,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 26-01-PLAN.md — REQ-26-A one-liner setActiveDevice wire in Main.qml onDeviceSelected (closes GAP-25A) (wave 1)
+- [x] 26-01-PLAN.md — REQ-26-A one-liner setActiveDevice wire in Main.qml onDeviceSelected (closes GAP-25A) (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -540,4 +540,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 0/7            | Not started      | —          |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 1/7            | In Progress      |            |

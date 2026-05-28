@@ -4,8 +4,8 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-28T13:45:40.318Z'
-last_activity: 2026-05-28 -- Phase 26 planning complete
+last_updated: '2026-05-28T13:50:00.030Z'
+last_activity: 2026-05-28 -- Phase 26 execution started
 progress:
   total_phases: 18
   completed_phases: 17
@@ -21,20 +21,21 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 25 PARTIAL — UAT walked 2026-05-28 13:00-13:10; 3 PASS, 1 FAIL, 1 NO_AFFORDANCE, 6 BLOCKED (demo unit), 5 NOT_WALKED. Two new gaps (GAP-25A, GAP-25B) routed to **Phase 26: OpenDeck-shaped device editor**.
+**Current focus:** Phase 26 — OpenDeck-shaped Device Editor
 
 ## Current Position
 
-Phase: 25 (hardware-verification-real-plugin) — **PARTIAL** (2/2 plans, but UAT cannot complete on existing UI)
+Phase: 26 (OpenDeck-shaped Device Editor) — EXECUTING
+Plan: 1 of 7
 Plans:
 25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
 25-02 (operator-gated) — PARTIAL (2026-05-28 13:10): autonomous-mode walkthrough recorded results for 11/16 tests. Three PASS (7 brightness, 8 clear, 9 hasClock-honesty). One FAIL (Test 1 image-upload — 3-layer regression; L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26). One NO_AFFORDANCE (Test 6 — no touch-strip drop target in KeyDesigner). Six BLOCKED on demo unit 0x3004 input-streaming gap (Tests 2-5, 15-16). Five NOT_WALKED (Tests 10-12 driven by 4/5/6; 13-14 gated on Phase 26). See `.planning/phases/25-hardware-verification-real-plugin/25-02-SUMMARY.md`.
 Phase: 26 (NEW — OpenDeck-shaped device editor) — PROPOSED 2026-05-28; goal: replace generic KeyDesigner with Elgato/OpenDeck-pattern device-shaped editor (per-SKU geometry: key grid + encoder dials + touch strip), drag-drop action library, auto-wire setActiveDevice on sidebar selection. Closes GAP-25A (setActiveDevice wiring) + GAP-25B (missing affordances) and unblocks Phase 25 resume. Research deliverable: comprehensive analysis of OpenDeck (`nekename/OpenDeck`), `naerschhersch/opendeck-akp05`, `4ndv/mirajazz` — covering all AJAZZ SKUs OpenDeck supports.
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) + 13(2) = 33 plans across 13 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget).
-Status: Ready to execute
+Status: Executing Phase 26
 Branch: feat/streamdock (off develop)
-Last activity: 2026-05-28 -- Phase 26 planning complete
+Last activity: 2026-05-28 -- Phase 26 execution started
 
 ### Open follow-up items (operator UAT 2026-05-28)
 
