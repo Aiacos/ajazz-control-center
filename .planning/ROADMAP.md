@@ -41,7 +41,7 @@ Audit: `tech_debt` — 28/28 requirements satisfied, 178/178 tests pass; deferre
 - [ ] **Phase 10: AKP05E (0x3004) Promotion** *(PARTIAL — reconciled 2026-05-27: image pipeline + 1024-byte packets + EncoderReleased + `hasClock=false` shipped; `akp05e` at `partial`. Open: 16ms encoder_coalescer not built; 10-03 LIVE-HW render smoke deferred → Phase 25; AKP05 wire bytes still Ghidra-derived + Linux render bug unconfirmed)* — real `setKeyImage`/encoder/brightness wired to the 0x3004 LCD (10 LCD keys / 4 endless encoders / LCD touch strip) + `clock` honest demotion.
 - [ ] **Phase 11: AJAZZ 2.4G 8K Mouse Probe-and-Confirm** *(SUBSTANTIALLY SHIPPED — reconciled 2026-05-27: `ajazz_24g_8k` at `functional`; DPI 0x54 / poll 0x04 / RGB 0x07 / clock 0x28 / battery 0x05 shipped & tested. Open: USB-2.0 SOF-cap UI warning unbound. Opcodes corrected vs stale plan)* — DPI cycle / per-stage / polling-rate / LOD / per-zone RGB.
 - [ ] **Phase 12: AK980 PRO Promotion** *(PARTIAL — reconciled 2026-05-27: `ak980pro` at `functional`; clock 0x28 + battery 0x20/01 + 20-mode RGB shipped & hardware-confirmed. Open (HW-free): wireless RGB rate-limiter (Pitfall 24), RGB direction plumbing, dedicated 0x17 sleep-timer, Save-vs-Push UX)* — RGB 20-mode + brightness/speed/direction + sleep-timer + `isWireless` rate-limiter + `clock` per ARCH-05.1.
-- [ ] **Phase 13: Catalogue + v1.1 UI Verifies Back-Fill** — `microdia_dongle_7016` entered at `probed` with topology evidence + ARCH-06 negative ratified + four real-hardware visual verifies from v1.1 (Sync button visibility, Settings auto-sync persistence, glyph-only-no-toast, MaturityRole tooltip).
+- [x] **Phase 13: Catalogue + v1.1 UI Verifies Back-Fill** — `microdia_dongle_7016` entered at `probed` with topology evidence + ARCH-06 negative ratified + four real-hardware visual verifies from v1.1 (Sync button visibility, Settings auto-sync persistence, glyph-only-no-toast, MaturityRole tooltip). (completed 2026-05-28)
 
 **Milestone constraints (load-bearing — do not lose these):**
 
@@ -486,7 +486,7 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 10. AKP05E (0x3004) Promotion               | v1.2      | 0/?            | Not started      | —          |
 | 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm   | v1.2      | 0/?            | Not started      | —          |
 | 12. AK980 PRO Promotion                     | v1.2      | 0/?            | Not started      | —          |
-| 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 0/?            | Not started      | —          |
+| 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 2/2            | Complete         | 2026-05-28 |
 | 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
