@@ -495,7 +495,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 26-04-PLAN.md — REQ-26-B DeviceView.qml + EncoderDial + TouchStripLane + ActionLibraryPane + KeyCell DropArea/Drag extension + ProfileEditor LCD-key branch flip + ATOMIC KeyDesigner.qml deletion (wave 3)
+- [x] 26-04-PLAN.md — REQ-26-B DeviceView.qml + EncoderDial + TouchStripLane + ActionLibraryPane + KeyCell DropArea/Drag extension + ProfileEditor LCD-key branch flip + ATOMIC KeyDesigner.qml deletion (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -540,4 +540,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 3/7            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 4/7            | In Progress      |            |
