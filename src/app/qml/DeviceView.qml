@@ -231,8 +231,14 @@ Item {
                                         required property int index
                                         selected: root.selectedKeyIndex === index
                                         onDragActiveChanged: function(active) {
-                                            root._activeDragCount =
-                                                root._activeDragCount + (active ? 1 : -1);
+                                            // WR-02 follow-up: Math.max guards against
+                                            // underflow when a cell is destroyed mid-drag
+                                            // (geometry/codename change). The counter is
+                                            // a "logical drag active" flag, not a strict
+                                            // reference count — clamping at 0 is correct.
+                                            root._activeDragCount = active
+                                                ? root._activeDragCount + 1
+                                                : Math.max(0, root._activeDragCount - 1);
                                         }
                                         onClicked: {
                                             root.selectedKeyIndex = index;
@@ -282,8 +288,14 @@ Item {
                                         iconSource: ""
                                         selected: root.selectedEncoderIndex === index
                                         onDragActiveChanged: function(active) {
-                                            root._activeDragCount =
-                                                root._activeDragCount + (active ? 1 : -1);
+                                            // WR-02 follow-up: Math.max guards against
+                                            // underflow when a cell is destroyed mid-drag
+                                            // (geometry/codename change). The counter is
+                                            // a "logical drag active" flag, not a strict
+                                            // reference count — clamping at 0 is correct.
+                                            root._activeDragCount = active
+                                                ? root._activeDragCount + 1
+                                                : Math.max(0, root._activeDragCount - 1);
                                         }
                                         onClicked: {
                                             root.selectedKeyIndex = -1;
@@ -317,9 +329,12 @@ Item {
                                     root.zoneSelected(idx);
                                 }
                                 // WR-02: propagate zone drag state to anyDragActive counter.
+                                // Math.max guards against underflow if a zone cell
+                                // is destroyed mid-drag (touchZoneCount change).
                                 onZoneDragActiveChanged: function(active) {
-                                    root._activeDragCount =
-                                        root._activeDragCount + (active ? 1 : -1);
+                                    root._activeDragCount = active
+                                        ? root._activeDragCount + 1
+                                        : Math.max(0, root._activeDragCount - 1);
                                 }
                                 onZoneSwapRequested: function(src, dst) {
                                     // Phase 26 v1: zone swap calls commitTouchZoneBinding

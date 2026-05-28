@@ -1,6 +1,6 @@
 ---
 phase: 26-opendeck-shaped-device-editor
-reviewed: 2026-05-28T18:00:00Z
+reviewed: 2026-05-28T20:00:00Z
 depth: standard
 files_reviewed: 23
 files_reviewed_list:
@@ -29,562 +29,218 @@ files_reviewed_list:
   - tests/unit/test_profile_serialization.cpp
   - tests/unit/test_streamdeck_register_geometry.cpp
 findings:
-  critical: 4
-  warning: 6
-  info: 4
-  total: 14
+  critical: 1
+  warning: 1
+  info: 3
+  total: 5
 status: issues_found
 ---
 
-# Phase 26: Code Review Report
+# Phase 26: Code Review Report (Iteration 2)
 
-**Reviewed:** 2026-05-28T18:00:00Z
+**Reviewed:** 2026-05-28T20:00:00Z
 **Depth:** standard
 **Files Reviewed:** 23
 **Status:** issues_found
 
 ## Summary
 
-Phase 26 delivers the OpenDeck-shaped device editor (DeviceView.qml replacing
-KeyDesigner.qml), the setActiveDevice wiring (REQ-26-A), DeviceDescriptor geometry
-fields (REQ-26-C), profile schema v2 + touchZones (D-11/D-12), and the geometry
-regression test (REQ-26-D). The COD-031 invariant (no nlohmann in core/include) is
-clean. The QML_SINGLETON pattern follows the documented non-default-constructible
-static_assert on all three singleton classes touched (ProfileController,
-StreamDockControlService). KeyDesigner.qml is gone; ProfileEditor routes to
-DeviceView correctly.
+This is the second-pass review following 8 fix commits (7dc7407 -> 8eede93) that
+addressed 4 Critical + 6 Warning findings from iteration 1. Eight of the ten
+prior findings are confirmed closed. One new Critical regression was introduced
+by the CR-04 fix: the QML drag-drop test that covered the encoder-binding path
+was not updated after `commitEncoderBinding` became a real Q_INVOKABLE, producing
+an inverted assertion that will cause the QML test to fail at runtime. One residual
+Warning remains open (WR-02 counter underflow on cell destroy). Three Info items
+carry over unchanged.
 
-Four blockers are present: the profile JSON reader has an ordering dependency that
-silently discards touchZones when the key precedes \_schemaVersion in third-party
-JSON; `resetActiveProfile()` does not clear touchZones despite clearing all other
-maps; `selectedZoneIndex` is declared and passed to the Inspector label but is never
-set positive (touch-zone tap can never propagate selection state to the Inspector);
-and `commitEncoderBinding` is called from EncoderDial.qml's drop handler without
-existing on ProfileController, producing a silent QML no-op with no runtime guard
-or user feedback.
+COD-031 invariant: clean (no nlohmann in core/include headers).
+QML_SINGLETON static_assert: present on both ProfileController and
+StreamDockControlService.
+ASCII test names: all test names inspected are ASCII-clean.
 
 ______________________________________________________________________
+
+## Closure Verification — Prior Findings
+
+| ID    | Status   | Evidence                                                                                                                                                                                                                                                                                                                                       |
+| ----- | -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CR-01 | CLOSED   | `profile.cpp:868` — `touchZones` branch is now unconditional; `schemaVersion` marked `[[maybe_unused]]`. New test `"v2 profile with touchZones key before _schemaVersion round-trips"` passes (line 272 of `test_profile_serialization.cpp`).                                                                                                  |
+| CR-02 | CLOSED   | `profile_controller.cpp:310` — `m_profile.touchZones.clear()` added with an explanatory comment.                                                                                                                                                                                                                                               |
+| CR-03 | CLOSED   | `TouchStripLane.qml:175` — `onClicked: zoneCell.zoneTapped(zoneCell.zoneIndex)` added to ItemDelegate; `zoneTapped` signal propagated through `TouchStripLane`; `DeviceView.qml:313` connects `onZoneTapped` and sets `selectedZoneIndex`.                                                                                                     |
+| CR-04 | CLOSED\* | `profile_controller.cpp:190-230` — `commitEncoderBinding` Q_INVOKABLE added, mirrors `commitKeyBinding` exactly (same arg order, validation range, signal). `EncoderDial.qml:152` calls it. *HOWEVER: the QML-level test was not updated — see new CR-01 below.*                                                                               |
+| WR-01 | CLOSED   | `DeviceView.qml:131` — `new XMLHttpRequest()` (standard constructor); `xhr.open("GET", url, true)` (async=true). `_hasPhoto` kept with a TODO comment per D-07. IN-04 collapsed into this fix.                                                                                                                                                 |
+| WR-02 | PARTIAL  | `_activeDragCount` counter wired from all three cell types (lines 233-235, 284-286, 320-322 in DeviceView.qml). Counter is correct for normal operation. Residual underflow risk on cell destroy — see new WR-01 below.                                                                                                                        |
+| WR-03 | CLOSED   | `test_device_view_geometry.qml:60-84` — AKP153 now `keyRows:3, gridColumns:5`; AKP03 now `keyRows:2, gridColumns:3`. Both align with `register.cpp` descriptors.                                                                                                                                                                               |
+| WR-04 | CLOSED   | `device_model.cpp:134-141` — four geometry roles (`KeyRowsRole`, `TouchZoneCountRole`, `MainScreenWidthPxRole`, `MainScreenHeightPxRole`) added to `data()`. `roleNames()` exposes all four (lines 169-172). `dataChanged` is fired for `ConnectedRole` only (correct: geometry roles are static per-descriptor and do not change at runtime). |
+| WR-05 | CLOSED   | Collapsed into WR-01 fix — async XHR.                                                                                                                                                                                                                                                                                                          |
+| WR-06 | CLOSED   | Collapsed into CR-01 fix.                                                                                                                                                                                                                                                                                                                      |
+
+______________________________________________________________________
+
+## Narrative Findings (AI reviewer)
 
 ## Critical Issues
 
-### CR-01: JSON reader silently discards touchZones when key precedes \_schemaVersion
+### CR-01: QML drag-drop test for commitEncoderBinding still asserts the stub no-op; will fail now that Q_INVOKABLE is real
 
-**File:** `src/core/src/profile.cpp:849-895`
+**File:** `tests/qml/test_device_view_drag_drop.qml:63-83`
 
-**Issue:** `profileFromJson` initialises `schemaVersion = 1` and dispatches key
-parsing in a single pass. The branch at line 870 (`if (schemaVersion >= 2)`) guards
-the touchZones read. If an external tool (or a future refactor of the writer) emits
-the `"touchZones"` key **before** `"_schemaVersion"` in the JSON object, the reader
-will skip it silently: `schemaVersion` is still 1 at that point, so the
-`else { r.skipValue(); }` branch is taken and all touch-zone data is permanently
-lost for that load. The writer always emits `_schemaVersion` as the second key (so
-self-written files are safe), but JSON object key order is not specified by RFC 8259
-and any compliant serialiser or hand-edited file may reorder keys.
+**Issue:** `test_drop_library_tile_on_encoder_calls_commitEncoderBinding` (lines
+69-83) was written when `commitEncoderBinding` was a known absent stub and the
+correct expectation was zero `profileChanged` emissions. The test body explicitly
+comments "Phase 26 v1: ProfileController.commitEncoderBinding does not exist" (line
+71\) and asserts `profileChangedSpy.count == before` (i.e. zero new emissions, line
+82).
 
-**Fix:** Hoist the schema version to a pre-pass or treat a present `touchZones` key
-as implicitly v2 regardless of schema version order:
+The CR-04 fix added `commitEncoderBinding` as a real `Q_INVOKABLE` that emits
+`profileChanged` on success (`profile_controller.cpp:229`). The QML test now
+calls a live method that fires `profileChanged`, but the assertion still demands
+zero emissions. The test will therefore fail at runtime.
 
-```cpp
-// Option A: two-pass (safest). Parse the whole object once to get
-// _schemaVersion, then reset the reader and parse again.
+The C++ companion test in `test_device_view_tests.cpp:153-171` **was** correctly
+updated to expect `fired == 1`, so the C++ side is sound. Only the QML test
+is inverted.
 
-// Option B (minimal change): when "touchZones" is encountered
-// and schemaVersion is still 1 (not yet seen), treat it as v2:
-} else if (key == "touchZones") {
-    // Always attempt to parse if the key is present; an absent
-    // _schemaVersion in an externally-generated file that carries
-    // touchZones should be read, not discarded.
-    r.expect('{');
-    if (!r.tryConsume('}')) {
-        while (true) {
-            std::string const idxStr = r.readString();
-            std::uint8_t idx = 0;
-            try {
-                idx = static_cast<std::uint8_t>(std::stoul(idxStr) & 0xFFu);
-            } catch (std::exception const&) { /* throw */ }
-            r.expect(':');
-            profile.touchZones.emplace(idx, readTouchZoneBinding(r));
-            if (r.tryConsume(',')) continue;
-            r.expect('}');
-            break;
-        }
-    }
-```
+The test also wraps the call in a `try/catch` to absorb a "is not a function"
+error — this guard is now dead code because the method exists, but it silently
+swallows any future runtime exception from that call path.
 
-Remove the `schemaVersion >= 2` guard on the `touchZones` branch. The schema
-version flag is already safe for **missing** touchZones on genuine v1 files (they
-have no `"touchZones"` key at all, so the branch is never reached).
-
-______________________________________________________________________
-
-### CR-02: resetActiveProfile() silently omits touchZones from clear
-
-**File:** `src/app/src/profile_controller.cpp:263-277`
-
-**Issue:** `resetActiveProfile()` clears `keys`, `encoders`, `mouseButtons`, and
-per-page keys, but does **not** clear `m_profile.touchZones`. After the user clicks
-"Restore defaults", every previously configured touch-zone binding survives in
-memory and will be written back to disk on the next `saveActiveProfile()`, giving
-the user a false "reset" for touch-strip-capable devices.
-
-```cpp
-void ProfileController::resetActiveProfile() {
-    m_profile.keys.clear();
-    m_profile.encoders.clear();
-    m_profile.mouseButtons.clear();     // touchZones is NOT cleared
-    for (auto& [id, page] : m_profile.pages) {
-        page.keys.clear();
-    }
-    emit profileChanged();
-    saveActiveProfile();
-}
-```
-
-**Fix:**
-
-```cpp
-void ProfileController::resetActiveProfile() {
-    m_profile.keys.clear();
-    m_profile.encoders.clear();
-    m_profile.mouseButtons.clear();
-    m_profile.touchZones.clear();   // ADD: Phase 26 D-11 map
-    for (auto& [id, page] : m_profile.pages) {
-        page.keys.clear();
-    }
-    emit profileChanged();
-    saveActiveProfile();
-}
-```
-
-______________________________________________________________________
-
-### CR-03: selectedZoneIndex is never set positive; touch-zone Inspector selection is permanently broken
-
-**File:** `src/app/qml/DeviceView.qml:58,63,375-376`
-
-**Issue:** `DeviceView.qml` declares `selectedZoneIndex` (line 58), exposes a
-`zoneSelected(int idx)` signal (line 63), and uses the index in the `selectionLabel`
-binding passed to the Inspector (lines 375-376). However, `selectedZoneIndex` is
-**only ever assigned -1** — in the key-click handler (line 214) and encoder-click
-handler (line 261) — and is never set to a valid zone index.
-
-`TouchStripLane.qml` has no click handler on `ItemDelegate` (only drag and drop),
-and `DeviceView.qml` does not connect any `zoneSelected` emission from the lane.
-As a result: tapping a touch-zone cell in the editor **does not** update the
-Inspector's `selectionLabel` or the `binding` property with zone-specific data;
-the Inspector always shows the empty-selection state for zones regardless of which
-zone the user interacts with.
-
-**Fix:** Add a `clicked` signal to `TouchZoneCell`/`ItemDelegate` in
-`TouchStripLane.qml` and connect it in `DeviceView.qml`:
+**Fix:** Update the QML test to match the C++ companion test:
 
 ```qml
-// In TouchStripLane.qml, TouchZoneCell's ItemDelegate:
-ItemDelegate {
-    id: zoneDelegate
-    anchors.fill: parent
-    background: Item {}
-    property bool selected: false
-    // ADD: forward clicks so DeviceView can update selectedZoneIndex
-    onClicked: zoneCell.zoneSwapRequested(-1, zoneCell.zoneIndex)  // re-use signal or add new one
+function test_drop_library_tile_on_encoder_calls_commitEncoderBinding() {
+    profileChangedSpy.clear()
+    // Phase 26 CR-04: commitEncoderBinding is now a real Q_INVOKABLE.
+    // Calling it with a valid index and actionKind must emit profileChanged.
+    ProfileController.commitEncoderBinding(1, "", "Key macro", 2, "")
+    compare(profileChangedSpy.count, 1,
+            "commitEncoderBinding must emit profileChanged once a Q_INVOKABLE exists")
 }
 ```
 
-The cleanest fix is to add a `signal zoneTapped(int idx)` to `TouchZoneCell` and
-`TouchStripLane`, forward the signal in `DeviceView`:
-
-```qml
-// In DeviceView.qml, TouchStripLane delegate:
-TouchStripLane {
-    visible: root.touchZoneCount > 0
-    touchZoneCount: root.touchZoneCount
-    zoneIconSources: []
-    zoneLabels: []
-    onZoneTapped: function(idx) {           // ADD
-        root.selectedKeyIndex = -1;
-        root.selectedEncoderIndex = -1;
-        root.selectedZoneIndex = idx;
-        root.zoneSelected(idx);
-    }
-    onZoneSwapRequested: function(src, dst) { ... }
-}
-```
-
-Until this is fixed, REQ-26-B acceptance criterion "each cell is a distinct drop
-target" holds, but operator workflow (tap a zone → inspect binding → change it) is
-broken for touch zones.
-
-______________________________________________________________________
-
-### CR-04: commitEncoderBinding called from QML without existing on ProfileController; no fallback or user feedback
-
-**File:** `src/app/qml/components/EncoderDial.qml:149`
-
-**Issue:** `EncoderDial.qml` line 149 calls
-`ProfileController.commitEncoderBinding(root.index, "", ap.label, ap.actionKind, "")`.
-`ProfileController` exposes no `commitEncoderBinding` Q_INVOKABLE (confirmed by
-reading `profile_controller.hpp`). In Qt 6 QML, calling a non-existent Q_INVOKABLE
-on a singleton produces a runtime `qWarning` ("commitEncoderBinding is not a
-function") but is otherwise a silent no-op. The user receives zero feedback that
-their drop was ignored; the binding appears to succeed visually because
-`EncoderDial.qml` calls `drop.acceptProposedAction()` unconditionally at line 151.
-
-This is documented as a "known stub" in the plan summary, but no comment in
-`EncoderDial.qml` tells the maintainer that the drop call is a silent no-op,
-and no `drop.accepted = false` is set on the missing-method path to make the UI
-honest. The encoder drop therefore silently lies: the drag-drop gesture says
-"accepted" but nothing is persisted.
-
-**Fix (minimal v1):** Reject the drop explicitly when the method is absent, so
-the user gets visual rejection feedback rather than false acceptance:
-
-```qml
-// EncoderDial.qml DropArea onDropped, "application/x-ajazz-action" branch:
-if (drop.hasFormat("application/x-ajazz-action")) {
-    var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
-    // Phase 26 v1: commitEncoderBinding not yet in ProfileController.
-    // Reject the drop honestly rather than silently accepting a no-op.
-    drop.accepted = false;
-    // TODO: replace with ProfileController.commitEncoderBinding(...)
-    //       when the Q_INVOKABLE lands (follow-up plan).
-    return;
-}
-```
-
-**Fix (proper):** Add `commitEncoderBinding` Q_INVOKABLE to `ProfileController`,
-following the same pattern as `commitKeyBinding` / `commitTouchZoneBinding`.
+Remove the `try/catch` wrapper — it hides real exceptions from the live method.
 
 ______________________________________________________________________
 
 ## Warnings
 
-### WR-01: Photo background is loaded but never rendered; \_hasPhoto is a dead property
+### WR-01: \_activeDragCount can underflow to negative if a cell is destroyed while its drag is in flight
 
-**File:** `src/app/qml/DeviceView.qml:134-141`
+**File:** `src/app/qml/DeviceView.qml:233-235, 284-286, 320-322`
 
-**Issue:** `loadLayout(codename)` is called on every codename change (line 137),
-parsing the JSON via a synchronous XMLHttpRequest. `_hasPhoto` is computed (line
-140-141). The device-layouts directory is now populated (17 SKU JSONs confirmed in
-`resources/device-layouts/`). However, `_hasPhoto` is **never referenced** after
-line 141 — no `Image { source: ... }` element or conditional in the chassis renders
-the photo. The outline-frame Rectangle is always `visible: true` (line 183) with
-no branch on `_hasPhoto`. The layout JSON is parsed on every device change for no
-effect. The comment at lines 23-25 says "outline-frame always active" as a v1
-note, but the loaded layout data (key positions, encoder positions, touch-zone
-positions from the JSON) is also never consumed for positioned-cell rendering.
+**Issue:** The `_activeDragCount` counter is incremented (`+1`) when a cell's
+`onDragActiveChanged(true)` fires and decremented (`-1`) when
+`onDragActiveChanged(false)` fires. The increment and decrement are wired
+through the delegate's `onDragActiveChanged` handler.
 
-This is a dead-property warning, not a crash. The overhead is a synchronous
-`XMLHttpRequest` on every codename change, which is harmless for qrc resources
-but leaves the v1 implementation in a state where the loaded JSON data has no
-consumer. When photo rendering is activated, a reviewer should verify the
-synchronous XHR does not block on slower targets.
+If the user changes the active device (i.e. `root.codename` changes) while a
+drag is in progress, `_ensureBindings()` is called, which calls
+`bindings.remove()` on cells. Removing a cell from the `bindings` ListModel
+destroys its delegate instance. In Qt Quick, a destroyed delegate does NOT emit
+a final `Drag.active = false` change notification on the parent's handler —
+the parent's `_activeDragCount` never receives the decrement. The counter stays
+positive, `anyDragActive` stays `true`, and the trash button remains fully opaque
+forever until the next drag cycle, which sends a spurious decrement that takes
+the counter to -1 (since `anyDragActive` is `_activeDragCount > 0`, a -1 value
+reads as false, so the visual is eventually corrected, but the counter state is
+corrupted).
 
-**Fix:** Either remove the `loadLayout` call + `_hasPhoto` property entirely until
-the photo path is actually wired, OR add a TODO comment pointing to the follow-up
-plan that activates the photo path. Do not leave dead computed properties in
-production code without explanation.
+The same scenario applies for `encoderCount` or `touchZoneCount` changes (which
+rebuild the Repeater model).
 
-______________________________________________________________________
-
-### WR-02: anyDragActive is declared but never set; trash-zone opacity is always 0.3
-
-**File:** `src/app/qml/DeviceView.qml:112,299`
-
-**Issue:** `DeviceView.qml` declares `property bool anyDragActive: false` (line
-112\) and uses it to control trash-zone button opacity (line 299). However, no code
-path in DeviceView, KeyCell, EncoderDial, or TouchStripLane ever sets
-`root.anyDragActive = true`. The trash button's opacity therefore remains at 0.3
-permanently — the D-10 "100% during any cell drag" visual feedback is never applied.
-
-The D-09 / UI-SPEC trash-zone affordance states the button should go fully opaque
-during any drag so users discover it as a valid drop target. This feedback is
-permanently suppressed.
-
-**Fix:** Set `anyDragActive` from child-component drag state:
+**Fix:** Reset the counter to zero whenever the bindings model or geometry changes:
 
 ```qml
-// In KeyCell/EncoderDial/TouchZoneCell DragHandler, add:
-Binding {
-    target: root           // the DeviceView root
-    property: "anyDragActive"
-    value: dragHandler.active
-    when: dragHandler.active
-    restoreMode: Binding.RestoreBindingOrValue
+onKeyCountChanged: {
+    _activeDragCount = 0;   // reset: any in-flight drag is now orphaned
+    _ensureBindings();
+}
+
+onEncoderCountChanged: {
+    _activeDragCount = 0;
+}
+
+onTouchZoneCountChanged: {
+    _activeDragCount = 0;
 }
 ```
 
-Or: wire a `Drag.onActiveChanged` connection on each child that sets
-`DeviceView.anyDragActive`.
-
-______________________________________________________________________
-
-### WR-03: test_device_view_geometry.qml uses wrong row/column argument order for AKP03 and AKP153
-
-**File:** `tests/qml/test_device_view_geometry.qml:50-87`
-
-**Issue:** The AKP153 DeviceView in the test (lines 50-60) is configured with:
+Alternatively, clamp the counter to non-negative at every decrement:
 
 ```qml
-keyRows:     5
-gridColumns: 3
+root._activeDragCount = Math.max(0, root._activeDragCount - 1);
 ```
 
-This matches the physical AKP153 layout (3 columns × 5 rows = 15 keys), but note
-that the C++ geometry in `register.cpp` uses `keyRows = 3` in `akp153_descriptor`
-(line 82 of register.cpp). The test passes the values transposed from the
-descriptor: the test says rows=5/cols=3 while the descriptor says keyRows=3 and
-gridColumns=5. The QML geometry test creates the DeviceView with hard-coded
-geometry, not from the descriptor, so the test happens to render correctly (a
-3×5=15-cell grid either way), but the test does not validate that DeviceView
-correctly uses the descriptor-supplied values.
-
-Similarly, the AKP03 test (lines 71-80) uses `keyRows: 3, gridColumns: 2` — that
-is 2 cols × 3 rows = 6 keys, which is correct, but the `akp03_descriptor` in
-`register.cpp` sets `keyRows = 2` and `gridColumns = 3`. Again, the test is not
-exercising the actual device geometry from the descriptor.
-
-The `test_device_view_tests.cpp` C++ test (line 105) does the same: `keyRows=5, gridColumns=3` for AKP153, and `keyRows=3, gridColumns=2` for AKP03 (line 115).
-
-These tests pass because the key *count* is correct (15 and 6), but the row/column
-counts are swapped from what the actual descriptors declare. Any code that reads
-`keyRowsResolved` directly (for layout purposes) would get a different value under
-test than under production.
-
-**Fix:** Align test geometry with the descriptor:
-
-```qml
-// AKP153: keyRows=3, gridColumns=5 (matches akp153_descriptor in register.cpp)
-// AKP03:  keyRows=2, gridColumns=3 (matches akp03_descriptor in register.cpp)
-```
-
-______________________________________________________________________
-
-### WR-04: DeviceModel roleNames does not expose keyRows or touchZoneCount as model roles
-
-**File:** `src/app/src/device_model.cpp:138-157`
-
-**Issue:** `DeviceModel::capabilitiesFor()` correctly exposes `keyRows`,
-`touchZoneCount`, `mainScreenWidthPx`, and `mainScreenHeightPx` in the QVariantMap
-returned to QML (lines 318-321). However, `DeviceModel::roleNames()` does not
-define roles for these four geometry fields. Any QML that binds directly to the
-`DeviceModel` list view (e.g. `model.keyRows` in a delegate) will get `undefined`.
-
-In the current implementation, `ProfileEditor.qml` reads them through
-`DeviceModel.capabilitiesFor(codename)`, which works. But the absence of
-corresponding roles means `DeviceList.qml` or any future list delegate cannot bind
-to geometry fields, and the role-based `dataChanged` mechanism will not fire for
-them. This is a latent inconsistency between the data API and the model roles.
-
-**Fix:** Add the four new geometry roles to the `Roles` enum in
-`device_model.hpp` and expose them in `roleNames()` and `data()`:
-
-```cpp
-// In device_model.hpp Roles enum:
-KeyRowsRole,
-TouchZoneCountRole,
-MainScreenWidthPxRole,
-MainScreenHeightPxRole,
-
-// In roleNames():
-{KeyRowsRole, "keyRows"},
-{TouchZoneCountRole, "touchZoneCount"},
-// etc.
-
-// In data() switch:
-case KeyRowsRole: return static_cast<int>(d.keyRows);
-```
-
-______________________________________________________________________
-
-### WR-05: Synchronous XMLHttpRequest in QML loadLayout triggers Qt deprecation warning on Qt 6.8+
-
-**File:** `src/app/qml/DeviceView.qml:122`
-
-**Issue:** `xhr.open("GET", url, false)` — the third argument `false` requests
-synchronous XHR. Qt 6 has deprecated synchronous XMLHttpRequest in QML as of
-Qt 6.8; the documented replacement is the `async` mode with an `onreadystatechange`
-callback. On Qt 6.8+ this generates a runtime warning:
-
-```
-qrc:/qt/qml/AjazzControlCenter/DeviceView.qml:122: Use of synchronous
-XMLHttpRequest in a non-main context is deprecated.
-```
-
-The test harness in `test_qml_smoke.cpp` is configured to treat QML warnings as
-test failures. If CI upgrades Qt beyond 6.7, this warning will trigger test
-failures.
-
-Additionally, blocking the QML main thread on I/O — even for a qrc resource — is
-architecturally unsound and will break if the layout loader is ever extended to
-HTTP URLs.
-
-**Fix:** Switch to async XHR with proper state handling:
-
-```qml
-function loadLayout(cn) {
-    if (cn === "") return null;
-    var url = "qrc:/qt/qml/AjazzControlCenter/device-layouts/" + cn + ".json";
-    var xhr = new XMLHttpRequest();
-    xhr.open("GET", url, true);   // async
-    xhr.onreadystatechange = function() {
-        if (xhr.readyState === XMLHttpRequest.DONE) {
-            if (xhr.status === 200) {
-                try {
-                    root._layout = JSON.parse(xhr.responseText);
-                } catch (e) {
-                    root._layout = null;
-                }
-            } else {
-                root._layout = null;
-            }
-        }
-    };
-    xhr.send();
-    // _layout starts null; binding updates when async completes
-}
-```
-
-Note: the `Qt.createQmlObject('import QtQml 2.15; XMLHttpRequest {}', root)` form
-at line 121 is also unusual (creating an object from an inline string to get the
-XMLHttpRequest type). The standard form `new XMLHttpRequest()` is valid QML and
-does not need the `Qt.createQmlObject` indirection.
-
-______________________________________________________________________
-
-### WR-06: Profile schema reader ordering dependency is undocumented and fragile
-
-**File:** `src/core/src/profile.cpp:844-895`
-
-**Issue:** The `touchZones` guard (`if (schemaVersion >= 2)` at line 870) creates
-an implicit requirement that `"_schemaVersion"` must appear **before**
-`"touchZones"` in the JSON document. This ordering guarantee holds for the
-in-house writer (which always emits `_schemaVersion` second, after `id`), but:
-
-1. No comment in the reader documents this ordering requirement.
-1. A JSON linter, a diff-merge tool, or a third-party writer that emits the
-   `"touchZones"` key first will cause all touch-zone bindings to be silently lost.
-1. The round-trip unit test (`test_profile_serialization.cpp`) only tests
-   `profileToJson` → `profileFromJson` using the in-house writer, so it will not
-   catch this ordering sensitivity.
-
-**Fix:** See CR-01 for the recommended code fix. At minimum, add a comment and a
-test that verifies touchZones are parsed when they precede `_schemaVersion`:
-
-```cpp
-TEST_CASE("v2 profile with touchZones key before _schemaVersion round-trips",
-          "[profile][migration][ordering]") {
-    // Keys are in reversed order relative to writer output.
-    constexpr char const* kReorderedJson =
-        R"({"id":"x","touchZones":{"0":{"onTap":[]}},"_schemaVersion":2,
-            "name":"Y","device":"akp05e","keys":{},"encoders":{}})";
-    auto const p = profileFromJson(kReorderedJson);
-    // This SHOULD have 1 touch zone. If it has 0, the ordering bug is live.
-    REQUIRE(p.touchZones.size() == 1);
-}
-```
+The clamp is simpler and more robust: it cannot go negative regardless of event
+ordering, but it does not reset a counter that was artificially elevated. The
+explicit zero-reset on geometry change is the correct semantic fix.
 
 ______________________________________________________________________
 
 ## Info
 
-### IN-01: akp03_descriptor helper omits touchZoneCount field; relies on zero default
+### IN-01: akp03_descriptor omits explicit touchZoneCount=0 (carries over from prior review; unchanged)
 
 **File:** `src/devices/streamdeck/src/register.cpp:90-103`
 
-**Issue:** The `akp03_descriptor` helper function produces a struct initialiser that
-does not set `touchZoneCount`, relying on the zero default in `DeviceDescriptor`.
-AKP03 has no touch strip, so the value should indeed be 0. However, unlike the AKP05
-descriptors (which explicitly set `.touchZoneCount = 4` and
-`.mainScreenWidthPx = 0` / `.mainScreenHeightPx = 0` with explanatory comments),
-the AKP03 and AKP153 descriptor helpers are silent about the Phase 26 fields. A
-future contributor reading the helper is left wondering if the fields were forgotten
-or deliberately omitted.
+**Issue:** `akp03_descriptor` does not set `touchZoneCount` explicitly, relying
+on the zero default in `DeviceDescriptor`. The zero-default is correct (AKP03
+has no touch strip), but the absence of an explicit field leaves a future
+contributor uncertain whether the field was intentionally zeroed or forgotten,
+in contrast to the AKP05 descriptors which comment their Phase 26 geometry
+fields explicitly.
 
-**Fix:** Add an explicit zero with a comment:
-
-```cpp
-constexpr auto akp03_descriptor(...) {
-    return core::DeviceDescriptor{
-        ...
-        .keyRows = 2,        // 2x3 grid (REQ-26-C)
-        .touchZoneCount = 0, // AKP03 has no touch strip (REQ-26-C)
-    };
-}
-```
+**Fix:** Add `.touchZoneCount = 0, // AKP03 has no touch strip (REQ-26-C)` to the
+`akp03_descriptor` helper.
 
 ______________________________________________________________________
 
-### IN-02: LibraryTile component uses `pragma ComponentBehavior: Bound` but captures root via outer scope
+### IN-02: test_device_view_drag_drop.qml test comment block is stale after CR-04 fix
 
-**File:** `src/app/qml/ActionLibraryPane.qml:13,87-162`
+**File:** `tests/qml/test_device_view_drag_drop.qml:63-68`
 
-**Issue:** `ActionLibraryPane.qml` sets `pragma ComponentBehavior: Bound`, which
-is correct for the `LibraryTile` inline component. The `LibraryTile` properly
-declares all its required properties. However, the `contentItem` layout (line
-128-157) refers to `Theme.spacingLg` / `Theme.spacingSm` via the global
-singleton, and the `background` Rectangle (line 124-126) reads `Theme.bgRowHover`
-/ `Theme.bgBase`. These are singleton accesses, not outer-scope captures, so they
-are compatible with `ComponentBehavior: Bound`. No issue in practice, but worth
-noting for future contributors.
+**Issue:** Even after the fix in CR-01 above, the surrounding comment block (lines
+63-68) will still say "commitEncoderBinding does not yet exist on ProfileController
+(Phase 26 v1 known stub)" and "when commitEncoderBinding is added in a follow-up
+plan this test must be updated to expect count == 1". This comment block will be
+factually wrong after the test is corrected — it will describe a condition that is
+already resolved.
 
-______________________________________________________________________
-
-### IN-03: Test case name style inconsistency in test_device_view_tests.cpp
-
-**File:** `tests/qml/test_device_view_tests.cpp:93-207`
-
-**Issue:** The Catch2 test names use a `ClassName::method_name` style with
-underscores and double-colons, e.g.:
-`"DeviceViewGeometry::test_akp05e_renders_5x2_grid_plus_4_dials_plus_4_zones"`.
-
-The CLAUDE.md requirement for ASCII-only names is satisfied. However, the colons
-`::` in test names may conflict with CTest's tag-filter syntax (`[tagname]`) on
-some shell environments, and the names diverge from the project's existing
-Catch2 naming convention (which uses `TEST_CASE("action verb phrase", "[tag]")`
-format in other test files). This is not a build failure but creates inconsistency
-in `ctest -N` output.
-
-**Fix (optional):** Align with project convention:
-
-```cpp
-TEST_CASE("DeviceView renders 5x2 key grid plus 4 dials plus 4 zones for AKP05E",
-          "[qml][device_view][geometry]")
-```
-
-______________________________________________________________________
-
-### IN-04: loadLayout creates XMLHttpRequest via Qt.createQmlObject rather than standard constructor
-
-**File:** `src/app/qml/DeviceView.qml:121`
-
-**Issue:** Line 121 uses:
+**Fix:** After applying the CR-01 fix, replace the comment block with a forward-
+looking comment that describes the current (post-fix) behavior:
 
 ```qml
-var xhr = Qt.createQmlObject('import QtQml 2.15; XMLHttpRequest {}', root);
-```
-
-The standard QML idiom for XMLHttpRequest is the plain constructor:
-
-```qml
-var xhr = new XMLHttpRequest();
-```
-
-The `Qt.createQmlObject` path is unnecessary overhead (it compiles a new QML
-component on each call), creates a persistent QObject child of `root` that is
-never deleted (the `xhr` local goes out of scope but the parented QObject
-remains alive), and the `QtQml 2.15` import hint is outdated (Qt 6 uses
-`QtQml`/`import QtQml` without version numbers in idiomatic code). This is a
-memory-leak vector proportional to the number of codename changes.
-
-**Fix:** Use the standard constructor and see WR-05 for the async migration:
-
-```qml
-var xhr = new XMLHttpRequest();
-xhr.open("GET", url, false);
+// Phase 26 CR-04: commitEncoderBinding is a real Q_INVOKABLE.
+// Verify that a library tile drop emits profileChanged.
 ```
 
 ______________________________________________________________________
 
-_Reviewed: 2026-05-28T18:00:00Z_
+### IN-03: test_device_view_drag_drop.qml test 2 dead try/catch is a test-reliability hazard
+
+**File:** `tests/qml/test_device_view_drag_drop.qml:77-81`
+
+**Issue:** The `try { ProfileController.commitEncoderBinding(...) } catch (e) {}`
+wrapper was added to absorb the "is not a function" error from calling a
+non-existent method. After CR-04 the method is real; the try/catch now silently
+swallows any actual runtime exception thrown from within `commitEncoderBinding`'s
+execution path (e.g., a QML binding loop, a type conversion fault). A test that
+swallows exceptions will pass even when the method under test throws.
+
+**Fix:** Remove the try/catch entirely (the method is real; let it throw if it
+fails):
+
+```qml
+ProfileController.commitEncoderBinding(1, "", "Key macro", 2, "")
+```
+
+This item is separately listed from IN-02 because it is a test-reliability bug
+distinct from the stale comment.
+
+______________________________________________________________________
+
+_Reviewed: 2026-05-28T20:00:00Z_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Iteration: 2 of 3_
