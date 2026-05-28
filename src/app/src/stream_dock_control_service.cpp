@@ -35,6 +35,7 @@
 #include <QImage>
 #include <QQmlEngine>
 #include <QTimer>
+#include <QUrl>
 
 #include <algorithm>
 #include <limits>
@@ -48,6 +49,20 @@ namespace {
 
 /// Module-level singleton instance pointer (mirrors LightingService pattern).
 StreamDockControlService* g_instance = nullptr;
+
+/// Normalise a profile imagePath to a filesystem path that QImage(QString)
+/// understands. The QML FileDialog hands us "file:///..." URLs (Inspector.qml
+/// onAccepted, Phase 25 VERIFY-05 walkthrough 2026-05-28) which are propagated
+/// through the profile model verbatim so QML Image consumers don't relative-
+/// resolve them under qrc:/. Here we strip the URL scheme back to a path.
+/// Bare paths pass through unchanged.
+QString normaliseImagePath(std::string const& stored) {
+    QString const s = QString::fromStdString(stored);
+    if (s.startsWith(QStringLiteral("file:"))) {
+        return QUrl(s).toLocalFile();
+    }
+    return s;
+}
 
 } // namespace
 
@@ -289,7 +304,7 @@ void StreamDockControlService::repaintEncodersFromProfile() {
         //   Do NOT delete ENC (LOCKED: hardware wins in Phase 25).
         QImage img;
         if (binding.state.imagePath && !binding.state.imagePath->empty()) {
-            img = QImage(QString::fromStdString(*binding.state.imagePath));
+            img = QImage(normaliseImagePath(*binding.state.imagePath));
             if (img.isNull()) {
                 AJAZZ_LOG_WARN("stream-dock-control",
                                "repaintEncodersFromProfile: failed to load image '{}'",
@@ -386,7 +401,7 @@ void StreamDockControlService::repaintPage(QString const& pageId) {
         // Render KeyState: imagePath takes priority; fall back to background fill.
         QImage img;
         if (binding.state.imagePath && !binding.state.imagePath->empty()) {
-            img = QImage(QString::fromStdString(*binding.state.imagePath));
+            img = QImage(normaliseImagePath(*binding.state.imagePath));
             if (img.isNull()) {
                 // Image load failed -- fall through to background fill or skip.
                 AJAZZ_LOG_WARN("stream-dock-control",

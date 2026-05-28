@@ -99,7 +99,23 @@ Rectangle {
             qsTr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"),
             qsTr("All files (*)")
         ]
-        onAccepted: root.bindingFieldChanged("iconSource", iconPicker.selectedFile)
+        // FileDialog.selectedFile is a `url` ("file:///path/to/icon.png"); the
+        // ListModel role `iconSource` is first seeded as String at
+        // KeyDesigner.qml._ensureBindings(), so writing the url directly hits
+        // Qt's "Can't assign to existing role 'iconSource' of different type
+        // [Url -> String]" and silently no-ops (Phase 25 VERIFY-05 Test 1 FAIL,
+        // 2026-05-28 walkthrough). Converting to a String here keeps the role
+        // typing consistent.
+        //
+        // We keep the `file://` URL form (not a bare /home/... path) so that
+        // QML Image consumers (KeyCell, Inspector preview, both `url` typed)
+        // recognise it as an absolute URL — bare paths get resolved relative
+        // to the QML context (qrc:/), which silently breaks the preview with
+        // "QML QQuickImage: Cannot open: qrc:/home/...". The C++ load site at
+        // StreamDockControlService strips the `file://` prefix before
+        // QImage(QString).
+        onAccepted: root.bindingFieldChanged(
+            "iconSource", iconPicker.selectedFile.toString())
     }
 
     ColumnLayout {
