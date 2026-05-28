@@ -1,14 +1,17 @@
 ---
-status: testing
+status: partial-blocked
 phase: 25-hardware-verification-real-plugin
 source: [25-01-PLAN.md Task 2; mirrors 10-UAT.md structure; covers VERIFY-05 + VERIFY-06 + provisional-§5 reconciliation]
 started: 2026-05-28T08:50:00Z
-updated: 2026-05-28T08:50:00Z
+updated: 2026-05-28T13:10:00Z
+operator: uni.lorenzo.a@gmail.com
+session: 2026-05-28 13:00-13:10 GMT+2 (autonomous-mode walkthrough)
 ---
 
 ## Current Test
 
-<!-- OVERWRITE each test - shows where we are -->
+<!-- Session 2026-05-28 12:50-13:10 stopped at test 1 retry-2; structural blocker found.
+     UAT cannot close on the existing UI — see "Session Findings" below and Phase 26. -->
 
 number: 1
 name: Push image to an LCD key
@@ -17,7 +20,8 @@ With an AKP05E (0300:3004 firmware-confirmed, OR a retail SKU advertising the
 same firmware family) connected, launch the app, select the AKP05E in the
 sidebar, and assign/push an image to one of the 10 LCD keys. The image
 appears on that physical key.
-awaiting: operator
+result: FAIL (3-layer regression — see Session Findings)
+awaiting: Phase 26 device-shaped editor
 
 ______________________________________________________________________
 
@@ -92,7 +96,19 @@ appears on that physical key without needing a manual flush. The `BAT`
 write+chunks+`ULEND` sequence on hidraw is the path; the live render was
 informally confirmed 2026-05-28 on the demo unit. Operator: open the app,
 select AKP05E, drag an image onto key 1, observe.
-result: [pending]
+result: FAIL — operator session 2026-05-28 13:00-13:10 found a 3-layer
+regression in the image-upload UI pipeline:
+(L1) QML role-typing: Inspector.qml emitted FileDialog url to a
+String-typed ListModel role; "Can't assign to existing role 'iconSource'
+of different type [Url -> String]"; silent no-op. FIXED in commit `24651a3`.
+(L2) C++ load site: QImage(QString) doesn't accept "file://" URLs.
+FIXED in commit `24651a3` via QUrl(s).toLocalFile() normalisation.
+(L3) Structural: StreamDockControlService::setActiveDevice() is never
+called from QML — m_activeDevice stays null, repaintPage() early-returns,
+the device-write never fires even after L1+L2 fixes. Inspector preview
+renders the picked image but the device key stays blank and the KeyCell
+grid preview also stays blank. L3 closure requires a device-shaped editor
+that wires setActiveDevice on sidebar selection (Phase 26).
 
 ### 2. Encoder rotate fires actions (VERIFY-05)
 
@@ -101,7 +117,10 @@ counter-clockwise fires a `dialRotate` event (positive delta on CW, negative
 on CCW). Per the akp05.md provisional §5 framing the encoder index is 0..3
 and the delta is ±1 per tick. Bound to a built-in action (e.g., volume up/down)
 on Plan 21-03 the operator hears a system-volume change on each tick.
-result: [pending] *(BLOCKED on 0x3004 demo unit — see "Demo-unit caveat".)*
+result: BLOCKED — demo unit 0x3004 does not stream input (CLAUDE.md
+AKP05E glossary §7.1, also reverified live with mirajazz 4ndv reference).
+Convert BLOCKED → PASS needs a retail AKP05E / Mirabox N4 or the
+Frida-on-Windows vendor-app capture path.
 
 ### 3. Encoder press fires action (VERIFY-05)
 
@@ -110,7 +129,8 @@ press-only-then-synthesised-release pattern that the AKP05 backend emits —
 see commit `670348e`, `WR-05 clarify EncoderReleased dispatch`). On press a
 bound action (e.g., toggle mute) triggers; on synthesised release the action
 does NOT re-trigger.
-result: [pending] *(BLOCKED on 0x3004 demo unit.)*
+result: BLOCKED — demo unit 0x3004 does not stream input. Same blocker
+as Test 2.
 
 ### 4. Touch-strip tap fires per-zone action (VERIFY-05)
 
@@ -119,8 +139,10 @@ a touch event with the correct zone index (0..3). Per the provisional §5
 table (`akp05.md` lines 125-129) gesture code `0x0` = Tap, payload bytes
 10..11 = zone index. The app routes the touch to the action bound to the
 under-encoder action slot.
-result: [pending] *(BLOCKED on 0x3004 demo unit. Note: this test also
-DOUBLES as the touch-zone-map confirm-or-correct row — see Test 10.)*
+result: BLOCKED — demo unit 0x3004 does not stream input. Same blocker
+as Test 2. This test ALSO doubles as the touch-zone-map confirm-or-
+correct row (Test 10) — both stay BLOCKED until a different unit
+arrives.
 
 ### 5. Touch-strip swipe changes page (VERIFY-05)
 
@@ -130,8 +152,9 @@ provisional §5 table gesture codes `0x1` (swipe-left) and `0x2` (swipe-right)
 carry the start-X in bytes 10..11 BE16. The app's `pageNavigated`
 signal (per `805bce3 feat(16-03): wire pageNavRequested -> navigatePage`)
 should fire.
-result: [pending] *(BLOCKED on 0x3004 demo unit. Test also doubles as the
-swipe-gesture-code confirm-or-correct row — see Test 11.)*
+result: BLOCKED — demo unit 0x3004 does not stream input. Same blocker
+as Test 2. Doubles as the swipe-gesture-code confirm-or-correct row
+(Test 11) — both stay BLOCKED until a different unit arrives.
 
 ### 6. Push image to a touch-strip zone (VERIFY-05)
 
@@ -141,7 +164,12 @@ zone show the image on the touch strip. The current `assignEncoderImage` path
 sends a `BAT` write with the touch-strip zone key-byte mapping (enc 1..4 →
 strip 5 → bottom 6..10 → top 11..15 per CLAUDE.md AKP05E glossary). The image
 appears on the correct touch-strip zone (NOT on an LCD key).
-result: [pending]
+result: NO_AFFORDANCE — operator session 2026-05-28 13:00-13:10 reports
+"nella UI dell'applicazione non compare nessuna voce LCD, solo Dial" —
+the existing `KeyDesigner.qml` grid does NOT expose a drop target for
+touch-strip zones; only the encoder dials are visible in the editor.
+A device-shaped editor surface (touch-strip lane visualised below the
+4 encoders, drop-targetable) is needed. Tracked in Phase 26.
 
 ### 7. Global brightness slider works (VERIFY-05)
 
@@ -151,13 +179,18 @@ changes the AKP05E's overall LCD brightness from min to max. The `LIG` opcode
 - percentage byte path (`StreamDockControlService::setBrightness`) was
   informally confirmed live 2026-05-28. Operator: drag slider 0% → 100%,
   observe.
-  result: [pending]
+  result: PASS — operator session 2026-05-28 13:00, "brightness changes
+  live". The setBrightness path takes a codename and uses the
+  m_lookup() fallback rather than m_activeDevice, so it works even
+  without the Phase 26 sidebar-wiring fix.
 
 ### 8. Clear all blanks the panel (VERIFY-05)
 
 expected: The "Clear all" button blanks every LCD key + touch strip on the
 AKP05E (CLE opcode). Informally confirmed 2026-05-28.
-result: [pending]
+result: PASS — operator session 2026-05-28 13:00, "panel cleared". Like
+setBrightness, clearAll takes a codename and uses m_lookup() fallback;
+it does not depend on m_activeDevice being set.
 
 ### 9. hasClock=false honesty (no Sync button) (VERIFY-05)
 
@@ -168,7 +201,8 @@ ARCH-05 (Stream Dock family has no firmware RTC; landed via commit `07c5902`).
 The UI is gated by `visible: root.hasClock` in `SettingsRow.qml:196`.
 Operator: select AKP05E, open `Settings` tab in `ProfileEditor`, confirm
 absence.
-result: [pending]
+result: PASS — operator session 2026-05-28 13:00, "no Sync button on
+AKP05E row". DEVICES-11 / ARCH-05 honesty contract honoured by the UI.
 
 ______________________________________________________________________
 
@@ -194,7 +228,9 @@ swipe-left/right with payload bytes 10..11 = start-X (BE16, 0..639). Tap zones
 align with encoder positions (zone 0 under encoder 1, ... zone 3 under
 encoder 4).
 
-confirm_or_correct: [pending — driven by Tests 4 + 5]
+confirm_or_correct: BLOCKED — driven by Tests 4 + 5, both BLOCKED on
+demo unit 0x3004 input-streaming gap. Resume when a unit that streams
+input is in hand.
 
 how_to_correct: If the device returns a gesture code OR zone index OR
 swipe-X-payload encoding that disagrees with the table above, update
@@ -213,9 +249,10 @@ the 32-byte header packet: bytes 5..7 = `D R A`; bytes 8..11 = BE32
 BE16 `rect.height`; 17..18 = BE16 `rect.x`; 19..20 = BE16 `rect.y`. Then JPEG
 data follows.
 
-confirm_or_correct: \[pending — driven by Test 6 if/when `DRA` is wired into
-the app's encoder-image path; currently the app uses `BAT` per the AKP05E
-glossary, so `DRA` may be a future-work opcode\]
+confirm_or_correct: BLOCKED — driven by Test 6 if/when DRA is wired into
+the app's encoder-image path; currently the app uses BAT per the AKP05E
+glossary, so DRA may be a future-work opcode. Test 6 NO_AFFORDANCE
+(missing UI surface for touch-strip zones — Phase 26).
 
 how_to_correct: If the rect field order is NOT (width, height, x, y) BE16, or
 the location byte is at a different offset, update `akp05_vendor.md` §2 line
@@ -235,7 +272,8 @@ full-width touch strip (size only, target implicit); `BAT` = key image (size
   zones, 6..15 = LCD keys per CLAUDE.md glossary). So `ENC`/`MAI` may be unused
   in the live code paths but DOCUMENTED in `akp05.md`.
 
-confirm_or_correct: [pending — driven by Test 6 (touch-strip zone image)]
+confirm_or_correct: BLOCKED — driven by Test 6, which is NO_AFFORDANCE
+in the current UI (no touch-strip drop target). Resume after Phase 26.
 
 how_to_correct: If Test 6 confirms `BAT` is the correct opcode for
 touch-strip zones (which is what the in-code path uses), update `akp05.md`
@@ -262,8 +300,10 @@ expected: Launch a sample `.sdPlugin` (one of the bundled built-ins under
 Confirm in the app log: the plugin's `register` message arrives over the
 loopback WebSocket; the `passHello` auth handshake (commit `d9fd224 feat(17-03)`)
 completes; the plugin appears in `LoadedPluginsPage` (the QML view).
-result: [pending] *(NOT blocked by demo unit — handshake is loopback, not
-HID. This test should pass on the demo unit.)*
+result: NOT_WALKED — gated on Phase 26 device editor + a real third-party
+sdPlugin sample on disk. Loopback path is reachable in principle (not
+demo-unit-blocked). Resume after Phase 26 lands the device editor and a
+sdPlugin is installed via PluginStore.
 
 ### 14. Plugin `setImage` paints a key (VERIFY-06)
 
@@ -272,7 +312,11 @@ on the AKP05E. The `PluginDeviceBridge::onSetImage` path
 (`src/app/src/plugin_device_bridge.cpp`) decodes the data URI and routes the
 image through the device's `assignMainImage` (per Plan 23-01). The image
 appears on the targeted LCD key.
-result: [pending] *(Reachable on the demo unit — image render works.)*
+result: NOT_WALKED — even though the wire path is reachable on the demo
+unit (the C++ assignMainImage with QImage works at the wire layer per
+the CLAUDE.md glossary), routing a plugin setImage through the editor
+requires the Phase 26 setActiveDevice wiring to be in place (the same
+m_activeDevice null blocker as Test 1). Resume after Phase 26.
 
 ### 15. Plugin receives `keyDown` from physical press (VERIFY-06)
 
@@ -280,50 +324,114 @@ expected: With the plugin loaded and an action bound to an LCD key on the
 AKP05E, a physical press fires a `keyDown` event over the WebSocket. The
 plugin's handler runs; an observable effect (e.g., the plugin updates the
 key image or fires a system action) occurs.
-result: [pending] *(BLOCKED on 0x3004 demo unit — input streaming
-unreachable. Use a retail AKP05E / Mirabox N4 or the Frida-on-Windows path.)*
+result: BLOCKED — demo unit 0x3004 input-streaming gap; same blocker as
+Test 2. Resume with a retail AKP05E / Mirabox N4 or Frida-on-Windows.
 
 ### 16. Plugin receives `dialRotate` from physical encoder turn (VERIFY-06)
 
 expected: With the plugin loaded and an action bound to an encoder on the
 AKP05E, a physical rotate (CW or CCW) fires a `dialRotate` event over the
 WebSocket. The plugin's handler runs; an observable effect occurs.
-result: [pending] *(BLOCKED on 0x3004 demo unit.)*
+result: BLOCKED — demo unit 0x3004 input-streaming gap; same blocker as
+Test 2.
+
+______________________________________________________________________
+
+## Session Findings (2026-05-28 13:00-13:10)
+
+The autonomous-mode walkthrough surfaced two distinct categories of
+blockers:
+
+### Category A — Real bug regressions (fixed in tree)
+
+A 3-layer regression in the image-upload pipeline:
+
+- L1: QML role-type mismatch (Url → String) in `Inspector.qml` →
+  `KeyDesigner.qml` bindings ListModel. Silent no-op.
+- L2: `QImage(QString)` doesn't accept `file://` URLs at
+  `stream_dock_control_service.cpp:292,389`. Image stays null.
+- L3 (STRUCTURAL): `StreamDockControlService::setActiveDevice()` is
+  declared in C++ but never called from any QML file. `m_activeDevice`
+  stays null. `repaintPage()` early-returns. Even with L1+L2 fixes,
+  the device-write never fires.
+
+L1+L2 fixed in commit `24651a3 fix(app): icon-source URL handling across QML/C++ boundary`. L3 is a structural gap; closure belongs in
+Phase 26 (device-shaped editor wires setActiveDevice on sidebar selection).
+
+### Category B — Missing UI affordances (Phase 26)
+
+The existing `KeyDesigner.qml` is a generic NxN tile grid. It does NOT
+model the AKP05E geometry (10 LCD keys + 4 encoder dials + 1 touch
+strip). The operator reports "nella UI dell'applicazione non compare
+nessuna voce LCD, solo Dial" — no drop target for touch-strip zones,
+no encoder-LCD overlay surface, no drag-and-drop from an action library.
+A device-shaped editor (Elgato Stream Deck / OpenDeck pattern) is
+needed for VERIFY-05 affordances to exist at all.
+
+### Category C — Demo-unit hardware (BLOCKED)
+
+Tests 2, 3, 4, 5, 15, 16 stay BLOCKED on this unit per the CLAUDE.md
+AKP05E glossary §7.1 (input streaming unreachable on 0x3004). Resume
+needs a retail AKP05E / Mirabox N4 or the Frida-on-Windows capture path.
 
 ______________________________________________________________________
 
 ## Summary
 
 total: 16
-passed: 0
-issues: 0
-pending: 16
-skipped: 0
+passed: 3
+failed: 1
+no_affordance: 1
+blocked_demo_unit: 6
+not_walked: 5
+pending: 0
 
-Per-criterion result table (operator: fill as you go):
+Per-criterion result table (autonomous walkthrough 2026-05-28 13:00-13:10):
 
-| #   | Name                                  | Result  | Notes                                 |
-| --- | ------------------------------------- | ------- | ------------------------------------- |
-| 1   | Push image to an LCD key              | pending |                                       |
-| 2   | Encoder rotate fires actions          | pending | BLOCKED on 0x3004                     |
-| 3   | Encoder press fires action            | pending | BLOCKED on 0x3004                     |
-| 4   | Touch-strip tap fires per-zone action | pending | BLOCKED on 0x3004; doubles as Test 10 |
-| 5   | Touch-strip swipe changes page        | pending | BLOCKED on 0x3004; doubles as Test 11 |
-| 6   | Push image to a touch-strip zone      | pending |                                       |
-| 7   | Global brightness slider works        | pending |                                       |
-| 8   | Clear all blanks the panel            | pending |                                       |
-| 9   | hasClock=false honesty                | pending |                                       |
-| 10  | Touch-strip zone+gesture map (§5)     | pending | driven by Tests 4 + 5                 |
-| 11  | DRA rect header layout                | pending | driven by Test 6 if/when DRA is wired |
-| 12  | ENC vs MAI vs BAT mapping             | pending | driven by Test 6                      |
-| 13  | Plugin handshake (loopback)           | pending |                                       |
-| 14  | Plugin setImage paints a key          | pending |                                       |
-| 15  | Plugin receives keyDown               | pending | BLOCKED on 0x3004                     |
-| 16  | Plugin receives dialRotate            | pending | BLOCKED on 0x3004                     |
+| #   | Name                                  | Result        | Notes                                                                  |
+| --- | ------------------------------------- | ------------- | ---------------------------------------------------------------------- |
+| 1   | Push image to an LCD key              | FAIL          | 3-layer regression; L1+L2 fixed in 24651a3; L3 (setActiveDevice) → P26 |
+| 2   | Encoder rotate fires actions          | BLOCKED       | 0x3004 demo unit input-streaming gap                                   |
+| 3   | Encoder press fires action            | BLOCKED       | 0x3004 demo unit input-streaming gap                                   |
+| 4   | Touch-strip tap fires per-zone action | BLOCKED       | 0x3004 demo unit; doubles as Test 10                                   |
+| 5   | Touch-strip swipe changes page        | BLOCKED       | 0x3004 demo unit; doubles as Test 11                                   |
+| 6   | Push image to a touch-strip zone      | NO_AFFORDANCE | "solo Dial" — no touch-strip drop target in KeyDesigner → P26          |
+| 7   | Global brightness slider works        | PASS          | setBrightness uses m_lookup fallback; not blocked by L3                |
+| 8   | Clear all blanks the panel            | PASS          | clearAll uses m_lookup fallback; not blocked by L3                     |
+| 9   | hasClock=false honesty                | PASS          | DEVICES-11/ARCH-05 honesty contract honoured                           |
+| 10  | Touch-strip zone+gesture map (§5)     | BLOCKED       | Driven by Tests 4 + 5 (both BLOCKED demo unit)                         |
+| 11  | DRA rect header layout                | BLOCKED       | Driven by Test 6 (NO_AFFORDANCE) + Test 4/5 (BLOCKED)                  |
+| 12  | ENC vs MAI vs BAT mapping             | BLOCKED       | Driven by Test 6 (NO_AFFORDANCE)                                       |
+| 13  | Plugin handshake (loopback)           | NOT_WALKED    | Reachable; gated on a real sdPlugin sample + Phase 26 editor           |
+| 14  | Plugin setImage paints a key          | NOT_WALKED    | Wire reachable; gated on the L3 setActiveDevice fix (P26)              |
+| 15  | Plugin receives keyDown               | BLOCKED       | 0x3004 demo unit input-streaming gap                                   |
+| 16  | Plugin receives dialRotate            | BLOCKED       | 0x3004 demo unit input-streaming gap                                   |
 
-Operator name / session: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+Operator: uni.lorenzo.a@gmail.com (autonomous-mode session 2026-05-28
+13:00-13:10 GMT+2)
 
 ## Gaps
 
-\[none yet — the demo-unit input-unreachable items are NOT gaps; they are
-documented hardware behaviour. Convert them PASS only with a different unit.\]
+Two new gaps documented; both routed to Phase 26 (OpenDeck-shaped
+device editor):
+
+- **GAP-25A** — Image-upload pipeline L3 wiring gap:
+  `StreamDockControlService::setActiveDevice()` is declared but never
+  called from QML. `m_activeDevice` stays null. `repaintPage()` early-
+  returns. Phase 26 sidebar selection must wire setActiveDevice on the
+  selection-changed signal so the device-shaped editor can drive image
+  uploads end-to-end. (L1+L2 already closed in commit 24651a3.)
+
+- **GAP-25B** — Missing device-shaped editor affordances:
+  `KeyDesigner.qml` is a generic NxN tile grid. No touch-strip drop
+  target, no encoder-LCD overlay surface, no drag-and-drop from an
+  action library. Phase 26 will model the AKP05E geometry (10 LCD keys
+
+  - 4 encoder dials + 1 touch strip below) following the
+    Elgato/OpenDeck pattern, and extend to all AJAZZ SKUs OpenDeck
+    supports.
+
+Demo-unit input-streaming items (Tests 2-5, 15-16) are NOT gaps; they
+are documented hardware behaviour (CLAUDE.md AKP05E glossary §7.1).
+Convert BLOCKED → PASS only with a retail AKP05E / Mirabox N4 / Frida-
+on-Windows path.

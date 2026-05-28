@@ -21,17 +21,18 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 25 Plan 01 complete (25-UAT.md authored) — Plan 02 awaits operator hardware UAT.
+**Current focus:** Phase 25 PARTIAL — UAT walked 2026-05-28 13:00-13:10; 3 PASS, 1 FAIL, 1 NO_AFFORDANCE, 6 BLOCKED (demo unit), 5 NOT_WALKED. Two new gaps (GAP-25A, GAP-25B) routed to **Phase 26: OpenDeck-shaped device editor**.
 
 ## Current Position
 
-Phase: 25 (hardware-verification-real-plugin) — IN PROGRESS (1/2 plans)
+Phase: 25 (hardware-verification-real-plugin) — **PARTIAL** (2/2 plans, but UAT cannot complete on existing UI)
 Plans:
 25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
-25-02 (operator-gated) — PENDING: operator walks 25-UAT.md against a unit that supports input streaming. The lab demo unit `0x0300:0x3004` cannot satisfy Tests 2-5 + 15-16 (input unreachable per CLAUDE.md AKP05E glossary §7.1). Convert BLOCKED → PASS needs a retail AKP05E / Mirabox N4 or the Frida-on-Windows-vendor-app capture path.
+25-02 (operator-gated) — PARTIAL (2026-05-28 13:10): autonomous-mode walkthrough recorded results for 11/16 tests. Three PASS (7 brightness, 8 clear, 9 hasClock-honesty). One FAIL (Test 1 image-upload — 3-layer regression; L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26). One NO_AFFORDANCE (Test 6 — no touch-strip drop target in KeyDesigner). Six BLOCKED on demo unit 0x3004 input-streaming gap (Tests 2-5, 15-16). Five NOT_WALKED (Tests 10-12 driven by 4/5/6; 13-14 gated on Phase 26). See `.planning/phases/25-hardware-verification-real-plugin/25-02-SUMMARY.md`.
+Phase: 26 (NEW — OpenDeck-shaped device editor) — PROPOSED 2026-05-28; goal: replace generic KeyDesigner with Elgato/OpenDeck-pattern device-shaped editor (per-SKU geometry: key grid + encoder dials + touch strip), drag-drop action library, auto-wire setActiveDevice on sidebar selection. Closes GAP-25A (setActiveDevice wiring) + GAP-25B (missing affordances) and unblocks Phase 25 resume. Research deliverable: comprehensive analysis of OpenDeck (`nekename/OpenDeck`), `naerschhersch/opendeck-akp05`, `4ndv/mirajazz` — covering all AJAZZ SKUs OpenDeck supports.
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) + 13(2) = 33 plans across 13 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget).
-Status: verifying — Phase 25 Plan 1 complete; Plan 2 awaits operator hardware time
+Status: phase-26-spec-pending — Phase 25 partial; UAT resumes after Phase 26 lands device editor; demo-unit BLOCKED items resume with different hardware unit.
 Branch: feat/streamdock (off develop)
 Last activity: 2026-05-28
 
@@ -158,6 +159,8 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ### Blockers/Concerns
 
+- **GAP-25A (Phase 25 → 26)**: `StreamDockControlService::setActiveDevice()` is declared in C++ but never called from any QML file (`grep -rn setActiveDevice src/app/qml/` returns nothing as of 2026-05-28). `m_activeDevice` stays null, `repaintPage()` early-returns at `if (!m_activeDevice) return;`, so the QML→C++→device image-upload path is broken end-to-end even after the L1+L2 URL handling fixes landed in commit `24651a3`. Phase 26 closes this by wiring `setActiveDevice` on sidebar selection-changed in the device-shaped editor.
+- **GAP-25B (Phase 25 → 26)**: `KeyDesigner.qml` is a generic NxN tile grid with no touch-strip drop target, no encoder-LCD overlay surface, no drag-and-drop from an action library. Operator UAT 2026-05-28 13:00 reports "nella UI dell'applicazione non compare nessuna voce LCD, solo Dial" (no LCD entry in app UI, only Dial). Phase 26 replaces it with an Elgato/OpenDeck-pattern device-shaped editor per SKU (AKP05E: 5×2 + 4 encoders + touch strip; AKP153: 3×5; AKP03: 2×3; AK980: keyboard view; etc.).
 - **CAPTURE-01 is MUST-FIX-FIRST inside Phase 9**: capture-data-hygiene policy + `.pcap`/`.pcapng` gitignore + pre-commit reject hook MUST land before any researcher does their first capture (Pitfall 17 — keystroke recovery from raw `.pcap` is deterministic via `tshark` / `USB-Keyboard-Parser`).
 - **Phase 11 (8K mouse) mid-phase research flag**: zero 3rd-party OSS corpus exists for `3151:5007`; if Phase 9 captures reveal AJ199 V1.0 vs Max envelope diverges materially, invoke `/gsd-research-phase` on the SONiX 3151 chipset family before committing to a factory split.
 - **Phase 12 (AK980 PRO) mid-phase research flag**: if Phase 9 captures reveal TFT cmd 0x72 / per-key RGB / macros / layers materially divergent from the TaxMachine baseline, invoke `/gsd-research-phase` on the Microdia 0c45 chipset family.
