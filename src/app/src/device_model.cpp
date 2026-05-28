@@ -312,6 +312,13 @@ QVariantMap DeviceModel::capabilitiesFor(QString const& codename) const {
     m.insert(QStringLiteral("keyCount"), static_cast<int>(it->keyCount));
     m.insert(QStringLiteral("gridColumns"), static_cast<int>(it->gridColumns));
     m.insert(QStringLiteral("encoderCount"), static_cast<int>(it->encoderCount));
+    // Phase 26 (REQ-26-B): geometry fields for DeviceView three-row layout.
+    // keyRows and touchZoneCount drive row counts; mainScreen* reserved for
+    // future wide-strip editor (AKP815 deferred, D-13).
+    m.insert(QStringLiteral("keyRows"), static_cast<int>(it->keyRows));
+    m.insert(QStringLiteral("touchZoneCount"), static_cast<int>(it->touchZoneCount));
+    m.insert(QStringLiteral("mainScreenWidthPx"), static_cast<int>(it->mainScreenWidthPx));
+    m.insert(QStringLiteral("mainScreenHeightPx"), static_cast<int>(it->mainScreenHeightPx));
     m.insert(QStringLiteral("dpiStageCount"), static_cast<int>(it->dpiStageCount));
     m.insert(QStringLiteral("hasRgb"), it->hasRgb);
     m.insert(QStringLiteral("hasTouchStrip"), it->hasTouchStrip);

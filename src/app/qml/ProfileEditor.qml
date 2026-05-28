@@ -44,6 +44,8 @@ Rectangle {
     readonly property int  _keyCount:      capabilities && capabilities.keyCount      ? capabilities.keyCount      : 0
     readonly property int  _gridColumns:   capabilities && capabilities.gridColumns   ? capabilities.gridColumns   : 5
     readonly property int  _encoderCount:  capabilities && capabilities.encoderCount  ? capabilities.encoderCount  : 0
+    readonly property int  _keyRows:       capabilities && capabilities.keyRows       ? capabilities.keyRows       : 0
+    readonly property int  _touchZoneCount: capabilities && capabilities.touchZoneCount ? capabilities.touchZoneCount : 0
     readonly property int  _dpiStageCount: capabilities && capabilities.dpiStageCount ? capabilities.dpiStageCount : 0
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
     readonly property bool _hasSettings:   capabilities && capabilities.hasSettings   ? capabilities.hasSettings   : false
@@ -185,7 +187,7 @@ Rectangle {
 
             Loader {
                 active: stack.currentIndex === 0 && root._showKeys
-                sourceComponent: keyDesignerComp
+                sourceComponent: deviceViewComp
             }
             Loader {
                 active: stack.currentIndex === 1 && root._showRgb
@@ -245,22 +247,27 @@ Rectangle {
 
     // ---- Component definitions for the Loaders ----------------------------
 
-    // Keys tab: KeyDesigner grid + live-device controls (DISPLAY-09, Phase 16).
+    // Keys tab: DeviceView (geometry-driven three-row editor, REQ-26-B, Phase 26) +
+    // live-device controls (DISPLAY-09, Phase 16).
     // The brightness Slider is debounced via a single-shot Timer (~80 ms) so
     // dragging does not flood LIG writes (T-16a-01). One final setBrightness is
     // issued on pointer release (onPressedChanged when !pressed). Both controls
     // are gated to LCD-key devices (_showKeys / codename != "").
     Component {
-        id: keyDesignerComp
+        id: deviceViewComp
 
         ColumnLayout {
             spacing: Theme.spacingSm
 
-            KeyDesigner {
+            DeviceView {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 keyCount: root._keyCount
                 gridColumns: root._gridColumns
+                keyRows: root._keyRows
+                encoderCount: root._encoderCount
+                touchZoneCount: root._touchZoneCount
+                codename: root.codename
             }
 
             // Live-device controls row: brightness slider + clear-all button.

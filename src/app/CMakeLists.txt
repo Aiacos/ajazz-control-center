@@ -296,6 +296,25 @@ foreach(product_path IN LISTS ACC_DEVICE_PRODUCTS)
     )
 endforeach()
 
+# Per-SKU device layout JSONs (resources/device-layouts/<codename>.json). These small JSON files
+# carry cell-position coordinates for the photo-background overlay in DeviceView.qml (D-06, Phase
+# 26). The JSONs are authored in Plan 26-06; this glob tolerates an empty directory so the module
+# compiles before any layout JSON exists. CONFIGURE_DEPENDS re-globs when a JSON is added/removed so
+# cmake reconfigures automatically. QRC alias: device-layouts/<name>.json ->
+# qrc:/qt/qml/AjazzControlCenter/device-layouts/<name>.json
+set(ACC_DEVICE_LAYOUTS "")
+if(EXISTS "${CMAKE_SOURCE_DIR}/resources/device-layouts")
+    file(GLOB ACC_DEVICE_LAYOUTS CONFIGURE_DEPENDS
+         ${CMAKE_SOURCE_DIR}/resources/device-layouts/*.json
+    )
+    foreach(layout_path IN LISTS ACC_DEVICE_LAYOUTS)
+        get_filename_component(layout_name "${layout_path}" NAME)
+        set_source_files_properties(
+            "${layout_path}" PROPERTIES QT_RESOURCE_ALIAS device-layouts/${layout_name}
+        )
+    endforeach()
+endif()
+
 # Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
 # `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
 # only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
@@ -373,9 +392,9 @@ set(ACC_QML_MODULE_SOURCES
     # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above; the header is listed here so moc finds
     # the Q_OBJECT declaration. Mirror of the branding_service / stream_dock_control_service
     # pattern. Only the .hpp is listed here (for AUTOMOC); the .cpp is compiled SOLELY in the
-    # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above. The header class is itself
-    # #if defined(AJAZZ_HAVE_WEBSOCKETS)-gated, so AUTOMOC is a no-op on minimal (no-WebSockets)
-    # builds and ajazz-control-center.exe links without the module (was: LNK1120 on SdPluginServer).
+    # AJAZZ_HAVE_WEBSOCKETS-gated target_sources block above. The header class is itself #if
+    # defined(AJAZZ_HAVE_WEBSOCKETS)-gated, so AUTOMOC is a no-op on minimal (no-WebSockets) builds
+    # and ajazz-control-center.exe links without the module (was: LNK1120 on SdPluginServer).
     src/plugin_device_bridge.hpp
     # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient Q_OBJECT header listed here so AUTOMOC finds the
     # moc declaration. The .cpp is in the AJAZZ_HAVE_WEBSOCKETS-gated block above. The whole class
@@ -402,7 +421,8 @@ set(ACC_QML_MODULE_QML_FILES
     qml/ProfileEditor.qml
     qml/RgbPicker.qml
     qml/SettingsRow.qml
-    qml/KeyDesigner.qml
+    qml/DeviceView.qml
+    qml/ActionLibraryPane.qml
     qml/EncoderPanel.qml
     qml/MousePanel.qml
     qml/Inspector.qml
@@ -419,7 +439,9 @@ set(ACC_QML_MODULE_QML_FILES
     qml/components/EmptyState.qml
     qml/components/FirmwarePanel.qml
     qml/components/EncoderCard.qml
+    qml/components/EncoderDial.qml
     qml/components/KeyCell.qml
+    qml/components/TouchStripLane.qml
     qml/components/Notification.qml
     qml/components/PageHeader.qml
     qml/components/PrimaryButton.qml
@@ -441,6 +463,7 @@ set(ACC_QML_MODULE_RESOURCES
     ${ACC_OPENDECK_FALLBACK}
     ${ACC_UI_ICONS}
     ${ACC_DEVICE_PRODUCTS}
+    ${ACC_DEVICE_LAYOUTS}
     ${ACC_SDPI_CSS}
 )
 
