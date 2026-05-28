@@ -215,6 +215,18 @@ void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
     out << "}";
 }
 
+/// Serialise a TouchZoneBinding (onTap chain; Phase 26 D-11 / schema v2).
+/// Hand-rolled per COD-031: no nlohmann::json in ajazz_core.
+void writeTouchZoneBinding(std::ostringstream& out, TouchZoneBinding const& b) {
+    out << "{";
+    writeChain(out, "onTap", b.onTap);
+    if (!keyStateIsDefault(b.state)) {
+        out << ",\"state\":";
+        writeKeyState(out, b.state);
+    }
+    out << "}";
+}
+
 } // namespace
 
 std::string profileToJson(Profile const& profile) {
@@ -222,6 +234,10 @@ std::string profileToJson(Profile const& profile) {
     out << "{";
     out << "\"id\":";
     escape(out, profile.id);
+    // Schema version bump: v2 adds the touchZones map (Phase 26 D-12).
+    // Reader defaults to v1 (empty touchZones) when this field is absent,
+    // so existing v1 files remain readable without modification.
+    out << ",\"_schemaVersion\":2";
     out << ",";
     out << "\"name\":";
     escape(out, profile.name);
@@ -251,6 +267,23 @@ std::string profileToJson(Profile const& profile) {
         }
         out << "\"" << idx << "\":";
         writeEncoderBinding(out, eb);
+        first = false;
+    }
+    out << "}";
+
+    // Touch-strip zones (onTap chain; schema v2, Phase 26 D-11).
+    // Emitted as an empty object when no zones are configured so that
+    // round-trips on v2 profiles always include the key (T-26-07: unknown
+    // future _schemaVersion values are treated as v2 — read touchZones if
+    // present, skip unknown keys, never throw on forward-compat fields).
+    out << ",\"touchZones\":{";
+    first = true;
+    for (auto const& [idx, tz] : profile.touchZones) {
+        if (!first) {
+            out << ",";
+        }
+        out << "\"" << static_cast<unsigned>(idx) << "\":";
+        writeTouchZoneBinding(out, tz);
         first = false;
     }
     out << "}";
@@ -707,6 +740,32 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
     return eb;
 }
 
+/// Parse a TouchZoneBinding object (schema v2, Phase 26 D-11).
+/// Absent fields default-construct, so a minimal {"onTap":[]} round-trips cleanly.
+TouchZoneBinding readTouchZoneBinding(JsonReader& r) {
+    TouchZoneBinding tz{};
+    r.expect('{');
+    if (!r.tryConsume('}')) {
+        while (true) {
+            std::string const key = r.readString();
+            r.expect(':');
+            if (key == "onTap") {
+                tz.onTap = readActionArray(r);
+            } else if (key == "state") {
+                tz.state = readKeyState(r);
+            } else {
+                r.skipValue();
+            }
+            if (r.tryConsume(',')) {
+                continue;
+            }
+            r.expect('}');
+            break;
+        }
+    }
+    return tz;
+}
+
 /// Read a `{"<uint>":<value>, ...}` map; @p readValue consumes one value.
 template <typename Value, typename ReadValueFn>
 void readUintKeyedMap(JsonReader& r,
@@ -782,10 +841,18 @@ Profile profileFromJson(std::string_view json) {
     if (r.tryConsume('}')) {
         return profile;
     }
+    // Track the schema version so touchZones is only parsed on v2+ profiles.
+    // Absence of _schemaVersion (v1 profile) or value 1 → treat touchZones
+    // as absent and default-construct an empty map (D-12 backward compat).
+    // Unknown future versions >= 2 are treated as v2 (T-26-07: forward compat
+    // — read touchZones if present, ignore other unknown root keys).
+    int schemaVersion = 1;
     while (true) {
         std::string const key = r.readString();
         r.expect(':');
-        if (key == "id") {
+        if (key == "_schemaVersion") {
+            schemaVersion = static_cast<int>(r.readUInt());
+        } else if (key == "id") {
             profile.id = r.readString();
         } else if (key == "name") {
             profile.name = r.readString();
@@ -797,6 +864,35 @@ Profile profileFromJson(std::string_view json) {
         } else if (key == "encoders") {
             readUintKeyedMap(
                 r, profile.encoders, [](JsonReader& rr) { return readEncoderBinding(rr); });
+        } else if (key == "touchZones") {
+            // Only parse when schema version >= 2; skip for v1 profiles so
+            // their empty touchZones map is preserved (D-12 migration).
+            if (schemaVersion >= 2) {
+                r.expect('{');
+                if (!r.tryConsume('}')) {
+                    while (true) {
+                        std::string const idxStr = r.readString();
+                        std::uint8_t idx = 0;
+                        try {
+                            idx = static_cast<std::uint8_t>(std::stoul(idxStr) & 0xFFu);
+                        } catch (std::exception const&) {
+                            std::ostringstream err;
+                            err << "profileFromJson: invalid uint8 touchZone key \"" << idxStr
+                                << "\"";
+                            throw std::runtime_error(err.str());
+                        }
+                        r.expect(':');
+                        profile.touchZones.emplace(idx, readTouchZoneBinding(r));
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect('}');
+                        break;
+                    }
+                }
+            } else {
+                r.skipValue();
+            }
         } else if (key == "mouseButtons") {
             // String-keyed (button name) map of key-style Bindings. Wire key
             // "mouseButtons" per PROFILE_SCHEMA.md. Mirrors the pages reader's

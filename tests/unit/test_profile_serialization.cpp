@@ -191,6 +191,77 @@ TEST_CASE("profile reader skips unknown keys and tolerates whitespace",
     REQUIRE(p.applicationHints.size() == 2);
 }
 
+/// D-12: a v1 profile (no _schemaVersion key) loads with empty touchZones;
+/// re-serialising upgrades it to schema v2 with a touchZones key.
+TEST_CASE("v1 profile migrates touchZones to empty on load", "[profile][migration]") {
+    using namespace ajazz::core;
+
+    // Construct a minimal v1 profile JSON: no _schemaVersion, no touchZones.
+    // The device, keys, encoders fields are present to exercise the existing
+    // reader paths; the absence of _schemaVersion signals a v1 document.
+    constexpr char const* kV1Json =
+        R"({"id":"abc","name":"x","device":"akp05e","keys":{},"encoders":{}})";
+
+    Profile const p = profileFromJson(kV1Json);
+
+    // D-12: v1 profile loads with empty touchZones map.
+    REQUIRE(p.touchZones.empty());
+    REQUIRE(p.id == "abc");
+    REQUIRE(p.deviceCodename == "akp05e");
+
+    // Re-serialise: the writer always emits schema v2 + touchZones key.
+    auto const json = profileToJson(p);
+    REQUIRE(json.find("\"_schemaVersion\":2") != std::string::npos);
+    REQUIRE(json.find("\"touchZones\":") != std::string::npos);
+}
+
+/// D-12: a Profile with non-empty touchZones serialises to v2 JSON and
+/// round-trips back to the same touchZones (size, keys, chain, state.text).
+TEST_CASE("v2 profile touchZones round-trip", "[profile][touchzone]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "tz-rt-uuid";
+    p.name = "Touch Zone Profile";
+    p.deviceCodename = "akp05e";
+
+    // Zone 0: tap chain with one action + label on the state.
+    TouchZoneBinding tz0{};
+    tz0.onTap.push_back(
+        Action{.kind = ActionKind::Plugin, .id = "media.play", .label = "Play", .delayMs = 0});
+    tz0.state.text = "Z0";
+    p.touchZones[0] = tz0;
+
+    // Zone 3: empty tap chain + custom state text only (exercises sparse map).
+    TouchZoneBinding tz3{};
+    tz3.state.text = "Z3";
+    p.touchZones[3] = tz3;
+
+    auto const json = profileToJson(p);
+    // Schema v2 markers must be present.
+    REQUIRE(json.find("\"_schemaVersion\":2") != std::string::npos);
+    REQUIRE(json.find("\"touchZones\":") != std::string::npos);
+
+    // Round-trip the JSON back to a Profile.
+    Profile const restored = profileFromJson(json);
+
+    REQUIRE(restored.touchZones.size() == 2);
+    REQUIRE(restored.touchZones.count(0) == 1);
+    REQUIRE(restored.touchZones.count(3) == 1);
+
+    auto const& r0 = restored.touchZones.at(0);
+    REQUIRE(r0.onTap.size() == 1);
+    REQUIRE(r0.onTap.front().id == "media.play");
+    REQUIRE(r0.onTap.front().kind == ActionKind::Plugin);
+    REQUIRE(r0.state.text.has_value());
+    REQUIRE(r0.state.text.value() == "Z0");
+
+    auto const& r3 = restored.touchZones.at(3);
+    REQUIRE(r3.onTap.empty());
+    REQUIRE(r3.state.text.has_value());
+    REQUIRE(r3.state.text.value() == "Z3");
+}
+
 /// profileFromJson() must report a byte offset on malformed input.
 TEST_CASE("profile reader fails with byte offset on malformed input", "[profile][error]") {
     using namespace ajazz::core;
