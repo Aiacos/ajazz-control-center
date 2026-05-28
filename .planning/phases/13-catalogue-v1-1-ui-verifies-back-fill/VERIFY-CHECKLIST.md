@@ -60,28 +60,32 @@ CLAUDE.md, `udevadm trigger --action=change` does NOT restore the `uaccess`
 ACL on systemd >= 258 / Linux device access notes). Dev-only transient
 recovery: `sudo setfacl -m u:$(id -u):rw /dev/hidraw<N>`.
 
-### Clock-demotion ordering dependency (READ before VERIFY-01)
+### Expected `hasClock` state per descriptor (REFERENCE for VERIFY-01)
 
-VERIFY-01 expects the per-row sync surface to be HIDDEN on devices whose
-descriptor sets `hasClock=false`. Two known descriptors should arrive at
-`hasClock=false` per ROADMAP:
+VERIFY-01 cross-checks the rendered sync surface against `DeviceDescriptor::hasClock`.
+The current code reality (verified 2026-05-28 against `src/devices/*/src/register.cpp`):
 
-- `akp05e` (USB `0x0300:0x3004` - the firmware-confirmed retail unit;
-  previously mis-filed as `akp03_variant_3004`). DEVICES-05 demotion is in
-  Phase 10.
-- `ak980pro` (USB `0x0c45:0x8009`). DEVICES-06 demotion is in Phase 12.
+| Codename                                | `hasClock` | Source-of-truth                                                                                |
+| --------------------------------------- | :--------: | ---------------------------------------------------------------------------------------------- |
+| `akp05e` (USB `0x0300:0x3004`)          |  `false`   | DEVICES-11 / ARCH-05 — Stream Dock firmware has no RTC. Landed via commit `07c5902` (Phase 14) |
+| `ak980pro` (USB `0x0c45:0x8009`)        |   `true`   | ARCH-05.1 — real 4-packet `0x28` firmware RTC envelope, hardware-confirmed                     |
+| Generic AKP05-family backend (non-3004) |   `true`   | Plan 05-02 / A-03 / D-03 — backend inherits `IClockCapable`                                    |
+| AKP815                                  |   `true`   | A-03 / D-03 — has a firmware RTC                                                               |
+| AKP153-family rows                      |   `true`   | per `register.cpp` family table                                                                |
+| AJAZZ mice (no TFT)                     |  `false`   | conditional: `.hasClock = tft` — only true on TFT-equipped variants                            |
 
-If those demotions have NOT yet landed at the moment the operator runs this
-checklist, the descriptors still advertise `hasClock=true` - and VERIFY-01
-records BLOCKED + the dependency, NOT a hard FAIL. Verify before starting:
+There is **no pending demotion** for VERIFY-01: both flag positions above are
+already final. (An earlier draft of this checklist carried a `DEVICES-06`
+"ak980pro demotion" note; that claim was superseded by ARCH-05.1 when the real
+RTC was hardware-confirmed. ARCH-05.1 wins; the AK980 PRO Sync button is
+VISIBLE by design.)
+
+Sanity-check at start (should match the table above):
 
 ```
-grep -n 'codename = "akp05e"' -A 5 src/devices/streamdeck/src/register.cpp
-grep -n 'codename = "ak980pro"' -A 5 src/devices/keyboard/src/register.cpp
+grep -n 'codename = "akp05e"' -A 8 src/devices/streamdeck/src/register.cpp
+grep -n 'codename = "ak980pro"' -A 8 src/devices/keyboard/src/register.cpp
 ```
-
-If either descriptor shows `.hasClock = true,` the demotion has NOT landed -
-flag VERIFY-01 BLOCKED until that phase has shipped.
 
 ### As-built UI map (where each surface lives in the running app)
 
@@ -110,8 +114,8 @@ Each verify ends in an Acceptance line of the form
 at the end of the file. PASS means the expected behaviour was observed
 verbatim. FAIL means the observed behaviour contradicts the expected
 behaviour (this is a regression and must be filed). BLOCKED means a
-prerequisite is missing (e.g. clock-demotion ordering, a device not
-present, the build did not configure).
+prerequisite is missing (e.g. a device not present, the build did not
+configure, a build precondition like `qt6-qtbase-private-devel` missing).
 
 ______________________________________________________________________
 
@@ -128,8 +132,8 @@ tab.
 1. App is launched and the device sidebar is populated with at least the 4
    required devices (Stream Dock AKP05-family + Stream Dock AKP153-family +
    AK980 PRO + AJAZZ mouse).
-1. The clock-demotion ordering check above has been performed and recorded
-   (whether the demotions are landed or not).
+1. The `hasClock` reference table above has been sanity-checked against the
+   live `register.cpp` files (a quick grep — should match verbatim).
 
 **Steps:**
 
@@ -154,14 +158,17 @@ tab.
 
 **Acceptance (PASS iff ...):**
 
-PASS iff (a) the AKP05-family AND AKP153-family Stream Dock rows DO show the
-"Time synchronization" section AND (b) the `ak980pro` row DOES NOT show it,
-post-DEVICES-06 demotion AND (c) the `akp05e` (USB `0x0300:0x3004`) row DOES
-NOT show it, post-DEVICES-05 demotion AND (d) the mouse row DOES NOT show it.
+PASS iff (a) the generic AKP05-family AND AKP153-family Stream Dock rows DO
+show the "Time synchronization" section (`hasClock=true` per Plan 05-02 /
+A-03) AND (b) the `ak980pro` row DOES show it (`hasClock=true` per ARCH-05.1
+real 4-packet `0x28` RTC) AND (c) the `akp05e` (USB `0x0300:0x3004`) row
+DOES NOT show it (`hasClock=false` per DEVICES-11 / ARCH-05, landed in
+commit `07c5902`) AND (d) the non-TFT mouse row DOES NOT show it
+(`hasClock=tft` evaluates false).
 
-If DEVICES-05 or DEVICES-06 has NOT landed at the moment of testing, mark the
-corresponding sub-check BLOCKED (NOT FAIL) and record the dependency. The
-remaining sub-checks still apply.
+If the live `register.cpp` `hasClock` value disagrees with the reference
+table at top of this checklist, that is a regression — record FAIL with the
+delta.
 
 `PASS / FAIL / BLOCKED - notes: ____________________________________________`
 
@@ -400,5 +407,5 @@ Operator name / session: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\
 If any verify is FAIL, file an issue tagged `regression` with the failing
 verify ID, the observed behaviour, and the expected wording from this
 checklist. If any verify is BLOCKED, record the blocking dependency
-(missing demotion phase, missing device, missing build dep) in the notes
-column so the next operator session can pick it up.
+(missing device, missing build dep) in the notes column so the next
+operator session can pick it up.

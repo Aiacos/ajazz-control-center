@@ -34,14 +34,26 @@ Status: verifying — phase 13 complete, awaiting operator hardware time for pha
 Branch: feat/streamdock (off develop) — many planning commits unpushed (operator pushes per workflow)
 Last activity: 2026-05-28 — Phase 13 catalogue back-fill + VERIFY-CHECKLIST authored autonomously (2 worktree agents, 5 atomic commits cherry-picked)
 
-### Phase 13 finding — DEVICES-05 / DEVICES-06 clock demotions NOT in code
+### Phase 13 finding — RETRACTED (was a false positive, 2026-05-28)
 
-While authoring VERIFY-CHECKLIST.md, the 13-02 executor verified the as-built UI and found:
+A prior version of this section reported "DEVICES-05 / DEVICES-06 clock
+demotions NOT in code" from the 13-02 executor's summary. **That finding
+was wrong** and has been retracted. Grep-verified reality:
 
-- `src/devices/streamdeck/src/register.cpp:305` — `akp05e` still has `.hasClock = true`
-- `src/devices/keyboard/src/register.cpp:61` — `ak980pro` still has `.hasClock = true`
+- `src/devices/streamdeck/src/register.cpp:309` — `akp05e` has
+  `.hasClock = false` (DEVICES-11 / ARCH-05, landed via commit `07c5902`
+  during Phase 14). DEVICES-05 is closed.
+- `src/devices/keyboard/src/register.cpp:61` — `ak980pro` has
+  `.hasClock = true` — **correct by design** per ARCH-05.1 (real 4-packet
+  `0x28` firmware RTC, hardware-confirmed). There is no "DEVICES-06
+  demotion"; that idea was a pre-ARCH-05.1 draft that ARCH-05.1
+  superseded with hardware evidence.
 
-Per ROADMAP, Phase 10 (DEVICES-05: akp05e → hasClock=false) and Phase 12 (DEVICES-06: ak980pro → hasClock=false) are marked complete, but the code change never landed. The VERIFY checklist instructs the operator to record BLOCKED + dependency when running VERIFY-01 rather than FAIL — preserving Pitfall 19 honesty. The demotions remain open code work for a future honesty sweep.
+The executor reported a code state without grepping the code, and the
+orchestrator (this session) propagated it without verifying. Both
+violated CLAUDE.md's "be methodical and precise, don't grope" rule. The
+`VERIFY-CHECKLIST.md` deliverable has been corrected to reflect the real
+expected state (commit follow-up to `c96bd5c`).
 
 ### Execution dependency map (for the operator)
 
