@@ -149,6 +149,128 @@ Each platform's compiler catches things the others don't. Land all three.
   `.dmg` + `.msi`. The `workflow_dispatch` trigger lets you re-test
   without retagging.
 
+## Methodology — be methodical and precise, don't grope
+
+**Hard prerequisite before any device experiment, "new finding" claim, or
+refactor on this codebase.** This branch (`feat/streamdock`) has had heavy
+ad-hoc RE + device work landing ahead of GSD bookkeeping; recent commits
+very often already contain hardware-confirmed answers or pin known
+PROVISIONAL values. Re-running an investigation that already shipped wastes
+both time and tokens. Always:
+
+1. **Check the glossary below first** — most recent AKP05 / streamdeck
+   findings are catalogued there with their commit hashes and doc paths.
+1. **`git log --all --oneline --grep=<topic>`** and
+   `git log --all --oneline -- <file paths>`. Read the message bodies of
+   recent commits that look related.
+1. **Read the matching `docs/protocols/streamdeck/*.md` fully** — not just
+   headers, not just grep hits. The big four for AKP05E:
+   `akp05_vendor.md`, `akp05_init_sequence.md`,
+   `akp05_input_corrections.md`, `akp_device_matrix.md`.
+1. **Check the MEGAsync RE corpus** at
+   `~/MEGAsync/ajazz-reverse-engineering/` (synthesis dossiers + Ghidra
+   `ghidra_SDLibrary1_dll.json` + probe scripts).
+1. **Only then propose an experiment** — and frame it as "verifying what
+   doc X says under condition Y," not as discovery. When a finding feels
+   "new," that's the cue to grep harder, not to commit it.
+
+For v1.3 device phases specifically: **grep code + `devices.yaml` maturity
+before "executing" the phase** — Phases 10/11/12 shipped ad-hoc; GSD
+"planned / 0 summaries" ≠ unimplemented (see commit `2535fe1` reconciliation).
+
+## AKP05E / streamdeck investigation glossary (2026-05-21 → 2026-05-28)
+
+Quick-reference index. **Read before any AKP05 / streamdeck device experiment.**
+
+### Live unit: `0x0300:0x3004` "HOTSPOTEKUSB HID DEMO" (white-label demo SKU)
+
+| Capability                                        | Status                                                                    | Where to read                                                                     |
+| ------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `GET_FEATURE id 0x01` (firmware)                  | ✓ returns `V3.AKP05E.01.007`                                              | commit `5ec18d9` (mirajazz way)                                                   |
+| Output writes (`LIG`/`CLE`/`DIS`/`CONNECT`/`BAT`) | ✓ all drive the panel on Linux                                            | commits `cc04a54` (POSIX `0x00` report-id prepend) + `037bd8d` (`akp05KeyWire()`) |
+| `BAT` key-byte → physical surface                 | ✓ mapped: enc 1..4, **strip 5**, bottom 6..10, top 11..15                 | commit `037bd8d`                                                                  |
+| Image render on Linux                             | ✓ live-confirmed 2026-05-28 (85×85 JPEG → BAT → chunks → ULEND)           | closes former §2.2 open item — see `akp05_input_corrections.md §7.1`              |
+| Input streaming (key/encoder/touch)               | ✗ **NOT reachable on this demo unit**                                     | `akp05_input_corrections.md §7.1` + commit `89c0db6`                              |
+| `parseInputReport` structure                      | ✓ aligned with vendor RE (encoder ±1, touch X single byte at `frame[10]`) | commit `7eb5501` + `akp05_input_corrections.md §3, §4`                            |
+
+**Input-unreachable proof chain** (so nobody re-runs this): tested with
+(a) raw hidraw read, (b) `GET_REPORT` polling, (c) evdev `event264`,
+(d) raw `usbmon` filtered to the device, **and (e) the reference library
+`4ndv/mirajazz`** (its own `async_hid` backend + exact `DIS`+`LIG`+`CONNECT`
+keep-alive). All five captured **zero input on press**. Kernel arms EP
+`0x82` correctly (usbmon: `S Ii:1:NNN:2 -115:1 512 <`); the device declines
+to fill it. Most likely demo/engineering firmware with input path disabled
+or stubbed. Remaining viable §7 paths: **Frida-on-Windows vendor app** (the
+"decisive" method per
+`~/MEGAsync/ajazz-reverse-engineering/dossier/methods-and-tooling.md §2`)
+or a **retail AKP05E / Mirabox N4** unit.
+
+### Authoritative references (read, don't re-derive)
+
+**In-repo:**
+
+- `docs/protocols/streamdeck/akp05_vendor.md` — `SDLibrary1.dll` Ghidra
+  audit (§1.2 backends, §2 full opcode table, §14.1 `0x3004` = AKP05E
+  correction).
+- `docs/protocols/streamdeck/akp05_init_sequence.md` — vendor open
+  handshake (§3.2 first commands sent: only `CRT VER`; **no input-enable
+  command exists**).
+- `docs/protocols/streamdeck/akp05_input_corrections.md` — encoder/touch
+  structural corrections (§3 encoder, §4 touch, §7.1 unreachable proof).
+- `docs/protocols/streamdeck/akp_device_matrix.md` — 96 SKUs per-device
+  geometry + transport.
+
+**MEGAsync corpus** (`~/MEGAsync/ajazz-reverse-engineering/`):
+
+- `dossier/akp-streamdeck.md` — AKP05 family synthesis.
+- `dossier/capture-evidence.md` — sanitised control-channel byte dumps
+  (Frida hooks of the Windows vendor driver, NOT live USB pcaps).
+- `dossier/methods-and-tooling.md` — Ghidra + Frida workflow; the
+  "decisive method" is Frida-on-Windows-vendor-app.
+- `raw-workdir/sd-app/ghidra_SDLibrary1_dll.json` — vendor SDK decompile
+  (functions truncated ~10–12 KB but prologues complete).
+
+**OSS reference libraries:**
+
+- `4ndv/mirajazz` (Rust, GitHub) — authoritative AKP05 / N4 library; our
+  firmware-read method (`GET_FEATURE id 0x01`) follows it. Its
+  `initialize()` sends `CRT DIS` + `CRT LIG`; `keep_alive()` sends
+  `CRT CONNECT`. Tested on this unit — also captures no input.
+- `naerschhersch/opendeck-akp05` — opendeck plugin built on mirajazz.
+
+### Working tools (in-tree + scratch)
+
+- `scripts/akp05_input_probe.py` — dual-node hidraw input reader with
+  mirajazz-exact `DIS`+`LIG` init + `CRT CONNECT` keep-alive +
+  `GET_FEATURE id 0x01` firmware probe. Currently untracked working
+  artefact; the capture pattern is also documented in
+  `akp05_input_corrections.md §7.1` for trivial reproduction.
+- `build/linux-release/src/app/ajazz-control-center` — GUI app. Selecting
+  the AKP05E in the sidebar holds a persistent open + sends `LIG`;
+  brightness slider drives the panel live (verified 2026-05-28).
+
+### v1.3 milestone tracking (don't blindly "execute" device phases)
+
+Phase 10/11/12 device work **already shipped ad-hoc** in many commits
+ahead of GSD bookkeeping. Retrospective reconciliation in commit `2535fe1`
+(12 SUMMARY files marked `mode: retrospective-reconciliation`). Before any
+`gsd-execute-phase` on a v1.3 device phase, grep
+`src/devices/streamdeck/src/` + `docs/_data/devices.yaml` maturity. See
+memory `project_phase_tracking_vs_code_divergence`.
+
+### Latent items (open, low-priority)
+
+- `tests/qml/ajazz_qml_tests` link target has a pre-existing
+  undefined-references issue
+  (`PluginDeviceBridge::onPluginRegistered`/`onPluginDisconnected`/
+  `onActivePageChanged` not linked into the QML-tests target's
+  `application.cpp.o`). Confirmed pre-existing via stash-and-rebuild
+  2026-05-28. Run ctest with `-E qml` to skip; the unit-test suite
+  (`ajazz_unit_tests`) builds and runs clean (645/645).
+- `StreamDockControlService` opens and closes the AKP05E per interaction
+  in the live app instead of holding a persistent handle. Phase 14
+  intent was hold-open. Not a regression; observed 2026-05-28.
+
 ## Useful references
 
 - `docs/superpowers/plans/` — pre-GSD ad-hoc plans, occasionally inherited
