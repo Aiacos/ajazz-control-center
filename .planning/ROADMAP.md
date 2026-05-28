@@ -490,8 +490,8 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 26-02-PLAN.md — REQ-26-C/D DeviceDescriptor extension (keyRows, touchZoneCount, mainScreenWidth/Height) + populate ~15 LCD-key descriptor rows (AKP815 stays sentinel) + Catch2 geometry regression test (wave 2)
-- [ ] 26-03-PLAN.md — D-11/D-12 Profile::touchZones map + schema v2 auto-migrate (hand-rolled JSON, COD-031 preserved) + ProfileController::commitTouchZoneBinding Q_INVOKABLE (wave 2)
+- [x] 26-02-PLAN.md — REQ-26-C/D DeviceDescriptor extension (keyRows, touchZoneCount, mainScreenWidth/Height) + populate ~15 LCD-key descriptor rows (AKP815 stays sentinel) + Catch2 geometry regression test (wave 2)
+- [x] 26-03-PLAN.md — D-11/D-12 Profile::touchZones map + schema v2 auto-migrate (hand-rolled JSON, COD-031 preserved) + ProfileController::commitTouchZoneBinding Q_INVOKABLE (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -540,4 +540,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 1/7            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 3/7            | In Progress      |            |
