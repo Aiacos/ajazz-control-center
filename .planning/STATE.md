@@ -35,6 +35,12 @@ Status: verifying — Phase 25 Plan 1 complete; Plan 2 awaits operator hardware 
 Branch: feat/streamdock (off develop)
 Last activity: 2026-05-28
 
+### Open follow-up items (operator UAT 2026-05-28)
+
+These observations came out of the VERIFY-CHECKLIST.md (v1.1 back-fill) operator walkthrough. They are NOT regressions of the verifies (all 4 closed PASS for exercised sub-criteria) and they are NOT in any v1.3 phase scope; they are noted here for triage into a future minor sweep.
+
+- **TimeSyncService: retry on HID recovery after rapid replug.** During VERIFY-02 replug, the mouse (`ajazz_24g_8k`) arrival fired the 300ms-debounced auto-sync timer at +311ms when hidraw was still mid-re-enumeration. The orchestrator logged `[time-sync] auto-sync skipped for ajazz_24g_8k: HID write failed when pushing time to 'ajazz_24g_8k'` and did NOT re-attempt setTime. Battery polls 15s later succeed (HID is now open), but the OLED clock remained unsynchronized for the entire session. Honesty contract intact (INFO skip with verbatim reason; no false success); the gap is UX (the user's OLED shows stale time until the next process arrival event or manual click). Possible fix: on a subsequent successful HID open of the same VID:PID within N minutes of an auto-sync HID-failure skip, re-fire the setTime once. Bound the retry to avoid spamming devices that genuinely return NotImplemented (those skip with a different reason string). Witnessed live 2026-05-28 / Phase 13 operator UAT.
+
 ### Phase 13 finding — RETRACTED (was a false positive, 2026-05-28)
 
 A prior version of this section reported "DEVICES-05 / DEVICES-06 clock

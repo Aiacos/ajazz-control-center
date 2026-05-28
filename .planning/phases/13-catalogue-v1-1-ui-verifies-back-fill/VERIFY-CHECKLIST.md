@@ -170,7 +170,7 @@ If the live `register.cpp` `hasClock` value disagrees with the reference
 table at top of this checklist, that is a regression — record FAIL with the
 delta.
 
-`PASS / FAIL / BLOCKED - notes: ____________________________________________`
+`PASS / FAIL / BLOCKED - notes:` **PASS** (3/4 sub-checks exercised; (a) BLOCKED — lab has no AKP153 / generic AKP05-family device. (b) ak980pro shows section ✓. (c) akp05e (0x3004) hides section ✓ — DEVICES-11/ARCH-05 confirmed live. (d) REFINED — mouse (AJ159 APEX) hasClock=true via TFT, shows section ✓; "non-TFT mouse" assumption in checklist did not apply to this lab unit. Operator session 2026-05-28.)
 
 ______________________________________________________________________
 
@@ -232,7 +232,7 @@ in the top-right on the auto-sync arrival (auto path emits only
 `syncSucceeded`, not `manualSyncSucceeded`; the toast is gated on the latter,
 see VERIFY-03 honesty contract).
 
-`PASS / FAIL / BLOCKED - notes: ____________________________________________`
+`PASS / FAIL / BLOCKED - notes:` **PASS**. (a) Toggle persists across SIGTERM quit + relaunch — `[Time] AutoSync=true` mirrored to `~/.config/Aiacos/AJAZZ Control Center.conf` and read back on launch. (b) Replug of full USB topology produced 3 simultaneous `time-sync` log lines (ajazz_24g_8k at +311ms, ak980pro at +582ms with success via 4-pkt 0x28, akp05e at +359ms with NotImplemented skip). Range 311-582ms — the "~300ms" target was the debounce window; HID re-init adds 50-360ms latency. (c) NO green "Time synced" pill on auto-arrival — operator-confirmed live. **Documented finding (non-regression):** mouse auto-sync skipped at +311ms with reason `HID write failed when pushing time to 'ajazz_24g_8k'` — race condition where hidraw is still re-enumerating when the 300ms timer fires. The auto-sync orchestrator does NOT retry; battery polls 15s later succeed but setTime is not re-attempted. Honesty contract intact (INFO skip with verbatim reason, no false success). See STATE.md "Open follow-up items" for the retry-on-HID-recovery TODO.
 
 ______________________________________________________________________
 
@@ -317,7 +317,7 @@ IMMEDIATE FAIL. This is the Pitfall 19 honesty contract: a `NotImplemented`
 verdict must never present as success. No exceptions, no "the toast was
 fast" excuses.
 
-`PASS / FAIL / BLOCKED - notes: ____________________________________________`
+`PASS / FAIL / BLOCKED - notes:` **PASS** (auto-half + side-test on success) + BLOCKED (manual-click + NotImplemented intersection has no clickable target on connected hw). **Auto-half PASS** — witnessed live during VERIFY-02 replug: `[time-sync] auto-sync skipped for akp05e: Time-sync wire format not yet implemented for this device` fired at +359ms after arrival, AND no green pill appeared (operator-confirmed). **Side-test PASS** — manual click of "Sync time now" on AK980 PRO produced (i) `[keyboard.ak980] setTime → device clock set to 2026-05-28 12:33:37 (local)`, (ii) inline `✓ Synced` next to the button, (iii) green `Time synced: ak980pro` pill in top-right (operator-confirmed visually; transient, screenshot timing missed it but user saw it). **Manual-half BLOCKED** — no device on connected lab has the `hasClock=true + setTime=NotImplemented` intersection: AKP05E is hasClock=false (no button to click), AK980 PRO + mouse have setTime IMPLEMENTED. Pitfall 19 double-barrier confirmed: pill fires on `manualSyncSucceeded` (live witnessed), never on auto-arrival or NotImplemented (live witnessed). Operator session 2026-05-28.
 
 ______________________________________________________________________
 
@@ -386,7 +386,7 @@ tiers beyond the connected set cannot be exercised because of the connected-
 only sidebar filter, record those tiers BLOCKED with the tier names listed
 rather than FAIL.
 
-`PASS / FAIL / BLOCKED - notes: ____________________________________________`
+`PASS / FAIL / BLOCKED - notes:` **PASS** (2/5 tiers exercised) + BLOCKED (3/5 tiers — Verified, Probed, Scaffolded). (a) Chip text matches devices.yaml verbatim: akp05e=Partial ✓, ak980pro=Functional ✓, ajazz_24g_8k=Functional ✓. (b) Description label verbatim per tier mapping: Partial="Some features work; others in progress." ✓; Functional="All advertised features work." ✓ (observed on both ak980pro and mouse). (c) Per-tier color rendering correct: Partial chip is amber/yellow (`Theme.warningAccent` `#f59e0b`), Functional chips are brand red/coral (`Theme.accent`) — distinct colors per tier as designed; both Functional chips render IDENTICAL color (one-singleton confirms). Coverage of Verified, Probed, Scaffolded tiers BLOCKED: sidebar is connected-only by v1.1 design intent; no offline-catalogue view exists. Operator session 2026-05-28.
 
 ______________________________________________________________________
 
@@ -395,14 +395,14 @@ ______________________________________________________________________
 Fill this table after running the four verifies. Use ASCII PASS / FAIL /
 BLOCKED only.
 
-| Verify    | Outcome | Operator notes | Date (UTC) |
-| --------- | ------- | -------------- | ---------- |
-| VERIFY-01 |         |                |            |
-| VERIFY-02 |         |                |            |
-| VERIFY-03 |         |                |            |
-| VERIFY-04 |         |                |            |
+| Verify    | Outcome      | Operator notes                                                                                                                                                                               | Date (UTC) |
+| --------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| VERIFY-01 | PASS+BLOCKED | 3/4 connected devices pass (akp05e hides, ak980pro shows, mouse shows because TFT); BLOCKED on AKP153 + generic AKP05 (lab has no such device).                                              | 2026-05-28 |
+| VERIFY-02 | PASS         | Toggle survives quit+relaunch; arrival firing produced 3 time-sync log lines within 311-582ms; no green pill on auto-path. Documented finding: mouse retry-on-HID-recovery follow-up.        | 2026-05-28 |
+| VERIFY-03 | PASS+BLOCKED | AUTO-half on NotImplemented (AKP05E) witnessed silent during VERIFY-02; side-test on success (AK980 PRO) green pill fired correctly; MANUAL+NotImplemented intersection BLOCKED (no target). | 2026-05-28 |
+| VERIFY-04 | PASS+BLOCKED | 2/5 tiers exercised (Partial + Functional); chip text + description + per-tier color all match expected; Verified+Probed+Scaffolded BLOCKED (connected-only sidebar by design).              | 2026-05-28 |
 
-Operator name / session: \_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_\_
+Operator name / session: Lorenzo Argentieri / 2026-05-28 UAT walkthrough (orchestrator-assisted, sub-agent Claude Opus 4.7)
 
 If any verify is FAIL, file an issue tagged `regression` with the failing
 verify ID, the observed behaviour, and the expected wording from this
