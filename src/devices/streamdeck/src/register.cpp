@@ -79,6 +79,7 @@ akp153_descriptor(std::uint16_t vid, std::uint16_t pid, char const* model, char 
         .keyCount = akp153::KeyCount,
         .gridColumns = 5,
         .encoderCount = 0,
+        .keyRows = 3, // 3×5 landscape grid (REQ-26-C)
     };
 }
 
@@ -96,6 +97,7 @@ akp03_descriptor(std::uint16_t vid, std::uint16_t pid, char const* model, char c
         .keyCount = akp03::DisplayKeyCount,
         .gridColumns = 3,
         .encoderCount = akp03::EncoderCount,
+        .keyRows = 2, // 2×3 grid (REQ-26-C)
     };
 }
 
@@ -268,7 +270,11 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
-            .hasClock = true, // A-03 / D-03: AKP05 backend inherits IClockCapable (Plan 05-02).
+            .hasClock = true,    // A-03 / D-03: AKP05 backend inherits IClockCapable (Plan 05-02).
+            .keyRows = 2,        // 2x5 grid; akp05::KeyRows = 2 (REQ-26-C)
+            .touchZoneCount = 4, // 4 zones aligned to encoders; akp05::TouchZoneCount
+            .mainScreenWidthPx = 0, // strip is 4 discrete zones, not one wide rect
+            .mainScreenHeightPx = 0,
         },
         &makeAkp05);
 
@@ -285,7 +291,11 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
-            .hasClock = true, // A-03 / D-03: shares Akp05Device backend → same IClockCapable.
+            .hasClock = true,    // A-03 / D-03: shares Akp05Device backend -> same IClockCapable.
+            .keyRows = 2,        // 2x5 grid; akp05::KeyRows = 2 (REQ-26-C)
+            .touchZoneCount = 4, // 4 zones aligned to encoders; akp05::TouchZoneCount
+            .mainScreenWidthPx = 0, // strip is 4 discrete zones, not one wide rect
+            .mainScreenHeightPx = 0,
         },
         &makeAkp05);
 
@@ -306,7 +316,11 @@ void registerAll(core::DeviceRegistry& registry) {
             .gridColumns = akp05::KeyCols,
             .encoderCount = akp05::EncoderCount,
             .hasTouchStrip = true,
-            .hasClock = false, // DEVICES-11 / ARCH-05: Stream Dock family has no firmware RTC.
+            .hasClock = false,      // DEVICES-11 / ARCH-05: Stream Dock family has no firmware RTC.
+            .keyRows = 2,           // 2x5 grid; akp05::KeyRows = 2 (REQ-26-C)
+            .touchZoneCount = 4,    // 4 zones aligned to encoders; akp05::TouchZoneCount
+            .mainScreenWidthPx = 0, // strip is 4 discrete zones, not one wide rect
+            .mainScreenHeightPx = 0,
         },
         &makeAkp05);
 

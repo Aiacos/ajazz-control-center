@@ -94,6 +94,13 @@ add_executable(
     # affordance cannot silently regress. Also guards against an over-broad
     # flip by asserting mirabox_n4 still has hasClock==true.
     test_register_akp05e_clock.cpp
+    # Phase 26 Plan 26-02 (REQ-26-D): geometry-field regression test. Iterates
+    # the StreamDeck registry after registerAll() and asserts that every non-deferred
+    # LCD-key descriptor has keyRows > 0. AKP815 is in the kDeferredLcdSkus allow-list
+    # (D-13 sentinel; 800x480 wide strip deferred). Also asserts the aux-surface
+    # invariant: any descriptor with hasTouchStrip or encoderCount > 0 must declare
+    # touchZoneCount > 0 OR (mainScreenWidthPx > 0 AND mainScreenHeightPx > 0).
+    test_streamdeck_register_geometry.cpp
     # Phase 14 Plan 14-02 (DISPLAY-06/07/08, DOCK-01/02): MockTransport-based
     # wire assertions for StreamDockControlService. Proves the panel lights at
     # open (LIG, DISPLAY-06), key images arrive via BAT->chunks->ULEND without
