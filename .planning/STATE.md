@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: verifying
-stopped_at: Completed Phase 13 (catalogue back-fill + VERIFY-CHECKLIST); halted before Phase 25 hardware UAT per --only 13
-last_updated: '2026-05-28T08:31:34.177Z'
+stopped_at: Completed 24-family-coverage-akp03-153-815/24-02-PLAN.md (DEVICES-10 final)
+last_updated: '2026-05-28T09:04:12.284Z'
 last_activity: 2026-05-28
 progress:
   total_phases: 17
   completed_phases: 16
   total_plans: 51
-  completed_plans: 49
+  completed_plans: 50
   percent: 94
 ---
 
@@ -21,18 +21,19 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 13 complete — Phase 25 remaining (hardware-gated; deferred to operator)
+**Current focus:** Phase 25 Plan 01 complete (25-UAT.md authored) — Plan 02 awaits operator hardware UAT.
 
 ## Current Position
 
-Phase: 13 (catalogue-v1-1-ui-verifies-back-fill) — COMPLETE (2026-05-28)
-Plans: 13-01 (DEVICES-08/09 catalogue back-fill) + 13-02 (VERIFY-CHECKLIST authoring) — both 2/2 done
-Outstanding milestone work: Phase 25 (Hardware Verification + Real Plugin) — HARDWARE-GATED, deferred. Input streaming is unreachable on the 0x3004 demo unit per CLAUDE.md AKP05E glossary; VERIFY-05/06 need a retail SKU or Frida-on-Windows-vendor-app path.
+Phase: 25 (hardware-verification-real-plugin) — IN PROGRESS (1/2 plans)
+Plans:
+25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
+25-02 (operator-gated) — PENDING: operator walks 25-UAT.md against a unit that supports input streaming. The lab demo unit `0x0300:0x3004` cannot satisfy Tests 2-5 + 15-16 (input unreachable per CLAUDE.md AKP05E glossary §7.1). Convert BLOCKED → PASS needs a retail AKP05E / Mirabox N4 or the Frida-on-Windows-vendor-app capture path.
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) + 13(2) = 33 plans across 13 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget).
-Status: verifying — phase 13 complete, awaiting operator hardware time for phase 25
-Branch: feat/streamdock (off develop) — many planning commits unpushed (operator pushes per workflow)
-Last activity: 2026-05-28 — Phase 13 catalogue back-fill + VERIFY-CHECKLIST authored autonomously (2 worktree agents, 5 atomic commits cherry-picked)
+Status: verifying — Phase 25 Plan 1 complete; Plan 2 awaits operator hardware time
+Branch: feat/streamdock (off develop)
+Last activity: 2026-05-28
 
 ### Phase 13 finding — RETRACTED (was a false positive, 2026-05-28)
 
@@ -43,6 +44,7 @@ was wrong** and has been retracted. Grep-verified reality:
 - `src/devices/streamdeck/src/register.cpp:309` — `akp05e` has
   `.hasClock = false` (DEVICES-11 / ARCH-05, landed via commit `07c5902`
   during Phase 14). DEVICES-05 is closed.
+
 - `src/devices/keyboard/src/register.cpp:61` — `ak980pro` has
   `.hasClock = true` — **correct by design** per ARCH-05.1 (real 4-packet
   `0x28` firmware RTC, hardware-confirmed). There is no "DEVICES-06

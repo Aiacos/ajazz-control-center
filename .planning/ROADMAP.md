@@ -462,7 +462,7 @@ Plans:
 
 Plans:
 
-- [ ] 25-01-PLAN.md — Author the 25-UAT.md operator runbook + correct akp05e hasClock=false (autonomous)
+- [x] 25-01-PLAN.md — Author the 25-UAT.md operator runbook + correct akp05e hasClock=false (autonomous)
 - [ ] 25-02-PLAN.md — Operator walks VERIFY-05/06 on the AKP05E + reconciles provisional §5 (hardware wins; operator-gated)
 
 ## Progress
@@ -498,4 +498,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 22. Plugin Store / Local Install            | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 25. Hardware Verification + Real Plugin(HW) | v1.3      | 0/2            | Not started      | —          |
+| 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
