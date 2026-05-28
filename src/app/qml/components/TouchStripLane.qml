@@ -1,0 +1,241 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// TouchStripLane.qml -- horizontal row of touch-zone cells for DeviceView.
+//
+// Each zone cell is a discrete drop target (not one wide cell). The lane
+// renders `touchZoneCount` cells side-by-side with Theme.spacingXs gaps.
+//
+// LED-strip hint: top border is thickened to 4px Theme.accent to suggest
+// the physical LED bar above the touch strip (OpenDeck Key.svelte pattern).
+//
+// Drag-drop (Phase 26 / REQ-26-B):
+//   * Each zone cell is a drag SOURCE when occupied (iconSource non-empty).
+//   * Each zone cell is ALWAYS a drop TARGET accepting "application/x-ajazz-action"
+//     (library -> zone) and "application/x-ajazz-binding" (same-controller swap).
+//
+// Accessibility: outer Item has Accessible.Group; per-cell Accessible.Button.
+pragma ComponentBehavior: Bound
+import QtQuick
+import QtQuick.Controls
+import AjazzControlCenter
+
+Item {
+    id: root
+
+    required property int touchZoneCount
+    // Arrays of url and string, one entry per zone (index 0..touchZoneCount-1).
+    // Parent passes empty arrays when bindings are not yet loaded; cells fall
+    // back to the empty-state placeholder glyph.
+    required property var zoneIconSources
+    required property var zoneLabels
+
+    signal zoneSwapRequested(int srcIndex, int dstIndex)
+
+    // Implicit size: fits the row of cells.
+    implicitWidth:  touchZoneCount * 120 + Math.max(0, touchZoneCount - 1) * Theme.spacingXs
+    implicitHeight: Math.max(Theme.minTouchTarget, 48)
+
+    Row {
+        id: row
+        anchors.fill: parent
+        spacing: Theme.spacingXs
+
+        Repeater {
+            model: root.touchZoneCount
+            delegate: TouchZoneCell {
+                required property int index
+
+                zoneIndex:   index
+                iconSource:  index < root.zoneIconSources.length
+                             ? root.zoneIconSources[index] : ""
+                zoneLabel:   index < root.zoneLabels.length
+                             ? root.zoneLabels[index]      : ""
+                height:      row.height
+
+                onZoneSwapRequested: function(src, dst) {
+                    root.zoneSwapRequested(src, dst);
+                }
+            }
+        }
+    }
+
+    Accessible.role: Accessible.Group
+    Accessible.name: qsTr("Touch strip")
+
+    // -------------------------------------------------------------------------
+    // TouchZoneCell -- inline private component (no separate file needed; it is
+    // only ever instantiated by TouchStripLane).
+    // -------------------------------------------------------------------------
+    component TouchZoneCell: Item {
+        id: zoneCell
+
+        property int    zoneIndex:  0
+        property url    iconSource: ""
+        property string zoneLabel:  ""
+
+        signal zoneSwapRequested(int srcIndex, int dstIndex)
+
+        width:  Math.max(Theme.minTouchTarget, 120)
+        height: Math.max(Theme.minTouchTarget, 48)
+
+        // ----- Drag-over scale animation (D-10) ---------------------------
+        transform: Scale {
+            id: zoneCellScale
+            origin.x: zoneCell.width / 2
+            origin.y: zoneCell.height / 2
+            xScale: 1.0
+            yScale: 1.0
+            Behavior on xScale {
+                NumberAnimation { duration: 100; easing.type: Easing.OutQuad }
+            }
+            Behavior on yScale {
+                NumberAnimation { duration: 100; easing.type: Easing.OutQuad }
+            }
+        }
+
+        // Background rectangle with LED-strip hint (thickened top border).
+        Rectangle {
+            id: bg
+            anchors.fill: parent
+            radius: Theme.radiusSm
+            color: zoneDelegate.hovered ? Theme.tileHover : Theme.tile
+            border.width: 1
+            border.color: zoneDelegate.activeFocus || zoneDelegate.selected
+                          ? Theme.accent : Theme.borderSubtle
+        }
+
+        // Thickened top accent border for LED-strip visual hint.
+        Rectangle {
+            anchors.top: parent.top
+            anchors.left: parent.left
+            anchors.right: parent.right
+            height: 4
+            color: Theme.accent
+        }
+
+        // Icon layer.
+        Image {
+            anchors.centerIn: parent
+            width: parent.width - Theme.spacingMd * 2
+            height: parent.height - Theme.spacingMd * 2 - 4 // subtract LED strip
+            source: zoneCell.iconSource
+            fillMode: Image.PreserveAspectFit
+            smooth: true
+            asynchronous: true
+            visible: zoneCell.iconSource.toString() !== ""
+        }
+
+        // Default "view_column" glyph when empty.
+        Text {
+            anchors.centerIn: parent
+            font.family: "Material Symbols Outlined"
+            font.pixelSize: 20
+            text: "view_column"
+            color: Qt.rgba(Theme.fgPrimary.r, Theme.fgPrimary.g, Theme.fgPrimary.b, 0.5)
+            visible: zoneCell.iconSource.toString() === ""
+        }
+
+        // Label overlay.
+        Text {
+            anchors.bottom: parent.bottom
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottomMargin: Theme.spacingXs
+            text: zoneCell.zoneLabel
+            color: Theme.fgPrimary
+            font.pixelSize: Theme.typeLabelMedium.pixelSize
+            font.weight: Theme.typeLabelMedium.weight
+            horizontalAlignment: Text.AlignHCenter
+            visible: zoneCell.zoneLabel !== ""
+        }
+
+        // ItemDelegate for focus + pressed states.
+        ItemDelegate {
+            id: zoneDelegate
+            anchors.fill: parent
+            background: Item {}   // visual is handled by bg above
+            property bool selected: false
+        }
+
+        // ----- Drag source (when occupied) ---------------------------------
+        DragHandler {
+            id: zoneDragHandler
+            target: null
+            acceptedButtons: Qt.LeftButton
+            dragThreshold: 8
+            enabled: zoneCell.iconSource.toString() !== ""
+        }
+
+        Drag.active: zoneDragHandler.active
+        Drag.dragType: Drag.Automatic
+        Drag.mimeData: ({
+            "application/x-ajazz-binding": JSON.stringify({
+                controller: "TouchZone",
+                position: zoneCell.zoneIndex
+            })
+        })
+
+        MouseArea {
+            anchors.fill: parent
+            acceptedButtons: Qt.NoButton
+            hoverEnabled: true
+            cursorShape: zoneCell.iconSource.toString() !== ""
+                ? (zoneDragHandler.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
+                : Qt.ArrowCursor
+        }
+
+        // ----- Drop target (always) ----------------------------------------
+        DropArea {
+            anchors.fill: parent
+            keys: ["application/x-ajazz-action", "application/x-ajazz-binding"]
+
+            onEntered: function(drag) {
+                zoneCellScale.xScale = 1.05;
+                zoneCellScale.yScale = 1.05;
+                drag.accepted = true;
+            }
+
+            onExited: function() {
+                zoneCellScale.xScale = 1.0;
+                zoneCellScale.yScale = 1.0;
+            }
+
+            onDropped: function(drop) {
+                zoneCellScale.xScale = 1.0;
+                zoneCellScale.yScale = 1.0;
+
+                if (drop.hasFormat("application/x-ajazz-action")) {
+                    var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
+                    ProfileController.commitTouchZoneBinding(zoneCell.zoneIndex, "",
+                                                            ap.label, ap.actionKind, "");
+                    drop.acceptProposedAction();
+                    return;
+                }
+
+                if (drop.hasFormat("application/x-ajazz-binding")) {
+                    var bp = JSON.parse(drop.getDataAsString("application/x-ajazz-binding"));
+                    if (bp.controller !== "TouchZone") {
+                        drop.accepted = false;
+                        return;
+                    }
+                    if (bp.position !== zoneCell.zoneIndex) {
+                        zoneCell.zoneSwapRequested(bp.position, zoneCell.zoneIndex);
+                    }
+                    drop.acceptProposedAction();
+                    return;
+                }
+
+                drop.accepted = false;
+            }
+        }
+
+        Accessible.role: Accessible.Button
+        Accessible.name: zoneCell.iconSource.toString() !== ""
+            ? (zoneCell.zoneLabel !== ""
+               ? qsTr("Touch zone %1: %2").arg(zoneCell.zoneIndex + 1).arg(zoneCell.zoneLabel)
+               : qsTr("Touch zone %1").arg(zoneCell.zoneIndex + 1))
+            : qsTr("Touch zone %1 -- empty").arg(zoneCell.zoneIndex + 1)
+        Accessible.description: zoneCell.iconSource.toString() !== ""
+            ? qsTr("Press Space to select, Delete to clear")
+            : qsTr("Drop a touch zone action here")
+    }
+}
