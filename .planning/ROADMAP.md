@@ -499,8 +499,8 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 26-05-PLAN.md — REQ-26-B offscreen QML tests (geometry 3 SKU classes + drag-drop wire to each commit method); resolves tests/qml link issue (wave 4)
-- [ ] 26-06-PLAN.md — D-04/05/06/07 per-SKU layout JSONs (AKP05E first; then AKP05/N4, AKP153 family, AKP03 family, Mirabox N3 variants) + attribution README (fair-use) (wave 4)
+- [x] 26-05-PLAN.md — REQ-26-B offscreen QML tests (geometry 3 SKU classes + drag-drop wire to each commit method); resolves tests/qml link issue (wave 4)
+- [x] 26-06-PLAN.md — D-04/05/06/07 per-SKU layout JSONs (AKP05E first; then AKP05/N4, AKP153 family, AKP03 family, Mirabox N3 variants) + attribution README (fair-use) (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -540,4 +540,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 4/7            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 6/7            | In Progress      |            |
