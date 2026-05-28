@@ -276,6 +276,13 @@ Item {
                                 touchZoneCount: root.touchZoneCount
                                 zoneIconSources: []
                                 zoneLabels: []
+                                // CR-03: handle tap to update Inspector selection.
+                                onZoneTapped: function(idx) {
+                                    root.selectedKeyIndex = -1;
+                                    root.selectedEncoderIndex = -1;
+                                    root.selectedZoneIndex = idx;
+                                    root.zoneSelected(idx);
+                                }
                                 onZoneSwapRequested: function(src, dst) {
                                     // Phase 26 v1: zone swap calls commitTouchZoneBinding
                                     // with empty params on both sides (effectively resets).

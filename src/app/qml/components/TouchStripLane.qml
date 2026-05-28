@@ -30,6 +30,9 @@ Item {
     required property var zoneLabels
 
     signal zoneSwapRequested(int srcIndex, int dstIndex)
+    /// Emitted when the user taps (clicks) a zone cell; carries the 0-based zone index.
+    /// Connected by DeviceView.qml to update selectedZoneIndex and drive the Inspector.
+    signal zoneTapped(int idx)
 
     // Implicit size: fits the row of cells.
     implicitWidth:  touchZoneCount * 120 + Math.max(0, touchZoneCount - 1) * Theme.spacingXs
@@ -55,6 +58,9 @@ Item {
                 onZoneSwapRequested: function(src, dst) {
                     root.zoneSwapRequested(src, dst);
                 }
+                onZoneTapped: function(tappedIdx) {
+                    root.zoneTapped(tappedIdx);
+                }
             }
         }
     }
@@ -74,6 +80,8 @@ Item {
         property string zoneLabel:  ""
 
         signal zoneSwapRequested(int srcIndex, int dstIndex)
+        /// Emitted when the user taps this zone cell; forwarded by TouchStripLane to DeviceView.
+        signal zoneTapped(int idx)
 
         width:  Math.max(Theme.minTouchTarget, 120)
         height: Math.max(Theme.minTouchTarget, 48)
@@ -154,6 +162,9 @@ Item {
             anchors.fill: parent
             background: Item {}   // visual is handled by bg above
             property bool selected: false
+            // CR-03: wire click to emit zoneTapped so DeviceView can update
+            // selectedZoneIndex and drive the Inspector pane with zone-specific data.
+            onClicked: zoneCell.zoneTapped(zoneCell.zoneIndex)
         }
 
         // ----- Drag source (when occupied) ---------------------------------
