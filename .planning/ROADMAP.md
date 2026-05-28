@@ -480,11 +480,17 @@ Plans:
 1. On the live AKP05E demo unit (`0300:3004`, fw `V3.AKP05E.01.007`), after Phase 26 lands the operator re-walks 25-UAT.md Tests 1 + 6 and records PASS; `25-UAT.md` Summary `passed:` ≥ 5 (REQ-26-E). Drag-drop wire from action library tile → key / encoder / touch-strip-zone drop target → `ProfileController.commitKeyBinding` / `commitEncoderBinding` / `commitTouchZoneBinding` works in an offscreen QML test with a mock `ProfileController`.
 1. `ctest --preset linux-release -E qml` ≥ 645 passed, 0 failed (no regressions in the existing suite). AK820/AK980 keyboard and AJ-series mouse SKUs continue routing to their existing specialised panels (`MousePanel`, `RgbPicker`, `SettingsRow`, `FirmwarePanel`) untouched.
 
-**Plans**: TBD plans (planner-decided wave structure; CONTEXT.md suggests 6 waves — GAP-25A one-liner first; descriptor extension + geometry test; profile schema bump + migration; DeviceView + companion components + layout JSON; per-SKU layout JSONs + photo assets; operator UAT re-walk). · **Phase notes**: UI-only follow-up to Phase 25 PARTIAL; no protocol changes; hard-replacement atomic commits per CLAUDE.md; layout JSONs at `resources/device-layouts/<codename>.json` (D-06), photos at `resources/device-photos/<codename>.png` (D-05) with outline-frame fallback (D-07); `Profile::touchZones` map + schema v2 with auto-migrate (D-11, D-12); AKP815 deferral sentinel `keyRows=0` with allow-list (D-13). **UI hint**: yes (UI-SPEC NOT required — patterns + components fully specified in CONTEXT.md and 26-SPEC.md).
+**Plans**: 7 plans (5 waves; max 2 concurrent per CLAUDE.md cap). Wave 1: GAP-25A one-liner. Wave 2: descriptor extension + geometry test (parallel) || profile schema v2 + commitTouchZoneBinding. Wave 3: DeviceView + companion components + atomic KeyDesigner deletion. Wave 4: QML offscreen tests (parallel) || per-SKU layout JSONs + photo attribution. Wave 5: operator UAT re-walk (HARDWARE-GATED, autonomous=false). · **Phase notes**: UI-only follow-up to Phase 25 PARTIAL; no protocol changes; hard-replacement atomic commits per CLAUDE.md; layout JSONs at `resources/device-layouts/<codename>.json` (D-06); per PATTERNS.md, photos REUSE existing `resources/devices/products/product-<codename>.png` (not a new `resources/device-photos/` directory) with outline-frame fallback (D-07); `Profile::touchZones` map + schema v2 with auto-migrate (D-11, D-12); AKP815 deferral sentinel `keyRows=0` with allow-list (D-13). **UI hint**: yes (UI-SPEC approved 2026-05-28).
 
 Plans:
 
-- [ ] _TBD by planner_
+- [ ] 26-01-PLAN.md — REQ-26-A one-liner setActiveDevice wire in Main.qml onDeviceSelected (closes GAP-25A) (wave 1)
+- [ ] 26-02-PLAN.md — REQ-26-C/D DeviceDescriptor extension (keyRows, touchZoneCount, mainScreenWidth/Height) + populate ~15 LCD-key descriptor rows (AKP815 stays sentinel) + Catch2 geometry regression test (wave 2)
+- [ ] 26-03-PLAN.md — D-11/D-12 Profile::touchZones map + schema v2 auto-migrate (hand-rolled JSON, COD-031 preserved) + ProfileController::commitTouchZoneBinding Q_INVOKABLE (wave 2)
+- [ ] 26-04-PLAN.md — REQ-26-B DeviceView.qml + EncoderDial + TouchStripLane + ActionLibraryPane + KeyCell DropArea/Drag extension + ProfileEditor LCD-key branch flip + ATOMIC KeyDesigner.qml deletion (wave 3)
+- [ ] 26-05-PLAN.md — REQ-26-B offscreen QML tests (geometry 3 SKU classes + drag-drop wire to each commit method); resolves tests/qml link issue (wave 4)
+- [ ] 26-06-PLAN.md — D-04/05/06/07 per-SKU layout JSONs (AKP05E first; then AKP05/N4, AKP153 family, AKP03 family, Mirabox N3 variants) + attribution README (fair-use) (wave 4)
+- [ ] 26-07-PLAN.md — REQ-26-E operator-gated re-walk of 25-UAT.md Tests 1 + 6 on live AKP05E demo unit; HARDWARE-GATED, autonomous=false (wave 5)
 
 ## Progress
 
@@ -520,3 +526,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
 | 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor           | v1.3      | 0/7            | Not started      | —          |

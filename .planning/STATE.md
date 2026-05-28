@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: phase-26-spec-pending — Phase 25 partial; UAT resumes after Phase 26 lands device editor; demo-unit BLOCKED items resume with different hardware unit.
-stopped_at: Phase 26 context gathered
-last_updated: '2026-05-28T12:26:49.523Z'
+stopped_at: Phase 26 UI-SPEC approved
+last_updated: '2026-05-28T12:51:31.652Z'
 last_activity: 2026-05-28
 progress:
-  total_phases: 17
+  total_phases: 18
   completed_phases: 17
   total_plans: 51
   completed_plans: 51
-  percent: 100
+  percent: 94
 ---
 
 # Project State
@@ -207,9 +207,9 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Session Continuity
 
-Last session: 2026-05-28T12:26:49.514Z
-Stopped at: Phase 26 context gathered
-Resume file: .planning/phases/26-opendeck-shaped-device-editor/26-CONTEXT.md
+Last session: 2026-05-28T12:51:31.643Z
+Stopped at: Phase 26 UI-SPEC approved
+Resume file: .planning/phases/26-opendeck-shaped-device-editor/26-UI-SPEC.md
 
 ## 2026-05-17 mid-milestone amendment update
 
