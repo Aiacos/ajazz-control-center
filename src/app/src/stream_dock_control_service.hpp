@@ -150,7 +150,7 @@ public:
      *
      * @param codename Device codename, e.g. "akp05e".
      */
-    void setActiveDevice(QString const& codename);
+    Q_INVOKABLE void setActiveDevice(QString const& codename);
 
     /**
      * @brief Enqueue a key-image assignment for the next coalesced drain.

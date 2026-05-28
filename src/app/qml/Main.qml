@@ -125,6 +125,7 @@ ApplicationWindow {
                 Layout.fillHeight: true
                 model: DeviceModel
                 onDeviceSelected: codename => {
+                    StreamDockControlService.setActiveDevice(codename); // REQ-26-A, closes GAP-25A
                     editor.codename = codename;
                     editor.capabilities = DeviceModel.capabilitiesFor(codename);
                 }
