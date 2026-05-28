@@ -44,7 +44,8 @@ namespace {
 /// AKP05 touch-strip width in pixels (= 640, akp05_protocol.hpp:82).
 /// AKP05-specific: only used by the touch-strip dispatch path (other families
 /// never emit TouchStrip events because hasTouchStrip=false in their descriptors).
-inline constexpr std::uint16_t kTouchStripRangeX = 640;
+inline constexpr std::uint16_t kTouchStripRangeX =
+    256; // single-byte X per akp05_input_corrections.md §4 (was 640 BE16 — refuted)
 
 /// Touch gesture indices packed into the upper 16 bits of DeviceEvent::value
 /// by akp05.cpp:513-517.

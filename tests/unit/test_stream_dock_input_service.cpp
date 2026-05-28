@@ -80,8 +80,11 @@ std::vector<std::uint8_t> makeEncoderPressFrame(std::uint8_t encIdx) {
 std::vector<std::uint8_t> makeTouchFrame(std::uint8_t gesture, std::uint16_t x) {
     std::vector<std::uint8_t> f(16, 0);
     f[9] = static_cast<std::uint8_t>(0x30u | (gesture & 0x0fu));
-    f[10] = static_cast<std::uint8_t>((x >> 8u) & 0xFFu);
-    f[11] = static_cast<std::uint8_t>(x & 0xFFu);
+    // akp05_input_corrections.md §4: touch X is a SINGLE byte at frame[10]
+    // (the prior BE16 model spanning [10..11] was refuted by the vendor RE).
+    // x is clamped to 0..255 here; tests pass 0..0xFF directly.
+    f[10] = static_cast<std::uint8_t>(x & 0xFFu);
+    f[11] = 0;
     return f;
 }
 
@@ -314,7 +317,7 @@ TEST_CASE("INPUT-04b: encoder press fires onPress and synthesises paired release
 // INPUT-05a: Touch tap fires encoder onPress via provisional zone map
 // ===========================================================================
 
-TEST_CASE("INPUT-05a: touch tap at X=350 routes to encoder 2 onPress (zone 350*4/640==2)",
+TEST_CASE("INPUT-05a: touch tap at X=140 routes to encoder 2 onPress (zone 140*4/256==2)",
           "[stream-dock-input]") {
     ajazz::tests::qtApp();
 
@@ -338,8 +341,8 @@ TEST_CASE("INPUT-05a: touch tap at X=350 routes to encoder 2 onPress (zone 350*4
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(dev);
 
-    // X=350: 350*4/640 = 2 (integer division) -> zone 2 -> encoders[2].onPress
-    obs->enqueueRead(makeTouchFrame(0 /*gesture=Tap*/, 350));
+    // X=140 (single byte 0..255 per §4): 140*4/256 = 2 -> zone 2 -> encoders[2].onPress
+    obs->enqueueRead(makeTouchFrame(0 /*gesture=Tap*/, 140));
     svc.pump();
 
     REQUIRE(openUrlCount == 1);
@@ -347,13 +350,14 @@ TEST_CASE("INPUT-05a: touch tap at X=350 routes to encoder 2 onPress (zone 350*4
 
 TEST_CASE("INPUT-05a: zoneForX helper maps correctly and is marked PROVISIONAL",
           "[stream-dock-input]") {
-    // Verify the static zone helper directly
-    REQUIRE(StreamDockInputService::zoneForX(0) == 0);   // 0*4/640 = 0
-    REQUIRE(StreamDockInputService::zoneForX(159) == 0); // 159*4/640 = 0
-    REQUIRE(StreamDockInputService::zoneForX(160) == 1); // 160*4/640 = 1
-    REQUIRE(StreamDockInputService::zoneForX(350) == 2); // 350*4/640 = 2
-    REQUIRE(StreamDockInputService::zoneForX(480) == 3); // 480*4/640 = 3
-    REQUIRE(StreamDockInputService::zoneForX(639) == 3); // clamp to EncoderCount-1
+    // Verify the static zone helper directly. X is single byte 0..255 per
+    // akp05_input_corrections.md §4 (was 0..639 BE16 — refuted).
+    REQUIRE(StreamDockInputService::zoneForX(0) == 0);   // 0*4/256 = 0
+    REQUIRE(StreamDockInputService::zoneForX(63) == 0);  // 63*4/256 = 0
+    REQUIRE(StreamDockInputService::zoneForX(64) == 1);  // 64*4/256 = 1
+    REQUIRE(StreamDockInputService::zoneForX(140) == 2); // 140*4/256 = 2
+    REQUIRE(StreamDockInputService::zoneForX(192) == 3); // 192*4/256 = 3
+    REQUIRE(StreamDockInputService::zoneForX(255) == 3); // clamp to EncoderCount-1
 }
 
 // ===========================================================================

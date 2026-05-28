@@ -213,16 +213,19 @@ TEST_CASE("akp05 parser rejects out-of-range encoder ids", "[akp05][protocol]") 
     REQUIRE(!parseInputReport(frame).has_value());
 }
 
-/// Touch tap frame (0x30) must decode the 16-bit big-endian X coordinate from bytes 10–11.
+/// Touch tap frame (0x30) decodes X from the SINGLE byte at report[10] (0..255)
+/// per akp05_input_corrections.md §4. The prior BE16 model spanning [10..11]
+/// was refuted by the vendor RE — getTouchbarLocationFromX takes the single
+/// `state` arg = report[10].
 TEST_CASE("akp05 parser decodes a touch tap with x coordinate", "[akp05][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x30; // tap
-    frame[10] = 0x01;
-    frame[11] = 0x40; // 0x0140 = 320
+    frame[9] = 0x30;  // tap
+    frame[10] = 0x01; // X = 1 (single byte)
+    frame[11] = 0x40; // would be the high byte under the old BE16 model — now ignored
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
     REQUIRE(ev->kind == InputEvent::Kind::TouchTap);
-    REQUIRE(ev->value == 320);
+    REQUIRE(ev->value == 1);
 }
 
 /// Touch swipe-left (0x31), swipe-right (0x32), and long-press (0x33) must each decode correctly.

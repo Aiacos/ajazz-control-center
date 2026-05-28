@@ -24,7 +24,7 @@
  *  - SDActionCanvasWidget::handleKeyEvents @0x1400d02b0: encoder direction is a
  *    distinct keyCode -> KnobClockwiseRotation / KnobCounterclockwiseRotation /
  *    KnobPressed (no magnitude byte); touch X is the single `state` arg passed to
- *    SDActionTouchBarWidget::getTouchbarLoactionFromX(state).
+ *    SDActionTouchBarWidget::getTouchbarLocationFromX(state).
  *  - SDDevice::sendGetHardwareFirmwareVersion @0x180023440: VER packet =
  *    [0]=reportId [1..3]="CRT" [6..8]="VER".
  */
@@ -44,8 +44,23 @@ namespace {
 // (0300:3004) on 2026-05-27 via GET_REPORT: leading 0x00 report-id byte, then
 // the ASCII firmware string, then zero padding. (See ver_probe.py session.)
 std::array<std::uint8_t, 17> makeRealVerResponsePrefix() {
-    return {0x00, 0x56, 0x33, 0x2e, 0x41, 0x4b, 0x50, 0x30, 0x35,
-            0x45, 0x2e, 0x30, 0x31, 0x2e, 0x30, 0x30, 0x37}; // "\0V3.AKP05E.01.007"
+    return {0x00,
+            0x56,
+            0x33,
+            0x2e,
+            0x41,
+            0x4b,
+            0x50,
+            0x30,
+            0x35,
+            0x45,
+            0x2e,
+            0x30,
+            0x31,
+            0x2e,
+            0x30,
+            0x30,
+            0x37}; // "\0V3.AKP05E.01.007"
 }
 } // namespace
 
@@ -59,8 +74,7 @@ TEST_CASE("akp05 input: ACK frames are discarded (report[0..2]=='ACK')",
     REQUIRE_FALSE(parseInputReport(frame).has_value());
 }
 
-TEST_CASE("akp05 input: reports shorter than 16 bytes are rejected",
-          "[akp05][vendor-re][input]") {
+TEST_CASE("akp05 input: reports shorter than 16 bytes are rejected", "[akp05][vendor-re][input]") {
     std::array<std::uint8_t, 8> tooShort{};
     REQUIRE_FALSE(parseInputReport(tooShort).has_value());
 }
@@ -128,15 +142,15 @@ TEST_CASE("akp05 input: parseVersionResponse decodes the live AKP05E firmware st
 // ===========================================================================
 
 TEST_CASE("akp05 input: encoder rotation has NO magnitude byte (always +/-1 step)",
-          "[akp05][input-rework][!shouldfail]") {
+          "[akp05][input-rework]") {
     // RE (handleKeyEvents): a rotation report = exactly one detent in a fixed
     // direction encoded by the keyCode itself (KnobClockwise/Counterclockwise);
     // there is NO signed-delta byte. The current parser wrongly reads report[10]
     // as an int8 magnitude, so feeding 5 yields value==5. The corrected parser
     // must yield a unit step regardless of report[10].
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x20;  // (current code's encoder tag; the real AKP05E codes are TBD)
-    frame[10] = 5;    // a value the current code mis-reads as a magnitude of 5
+    frame[9] = 0x20; // (current code's encoder tag; the real AKP05E codes are TBD)
+    frame[10] = 5;   // a value the current code mis-reads as a magnitude of 5
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
     REQUIRE(ev->kind == InputEvent::Kind::EncoderTurned);
@@ -144,18 +158,18 @@ TEST_CASE("akp05 input: encoder rotation has NO magnitude byte (always +/-1 step
 }
 
 TEST_CASE("akp05 input: touch X is a single byte at report[10], not BE16 at [10..11]",
-          "[akp05][input-rework][!shouldfail]") {
+          "[akp05][input-rework]") {
     // RE (handleKeyEvents): touch X is the single `state` arg (report[10]) passed
-    // to SDActionTouchBarWidget::getTouchbarLoactionFromX(state) -> 0..255. The
+    // to SDActionTouchBarWidget::getTouchbarLocationFromX(state) -> 0..255. The
     // current parser reads a big-endian 16-bit X from report[10..11] (0..639),
     // which a one-byte field cannot carry. The corrected parser must take X from
     // report[10] only and never exceed 0xFF.
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x30;   // (current code's touch tag; real AKP05E codes are TBD)
-    frame[10] = 0x01;  // corrected X == 1
-    frame[11] = 0x40;  // current code folds this in -> X == 0x0140 == 320
+    frame[9] = 0x30;  // (current code's touch tag; real AKP05E codes are TBD)
+    frame[10] = 0x01; // corrected X == 1
+    frame[11] = 0x40; // current code folds this in -> X == 0x0140 == 320
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
-    REQUIRE(ev->value == frame[10]);          // FAILS today (value==320)
-    REQUIRE(ev->value <= 0xFF);               // FAILS today (320 > 255)
+    REQUIRE(ev->value == frame[10]); // FAILS today (value==320)
+    REQUIRE(ev->value <= 0xFF);      // FAILS today (320 > 255)
 }

@@ -79,9 +79,9 @@ inline constexpr std::uint16_t MainDisplayWidthPx = 800; ///< Legacy alias for c
                                                          ///< to the strip as a "main" display.
 inline constexpr std::uint16_t MainDisplayHeightPx = 100; ///< Legacy alias (full strip height
                                                           ///< is 480 px — UI uses ~100 px band).
-inline constexpr std::uint16_t TouchStripRangeX = 640;    ///< Touch X coordinate range, 0..639
-                                                          ///< (preserved for backwards-compat
-                                                          ///< tests; capture pending).
+inline constexpr std::uint16_t TouchStripRangeX =
+    256; ///< Touch X is single byte (0..255), per akp05_input_corrections.md §4 (was 640 — wrong
+         ///< BE16 model) (preserved for backwards-compat tests; capture pending).
 
 // Per-encoder LCD overlay rendered as a slice of the LCD strip. Stream Deck
 // Plus uses 200×100 per encoder; the Mirabox N4 strip is 4 × (200×480) when

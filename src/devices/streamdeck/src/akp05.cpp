@@ -257,8 +257,20 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
     }
 
     // Encoder events: tag in [0x20..0x2f]. Bits 0..3 = encoder index. Byte 10 =
-    // signed rotation delta (+1 CW, 0xff CCW, 0 for press/release). Byte 11 =
-    // button edge (0x01 down, 0x00 up).
+    // sign of frame[10] (CW = positive, CCW = negative, 0 = press/release). Byte 11
+    // carries the button edge (0x01 down, 0x00 up).
+    //
+    // STRUCTURAL ALIGNMENT 2026-05-28 (akp05_input_corrections.md §3): the vendor
+    // RE (handleKeyEvents) decompile proves encoder rotation has NO magnitude
+    // byte — one report == one detent in a fixed direction, encoded by the
+    // keyCode itself. The exact AKP05E keyCode-per-encoder-per-direction values
+    // are still [PROVISIONAL] (the 0x20..0x2f tag-mask retained here predates
+    // the live capture in §7; the family-branch 0x0a..0x11 hypothesis from §3
+    // is also unverified for the AKP05E SKU). Pending §7, this branch keeps
+    // the dispatch tag mask but clamps |value| to 1 so the structural invariant
+    // ("rotation is always ±1 step") is now honoured regardless of any
+    // misinterpreted magnitude byte. See §7.1 (commit 89c0db6) for why live
+    // capture is not currently possible on the 0x3004 demo unit.
     if ((tag & 0xf0u) == 0x20u) {
         auto const encIndex = static_cast<std::uint8_t>(tag & 0x0fu);
         if (encIndex >= EncoderCount) {
@@ -271,7 +283,7 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
         ev.index = encIndex;
         if (rot != 0) {
             ev.kind = InputEvent::Kind::EncoderTurned;
-            ev.value = rot;
+            ev.value = static_cast<std::int16_t>(rot > 0 ? 1 : -1); // ±1 step, no magnitude (§3)
             return ev;
         }
         ev.kind =
@@ -281,17 +293,21 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
 
     // Touch-strip events: tag in [0x30..0x3f]. Low nibble is the gesture:
     //   0x0 = tap, 0x1 = swipe-left, 0x2 = swipe-right, 0x3 = long-press.
-    // Bytes 10..11 (big-endian) carry the absolute X coordinate (0..639).
+    //
+    // STRUCTURAL ALIGNMENT 2026-05-28 (akp05_input_corrections.md §4): the vendor
+    // RE (handleKeyEvents.getTouchbarLocationFromX) proves the touch X is the
+    // SINGLE byte at report[10] (0..255), NOT a big-endian 16-bit value spanning
+    // bytes 10..11. The TouchStripRangeX = 640 clamp is therefore physically
+    // impossible — a one-byte field cannot encode 0..639. The exact codes for
+    // the wire-layer Down/Up/Move events are still [PROVISIONAL] (§4 suggests
+    // 0x97/0x98/0x99 but unverified for AKP05E); the existing 0x30..0x3f
+    // tag-mask is retained as the dispatch surface until §7 confirms the real
+    // codes. Tap-vs-swipe synthesis remains the vendor's host-side convention
+    // here for downstream compatibility (input-service consumes the mapped
+    // DeviceEvent::TouchStrip envelope unchanged).
     if ((tag & 0xf0u) == 0x30u) {
         auto const gesture = static_cast<std::uint8_t>(tag & 0x0fu);
-        auto const x = static_cast<std::uint16_t>((static_cast<std::uint32_t>(frame[10]) << 8U) |
-                                                  static_cast<std::uint32_t>(frame[11]));
-        // SEC-009 / CWE-20: clamp/discard X coordinates that fall outside the
-        // documented 0..639 range. Out-of-range values almost certainly
-        // indicate a malformed frame and should not surface to UI logic.
-        if (x >= akp05::TouchStripRangeX) {
-            return std::nullopt;
-        }
+        auto const x = frame[10]; // single byte, 0..255 (§4 single-byte X)
 
         InputEvent ev{};
         ev.value = static_cast<std::int16_t>(x);

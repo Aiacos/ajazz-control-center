@@ -619,7 +619,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         // The zone index is the 0-based encoder index; look up the encoder context.
         // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
         constexpr int kEncoderCount = 4;
-        constexpr int kTouchStripRangeX = 640;
+        constexpr int kTouchStripRangeX = 256; // single-byte X per akp05_input_corrections.md §4
         int const zone =
             std::min(static_cast<int>((x * kEncoderCount) / kTouchStripRangeX), kEncoderCount - 1);
 
