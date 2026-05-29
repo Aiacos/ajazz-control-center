@@ -17,6 +17,8 @@
 #include "ajazz/keyboard/keyboard.hpp"
 #include "ajazz/mouse/mouse.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
+#include "debug_control_facade.hpp"
+#include "debug_control_server.hpp"
 #include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
 
@@ -800,6 +802,20 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     m_hotplug->setCallback([this](core::HotplugEvent const& ev) { onHotplug(ev); });
     if (!m_hotplug->start()) {
         AJAZZ_LOG_INFO("app", "hot-plug monitor unavailable on this platform/session");
+    }
+
+    // Opt-in debug control channel. Off unless AJAZZ_DEBUG_CONTROL is set;
+    // when on, it binds an owner-only Unix domain socket under XDG_RUNTIME_DIR
+    // and exposes the log/state/control surface to the out-of-process
+    // `scripts/ajazz-debug` client. Started last so every subsystem it talks
+    // to already exists.
+    if (DebugControlServer::enabledFromEnv()) {
+        m_debugControl = std::make_unique<DebugControlServer>(this);
+        registerDebugControlMethods(*m_debugControl, *this);
+        if (!m_debugControl->start(DebugControlServer::defaultSocketPath())) {
+            AJAZZ_LOG_WARN("app", "debug control channel requested but failed to start");
+            m_debugControl.reset();
+        }
     }
 }
 

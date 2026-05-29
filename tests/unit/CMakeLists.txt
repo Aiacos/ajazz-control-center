@@ -7,6 +7,10 @@ add_executable(
     # install()/Qt-handler side effects are not exercised here).
     test_debug_logging.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/debug_logging.cpp
+    # Debug epic Phase 2: JSON-RPC framing + dispatch of the control channel
+    # (processRequestLine; the QLocalServer transport is runtime glue).
+    test_debug_control_server.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/debug_control_server.cpp
     test_device_registry.cpp
     test_akp153_protocol.cpp
     test_akp03_protocol.cpp

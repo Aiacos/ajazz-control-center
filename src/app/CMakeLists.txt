@@ -41,6 +41,11 @@ qt_add_executable(
     # + ring) and installs the qInstallMessageHandler bridge. Backs the out-of-process debug log
     # stream.
     src/debug_logging.cpp
+    # Debug epic Phase 2: opt-in JSON-RPC control channel over a Unix domain socket (off unless
+    # AJAZZ_DEBUG_CONTROL is set) + the facade that maps log/state/device/profile/plugin/action
+    # methods onto it. Lets the out-of-process scripts/ajazz-debug client drive a running instance.
+    src/debug_control_server.cpp
+    src/debug_control_facade.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded

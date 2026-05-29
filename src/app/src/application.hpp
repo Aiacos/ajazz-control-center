@@ -54,6 +54,7 @@ class RingBufferSink;
 
 namespace ajazz::app {
 class HotplugDebouncer;
+class DebugControlServer;
 } // namespace ajazz::app
 
 #ifdef AJAZZ_PYTHON_HOST
@@ -264,6 +265,12 @@ private:
     /// control channel. The accompanying file path is retained for reporting.
     std::shared_ptr<core::RingBufferSink> m_logRing;
     QString m_logFilePath;
+
+    /// Opt-in out-of-process control channel (Unix domain socket JSON-RPC).
+    /// Null unless AJAZZ_DEBUG_CONTROL was set at launch; constructed and
+    /// started last in startBackgroundServices() so its handlers can reach
+    /// every other subsystem.
+    std::unique_ptr<DebugControlServer> m_debugControl;
 
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
