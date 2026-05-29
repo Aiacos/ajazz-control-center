@@ -219,159 +219,82 @@ Item {
                     Accessible.ignored: true
                 }
 
-                // ---- Outline-frame fallback (D-07) ----
-                // Active when _hasPhoto is false OR the image is still loading /
-                // failed to load. The editor is NEVER broken — always renders
-                // something useful from DeviceDescriptor geometry alone.
-                Rectangle {
-                    id: outlineFrame
+                // ---- Device-shaped schematic (D-07 always-renders fallback) ----
+                // Geometry-driven OpenDeck-style canvas: a centered device frame
+                // with the physical Stream Dock stack — key grid on top, the
+                // horizontal touch strip beneath it, rotary dials at the bottom
+                // (one under each strip zone). Active whenever no per-SKU photo is
+                // available; the editor is NEVER broken (renders from descriptor
+                // geometry alone). All cell intent is forwarded to the same
+                // ProfileController + selection wiring as before.
+                DeviceCanvas {
+                    id: deviceCanvas
                     anchors.fill: parent
-                    color: Theme.tile
-                    border.color: Theme.borderSubtle
-                    border.width: 1
-                    radius: Theme.radiusLg
+                    anchors.margins: Theme.spacingMd
                     visible: !chassisPhoto.visible
 
-                    // Scrollable chassis content.
-                    Flickable {
-                        id: chassisFlickable
-                        anchors.fill: parent
-                        anchors.margins: Theme.spacingMd
-                        contentWidth: chassisColumn.implicitWidth
-                        contentHeight: chassisColumn.implicitHeight
-                        clip: true
+                    keyRows:        root.keyRowsResolved
+                    keyColumns:     root._keyColumnsResolved
+                    keyCount:       root.keyCount
+                    encoderCount:   root.encoderCount
+                    touchZoneCount: root.touchZoneCount
+                    deviceName:     root.codename
+                    bindings:       bindings
+                    selectedKeyIndex:     root.selectedKeyIndex
+                    selectedEncoderIndex: root.selectedEncoderIndex
+                    selectedZoneIndex:    root.selectedZoneIndex
 
-                        Column {
-                            id: chassisColumn
-                            spacing: Theme.spacingLg
+                    // WR-02: drive the trash-zone opacity counter. Math.max guards
+                    // against underflow if a cell is destroyed mid-drag.
+                    onCellDragActiveChanged: function(active) {
+                        root._activeDragCount = active
+                            ? root._activeDragCount + 1
+                            : Math.max(0, root._activeDragCount - 1);
+                    }
 
-                            // ----- Row 1: LCD-key grid -----------------------
-                            Grid {
-                                id: keyGrid
-                                columns: root._keyColumnsResolved
-                                rows: root.keyRowsResolved
-                                rowSpacing: Theme.spacingSm
-                                columnSpacing: Theme.spacingSm
-                                visible: root.keyCount > 0
+                    onKeyClicked: function(index) {
+                        root.selectedKeyIndex = index;
+                        root.selectedEncoderIndex = -1;
+                        root.selectedZoneIndex = -1;
+                        root.keySelected(index);
+                        root.keyActivated(index);
+                    }
+                    onKeySwapRequested: function(src, dst) {
+                        // Phase 26 v1: no swapKeyBindings Q_INVOKABLE yet; swap the
+                        // two model rows + commit both (a dedicated atomic swap for
+                        // keys lands in a follow-up, like encoders/zones already have).
+                        if (src < 0 || src >= bindings.count) return;
+                        if (dst < 0 || dst >= bindings.count) return;
+                        var srcRow = bindings.get(src);
+                        var dstRow = bindings.get(dst);
+                        bindings.set(src, { iconSource: dstRow.iconSource, label: dstRow.label,
+                                            actionKind: dstRow.actionKind, actionParams: dstRow.actionParams });
+                        bindings.set(dst, { iconSource: srcRow.iconSource, label: srcRow.label,
+                                            actionKind: srcRow.actionKind, actionParams: srcRow.actionParams });
+                        ProfileController.commitKeyBinding(src, dstRow.iconSource, dstRow.label,
+                                                           dstRow.actionKind, dstRow.actionParams);
+                        ProfileController.commitKeyBinding(dst, srcRow.iconSource, srcRow.label,
+                                                           srcRow.actionKind, srcRow.actionParams);
+                    }
 
-                                Repeater {
-                                    model: bindings
-                                    delegate: KeyCell {
-                                        required property int index
-                                        selected: root.selectedKeyIndex === index
-                                        onDragActiveChanged: function(active) {
-                                            // WR-02 follow-up: Math.max guards against
-                                            // underflow when a cell is destroyed mid-drag
-                                            // (geometry/codename change). The counter is
-                                            // a "logical drag active" flag, not a strict
-                                            // reference count — clamping at 0 is correct.
-                                            root._activeDragCount = active
-                                                ? root._activeDragCount + 1
-                                                : Math.max(0, root._activeDragCount - 1);
-                                        }
-                                        onClicked: {
-                                            root.selectedKeyIndex = index;
-                                            root.selectedEncoderIndex = -1;
-                                            root.selectedZoneIndex = -1;
-                                            root.keySelected(index);
-                                            root.keyActivated(index);
-                                        }
-                                        onCellSwapRequested: function(src, dst) {
-                                            // Phase 26 v1: no swapKeyBindings Q_INVOKABLE yet;
-                                            // read both rows, swap them via two commitKeyBinding
-                                            // calls. A dedicated swap method lands in a follow-up.
-                                            if (src < 0 || src >= bindings.count) return;
-                                            if (dst < 0 || dst >= bindings.count) return;
-                                            var srcRow = bindings.get(src);
-                                            var dstRow = bindings.get(dst);
-                                            // swap in model
-                                            bindings.set(src, { iconSource: dstRow.iconSource,
-                                                                 label: dstRow.label,
-                                                                 actionKind: dstRow.actionKind,
-                                                                 actionParams: dstRow.actionParams });
-                                            bindings.set(dst, { iconSource: srcRow.iconSource,
-                                                                 label: srcRow.label,
-                                                                 actionKind: srcRow.actionKind,
-                                                                 actionParams: srcRow.actionParams });
-                                            // commit both
-                                            ProfileController.commitKeyBinding(src,
-                                                dstRow.iconSource, dstRow.label,
-                                                dstRow.actionKind, dstRow.actionParams);
-                                            ProfileController.commitKeyBinding(dst,
-                                                srcRow.iconSource, srcRow.label,
-                                                srcRow.actionKind, srcRow.actionParams);
-                                        }
-                                    }
-                                }
-                            }
+                    onEncoderClicked: function(index) {
+                        root.selectedKeyIndex = -1;
+                        root.selectedEncoderIndex = index;
+                        root.selectedZoneIndex = -1;
+                        root.encoderSelected(index);
+                    }
+                    onEncoderSwapRequested: function(src, dst) {
+                        ProfileController.swapEncoderBindings(src, dst);
+                    }
 
-                            // ----- Row 2: Encoder dials ----------------------
-                            Row {
-                                spacing: Theme.spacingMd
-                                visible: root.encoderCount > 0
-
-                                Repeater {
-                                    model: root.encoderCount
-                                    delegate: EncoderDial {
-                                        required property int index
-                                        iconSource: ""
-                                        selected: root.selectedEncoderIndex === index
-                                        onDragActiveChanged: function(active) {
-                                            // WR-02 follow-up: Math.max guards against
-                                            // underflow when a cell is destroyed mid-drag
-                                            // (geometry/codename change). The counter is
-                                            // a "logical drag active" flag, not a strict
-                                            // reference count — clamping at 0 is correct.
-                                            root._activeDragCount = active
-                                                ? root._activeDragCount + 1
-                                                : Math.max(0, root._activeDragCount - 1);
-                                        }
-                                        onClicked: {
-                                            root.selectedKeyIndex = -1;
-                                            root.selectedEncoderIndex = index;
-                                            root.selectedZoneIndex = -1;
-                                            root.encoderSelected(index);
-                                        }
-                                        onEncoderSwapRequested: function(src, dst) {
-                                            // UI-REVIEW.md fix: use the dedicated atomic
-                                            // swap Q_INVOKABLE instead of two commits with
-                                            // empty params (which silently destroyed both
-                                            // bindings instead of swapping).
-                                            ProfileController.swapEncoderBindings(src, dst);
-                                        }
-                                    }
-                                }
-                            }
-
-                            // ----- Row 3: Touch-strip zones ------------------
-                            TouchStripLane {
-                                visible: root.touchZoneCount > 0
-                                touchZoneCount: root.touchZoneCount
-                                zoneIconSources: []
-                                zoneLabels: []
-                                // CR-03: handle tap to update Inspector selection.
-                                onZoneTapped: function(idx) {
-                                    root.selectedKeyIndex = -1;
-                                    root.selectedEncoderIndex = -1;
-                                    root.selectedZoneIndex = idx;
-                                    root.zoneSelected(idx);
-                                }
-                                // WR-02: propagate zone drag state to anyDragActive counter.
-                                // Math.max guards against underflow if a zone cell
-                                // is destroyed mid-drag (touchZoneCount change).
-                                onZoneDragActiveChanged: function(active) {
-                                    root._activeDragCount = active
-                                        ? root._activeDragCount + 1
-                                        : Math.max(0, root._activeDragCount - 1);
-                                }
-                                onZoneSwapRequested: function(src, dst) {
-                                    // UI-REVIEW.md fix: atomic swap Q_INVOKABLE replaces
-                                    // the previous two-empty-commits pattern that destroyed
-                                    // both zone bindings instead of swapping.
-                                    ProfileController.swapTouchZoneBindings(src, dst);
-                                }
-                            }
-                        }
+                    onZoneClicked: function(index) {
+                        root.selectedKeyIndex = -1;
+                        root.selectedEncoderIndex = -1;
+                        root.selectedZoneIndex = index;
+                        root.zoneSelected(index);
+                    }
+                    onZoneSwapRequested: function(src, dst) {
+                        ProfileController.swapTouchZoneBindings(src, dst);
                     }
                 }
 

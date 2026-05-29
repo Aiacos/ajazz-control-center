@@ -375,4 +375,9 @@ std::vector<QString> DeviceModel::connectedCodenames() const {
     return out;
 }
 
+QString DeviceModel::firstConnectedCodename() const {
+    auto const connected = connectedCodenames();
+    return connected.empty() ? QString{} : connected.front();
+}
+
 } // namespace ajazz::app

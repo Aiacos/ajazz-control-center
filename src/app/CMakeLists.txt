@@ -278,6 +278,19 @@ foreach(icon_file IN LISTS _acc_ui_devices)
 endforeach()
 list(APPEND ACC_UI_ICONS ${_acc_ui_glyphs} ${_acc_ui_actions} ${_acc_ui_devices})
 
+# Bundled icon font. The QML references font.family "Material Symbols Outlined" in several places
+# (action icons, encoder/touch-zone glyphs, trash button); that font is NOT guaranteed to be
+# installed on the host (it is absent on stock Fedora/Wayland), so without bundling it the icon
+# ligatures render as their literal text ("tune", "delete", ...). We bundle a static, glyph-subset
+# build of Google's Material Symbols Outlined (Apache-2.0), loaded at startup via a FontLoader in
+# Main.qml. QRC alias: fonts/<name> -> qrc:/qt/qml/AjazzControlCenter/fonts/<name>.
+set(ACC_UI_FONTS "")
+file(GLOB ACC_UI_FONTS CONFIGURE_DEPENDS ${CMAKE_SOURCE_DIR}/resources/fonts/*.ttf)
+foreach(font_path IN LISTS ACC_UI_FONTS)
+    get_filename_component(font_name "${font_path}" NAME)
+    set_source_files_properties("${font_path}" PROPERTIES QT_RESOURCE_ALIAS fonts/${font_name})
+endforeach()
+
 # Per-model product photos (resources/devices/products/*.{png,jpg}). Downsized (~256px) vendor
 # product shots, fetched once and bundled so the device editor header shows a real picture offline —
 # no runtime CDN dependency. Aliased under icons/devices/products/ →
@@ -434,6 +447,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/components/AppHeader.qml
     qml/components/BatteryIndicator.qml
     qml/components/Card.qml
+    qml/components/DeviceCanvas.qml
     qml/components/DeviceImage.qml
     qml/components/DeviceRow.qml
     qml/components/EmptyState.qml
@@ -462,6 +476,7 @@ set(ACC_QML_MODULE_RESOURCES
     ${ACC_STREAMDOCK_FALLBACK}
     ${ACC_OPENDECK_FALLBACK}
     ${ACC_UI_ICONS}
+    ${ACC_UI_FONTS}
     ${ACC_DEVICE_PRODUCTS}
     ${ACC_DEVICE_LAYOUTS}
     ${ACC_SDPI_CSS}

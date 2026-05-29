@@ -161,6 +161,19 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantMap capabilitiesFor(QString const& codename) const;
 
     /**
+     * @brief First currently-connected device codename, or empty if none.
+     *
+     * Lets Main.qml auto-select a device on startup so the editor opens to a
+     * real device instead of the empty "select a device" state (matching
+     * OpenDeck/Elgato, which always open to a connected device). Returns the
+     * first entry of @ref connectedCodenames() (model order: sorted by family
+     * then codename), or an empty string when nothing is connected.
+     *
+     * @invokable Callable from QML as `DeviceModel.firstConnectedCodename()`.
+     */
+    [[nodiscard]] Q_INVOKABLE QString firstConnectedCodename() const;
+
+    /**
      * @brief Return the codenames of devices currently considered
      *        connected (per the last @ref refresh()).
      *

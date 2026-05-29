@@ -32,6 +32,30 @@ ApplicationWindow {
     title: Branding.productName
     color: Theme.bgBase
 
+    // Register the bundled Material Symbols Outlined icon font at startup so the
+    // app-wide `font.family: "Material Symbols Outlined"` references resolve to
+    // real glyphs instead of falling back to a system font (absent on stock
+    // Fedora/Wayland), which renders the ligature names as literal text.
+    FontLoader {
+        id: materialSymbolsFont
+        source: "qrc:/qt/qml/AjazzControlCenter/fonts/MaterialSymbolsOutlined-subset.ttf"
+    }
+
+    // Auto-select the first connected device on startup so the editor opens to a
+    // real device instead of the empty "select a device" state (matching
+    // OpenDeck/Elgato, which always open to a connected device).
+    Component.onCompleted: {
+        if (editor.codename === "") {
+            DeviceModel.refresh();
+            var cn = DeviceModel.firstConnectedCodename();
+            if (cn !== "") {
+                StreamDockControlService.setActiveDevice(cn);
+                editor.codename = cn;
+                editor.capabilities = DeviceModel.capabilitiesFor(cn);
+            }
+        }
+    }
+
     // Material Design theme — bind to ThemeService.effectiveMode (always
     // resolved to "light" or "dark", never "auto"). This is the single
     // source of truth for "is the UI light or dark right now"; binding
