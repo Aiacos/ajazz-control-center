@@ -50,6 +50,13 @@ ItemDelegate {
     // orchestrates the actual swap (it owns both source and destination state).
     signal cellSwapRequested(int srcIndex, int dstIndex)
 
+    // Emitted when a library action is dropped on this cell. The DeviceView
+    // parent owns the binding ListModel, so it (not the cell) updates the live
+    // preview AND commits to the profile — keeping the dropped action's icon,
+    // label and plugin actionId in sync. `payload` is the parsed
+    // application/x-ajazz-action object.
+    signal cellActionDropped(int index, var payload)
+
     width: 96
     height: 96
 
@@ -206,9 +213,10 @@ ItemDelegate {
 
             if (drop.hasFormat("application/x-ajazz-action")) {
                 var actionPayload = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
-                // Library -> cell: commit the binding; iconPath is empty in v1 (user picks via Inspector).
-                ProfileController.commitKeyBinding(root.index, "", actionPayload.label,
-                                                   actionPayload.actionKind, "");
+                // Library -> cell: let DeviceView update the preview model AND
+                // commit (it owns the bindings model; committing here would skip
+                // the live preview and drop the plugin actionId).
+                root.cellActionDropped(root.index, actionPayload);
                 drop.acceptProposedAction();
                 return;
             }

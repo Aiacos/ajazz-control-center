@@ -25,6 +25,8 @@
 #include "plugin_catalog_model.hpp"
 #include "qt_app_fixture.hpp"
 
+#include <QDir>
+#include <QFile>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QString>
@@ -207,6 +209,80 @@ TEST_CASE("CatalogOffline onlineCatalogEnabled defaults to true", "[catalog-offl
     PluginCatalogModel model(nullptr);
     REQUIRE(model.onlineCatalogEnabled() == true);
     QStandardPaths::setTestModeEnabled(false);
+
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+}
+
+// ---------------------------------------------------------------------------
+// Test: installedActions() flattens declared actions from installed manifests
+//
+// Workstream B: the Action Library lists real plugin actions so the user can
+// drag a specific dotted action onto a key. installedActions() must scan the
+// <pluginsDir>/<name>.sdPlugin/manifest.json layout, parse each manifest, and
+// return one entry per declared action with the action UUID as `actionId`.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+
+    QStandardPaths::setTestModeEnabled(true);
+    // Construct first: the ctor verify-gate sweep quarantines UNSIGNED .sdPlugin
+    // dirs (fail-closed), so plant the fixture afterwards. installedActions()
+    // enumerates the dir live and does not re-run the verify gate — verification
+    // is enforced at install time, not at enumerate time.
+    PluginCatalogModel model(nullptr);
+
+    // Lay down one installed plugin with two declared actions. OS lists only
+    // mac/windows; the LOCKED Linux-accept policy keeps it runnable here.
+    QString const pluginDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.demo.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Demo Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.demo.first",  "Name": "First Action",
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.demo.second", "Name": "Second Action",
+          "PropertyInspectorPath": "pi/index.html",
+          "Controllers": ["Knob"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    QStandardPaths::setTestModeEnabled(false);
+
+    REQUIRE(actions.size() == 2);
+
+    auto const a0 = actions.at(0).toMap();
+    auto const a1 = actions.at(1).toMap();
+    CHECK(a0.value(QStringLiteral("pluginName")).toString() == QStringLiteral("Demo Plugin"));
+    CHECK(a0.value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.demo.first"));
+    CHECK(a0.value(QStringLiteral("actionName")).toString() == QStringLiteral("First Action"));
+    CHECK(a1.value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.demo.second"));
+    CHECK(a1.value(QStringLiteral("propertyInspectorPath")).toString() ==
+          QStringLiteral("pi/index.html"));
 
     PluginCatalogModel::setPluginsDirOverride(QString{});
 }

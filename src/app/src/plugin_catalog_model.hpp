@@ -30,6 +30,7 @@
 #include <QStringList>
 #include <QtQmlIntegration>
 #include <QUrl>
+#include <QVariantList>
 #include <QVariantMap>
 
 class QNetworkAccessManager;
@@ -176,6 +177,28 @@ public:
 
     /// Number of installed plugins; surfaces the @c installedCount QML property.
     [[nodiscard]] int installedCount() const;
+
+    /**
+     * @brief Flattened list of bindable actions across all installed plugins.
+     *
+     * Scans @c userPluginsDir() for @c *.sdPlugin directories, parses each
+     * @c manifest.json (skipping unparsable or non-runnable manifests), and
+     * returns one entry per declared action. Each entry is a QVariantMap with:
+     *   - @c pluginName            — owning plugin's display name.
+     *   - @c actionId              — the action UUID (reverse-DNS); stored as
+     *                                Action::id when bound to a key.
+     *   - @c actionName            — action display label.
+     *   - @c icon                  — file:// URL of the action (or plugin)
+     *                                icon, or "" when none resolves on disk.
+     *   - @c propertyInspectorPath — relative PI HTML path (for Workstream C),
+     *                                or "" when the action has no inspector.
+     *   - @c controllers           — QStringList (Keypad/Knob/...), for
+     *                                surface-aware filtering.
+     *
+     * The QML Action Library re-queries this on the @c installedCountChanged
+     * signal so newly-installed plugins appear without a restart.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
      * @brief Re-populate the model from the current source.

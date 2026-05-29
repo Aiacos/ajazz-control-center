@@ -11,10 +11,12 @@
 
 #include "ajazz/core/logger.hpp"
 #include "opendeck_catalog_fetcher.hpp"
+#include "plugin_manifest.hpp"
 #include "plugin_verify_gate.hpp"
 #include "sdplugin_extractor.hpp"
 #include "streamdock_catalog_fetcher.hpp"
 
+#include <QCoreApplication>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -295,6 +297,77 @@ int PluginCatalogModel::installedCount() const {
         }
     }
     return count;
+}
+
+QVariantList PluginCatalogModel::installedActions() const {
+    QVariantList out;
+
+    QString const pluginsDirPath = userPluginsDir();
+    QDir const dir(pluginsDirPath);
+    if (!dir.exists()) {
+        return out;
+    }
+
+    // Same install layout the verify-gate sweep and Phase-18 discovery use:
+    // <pluginsDir>/<name>.sdPlugin/manifest.json.
+    QString const platform = currentPlatformString();
+    QString const appVer = QCoreApplication::applicationVersion();
+    QStringList const entries =
+        dir.entryList(QStringList{QStringLiteral("*.sdPlugin")}, QDir::Dirs | QDir::NoDotAndDotDot);
+
+    for (QString const& entry : entries) {
+        QString const pluginDir = dir.filePath(entry);
+        QFile manifestFile(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        if (!manifestFile.open(QIODevice::ReadOnly)) {
+            continue;
+        }
+        QByteArray const json = manifestFile.readAll();
+        manifestFile.close();
+
+        auto const parsed = parsePluginManifest(json);
+        if (!parsed) {
+            continue; // unparsable / missing required keys (T-18-MANIFEST)
+        }
+        if (!manifestRunnableHere(*parsed, platform, appVer)) {
+            continue; // not for this OS / below software minimum version
+        }
+
+        for (PluginAction const& action : parsed->actions) {
+            if (action.uuid.isEmpty() || action.name.isEmpty()) {
+                continue; // an action with no id cannot be bound or routed
+            }
+
+            // Prefer the per-action icon, fall back to the plugin icon. Elgato
+            // manifests routinely omit the extension, so probe `.png` too.
+            // Returned as a file:// URL so QML Image renders it directly and the
+            // C++ load boundary (normaliseImagePath) can strip it on persist.
+            QString iconUrl;
+            QString const iconRel = !action.icon.isEmpty() ? action.icon : parsed->icon;
+            if (!iconRel.isEmpty()) {
+                QString const base = QDir(pluginDir).filePath(iconRel);
+                QString resolved;
+                if (QFileInfo::exists(base)) {
+                    resolved = base;
+                } else if (QFileInfo::exists(base + QStringLiteral(".png"))) {
+                    resolved = base + QStringLiteral(".png");
+                }
+                if (!resolved.isEmpty()) {
+                    iconUrl = QUrl::fromLocalFile(resolved).toString();
+                }
+            }
+
+            QVariantMap m;
+            m.insert(QStringLiteral("pluginName"), parsed->name);
+            m.insert(QStringLiteral("actionId"), action.uuid);
+            m.insert(QStringLiteral("actionName"), action.name);
+            m.insert(QStringLiteral("icon"), iconUrl);
+            m.insert(QStringLiteral("propertyInspectorPath"), action.propertyInspectorPath);
+            m.insert(QStringLiteral("controllers"), action.controllers);
+            out.append(m);
+        }
+    }
+
+    return out;
 }
 
 void PluginCatalogModel::reload() {

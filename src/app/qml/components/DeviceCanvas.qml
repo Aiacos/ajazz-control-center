@@ -46,6 +46,7 @@ Item {
     // ---- Intent signals (DeviceView wires these to ProfileController) ------
     signal keyClicked(int index)
     signal keySwapRequested(int src, int dst)
+    signal keyActionDropped(int index, var payload)
     signal encoderClicked(int index)
     signal encoderSwapRequested(int src, int dst)
     signal zoneClicked(int index)
@@ -116,6 +117,7 @@ Item {
                         onDragActiveChanged: (active) => canvas.cellDragActiveChanged(active)
                         onClicked: canvas.keyClicked(index)
                         onCellSwapRequested: (src, dst) => canvas.keySwapRequested(src, dst)
+                        onCellActionDropped: (i, payload) => canvas.keyActionDropped(i, payload)
                     }
                 }
             }

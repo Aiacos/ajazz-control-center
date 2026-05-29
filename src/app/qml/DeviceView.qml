@@ -82,7 +82,7 @@ Item {
 
     function _ensureBindings() {
         while (bindings.count < root.keyCount) {
-            bindings.append({ iconSource: "", label: "", actionKind: 0, actionParams: "" });
+            bindings.append({ iconSource: "", label: "", actionKind: 0, actionParams: "", actionId: "" });
         }
         while (bindings.count > root.keyCount) {
             bindings.remove(bindings.count - 1);
@@ -105,7 +105,8 @@ Item {
         bindings.setProperty(root.selectedKeyIndex, field, value);
         var row = bindings.get(root.selectedKeyIndex);
         ProfileController.commitKeyBinding(root.selectedKeyIndex, row.iconSource,
-                                           row.label, row.actionKind, row.actionParams);
+                                           row.label, row.actionKind, row.actionParams,
+                                           row.actionId !== undefined ? row.actionId : "");
     }
 
     // ---- Track any active drag for trash-zone opacity (WR-02) ---------------
@@ -268,14 +269,38 @@ Item {
                         if (dst < 0 || dst >= bindings.count) return;
                         var srcRow = bindings.get(src);
                         var dstRow = bindings.get(dst);
+                        var srcId = srcRow.actionId !== undefined ? srcRow.actionId : "";
+                        var dstId = dstRow.actionId !== undefined ? dstRow.actionId : "";
                         bindings.set(src, { iconSource: dstRow.iconSource, label: dstRow.label,
-                                            actionKind: dstRow.actionKind, actionParams: dstRow.actionParams });
+                                            actionKind: dstRow.actionKind, actionParams: dstRow.actionParams,
+                                            actionId: dstId });
                         bindings.set(dst, { iconSource: srcRow.iconSource, label: srcRow.label,
-                                            actionKind: srcRow.actionKind, actionParams: srcRow.actionParams });
+                                            actionKind: srcRow.actionKind, actionParams: srcRow.actionParams,
+                                            actionId: srcId });
                         ProfileController.commitKeyBinding(src, dstRow.iconSource, dstRow.label,
-                                                           dstRow.actionKind, dstRow.actionParams);
+                                                           dstRow.actionKind, dstRow.actionParams, dstId);
                         ProfileController.commitKeyBinding(dst, srcRow.iconSource, srcRow.label,
-                                                           srcRow.actionKind, srcRow.actionParams);
+                                                           srcRow.actionKind, srcRow.actionParams, srcId);
+                    }
+
+                    // Library -> key drop (Workstream B): update the live preview
+                    // model AND commit. For a plugin action, payload.actionId is the
+                    // dotted UUID the plugin host routes to; iconUrl is a file:// URL
+                    // resolved from the plugin's manifest icon.
+                    onKeyActionDropped: function(index, payload) {
+                        if (index < 0 || index >= bindings.count) return;
+                        var icon = payload.iconUrl ? payload.iconUrl : "";
+                        var lbl = payload.label ? payload.label : "";
+                        var aid = payload.actionId ? payload.actionId : "";
+                        bindings.set(index, { iconSource: icon, label: lbl,
+                                              actionKind: payload.actionKind, actionParams: "",
+                                              actionId: aid });
+                        ProfileController.commitKeyBinding(index, icon, lbl,
+                                                           payload.actionKind, "", aid);
+                        root.selectedKeyIndex = index;
+                        root.selectedEncoderIndex = -1;
+                        root.selectedZoneIndex = -1;
+                        root.keySelected(index);
                     }
 
                     onEncoderClicked: function(index) {
