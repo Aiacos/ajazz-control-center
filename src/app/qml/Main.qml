@@ -6,7 +6,8 @@
 //   * AppHeader    — product mark, search, minimize-to-tray.
 //   * RowLayout
 //     * DeviceList  — sidebar with the connected devices.
-//     * ProfileEditor — middle pane with Keys/RGB/Encoders/Mouse tabs.
+//     * ProfileEditor — middle pane with Keys/RGB/Mouse tabs (encoders are
+//       edited as dials on the device canvas inside the Keys tab).
 //     * Inspector   — right pane with the form fields for the selected element.
 //
 // Responsive behaviour (F-17):
@@ -176,9 +177,9 @@ ApplicationWindow {
             // so it has direct access to the binding ListModel and stays in
             // sync with cell-preview updates without cross-component
             // plumbing. Quick task 260514-1je. The previous top-level
-            // Inspector placeholder is removed — non-Keys tabs (RGB,
-            // Encoders, Mouse) will grow their own embedded inspectors as
-            // those features mature.
+            // Inspector placeholder is removed — non-Keys tabs (RGB, Mouse)
+            // will grow their own embedded inspectors as those features
+            // mature.
         }
     }
 

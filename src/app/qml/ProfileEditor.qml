@@ -2,13 +2,16 @@
 //
 // ProfileEditor.qml — middle pane of the main window.
 //
-// Hosts a TabBar (Keys / RGB / Encoders / Mouse) and switches between the
-// matching panels. Each panel is wrapped in a Loader (F-28) so that only the
-// currently visible tab is instantiated.
+// Hosts a TabBar (Keys / RGB / Mouse / Settings / Firmware) and switches
+// between the matching panels. Each panel is wrapped in a Loader (F-28) so
+// that only the currently visible tab is instantiated.
+//
+// Encoders have no dedicated tab: they are edited in-place as the rotary dials
+// on the device canvas inside the Keys tab (DeviceCanvas Lane 3).
 //
 // Tabs are conditionally present based on the device's runtime capabilities
 // (F-22): a keyboard hides "Keys" (it is not an LCD-key device), a stream
-// deck hides "Mouse", an encoder-less stream deck hides "Encoders", etc.
+// deck hides "Mouse", a non-RGB device hides "RGB", etc.
 //
 // A sticky Apply / Revert footer (F-19, F-29) lives at the bottom and emits
 // signals that ProfileController can wire to.
@@ -61,7 +64,8 @@ Rectangle {
 
     readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
-    readonly property bool _showEncoders:  _encoderCount > 0
+    // Encoders no longer have a dedicated tab: they are edited in-place as the
+    // rotary dials on the device canvas inside the Keys tab (DeviceCanvas Lane 3).
     readonly property bool _showMouse:     _dpiStageCount > 0
     // The Settings tab hosts per-device Time-sync, the AK-series batch, AND the
     // device maturity tier. Maturity applies to every catalogued device, so the
@@ -155,11 +159,6 @@ Rectangle {
                 width: visible ? implicitWidth : 0
             }
             TabButton {
-                text: qsTr("Encoders")
-                visible: root._showEncoders
-                width: visible ? implicitWidth : 0
-            }
-            TabButton {
                 text: qsTr("Mouse")
                 visible: root._showMouse
                 width: visible ? implicitWidth : 0
@@ -194,19 +193,15 @@ Rectangle {
                 sourceComponent: rgbPickerComp
             }
             Loader {
-                active: stack.currentIndex === 2 && root._showEncoders
-                sourceComponent: encoderPanelComp
-            }
-            Loader {
-                active: stack.currentIndex === 3 && root._showMouse
+                active: stack.currentIndex === 2 && root._showMouse
                 sourceComponent: mousePanelComp
             }
             Loader {
-                active: stack.currentIndex === 4 && root._showSettings
+                active: stack.currentIndex === 3 && root._showSettings
                 sourceComponent: settingsRowComp
             }
             Loader {
-                active: stack.currentIndex === 5 && root._showFirmware
+                active: stack.currentIndex === 4 && root._showFirmware
                 sourceComponent: firmwarePanelComp
             }
         }
@@ -330,7 +325,6 @@ Rectangle {
     }
 
     Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
-    Component { id: encoderPanelComp; EncoderPanel { encoderCount: root._encoderCount } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
     Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename; hasSettings: root._hasSettings; hasClock: root._hasClock; deviceMaturity: root._maturity } }
     Component { id: firmwarePanelComp; FirmwarePanel { deviceCodename: root.codename; deviceFamily: root._family } }
