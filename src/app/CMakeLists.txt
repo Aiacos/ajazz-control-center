@@ -61,6 +61,9 @@ qt_add_executable(
     # AJAZZ_HAVE_WEBSOCKETS (SdPluginServer dep); the crash tracker compiles regardless.
     src/plugin_manager.cpp
     src/loaded_plugins_model.cpp
+    # Developer debug console: logs plugin/device protocol traffic + injects simulated device input
+    # and plugin->host actions (PluginDebug QML singleton).
+    src/plugin_debug_service.cpp
     src/time_sync_service.cpp
     # 2026-05-18: AK980 PRO 20-mode firmware lighting picker (opcode 0x13). Mirrors TimeSyncService
     # DI shape; dynamic_cast to IFirmwareLightingCapable so any future keyboard that ships a fixed
@@ -441,6 +444,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/MousePanel.qml
     qml/Inspector.qml
     qml/PluginStore.qml
+    qml/DebugConsole.qml
     qml/LoadedPluginsPage.qml
     qml/PropertyInspector.qml
     qml/NativePropertyInspector.qml

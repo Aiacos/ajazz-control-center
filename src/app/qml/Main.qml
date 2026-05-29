@@ -137,6 +137,7 @@ ApplicationWindow {
             onPluginStoreRequested: pluginStoreDrawer.open()
             onLoadedPluginsRequested: loadedPluginsDrawer.open()
             onSettingsRequested: settingsDrawer.open()
+            onDebugConsoleRequested: debugDrawer.open()
         }
 
         RowLayout {
@@ -260,6 +261,33 @@ ApplicationWindow {
         }
 
         LoadedPluginsPage {
+            anchors.fill: parent
+        }
+    }
+
+    // ----------------------------------------------------------------------
+    // Plugin debug console drawer — protocol log + input/response simulation.
+    // Same right-edge / modal pattern as the other drawers.
+    // ----------------------------------------------------------------------
+    Drawer {
+        id: debugDrawer
+        edge: Qt.RightEdge
+        modal: true
+        dragMargin: 0
+        width: Math.min(960, Math.max(720, root.width * 0.75))
+        height: root.height
+
+        Material.theme: root.materialTheme
+        Material.accent: Theme.accent
+        Material.primary: Theme.accent2
+
+        background: Rectangle {
+            color: Theme.surfaceContainer
+            border.color: Theme.borderSubtle
+            border.width: 1
+        }
+
+        DebugConsole {
             anchors.fill: parent
         }
     }

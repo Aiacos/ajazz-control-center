@@ -418,8 +418,18 @@ Application::Application(QObject* parent)
                                                           m_streamDockInput.get(),
                                                           this)),
 #endif
+      // Debug console: always constructed (logging works without WebSockets).
+      // attach() wires the live taps once the server/bridge/input exist.
+      m_pluginDebug(std::make_unique<PluginDebugService>(this)),
       m_hotplug(std::make_unique<core::HotplugMonitor>()),
       m_debouncer(std::make_unique<HotplugDebouncer>(this)) {
+    // Wire the debug console's protocol taps + simulation seams.
+    m_pluginDebug->attach(
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+        m_pluginServer.get(),
+        m_pluginBridge.get(),
+#endif
+        m_streamDockInput.get());
     // 300ms trailing-edge coalescing per D-05 / HOTPLUG-05. The debouncer
     // owns its QTimers and lives on this Application's thread (the GUI
     // thread); its `coalesced` signal is delivered to the DeviceModel on
@@ -691,6 +701,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     DeviceModel::registerInstance(m_deviceModel.get());
     ProfileController::registerInstance(m_profileController.get());
     PluginCatalogModel::registerInstance(m_pluginCatalog.get());
+    PluginDebugService::registerInstance(m_pluginDebug.get());
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());

@@ -32,6 +32,10 @@ Rectangle {
     /// for this and opens the Settings drawer.
     signal settingsRequested()
 
+    /// Emitted when the user clicks the "Debug" button. Main.qml opens the
+    /// plugin debug console drawer (protocol log + input/response simulation).
+    signal debugConsoleRequested()
+
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingLg
@@ -145,6 +149,35 @@ Rectangle {
                 text: loadedBtn.text
                 color: Theme.fgPrimary
                 font: loadedBtn.font
+                horizontalAlignment: Text.AlignHCenter
+                verticalAlignment: Text.AlignVCenter
+                leftPadding: Theme.spacingSm
+                rightPadding: Theme.spacingSm
+            }
+        }
+
+        // Debug console button — opens the plugin debug console drawer. Sits
+        // next to "Loaded" since both are runtime/diagnostic surfaces.
+        ToolButton {
+            id: debugBtn
+            text: qsTr("Debug")
+            font.pixelSize: Theme.fontMd
+            ToolTip.visible: hovered
+            ToolTip.text: qsTr("Open the plugin debug console (log + simulate)")
+            onClicked: root.debugConsoleRequested()
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("Debug console")
+            Accessible.description: qsTr("View plugin protocol traffic and simulate device input and plugin responses")
+            background: Rectangle {
+                radius: Theme.radiusMd
+                color: debugBtn.hovered ? Theme.bgRowHover : "transparent"
+                border.width: debugBtn.activeFocus ? Theme.focusRingWidth : 0
+                border.color: Theme.accent
+            }
+            contentItem: Text {
+                text: debugBtn.text
+                color: Theme.fgPrimary
+                font: debugBtn.font
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: Text.AlignVCenter
                 leftPadding: Theme.spacingSm

@@ -23,6 +23,7 @@
 #include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
 #include "plugin_catalog_model.hpp"
+#include "plugin_debug_service.hpp"
 #include "profile_controller.hpp"
 #include "property_inspector_controller.hpp"
 #include "qt_executor.hpp"
@@ -240,6 +241,12 @@ private:
                         ///< point at server/control/input (all Application members with
                         ///< longer lifetimes per member-declaration order).
 #endif
+    /// Developer debug console: logs plugin/device protocol traffic and injects
+    /// simulated device input + plugin->host actions. Always present (logging
+    /// works without WebSockets); declared after the plugin server/bridge so
+    /// its non-owning taps outlive nothing (destroyed before them).
+    std::unique_ptr<PluginDebugService> m_pluginDebug;
+
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).
