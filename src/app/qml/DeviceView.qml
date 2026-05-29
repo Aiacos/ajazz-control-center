@@ -165,19 +165,20 @@ Item {
     // ---- Three-column outer layout -----------------------------------------
     RowLayout {
         anchors.fill: parent
-        spacing: Theme.spacingXl
+        spacing: Theme.spacingMd
 
-        // Column 1: Action library pane (left).
-        ActionLibraryPane {
-            Layout.preferredWidth: 240
-            Layout.fillHeight: true
-        }
-
-        // Column 2: Device chassis area (center, fills remaining width).
-        FocusScope {
-            id: chassisScope
+        // Left/center column (OpenDeck single-view): device canvas on top,
+        // Property Inspector docked beneath it.
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
+            spacing: Theme.spacingMd
+
+            // Device chassis area (center, fills remaining height).
+            FocusScope {
+                id: chassisScope
+                Layout.fillWidth: true
+                Layout.fillHeight: true
 
             Accessible.role: Accessible.Table
             Accessible.name: root.codename !== ""
@@ -375,21 +376,28 @@ Item {
             }
         }
 
-        // Column 3: Inspector pane (right).
-        Inspector {
-            Layout.preferredWidth: 280
-            Layout.fillHeight: true
-            selectionLabel: root.selectedKeyIndex >= 0
-                ? qsTr("Key %1").arg(root.selectedKeyIndex + 1)
-                : (root.selectedEncoderIndex >= 0
-                   ? qsTr("Encoder %1").arg(root.selectedEncoderIndex + 1)
-                   : (root.selectedZoneIndex >= 0
-                      ? qsTr("Zone %1").arg(root.selectedZoneIndex + 1)
-                      : ""))
-            binding: root.selectedBinding
-            onBindingFieldChanged: function(field, value) {
-                root.updateSelectedBinding(field, value);
+            // Property Inspector docked at the bottom (OpenDeck layout).
+            Inspector {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 220
+                selectionLabel: root.selectedKeyIndex >= 0
+                    ? qsTr("Key %1").arg(root.selectedKeyIndex + 1)
+                    : (root.selectedEncoderIndex >= 0
+                       ? qsTr("Encoder %1").arg(root.selectedEncoderIndex + 1)
+                       : (root.selectedZoneIndex >= 0
+                          ? qsTr("Zone %1").arg(root.selectedZoneIndex + 1)
+                          : ""))
+                binding: root.selectedBinding
+                onBindingFieldChanged: function(field, value) {
+                    root.updateSelectedBinding(field, value);
+                }
             }
+        }
+
+        // Right: Action library sidebar (OpenDeck-style, fixed width).
+        ActionLibraryPane {
+            Layout.preferredWidth: 288
+            Layout.fillHeight: true
         }
     }
 }
