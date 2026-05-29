@@ -182,6 +182,40 @@ TEST_CASE("ProfileController: commitKeyBinding mutates keys and emits profileCha
     CHECK(binding.onPress[0].settingsJson == std::string{"{\"url\":\"https://x\"}"});
 }
 
+TEST_CASE("ProfileController: commitKeyBinding persists the plugin actionId into Action::id",
+          "[profile-persistence][PROFILE-01]") {
+    ajazz::tests::qtApp();
+
+    app::ProfileController ctrl(nullptr);
+
+    // Bind a plugin action: the dotted UUID must land in Action::id so the
+    // plugin host can route key events to it (Workstream B).
+    ctrl.commitKeyBinding(4,
+                          QStringLiteral(""),
+                          QStringLiteral("Toggle Mute"),
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{}"),
+                          QStringLiteral("com.elgato.obs.togglemute"));
+
+    auto const& profile = ctrl.activeProfile();
+    auto const it = profile.keys.find(4);
+    REQUIRE(it != profile.keys.end());
+    REQUIRE(it->second.onPress.size() == 1);
+    CHECK(it->second.onPress[0].kind == core::ActionKind::Plugin);
+    CHECK(it->second.onPress[0].id == std::string{"com.elgato.obs.togglemute"});
+
+    // The 5-arg overload (no actionId) must still work and leave id empty.
+    ctrl.commitKeyBinding(5,
+                          QStringLiteral(""),
+                          QStringLiteral("URL"),
+                          static_cast<int>(core::ActionKind::OpenUrl),
+                          QStringLiteral("{\"url\":\"https://x\"}"));
+    auto const it5 = ctrl.activeProfile().keys.find(5);
+    REQUIRE(it5 != ctrl.activeProfile().keys.end());
+    REQUIRE(it5->second.onPress.size() == 1);
+    CHECK(it5->second.onPress[0].id.empty());
+}
+
 TEST_CASE("ProfileController: commitKeyBinding with empty iconPath/label stores nullopt",
           "[profile-persistence][PROFILE-01]") {
     ajazz::tests::qtApp();

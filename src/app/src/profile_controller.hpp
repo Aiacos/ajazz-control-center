@@ -142,13 +142,19 @@ public:
      * @param label       Overlay text; empty -> nullopt.
      * @param actionKind  cast from ajazz::core::ActionKind enum value.
      * @param settingsJson Opaque JSON string forwarded to Action::settingsJson.
+     * @param actionId    Dotted action identifier forwarded to Action::id. Only
+     *                    meaningful for ActionKind::Plugin (the plugin-host
+     *                    dispatch key, e.g. "com.elgato.obs.togglemute"); empty
+     *                    for built-in kinds. Optional so existing 5-arg QML
+     *                    callers keep working.
      * @invokable Callable from QML as ProfileController.commitKeyBinding(...).
      */
     Q_INVOKABLE void commitKeyBinding(int keyIndex,
                                       QString const& iconPath,
                                       QString const& label,
                                       int actionKind,
-                                      QString const& settingsJson);
+                                      QString const& settingsJson,
+                                      QString const& actionId = {});
 
     /**
      * @brief Commit a rotary-encoder binding into the active Profile (encoders map).
@@ -179,7 +185,8 @@ public:
                                           QString const& iconPath,
                                           QString const& label,
                                           int actionKind,
-                                          QString const& settingsJson);
+                                          QString const& settingsJson,
+                                          QString const& actionId = {});
 
     /**
      * @brief Commit a touch-strip-zone binding into the active Profile (touchZones map).
@@ -207,7 +214,8 @@ public:
                                             QString const& iconPath,
                                             QString const& label,
                                             int actionKind,
-                                            QString const& settingsJson);
+                                            QString const& settingsJson,
+                                            QString const& actionId = {});
 
     /**
      * @brief Atomically swap two encoder bindings.

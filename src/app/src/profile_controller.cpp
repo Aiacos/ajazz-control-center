@@ -151,7 +151,8 @@ void ProfileController::commitKeyBinding(int keyIndex,
                                          QString const& iconPath,
                                          QString const& label,
                                          int actionKind,
-                                         QString const& settingsJson) {
+                                         QString const& settingsJson,
+                                         QString const& actionId) {
     // Validate keyIndex: must be in [0, 65534] (65535 is the uint16_t overflow sentinel).
     if (keyIndex < 0 ||
         keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
@@ -181,6 +182,7 @@ void ProfileController::commitKeyBinding(int keyIndex,
 
     ajazz::core::Action act{};
     act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.id = actionId.toStdString();
     act.settingsJson = settingsJson.toStdString();
     binding.onPress = {std::move(act)};
 
@@ -191,7 +193,8 @@ void ProfileController::commitEncoderBinding(int encoderIndex,
                                              QString const& iconPath,
                                              QString const& label,
                                              int actionKind,
-                                             QString const& settingsJson) {
+                                             QString const& settingsJson,
+                                             QString const& actionId) {
     // Validate encoderIndex: must be in [0, 65534] (uint16_t range; mirrors commitKeyBinding).
     if (encoderIndex < 0 ||
         encoderIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
@@ -223,6 +226,7 @@ void ProfileController::commitEncoderBinding(int encoderIndex,
     // Library drag-drop assigns to onPress; CW/CCW editors are a follow-up (Phase 26 D-09).
     ajazz::core::Action act{};
     act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.id = actionId.toStdString();
     act.settingsJson = settingsJson.toStdString();
     binding.onPress = {std::move(act)};
 
@@ -233,7 +237,8 @@ void ProfileController::commitTouchZoneBinding(int zoneIndex,
                                                QString const& iconPath,
                                                QString const& label,
                                                int actionKind,
-                                               QString const& settingsJson) {
+                                               QString const& settingsJson,
+                                               QString const& actionId) {
     // Validate zoneIndex: must be in [0, 255] (uint8_t range; touchZoneCount is uint8).
     // Out-of-range values indicate a runaway QML caller (T-26-09 mitigation).
     if (zoneIndex < 0 || zoneIndex > 255) {
@@ -263,6 +268,7 @@ void ProfileController::commitTouchZoneBinding(int zoneIndex,
 
     ajazz::core::Action act{};
     act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.id = actionId.toStdString();
     act.settingsJson = settingsJson.toStdString();
     binding.onTap = {std::move(act)};
 
