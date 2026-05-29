@@ -77,3 +77,6 @@ captures/raw/
 # Local secrets
 .env
 .env.local
+
+# Claude Code local state (agent worktrees, session settings)
+.claude/
