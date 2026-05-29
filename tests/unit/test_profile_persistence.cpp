@@ -549,3 +549,118 @@ TEST_CASE("ProfileController: loaded profile with 2 bound keys repaints via "
     CHECK(batCount >= 2);
     CHECK(ulendCount >= 2);
 }
+
+// ---------------------------------------------------------------------------
+// Multi-profile library (Workstream D)
+//
+// qt_app_fixture enables QStandardPaths test mode, so the profiles dir is an
+// isolated test location. Tests use unique device codenames to avoid colliding
+// with each other inside the shared test-mode AppDataLocation.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("ProfileController: createProfile indexes a device-scoped profile",
+          "[profile-persistence][profile-library]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+
+    QString const dev = QStringLiteral("test-d-create");
+    QString const id = ctrl.createProfile(QStringLiteral("My Profile"), dev);
+
+    REQUIRE_FALSE(id.isEmpty());
+    CHECK(ctrl.activeProfileId() == id);
+    CHECK(ctrl.activeProfileName() == QStringLiteral("My Profile"));
+    CHECK(ctrl.knownProfileIds().contains(id));
+    CHECK(ctrl.profileNameFor(id) == QStringLiteral("My Profile"));
+
+    // profilesForDevice returns {id, name} for this device.
+    QVariantList const list = ctrl.profilesForDevice(dev);
+    bool found = false;
+    for (auto const& v : list) {
+        if (v.toMap().value(QStringLiteral("id")).toString() == id) {
+            found = true;
+            CHECK(v.toMap().value(QStringLiteral("name")).toString() ==
+                  QStringLiteral("My Profile"));
+        }
+    }
+    CHECK(found);
+
+    ctrl.deleteProfile(id); // cleanup
+}
+
+TEST_CASE("ProfileController: loadProfileById switches between profiles",
+          "[profile-persistence][profile-library]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+
+    QString const dev = QStringLiteral("test-d-switch");
+    QString const a = ctrl.createProfile(QStringLiteral("A"), dev);
+    // Give profile A a distinctive key binding and persist it.
+    ctrl.commitKeyBinding(0,
+                          QStringLiteral(""),
+                          QStringLiteral("AKey"),
+                          static_cast<int>(core::ActionKind::KeyPress),
+                          QStringLiteral("{}"));
+    ctrl.saveActiveProfile();
+
+    QString const b = ctrl.createProfile(QStringLiteral("B"), dev);
+    REQUIRE(a != b);
+    CHECK(ctrl.activeProfileId() == b);
+
+    // Switch back to A by id: its binding must come back.
+    ctrl.loadProfileById(a);
+    CHECK(ctrl.activeProfileId() == a);
+
+    QVariantList const kb = ctrl.activeKeyBindings();
+    bool sawAKey = false;
+    for (auto const& v : kb) {
+        auto const m = v.toMap();
+        if (m.value(QStringLiteral("index")).toInt() == 0) {
+            sawAKey = (m.value(QStringLiteral("label")).toString() == QStringLiteral("AKey"));
+        }
+    }
+    CHECK(sawAKey);
+
+    ctrl.deleteProfile(a);
+    ctrl.deleteProfile(b);
+}
+
+TEST_CASE("ProfileController: rename and duplicate update the library",
+          "[profile-persistence][profile-library]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+
+    QString const dev = QStringLiteral("test-d-rename");
+    QString const id = ctrl.createProfile(QStringLiteral("Orig"), dev);
+
+    ctrl.renameActiveProfile(QStringLiteral("Renamed"));
+    CHECK(ctrl.activeProfileName() == QStringLiteral("Renamed"));
+    CHECK(ctrl.profileNameFor(id) == QStringLiteral("Renamed"));
+
+    // Duplicate the active profile under a new name -> new id, copy active.
+    QString const dupe = ctrl.duplicateProfile(QString{}, QStringLiteral("Copy"));
+    REQUIRE_FALSE(dupe.isEmpty());
+    CHECK(dupe != id);
+    CHECK(ctrl.activeProfileId() == dupe);
+    CHECK(ctrl.profileNameFor(dupe) == QStringLiteral("Copy"));
+
+    ctrl.deleteProfile(id);
+    ctrl.deleteProfile(dupe);
+}
+
+TEST_CASE("ProfileController: deleting the active profile activates a replacement",
+          "[profile-persistence][profile-library]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+
+    QString const dev = QStringLiteral("test-d-delete");
+    QString const only = ctrl.createProfile(QStringLiteral("Only"), dev);
+    CHECK(ctrl.activeProfileId() == only);
+
+    // Deleting the only profile for the device activates a fresh "Default".
+    ctrl.deleteProfile(only);
+    CHECK_FALSE(ctrl.knownProfileIds().contains(only));
+    CHECK(ctrl.activeProfileId() != only);
+    CHECK_FALSE(ctrl.activeProfileId().isEmpty());
+
+    ctrl.deleteProfile(ctrl.activeProfileId()); // best-effort cleanup
+}

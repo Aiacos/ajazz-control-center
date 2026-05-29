@@ -13,10 +13,12 @@
 
 #include "ajazz/core/profile.hpp"
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QStringList>
 #include <QtQmlIntegration>
+#include <QVariantList>
 
 #include <type_traits>
 
@@ -102,6 +104,59 @@ public:
      * library work.
      */
     Q_INVOKABLE void loadProfileById(QString const& profileId);
+
+    // -------------------------------------------------------------------------
+    // Multi-profile library (Workstream D). Profiles are device-scoped JSON
+    // files under AppDataLocation/profiles/. The controller keeps an in-memory
+    // id->{name, deviceCodename, path} index, rebuilt by refreshProfileLibrary()
+    // (scan on construction + after any create/rename/delete/duplicate). This
+    // is the id:path index issue #24 deferred; loadProfileById() now resolves
+    // through it instead of failing.
+    // -------------------------------------------------------------------------
+
+    /// Rescan AppDataLocation/profiles for *.json and rebuild the in-memory
+    /// index. Emits profilesChanged(). Safe to call repeatedly.
+    Q_INVOKABLE void refreshProfileLibrary();
+
+    /// Known profiles for a device as a QVariantList of {id, name} maps, sorted
+    /// by name. An empty @p deviceCodename returns every known profile. Drives
+    /// the editor's profile-switcher dropdown.
+    [[nodiscard]] Q_INVOKABLE QVariantList profilesForDevice(QString const& deviceCodename) const;
+
+    /// Active profile identity, surfaced for the switcher UI.
+    [[nodiscard]] Q_INVOKABLE QString activeProfileId() const;
+    [[nodiscard]] Q_INVOKABLE QString activeProfileName() const;
+
+    /// Create a fresh, empty profile for @p deviceCodename with a generated
+    /// UUID, persist it, index it, and make it active. Returns the new id (or
+    /// "" on save failure). Emits profileChanged() + profilesChanged().
+    Q_INVOKABLE QString createProfile(QString const& name, QString const& deviceCodename);
+
+    /// Rename the active profile and persist. Emits profilesChanged().
+    Q_INVOKABLE void renameActiveProfile(QString const& newName);
+
+    /// Delete a profile by id (removes the file + index entry). If the active
+    /// profile is deleted, activates another profile for the same device, or a
+    /// fresh "Default" if none remain. Emits profilesChanged() (and
+    /// profileChanged() when the active profile changed).
+    Q_INVOKABLE void deleteProfile(QString const& profileId);
+
+    /// Duplicate a profile (by id, or the active one when @p profileId is empty)
+    /// under @p newName with a fresh UUID, persist it, and make it active.
+    /// Returns the new id (or "" on failure).
+    Q_INVOKABLE QString duplicateProfile(QString const& profileId, QString const& newName);
+
+    /// Ensure the active profile belongs to @p deviceCodename: loads that
+    /// device's first known profile, or creates a "Default" one when none
+    /// exist. Called when the selected device changes so the editor always
+    /// edits a device-scoped profile.
+    Q_INVOKABLE void activateDeviceProfile(QString const& deviceCodename);
+
+    /// Active profile's key bindings as a QVariantList of
+    /// {index, iconSource, label, actionKind, actionId} maps (only populated
+    /// keys). Lets the QML editor rebuild its preview model after a profile
+    /// switch (DeviceView listens to profileChanged()).
+    [[nodiscard]] Q_INVOKABLE QVariantList activeKeyBindings() const;
 
     // -------------------------------------------------------------------------
     // Phase 16-02 (PROFILE-01): default path + commit + active-profile save/load
@@ -340,8 +395,25 @@ signals:
     void profilesChanged();
 
 private:
+    /// One indexed profile on disk. `id` is the profile's stable id (or the
+    /// sanitized filename stem for legacy files with an empty id).
+    struct ProfileMeta {
+        QString id;
+        QString name;
+        QString deviceCodename;
+        QString path;
+    };
+
+    /// AppDataLocation/profiles. Created lazily on first save.
+    [[nodiscard]] QString profilesDir() const;
+
+    /// Rescan the profiles directory and rebuild m_library. Does NOT emit;
+    /// callers decide whether to emit profilesChanged().
+    void rescanLibrary();
+
     ajazz::core::Profile m_profile{};
     QString m_path;
+    QHash<QString, ProfileMeta> m_library; ///< id -> on-disk profile metadata.
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.

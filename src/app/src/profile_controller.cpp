@@ -15,11 +15,16 @@
 #include "ajazz/core/profile_io.hpp"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QQmlEngine>
 #include <QStandardPaths>
 #include <QString>
+#include <QUuid>
+#include <QVariantList>
+#include <QVariantMap>
 
+#include <algorithm>
 #include <exception>
 #include <filesystem>
 #include <limits>
@@ -46,7 +51,9 @@ void ProfileController::registerInstance(ProfileController* instance) noexcept {
     s_profileControllerInstance = instance;
 }
 
-ProfileController::ProfileController(QObject* parent) : QObject(parent) {}
+ProfileController::ProfileController(QObject* parent) : QObject(parent) {
+    rescanLibrary();
+}
 
 void ProfileController::loadProfile(QString const& path) {
     try {
@@ -80,18 +87,233 @@ void ProfileController::saveProfile(QString const& path) {
 }
 
 QStringList ProfileController::knownProfileIds() const {
-    QStringList ids;
-    if (!m_profile.id.empty()) {
-        ids << QString::fromStdString(m_profile.id);
+    QStringList ids = m_library.keys();
+    // The active profile may be brand new (created but the library not yet
+    // rescanned in this const path); make sure it is always listed.
+    QString const activeId = QString::fromStdString(m_profile.id);
+    if (!activeId.isEmpty() && !ids.contains(activeId)) {
+        ids << activeId;
     }
+    ids.sort();
     return ids;
 }
 
 QString ProfileController::profileNameFor(QString const& profileId) const {
+    auto const it = m_library.find(profileId);
+    if (it != m_library.end()) {
+        return it->name;
+    }
     if (QString::fromStdString(m_profile.id) == profileId) {
         return QString::fromStdString(m_profile.name);
     }
     return {};
+}
+
+// ---------------------------------------------------------------------------
+// Multi-profile library (Workstream D)
+// ---------------------------------------------------------------------------
+
+QString ProfileController::profilesDir() const {
+    QString const appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    return appData + QStringLiteral("/profiles");
+}
+
+void ProfileController::rescanLibrary() {
+    m_library.clear();
+    QDir const dir(profilesDir());
+    if (!dir.exists()) {
+        return;
+    }
+    QStringList const files =
+        dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files | QDir::Readable);
+    for (QString const& file : files) {
+        QString const path = dir.filePath(file);
+        try {
+            ajazz::core::Profile const p =
+                ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+            ProfileMeta meta;
+            // Legacy files may carry an empty id; key off the filename stem so
+            // they still appear and remain loadable (the stem == sanitized id).
+            QString const stem = QFileInfo(file).completeBaseName();
+            meta.id = p.id.empty() ? stem : QString::fromStdString(p.id);
+            meta.name = p.name.empty() ? meta.id : QString::fromStdString(p.name);
+            meta.deviceCodename = QString::fromStdString(p.deviceCodename);
+            meta.path = path;
+            m_library.insert(meta.id, meta);
+        } catch (std::exception const&) {
+            // Skip unreadable / malformed profile files rather than aborting the
+            // whole scan; a corrupt file must not hide the rest of the library.
+            continue;
+        }
+    }
+}
+
+void ProfileController::refreshProfileLibrary() {
+    rescanLibrary();
+    emit profilesChanged();
+}
+
+QVariantList ProfileController::profilesForDevice(QString const& deviceCodename) const {
+    std::vector<ProfileMeta> matches;
+    for (auto const& meta : m_library) {
+        if (deviceCodename.isEmpty() || meta.deviceCodename == deviceCodename) {
+            matches.push_back(meta);
+        }
+    }
+    std::sort(matches.begin(), matches.end(), [](ProfileMeta const& a, ProfileMeta const& b) {
+        return a.name.localeAwareCompare(b.name) < 0;
+    });
+
+    QVariantList out;
+    for (auto const& meta : matches) {
+        QVariantMap m;
+        m.insert(QStringLiteral("id"), meta.id);
+        m.insert(QStringLiteral("name"), meta.name);
+        out.append(m);
+    }
+    return out;
+}
+
+QString ProfileController::activeProfileId() const {
+    return QString::fromStdString(m_profile.id);
+}
+
+QString ProfileController::activeProfileName() const {
+    return QString::fromStdString(m_profile.name);
+}
+
+QString ProfileController::createProfile(QString const& name, QString const& deviceCodename) {
+    ajazz::core::Profile fresh{};
+    fresh.id = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    fresh.name = name.isEmpty() ? std::string{"Profile"} : name.toStdString();
+    fresh.deviceCodename = deviceCodename.toStdString();
+
+    m_profile = std::move(fresh);
+    m_path.clear(); // force saveActiveProfile to treat this as a new id
+    emit profileChanged();
+
+    saveActiveProfile(); // persists + emits profileSaved/profilesChanged on new id
+    rescanLibrary();
+    emit profilesChanged();
+    return QString::fromStdString(m_profile.id);
+}
+
+void ProfileController::renameActiveProfile(QString const& newName) {
+    if (newName.isEmpty()) {
+        return;
+    }
+    m_profile.name = newName.toStdString();
+    emit profileChanged();
+    saveActiveProfile();
+    rescanLibrary();
+    emit profilesChanged();
+}
+
+void ProfileController::deleteProfile(QString const& profileId) {
+    auto const it = m_library.find(profileId);
+    QString const path = (it != m_library.end()) ? it->path : defaultProfilePath(profileId);
+
+    QFile file(path);
+    if (file.exists() && !file.remove()) {
+        emit saveFailed(tr("Could not delete profile file: %1").arg(path));
+        return;
+    }
+
+    bool const wasActive = (QString::fromStdString(m_profile.id) == profileId);
+    QString const deviceCodename = (it != m_library.end())
+                                       ? it->deviceCodename
+                                       : QString::fromStdString(m_profile.deviceCodename);
+
+    rescanLibrary();
+    emit profilesChanged();
+
+    if (wasActive) {
+        // Drop the just-deleted profile from memory first, otherwise
+        // activateDeviceProfile() sees its stale deviceCodename still matching
+        // and keeps the deleted profile active. With an empty active profile it
+        // loads another profile for the device, or creates a fresh default.
+        m_profile = ajazz::core::Profile{};
+        m_path.clear();
+        activateDeviceProfile(deviceCodename);
+    }
+}
+
+QString ProfileController::duplicateProfile(QString const& profileId, QString const& newName) {
+    // Resolve the source profile: an explicit id from the library, else the
+    // active profile.
+    ajazz::core::Profile source;
+    if (!profileId.isEmpty()) {
+        auto const it = m_library.find(profileId);
+        if (it == m_library.end()) {
+            emit loadFailed(tr("Profile '%1' not found").arg(profileId));
+            return {};
+        }
+        try {
+            source =
+                ajazz::core::readProfileFromDisk(std::filesystem::path{it->path.toStdString()});
+        } catch (std::exception const& e) {
+            emit loadFailed(QString::fromUtf8(e.what()));
+            return {};
+        }
+    } else {
+        source = m_profile;
+    }
+
+    source.id = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    source.name = newName.isEmpty() ? (source.name + " copy") : newName.toStdString();
+
+    m_profile = std::move(source);
+    m_path.clear();
+    emit profileChanged();
+    saveActiveProfile();
+    rescanLibrary();
+    emit profilesChanged();
+    return QString::fromStdString(m_profile.id);
+}
+
+void ProfileController::activateDeviceProfile(QString const& deviceCodename) {
+    rescanLibrary();
+
+    // Already editing a profile for this device? Keep it.
+    if (!m_profile.id.empty() &&
+        QString::fromStdString(m_profile.deviceCodename) == deviceCodename) {
+        return;
+    }
+
+    // Load the first known profile for this device (sorted by name).
+    QVariantList const forDevice = profilesForDevice(deviceCodename);
+    if (!forDevice.isEmpty()) {
+        QString const id = forDevice.first().toMap().value(QStringLiteral("id")).toString();
+        loadProfileById(id);
+        return;
+    }
+
+    // None yet: create a default device-scoped profile.
+    createProfile(tr("Default"), deviceCodename);
+}
+
+QVariantList ProfileController::activeKeyBindings() const {
+    QVariantList out;
+    for (auto const& [idx, binding] : m_profile.keys) {
+        QVariantMap m;
+        m.insert(QStringLiteral("index"), static_cast<int>(idx));
+        m.insert(QStringLiteral("iconSource"),
+                 binding.state.imagePath ? QString::fromStdString(*binding.state.imagePath)
+                                         : QString{});
+        m.insert(QStringLiteral("label"),
+                 binding.state.text ? QString::fromStdString(*binding.state.text) : QString{});
+        // First onPress step defines the action kind / plugin id for the tile.
+        int kind = 0;
+        QString actionId;
+        if (!binding.onPress.empty()) {
+            kind = static_cast<int>(binding.onPress.front().kind);
+            actionId = QString::fromStdString(binding.onPress.front().id);
+        }
+        m.insert(QStringLiteral("actionKind"), kind);
+        m.insert(QStringLiteral("actionId"), actionId);
+        out.append(m);
+    }
+    return out;
 }
 
 ajazz::core::Profile const& ProfileController::activeProfile() const noexcept {
@@ -382,12 +604,19 @@ void ProfileController::loadProfileById(QString const& profileId) {
         emit profileChanged();
         return;
     }
-    // The id\:path index is not yet maintained; the tray submenu currently
-    // exposes only the active profile (see issue #24). Surface a clear
-    // message so the UI can prompt the user to use the file picker.
-    emit loadFailed(tr("Profile '%1' is not in the in-memory library; "
-                       "open it from the Profiles page.")
-                        .arg(profileId));
+    // Resolve through the in-memory library index (issue #24, now implemented).
+    auto it = m_library.find(profileId);
+    if (it == m_library.end()) {
+        // Rebuild once in case the library is stale (e.g. a profile created in
+        // another window) before giving up.
+        rescanLibrary();
+        it = m_library.find(profileId);
+    }
+    if (it == m_library.end()) {
+        emit loadFailed(tr("Profile '%1' is not in the library").arg(profileId));
+        return;
+    }
+    loadProfile(it->path); // emits profileChanged() on success / loadFailed() on error
 }
 
 } // namespace ajazz::app
