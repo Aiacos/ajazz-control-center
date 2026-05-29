@@ -3,7 +3,9 @@
 // TouchStripLane.qml -- horizontal row of touch-zone cells for DeviceView.
 //
 // Each zone cell is a discrete drop target (not one wide cell). The lane
-// renders `touchZoneCount` cells side-by-side with Theme.spacingXs gaps.
+// renders `touchZoneCount` cells side-by-side with `cellSpacing` gaps. When the
+// parent constrains the lane width the zones stretch to share it evenly, so the
+// strip can be sized to span the key grid and align with the dial lane below.
 //
 // LED-strip hint: top border is thickened to 4px Theme.accent to suggest
 // the physical LED bar above the touch strip (OpenDeck Key.svelte pattern).
@@ -29,6 +31,19 @@ Item {
     required property var zoneIconSources
     required property var zoneLabels
 
+    // Inter-zone gap. The parent (DeviceCanvas) sets this to the SAME value the
+    // dial lane uses so zone N lines up exactly above dial N (Stream Dock Plus).
+    property int cellSpacing: Theme.spacingXs
+
+    // Zones share the lane width evenly: when the parent constrains `width`
+    // (e.g. Layout.preferredWidth = the key-grid content width), each zone
+    // stretches to fill its share so the strip spans the grid and aligns with
+    // the dials below. Falls back to a sensible minimum touch target.
+    readonly property real _cellWidth: touchZoneCount > 0
+        ? Math.max(Theme.minTouchTarget,
+                   (width - (touchZoneCount - 1) * cellSpacing) / touchZoneCount)
+        : width
+
     signal zoneSwapRequested(int srcIndex, int dstIndex)
     /// Emitted when the user taps (clicks) a zone cell; carries the 0-based zone index.
     /// Connected by DeviceView.qml to update selectedZoneIndex and drive the Inspector.
@@ -44,7 +59,7 @@ Item {
     Row {
         id: row
         anchors.fill: parent
-        spacing: Theme.spacingXs
+        spacing: root.cellSpacing
 
         Repeater {
             model: root.touchZoneCount
@@ -56,6 +71,7 @@ Item {
                              ? root.zoneIconSources[index] : ""
                 zoneLabel:   index < root.zoneLabels.length
                              ? root.zoneLabels[index]      : ""
+                width:       root._cellWidth
                 height:      row.height
 
                 onZoneSwapRequested: function(src, dst) {

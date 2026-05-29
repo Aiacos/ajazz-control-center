@@ -122,9 +122,13 @@ Item {
 
             // ---- Lane 2: touch strip (above the dials, Stream Dock Plus order) -
             // One horizontal LCD divided into `touchZoneCount` zones. Reuses the
-            // standalone TouchStripLane; centered under the key grid.
+            // standalone TouchStripLane, constrained to the shared content width
+            // with the same gap as the dial lane so the strip spans the key grid
+            // and zone N sits exactly above dial N.
             TouchStripLane {
                 Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: canvas._contentWidth
+                cellSpacing: canvas._gap
                 visible: canvas.touchZoneCount > 0
                 touchZoneCount: canvas.touchZoneCount
                 zoneIconSources: []
