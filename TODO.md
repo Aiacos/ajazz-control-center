@@ -842,6 +842,58 @@ ______________________________________________________________________
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
 workstreams.
 
+### Plugin + profile + debug epic — follow-ups (2026-05-29)
+
+> Shipped this session (`feat/streamdock`): online catalog on by default
+> (`32abda6`), plugin **action picker** in the editor (`39a551b`, `f4be70a`),
+> **Property Inspector** loads for a bound plugin action (`0307e4d`),
+> **multi-profile** library + device-scoped switcher (`977e369`, `42c6838`),
+> and a **plugin debug console** with protocol log + input/response simulation
+> (`2ca3a7f`). Remaining:
+
+- [ ] **Live click-through verification** of the Property Inspector + debug
+  console. Could not be self-verified in the dev environment (no Wayland
+  input-injection tool; the AKP05E demo unit's input path is unreachable).
+  Walk: drag *Toggle Demo* onto a key → click it → PI HTML renders in the
+  Inspector → type in the field → confirm it persists to
+  `AppDataLocation/plugins/com.test.demo.sdPlugin/settings/<context>.json`;
+  then **Debug** → *Key down* → confirm the transcript logs the routing.
+- [ ] **Reconcile PI settings vs. profile binding.** `PIBridge.setSettings`
+  persists to a per-context JSON file under the plugin dir (Stream Deck
+  model), but the key's `Action::settingsJson` in the profile is separate —
+  two stores for the same logical settings. Decide the source of truth and
+  sync (or document the split). `pi_bridge.cpp` + `profile_controller.cpp`.
+- [ ] **Encoder / touch-zone action binding + PI.** Only keys have a live
+  preview model + `actionId` readback (`DeviceView` bindings). The encoder
+  and touch-strip drop paths don't resolve a plugin action's PI, and the
+  dials/zones don't show a bound icon. Extend `actionInfo` resolution +
+  `EncoderDial`/`TouchStripLane` to match the key path.
+- [ ] **Debug console: log outbound host→plugin events.** The transcript taps
+  inbound (`SdPluginServer::actionReceived`) + device events, but
+  `sendEvent()` is a method (no signal) so host→plugin frames aren't logged.
+  Add a tap (signal or a `PluginDebug.record()` call inside `sendEvent`).
+- [ ] **Debug console test.** No automated coverage for
+  `PluginDebugService::simulateKey/...` → `PluginDeviceBridge::onDeviceEvent`
+  routing (skipped — would force linking the whole bridge/server chain).
+  Add a focused integration test once the bridge test fixture is cheaper.
+- [ ] **End-to-end with a *running* plugin.** The installed `com.test.demo`
+  plugin is signed but does not spawn a process; `keyDown` routing to a live
+  plugin (and its `setImage` repaint round-trip) is unverified on real input.
+- [ ] **Profile pages / folders UI.** `Profile::pages` + `OpenFolder` /
+  `BackToParent` actions exist in core; no UI to create/navigate folders.
+- [ ] **Profile import/export UI.** `profile_bundle.{hpp,cpp}` implements
+  `.ajazzprofile` ZIP import/export in core; wire a QML affordance into the
+  `ProfileBar`.
+- [ ] **Unsaved-changes guard on profile switch.** `ProfileBar` switching
+  calls `loadProfileById` immediately; unsaved edits are discarded silently.
+  Prompt (or auto-save) before switching.
+- [ ] **Remove the dev test plugin.** `com.test.demo.sdPlugin` was hand-
+  installed into `AppDataLocation/plugins/` to verify the PI; delete it once
+  a real plugin is available, or keep as a fixture and document it.
+- [ ] **Tray Switch-profile submenu.** `loadProfileById` now resolves via the
+  library index (was a stub, issue #24); confirm `TrayController:: rebuildProfileSubmenu` lists all profiles (it historically showed only the
+  active one) now that `knownProfileIds()` returns the full set.
+
 ### UI polish (incremental)
 
 - 🟡 **Material 3 expressive theming** beyond the basic style switch.
