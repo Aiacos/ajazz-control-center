@@ -37,6 +37,10 @@ qt_add_executable(
     ajazz-control-center
     src/main.cpp
     src/application.cpp
+    # Debug epic Phase 1: unifies core AJAZZ_LOG_* and Qt qDebug/qCDebug into one tee (stderr + file
+    # + ring) and installs the qInstallMessageHandler bridge. Backs the out-of-process debug log
+    # stream.
+    src/debug_logging.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded

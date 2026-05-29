@@ -40,6 +40,7 @@
 #include "tray_controller.hpp"
 
 #include <QObject>
+#include <QString>
 
 #include <memory>
 
@@ -48,6 +49,7 @@ class QQmlApplicationEngine;
 namespace ajazz::core {
 class HotplugMonitor;
 struct HotplugEvent;
+class RingBufferSink;
 } // namespace ajazz::core
 
 namespace ajazz::app {
@@ -114,6 +116,15 @@ public:
     /// `registerAll(DeviceRegistry&)` backend bootstrap. Audit finding A1
     /// replaced the previous Meyers-singleton with this owned instance.
     [[nodiscard]] core::DeviceRegistry& deviceRegistry() noexcept { return m_deviceRegistry; }
+
+    /// In-memory ring of the most recent log records from every source (the
+    /// project's AJAZZ_LOG_* and Qt's qDebug/qCDebug, unified in bootstrap()).
+    /// Backs the out-of-process debug log stream; valid and non-null after
+    /// bootstrap().
+    [[nodiscard]] core::RingBufferSink* logRing() const noexcept { return m_logRing.get(); }
+
+    /// Absolute path of the append-only log file written since bootstrap().
+    [[nodiscard]] QString const& logFilePath() const noexcept { return m_logFilePath; }
 
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
@@ -246,6 +257,13 @@ private:
     /// works without WebSockets); declared after the plugin server/bridge so
     /// its non-owning taps outlive nothing (destroyed before them).
     std::unique_ptr<PluginDebugService> m_pluginDebug;
+
+    /// Unified log ring (stderr+file+ring tee installed in bootstrap()).
+    /// shared_ptr because the same instance is held by the active core
+    /// LogSink; this handle lets logRing() expose its tail to the debug
+    /// control channel. The accompanying file path is retained for reporting.
+    std::shared_ptr<core::RingBufferSink> m_logRing;
+    QString m_logFilePath;
 
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 

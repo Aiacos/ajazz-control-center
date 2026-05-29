@@ -3,6 +3,10 @@ add_executable(
     test_logger.cpp
     # Debug epic Phase 1: tee / ring-buffer / file LogSink building blocks.
     test_log_sinks.cpp
+    # Debug epic Phase 1: pure Qt->core log mapping + level parsing (the
+    # install()/Qt-handler side effects are not exercised here).
+    test_debug_logging.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/debug_logging.cpp
     test_device_registry.cpp
     test_akp153_protocol.cpp
     test_akp03_protocol.cpp

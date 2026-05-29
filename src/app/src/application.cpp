@@ -17,6 +17,7 @@
 #include "ajazz/keyboard/keyboard.hpp"
 #include "ajazz/mouse/mouse.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
+#include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
 
 #include <QCoreApplication>
@@ -579,7 +580,14 @@ Application::~Application() {
 }
 
 void Application::bootstrap() {
-    core::setLogLevel(core::LogLevel::Info);
+    // Unify every log source into one queryable stream BEFORE any subsystem
+    // logs: a tee that fans stderr + an append-only file + an in-memory ring,
+    // plus a Qt message-handler bridge so qDebug/qCDebug land in the same
+    // place. The ring backs the out-of-process debug log channel. The level
+    // honours the AJAZZ_LOG_LEVEL env override (default Info, as before).
+    m_logFilePath = DebugLogging::defaultLogFilePath();
+    m_logRing = DebugLogging::install(m_logFilePath, logLevelFromEnv(core::LogLevel::Info));
+    AJAZZ_LOG_INFO("app", "logging unified: file={}", m_logFilePath.toStdString());
 
     // Audit finding A1: pass the owned registry into every backend
     // bootstrap (constructor injection — there is no registry singleton).
