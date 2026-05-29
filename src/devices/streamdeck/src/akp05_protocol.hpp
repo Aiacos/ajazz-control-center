@@ -154,12 +154,38 @@ buildCmdHeader(std::array<std::uint8_t, 3> const& cmd);
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildClearKey(std::uint8_t keyIndex);
 
 /**
+ * @brief Map a 1-based logical key index to the AKP05E firmware's wire byte.
+ *
+ * IDisplayCapable addresses keys 1..KeyCount row-major (1 = top-left, KeyCols =
+ * top-right, KeyCols+1 = bottom-left, KeyCount = bottom-right). The AKP05E
+ * firmware does NOT address them linearly: hardware-confirmed on a live AKP05E
+ * (0x0300:0x3004, commit 037bd8d) and cross-checked against opendeck-akp05's
+ * position table, the BAT key byte addresses encoder LCDs at 1..4, the touch
+ * strip at 5, the bottom row at 6..10, and the top row at 11..15. Passing the
+ * raw logical index sends key 1's image to an encoder/strip slot instead of the
+ * key. This is a device-protocol fact, identical on every OS (NOT platform-gated,
+ * unlike the report-id prefix). Re-validated 2026-05-29 via the color round-trip
+ * harness (all 15 surfaces rendered). See akp05_input_corrections.md §7.1.
+ *
+ * @param keyIndex 1-based logical key index, 1..KeyCount.
+ * @return The firmware wire byte to pass to buildKeyImageHeader / buildClearKey.
+ */
+[[nodiscard]] constexpr std::uint8_t akp05KeyWire(std::uint8_t keyIndex) noexcept {
+    // Top row (1..KeyCols) -> 11..15; bottom row (KeyCols+1..KeyCount) -> 6..10.
+    // The +10 offset on the top row = encoders(4) + strip(1) + bottom row(5).
+    constexpr std::uint8_t kTopRowWireOffset = 10U;
+    return (keyIndex <= KeyCols) ? static_cast<std::uint8_t>(kTopRowWireOffset + keyIndex)
+                                 : keyIndex;
+}
+
+/**
  * @brief Build the first packet of a `Set key image` transfer.
  *
- * Offsets 10..11 = big-endian JPEG size, offset 12 = keyIndex. The JPEG
- * payload follows in 1024-byte chunks (identical format to AKP153).
+ * Offsets 10..11 = big-endian JPEG size, offset 12 = the wire key byte. The
+ * JPEG payload follows in 1024-byte chunks (identical format to AKP153).
  *
- * @param keyIndex  1-based key index, 1..KeyCount.
+ * @param keyIndex  Firmware wire key byte (see akp05KeyWire()); callers map a
+ *                  1-based logical index through akp05KeyWire() before this call.
  * @param jpegSize  Total JPEG payload size in bytes.
  * @return 1024-byte header packet.
  */

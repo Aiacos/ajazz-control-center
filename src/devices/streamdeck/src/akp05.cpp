@@ -149,9 +149,10 @@ std::array<std::uint8_t, PacketSize> buildUploadFinished() {
  *  The firmware expects one header packet followed immediately by one or more
  *  1024-byte raw JPEG data packets.  The header encodes:
  *  - Bytes 10–11: big-endian total JPEG byte count
- *  - Byte 12:     1-based key index
+ *  - Byte 12:     firmware wire key byte (callers map the 1-based logical index
+ *                 through akp05KeyWire() first; see that helper).
  *
- *  @param keyIndex  Destination key index (1..KeyCount).
+ *  @param keyIndex  Firmware wire key byte (see akp05KeyWire()).
  *  @param jpegSize  Total byte length of the JPEG payload (≤ 0xFFFF).
  *  @return          Ready-to-send 1024-byte header packet.
  */
@@ -609,9 +610,11 @@ public:
         }
         // ARCH-04: caller passes RGBA8 at any resolution per IDisplayCapable contract;
         // backend resizes to the device's native 85×85 and JPEG-encodes host-side.
+        // The 1-based logical index is mapped to the firmware wire byte (the
+        // AKP05E addresses keys non-linearly — akp05KeyWire(), commit 037bd8d).
         auto const jpeg = encodeForDevice(rgba, width, height, akp05KeyTransform());
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
-        sendImage(akp05::buildKeyImageHeader(keyIndex, sized), jpeg);
+        sendImage(akp05::buildKeyImageHeader(akp05::akp05KeyWire(keyIndex), sized), jpeg);
     }
 
     void setKeyColor(std::uint8_t keyIndex, Rgb color) override {
@@ -620,10 +623,10 @@ public:
         }
         // ARCH-04: synthesise a solid-color JPEG at native dimensions and ship via
         // the standard key-image path. The 1×1 source is upscaled cheaply by
-        // QImage::scaled inside encodeSolid.
+        // QImage::scaled inside encodeSolid. Logical index -> wire byte (037bd8d).
         auto const jpeg = encodeSolid(color, akp05KeyTransform());
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
-        sendImage(akp05::buildKeyImageHeader(keyIndex, sized), jpeg);
+        sendImage(akp05::buildKeyImageHeader(akp05::akp05KeyWire(keyIndex), sized), jpeg);
     }
 
     void clearKey(std::uint8_t keyIndex) override {
@@ -632,8 +635,10 @@ public:
         if (keyIndex != 0xffU && !keyIndexInRange(keyIndex)) {
             return;
         }
-        auto const pkt =
-            (keyIndex == 0xff) ? akp05::buildClearAll() : akp05::buildClearKey(keyIndex);
+        // Map the 1-based logical index to the firmware wire byte (037bd8d);
+        // the 0xff clear-all sentinel must NOT be remapped.
+        auto const pkt = (keyIndex == 0xff) ? akp05::buildClearAll()
+                                            : akp05::buildClearKey(akp05::akp05KeyWire(keyIndex));
         (void)m_transport->write(pkt);
     }
 

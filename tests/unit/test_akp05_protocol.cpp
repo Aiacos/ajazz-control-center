@@ -40,6 +40,24 @@ TEST_CASE("akp05 key image header uses BAT command", "[akp05][protocol]") {
     REQUIRE(pkt[12] == 8);
 }
 
+/// akp05KeyWire maps the 1-based logical grid to the firmware's non-linear wire
+/// bytes: top row 1..5 -> 11..15, bottom row 6..10 -> 6..10 (hardware-confirmed,
+/// commit 037bd8d; re-validated live 2026-05-29).
+TEST_CASE("akp05 key->wire byte remap (037bd8d)", "[akp05][protocol]") {
+    // Top row -> wire 11..15.
+    REQUIRE(akp05KeyWire(1) == 11);
+    REQUIRE(akp05KeyWire(2) == 12);
+    REQUIRE(akp05KeyWire(3) == 13);
+    REQUIRE(akp05KeyWire(4) == 14);
+    REQUIRE(akp05KeyWire(5) == 15);
+    // Bottom row -> wire 6..10 (unchanged).
+    REQUIRE(akp05KeyWire(6) == 6);
+    REQUIRE(akp05KeyWire(7) == 7);
+    REQUIRE(akp05KeyWire(8) == 8);
+    REQUIRE(akp05KeyWire(9) == 9);
+    REQUIRE(akp05KeyWire(10) == 10);
+}
+
 /// Encoder image header must use 'ENC' command word.
 TEST_CASE("akp05 encoder image header uses ENC command", "[akp05][protocol]") {
     auto const pkt = buildEncoderImageHeader(2, 0x0100);
