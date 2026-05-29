@@ -435,6 +435,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/RgbPicker.qml
     qml/SettingsRow.qml
     qml/DeviceView.qml
+    qml/ProfileBar.qml
     qml/ActionLibraryPane.qml
     qml/EncoderPanel.qml
     qml/MousePanel.qml

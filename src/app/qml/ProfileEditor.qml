@@ -133,6 +133,16 @@ Rectangle {
             }
         }
 
+        // Profile switcher bar (Workstream D) --------------------------------
+        // Profiles are device-scoped. Selecting a device activates that
+        // device's profile (creating a "Default" the first time); this bar
+        // lets the user switch between them and create/rename/duplicate/delete.
+        ProfileBar {
+            Layout.fillWidth: true
+            visible: root.codename !== ""
+            deviceCodename: root.codename
+        }
+
         // Empty state when nothing is selected -------------------------------
         EmptyState {
             visible: root.codename === ""

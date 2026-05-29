@@ -92,8 +92,34 @@ Item {
         }
     }
 
-    onKeyCountChanged: _ensureBindings()
-    Component.onCompleted: _ensureBindings()
+    onKeyCountChanged: { _ensureBindings(); _syncFromProfile(); }
+    Component.onCompleted: { _ensureBindings(); _syncFromProfile(); }
+
+    // Rebuild the preview model from the active profile's key bindings. Called
+    // on profileChanged so switching profiles (or any commit) refreshes the
+    // tiles — the QML model is the editor's source of truth for the preview,
+    // and ProfileController.activeKeyBindings() reflects the committed state.
+    function _syncFromProfile() {
+        for (var i = 0; i < bindings.count; ++i) {
+            bindings.set(i, { iconSource: "", label: "", actionKind: 0, actionParams: "", actionId: "" });
+        }
+        var kb = ProfileController.activeKeyBindings();
+        for (var j = 0; j < kb.length; ++j) {
+            var b = kb[j];
+            if (b.index >= 0 && b.index < bindings.count) {
+                bindings.set(b.index, { iconSource: b.iconSource ? b.iconSource : "",
+                                        label: b.label ? b.label : "",
+                                        actionKind: b.actionKind,
+                                        actionParams: "",
+                                        actionId: b.actionId ? b.actionId : "" });
+            }
+        }
+    }
+
+    Connections {
+        target: ProfileController
+        function onProfileChanged() { root._syncFromProfile(); }
+    }
 
     readonly property var selectedBinding:
         selectedKeyIndex >= 0 && selectedKeyIndex < bindings.count
