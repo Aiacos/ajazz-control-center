@@ -182,10 +182,16 @@ TEST_CASE("CatalogOffline installFromFile does not trigger online fetch", "[cata
 }
 
 // ---------------------------------------------------------------------------
-// Test: onlineCatalogEnabled defaults to false
+// Test: onlineCatalogEnabled defaults to true (online catalog on by default)
+//
+// The default flipped from false -> true so a fresh install can browse and
+// install plugins without first finding a toggle. Network access stays fully
+// gated on this flag (see the "disabled" URL override path), so turning it OFF
+// still restores the no-outbound-request behaviour the rest of this suite
+// covers. A user's explicit stored choice always wins over this default.
 // ---------------------------------------------------------------------------
 
-TEST_CASE("CatalogOffline onlineCatalogEnabled defaults to false", "[catalog-offline]") {
+TEST_CASE("CatalogOffline onlineCatalogEnabled defaults to true", "[catalog-offline]") {
     auto& app = qtApp();
     Q_UNUSED(app);
 
@@ -199,7 +205,7 @@ TEST_CASE("CatalogOffline onlineCatalogEnabled defaults to false", "[catalog-off
     // Use QSettings test mode so the test does not write to real user settings
     QStandardPaths::setTestModeEnabled(true);
     PluginCatalogModel model(nullptr);
-    REQUIRE(model.onlineCatalogEnabled() == false);
+    REQUIRE(model.onlineCatalogEnabled() == true);
     QStandardPaths::setTestModeEnabled(false);
 
     PluginCatalogModel::setPluginsDirOverride(QString{});

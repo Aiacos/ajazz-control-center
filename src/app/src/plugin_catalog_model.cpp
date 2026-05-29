@@ -106,12 +106,17 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     : QAbstractListModel(parent),
       m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)),
       m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)) {
-    // PLUGIN-14 anti-feature (T-22-phonehome): load the persisted opt-in flag.
-    // Default is false — no outbound network request on construction.
+    // PLUGIN-14 (T-22-phonehome): load the persisted online-catalog flag.
+    // The catalog is now ON by default so a fresh install can browse and
+    // install Stream Dock / OpenDeck plugins without first hunting for a
+    // toggle. A user who explicitly turned it OFF has a stored `false` that
+    // still wins over this default — only the first-launch / never-set case
+    // sees online enabled. Network is still gated entirely on this flag, so
+    // disabling it restores the no-outbound-request behaviour.
     {
         QSettings settings;
         m_onlineCatalogEnabled =
-            settings.value(QStringLiteral("plugins/onlineCatalogEnabled"), false).toBool();
+            settings.value(QStringLiteral("plugins/onlineCatalogEnabled"), true).toBool();
     }
     // First-launch (or post-upgrade) sweep: convert any `.sdPlugin`
     // archive files left in the user plugins directory by older code

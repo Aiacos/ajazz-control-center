@@ -469,8 +469,9 @@ private:
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
 
-    /// QSettings-backed opt-in flag; default false (no phone-home on launch).
-    bool m_onlineCatalogEnabled = false;
+    /// QSettings-backed flag; default true (online catalog on unless the user
+    /// turned it off). Network stays fully gated on this flag — see ctor.
+    bool m_onlineCatalogEnabled = true;
 
     /// Shared QNetworkAccessManager for plugin downloads (install path).
     /// Created lazily on the first `install()` call so the cheap mock
