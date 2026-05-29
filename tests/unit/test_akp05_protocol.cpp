@@ -192,59 +192,73 @@ TEST_CASE("akp05 parser decodes a key press", "[akp05][protocol]") {
     REQUIRE(ev->index == 7);
 }
 
-/// All four encoder indices (0x20–0x23) must decode as EncoderTurned with correct index and value.
+/// All four encoders decode as EncoderTurned with the correct index + ±1 value.
+/// Codes are the vendor-RE rotation codes (PROVISIONAL per-encoder/polarity).
 TEST_CASE("akp05 parser decodes all four encoders", "[akp05][protocol]") {
-    for (std::uint8_t enc = 0; enc < 4; ++enc) {
+    struct Rot {
+        std::uint8_t code;
+        std::uint8_t index;
+        std::int16_t value;
+    };
+    for (auto const& c : {
+             Rot{ActionEncoder0Cw, 0, +1},
+             Rot{ActionEncoder1Cw, 1, +1},
+             Rot{ActionEncoder2Cw, 2, +1},
+             Rot{ActionEncoder3Cw, 3, +1},
+         }) {
         std::array<std::uint8_t, 16> frame{};
-        frame[9] = static_cast<std::uint8_t>(0x20u | enc);
+        frame[9] = c.code;
         frame[10] = 0x01;
         auto const ev = parseInputReport(frame);
         REQUIRE(ev.has_value());
         REQUIRE(ev->kind == InputEvent::Kind::EncoderTurned);
-        REQUIRE(ev->index == enc);
-        REQUIRE(ev->value == 1);
+        REQUIRE(ev->index == c.index);
+        REQUIRE(ev->value == c.value);
     }
 }
 
-/// Encoder ids ≥ 0x24 exceed the AKP05 encoder count and must return an empty optional.
-TEST_CASE("akp05 parser rejects out-of-range encoder ids", "[akp05][protocol]") {
+/// An action code that matches no key/encoder/touch code returns an empty optional.
+TEST_CASE("akp05 parser rejects unknown action codes", "[akp05][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x24; // encoder 4 - AKP05 only has 0..3
+    frame[9] = 0x24; // not a key (>KeyCount), encoder, or touch code
     REQUIRE(!parseInputReport(frame).has_value());
 }
 
-/// Touch tap frame (0x30) decodes X from the SINGLE byte at report[10] (0..255)
-/// per akp05_input_corrections.md §4. The prior BE16 model spanning [10..11]
-/// was refuted by the vendor RE — getTouchbarLocationFromX takes the single
-/// `state` arg = report[10].
-TEST_CASE("akp05 parser decodes a touch tap with x coordinate", "[akp05][protocol]") {
+/// Touch frames carry X in the SINGLE byte report[10] (0..255) per
+/// akp05_input_corrections.md §4. The prior BE16 model spanning [10..11] was
+/// refuted by the vendor RE — getTouchbarLocationFromX takes the single `state`
+/// arg = report[10].
+TEST_CASE("akp05 parser decodes a touch-down with single-byte x", "[akp05][protocol]") {
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x30;  // tap
-    frame[10] = 0x01; // X = 1 (single byte)
-    frame[11] = 0x40; // would be the high byte under the old BE16 model — now ignored
+    frame[9] = ActionTouchDown; // 0x98
+    frame[10] = 0x01;           // X = 1 (single byte)
+    frame[11] = 0x40;           // would be the high byte under the old BE16 model — now ignored
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
-    REQUIRE(ev->kind == InputEvent::Kind::TouchTap);
+    REQUIRE(ev->kind == InputEvent::Kind::TouchDown);
     REQUIRE(ev->value == 1);
 }
 
-/// Touch swipe-left (0x31), swipe-right (0x32), and long-press (0x33) must each decode correctly.
-TEST_CASE("akp05 parser decodes swipe and long-press", "[akp05][protocol]") {
-    std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x31; // swipe-left
-    auto const left = parseInputReport(frame);
-    REQUIRE(left.has_value());
-    REQUIRE(left->kind == InputEvent::Kind::TouchSwipeLeft);
-
-    frame[9] = 0x32; // swipe-right
-    auto const right = parseInputReport(frame);
-    REQUIRE(right.has_value());
-    REQUIRE(right->kind == InputEvent::Kind::TouchSwipeRight);
-
-    frame[9] = 0x33; // long-press
-    auto const longp = parseInputReport(frame);
-    REQUIRE(longp.has_value());
-    REQUIRE(longp->kind == InputEvent::Kind::TouchLongPress);
+/// The firmware emits only raw down/move/up (no tap/swipe/long-press on the
+/// wire — those are host-side gestures). Each raw code decodes to its kind.
+TEST_CASE("akp05 parser decodes raw touch down/move/up", "[akp05][protocol]") {
+    struct Tc {
+        std::uint8_t code;
+        InputEvent::Kind kind;
+    };
+    for (auto const& t : {
+             Tc{ActionTouchDown, InputEvent::Kind::TouchDown},
+             Tc{ActionTouchMove, InputEvent::Kind::TouchMove},
+             Tc{ActionTouchUp, InputEvent::Kind::TouchUp},
+         }) {
+        std::array<std::uint8_t, 16> frame{};
+        frame[9] = t.code;
+        frame[10] = 0x7f;
+        auto const ev = parseInputReport(frame);
+        REQUIRE(ev.has_value());
+        REQUIRE(ev->kind == t.kind);
+        REQUIRE(ev->value == 0x7f);
+    }
 }
 
 /// CRT VER response: leading report-id byte then an ASCII version string,

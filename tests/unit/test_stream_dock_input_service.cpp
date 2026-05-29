@@ -18,6 +18,7 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
+#include "akp05_protocol.hpp" // ActionEncoderN*/ActionTouch* wire codes
 #include "fixtures/mock_transport.hpp"
 #include "qt_app_fixture.hpp"
 #include "qt_executor.hpp"
@@ -57,34 +58,63 @@ std::vector<std::uint8_t> makeKeyFrame(std::uint8_t key, bool pressed) {
     return f;
 }
 
-/// Build a 16-byte EncoderTurned frame. delta=+1 CW, delta=-1 (0xFF) CCW.
-std::vector<std::uint8_t> makeEncoderTurnFrame(std::uint8_t encIdx, std::int8_t delta) {
+/// Build a 16-byte EncoderTurned frame for encoder `encIdx` (0..3); dir>0 = CW.
+/// Uses the vendor-RE rotation codes (akp05_protocol.hpp) — one report == one
+/// detent, no magnitude byte (akp05_input_corrections.md §3).
+std::vector<std::uint8_t> makeEncoderTurnFrame(std::uint8_t encIdx, std::int8_t dir) {
+    namespace a = ajazz::streamdeck::akp05;
     std::vector<std::uint8_t> f(16, 0);
-    f[9] = static_cast<std::uint8_t>(0x20u | (encIdx & 0x0fu));
-    f[10] = static_cast<std::uint8_t>(delta); // signed delta: +1 or 0xFF
-    f[11] = 0x00u;                            // button not pressed
+    switch (encIdx) {
+    case 0:
+        f[9] = dir > 0 ? a::ActionEncoder0Cw : a::ActionEncoder0Ccw;
+        break;
+    case 1:
+        f[9] = dir > 0 ? a::ActionEncoder1Cw : a::ActionEncoder1Ccw;
+        break;
+    case 2:
+        f[9] = dir > 0 ? a::ActionEncoder2Cw : a::ActionEncoder2Ccw;
+        break;
+    case 3:
+        f[9] = dir > 0 ? a::ActionEncoder3Cw : a::ActionEncoder3Ccw;
+        break;
+    default:
+        break;
+    }
     return f;
 }
 
-/// Build a 16-byte EncoderPressed frame (byte11 = 0x01, rot = 0).
+/// Build a 16-byte EncoderPressed frame (real press code; report[10] = edge).
 std::vector<std::uint8_t> makeEncoderPressFrame(std::uint8_t encIdx) {
+    namespace a = ajazz::streamdeck::akp05;
     std::vector<std::uint8_t> f(16, 0);
-    f[9] = static_cast<std::uint8_t>(0x20u | (encIdx & 0x0fu));
-    f[10] = 0x00u; // no rotation
-    f[11] = 0x01u; // button pressed
+    switch (encIdx) {
+    case 0:
+        f[9] = a::ActionEncoder0Press;
+        break;
+    case 1:
+        f[9] = a::ActionEncoder1Press;
+        break;
+    case 2:
+        f[9] = a::ActionEncoder2Press;
+        break;
+    case 3:
+        f[9] = a::ActionEncoder3Press;
+        break;
+    default:
+        break;
+    }
+    f[10] = 0x01u; // pressed edge
     return f;
 }
 
-/// Build a 16-byte TouchStrip frame. gesture in [0=Tap, 1=SwipeLeft, 2=SwipeRight].
-/// X is big-endian in bytes 10..11.
-std::vector<std::uint8_t> makeTouchFrame(std::uint8_t gesture, std::uint16_t x) {
+/// Build a 16-byte raw touch frame. `code` is ActionTouch{Down,Move,Up}; touch X
+/// is the SINGLE byte at frame[10] (akp05_input_corrections.md §4). Tap vs swipe
+/// is synthesised by the input service from a down->up X delta, so callers build
+/// a tap as {down(x), up(x)} and a swipe as {down(x1), up(x2)}.
+std::vector<std::uint8_t> makeTouchFrame(std::uint8_t code, std::uint16_t x) {
     std::vector<std::uint8_t> f(16, 0);
-    f[9] = static_cast<std::uint8_t>(0x30u | (gesture & 0x0fu));
-    // akp05_input_corrections.md §4: touch X is a SINGLE byte at frame[10]
-    // (the prior BE16 model spanning [10..11] was refuted by the vendor RE).
-    // x is clamped to 0..255 here; tests pass 0..0xFF directly.
+    f[9] = code;
     f[10] = static_cast<std::uint8_t>(x & 0xFFu);
-    f[11] = 0;
     return f;
 }
 
@@ -341,8 +371,11 @@ TEST_CASE("INPUT-05a: touch tap at X=140 routes to encoder 2 onPress (zone 140*4
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(dev);
 
-    // X=140 (single byte 0..255 per §4): 140*4/256 = 2 -> zone 2 -> encoders[2].onPress
-    obs->enqueueRead(makeTouchFrame(0 /*gesture=Tap*/, 140));
+    // X=140 (single byte 0..255 per §4): zone 140*4/256 = 2. A tap is a down->up
+    // pair with a small X delta (synthesised by the service); it routes to
+    // encoders[2].onPress.
+    obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchDown, 140));
+    obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchUp, 140));
     svc.pump();
 
     REQUIRE(openUrlCount == 1);
@@ -364,7 +397,7 @@ TEST_CASE("INPUT-05a: zoneForX helper maps correctly and is marked PROVISIONAL",
 // INPUT-05b: Touch swipe emits pageNavRequested signal
 // ===========================================================================
 
-TEST_CASE("INPUT-05b: swipe-left emits pageNavRequested(-1), swipe-right emits +1",
+TEST_CASE("INPUT-05b: a down->up X delta swipe emits pageNavRequested(-1/+1)",
           "[stream-dock-input]") {
     ajazz::tests::qtApp();
 
@@ -384,15 +417,17 @@ TEST_CASE("INPUT-05b: swipe-left emits pageNavRequested(-1), swipe-right emits +
 
     QSignalSpy spy(&svc, &StreamDockInputService::pageNavRequested);
 
-    SECTION("SwipeLeft (gesture=1) emits pageNavRequested(-1)") {
-        obs->enqueueRead(makeTouchFrame(1 /*SwipeLeft*/, 200));
+    SECTION("decreasing X (down 200 -> up 150) emits pageNavRequested(-1)") {
+        obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchDown, 200));
+        obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchUp, 150));
         svc.pump();
         REQUIRE(spy.count() == 1);
         REQUIRE(spy.at(0).at(0).toInt() == -1);
     }
 
-    SECTION("SwipeRight (gesture=2) emits pageNavRequested(+1)") {
-        obs->enqueueRead(makeTouchFrame(2 /*SwipeRight*/, 200));
+    SECTION("increasing X (down 100 -> up 160) emits pageNavRequested(+1)") {
+        obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchDown, 100));
+        obs->enqueueRead(makeTouchFrame(ajazz::streamdeck::akp05::ActionTouchUp, 160));
         svc.pump();
         REQUIRE(spy.count() == 1);
         REQUIRE(spy.at(0).at(0).toInt() == +1);

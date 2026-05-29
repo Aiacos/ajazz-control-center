@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <cstdlib>
 #include <limits>
 #include <stdexcept>
 #include <string_view>
@@ -41,18 +42,11 @@ namespace {
 
 // kEncoderCount is now m_encoderCount (runtime, from descriptor.encoderCount).
 // AKP05-specific zoneForX uses a local kAkp05EncoderCount=4 constant.
-/// AKP05 touch-strip width in pixels (= 640, akp05_protocol.hpp:82).
-/// AKP05-specific: only used by the touch-strip dispatch path (other families
-/// never emit TouchStrip events because hasTouchStrip=false in their descriptors).
-inline constexpr std::uint16_t kTouchStripRangeX =
-    256; // single-byte X per akp05_input_corrections.md §4 (was 640 BE16 — refuted)
-
-/// Touch gesture indices packed into the upper 16 bits of DeviceEvent::value
-/// by akp05.cpp:513-517.
-inline constexpr std::uint32_t kGestureTap = 0u;
-inline constexpr std::uint32_t kGestureSwipeLeft = 1u;
-inline constexpr std::uint32_t kGestureSwipeRight = 2u;
-// gesture 3 = LongPress — no-op for Phase 15; note for Phase 16.
+/// AKP05 touch-strip X range. Touch X is a SINGLE byte (0..255) per the vendor
+/// RE (akp05_input_corrections.md §4) — NOT the old 640 BE16 model. Used only by
+/// the touch dispatch path (other families never emit touch events because
+/// hasTouchStrip=false in their descriptors).
+inline constexpr std::uint16_t kTouchStripRangeX = 256;
 
 } // namespace
 
@@ -250,33 +244,41 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
         // TODO(WR-05): implement onRelease dispatch once profile.hpp adds the field.
         break;
 
-    // ---- Touch strip (INPUT-05) ------------------------------------------
-    case core::DeviceEvent::Kind::TouchStrip: {
-        // Gate on descriptor.hasTouchStrip: AKP03/153/815 have no touch strip
-        // and should never emit TouchStrip events, but guard here for defence-
-        // in-depth so the zoneForX (AKP05-specific formula) is never called on
-        // a non-touch device even if a stray event were somehow delivered.
+    // ---- Touch strip (INPUT-05): raw down/move/up -> synthesised tap/swipe ----
+    // The AKP05 firmware emits only down/move/up + a single-byte X
+    // (akp05_input_corrections.md §4); tap vs swipe is derived HERE from the
+    // down->up X delta. All three cases gate on descriptor.hasTouchStrip so the
+    // AKP05-specific zoneForX formula is never reached on a non-touch family.
+    case core::DeviceEvent::Kind::TouchDown:
         if (!m_hasTouchStrip) {
             break;
         }
-        // Touch value packing: (gesture<<16)|X (akp05.cpp:513-517).
-        auto const gesture = static_cast<std::uint32_t>(ev.value) >> 16u;
-        auto const x = static_cast<std::uint16_t>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
+        m_touchActive = true;
+        m_touchDownX = static_cast<std::uint16_t>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
+        break;
 
-        if (gesture == kGestureTap) {
-            // INPUT-05a: tap -> provisional zone -> encoders[zone].onPress
-            auto const zone = zoneForX(x);
+    case core::DeviceEvent::Kind::TouchMove:
+        // Position is consumed only at the up edge today. Kept as a distinct
+        // case so a future drag/scrub gesture can hook the moving X here.
+        break;
+
+    case core::DeviceEvent::Kind::TouchUp: {
+        if (!m_hasTouchStrip || !m_touchActive) {
+            break;
+        }
+        m_touchActive = false;
+        auto const upX = static_cast<int>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
+        auto const delta = upX - static_cast<int>(m_touchDownX);
+        if (std::abs(delta) >= kSwipeThresholdX) {
+            // INPUT-05b: swipe -> page-nav intent (X increasing = rightward = next).
+            emit pageNavRequested(delta > 0 ? +1 : -1);
+        } else {
+            // INPUT-05a: tap -> provisional zone (from the down X) -> encoders[zone].onPress
+            auto const zone = zoneForX(m_touchDownX);
             if (auto it = prof.encoders.find(zone); it != prof.encoders.end()) {
                 m_engine->run(it->second.onPress);
             }
-        } else if (gesture == kGestureSwipeLeft) {
-            // INPUT-05b: swipe-left -> prev page intent
-            emit pageNavRequested(-1);
-        } else if (gesture == kGestureSwipeRight) {
-            // INPUT-05b: swipe-right -> next page intent
-            emit pageNavRequested(+1);
         }
-        // gesture 3 = LongPress: no-op for Phase 15 (note for Phase 16).
         break;
     }
 

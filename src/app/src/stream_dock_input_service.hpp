@@ -262,10 +262,23 @@ private:
 
     /// Whether the active device has a touch strip (AKP05=true; AKP03/153/815=false).
     /// Set from descriptor.hasTouchStrip on setActiveDevice(). Used to gate the
-    /// TouchStrip dispatch branch so it is inert for non-touch families even if a
-    /// TouchStrip event were somehow emitted (defence-in-depth; in practice only
-    /// AKP05's backend ever emits DeviceEvent::Kind::TouchStrip).
+    /// touch dispatch branch so it is inert for non-touch families even if a
+    /// touch event were somehow emitted (defence-in-depth; in practice only
+    /// AKP05's backend ever emits the DeviceEvent::Kind::Touch{Down,Move,Up} events).
     bool m_hasTouchStrip{false};
+
+    /// Touch-gesture synthesis state. The AKP05 firmware emits only raw
+    /// down/move/up (DeviceEvent::Kind::TouchDown/Move/Up); tap-vs-swipe is
+    /// derived HERE from the down->up X delta (the firmware has no gesture
+    /// concept — akp05_input_corrections.md §4). m_touchActive tracks whether a
+    /// press is in progress; m_touchDownX records X at the TouchDown edge.
+    bool m_touchActive{false};
+    std::uint16_t m_touchDownX{0};
+
+    /// Swipe threshold against the single-byte X range (0..255): a down->up
+    /// |X delta| >= this is a swipe (page nav); below it, a tap (zone press).
+    /// Heuristic — tune once retail-hardware touch data exists (§4).
+    static constexpr int kSwipeThresholdX = 40;
 
     /// Per-encoder signed delta accumulator for the rotation coalescer.
     /// Sized dynamically from the active device's descriptor.encoderCount on

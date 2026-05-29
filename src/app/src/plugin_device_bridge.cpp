@@ -601,23 +601,24 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     }
 
     // ------------------------------------------------------------------
-    // Touch strip -> touchTap for gesture 0 (tap); swipes dropped
+    // Touch strip -> touchTap on the completed touch (TouchUp).
     // ------------------------------------------------------------------
-    case Kind::TouchStrip: {
-        // Touch value packing: (gesture<<16)|X (same as stream_dock_input_service.cpp:219).
-        auto const gesture = static_cast<std::uint32_t>(ev.value) >> 16u;
-        auto const x = static_cast<int>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
+    // The firmware emits raw down/move/up + a single-byte X
+    // (akp05_input_corrections.md §4). down/move are intermediate edges and are
+    // not plugin events; a completed touch (the up edge) is surfaced to plugins
+    // as touchTap at its X. Tap-vs-swipe discrimination is a host gesture owned
+    // by StreamDockInputService (the action side), not this seam — so the bridge
+    // forwards every completed touch and does not attempt to classify it.
+    case Kind::TouchDown:
+    case Kind::TouchMove:
+        return;
 
-        // Only gesture 0 (tap) is a plugin event.
-        // Gestures 1 (swipe-left) and 2 (swipe-right) are page-nav intents
-        // owned by Phase 16 — dropped here (not plugin events).
-        if (gesture != 0u) {
-            return;
-        }
+    case Kind::TouchUp: {
+        auto const x = static_cast<int>(static_cast<std::uint32_t>(ev.value) & 0xFFFFu);
 
         // Derive the encoder zone from X position (mirrors zoneForX in input service).
         // The zone index is the 0-based encoder index; look up the encoder context.
-        // PROVISIONAL zone map (akp05.md §5) — hardware-reconciled in Phase 25.
+        // PROVISIONAL zone map (akp05_input_corrections.md §4/§5).
         constexpr int kEncoderCount = 4;
         constexpr int kTouchStripRangeX = 256; // single-byte X per akp05_input_corrections.md §4
         int const zone =

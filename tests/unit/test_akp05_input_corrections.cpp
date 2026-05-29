@@ -142,34 +142,79 @@ TEST_CASE("akp05 input: parseVersionResponse decodes the live AKP05E firmware st
 // ===========================================================================
 
 TEST_CASE("akp05 input: encoder rotation has NO magnitude byte (always +/-1 step)",
-          "[akp05][input-rework]") {
+          "[akp05][vendor-re][input]") {
     // RE (handleKeyEvents): a rotation report = exactly one detent in a fixed
-    // direction encoded by the keyCode itself (KnobClockwise/Counterclockwise);
-    // there is NO signed-delta byte. The current parser wrongly reads report[10]
-    // as an int8 magnitude, so feeding 5 yields value==5. The corrected parser
-    // must yield a unit step regardless of report[10].
+    // direction encoded by the report[9] action code itself
+    // (KnobClockwise/Counterclockwise); there is NO signed-delta byte. The
+    // parser must yield a unit step regardless of report[10].
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x20; // (current code's encoder tag; the real AKP05E codes are TBD)
-    frame[10] = 5;   // a value the current code mis-reads as a magnitude of 5
+    frame[9] = ActionEncoder0Cw; // real encoder-1 CW code (value PROVISIONAL)
+    frame[10] = 5;               // a stray byte that must NOT become a magnitude
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
     REQUIRE(ev->kind == InputEvent::Kind::EncoderTurned);
-    REQUIRE(std::abs(static_cast<int>(ev->value)) == 1); // FAILS today (value==5)
+    REQUIRE(ev->index == 0);
+    REQUIRE(ev->value == 1); // unit step; sign comes from the code, not report[10]
+}
+
+TEST_CASE("akp05 input: each encoder code maps to the documented index + direction",
+          "[akp05][input]") {
+    // Structural cross-check of the explicit code->encoder map (PROVISIONAL
+    // per-encoder assignment, but the dispatch must be exhaustive + correct).
+    struct Rot {
+        std::uint8_t code;
+        std::uint8_t index;
+        std::int16_t value;
+    };
+    for (auto const& c : {
+             Rot{ActionEncoder0Ccw, 0, -1},
+             Rot{ActionEncoder0Cw, 0, +1},
+             Rot{ActionEncoder1Ccw, 1, -1},
+             Rot{ActionEncoder1Cw, 1, +1},
+             Rot{ActionEncoder2Ccw, 2, -1},
+             Rot{ActionEncoder2Cw, 2, +1},
+             Rot{ActionEncoder3Ccw, 3, -1},
+             Rot{ActionEncoder3Cw, 3, +1},
+         }) {
+        std::array<std::uint8_t, 16> frame{};
+        frame[9] = c.code;
+        auto const ev = parseInputReport(frame);
+        REQUIRE(ev.has_value());
+        REQUIRE(ev->kind == InputEvent::Kind::EncoderTurned);
+        REQUIRE(ev->index == c.index);
+        REQUIRE(ev->value == c.value);
+    }
+
+    // Press codes: report[10] != 0 == pressed, == 0 == released.
+    for (auto const& [code, index] : {
+             std::pair<std::uint8_t, std::uint8_t>{ActionEncoder0Press, 0},
+             std::pair<std::uint8_t, std::uint8_t>{ActionEncoder1Press, 1},
+             std::pair<std::uint8_t, std::uint8_t>{ActionEncoder2Press, 2},
+             std::pair<std::uint8_t, std::uint8_t>{ActionEncoder3Press, 3},
+         }) {
+        std::array<std::uint8_t, 16> down{};
+        down[9] = code;
+        down[10] = 0x01;
+        auto const pressed = parseInputReport(down);
+        REQUIRE(pressed.has_value());
+        REQUIRE(pressed->kind == InputEvent::Kind::EncoderPressed);
+        REQUIRE(pressed->index == index);
+    }
 }
 
 TEST_CASE("akp05 input: touch X is a single byte at report[10], not BE16 at [10..11]",
-          "[akp05][input-rework]") {
+          "[akp05][vendor-re][input]") {
     // RE (handleKeyEvents): touch X is the single `state` arg (report[10]) passed
     // to SDActionTouchBarWidget::getTouchbarLocationFromX(state) -> 0..255. The
-    // current parser reads a big-endian 16-bit X from report[10..11] (0..639),
-    // which a one-byte field cannot carry. The corrected parser must take X from
-    // report[10] only and never exceed 0xFF.
+    // parser must take X from report[10] only and never exceed 0xFF, and must
+    // surface the raw down/move/up kind (gestures are synthesised host-side).
     std::array<std::uint8_t, 16> frame{};
-    frame[9] = 0x30;  // (current code's touch tag; real AKP05E codes are TBD)
-    frame[10] = 0x01; // corrected X == 1
-    frame[11] = 0x40; // current code folds this in -> X == 0x0140 == 320
+    frame[9] = ActionTouchDown; // real touch-down code (0x98)
+    frame[10] = 0x01;           // X == 1
+    frame[11] = 0x40;           // must NOT be folded into X (old BE16 model -> 320)
     auto const ev = parseInputReport(frame);
     REQUIRE(ev.has_value());
-    REQUIRE(ev->value == frame[10]); // FAILS today (value==320)
-    REQUIRE(ev->value <= 0xFF);      // FAILS today (320 > 255)
+    REQUIRE(ev->kind == InputEvent::Kind::TouchDown);
+    REQUIRE(ev->value == frame[10]); // single-byte X
+    REQUIRE(ev->value <= 0xFF);
 }

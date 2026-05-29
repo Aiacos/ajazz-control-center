@@ -224,11 +224,11 @@ std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize)
  *  The AKP05 multiplexes keys, encoders, and touch-strip events over a single
  *  512-byte HID report.  The tag byte at offset 9 determines the event class:
  *
- *  | Tag range    | Class                  | Notes                              |
- *  |-------------|------------------------|------------------------------------|
- *  | 1..KeyCount  | Key press/release      | Byte 10 = edge (non-zero = down)   |
- *  | 0x20..0x2F   | Encoder rotation/press | Byte 10 = signed int8 delta        |
- *  | 0x30..0x3F   | Touch-strip gesture    | Low nibble = gesture code          |
+ *  | report[9]     | Class                  | Notes                              |
+ *  |--------------|------------------------|------------------------------------|
+ *  | 1..KeyCount   | Key press/release      | report[10] = edge (non-zero = down)|
+ *  | ActionEncoder*| Encoder rotation/press | code carries dir+index; no delta   |
+ *  | ActionTouch*  | Touch down/move/up     | report[10] = X (0..255); no gesture|
  *
  *  ACK frames (bytes 0–2 == "ACK") are silently discarded.
  *
@@ -256,77 +256,101 @@ std::optional<InputEvent> parseInputReport(std::span<std::uint8_t const> frame) 
         return ev;
     }
 
-    // Encoder events: tag in [0x20..0x2f]. Bits 0..3 = encoder index. Byte 10 =
-    // sign of frame[10] (CW = positive, CCW = negative, 0 = press/release). Byte 11
-    // carries the button edge (0x01 down, 0x00 up).
-    //
-    // STRUCTURAL ALIGNMENT 2026-05-28 (akp05_input_corrections.md §3): the vendor
-    // RE (handleKeyEvents) decompile proves encoder rotation has NO magnitude
-    // byte — one report == one detent in a fixed direction, encoded by the
-    // keyCode itself. The exact AKP05E keyCode-per-encoder-per-direction values
-    // are still [PROVISIONAL] (the 0x20..0x2f tag-mask retained here predates
-    // the live capture in §7; the family-branch 0x0a..0x11 hypothesis from §3
-    // is also unverified for the AKP05E SKU). Pending §7, this branch keeps
-    // the dispatch tag mask but clamps |value| to 1 so the structural invariant
-    // ("rotation is always ±1 step") is now honoured regardless of any
-    // misinterpreted magnitude byte. See §7.1 (commit 89c0db6) for why live
-    // capture is not currently possible on the 0x3004 demo unit.
-    if ((tag & 0xf0u) == 0x20u) {
-        auto const encIndex = static_cast<std::uint8_t>(tag & 0x0fu);
-        if (encIndex >= EncoderCount) {
-            return std::nullopt;
-        }
-        auto const rot = static_cast<std::int8_t>(frame[10]);
-        auto const btn = frame[11];
-
-        InputEvent ev{};
-        ev.index = encIndex;
-        if (rot != 0) {
-            ev.kind = InputEvent::Kind::EncoderTurned;
-            ev.value = static_cast<std::int16_t>(rot > 0 ? 1 : -1); // ±1 step, no magnitude (§3)
-            return ev;
-        }
-        ev.kind =
-            btn != 0x00 ? InputEvent::Kind::EncoderPressed : InputEvent::Kind::EncoderReleased;
-        return ev;
-    }
-
-    // Touch-strip events: tag in [0x30..0x3f]. Low nibble is the gesture:
-    //   0x0 = tap, 0x1 = swipe-left, 0x2 = swipe-right, 0x3 = long-press.
-    //
-    // STRUCTURAL ALIGNMENT 2026-05-28 (akp05_input_corrections.md §4): the vendor
-    // RE (handleKeyEvents.getTouchbarLocationFromX) proves the touch X is the
-    // SINGLE byte at report[10] (0..255), NOT a big-endian 16-bit value spanning
-    // bytes 10..11. The TouchStripRangeX = 640 clamp is therefore physically
-    // impossible — a one-byte field cannot encode 0..639. The exact codes for
-    // the wire-layer Down/Up/Move events are still [PROVISIONAL] (§4 suggests
-    // 0x97/0x98/0x99 but unverified for AKP05E); the existing 0x30..0x3f
-    // tag-mask is retained as the dispatch surface until §7 confirms the real
-    // codes. Tap-vs-swipe synthesis remains the vendor's host-side convention
-    // here for downstream compatibility (input-service consumes the mapped
-    // DeviceEvent::TouchStrip envelope unchanged).
-    if ((tag & 0xf0u) == 0x30u) {
-        auto const gesture = static_cast<std::uint8_t>(tag & 0x0fu);
-        auto const x = frame[10]; // single byte, 0..255 (§4 single-byte X)
-
-        InputEvent ev{};
-        ev.value = static_cast<std::int16_t>(x);
-        switch (gesture) {
-        case 0x0:
-            ev.kind = InputEvent::Kind::TouchTap;
-            break;
-        case 0x1:
-            ev.kind = InputEvent::Kind::TouchSwipeLeft;
-            break;
-        case 0x2:
-            ev.kind = InputEvent::Kind::TouchSwipeRight;
-            break;
-        case 0x3:
-            ev.kind = InputEvent::Kind::TouchLongPress;
-            break;
+    // Encoder rotation/press. Per vendor RE (akp05_input_corrections.md §3,
+    // handleKeyEvents @0x1400d02b0) the report carries NO rotation-magnitude
+    // byte: direction AND encoder identity are BOTH encoded by the report[9]
+    // action code, and one report == exactly one detent (value = ±1). Codes
+    // CONVERGE across the 2026-05-27 Ghidra jump-table (DAT_1400d9ef4) and
+    // opendeck-akp05's inputs.rs; per-encoder index + CW/CCW polarity follow
+    // opendeck's convention and stay [PROVISIONAL] until a retail unit confirms
+    // them (the 0x3004 demo unit's input path is stubbed — §7.1, re-confirmed
+    // live 2026-05-29). Structure mirrors akp03::parseInputReport.
+    auto const decodeRotation =
+        [](std::uint8_t code) -> std::optional<std::pair<std::uint8_t, std::int8_t>> {
+        switch (code) {
+        case ActionEncoder0Ccw:
+            return std::pair{std::uint8_t{0}, std::int8_t{-1}};
+        case ActionEncoder0Cw:
+            return std::pair{std::uint8_t{0}, std::int8_t{+1}};
+        case ActionEncoder1Ccw:
+            return std::pair{std::uint8_t{1}, std::int8_t{-1}};
+        case ActionEncoder1Cw:
+            return std::pair{std::uint8_t{1}, std::int8_t{+1}};
+        case ActionEncoder2Ccw:
+            return std::pair{std::uint8_t{2}, std::int8_t{-1}};
+        case ActionEncoder2Cw:
+            return std::pair{std::uint8_t{2}, std::int8_t{+1}};
+        case ActionEncoder3Ccw:
+            return std::pair{std::uint8_t{3}, std::int8_t{-1}};
+        case ActionEncoder3Cw:
+            return std::pair{std::uint8_t{3}, std::int8_t{+1}};
         default:
             return std::nullopt;
         }
+    };
+    if (auto const rot = decodeRotation(tag)) {
+        if (rot->first >= EncoderCount) {
+            return std::nullopt;
+        }
+        InputEvent ev{};
+        ev.kind = InputEvent::Kind::EncoderTurned;
+        ev.index = rot->first;
+        ev.value = rot->second; // ±1 step, no magnitude byte (§3)
+        return ev;
+    }
+
+    auto const decodePress = [](std::uint8_t code) -> std::optional<std::uint8_t> {
+        switch (code) {
+        case ActionEncoder0Press:
+            return std::uint8_t{0};
+        case ActionEncoder1Press:
+            return std::uint8_t{1};
+        case ActionEncoder2Press:
+            return std::uint8_t{2};
+        case ActionEncoder3Press:
+            return std::uint8_t{3};
+        default:
+            return std::nullopt;
+        }
+    };
+    if (auto const encIndex = decodePress(tag)) {
+        if (*encIndex >= EncoderCount) {
+            return std::nullopt;
+        }
+        InputEvent ev{};
+        ev.index = *encIndex;
+        // The wire is press-dominant; report[10] carries the edge when the
+        // firmware supports it (opendeck reads `state != 0` as pressed). Treat
+        // byte 10 == 0 as a release so the synthesis path stays uniform with the
+        // key branch; the input service also synthesises a release on press.
+        ev.kind = (frame[10] == 0x00) ? InputEvent::Kind::EncoderReleased
+                                      : InputEvent::Kind::EncoderPressed;
+        return ev;
+    }
+
+    // Touch strip. CONFIRMED by the vendor decompile (handleKeyEvents @0x1400d02b0,
+    // akp05_input_corrections.md §4): the firmware emits only raw down/move/up
+    // (report[9] == 0x98/0x97/0x99) with the touch X as the SINGLE byte report[10]
+    // (0..255 — NOT a BE16 over [10..11]). Tap/swipe/long-press do NOT exist on
+    // the wire; they are host-side gestures synthesised from the down->up X delta
+    // by StreamDockInputService. (0x78/0x79 setCoreX and 0xB1/0xB2 N4-Pro
+    // touchbar-mode toggles are not surfaced as input events.)
+    auto const touchKind = [](std::uint8_t code) -> std::optional<InputEvent::Kind> {
+        switch (code) {
+        case ActionTouchDown:
+            return InputEvent::Kind::TouchDown;
+        case ActionTouchMove:
+            return InputEvent::Kind::TouchMove;
+        case ActionTouchUp:
+            return InputEvent::Kind::TouchUp;
+        default:
+            return std::nullopt;
+        }
+    };
+    if (auto const kind = touchKind(tag)) {
+        InputEvent ev{};
+        ev.kind = *kind;
+        ev.value = static_cast<std::int16_t>(frame[10]); // single-byte X, 0..255 (§4)
         return ev;
     }
 
@@ -517,21 +541,17 @@ public:
                 devEv.kind = DeviceEvent::Kind::EncoderReleased;
                 devEv.value = 0;
                 break;
-            case akp05::InputEvent::Kind::TouchTap:
-            case akp05::InputEvent::Kind::TouchSwipeLeft:
-            case akp05::InputEvent::Kind::TouchSwipeRight:
-            case akp05::InputEvent::Kind::TouchLongPress:
-                devEv.kind = DeviceEvent::Kind::TouchStrip;
-                // Encode gesture type in the upper 16 bits of value; raw X
-                // coordinate in the lower 16 bits so downstream consumers
-                // can recover both without widening the event struct.
-                {
-                    std::uint32_t const gesture =
-                        static_cast<std::uint32_t>(ev->kind) -
-                        static_cast<std::uint32_t>(akp05::InputEvent::Kind::TouchTap);
-                    std::uint32_t const x = static_cast<std::uint16_t>(ev->value);
-                    devEv.value = static_cast<std::int32_t>((gesture << 16) | x);
-                }
+            // Raw touch events pass straight through with X in `value`. Tap vs
+            // swipe is synthesised host-side by StreamDockInputService from the
+            // down->up X delta (the firmware has no gesture concept — §4).
+            case akp05::InputEvent::Kind::TouchDown:
+                devEv.kind = DeviceEvent::Kind::TouchDown;
+                break;
+            case akp05::InputEvent::Kind::TouchMove:
+                devEv.kind = DeviceEvent::Kind::TouchMove;
+                break;
+            case akp05::InputEvent::Kind::TouchUp:
+                devEv.kind = DeviceEvent::Kind::TouchUp;
                 break;
             }
 

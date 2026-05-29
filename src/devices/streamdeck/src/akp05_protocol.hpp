@@ -275,13 +275,51 @@ buildSecondaryScreenHeader(std::uint8_t location,
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildLogoSizeHeader(std::uint32_t jpegSize);
 
+// ---------------------------------------------------------------------------
+// Input action codes carried at report[9].
+//
+// Per the vendor RE (SDActionCanvasWidget::handleKeyEvents @0x1400d02b0,
+// akp05_input_corrections.md §3): an encoder report carries NO rotation-
+// magnitude byte — direction AND which-encoder are BOTH encoded by the
+// report[9] action code, and one report == exactly one detent (value = ±1).
+// The four encoders' codes CONVERGE across two independent corpora (the
+// 2026-05-27 Ghidra jump-table DAT_1400d9ef4 and opendeck-akp05's inputs.rs),
+// but the per-encoder index assignment and CW/CCW polarity follow opendeck's
+// convention and remain [PROVISIONAL] until a retail AKP05E / Mirabox N4 unit
+// confirms them on the wire — the 0x0300:0x3004 demo unit's input path is
+// stubbed (akp05_input_corrections.md §7.1; re-confirmed live 2026-05-29).
+inline constexpr std::uint8_t ActionEncoder0Ccw = 0xA0;   ///< Encoder 1 rotate CCW [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder0Cw = 0xA1;    ///< Encoder 1 rotate CW  [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder1Ccw = 0x50;   ///< Encoder 2 rotate CCW [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder1Cw = 0x51;    ///< Encoder 2 rotate CW  [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder2Ccw = 0x90;   ///< Encoder 3 rotate CCW [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder2Cw = 0x91;    ///< Encoder 3 rotate CW  [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder3Ccw = 0x70;   ///< Encoder 4 rotate CCW [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder3Cw = 0x71;    ///< Encoder 4 rotate CW  [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder0Press = 0x37; ///< Encoder 1 press [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder1Press = 0x35; ///< Encoder 2 press [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder2Press = 0x33; ///< Encoder 3 press [PROVISIONAL].
+inline constexpr std::uint8_t ActionEncoder3Press = 0x36; ///< Encoder 4 press [PROVISIONAL].
+
+// Touch-strip action codes (report[9]). CONFIRMED by the vendor decompile
+// (handleKeyEvents @0x1400d02b0, akp05_input_corrections.md §4): the firmware
+// emits only down/move/up — there is NO tap/swipe/long-press on the wire. Those
+// are host-side gestures synthesised from the down->up X delta (the input
+// service owns that synthesis). Touch X is the SINGLE byte report[10] (0..255),
+// NOT a BE16 value. 0x78/0x79 (setCoreX) and 0xB1/0xB2 (N4-Pro touchbar-mode
+// toggle) exist but are not surfaced as input events here.
+inline constexpr std::uint8_t ActionTouchMove = 0x97; ///< Touch contact moved; report[10] = X.
+inline constexpr std::uint8_t ActionTouchDown = 0x98; ///< Touch press began; report[10] = X.
+inline constexpr std::uint8_t ActionTouchUp = 0x99;   ///< Touch press ended; report[10] = X.
+
 /**
  * @brief Parsed input event from a raw 512-byte HID input report.
  *
- * The tag byte at offset 9 discriminates event types:
- *   - 1..KeyCount          : key event; byte 10 = press (0x01) / release (0x00).
- *   - 0x20..0x2F           : encoder event; low nibble = encoder index.
- *   - 0x30..0x3F           : touch-strip event; low nibble = gesture code.
+ * The action code at report[9] discriminates event types:
+ *   - 1..KeyCount          : key event; report[10] = press (non-zero) / release (0).
+ *   - ActionEncoderN{Ccw,Cw,Press} : encoder event; the code itself carries
+ *                            direction + encoder index (no magnitude byte).
+ *   - ActionTouch{Down,Move,Up}    : raw touch-strip event; report[10] = X (0..255).
  */
 struct InputEvent {
     /// Discriminates the input source and action.
@@ -291,14 +329,13 @@ struct InputEvent {
         EncoderTurned,   ///< Encoder rotated; `value` = signed step count (+1 CW, -1 CCW).
         EncoderPressed,  ///< Encoder knob depressed.
         EncoderReleased, ///< Encoder knob released.
-        TouchTap,        ///< Single tap on touch strip; `value` = X coordinate.
-        TouchSwipeLeft,  ///< Left swipe gesture; `value` = X start position.
-        TouchSwipeRight, ///< Right swipe gesture; `value` = X start position.
-        TouchLongPress,  ///< Long-press gesture on touch strip; `value` = X coordinate.
+        TouchDown,       ///< Touch-strip press began; `value` = X coordinate (0..255).
+        TouchMove,       ///< Touch-strip contact moved; `value` = X coordinate (0..255).
+        TouchUp,         ///< Touch-strip press ended;  `value` = X coordinate (0..255).
     };
     Kind kind{Kind::KeyPressed};
     std::uint8_t index{0}; ///< Key or encoder index (meaning depends on Kind).
-    std::int16_t value{0}; ///< Encoder delta or touch X coordinate, 0..TouchStripRangeX-1.
+    std::int16_t value{0}; ///< Encoder step (+/-1) or touch X coordinate (0..255).
 };
 
 /**

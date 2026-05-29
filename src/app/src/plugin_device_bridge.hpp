@@ -396,8 +396,8 @@ public slots:
      *   EncoderTurned          -> dialRotate with signed ticks + controller "Encoder".
      *   EncoderPressed         -> dialDown + legacy keyDownCord alias.
      *   EncoderReleased        -> dialUp + legacy keyUpCord alias.
-     *   TouchStrip gesture 0   -> touchTap {x, y:0, hold:false}.
-     *   TouchStrip gesture 1/2 -> dropped (page-nav intent owned by Phase 16).
+     *   TouchUp                -> touchTap {x, y:0, hold:false} (completed touch).
+     *   TouchDown/TouchMove    -> dropped (intermediate edges, not plugin events).
      *   Connected/Disconnected -> handled by onDeviceConnected/Disconnected.
      *
      * @param deviceId  Device codename from StreamDockInputService::deviceEvent.

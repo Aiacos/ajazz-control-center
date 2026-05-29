@@ -148,7 +148,9 @@ struct DeviceEvent {
         EncoderTurned,   ///< Encoder rotated; `index` = encoder number, `value` = signed delta.
         EncoderPressed,  ///< Encoder knob depressed; `index` = encoder number.
         EncoderReleased, ///< Encoder knob released; `index` = encoder number.
-        TouchStrip,      ///< Touch-strip gesture; `value` encodes gesture + X coordinate.
+        TouchDown,       ///< Touch-strip press began; `value` = X coordinate (0..255).
+        TouchMove,       ///< Touch-strip contact moved; `value` = X coordinate (0..255).
+        TouchUp,         ///< Touch-strip press ended;  `value` = X coordinate (0..255).
         Connected,       ///< Device became available on the bus.
         Disconnected,    ///< Device was removed or lost.
     };
