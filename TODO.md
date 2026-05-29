@@ -842,6 +842,40 @@ ______________________________________________________________________
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
 workstreams.
 
+### Out-of-process debug control channel (2026-05-29)
+
+> Shipped (`feat/streamdock`): an opt-in JSON-RPC control channel so an agent
+> can drive **and observe the whole app out-of-process** via the
+> `scripts/ajazz-debug` client (23 methods). Unified logs (tee stderr+file+ring
+>
+> - `qInstallMessageHandler` bridge so Qt `qCDebug` is captured too,
+>   `b3b0a0f`/`997c180`), a `QLocalServer` JSON-RPC server gated by
+>   `AJAZZ_DEBUG_CONTROL` (UDS, 0600) + `scripts/ajazz-debug` (`0ba3ece`),
+>   device/input/profile/plugin/`action.run` control (`bf881a1`), and
+>   `qml.tree/get/set/invoke/click` + `screenshot` (`e0319ea`). Drive a running
+>   instance: launch with `AJAZZ_DEBUG_CONTROL=1`, then
+>   `scripts/ajazz-debug <method> --params '{…}'`. Deferred:
+
+- [ ] **`raw.hidWrite`** is a not-implemented stub (honest error). `IDevice`
+  has no public raw-write seam and adding one crosses the "RE is source of
+  truth for wire format" hard rule — wire deliberately with an RE cross-check
+  only if a real need appears.
+- [ ] **QML `objectName` coverage.** `qml.click/get/set` only reach controls
+  that set `objectName:` in QML; most don't yet. Add objectNames to the key
+  controls (sidebar items, key cells, Apply/Revert, brightness slider) to make
+  the UI fully scriptable. `qml.tree` shows what's currently addressable.
+- [ ] **`qml.invoke` multi-arg.** Currently zero-arg only (covers
+  `clicked()`/triggers); richer calls need qml.set-then-invoke or an arg-coercing
+  `invokeMethod` path.
+- [ ] **Automated coverage for the live socket + facade.** The JSON-RPC
+  framing/dispatch is unit-tested (`test_debug_control_server.cpp`); the
+  QLocalServer round-trip and the facade handlers were verified live
+  (isolated offscreen instance) but lack a headless integration test.
+- [ ] **GCC 16 `-Werror=null-dereference`** false positive in
+  `profile_controller.cpp:619` (Qt `QHash` inlining). Unblocked locally only
+  (`-Wno-error=null-dereference` in the gitignored build cache); land a real
+  `fix(profiles):` before CI bumps to GCC 16.
+
 ### Plugin + profile + debug epic — follow-ups (2026-05-29)
 
 > Shipped this session (`feat/streamdock`): online catalog on by default
