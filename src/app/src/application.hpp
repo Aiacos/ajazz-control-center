@@ -127,6 +127,26 @@ public:
     /// Absolute path of the append-only log file written since bootstrap().
     [[nodiscard]] QString const& logFilePath() const noexcept { return m_logFilePath; }
 
+    // ---- Subsystem accessors for the debug control facade ----------------
+    // Non-owning; valid for the Application lifetime. Used by
+    // registerDebugControlMethods() to expose control over each subsystem.
+    [[nodiscard]] StreamDockControlService* streamDockControl() const noexcept {
+        return m_streamDockControl.get();
+    }
+    [[nodiscard]] StreamDockInputService* streamDockInput() const noexcept {
+        return m_streamDockInput.get();
+    }
+    [[nodiscard]] PluginDebugService* pluginDebug() const noexcept { return m_pluginDebug.get(); }
+    [[nodiscard]] ProfileController* profileController() const noexcept {
+        return m_profileController.get();
+    }
+    [[nodiscard]] BuiltinActionsService* builtinActions() const noexcept {
+        return m_builtinActions.get();
+    }
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
+#endif
+
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
     void onHotplug(core::HotplugEvent const& ev);

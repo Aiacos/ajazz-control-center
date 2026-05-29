@@ -9,12 +9,23 @@
 #include "ajazz/core/log_sinks.hpp"
 #include "ajazz/core/logger.hpp"
 #include "application.hpp"
+#include "builtin_actions_service.hpp"
 #include "debug_control_server.hpp"
 #include "debug_logging.hpp"
+#include "plugin_debug_service.hpp"
+#include "profile_controller.hpp"
+#include "stream_dock_control_service.hpp"
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "sd_plugin_server.hpp"
+#endif
 
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QString>
+#include <QVariant>
 
 namespace ajazz::app {
 namespace {
@@ -158,6 +169,233 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             {"methodCount", static_cast<int>(server.methodNames().size())},
         };
     });
+
+    // ---- Device output control (StreamDockControlService) --------------
+    server.registerMethod("device.setActiveDevice",
+                          [&app](QJsonObject const& params, QString& err) {
+                              auto* control = app.streamDockControl();
+                              if (control == nullptr) {
+                                  err = QStringLiteral("stream dock control unavailable");
+                                  return QJsonObject{};
+                              }
+                              QString const codename = params.value("codename").toString();
+                              if (codename.isEmpty()) {
+                                  err = QStringLiteral("missing 'codename'");
+                                  return QJsonObject{};
+                              }
+                              control->setActiveDevice(codename);
+                              return QJsonObject{{"activeDevice", codename}};
+                          });
+
+    server.registerMethod("device.setBrightness", [&app](QJsonObject const& params, QString& err) {
+        auto* control = app.streamDockControl();
+        if (control == nullptr) {
+            err = QStringLiteral("stream dock control unavailable");
+            return QJsonObject{};
+        }
+        QString const codename = params.value("codename").toString();
+        if (codename.isEmpty()) {
+            err = QStringLiteral("missing 'codename'");
+            return QJsonObject{};
+        }
+        if (!params.contains("percent")) {
+            err = QStringLiteral("missing 'percent'");
+            return QJsonObject{};
+        }
+        int const percent = qBound(0, params.value("percent").toInt(), 100);
+        control->setBrightness(codename, percent);
+        return QJsonObject{{"codename", codename}, {"percent", percent}};
+    });
+
+    server.registerMethod("device.clearAll", [&app](QJsonObject const& params, QString& err) {
+        auto* control = app.streamDockControl();
+        if (control == nullptr) {
+            err = QStringLiteral("stream dock control unavailable");
+            return QJsonObject{};
+        }
+        QString const codename = params.value("codename").toString();
+        if (codename.isEmpty()) {
+            err = QStringLiteral("missing 'codename'");
+            return QJsonObject{};
+        }
+        control->clearAll(codename);
+        return QJsonObject{{"cleared", codename}};
+    });
+
+    // ---- Input simulation (PluginDebugService) -------------------------
+    // Routes synthetic device events through the same path real input takes
+    // (PluginDeviceBridge::onDeviceEvent), so it drives actions + plugins.
+    server.registerMethod("input.key", [&app](QJsonObject const& params, QString& err) {
+        auto* dbg = app.pluginDebug();
+        if (dbg == nullptr) {
+            err = QStringLiteral("plugin debug service unavailable");
+            return QJsonObject{};
+        }
+        bool const pressed = params.value("pressed").toBool(true);
+        dbg->simulateKey(params.value("index").toInt(), pressed);
+        return QJsonObject{{"index", params.value("index").toInt()}, {"pressed", pressed}};
+    });
+
+    server.registerMethod("input.encoder", [&app](QJsonObject const& params, QString& err) {
+        auto* dbg = app.pluginDebug();
+        if (dbg == nullptr) {
+            err = QStringLiteral("plugin debug service unavailable");
+            return QJsonObject{};
+        }
+        dbg->simulateEncoder(params.value("index").toInt(), params.value("delta").toInt(1));
+        return QJsonObject{{"index", params.value("index").toInt()},
+                           {"delta", params.value("delta").toInt(1)}};
+    });
+
+    server.registerMethod("input.encoderPress", [&app](QJsonObject const& params, QString& err) {
+        auto* dbg = app.pluginDebug();
+        if (dbg == nullptr) {
+            err = QStringLiteral("plugin debug service unavailable");
+            return QJsonObject{};
+        }
+        bool const pressed = params.value("pressed").toBool(true);
+        dbg->simulateEncoderPress(params.value("index").toInt(), pressed);
+        return QJsonObject{{"index", params.value("index").toInt()}, {"pressed", pressed}};
+    });
+
+    server.registerMethod("input.touch", [&app](QJsonObject const& params, QString& err) {
+        auto* dbg = app.pluginDebug();
+        if (dbg == nullptr) {
+            err = QStringLiteral("plugin debug service unavailable");
+            return QJsonObject{};
+        }
+        // phase: 0=down 1=move 2=up (matches DeviceEvent touch phases).
+        dbg->simulateTouch(params.value("x").toInt(), params.value("phase").toInt());
+        return QJsonObject{{"x", params.value("x").toInt()},
+                           {"phase", params.value("phase").toInt()}};
+    });
+
+    // ---- Profile control (ProfileController) ---------------------------
+    server.registerMethod("profile.list", [&app](QJsonObject const&, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QJsonArray profiles;
+        for (auto const& id : pc->knownProfileIds()) {
+            profiles.append(QJsonObject{{"id", id}, {"name", pc->profileNameFor(id)}});
+        }
+        return QJsonObject{{"profiles", profiles},
+                           {"active", pc->activeProfileId()},
+                           {"activeName", pc->activeProfileName()}};
+    });
+
+    server.registerMethod("profile.active", [&app](QJsonObject const&, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        return QJsonObject{{"id", pc->activeProfileId()}, {"name", pc->activeProfileName()}};
+    });
+
+    server.registerMethod("profile.load", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QString const id = params.value("id").toString();
+        if (id.isEmpty()) {
+            err = QStringLiteral("missing 'id'");
+            return QJsonObject{};
+        }
+        pc->loadProfileById(id);
+        return QJsonObject{{"active", pc->activeProfileId()}};
+    });
+
+    server.registerMethod("profile.create", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QString const name = params.value("name").toString();
+        QString const codename = params.value("codename").toString();
+        if (name.isEmpty() || codename.isEmpty()) {
+            err = QStringLiteral("require 'name' and 'codename'");
+            return QJsonObject{};
+        }
+        return QJsonObject{{"id", pc->createProfile(name, codename)}};
+    });
+
+    // ---- Action execution (BuiltinActionsService) ---------------------
+    // Dangerous: built-in UUIDs include RunCommand/OpenUrl etc.; unknown
+    // UUIDs forward to the plugin path. Gated by the channel being on.
+    server.registerMethod("action.run", [&app](QJsonObject const& params, QString& err) {
+        auto* builtins = app.builtinActions();
+        if (builtins == nullptr) {
+            err = QStringLiteral("builtin actions service unavailable");
+            return QJsonObject{};
+        }
+        QString const id = params.value("id").toString();
+        if (id.isEmpty()) {
+            err = QStringLiteral("missing 'id' (action UUID)");
+            return QJsonObject{};
+        }
+        // settings may be a JSON object (re-serialised) or a verbatim string.
+        QString settingsJson;
+        QJsonValue const settings = params.value("settings");
+        if (settings.isObject()) {
+            settingsJson = QString::fromUtf8(
+                QJsonDocument(settings.toObject()).toJson(QJsonDocument::Compact));
+        } else if (settings.isString()) {
+            settingsJson = settings.toString();
+        } else {
+            settingsJson = QStringLiteral("{}");
+        }
+        builtins->onPluginAction(id.toStdString(), settingsJson.toStdString());
+        return QJsonObject{{"dispatched", id}};
+    });
+
+    // raw.hidWrite is intentionally a NOT-IMPLEMENTED stub: IDevice exposes
+    // no public raw-write seam, and adding one crosses the "RE is the source
+    // of truth for wire format" project hard rule (an arbitrary byte write
+    // bypasses every opcode/packet-layout invariant). Surfaced so the method
+    // is discoverable and returns an honest error rather than silently
+    // missing. Wire it deliberately, with an RE cross-check, if ever needed.
+    server.registerMethod("raw.hidWrite", [](QJsonObject const&, QString& err) {
+        err = QStringLiteral(
+            "raw.hidWrite not implemented: no public IDevice raw-write seam; adding one "
+            "must go through an RE cross-check (wire-format hard rule)");
+        return QJsonObject{};
+    });
+
+    // ---- Plugin host (SdPluginServer) ----------------------------------
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    server.registerMethod("plugin.list", [&app](QJsonObject const&, QString& err) {
+        auto* srv = app.pluginServer();
+        if (srv == nullptr) {
+            err = QStringLiteral("plugin server unavailable");
+            return QJsonObject{};
+        }
+        return QJsonObject{{"listening", srv->isListening()},
+                           {"port", static_cast<int>(srv->serverPort())},
+                           {"connectedCount", srv->connectedPluginCount()}};
+    });
+
+    server.registerMethod("plugin.sendEvent", [&app](QJsonObject const& params, QString& err) {
+        auto* srv = app.pluginServer();
+        if (srv == nullptr) {
+            err = QStringLiteral("plugin server unavailable");
+            return QJsonObject{};
+        }
+        QString const uuid = params.value("uuid").toString();
+        QString const event = params.value("event").toString();
+        if (uuid.isEmpty() || event.isEmpty()) {
+            err = QStringLiteral("require 'uuid' and 'event'");
+            return QJsonObject{};
+        }
+        bool const sent = srv->sendEvent(uuid, event, params.value("payload").toObject());
+        return QJsonObject{{"sent", sent}};
+    });
+#endif
 }
 
 } // namespace ajazz::app
