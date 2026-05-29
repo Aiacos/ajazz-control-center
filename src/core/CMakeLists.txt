@@ -11,6 +11,11 @@ add_library(
     src/macro_recorder.cpp
     src/notification_service.cpp
     src/logger.cpp
+    # Debug epic Phase 1: reusable LogSink building blocks (fan-out tee,
+    # bounded queryable ring buffer, append-to-file). No Qt / no JSON, so
+    # they stay inside the COD-031 boundary and back the out-of-process
+    # debug log stream wired up in the app tier.
+    src/log_sinks.cpp
     src/hotplug_monitor.cpp
     # Phase 21-01: IInputSynthesizer — always-compiled stub (AJAZZ_FEATURE_INPUT_SYNTH OFF by
     # default keeps the gating test hardware-free). The OS TUs are added unconditionally below

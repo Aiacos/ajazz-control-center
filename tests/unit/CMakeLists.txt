@@ -1,6 +1,8 @@
 add_executable(
     ajazz_unit_tests
     test_logger.cpp
+    # Debug epic Phase 1: tee / ring-buffer / file LogSink building blocks.
+    test_log_sinks.cpp
     test_device_registry.cpp
     test_akp153_protocol.cpp
     test_akp03_protocol.cpp
