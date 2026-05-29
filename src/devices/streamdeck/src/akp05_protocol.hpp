@@ -207,11 +207,13 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
 /**
  * @brief Build the firmware-version probe packet (CRT VER, no payload).
  *
- * Sent at device-open time by the vendor app — the device responds with
- * a 512-byte input report whose payload carries a version string. The
- * response format is not yet decoded in our Ghidra dump; this builder
- * only covers the request side. Backends that consume the response will
- * land in a follow-up commit per roadmap §11.3.
+ * This is the vendor app's open-time VER request (akp05_init_sequence.md §3.2).
+ * Our production backend does NOT use it: open() pulls the version via a HID
+ * GET_FEATURE (report id 0x01) instead, matching mirajazz, because the device
+ * answers the version over GET_REPORT rather than the interrupt-IN endpoint.
+ * This builder is retained as the documented vendor VER packet (covered by the
+ * protocol tests) and decoded by parseVersionResponse() (live-confirmed
+ * "V3.AKP05E.01.007"); keep it for the vendor-parity wire reference.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildVersionRequest();
 

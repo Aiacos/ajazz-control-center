@@ -31,8 +31,9 @@
  *      KeyReleased  -> Profile.keys[i].onRelease
  *      EncoderTurned -> 16 ms rotation coalescer (Pattern 3 / Pitfall 23)
  *      EncoderPressed -> encoders[i].onPress + synthesise paired release (Pattern 4)
- *      TouchStrip/Tap -> provisional zone map -> encoders[zone].onPress (INPUT-05a)
- *      TouchStrip/Swipe -> emit pageNavRequested(-1/+1) (INPUT-05b)
+ *      TouchDown/Up (raw) -> host-synthesised tap/swipe from the X delta:
+ *        small delta = tap -> provisional zone map -> encoders[zone].onPress (INPUT-05a)
+ *        large delta = swipe -> emit pageNavRequested(-1/+1) (INPUT-05b)
  *  - Expose the `pageNavRequested(int)` Q_SIGNAL for Phase 16's page model.
  *  - Expose `encoderReleaseSynthesised(uint16_t)` Q_SIGNAL for testability.
  *
