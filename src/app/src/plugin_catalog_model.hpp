@@ -201,6 +201,17 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
+     * @brief Resolve a single installed action by its UUID (Workstream C).
+     *
+     * Returns the same QVariantMap shape as one @ref installedActions entry
+     * (adds @c propertyInspectorAbsPath — the absolute PI HTML path — and
+     * @c pluginUuid — the install-dir name used as the settings-storage key),
+     * or an empty map when no installed plugin declares @p actionId. Used by
+     * the Inspector to load a bound plugin action's Property Inspector.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantMap actionInfo(QString const& actionId) const;
+
+    /**
      * @brief Re-populate the model from the current source.
      *
      * Re-applies the built-in mock fixture for the first-party /

@@ -267,6 +267,14 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
         f.write(manifest);
         f.close();
     }
+    // The PI file must exist for propertyInspectorAbsPath to resolve (Workstream C).
+    REQUIRE(QDir().mkpath(QDir(pluginDir).filePath(QStringLiteral("pi"))));
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("pi/index.html")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("<html></html>");
+        f.close();
+    }
 
     QVariantList const actions = model.installedActions();
     QStandardPaths::setTestModeEnabled(false);
@@ -283,6 +291,20 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
           QStringLiteral("com.example.demo.second"));
     CHECK(a1.value(QStringLiteral("propertyInspectorPath")).toString() ==
           QStringLiteral("pi/index.html"));
+
+    // actionInfo() resolves a single action with the absolute PI path + the
+    // plugin-uuid storage key (Workstream C).
+    QStandardPaths::setTestModeEnabled(true);
+    QVariantMap const info = model.actionInfo(QStringLiteral("com.example.demo.second"));
+    QStandardPaths::setTestModeEnabled(false);
+    CHECK(info.value(QStringLiteral("actionName")).toString() == QStringLiteral("Second Action"));
+    CHECK(info.value(QStringLiteral("pluginUuid")).toString() ==
+          QStringLiteral("com.example.demo.sdPlugin"));
+    CHECK(info.value(QStringLiteral("propertyInspectorAbsPath"))
+              .toString()
+              .endsWith(QStringLiteral("com.example.demo.sdPlugin/pi/index.html")));
+    // An unknown action id returns an empty map.
+    CHECK(model.actionInfo(QStringLiteral("com.nope.nope")).isEmpty());
 
     PluginCatalogModel::setPluginsDirOverride(QString{});
 }

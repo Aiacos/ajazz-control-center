@@ -356,18 +356,47 @@ QVariantList PluginCatalogModel::installedActions() const {
                 }
             }
 
+            // Absolute filesystem path to the action's Property Inspector HTML
+            // (Workstream C). loadInspector() needs an absolute path; the
+            // manifest stores it relative to the plugin dir.
+            QString piAbs;
+            if (!action.propertyInspectorPath.isEmpty()) {
+                QString const cand = QDir(pluginDir).filePath(action.propertyInspectorPath);
+                if (QFileInfo::exists(cand)) {
+                    piAbs = cand;
+                }
+            }
+
             QVariantMap m;
             m.insert(QStringLiteral("pluginName"), parsed->name);
             m.insert(QStringLiteral("actionId"), action.uuid);
             m.insert(QStringLiteral("actionName"), action.name);
             m.insert(QStringLiteral("icon"), iconUrl);
             m.insert(QStringLiteral("propertyInspectorPath"), action.propertyInspectorPath);
+            m.insert(QStringLiteral("propertyInspectorAbsPath"), piAbs);
+            // The install-dir name is the per-plugin settings-storage key the
+            // PIBridge uses (AppDataLocation/plugins/<pluginUuid>/settings/).
+            m.insert(QStringLiteral("pluginUuid"), entry);
             m.insert(QStringLiteral("controllers"), action.controllers);
             out.append(m);
         }
     }
 
     return out;
+}
+
+QVariantMap PluginCatalogModel::actionInfo(QString const& actionId) const {
+    if (actionId.isEmpty()) {
+        return {};
+    }
+    QVariantList const all = installedActions();
+    for (QVariant const& v : all) {
+        QVariantMap const m = v.toMap();
+        if (m.value(QStringLiteral("actionId")).toString() == actionId) {
+            return m;
+        }
+    }
+    return {};
 }
 
 void PluginCatalogModel::reload() {

@@ -58,30 +58,47 @@ Rectangle {
 
     signal bindingFieldChanged(string field, var value)
 
-    // -- Property Inspector wiring -------------------------------------------
-    // Called whenever `binding` changes to drive loadInspector / closeInspector.
-    // Reads the optional PI fields from the binding JS object; falls back to ""
-    // when absent so existing non-plugin bindings are unaffected.
+    // -- Property Inspector wiring (Workstream C) ----------------------------
+    // Called whenever `binding` changes. When the selected binding is a plugin
+    // action (actionKind == 0, non-empty actionId) whose installed manifest
+    // declares a Property Inspector HTML page, load it; otherwise close any
+    // HTML PI so the native form takes over. The PI path + plugin uuid are
+    // resolved live from PluginCatalog.actionInfo(actionId) rather than stored
+    // in the profile (the Profile schema has no PI field).
     function maybeLoadInspector() {
-        // Guard: no selection or WebEngine unavailable -> close the HTML PI so
-        // PropertyInspector.qml's Loader falls back to NativePropertyInspector.
-        if (!root.binding || !PropertyInspectorController.webEngineAvailable) {
+        if (!root.binding || !PropertyInspectorController.webEngineAvailable
+                || typeof PluginCatalog === "undefined" || !PluginCatalog) {
             PropertyInspectorController.closeInspector();
             return;
         }
 
-        var piPath = root.binding.propertyInspectorPath ? root.binding.propertyInspectorPath : "";
-        if (piPath === "") {
-            // Native / built-in action with no HTML PI -> native renderer takes over.
+        var kind = root.binding.actionKind;
+        var actionId = root.binding.actionId ? root.binding.actionId : "";
+        if (kind !== 0 /* ActionKind.Plugin */ || actionId === "") {
             PropertyInspectorController.closeInspector();
             return;
         }
 
-        // Plugin action with a PI HTML path -> load the HTML PI.
-        var pluginUuid  = root.binding.pluginUuid    ? root.binding.pluginUuid    : "";
-        var actionUuid  = root.binding.actionUuid    ? root.binding.actionUuid    : "";
-        var contextUuid = root.binding.contextUuid   ? root.binding.contextUuid   : "";
-        PropertyInspectorController.loadInspector(pluginUuid, piPath, actionUuid, contextUuid);
+        var info = PluginCatalog.actionInfo(actionId);
+        var piAbs = (info && info.propertyInspectorAbsPath) ? info.propertyInspectorAbsPath : "";
+        if (piAbs === "") {
+            // Plugin action without an HTML PI -> native form.
+            PropertyInspectorController.closeInspector();
+            return;
+        }
+
+        var pluginUuid = (info && info.pluginUuid) ? info.pluginUuid : "";
+        PropertyInspectorController.loadInspector(pluginUuid, piAbs, actionId, root._contextUuid());
+    }
+
+    // Stable per-profile, per-selection settings context so the PIBridge
+    // persists settings to a deterministic file across sessions. Distinct
+    // profiles/keys get distinct contexts (so settings do not bleed across).
+    function _contextUuid() {
+        var pid = (typeof ProfileController !== "undefined" && ProfileController)
+            ? ProfileController.activeProfileId() : "";
+        var sel = root.selectionLabel.replace(/[^A-Za-z0-9_-]/g, "_");
+        return (pid === "" ? "default" : pid) + "_" + (sel === "" ? "sel" : sel);
     }
 
     // React to binding changes (new key selected, selection cleared, binding updated).
@@ -139,9 +156,33 @@ Rectangle {
             body: qsTr("Click a key on the left to configure its action, label, and icon.")
         }
 
+        // HTML Property Inspector path (Workstream C) -------------------------
+        // When a bound plugin action declares a Property Inspector page, the
+        // controller reports hasHtmlInspector and we render the plugin's HTML
+        // PI here (loaded lazily so non-WebEngine builds never touch the file).
+        // The native form below is hidden while the HTML PI is active.
+        Loader {
+            id: htmlPiLoader
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            visible: root.hasSelection
+                     && PropertyInspectorController.webEngineAvailable
+                     && PropertyInspectorController.hasHtmlInspector
+            active: visible
+            // String source (not a hard import) so the missing PIWebView.qml in
+            // a no-WebEngine build does not become a compile error.
+            source: "PIWebView.qml"
+            onStatusChanged: {
+                if (status === Loader.Error) {
+                    console.error("Inspector: failed to load PIWebView.qml");
+                }
+            }
+        }
+
         // Form path -----------------------------------------------------------
         ColumnLayout {
-            visible: root.hasSelection
+            visible: root.hasSelection && !(PropertyInspectorController.webEngineAvailable
+                                            && PropertyInspectorController.hasHtmlInspector)
             Layout.fillWidth: true
             spacing: Theme.spacingMd
 
