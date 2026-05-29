@@ -15,13 +15,23 @@
  */
 #pragma once
 
+class QQmlApplicationEngine;
+
 namespace ajazz::app {
 
 class DebugControlServer;
 class Application;
 
-/// Register every debug-control method onto @p server, bound to @p app.
-/// Call once, after Application::bootstrap() (the log ring must exist).
+/// Register the log / state / device / input / profile / plugin / action
+/// methods onto @p server, bound to @p app. Call once, after
+/// Application::bootstrap() (the log ring must exist).
 void registerDebugControlMethods(DebugControlServer& server, Application& app);
+
+/// Register the QML introspection + driving + screenshot methods
+/// (qml.tree / qml.get / qml.set / qml.invoke / qml.click / screenshot)
+/// onto @p server, bound to @p engine. Call after the QML root has loaded.
+/// Handlers run on the GUI thread (the control server's event loop), so it
+/// is safe for them to touch QML objects and grab the window.
+void registerQmlControlMethods(DebugControlServer& server, QQmlApplicationEngine& engine);
 
 } // namespace ajazz::app

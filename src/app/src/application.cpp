@@ -812,6 +812,7 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     if (DebugControlServer::enabledFromEnv()) {
         m_debugControl = std::make_unique<DebugControlServer>(this);
         registerDebugControlMethods(*m_debugControl, *this);
+        registerQmlControlMethods(*m_debugControl, engine);
         if (!m_debugControl->start(DebugControlServer::defaultSocketPath())) {
             AJAZZ_LOG_WARN("app", "debug control channel requested but failed to start");
             m_debugControl.reset();

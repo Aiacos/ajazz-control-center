@@ -46,6 +46,10 @@ qt_add_executable(
     # methods onto it. Lets the out-of-process scripts/ajazz-debug client drive a running instance.
     src/debug_control_server.cpp
     src/debug_control_facade.cpp
+    # Debug epic Phase 3: QML introspection + driving + screenshot methods
+    # (qml.tree/get/set/invoke/click + screenshot) so the channel can see and drive the UI. Needs
+    # the QQmlApplicationEngine + Qt6::Quick (QQuickWindow).
+    src/debug_control_qml.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
     # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded
