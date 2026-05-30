@@ -274,11 +274,18 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     // it from a path-free identifier (PUUID, else the .sdPlugin directory name,
     // else Name) rather than the CodePath: real plugins use subdir CodePaths
     // like "plugin/main.html", which are NOT valid single path components.
-    QString const pluginId =
-        !manifest.puuid.isEmpty()
-            ? manifest.puuid
-            : (!manifest.sourceDir.isEmpty() ? QFileInfo(manifest.sourceDir).fileName()
-                                             : manifest.name);
+    // The m_live / m_lastNodeArgv KEY (distinct from the -pluginUUID arg, which
+    // prefers PUUID below). Historical contract: id == CodePath for simple
+    // single-component CodePaths. A subdir CodePath ("plugin/main.html") is not
+    // a valid single component, so fall back to the .sdPlugin dir name, else Name.
+    QString pluginId;
+    if (!manifest.codePath.isEmpty() && isSafeUuidComponent(manifest.codePath)) {
+        pluginId = manifest.codePath;
+    } else if (!manifest.sourceDir.isEmpty()) {
+        pluginId = QFileInfo(manifest.sourceDir).fileName();
+    } else {
+        pluginId = manifest.name;
+    }
     if (!isSafeUuidComponent(pluginId)) {
         qWarning("PluginManager: rejecting plugin with unsafe UUID/path component: '%s'",
                  qPrintable(pluginId));

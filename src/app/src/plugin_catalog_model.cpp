@@ -736,12 +736,16 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
 
     VerifyOutcome const vout = verifyStagedPlugin(stagedManifest);
 
-    if (vout.verdict == VerifyVerdict::Refused &&
-        !(userConfirmedUnsigned || untrustedPluginsAllowed())) {
+    if (vout.verdict == VerifyVerdict::Refused) {
         // Tampered OR unsigned (hard-refuse) — quarantine staging dir.
-        // Bypassed when the user explicitly confirmed an untrusted install or
-        // AJAZZ_ALLOW_UNTRUSTED_PLUGINS is set: third-party plugins (Elgato /
-        // OpenDeck) are unsigned and must be installable from all sources.
+        // NOTE: verifyStagedPlugin cannot yet distinguish "no signature"
+        // (unsigned third-party, opt-in-installable) from "signature present
+        // but invalid" (tampered, must ALWAYS refuse, incl. with
+        // userConfirmedUnsigned — CR-01). Until that split lands in the
+        // verifier, the GUI install-from-file path stays strict; unsigned
+        // third-party plugins (Elgato / OpenDeck) are enabled via the
+        // launch-sweep opt-in (AJAZZ_ALLOW_UNTRUSTED_PLUGINS) by placing the
+        // .sdPlugin directory in the plugins dir.
         AJAZZ_LOG_WARN("plugin-catalog",
                        "installFromFile '{}': signature Refused ({}); quarantining",
                        localPath.toStdString(),
@@ -752,12 +756,6 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         emit installFinished(
             localPath, false, tr("Plugin signature verification failed: %1").arg(reason));
         return false;
-    }
-    if (vout.verdict == VerifyVerdict::Refused) {
-        AJAZZ_LOG_WARN("plugin-catalog",
-                       "installFromFile '{}': unsigned/untrusted — installing as UNTRUSTED "
-                       "(explicit opt-in)",
-                       localPath.toStdString());
     }
 
     if (vout.verdict == VerifyVerdict::SelfSigned && !userConfirmedUnsigned) {
