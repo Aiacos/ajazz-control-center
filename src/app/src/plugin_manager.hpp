@@ -62,6 +62,11 @@
 #include <memory>
 #include <vector>
 
+#if defined(AJAZZ_HAVE_WEBENGINE)
+class QWebEngineProfile;
+class QWebEnginePage;
+#endif
+
 // QProcess must be a complete type wherever unique_ptr<QProcess> is destroyed.
 // Including QProcess here ensures any TU that includes this header can destroy LivePlugin.
 #include <QProcess>
@@ -258,6 +263,18 @@ private:
 
     /// Last buildNodeArgv result per uuid, stored for test assertions.
     QHash<QString, QStringList> m_lastNodeArgv;
+
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    /// Headless Chromium hosting for HTML plugins (CodePath = *.html). The
+    /// shared profile carries the Mirabox compat shim; one page per HTML
+    /// plugin loads its index.html and is invoked with
+    /// connectElgatoStreamDeckSocket() so it registers over the loopback WS
+    /// exactly like a Node plugin. Profile declared first so it outlives the
+    /// pages (reverse-of-declaration destruction). Both owned solely by these
+    /// unique_ptrs (no QObject parent) to avoid double-delete.
+    std::unique_ptr<QWebEngineProfile> m_htmlProfile;
+    std::vector<std::unique_ptr<QWebEnginePage>> m_htmlPages;
+#endif
 };
 
 } // namespace ajazz::app

@@ -48,6 +48,11 @@
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "plugin_mirabox_shim.hpp"
 #include "property_inspector_controller.hpp"
+
+#include <QtWebEngineCore/QWebEnginePage>
+#include <QtWebEngineCore/QWebEngineProfile>
+#include <QtWebEngineCore/QWebEngineScriptCollection>
+#include <QUrl>
 // MAINTAINER NOTE (WR-01): QQuickWebEngineScriptCollection is only forward-declared in the
 // public qquickwebengineprofile.h header; its complete type definition lives in the private
 // header below. There is no public-API alternative in Qt 6.7 that lets callers call
@@ -61,6 +66,15 @@ static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0),
 #endif
 
 namespace ajazz::app {
+
+// Emulated Stream Deck app version advertised to plugins and used for the
+// Software.MinimumVersion runnability gate. A manifest's MinimumVersion refers
+// to the Elgato Stream Deck app (e.g. "4.1", "6.5"), NOT to this app's version,
+// so gating against our own 0.1.0 would refuse every real plugin. We emulate
+// the SD v6 plugin API surface; advertise a generous v6 version so v4/v5/v6
+// plugins pass. (A plugin requiring a strictly newer SD than this is genuinely
+// out of scope and correctly skipped.)
+static constexpr char kEmulatedSdVersion[] = "6.9";
 
 // ---------------------------------------------------------------------------
 // isSafeUuidComponent — reuse from pi_bridge.cpp:66 (T-18-PATHTRAV mitigation).
@@ -168,8 +182,11 @@ QString PluginManager::buildInfoJson() {
     // Shape: {application:{version,platform},devicePixelRatio:1,devices:[]}.
     // Source: 18-RESEARCH.md A2 — exact shape pinned against a real package in Phase 25;
     //         this minimal form is sufficient for the plugin host to identify itself.
+    // The advertised version is the EMULATED Stream Deck app version (not our own
+    // app version): plugins compare against the Stream Deck app, so reporting our
+    // 0.1.0 would make version-gated plugins refuse to run. See kEmulatedSdVersion.
     QJsonObject app;
-    app[QStringLiteral("version")] = QCoreApplication::applicationVersion();
+    app[QStringLiteral("version")] = QString::fromLatin1(kEmulatedSdVersion);
     app[QStringLiteral("platform")] = currentPlatformString();
 
     QJsonObject envelope;
@@ -225,9 +242,11 @@ std::vector<PluginManifest> PluginManager::discover() {
             continue;
         }
 
-        // Step 4: apply runnability gate.
+        // Step 4: apply runnability gate. Pass the emulated Stream Deck version
+        // (not our app version) so a plugin's Software.MinimumVersion (an Elgato
+        // SD-app requirement) is compared against the right axis.
         if (!manifestRunnableHere(
-                *opt, currentPlatformString(), QCoreApplication::applicationVersion())) {
+                *opt, currentPlatformString(), QString::fromLatin1(kEmulatedSdVersion))) {
             qWarning("PluginManager: skipping %s (not runnable on this platform/version)",
                      qPrintable(opt->name));
             continue;
@@ -351,30 +370,55 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     } else if (ext == QLatin1String("html") || ext == QLatin1String("htm")) {
         // HTML / WebEngine path (PLUGIN-08, PLUGIN-11).
 #if defined(AJAZZ_HAVE_WEBENGINE)
-        if (m_piController) {
-            // Attach Mirabox shim to the per-plugin profile before loading index.html.
-            // akp_plugin_sdk.md §9 compat shim + Pattern 2 from 18-RESEARCH.md.
-            // userScripts() returns QQuickWebEngineScriptCollection* (Qt 6 API;
-            // scripts() does not exist on QQuickWebEngineProfile).
-            auto* profile = m_piController->activeProfile();
-            if (profile) {
-                profile->userScripts()->insert(makeMiraboxShim());
-            }
-            // NOTE: in-process HTML plugin page-load (the Chromium view that renders
-            // the plugin's index.html as its main UI, not the per-action PI settings
-            // panel) requires the Phase-19 device<->plugin bridge surface and the
-            // Phase-20 WebEngine view-routing work. PropertyInspectorController::
-            // loadInspector() is the Phase-20 per-action PI loader (4-arg API:
-            // pluginUuid, htmlAbsPath, actionUuid, contextUuid) — calling it here with
-            // placeholder args would be a semantic misuse and would corrupt the active
-            // PI state. The plugin is registered in m_live below so lifecycle tracking
-            // (crash, shutdown, exitApp) is fully active; only the Chromium page-load
-            // is deferred. (Phase-19/20 will wire the plugin main view once the bridge
-            // surface is ready.)
-            qInfo("PluginManager: HTML plugin '%s' registered in m_live; "
-                  "in-process WebEngine page-load deferred to Phase 19/20 bridge work",
-                  qPrintable(manifest.name));
+        // Load the plugin's index.html in a headless Chromium page and invoke
+        // its connectElgatoStreamDeckSocket() entry point so it registers over
+        // the loopback WebSocket exactly like a Node plugin (akp_plugin_sdk.md
+        // §3 HTML run mode). The shared profile carries the Mirabox compat shim
+        // (connectMiraBoxSDSocket alias) installed at document creation.
+        quint16 htmlPort = 0;
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+        if (m_server) {
+            htmlPort = m_server->serverPort();
         }
+#endif
+        QString const infoJson = buildInfoJson();
+        QString const htmlAbs =
+            manifest.sourceDir.isEmpty() ? code : manifest.sourceDir + QLatin1Char('/') + code;
+
+        if (!m_htmlProfile) {
+            m_htmlProfile =
+                std::make_unique<QWebEngineProfile>(QStringLiteral("ajazz-html-plugins"));
+            m_htmlProfile->scripts()->insert(makeMiraboxShim());
+        }
+        auto page = std::make_unique<QWebEnginePage>(m_htmlProfile.get());
+        QWebEnginePage* rawPage = page.get();
+        QString const regUuid = pluginUuid;
+        QString const pname = manifest.name;
+        connect(rawPage,
+                &QWebEnginePage::loadFinished,
+                this,
+                [rawPage, htmlPort, regUuid, infoJson, pname](bool ok) {
+                    if (!ok) {
+                        qWarning("PluginManager: HTML plugin '%s' page failed to load",
+                                 qPrintable(pname));
+                        return;
+                    }
+                    // The plugin's JS defines connectElgatoStreamDeckSocket (or the
+                    // connectSocket alias). inInfo is a JSON *string* the plugin
+                    // JSON.parses; JSON.stringify(<infoJson literal>) yields it.
+                    QString const js =
+                        QStringLiteral("(function(){var f=window.connectElgatoStreamDeckSocket||"
+                                       "window.connectSocket;if(typeof f==='function'){"
+                                       "f(%1,'%2','registerPlugin',JSON.stringify(%3));}})();")
+                            .arg(QString::number(htmlPort), regUuid, infoJson);
+                    rawPage->runJavaScript(js);
+                });
+        rawPage->load(QUrl::fromLocalFile(htmlAbs));
+        m_htmlPages.push_back(std::move(page));
+        qInfo("PluginManager: HTML plugin '%s' loading %s (port=%u)",
+              qPrintable(manifest.name),
+              qPrintable(htmlAbs),
+              static_cast<unsigned>(htmlPort));
 #else
         qWarning("PluginManager: HTML plugin '%s' requires WebEngine (not available)",
                  qPrintable(manifest.name));

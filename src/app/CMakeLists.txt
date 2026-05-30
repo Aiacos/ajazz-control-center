@@ -552,7 +552,12 @@ target_link_libraries(
 )
 
 if(AJAZZ_HAVE_WEBENGINE)
-    target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannelQuick)
+    # WebEngineCore provides QWebEnginePage/QWebEngineProfile used by the HTML plugin run-path
+    # (headless page-load + connectElgatoStreamDeckSocket).
+    find_package(Qt6 QUIET COMPONENTS WebEngineCore)
+    target_link_libraries(
+        ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannelQuick Qt6::WebEngineCore
+    )
     # Qt6::WebEngineQuickPrivate exposes the private include path required by plugin_manager.cpp to
     # call profile->userScripts()->insert(...). QQuickWebEngineScriptCollection is only
     # forward-declared in the public qquickwebengineprofile.h; its complete definition lives in the
