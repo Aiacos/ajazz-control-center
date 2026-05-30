@@ -16,10 +16,14 @@ For anything beyond a typo fix or a small bug, open a GitHub issue and describe 
 
 ### 2. Fork, branch, pull request
 
-- Fork the repository to your account.
-- Create a topic branch: `feat/akp03-backend`, `fix/qml-profile-drag-crash`, `docs/adding-a-device`.
+- Fork the repository to your account (external contributors), or branch
+  directly (maintainers).
+- Create a topic branch **off `develop`**: `feat/akp03-backend`,
+  `fix/qml-profile-drag-crash`, `docs/adding-a-device`.
 - Keep commits focused and reviewable. Squash trivia; preserve logically distinct steps.
-- Open a PR against `main`. Link the issue it closes.
+- Open a PR **against `develop`** (the default branch). Link the issue it
+  closes. `main` is release-only: it receives a single promotion PR from
+  `develop` when a release is cut, never feature PRs directly.
 
 ### 3. Commit style
 
@@ -75,6 +79,12 @@ a CI failure or run things by hand:
    the PR head as a `style:` commit, so the human reviewer always sees
    a green tree. Forks don't get this push (security boundary) — fork
    contributors should run `make lint-all` themselves before pushing.
+   - **Heads-up:** unless the repo has a `LINT_AUTOFIX_PAT` secret, that
+     `style:` commit is pushed with the default `GITHUB_TOKEN`, which does
+     **not** re-trigger the check suite. The required checks then sit
+     "waiting for status" on the fix commit. Push any follow-up commit (or
+     close/reopen the PR) to make them run. The simplest avoidance is to
+     run `make lint-all` locally so there is nothing left to auto-fix.
 
 If a hook is being noisy and the fix isn't trivially obvious, run
 `pre-commit run --hook-id <id> --all-files --verbose` to see exactly
@@ -170,4 +180,9 @@ By submitting a PR you certify that your contribution complies with the [Develop
 
 ## Release cadence
 
-Release branches are cut from `main` when the support matrix advances. Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
+A release is cut by promoting `develop` into `main` via a pull request;
+tags `v*` are then created from `main` and trigger the release workflow.
+Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
+
+The full branching model, the CI/CD pipeline, and the step-by-step release
+runbook live in **[`docs/RELEASING.md`](docs/RELEASING.md)**.

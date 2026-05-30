@@ -512,5 +512,5 @@ platforms:
     notes: "Grant Input Monitoring on first launch"
   - name: "Windows"
     build: "✅ MSVC 2022"
-    install: ".msi (winget)"
-    notes: "No drivers required"
+    install: ".msi / .zip (Releases)"
+    notes: "No drivers required; winget + Chocolatey pending approval"

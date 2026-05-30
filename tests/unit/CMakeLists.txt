@@ -365,9 +365,19 @@ endif()
 # AJAZZ_TEST_REPO_ROOT lets the verifier test locate scripts/sign-plugin-manifest.py +
 # resources/trusted_publishers.json regardless of CWD when ctest runs the binary. Applies on every
 # platform — the test now compiles on POSIX + Windows.
+#
+# AJAZZ_TEST_PYTHON3 pins the SAME interpreter for signing and verifying: the C++ verifier resolves
+# bare names only from vetted system dirs (never $PATH, CWE-426), but the interpreter that actually
+# has the `cryptography` module is wherever CMake/CI provisioned it (e.g. the hostedtoolcache python
+# on the macOS/Windows runners, NOT /usr/bin). Passing its absolute path makes the functional tests
+# interpreter-location-independent while the dedicated "unresolvable interpreter fails closed" case
+# still exercises a bare name.
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
 set_source_files_properties(
-    test_manifest_signer.cpp PROPERTIES COMPILE_DEFINITIONS
-                                        "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+    test_manifest_signer.cpp
+    PROPERTIES
+        COMPILE_DEFINITIONS
+        "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\";AJAZZ_TEST_PYTHON3=\"${Python3_EXECUTABLE}\""
 )
 
 # AJAZZ_TESTING flips on the ARCH-02 mock seams: HotplugMonitor::injectEvent (Plan 04-02) and any

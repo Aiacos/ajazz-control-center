@@ -5,9 +5,9 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
 
 concurrency:
@@ -190,9 +190,13 @@ jobs:
             -DAJAZZ_ENABLE_WERROR=OFF
 
       - name: Build & test
+        # -LE qml: the QML smoke tests instantiate a real QQmlEngine, which
+        # SIGSEGVs under gcov coverage instrumentation (gcov x Qt-QML) while
+        # passing in every normal build. They contribute no logic coverage,
+        # so exclude them here; the release build matrix still runs them.
         run: |
           cmake --build build-cov
-          ctest --test-dir build-cov --output-on-failure
+          ctest --test-dir build-cov --output-on-failure --label-exclude qml
 
       - name: Generate report
         run: |

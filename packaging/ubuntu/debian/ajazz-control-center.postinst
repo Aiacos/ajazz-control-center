@@ -1,0 +1,23 @@
+#!/bin/sh
+# postinst for ajazz-control-center.
+#
+# The 70-ajazz.rules udev rule is installed directly by the upstream CMake
+# install (not via dh_installudev), so reload + retrigger udev here so the
+# TAG+="uaccess" ACL applies to already-plugged-in devices without a reboot.
+# Desktop-database and icon-cache refreshes are otherwise driven by dpkg
+# triggers (dh compat 13), but we keep best-effort calls for completeness.
+set -e
+
+case "$1" in
+    configure)
+        if command -v udevadm >/dev/null 2>&1; then
+            udevadm control --reload-rules || true
+            udevadm trigger --subsystem-match=usb --subsystem-match=hidraw || true
+        fi
+        ;;
+    abort-upgrade | abort-remove | abort-deconfigure) ;;
+esac
+
+#DEBHELPER#
+
+exit 0

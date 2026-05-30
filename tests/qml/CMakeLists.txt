@@ -213,4 +213,10 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     endif()
 endif()
 
-catch_discover_tests(ajazz_qml_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+# LABELS "qml" lets the coverage CI job exclude these via `ctest -LE qml`. They instantiate QML
+# through a real QQmlEngine, which SIGSEGVs under gcov coverage instrumentation (gcov x Qt-QML
+# interaction) while passing in every normal build. They add no logic coverage, so the coverage job
+# skips them and the release build matrix keeps them as the real smoke gate.
+catch_discover_tests(
+    ajazz_qml_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "qml"
+)

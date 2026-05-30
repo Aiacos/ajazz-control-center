@@ -18,8 +18,14 @@ Homebrew cask on macOS). It installs the udev rule automatically and
 
 ### Windows
 
+Download and run the `.msi` from the
+[latest release](https://github.com/Aiacos/ajazz-control-center/releases/latest)
+(SmartScreen → **More info → Run anyway** while the installer is unsigned).
+`winget` / `Chocolatey` packages are prepared and pending approval:
+
 ```powershell
-winget install Aiacos.AjazzControlCenter
+winget install Aiacos.AjazzControlCenter   # coming soon (pending winget-pkgs)
+choco  install ajazz-control-center        # coming soon (pending moderation)
 ```
 
 ### Manual download
