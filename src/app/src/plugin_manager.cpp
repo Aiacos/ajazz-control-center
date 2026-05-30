@@ -270,7 +270,15 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     // The manifest's CodePath / Name is used as a key in m_live and potentially
     // in per-plugin settings directories. Reject any value that could traverse
     // path boundaries.
-    QString const pluginId = manifest.codePath.isEmpty() ? manifest.name : manifest.codePath;
+    // Stable plugin id used as the m_live key and -pluginUUID fallback. Derive
+    // it from a path-free identifier (PUUID, else the .sdPlugin directory name,
+    // else Name) rather than the CodePath: real plugins use subdir CodePaths
+    // like "plugin/main.html", which are NOT valid single path components.
+    QString const pluginId =
+        !manifest.puuid.isEmpty()
+            ? manifest.puuid
+            : (!manifest.sourceDir.isEmpty() ? QFileInfo(manifest.sourceDir).fileName()
+                                             : manifest.name);
     if (!isSafeUuidComponent(pluginId)) {
         qWarning("PluginManager: rejecting plugin with unsafe UUID/path component: '%s'",
                  qPrintable(pluginId));
@@ -283,10 +291,15 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     // or traversal components regardless of which platform-override was selected
     // (T-18-PATHTRAV bypass fix).
     QString const code = resolveCodePath(manifest);
-    if (code.isEmpty() || code.contains(QLatin1Char('/')) || code.contains(QLatin1Char('\\')) ||
+    // Allow forward-slash SUBDIRECTORIES (real plugins ship CodePath like
+    // "plugin/main.html" or "bin/index.js"); the child runs with sourceDir as
+    // CWD so a relative subpath stays inside the plugin dir. Still reject
+    // traversal (".."), absolute paths (leading '/'), and backslashes
+    // (Windows separators / traversal). (T-18-PATHTRAV.)
+    if (code.isEmpty() || code.startsWith(QLatin1Char('/')) || code.contains(QLatin1Char('\\')) ||
         code.contains(QLatin1String(".."))) {
         qWarning("PluginManager: rejecting plugin '%s': resolved code path '%s' is unsafe "
-                 "(contains directory separator or traversal component)",
+                 "(absolute, backslash, or traversal component)",
                  qPrintable(manifest.name),
                  qPrintable(code));
         return;
