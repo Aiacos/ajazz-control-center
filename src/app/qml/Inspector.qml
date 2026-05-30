@@ -58,6 +58,11 @@ Rectangle {
 
     signal bindingFieldChanged(string field, var value)
 
+    // Clip so the form can never paint outside the docked pane and bleed
+    // onto the brightness row / footer below it (the fields are taller than
+    // the pane; the ScrollView below makes them scrollable instead).
+    clip: true
+
     // -- Property Inspector wiring (Workstream C) ----------------------------
     // Called whenever `binding` changes. When the selected binding is a plugin
     // action (actionKind == 0, non-empty actionId) whose installed manifest
@@ -180,10 +185,21 @@ Rectangle {
         }
 
         // Form path -----------------------------------------------------------
-        ColumnLayout {
+        // Wrapped in a ScrollView so the form (which is taller than the docked
+        // pane) scrolls within the Inspector instead of overflowing onto the
+        // brightness row / footer below it.
+        ScrollView {
+            id: formScroll
             visible: root.hasSelection && !(PropertyInspectorController.webEngineAvailable
                                             && PropertyInspectorController.hasHtmlInspector)
             Layout.fillWidth: true
+            Layout.fillHeight: true
+            clip: true
+            contentWidth: availableWidth
+            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+            ColumnLayout {
+            width: formScroll.availableWidth
             spacing: Theme.spacingMd
 
             // -- Icon row -----------------------------------------------------
@@ -282,6 +298,7 @@ Rectangle {
                 onTextEdited: root.bindingFieldChanged("actionParams", text)
                 Accessible.role: Accessible.EditableText
                 Accessible.name: qsTr("Action parameters")
+            }
             }
         }
 
