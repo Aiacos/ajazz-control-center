@@ -140,8 +140,10 @@ void PluginDebugService::simulateKey(int keyIndex, bool pressed) {
     append(QStringLiteral("sim"),
            QStringLiteral("input"),
            QStringLiteral("key %1 %2 -> %3").arg(keyIndex).arg(pressed ? "down" : "up").arg(id));
-    if (m_bridge != nullptr) {
-        m_bridge->onDeviceEvent(id, ev);
+    if (m_input != nullptr) {
+        // Drive the FULL real pipeline (built-in actions + plugin bridge +
+        // debug log) via dispatch(), not just the plugin bridge directly.
+        m_input->injectSyntheticEvent(ev);
     }
 #else
     append(QStringLiteral("sim"),
@@ -160,8 +162,10 @@ void PluginDebugService::simulateEncoder(int encoderIndex, int delta) {
     append(QStringLiteral("sim"),
            QStringLiteral("input"),
            QStringLiteral("encoder %1 delta %2 -> %3").arg(encoderIndex).arg(delta).arg(id));
-    if (m_bridge != nullptr) {
-        m_bridge->onDeviceEvent(id, ev);
+    if (m_input != nullptr) {
+        // Drive the FULL real pipeline (built-in actions + plugin bridge +
+        // debug log) via dispatch(), not just the plugin bridge directly.
+        m_input->injectSyntheticEvent(ev);
     }
 #else
     Q_UNUSED(encoderIndex)
@@ -182,8 +186,10 @@ void PluginDebugService::simulateEncoderPress(int encoderIndex, bool pressed) {
                .arg(encoderIndex)
                .arg(pressed ? "press" : "release")
                .arg(id));
-    if (m_bridge != nullptr) {
-        m_bridge->onDeviceEvent(id, ev);
+    if (m_input != nullptr) {
+        // Drive the FULL real pipeline (built-in actions + plugin bridge +
+        // debug log) via dispatch(), not just the plugin bridge directly.
+        m_input->injectSyntheticEvent(ev);
     }
 #else
     Q_UNUSED(encoderIndex)
@@ -202,8 +208,10 @@ void PluginDebugService::simulateTouch(int x, int phase) {
     append(QStringLiteral("sim"),
            QStringLiteral("input"),
            QStringLiteral("touch x=%1 phase=%2 -> %3").arg(x).arg(phase).arg(id));
-    if (m_bridge != nullptr) {
-        m_bridge->onDeviceEvent(id, ev);
+    if (m_input != nullptr) {
+        // Drive the FULL real pipeline (built-in actions + plugin bridge +
+        // debug log) via dispatch(), not just the plugin bridge directly.
+        m_input->injectSyntheticEvent(ev);
     }
 #else
     Q_UNUSED(x)

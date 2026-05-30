@@ -189,6 +189,23 @@ public:
      */
     [[nodiscard]] core::ActionEngine* engine() const noexcept { return m_engine.get(); }
 
+    /**
+     * @brief Inject a synthetic DeviceEvent through the full real dispatch path.
+     *
+     * Routes @p ev through dispatch() exactly as a hardware event would be after
+     * decode: built-in bindings run via the ActionEngine AND the deviceEvent
+     * signal is emitted (driving the PluginDeviceBridge + debug log). Used by the
+     * opt-in debug-control channel (input.key / input.encoder / input.touch) to
+     * exercise keys, encoders, and the touch strip without hardware — or despite
+     * hardware that emits no input, like the 0x3004 AKP05E demo unit whose input
+     * endpoint never fills. Touch events still pass through dispatch()'s tap/swipe
+     * gesture synthesis, so this mirrors the hardware path faithfully.
+     *
+     * @note Main (GUI) thread only; the debug RPC handlers already run there.
+     * @param ev  The event to inject (index/value semantics per DeviceEvent::Kind).
+     */
+    void injectSyntheticEvent(core::DeviceEvent const& ev) { dispatch(ev); }
+
 Q_SIGNALS:
     /**
      * @brief Emitted when a touch swipe is detected.
