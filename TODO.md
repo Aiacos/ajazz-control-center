@@ -860,10 +860,12 @@ workstreams.
   has no public raw-write seam and adding one crosses the "RE is source of
   truth for wire format" hard rule — wire deliberately with an RE cross-check
   only if a real need appears.
-- [ ] **QML `objectName` coverage.** `qml.click/get/set` only reach controls
-  that set `objectName:` in QML; most don't yet. Add objectNames to the key
-  controls (sidebar items, key cells, Apply/Revert, brightness slider) to make
-  the UI fully scriptable. `qml.tree` shows what's currently addressable.
+- [x] **QML `objectName` coverage** (`028eeca`) + **visual-tree traversal**
+  (`f172e8b`). Header nav, Apply/Revert/Restore/Clear, brightness slider, each
+  `key_<index>`, and each `deviceRow_<codename>` are addressable; qml.tree/find
+  now union `QQuickItem::childItems()` so Repeater/ListView delegates are
+  reachable. Verified live (clicked navSettings + key_0). Add objectNames to
+  more controls as needed; `qml.tree` shows what's addressable.
 - [ ] **`qml.invoke` multi-arg.** Currently zero-arg only (covers
   `clicked()`/triggers); richer calls need qml.set-then-invoke or an arg-coercing
   `invokeMethod` path.
