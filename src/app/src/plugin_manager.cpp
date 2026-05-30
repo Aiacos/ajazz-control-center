@@ -279,10 +279,15 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     // single-component CodePaths. A subdir CodePath ("plugin/main.html") is not
     // a valid single component, so fall back to the .sdPlugin dir name, else Name.
     QString pluginId;
-    if (!manifest.codePath.isEmpty() && isSafeUuidComponent(manifest.codePath)) {
-        pluginId = manifest.codePath;
-    } else if (!manifest.sourceDir.isEmpty()) {
+    if (!manifest.sourceDir.isEmpty()) {
+        // Prefer the .sdPlugin directory name: it is UNIQUE per installed
+        // plugin, whereas CodePath ("plugin.cjs", "code.html") collides across
+        // plugins and would alias them to the same m_live key. sourceDir is
+        // empty in unit tests (manifests built in-memory), which fall back to
+        // the historical CodePath key below.
         pluginId = QFileInfo(manifest.sourceDir).fileName();
+    } else if (!manifest.codePath.isEmpty() && isSafeUuidComponent(manifest.codePath)) {
+        pluginId = manifest.codePath;
     } else {
         pluginId = manifest.name;
     }
