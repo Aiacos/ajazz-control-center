@@ -76,6 +76,21 @@ qt_add_executable(
     # because it lives in the same target. We must do the same here or PluginStore.qml fails with
     # "PluginCatalogProxy is not a type".
     ${ACC_APP_SOURCE_DIR}/src/plugin_catalog_proxy_model.cpp
+    # Debug-control epic + plugin host: Application::run()/initPluginHost() reference these
+    # unconditionally-compiled app sources (they are NOT in ACC_QML_MODULE_SOURCES — they have no
+    # QML_NAMED_ELEMENT export). Recompile them here so application.cpp links; otherwise the smoke
+    # test fails with undefined references to DebugLogging::*, DebugControlServer::*,
+    # registerDebugControlMethods/registerQmlControlMethods, PluginDebugService::*,
+    # PluginManager::*. The WebSockets-gated symbols they touch (SdPluginServer /
+    # PluginDeviceBridge) are added in the AJAZZ_HAVE_WEBSOCKETS block below, mirroring the app
+    # target.
+    ${ACC_APP_SOURCE_DIR}/src/debug_logging.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_server.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_facade.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_qml.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_debug_service.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_manager.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_crash_tracker.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)
