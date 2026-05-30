@@ -231,17 +231,20 @@ Rectangle {
                 spacing: Theme.spacingSm
 
                 SecondaryButton {
+                    objectName: "restoreDefaultsButton"
                     text: qsTr("Restore defaults")
                     onClicked: root.restoreDefaultsRequested()
                     accessibleDescription: qsTr("Reset every value on this tab to its factory default")
                 }
                 Item { Layout.fillWidth: true }
                 SecondaryButton {
+                    objectName: "revertButton"
                     text: qsTr("Revert")
                     onClicked: root.revertRequested()
                     accessibleDescription: qsTr("Discard unsaved changes and reload the last saved profile")
                 }
                 PrimaryButton {
+                    objectName: "applyButton"
                     text: qsTr("Apply")
                     onClicked: root.applyRequested()
                     accessibleDescription: qsTr("Persist the current changes and push them to the device")
@@ -290,6 +293,7 @@ Rectangle {
 
                 Slider {
                     id: brightnessSlider
+                    objectName: "brightnessSlider"
                     Layout.fillWidth: true
                     from: 0
                     to: 100
@@ -325,6 +329,7 @@ Rectangle {
                 }
 
                 SecondaryButton {
+                    objectName: "clearAllKeysButton"
                     text: qsTr("Clear all keys")
                     enabled: root.codename !== "" && root._showKeys
                     onClicked: StreamDockControlService.clearAll(root.codename)

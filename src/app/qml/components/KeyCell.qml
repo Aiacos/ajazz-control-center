@@ -39,6 +39,9 @@ ItemDelegate {
     // these as required on the delegate instance was hitting the
     // type-default-shadow trap (cells always rendered index "1").
     required property int index
+    // Stable handle for the out-of-process debug control channel
+    // (qml.click/get on "key_0".."key_N"). Harmless in normal use.
+    objectName: "key_" + index
     required property url iconSource
     required property string label
     property bool selected: false

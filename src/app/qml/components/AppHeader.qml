@@ -99,6 +99,7 @@ Rectangle {
         // and is the most visible non-search header action.
         ToolButton {
             id: pluginsBtn
+            objectName: "navPlugins"
             text: qsTr("Plugins")
             font.pixelSize: Theme.fontMd
             ToolTip.visible: hovered
@@ -131,6 +132,7 @@ Rectangle {
         // user's mental model: browse → manage → configure.
         ToolButton {
             id: loadedBtn
+            objectName: "navLoaded"
             text: qsTr("Loaded")
             font.pixelSize: Theme.fontMd
             ToolTip.visible: hovered
@@ -160,6 +162,7 @@ Rectangle {
         // next to "Loaded" since both are runtime/diagnostic surfaces.
         ToolButton {
             id: debugBtn
+            objectName: "navDebug"
             text: qsTr("Debug")
             font.pixelSize: Theme.fontMd
             ToolTip.visible: hovered
@@ -190,6 +193,7 @@ Rectangle {
         // minimize button so it shares the same right-side action cluster.
         ToolButton {
             id: settingsBtn
+            objectName: "navSettings"
             text: qsTr("Settings")
             font.pixelSize: Theme.fontMd
             ToolTip.visible: hovered
