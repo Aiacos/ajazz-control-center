@@ -33,6 +33,7 @@
 
 #ifdef AJAZZ_HAVE_WEBSOCKETS
 #include "plugin_device_bridge.hpp"
+#include "plugin_manager.hpp"
 #include "sd_plugin_server.hpp"
 #endif
 #include "theme_service.hpp"
@@ -272,6 +273,12 @@ private:
                         ///< in construction order (-Wreorder). Non-owning seam pointers
                         ///< point at server/control/input (all Application members with
                         ///< longer lifetimes per member-declaration order).
+    std::unique_ptr<PluginManager>
+        m_pluginManager; ///< Elgato .sdPlugin (node/html/native) discover + spawn +
+                         ///< crash lifecycle. Constructed in startBackgroundServices()
+                         ///< AFTER m_pluginServer is listening (spawn() reads its port).
+                         ///< Declared last so it is destroyed first (shutdown() sends
+                         ///< exitApp to children before the server/bridge tear down).
 #endif
     /// Developer debug console: logs plugin/device protocol traffic and injects
     /// simulated device input + plugin->host actions. Always present (logging

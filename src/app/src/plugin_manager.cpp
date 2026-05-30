@@ -233,6 +233,9 @@ std::vector<PluginManifest> PluginManager::discover() {
             continue;
         }
 
+        // Record the source directory so spawn() can run the child with the
+        // plugin dir as its working directory (relative CodePath + resources).
+        opt->sourceDir = m_pluginsDir + QLatin1Char('/') + entry;
         runnable.push_back(std::move(*opt));
     }
 
@@ -306,6 +309,14 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
+
+        // Run with the plugin dir as CWD so a relative CodePath (e.g.
+        // "plugin.cjs") and the plugin's own relative resource paths resolve.
+        // Without this the child runs from the app CWD, cannot find its entry
+        // point, exits non-zero, and the crash tracker disables it.
+        if (!manifest.sourceDir.isEmpty()) {
+            rawProc->setWorkingDirectory(manifest.sourceDir);
+        }
 
         // T-18-CHILD-ENV: apply explicit allowlist env — do NOT inherit full host env.
         rawProc->setProcessEnvironment(buildChildEnv());
@@ -394,6 +405,14 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 #endif
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
+
+        // Run with the plugin dir as CWD so a relative CodePath (e.g.
+        // "plugin.cjs") and the plugin's own relative resource paths resolve.
+        // Without this the child runs from the app CWD, cannot find its entry
+        // point, exits non-zero, and the crash tracker disables it.
+        if (!manifest.sourceDir.isEmpty()) {
+            rawProc->setWorkingDirectory(manifest.sourceDir);
+        }
 
         // T-18-CHILD-ENV: apply explicit allowlist env — do NOT inherit full host env.
         rawProc->setProcessEnvironment(buildChildEnv());

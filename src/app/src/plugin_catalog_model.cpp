@@ -50,6 +50,20 @@ QString g_pluginsDirOverride{};
 /// install() codepath also calls it.
 [[nodiscard]] QString userPluginsDir();
 
+/// Opt-in escape hatch for installing/keeping UNSIGNED third-party plugins
+/// (Elgato Stream Deck store, OpenDeck, arbitrary `.streamDeckPlugin` files).
+/// The PLUGIN-14 verify gate hard-refuses + deletes anything not signed by our
+/// Ed25519 trust root (T-22-backdoor) — correct as a secure DEFAULT, but no
+/// third party signs with our key (the AJAZZ vendor itself signs nothing, per
+/// the RE), so a plugin ecosystem is impossible without this. When
+/// `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` is set (non-empty), Refused/unsigned plugins
+/// are kept + installed as "untrusted" instead of being quarantined. Default
+/// (unset) preserves the delete-on-sight posture. Mirrors the opt-in gating of
+/// the debug control channel.
+[[nodiscard]] bool untrustedPluginsAllowed() {
+    return !qEnvironmentVariable("AJAZZ_ALLOW_UNTRUSTED_PLUGINS").isEmpty();
+}
+
 } // namespace
 
 PluginCatalogModel* PluginCatalogModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
@@ -146,7 +160,15 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                 continue; // no manifest -> not a valid plugin dir; skip
             }
             VerifyOutcome const vout = verifyStagedPlugin(manifestPath);
-            if (vout.verdict == VerifyVerdict::Refused) {
+            if (vout.verdict == VerifyVerdict::Refused && untrustedPluginsAllowed()) {
+                // Opt-in: keep the unsigned/untrusted plugin so it can be
+                // discovered + run. Surfaced as "untrusted" rather than deleted.
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "launch-sweep verify: '{}' unsigned/untrusted ({}); KEPT "
+                               "(AJAZZ_ALLOW_UNTRUSTED_PLUGINS set)",
+                               entry.toStdString(),
+                               vout.reason.toStdString());
+            } else if (vout.verdict == VerifyVerdict::Refused) {
                 AJAZZ_LOG_WARN("plugin-catalog",
                                "launch-sweep verify: '{}' refused ({}); removing from plugins dir",
                                entry.toStdString(),
@@ -714,8 +736,12 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
 
     VerifyOutcome const vout = verifyStagedPlugin(stagedManifest);
 
-    if (vout.verdict == VerifyVerdict::Refused) {
+    if (vout.verdict == VerifyVerdict::Refused &&
+        !(userConfirmedUnsigned || untrustedPluginsAllowed())) {
         // Tampered OR unsigned (hard-refuse) — quarantine staging dir.
+        // Bypassed when the user explicitly confirmed an untrusted install or
+        // AJAZZ_ALLOW_UNTRUSTED_PLUGINS is set: third-party plugins (Elgato /
+        // OpenDeck) are unsigned and must be installable from all sources.
         AJAZZ_LOG_WARN("plugin-catalog",
                        "installFromFile '{}': signature Refused ({}); quarantining",
                        localPath.toStdString(),
@@ -726,6 +752,12 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         emit installFinished(
             localPath, false, tr("Plugin signature verification failed: %1").arg(reason));
         return false;
+    }
+    if (vout.verdict == VerifyVerdict::Refused) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "installFromFile '{}': unsigned/untrusted — installing as UNTRUSTED "
+                       "(explicit opt-in)",
+                       localPath.toStdString());
     }
 
     if (vout.verdict == VerifyVerdict::SelfSigned && !userConfirmedUnsigned) {

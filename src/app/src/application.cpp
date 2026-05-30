@@ -21,9 +21,11 @@
 #include "debug_control_server.hpp"
 #include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
+#include "node_runner.hpp"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
+#include <QDir>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -31,6 +33,7 @@
 #include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTimer>
 #include <QUrl>
@@ -782,6 +785,25 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         AJAZZ_LOG_INFO("app",
                        "SdPluginServer listening on port {}",
                        static_cast<int>(m_pluginServer->serverPort()));
+
+        // Elgato .sdPlugin (node/html/native) discovery + spawn. The manager
+        // must be created AFTER the server is listening because spawn() reads
+        // serverPort() for the child's -port argv. User-level install dir:
+        // XDG AppLocalDataLocation/plugins (same tree PluginCatalogModel
+        // installs into). This is the runtime that makes installed Stream
+        // Dock plugins actually run + register over the WebSocket.
+        QString const pluginsDir =
+            QStandardPaths::writableLocation(QStandardPaths::AppLocalDataLocation) +
+            QStringLiteral("/plugins");
+        QDir().mkpath(pluginsDir);
+        m_pluginManager = std::make_unique<PluginManager>(
+            pluginsDir, m_pluginServer.get(), makeDefaultNodeProbe(), m_propertyInspector.get());
+        auto const runnable = m_pluginManager->discover();
+        AJAZZ_LOG_INFO(
+            "app", "plugin discovery: {} runnable plugin(s)", static_cast<int>(runnable.size()));
+        for (auto const& manifest : runnable) {
+            m_pluginManager->spawn(manifest);
+        }
     }
 #endif
 

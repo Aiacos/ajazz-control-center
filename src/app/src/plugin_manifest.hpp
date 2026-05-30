@@ -91,6 +91,14 @@ struct PluginManifest {
 
     // --- Actions ---
     std::vector<PluginAction> actions; ///< Actions array
+
+    // --- Runtime-populated (NOT from JSON) ---
+    /// Absolute path of the `.sdPlugin` directory this manifest was loaded
+    /// from. Set by PluginManager::discover() after parsing; empty when the
+    /// manifest was parsed from a byte buffer (unit tests). spawn() uses it as
+    /// the child process working directory so a relative CodePath resolves and
+    /// the plugin's own relative resource paths work.
+    QString sourceDir;
 };
 
 /**
