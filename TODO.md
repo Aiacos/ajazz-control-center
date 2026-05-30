@@ -842,6 +842,43 @@ ______________________________________________________________________
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
 workstreams.
 
+### Elgato-format plugin install + run from all sources (2026-05-30)
+
+> Goal: install + **use** Stream Dock (Elgato `.sdPlugin`/`.streamDeckPlugin`)
+> plugins from all sources; validate with System Monitor + Weather. RE-grounded
+> gap analysis done (see `docs/protocols/streamdeck/akp_plugin_sdk.md` §9 for the
+> wire-format/lifecycle reference). Two plugin ecosystems exist: the **Python OOP
+> host** (wired; AJAZZ Python plugins only) and **`PluginManager` +
+> `SdPluginServer`** (Elgato node/html/native — the path these plugins need),
+> which is **not wired at runtime**. Blocking work, in order:
+
+- [ ] **Wire `PluginManager` into `Application`.** It is unit-tested but never
+  constructed at runtime (`discover()`/`spawn()` never called; only a comment at
+  `application.cpp:777`). Construct after `m_pluginServer->start(0)` in
+  `startBackgroundServices` (pluginsDir = `<AppLocalDataLocation>/plugins`,
+  server, NodeProbe, PI controller); `discover()` → `spawn()` per runnable
+  manifest; `shutdown()` on teardown. Verify a **Node** plugin runs end-to-end.
+- [ ] **Implement the HTML plugin run-path** (currently stubbed in
+  `plugin_manager.cpp` ~L340–365: shim attached, "in-process WebEngine page-load
+  deferred to Phase 19/20"). Load the plugin `index.html` in a WebEngine page and
+  `runJavaScript("connectElgatoStreamDeckSocket(port,'uuid','registerPlugin', info)")` on loadFinished. Needed for the HTML test plugins (Counter, Weather).
+- [ ] **Rediscover-after-install (no restart).** Install-from-file/online extract
+  - verify + promote is wired in `PluginCatalogModel`, but nothing re-runs
+    discovery. Add `PluginManager::rediscover()` + connect the install-finished
+    signal to it. Optionally add debug-channel `plugin.installFromFile` +
+    `plugin.rediscover` to drive the loop from `scripts/ajazz-debug`.
+- [ ] **Install + verify the test plugins.** Counter (`com.elgato.counter`, HTML)
+  as the canonical fixture; **Weather** (`JaouherK/streamDeck-weatherPlugin`,
+  `com.jk.weather`, HTML); a System Monitor (most are Windows-native — pick a
+  Node/HTML one or accept install+register-only on Linux). Verify on the
+  device/preview via the debug channel + screenshot.
+- [ ] **Document Python-host vs PluginManager coexistence** (two ecosystems —
+  decide scope/boundary).
+- [ ] Do NOT auto-adopt the vendor store endpoints (`space.key123.vip` /
+  `47.106.243.57:8088` / `hotspot-oss-bucket` OSS) — anti-feature per
+  `akp05_vendor.md` §8; OpenDeck-style multi-source install (file / GitHub
+  release / URL) is the sanctioned model.
+
 ### Out-of-process debug control channel (2026-05-29)
 
 > Shipped (`feat/streamdock`): an opt-in JSON-RPC control channel so an agent
