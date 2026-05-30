@@ -12,6 +12,7 @@
 #include "ajazz/core/log_sinks.hpp"
 
 #include <chrono>
+#include <cstdio>
 #include <utility>
 
 namespace ajazz::core {
@@ -107,7 +108,18 @@ FileSink::FileSink(std::string path) : path_(std::move(path)) {
     // Append mode so successive runs accumulate into one log; the caller is
     // responsible for rotation/truncation policy. A failed open leaves
     // file_ == nullptr and write() degrades to a no-op.
+#if defined(_MSC_VER)
+    // MSVC treats std::fopen as deprecated (C4996 -> /WX hard error); use the
+    // bounds-checked fopen_s. The glibc-only "e" (O_CLOEXEC) mode flag does not
+    // exist on Windows, so the mode is plain "a" here.
+    if (::fopen_s(&file_, path_.c_str(), "a") != 0) {
+        file_ = nullptr;
+    }
+#else
+    // POSIX: keep the "e" (O_CLOEXEC) flag so the log fd is not inherited by the
+    // forked/bwrap'd plugin host child.
     file_ = std::fopen(path_.c_str(), "ae");
+#endif
 }
 
 FileSink::~FileSink() {
