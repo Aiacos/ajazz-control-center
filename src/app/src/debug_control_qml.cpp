@@ -26,24 +26,44 @@
 #include <QMetaObject>
 #include <QObject>
 #include <QQmlApplicationEngine>
+#include <QQuickItem>
 #include <QQuickWindow>
+#include <QSet>
 #include <QString>
 #include <QVariant>
 
 namespace ajazz::app {
 namespace {
 
-/// Depth-limited JSON description of an object subtree.
-QJsonObject describe(QObject const* obj, int depth) {
+/// QObject children PLUS visual (QQuickItem) children, deduped.
+///
+/// Repeater / ListView / Loader create their delegates with a *visual*
+/// parent but no QObject parent, so QObject::children() (and therefore
+/// findChild) never sees them. Unioning childItems() makes the whole live
+/// UI -- including every key cell and device row -- reachable.
+QList<QObject*> allChildren(QObject* obj) {
+    QList<QObject*> out = obj->children();
+    if (auto* item = qobject_cast<QQuickItem*>(obj)) {
+        for (QQuickItem* child : item->childItems()) {
+            if (!out.contains(child)) {
+                out.append(child);
+            }
+        }
+    }
+    return out;
+}
+
+/// Depth-limited JSON description of an object subtree (visual tree aware).
+QJsonObject describe(QObject* obj, int depth) {
+    auto const kids = allChildren(obj);
     QJsonObject node{
         {"objectName", obj->objectName()},
         {"class", QString::fromLatin1(obj->metaObject()->className())},
+        {"childCount", static_cast<int>(kids.size())},
     };
-    auto const& kids = obj->children();
-    node.insert("childCount", static_cast<int>(kids.size()));
     if (depth > 0 && !kids.isEmpty()) {
         QJsonArray children;
-        for (QObject const* child : kids) {
+        for (QObject* child : kids) {
             children.append(describe(child, depth - 1));
         }
         node.insert("children", children);
@@ -51,14 +71,29 @@ QJsonObject describe(QObject const* obj, int depth) {
     return node;
 }
 
+/// Recursive objectName search across the QObject + visual child tree.
+QObject* searchByName(QObject* obj, QString const& name, QSet<QObject*>& seen) {
+    if (obj == nullptr || seen.contains(obj)) {
+        return nullptr;
+    }
+    seen.insert(obj);
+    if (obj->objectName() == name) {
+        return obj;
+    }
+    for (QObject* child : allChildren(obj)) {
+        if (QObject* hit = searchByName(child, name, seen)) {
+            return hit;
+        }
+    }
+    return nullptr;
+}
+
 /// Find the first object matching @p name across all root objects (a root
 /// itself matches too). Returns nullptr if not found.
 QObject* findByName(QQmlApplicationEngine& engine, QString const& name) {
+    QSet<QObject*> seen;
     for (QObject* root : engine.rootObjects()) {
-        if (root->objectName() == name) {
-            return root;
-        }
-        if (auto* hit = root->findChild<QObject*>(name)) {
+        if (QObject* hit = searchByName(root, name, seen)) {
             return hit;
         }
     }
@@ -91,7 +126,7 @@ void registerQmlControlMethods(DebugControlServer& server, QQmlApplicationEngine
             return QJsonObject{{"tree", describe(obj, depth)}};
         }
         QJsonArray roots;
-        for (QObject const* root : engine.rootObjects()) {
+        for (QObject* root : engine.rootObjects()) {
             roots.append(describe(root, depth));
         }
         return QJsonObject{{"roots", roots}};
