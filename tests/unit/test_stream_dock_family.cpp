@@ -824,7 +824,10 @@ TEST_CASE("StreamDockFamily: CR-01 AKP03 LCD keyIndex 1..6 all produce a BAT bur
 
         QImage img(60, 60, QImage::Format_RGBA8888);
         img.fill(qRgba(static_cast<int>(keyIdx * 40), 0, 0, 255));
-        svc.assignKeyImage(static_cast<int>(keyIdx), img);
+        // keyIdx is already std::uint8_t — assignKeyImage takes std::uint8_t, so
+        // pass it directly. The previous static_cast<int> forced an int->uint8_t
+        // narrowing that Apple/Linux Clang reject under -Werror,-Wimplicit-int-conversion.
+        svc.assignKeyImage(keyIdx, img);
         drainQueue();
 
         // Must have emitted at least BAT header + 1 chunk + ULEND.
