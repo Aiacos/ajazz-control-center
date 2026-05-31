@@ -4,14 +4,14 @@
 // in this session. Sibling of PluginStore.qml (which lists plugins
 // available to install); this page is about the LIVE inventory.
 //
-// SEC-003 #51 surface contract — the trust chip:
+// SEC-003 #51 surface contract — the trust chip (Plan 27-04 extended):
 //
 //   * `trusted`     → no chip (clean look; absence of warning is the
 //                     positive signal — see U2 design discussion).
-//   * `self-signed` → amber "self-signed" chip; the manifest verifies
-//                     but its key is not in the bundled trust roots.
-//   * `unsigned`    → red "unsigned" chip; the manifest is missing
-//                     OR the signature failed verification.
+//   * `self-signed` → amber "self-signed" chip; no allow action.
+//   * `unsigned`    → red "unsigned" chip + "Allow this plugin" action.
+//   * `tampered`    → danger "tampered / invalid signature" chip;
+//                     NO allow action (CR-01: never consentable from UI).
 //
 // Roles consumed (from LoadedPluginsModel):
 //   pluginId, name, version, authors, permissions (QStringList),
@@ -66,6 +66,27 @@ Page {
                 color: Theme.fgSecondary
                 font.pixelSize: Theme.fontMd
             }
+        }
+
+        // Allow unsigned plugins toggle (Plan 27-04 / PLUGIN-16).
+        // Bound two-way to PluginCatalog.allowUnsignedPlugins.
+        // Mirrors the Online catalog toggle pattern in PluginStore.qml.
+        Switch {
+            id: allowUnsignedSwitch
+            text: qsTr("Allow unsigned plugins")
+            checked: PluginCatalog ? PluginCatalog.allowUnsignedPlugins : false
+            onToggled: {
+                if (PluginCatalog) {
+                    PluginCatalog.setAllowUnsignedPlugins(checked);
+                }
+            }
+            ToolTip.text: qsTr("When enabled, unsigned (developer sideload) plugins may be "
+                + "installed without per-plugin confirmation. Tampered plugins are "
+                + "always blocked regardless of this setting.")
+            ToolTip.visible: hovered
+            ToolTip.delay: 400
+            Accessible.role: Accessible.CheckBox
+            Accessible.name: qsTr("Allow unsigned plugins")
         }
 
         // Empty state — same affordance as PluginStore when its catalogue
@@ -150,9 +171,12 @@ Page {
                         }
                     }
 
-                    // ----- U2 trust chip ---------------------------------
-                    // Visible only when trustLevel != "trusted" — silence
-                    // is the positive signal, per the design discussion.
+                    // ----- U2 trust chip (Plan 27-04 extended) -----------
+                    // Handles four states:
+                    //   trusted     → chip invisible (no warning = positive signal)
+                    //   self-signed → amber chip, no action
+                    //   unsigned    → red chip + "Allow this plugin" action
+                    //   tampered    → danger chip, NO allow action (CR-01)
                     Rectangle {
                         id: trustChip
                         visible: row.trustLevel !== "trusted"
@@ -160,14 +184,13 @@ Page {
                         Layout.preferredWidth: chipText.implicitWidth + Theme.spacingMd * 2
                         radius: 12
 
-                        // Theme-aware semantic colors so the chip stays
-                        // readable in light mode too (pre-2026-05 these were
-                        // Tailwind literals - dark red/amber bg + bright
-                        // text - which inverted contrast on light surfaces).
-                        color: row.trustLevel === "unsigned"
+                        // Color by trust level: tampered and unsigned both
+                        // use error (red) to signal danger; self-signed uses
+                        // warning (amber) — a distinct but less severe state.
+                        color: (row.trustLevel === "unsigned" || row.trustLevel === "tampered")
                             ? Theme.chipBgError
                             : Theme.chipBgWarning
-                        border.color: row.trustLevel === "unsigned"
+                        border.color: (row.trustLevel === "unsigned" || row.trustLevel === "tampered")
                             ? Theme.chipBorderError
                             : Theme.chipBorderWarning
                         border.width: 1
@@ -175,25 +198,58 @@ Page {
                         Text {
                             id: chipText
                             anchors.centerIn: parent
+                            // Distinct labels: tampered is a separate security state,
+                            // not just another "unsigned" variant.
                             text: row.trustLevel === "unsigned"
                                 ? qsTr("unsigned")
-                                : qsTr("self-signed")
-                            color: row.trustLevel === "unsigned"
+                                : row.trustLevel === "tampered"
+                                    ? qsTr("tampered")
+                                    : qsTr("self-signed")
+                            color: (row.trustLevel === "unsigned" || row.trustLevel === "tampered")
                                 ? Theme.chipFgError
                                 : Theme.chipFgWarning
                             font.pixelSize: Theme.fontXs
                             font.weight: Font.DemiBold
                         }
 
+                        // Distinct tooltip per trust level. The old tooltip conflated
+                        // "unsigned or tampered" — now each state is described clearly.
                         ToolTip.visible: chipMouseArea.containsMouse
                         ToolTip.text: row.trustLevel === "unsigned"
-                            ? qsTr("This plugin's manifest is unsigned or tampered. Run only if you trust the source.")
-                            : qsTr("This plugin's manifest is signed but the publisher key is not in the bundled trust roots.")
+                            ? qsTr("This plugin has no signature (developer sideload). "
+                                + "Use 'Allow this plugin' to consent to running it.")
+                            : row.trustLevel === "tampered"
+                                ? qsTr("This plugin's signature is present but "
+                                    + "cryptographically invalid — it may be tampered. "
+                                    + "It cannot be allowed from the UI.")
+                                : qsTr("This plugin's manifest is signed but the publisher "
+                                    + "key is not in the bundled trust roots.")
 
                         MouseArea {
                             id: chipMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
+                        }
+                    }
+
+                    // ----- "Allow this plugin" action (unsigned only) ----
+                    // Present ONLY on unsigned rows (trustLevel === "unsigned").
+                    // ABSENT on tampered rows — CR-01: no UI consent path for
+                    // Ed25519-invalid packages. Do NOT change to "disabled";
+                    // the action must be absent, not merely greyed out.
+                    Button {
+                        id: allowPluginButton
+                        visible: row.trustLevel === "unsigned"
+                        text: qsTr("Allow")
+                        Layout.preferredHeight: 28
+                        font.pixelSize: Theme.fontXs
+                        ToolTip.text: qsTr("Record consent to run this unsigned plugin.")
+                        ToolTip.visible: hovered
+                        ToolTip.delay: 400
+                        onClicked: {
+                            if (PluginCatalog) {
+                                PluginCatalog.allowPlugin(row.pluginId);
+                            }
                         }
                     }
                 }
