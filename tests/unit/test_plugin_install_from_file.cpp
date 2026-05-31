@@ -674,6 +674,50 @@ TEST_CASE("PluginInstallFromFile unsigned plugin refused without consent", "[plu
     REQUIRE_FALSE(QFile::exists(installedManifest));
 }
 
+// ---------------------------------------------------------------------------
+// Regression: a `.zip`-extension archive must promote to a `<id>.sdPlugin`
+// directory, NOT `<id>.sdPlugin.zip`. The install-dir name is derived from the
+// archive filename; if it keeps the `.zip` / `.streamDeckPlugin` extension,
+// discover() (which scans only `*.sdPlugin` dirs) never matches the promoted
+// plugin and it is silently never spawned. Found via the live debug-channel
+// install->spawn check (TEST 2, 2026-05-31): buildSdPluginArchive only ever
+// produced `.sdPlugin`-named archives, so the unit suite missed the real
+// FileDialog shape (a zipped bundle ending in `.zip`).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile zip-extension archive promotes to sdPlugin dir",
+          "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+
+    // Archive FILENAME ends in `.sdPlugin.zip` (a zipped bundle, as the
+    // FileDialog accepts). Inner payload is `<id>.sdPlugin/manifest.json`.
+    QString const pluginId = QStringLiteral("com.example.zip-name-regression");
+    QString const archivePath = tmp.path() + "/" + pluginId + ".sdPlugin.zip";
+    {
+        QZipWriter zip(archivePath);
+        REQUIRE(zip.status() == QZipWriter::NoError);
+        zip.addFile(pluginId + ".sdPlugin/manifest.json", QByteArray{kMinimalManifest});
+        zip.addFile(pluginId + ".sdPlugin/Code/main.py", QByteArray("# placeholder\n"));
+        zip.close();
+    }
+
+    // Unsigned + explicit consent -> promoted.
+    REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+
+    // The promoted directory MUST end in `.sdPlugin` (discover() scans those)
+    // and MUST NOT keep the `.zip` extension.
+    REQUIRE(QFile::exists(QDir(pluginsDir).filePath(pluginId + ".sdPlugin/manifest.json")));
+    REQUIRE_FALSE(QDir(pluginsDir).exists(pluginId + ".sdPlugin.zip"));
+}
+
 TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
     auto& app = qtApp();
     Q_UNUSED(app);

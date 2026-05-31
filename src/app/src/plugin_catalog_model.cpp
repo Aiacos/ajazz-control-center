@@ -805,10 +805,25 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
             localPath, false, QStringLiteral("Cannot resolve user plugins directory."));
         return false;
     }
-    // Derive a stable archive name from the file's basename.
+    // Derive the install directory name from the file's basename. It MUST end
+    // in `.sdPlugin` — discover() only scans `*.sdPlugin` directories, so a
+    // promoted dir that keeps its `.zip` / `.streamDeckPlugin` extension (e.g.
+    // "foo.sdPlugin.zip") is silently never spawned. Strip a trailing archive
+    // extension, then ensure the `.sdPlugin` suffix.
     QFileInfo const fi(localPath);
-    QString const archiveName =
-        fi.fileName().isEmpty() ? QStringLiteral("install.sdPlugin") : fi.fileName();
+    QString archiveName = fi.fileName();
+    for (auto const* ext : {".zip", ".streamDeckPlugin"}) {
+        if (archiveName.endsWith(QLatin1String(ext), Qt::CaseInsensitive)) {
+            archiveName.chop(static_cast<int>(qstrlen(ext)));
+            break;
+        }
+    }
+    if (archiveName.isEmpty()) {
+        archiveName = QStringLiteral("install");
+    }
+    if (!archiveName.endsWith(QStringLiteral(".sdPlugin"), Qt::CaseInsensitive)) {
+        archiveName += QStringLiteral(".sdPlugin");
+    }
     // Staging parent: a sibling of the plugins/ directory so the discovered
     // path (installedPlugins/ == pluginsDir) is never touched until promote.
     QString const stagingParent =
