@@ -49,6 +49,12 @@ PluginActionState parseState(QJsonObject const& obj) {
     s.fontStyle = obj.value(QStringLiteral("FontStyle")).toString();
     s.titleColor = obj.value(QStringLiteral("TitleColor")).toString();
     s.titleAlignment = obj.value(QStringLiteral("TitleAlignment")).toString();
+
+    // Phase 28 extensions: Name, Title, ShowTitle (per schema §2 States[i]).
+    s.name = obj.value(QStringLiteral("Name")).toString();
+    s.title = obj.value(QStringLiteral("Title")).toString();
+    s.showTitle = obj.value(QStringLiteral("ShowTitle")).toBool(true);
+
     return s;
 }
 
@@ -74,6 +80,39 @@ PluginAction parseAction(QJsonObject const& obj) {
     for (QJsonValue const& sv : states)
         a.states.push_back(parseState(sv.toObject()));
 
+    // Phase 28 extensions (T-28-01 mitigations: guard every nested extraction).
+
+    // VisibleInActionsList: default true (absent = visible per Elgato SDK spec).
+    a.visibleInActionsList = obj.value(QStringLiteral("VisibleInActionsList")).toBool(true);
+
+    // DisableAutomaticStates: default false.
+    a.disableAutomaticStates = obj.value(QStringLiteral("DisableAutomaticStates")).toBool(false);
+
+    // Settings: store as compact JSON string; guard on isObject() (T-28-01).
+    QJsonValue const settingsVal = obj.value(QStringLiteral("Settings"));
+    if (settingsVal.isObject()) {
+        a.defaultSettings =
+            QJsonDocument(settingsVal.toObject()).toJson(QJsonDocument::Compact).toStdString();
+    }
+
+    // Encoder block: guard on isObject() — absent/non-object yields empty PluginEncoderBlock.
+    QJsonValue const encVal = obj.value(QStringLiteral("Encoder"));
+    if (encVal.isObject()) {
+        QJsonObject const encObj = encVal.toObject();
+        a.encoderBlock.icon = encObj.value(QStringLiteral("Icon")).toString();
+        a.encoderBlock.layout = encObj.value(QStringLiteral("layout")).toString();
+        // TriggerDescription sub-object (optional within Encoder).
+        QJsonValue const tdVal = encObj.value(QStringLiteral("TriggerDescription"));
+        if (tdVal.isObject()) {
+            QJsonObject const td = tdVal.toObject();
+            a.encoderBlock.triggerDescriptionRotate = td.value(QStringLiteral("Rotate")).toString();
+            a.encoderBlock.triggerDescriptionPush = td.value(QStringLiteral("Push")).toString();
+            a.encoderBlock.triggerDescriptionTouch = td.value(QStringLiteral("Touch")).toString();
+            a.encoderBlock.triggerDescriptionLongTouch =
+                td.value(QStringLiteral("LongTouch")).toString();
+        }
+    }
+
     return a;
 }
 
@@ -86,6 +125,32 @@ PluginOsRequirement parseOsEntry(QJsonObject const& obj) {
 }
 
 } // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// affordanceMask
+// ---------------------------------------------------------------------------
+
+int affordanceMask(QStringList const& controllers) noexcept {
+    // T-28-03 mitigation: unknown tokens contribute NO affordance bit (fail-safe).
+    // Only explicit Keypad/Knob/Encoder/SecondaryScreen tokens set bits.
+    // "Information" is intentionally ignored — no physical drop surface.
+    if (controllers.isEmpty())
+        return static_cast<int>(Affordance::Key); // Pitfall 2: empty defaults to Key
+
+    int mask = 0;
+    for (QString const& token : controllers) {
+        if (token == QStringLiteral("Keypad")) {
+            mask |= static_cast<int>(Affordance::Key);
+        } else if (token == QStringLiteral("Knob") || token == QStringLiteral("Encoder")) {
+            mask |= static_cast<int>(Affordance::Dial);
+        } else if (token == QStringLiteral("SecondaryScreen")) {
+            mask |= static_cast<int>(Affordance::TouchZone);
+        }
+        // "Information" and all other unknown tokens: no bit set (T-28-03).
+    }
+    // If only Information tokens were present, mask stays 0 — non-draggable (Pitfall 3).
+    return mask;
+}
 
 // ---------------------------------------------------------------------------
 // parsePluginManifest
