@@ -211,6 +211,7 @@ ApplicationWindow {
     // ----------------------------------------------------------------------
     Drawer {
         id: pluginStoreDrawer
+        objectName: "pluginStoreDrawer"
         edge: Qt.RightEdge
         modal: true
         dragMargin: 0 // disable edge-drag — only the header button opens it.

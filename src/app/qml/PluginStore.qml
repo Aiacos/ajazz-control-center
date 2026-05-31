@@ -146,6 +146,12 @@ Page {
             } else if (error === "self-signed plugin -- confirm to install") {
                 // Self-signed plugin: show the confirmation dialog.
                 selfSignedDialog.open();
+            } else if (error === "unsigned plugin -- confirm to install") {
+                // Unsigned (no signature) developer sideload: show the unsigned
+                // confirmation dialog. The backend gates promotion on the
+                // confirm=true re-issue (Unsigned branch only; a tampered /
+                // Refused package is NEVER offered a confirm -- CR-01).
+                unsignedDialog.open();
             } else {
                 root.localInstallStatus = qsTr("Install failed: %1").arg(error);
                 root.pendingLocalInstallPath = "";
@@ -193,6 +199,40 @@ Page {
         onAccepted: {
             if (!PluginCatalog || root.pendingLocalInstallPath.length === 0) return;
             // Re-issue installFromFile with explicit user confirmation.
+            PluginCatalog.installFromFile(root.pendingLocalInstallPath, true);
+            root.pendingLocalInstallPath = "";
+        }
+        onRejected: {
+            root.pendingLocalInstallPath = "";
+            root.localInstallStatus = qsTr("Install cancelled.");
+        }
+    }
+
+    // ------------------------------------------------------------------
+    // Unsigned plugin confirmation dialog (PLUGIN-16 / Phase 27).
+    // Shown when installFromFile emits "unsigned plugin -- confirm to install"
+    // (Unsigned = no signature block, a developer sideload). A tampered
+    // (Refused) package is NEVER routed here -- CR-01: the backend Refused
+    // branch quarantines unconditionally and emits no confirm string.
+    // ------------------------------------------------------------------
+    Dialog {
+        id: unsignedDialog
+        objectName: "unsignedConfirmDialog"
+        title: qsTr("Unsigned plugin")
+        standardButtons: Dialog.Ok | Dialog.Cancel
+        modal: true
+        anchors.centerIn: parent
+        Label {
+            width: parent.width
+            wrapMode: Text.WordWrap
+            text: qsTr("This plugin is not signed — it is a developer sideload with "
+                + "no publisher signature to verify. Only install plugins you trust.\n\n"
+                + "Install it anyway?")
+        }
+        onAccepted: {
+            if (!PluginCatalog || root.pendingLocalInstallPath.length === 0) return;
+            // Re-issue with explicit consent; backend promotes via the
+            // Unsigned branch (tampered packages can never reach here).
             PluginCatalog.installFromFile(root.pendingLocalInstallPath, true);
             root.pendingLocalInstallPath = "";
         }
@@ -287,6 +327,31 @@ Page {
                 ToolTip.delay: 400
                 Accessible.role: Accessible.CheckBox
                 Accessible.name: qsTr("Enable online catalog fetch")
+            }
+
+            // Allow-unsigned-plugins opt-in toggle (PLUGIN-16 / Phase 27).
+            // Controls PluginCatalog.allowUnsignedPlugins: whether unsigned
+            // (.sdPlugin, no signature) plugins install without a per-plugin
+            // confirm. Lives here, next to the catalog toggle, because both are
+            // PluginCatalog install-policy settings and this is where .sdPlugin
+            // plugins are installed. Tampered plugins are ALWAYS blocked
+            // regardless of this setting (CR-01).
+            Switch {
+                id: allowUnsignedSwitch
+                objectName: "allowUnsignedSwitch"
+                text: qsTr("Allow unsigned plugins")
+                checked: PluginCatalog ? PluginCatalog.allowUnsignedPlugins : false
+                onToggled: {
+                    if (PluginCatalog) {
+                        PluginCatalog.setAllowUnsignedPlugins(checked);
+                    }
+                }
+                ToolTip.text: qsTr("When on, unsigned (developer sideload) plugins install "
+                    + "without a per-plugin confirm. Tampered plugins are always blocked.")
+                ToolTip.visible: hovered
+                ToolTip.delay: 400
+                Accessible.role: Accessible.CheckBox
+                Accessible.name: qsTr("Allow unsigned plugins")
             }
         }
 

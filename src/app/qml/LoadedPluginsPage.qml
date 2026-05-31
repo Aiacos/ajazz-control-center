@@ -68,27 +68,14 @@ Page {
             }
         }
 
-        // Allow unsigned plugins toggle (Plan 27-04 / PLUGIN-16).
-        // Bound two-way to PluginCatalog.allowUnsignedPlugins.
-        // Mirrors the Online catalog toggle pattern in PluginStore.qml.
-        Switch {
-            id: allowUnsignedSwitch
-            objectName: "allowUnsignedSwitch"
-            text: qsTr("Allow unsigned plugins")
-            checked: PluginCatalog ? PluginCatalog.allowUnsignedPlugins : false
-            onToggled: {
-                if (PluginCatalog) {
-                    PluginCatalog.setAllowUnsignedPlugins(checked);
-                }
-            }
-            ToolTip.text: qsTr("When enabled, unsigned (developer sideload) plugins may be "
-                + "installed without per-plugin confirmation. Tampered plugins are "
-                + "always blocked regardless of this setting.")
-            ToolTip.visible: hovered
-            ToolTip.delay: 400
-            Accessible.role: Accessible.CheckBox
-            Accessible.name: qsTr("Allow unsigned plugins")
-        }
+        // NOTE: the .sdPlugin trust controls (the "Allow unsigned plugins"
+        // toggle + per-plugin unsigned consent) live in PluginStore.qml, NOT
+        // here. This page (LoadedPluginsPage) is driven by LoadedPluginsModel
+        // ← the Python OOP host (SEC-003); its rows are Python plugins, whose
+        // trust uses the SEC-003 trust-roots mechanism, not PluginCatalog.
+        // Phase 27 originally placed the .sdPlugin trust UX here by mistake
+        // (PluginCatalog.allowPlugin no-ops on a Python plugin id); moved to
+        // PluginStore where .sdPlugin plugins are actually installed.
 
         // Empty state — same affordance as PluginStore when its catalogue
         // is empty; keeps the drawer non-blank if the host hasn't been
@@ -217,8 +204,7 @@ Page {
                         // "unsigned or tampered" — now each state is described clearly.
                         ToolTip.visible: chipMouseArea.containsMouse
                         ToolTip.text: row.trustLevel === "unsigned"
-                            ? qsTr("This plugin has no signature (developer sideload). "
-                                + "Use 'Allow this plugin' to consent to running it.")
+                            ? qsTr("This plugin has no signature (developer sideload).")
                             : row.trustLevel === "tampered"
                                 ? qsTr("This plugin's signature is present but "
                                     + "cryptographically invalid — it may be tampered. "
@@ -233,27 +219,12 @@ Page {
                         }
                     }
 
-                    // ----- "Allow this plugin" action (unsigned only) ----
-                    // Present ONLY on unsigned rows (trustLevel === "unsigned").
-                    // ABSENT on tampered rows — CR-01: no UI consent path for
-                    // Ed25519-invalid packages. Do NOT change to "disabled";
-                    // the action must be absent, not merely greyed out.
-                    Button {
-                        id: allowPluginButton
-                        objectName: "allowPluginButton"
-                        visible: row.trustLevel === "unsigned"
-                        text: qsTr("Allow")
-                        Layout.preferredHeight: 28
-                        font.pixelSize: Theme.fontXs
-                        ToolTip.text: qsTr("Record consent to run this unsigned plugin.")
-                        ToolTip.visible: hovered
-                        ToolTip.delay: 400
-                        onClicked: {
-                            if (PluginCatalog) {
-                                PluginCatalog.allowPlugin(row.pluginId);
-                            }
-                        }
-                    }
+                    // No per-plugin "Allow" action here: this row is a Python
+                    // OOP-host plugin (SEC-003), not a .sdPlugin. The .sdPlugin
+                    // unsigned-consent UX lives in PluginStore.qml (the global
+                    // "Allow unsigned plugins" toggle + the install-from-file
+                    // unsigned confirm dialog). Wiring PluginCatalog.allowPlugin
+                    // to a Python plugin id was a no-op (see note at top).
                 }
             }
         }
