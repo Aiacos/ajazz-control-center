@@ -610,6 +610,7 @@ private:
     mutable int m_lastHiddenByVisibility = 0;
     mutable int m_lastSkippedUuidName = 0;
     mutable int m_lastSkippedParseFailure = 0;
+    mutable int m_lastSkippedOsVersion = 0; ///< GAP-28A: manifestRunnableHere() rejections
     mutable int m_lastTotalScanned = 0;
 
     /// QSettings-backed flag; default true (online catalog on unless the user

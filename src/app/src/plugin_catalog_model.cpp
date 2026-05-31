@@ -352,6 +352,7 @@ QVariantList PluginCatalogModel::installedActions() const {
     int hiddenCount = 0;
     int errorSkipCount = 0;
     int parseFailureCount = 0;
+    int osVersionSkipCount = 0; // GAP-28A: plugins rejected by manifestRunnableHere()
     int totalScanned = 0;
 
     QString const pluginsDirPath = userPluginsDir();
@@ -382,6 +383,12 @@ QVariantList PluginCatalogModel::installedActions() const {
             continue; // unparsable / missing required keys (T-18-MANIFEST)
         }
         if (!manifestRunnableHere(*parsed, platform, appVer)) {
+            ++osVersionSkipCount;
+            AJAZZ_LOG_INFO("plugin-catalog",
+                           "installedActions: skipped plugin '{}' (not runnable on {}, appVer={})",
+                           parsed->name.toStdString(),
+                           platform.toStdString(),
+                           appVer.toStdString());
             continue; // not for this OS / below software minimum version
         }
 
@@ -459,6 +466,7 @@ QVariantList PluginCatalogModel::installedActions() const {
     m_lastHiddenByVisibility = hiddenCount;
     m_lastSkippedUuidName = errorSkipCount;
     m_lastSkippedParseFailure = parseFailureCount;
+    m_lastSkippedOsVersion = osVersionSkipCount; // GAP-28A
     m_lastTotalScanned = totalScanned;
 
     return out;
@@ -470,6 +478,10 @@ QVariantMap PluginCatalogModel::lastScanDiagnostics() const {
         {QStringLiteral("hiddenByVisibility"), m_lastHiddenByVisibility},
         {QStringLiteral("skippedUuidName"), m_lastSkippedUuidName},
         {QStringLiteral("skippedParseFailure"), m_lastSkippedParseFailure},
+        // GAP-28A: plugins rejected by manifestRunnableHere (OS mismatch or version below minimum).
+        // A non-zero value here means at least one installed plugin is invisible on this
+        // OS/version and explains "tools show 0 for this plugin".
+        {QStringLiteral("skippedOsVersion"), m_lastSkippedOsVersion},
     };
 }
 

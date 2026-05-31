@@ -560,3 +560,94 @@ TEST_CASE("CatalogOffline affordanceMask in output map", "[catalog-offline]") {
     CHECK(knobRow.value(QStringLiteral("affordanceMask")).toInt() == 2);   // Dial only
     CHECK(bothRow.value(QStringLiteral("affordanceMask")).toInt() == 3);   // Key + Dial
 }
+
+// ---------------------------------------------------------------------------
+// GAP-28A regression: plugins rejected by manifestRunnableHere() must be
+// counted in lastScanDiagnostics()["skippedOsVersion"] so a user can tell
+// WHY their plugin shows 0 installed tools.
+// ---------------------------------------------------------------------------
+TEST_CASE("CatalogOffline GAP-28A skippedOsVersion counter for OS or version rejected plugins",
+          "[catalog-offline][gap-28a]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    // Plugin A: windows-only, high minimum version -> rejected by manifestRunnableHere on Linux.
+    // The locked Linux OS-accept policy only accepts plugins with NO linux entry; a plugin that
+    // lists ONLY "windows" falls through to the MinimumVersion check. A very high minimum
+    // version then rejects it even under the Linux accept-pass.
+    QString const pluginDirA =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.osreject.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDirA));
+    QByteArray const manifestA = R"JSON({
+      "Name": "Windows-Only High Version Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 2,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "Software": { "MinimumVersion": "9999.0" },
+      "CodePath": "index.js",
+      "Actions": [
+        { "UUID": "com.example.osreject.action1",
+          "Name": "Rejected Action",
+          "Controllers": ["Keypad"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDirA).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifestA);
+        f.close();
+    }
+
+    // Plugin B: linux-runnable, so its actions DO appear.
+    QString const pluginDirB =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.linuxok.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDirB));
+    QByteArray const manifestB = R"JSON({
+      "Name": "Linux OK Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 2,
+      "OS": [ { "Platform": "linux", "MinimumVersion": "1" } ],
+      "CodePath": "index.js",
+      "Actions": [
+        { "UUID": "com.example.linuxok.action1",
+          "Name": "OK Action",
+          "Controllers": ["Keypad"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDirB).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifestB);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    QVariantMap const diag = model.lastScanDiagnostics();
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+
+    // Plugin B's action appears; plugin A's does not (rejected).
+    CHECK(actions.size() == 1);
+    CHECK(actions.at(0).toMap().value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.linuxok.action1"));
+
+    // GAP-28A: the skippedOsVersion counter must be 1 (plugin A rejected).
+    CHECK(diag.value(QStringLiteral("skippedOsVersion")).toInt() == 1);
+
+    // Other counters must be zero (no hidden, no parse failure, no uuid/name error).
+    CHECK(diag.value(QStringLiteral("hiddenByVisibility")).toInt() == 0);
+    CHECK(diag.value(QStringLiteral("skippedParseFailure")).toInt() == 0);
+    CHECK(diag.value(QStringLiteral("skippedUuidName")).toInt() == 0);
+}
