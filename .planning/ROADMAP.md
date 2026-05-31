@@ -530,17 +530,17 @@ Plans:
 
 **Wave 1**
 
-- [ ] 27-01-PLAN.md — PLUGIN-16 verifier Unsigned/Tampered split (SignatureState None/Valid/Invalid + VerifyVerdict::Unsigned) + installFromFile CR-01 gate (tampered ALWAYS refuses even with consent) + hostile-zip Catch2 tests (wave 1)
+- [x] 27-01-PLAN.md — PLUGIN-16 verifier Unsigned/Tampered split (SignatureState None/Valid/Invalid + VerifyVerdict::Unsigned) + installFromFile CR-01 gate (tampered ALWAYS refuses even with consent) + hostile-zip Catch2 tests (wave 1)
 
 **Wave 2** *(parallel; zero file overlap)*
 
-- [ ] 27-02-PLAN.md — PLUGIN-15 PluginManager::rediscover() (idempotent, spawns only new) + installFinished->rediscover wiring + hermetic idempotency test (wave 2)
-- [ ] 27-05-PLAN.md — PLUGIN-17 concurrency regression test (new tests/unit/test_plugin_concurrency.cpp): one crash disables only itself across 3 distinctly-keyed plugins + WR-02 HTML-no-respawn guard (wave 2)
+- [x] 27-02-PLAN.md — PLUGIN-15 PluginManager::rediscover() (idempotent, spawns only new) + installFinished->rediscover wiring + hermetic idempotency test (wave 2)
+- [x] 27-05-PLAN.md — PLUGIN-17 concurrency regression test (new tests/unit/test_plugin_concurrency.cpp): one crash disables only itself across 3 distinctly-keyed plugins + WR-02 HTML-no-respawn guard (wave 2)
 
 **Wave 3** *(parallel; zero file overlap; 03 depends 02, 04 depends 01)*
 
-- [ ] 27-03-PLAN.md — PLUGIN-15 persisted per-plugin enable/disable (QSettings plugins/disabled/<id> consulted by discover/spawn+rediscover) + setPluginEnabled + restart-survival test (wave 3)
-- [ ] 27-04-PLAN.md — PLUGIN-16 in-app trust UX: allowUnsignedPlugins setting + per-plugin allowPlugin() (tampered never consentable) + LoadedPluginsPage.qml toggle/allow action + Catch2 gate (wave 3)
+- [x] 27-03-PLAN.md — PLUGIN-15 persisted per-plugin enable/disable (QSettings plugins/disabled/<id> consulted by discover/spawn+rediscover) + setPluginEnabled + restart-survival test (wave 3)
+- [x] 27-04-PLAN.md — PLUGIN-16 in-app trust UX: allowUnsignedPlugins setting + per-plugin allowPlugin() (tampered never consentable) + LoadedPluginsPage.qml toggle/allow action + Catch2 gate (wave 3)
 
 ## Progress
 
@@ -577,4 +577,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 24. Family Coverage AKP03/153/815              | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW)    | v1.3      | 1/2            | In Progress      |            |
 | 26. OpenDeck-shaped Device Editor              | v1.3      | 7/7            | Complete         | 2026-05-28 |
-| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/5            | Planned          | —          |
+| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 5/5            | Needs Review     | —          |

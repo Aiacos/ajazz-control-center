@@ -4,14 +4,14 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T16:00:00.000Z'
-last_activity: 2026-05-31 -- Phase 27 PLANNED (5 plans, 3 waves, plan-checker PASS all 12 dimensions; CR-01 tampered-always-refuses invariant verified at 6 layers) — ready for /gsd-execute-phase 27; earlier -- Plugin install/run epic reconciled into GSD (8 ad-hoc commits 2026-05-29/30 recorded; Phase 27 added to ROADMAP for the 5 genuinely-remaining GUI-parity/persistence gaps); Phase 25 re-walk (Test 1 PASS) + AKP05E robustness fixes (idle keep-alive + replug cache-evict, both hardware-validated); v1.3 audit gaps_found (archive blocked)
+last_updated: '2026-05-31T18:30:00.000Z'
+last_activity: 2026-05-31 -- Phase 27 EXECUTED (5/5 plans, sequential-on-main reusing build/linux-release; verifier 6/6 must-haves PASS, status human_needed for QML visual affordance + optional live smoke). Full suite 711/711 pass (was 645). CR-01 tampered-always-refuses gate proven with a real Ed25519 sign-then-flip-byte test. Commits 416ccc7..ffc4f83; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
 progress:
   total_phases: 19
   completed_phases: 17
-  total_plans: 58
-  completed_plans: 51
-  percent: 88
+  total_plans: 63
+  completed_plans: 56
+  percent: 89
 ---
 
 # Project State
