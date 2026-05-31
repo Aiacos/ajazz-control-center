@@ -811,6 +811,11 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
                        localPath.toStdString(),
                        vout.reason.toStdString());
         QDir(QDir(stagingParent).filePath(archiveName)).removeRecursively();
+        // WR-03: clean up the .plugin_staging parent dir too, mirroring the
+        // Unsigned (:828-829) and SelfSigned (:844-845) branches. Without this
+        // a hostile/tampered install leaves an empty staging dir adjacent to
+        // the plugins tree on every refused attempt.
+        QDir(stagingParent).rmdir(QStringLiteral("."));
         QString const reason =
             vout.reason.isEmpty() ? QStringLiteral("signature verification failed") : vout.reason;
         emit installFinished(
