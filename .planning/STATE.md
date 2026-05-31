@@ -3,17 +3,31 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
-stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T20:30:00.000Z'
+stopped_at: Phase 28 planning (AKP05 plugin action completeness + drag-to-bind on keys & dials)
+last_updated: '2026-05-31T21:15:00.000Z'
 last_live_verification: '2026-05-31 -- Phase 27 trust UX verified LIVE via the AJAZZ_DEBUG_CONTROL channel (new CLAUDE.md MANDATORY rule). Found + fixed a real bug ctest/code-review missed: the per-plugin "Allow" button was on LoadedPluginsPage (Python OOP-host rows, SEC-003), calling PluginCatalog.allowPlugin(pythonId) = no-op. Moved the .sdPlugin trust UX to PluginStore (global "Allow unsigned" toggle next to "Online catalog" + install-from-file unsigned confirm dialog; backend already emitted "unsigned plugin -- confirm to install"). Also cleared 3 real QML warnings (Theme.fgSecondary->fgMuted, Accessible.Group->Grouping, PluginStore tile enabled-shadow) + added objectNames (pluginStoreDrawer/loadedPluginsDrawer/allowUnsignedSwitch/unsignedConfirmDialog) for debug-addressability. Commits 13257d1 + e6cb806. 713/713 ctest. Remaining: full install->spawn live smoke needs a plugin.installFromFile/plugin.rediscover debug RPC (TEST 2).'
 test2_install_spawn: '2026-05-31 -- TEST 2 PASS (live, no restart). Added plugin.installFromFile + plugin.rediscover debug RPCs (commit 825eccd) + pluginManager()/pluginCatalog() accessors. Drove: install an unsigned node .sdPlugin with consent -> connectedCount 0->1, log "plugin registered: uuid=com.acc.test.unsigned.sdPlugin", rediscover "1 newly-spawned" -- WITHOUT app restart. Without consent -> correctly refused ("Unsigned -- awaiting user confirm"). FOUND + FIXED a 3rd real bug (commit 50055a3): installFromFile named the promoted dir from the full archive filename, so a zipped bundle (foo.sdPlugin.zip / foo.zip, the real FileDialog shape) landed at foo.sdPlugin.zip/ which discover() (scans *.sdPlugin) never matched -> promoted-but-never-spawned. Strip .zip/.streamDeckPlugin + ensure .sdPlugin suffix; regression test added (714/714). The unit suite missed it because buildSdPluginArchive only ever named archives .sdPlugin.'
 last_activity: 2026-05-31 -- Phase 27 EXECUTED + code-reviewed + fixed (5/5 plans; verifier 6/6 PASS human_needed for QML visual + optional live smoke; code review 0 Critical/4 Warning all fixed incl. WR-01 dead per-plugin-Allow now functional + WR-02 Win32 CWE-426 fail-closed). Full suite 713/713 (was 645). CR-01 tampered-always-refuses proven with a real Ed25519 sign-then-flip-byte test AND a forged-allowed-key test. Commits 416ccc7..dcd18c4; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
 progress:
-  total_phases: 19
-  completed_phases: 17
-  total_plans: 63
-  completed_plans: 56
-  percent: 89
+  total_phases: 20
+  completed_phases: 18
+  total_plans: 70
+  completed_plans: 68
+  percent: 90
+reconciliation_2026_05_31_pm: >-
+  Autonomous full-lifecycle re-entry found the milestone bookkeeping stale:
+  init.milestone-op reported all-complete (infers from on-disk SUMMARY files) while
+  this frontmatter still said "17/19, Executing Phase 26". Reconciled to disk
+  reality: Phases 14-24/26/27 code-complete; Phase 25 stays PARTIAL (HW-gated
+  input tests on 0x3004 demo unit); Phases 9-12 (v1.2) stay PARTIAL (operator
+  Wireshark captures, out of agent scope). Phase 26 VERIFICATION.md CREATED this
+  session (was missing -- the milestone-audit PHASE-26 blocker): status
+  human_needed, 5/6 verified, only HW-gated REQ-26-E operator sign-off
+  outstanding (already satisfied on-device via cd48ea3+cb00677); full suite
+  714/714; COD-031 clean. complete-milestone NOT run -- milestone REOPENED by a
+  new user goal -> Phase 28 (AKP05 plugin action completeness + drag-to-bind on
+  keys & dials). v1.3-MILESTONE-AUDIT.md MILESTONE-BOUNDARY blocker (v1.2 9-13
+  vs v1.3 14+ conflation) remains open for a later formal v1.2 close.
 ---
 
 # Project State
@@ -23,7 +37,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 26 — OpenDeck-shaped Device Editor
+**Current focus:** Phase 28 — AKP05 plugin action completeness (action library shows ALL declared tools) + drag-to-bind plugin actions onto keys, encoder dials, and touch-strip zones (planning/research).
 
 ## Current Position
 
