@@ -577,33 +577,33 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 1
 
 v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 (replanned 2026-05-23). Phase 14 is the load-bearing foundation (persistent open + brightness + the first capability call reaching the device) and MUST land first. The device slice (15, 16) and the plugin SDK transport/protocol/spawn (17, 18) can proceed in parallel against a MockDevice subject to the 2-agent cap; **Phase 19 is the convergence point** (setImage end-to-end + input→plugin) and depends on 14/15/17/18. Phases 20-22 (Property Inspector, built-in actions, store) build on the SDK. Phase 24 (family coverage) lands after the 14-19 AKP05E slice proves the template. **Phases 23 and 25 are HARDWARE-GATED** (AKP05E connected, fw `V3.AKP05E.01.007`); Phase 25 (incl. running a real `.sdPlugin`) gates the milestone close.
 
-| Phase                                               | Milestone | Plans Complete | Status                  | Completed  |
-| --------------------------------------------------- | --------- | -------------- | ----------------------- | ---------- |
-| 1. SEC-003 Plugin Host                              | v1.0      | 1/1            | Complete (retro)        | 2026-05-03 |
-| 2. QML Singleton Sweep                              | v1.0      | 1/1            | Complete (retro)        | 2026-05-04 |
-| 3. Architectural Decisions                          | v1.1      | 1/1            | Complete                | 2026-05-14 |
-| 4. Hot-plug Hardening                               | v1.1      | 7/7            | Complete                | 2026-05-14 |
-| 5. Time-Sync Scaffolding                            | v1.1      | 8/8            | Complete                | 2026-05-14 |
-| 6. CR-01 Win32 Env Fix                              | v1.1      | 3/3            | Complete                | 2026-05-14 |
-| 7. WR-01 Trust-Roots Parser                         | v1.1      | 3/3            | Complete                | 2026-05-14 |
-| 8. Scaffolded-Device Wiring                         | v1.1      | 4/4            | Complete                | 2026-05-14 |
-| 9. Research, Captures, Hygiene                      | v1.2      | 6/7            | In Progress             |            |
-| 10. AKP05E (0x3004) Promotion                       | v1.2      | 0/?            | Not started             | —          |
-| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm           | v1.2      | 0/?            | Not started             | —          |
-| 12. AK980 PRO Promotion                             | v1.2      | 0/?            | Not started             | —          |
-| 13. Catalogue + v1.1 UI Verifies Back-Fill          | v1.2      | 2/2            | Complete                | 2026-05-28 |
-| 14. Stream Dock Control Service                     | v1.3      | 2/2            | Complete                | 2026-05-24 |
-| 15. Stream Dock Input Routing                       | v1.3      | 2/2            | Complete                | 2026-05-24 |
-| 16. Device Controls + Persistence + Pages           | v1.3      | 3/3            | Complete                | 2026-05-24 |
-| 17. Plugin Protocol Completion                      | v1.3      | 3/3            | Complete                | 2026-05-24 |
-| 18. Plugin Manifest + Spawn + Lifecycle             | v1.3      | 4/4            | Complete                | 2026-05-24 |
-| 19. Device ↔ Plugin Bridge (setImage e2e)           | v1.3      | 3/3            | Complete                | 2026-05-24 |
-| 20. Property Inspector + Settings                   | v1.3      | 3/3            | Complete                | 2026-05-24 |
-| 21. Built-in In-Process Actions                     | v1.3      | 3/3            | Complete                | 2026-05-24 |
-| 22. Plugin Store / Local Install                    | v1.3      | 2/2            | Complete                | 2026-05-24 |
-| 23. Auxiliary Display Surfaces (HW)                 | v1.3      | 2/2            | Complete                | 2026-05-26 |
-| 24. Family Coverage AKP03/153/815                   | v1.3      | 2/2            | Complete                | 2026-05-24 |
-| 25. Hardware Verification + Real Plugin(HW)         | v1.3      | 1/2            | In Progress             |            |
-| 26. OpenDeck-shaped Device Editor                   | v1.3      | 7/7            | Complete                | 2026-05-28 |
-| 27. Plugin Install/Trust/Persistence Hardening      | v1.3      | 5/5            | Verified (human_needed) | 2026-05-31 |
-| 28. AKP05 Plugin Action Completeness + Drag-to-Bind | v1.3      | 5/5            | Complete                | 2026-05-31 |
+| Phase                                               | Milestone | Plans Complete | Status                          | Completed  |
+| --------------------------------------------------- | --------- | -------------- | ------------------------------- | ---------- |
+| 1. SEC-003 Plugin Host                              | v1.0      | 1/1            | Complete (retro)                | 2026-05-03 |
+| 2. QML Singleton Sweep                              | v1.0      | 1/1            | Complete (retro)                | 2026-05-04 |
+| 3. Architectural Decisions                          | v1.1      | 1/1            | Complete                        | 2026-05-14 |
+| 4. Hot-plug Hardening                               | v1.1      | 7/7            | Complete                        | 2026-05-14 |
+| 5. Time-Sync Scaffolding                            | v1.1      | 8/8            | Complete                        | 2026-05-14 |
+| 6. CR-01 Win32 Env Fix                              | v1.1      | 3/3            | Complete                        | 2026-05-14 |
+| 7. WR-01 Trust-Roots Parser                         | v1.1      | 3/3            | Complete                        | 2026-05-14 |
+| 8. Scaffolded-Device Wiring                         | v1.1      | 4/4            | Complete                        | 2026-05-14 |
+| 9. Research, Captures, Hygiene                      | v1.2      | 6/7            | In Progress                     |            |
+| 10. AKP05E (0x3004) Promotion                       | v1.2      | 0/?            | Not started                     | —          |
+| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm           | v1.2      | 0/?            | Not started                     | —          |
+| 12. AK980 PRO Promotion                             | v1.2      | 0/?            | Not started                     | —          |
+| 13. Catalogue + v1.1 UI Verifies Back-Fill          | v1.2      | 2/2            | Complete                        | 2026-05-28 |
+| 14. Stream Dock Control Service                     | v1.3      | 2/2            | Complete                        | 2026-05-24 |
+| 15. Stream Dock Input Routing                       | v1.3      | 2/2            | Complete                        | 2026-05-24 |
+| 16. Device Controls + Persistence + Pages           | v1.3      | 3/3            | Complete                        | 2026-05-24 |
+| 17. Plugin Protocol Completion                      | v1.3      | 3/3            | Complete                        | 2026-05-24 |
+| 18. Plugin Manifest + Spawn + Lifecycle             | v1.3      | 4/4            | Complete                        | 2026-05-24 |
+| 19. Device ↔ Plugin Bridge (setImage e2e)           | v1.3      | 3/3            | Complete                        | 2026-05-24 |
+| 20. Property Inspector + Settings                   | v1.3      | 3/3            | Complete                        | 2026-05-24 |
+| 21. Built-in In-Process Actions                     | v1.3      | 3/3            | Complete                        | 2026-05-24 |
+| 22. Plugin Store / Local Install                    | v1.3      | 2/2            | Complete                        | 2026-05-24 |
+| 23. Auxiliary Display Surfaces (HW)                 | v1.3      | 2/2            | Complete                        | 2026-05-26 |
+| 24. Family Coverage AKP03/153/815                   | v1.3      | 2/2            | Complete                        | 2026-05-24 |
+| 25. Hardware Verification + Real Plugin(HW)         | v1.3      | 1/2            | In Progress                     |            |
+| 26. OpenDeck-shaped Device Editor                   | v1.3      | 7/7            | Complete                        | 2026-05-28 |
+| 27. Plugin Install/Trust/Persistence Hardening      | v1.3      | 5/5            | Verified (human_needed)         | 2026-05-31 |
+| 28. AKP05 Plugin Action Completeness + Drag-to-Bind | v1.3      | 5/5 + gap      | Complete (live-verified passed) | 2026-05-31 |

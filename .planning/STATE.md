@@ -3,9 +3,19 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: verifying
-stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T20:58:38.649Z'
-last_activity: 2026-05-31
+stopped_at: Phase 28 COMPLETE + live-verified (plugin tools all show + drag-to-dial fires end-to-end)
+last_updated: '2026-05-31T23:35:00.000Z'
+last_activity: >
+  2026-05-31 -- Phase 28 EXECUTED (5 waves) + live-driven gap-closure GAP-28-ABC. Goal MET +
+  LIVE-PROVEN via AJAZZ_DEBUG_CONTROL: a plugin action bound to an AKP05E encoder receives
+  willAppear + dialDown + dialRotate (controller:Encoder); the action library shows exactly the
+  visible actions (hiddenByVisibility filter) with affordanceMask. 739/739 (was 714). Live
+  verification caught 3 real bugs all 713+ unit tests missed -- GAP-28B (device present at app
+  start never propagated its id to the input service/bridge -> byCoord("") nullopt + profileChanged
+  guard false -> every plugin binding silently dead; fixed via a deviceActivated signal, 05f99a6),
+  GAP-28A (OS/version-rejected plugins invisible -> skippedOsVersion diagnostic, a25e46d), GAP-28C
+  (app passed -pluginUUID=<dir>.sdPlugin not the manifest UUID; parse top-level UUID as puuid, 0e7289a).
+  Commits dea1382 .. c706541. See 28-VERIFICATION.md (passed) + 28-LIVE-VERIFICATION.md.
 progress:
   total_phases: 20
   completed_phases: 20
