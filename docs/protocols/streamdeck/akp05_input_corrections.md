@@ -317,6 +317,16 @@ The full ground-truth audit:
   85×85 JPEG pushed to `BAT keyIndex=1` rendered on the touch strip (matching
   the wire-byte map in commit `037bd8d` — strip is byte 5, NOT key 1; the
   re-confirmation also closes §2.2 "renders on Linux" positively for AKP05).
+  - ✅ **Corrected 2026-05-31** (full panel walk on the same unit; see
+    [`akp05.md` § "Hardware-confirmed render model"](./akp05.md)): images are
+    **`Rot180`** (panel mounted inverted — they rendered upside-down at 0°);
+    the **4 strip zones render via `BAT` wire bytes 1..4** (~128 px), while
+    `ENC`/`MAI`/`DRA` render **blank**; `ULEND` at buffer offset `5..9` is
+    accepted and works. **Caveat:** `CRT DIS` at `open()` *wedges* the display
+    (a `DIS,STP,DIS` open/close/reopen churn) — the §7 keep-alive `DIS` is fine
+    standalone but must not be added to the app's `open()`. A wedged panel
+    (backlit-but-black) recovers only with a **physical replug**, not
+    `udevadm trigger` (systemd ≥258 re-enumeration).
 - **Comms work**: `GET_FEATURE` report-id `0x01` returns
   `V3.AKP05E.01.007` (the proven mirajazz firmware probe, commit `5ec18d9`).
 - **Kernel-side input path is correct**: `usbmon` confirms the interrupt-IN

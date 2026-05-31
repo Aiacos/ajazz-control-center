@@ -119,11 +119,14 @@ via `MAI`).
 
 ## 4. AKP05 / Mirabox N4 family (10 LCD keys + 4 encoders + touch strip)
 
-**Wire**: v3 by `[mirajazz]` taxonomy. **1024-byte packets** in modern
-firmware (our backend currently sends 512; migration tracked in
-TODO.md). JPEG 85×85 per key. Touch strip 800×480 px, partial-update
-via `DRA` (akp05_vendor.md §3 row 190). 4 encoders, each binds to
-one of 4 strip zones.
+**Wire**: v3 by `[mirajazz]` taxonomy. **1024-byte packets**. JPEG keys
+85×85 **`Rot180`**. 4 encoders, each binding to one of 4 touch-strip zones
+(no separate encoder LCD). ✅ **Live-confirmed 2026-05-31 on `0x0300:0x3004`:
+the 4 strip zones render through the `BAT` opcode at wire bytes 1..4 (~128×128
+`Rot180`), NOT via `DRA`/`MAI`/`ENC` — those render blank on this firmware.**
+See [`akp05.md` § "Hardware-confirmed render model"](./akp05.md) for the full
+wire-byte→surface map. (The vendor Ghidra RE in `akp05_vendor.md §3` documents
+the vendor app's `DRA` path, which this firmware does not honour over hidraw.)
 
 | Codename                                      | VID:PID         | Model name                            | Notes                                                                                                                              |
 | --------------------------------------------- | --------------- | ------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |

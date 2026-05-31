@@ -272,7 +272,7 @@ devices:
     maturity: partial
     capabilities: [display, encoder, touch, macros]
     protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "Real retail AKP05E. Hot-plug capture 2026-05-13 surfaced this PID as 'Ajazz HOTSPOTEKUSB HID DEMO' (white-label dev string), which led to a brief mis-filing as the 6-key 'akp03_variant_3004'. A live CRT VER handshake on 2026-05-20 returned firmware string 'V3.AKP05E.01.007' — confirming AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Routed through makeAkp05."
+    notes: "White-label demo AKP05E ('Ajazz HOTSPOTEKUSB HID DEMO' dev string; briefly mis-filed as 6-key 'akp03_variant_3004'). Live CRT VER 2026-05-20 returned 'V3.AKP05E.01.007' — AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Output FULLY works (2026-05-31): keys + the 4 strip zones render via BAT (wire 6..15 keys, 1..4 strip zones), Rot180; brightness live. Input (key/encoder/touch) UNREACHABLE on this demo SKU -> maturity 'partial'. See docs/protocols/streamdeck/akp05.md. Routed through makeAkp05."
 
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic

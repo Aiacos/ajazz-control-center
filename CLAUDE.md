@@ -191,14 +191,14 @@ Quick-reference index. **Read before any AKP05 / streamdeck device experiment.**
 
 ### Live unit: `0x0300:0x3004` "HOTSPOTEKUSB HID DEMO" (white-label demo SKU)
 
-| Capability                                        | Status                                                                    | Where to read                                                                     |
-| ------------------------------------------------- | ------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
-| `GET_FEATURE id 0x01` (firmware)                  | ✓ returns `V3.AKP05E.01.007`                                              | commit `5ec18d9` (mirajazz way)                                                   |
-| Output writes (`LIG`/`CLE`/`DIS`/`CONNECT`/`BAT`) | ✓ all drive the panel on Linux                                            | commits `cc04a54` (POSIX `0x00` report-id prepend) + `037bd8d` (`akp05KeyWire()`) |
-| `BAT` key-byte → physical surface                 | ✓ mapped: enc 1..4, **strip 5**, bottom 6..10, top 11..15                 | commit `037bd8d`                                                                  |
-| Image render on Linux                             | ✓ live-confirmed 2026-05-28 (85×85 JPEG → BAT → chunks → ULEND)           | closes former §2.2 open item — see `akp05_input_corrections.md §7.1`              |
-| Input streaming (key/encoder/touch)               | ✗ **NOT reachable on this demo unit**                                     | `akp05_input_corrections.md §7.1` + commit `89c0db6`                              |
-| `parseInputReport` structure                      | ✓ aligned with vendor RE (encoder ±1, touch X single byte at `frame[10]`) | commit `7eb5501` + `akp05_input_corrections.md §3, §4`                            |
+| Capability                                  | Status                                                                                                                                                                | Where to read                                                             |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `GET_FEATURE id 0x01` (firmware)            | ✓ returns `V3.AKP05E.01.007`                                                                                                                                          | commit `5ec18d9` (mirajazz way)                                           |
+| Output writes (`LIG`/`CLE`/`CONNECT`/`BAT`) | ✓ drive the panel — but **never send `CRT DIS` at `open()`** (wedges the display via a `DIS,STP,DIS` open/close/reopen churn; recover by physical replug)             | `cc04a54` (report-id prepend) + `037bd8d`; DIS-wedge confirmed 2026-05-31 |
+| `BAT` key-byte → physical surface           | ✓ **strip zones 1..4** (the 4 encoder zones), wire 5 = **no surface**, bottom keys 6..10, top keys 11..15. **ALL surfaces use `BAT`**; `ENC`/`MAI`/`DRA` render blank | `037bd8d` + `cb00677` (strip via BAT 1..4)                                |
+| Image render on Linux                       | ✓ live — keys **and** the 4 strip zones, **`Rot180`** (panel mounted inverted; was upside-down at 0°), keys 85×85, zones ~128×128, `ULEND`@`5..9` works               | `cd48ea3` (key Rot180) + `cb00677` (strip); full model in `akp05.md`      |
+| Input streaming (key/encoder/touch)         | ✗ **NOT reachable on this demo unit**                                                                                                                                 | `akp05_input_corrections.md §7.1` + commit `89c0db6`                      |
+| `parseInputReport` structure                | ✓ aligned with vendor RE (encoder ±1, touch X single byte at `frame[10]`)                                                                                             | commit `7eb5501` + `akp05_input_corrections.md §3, §4`                    |
 
 **Input-unreachable proof chain** (so nobody re-runs this): tested with
 (a) raw hidraw read, (b) `GET_REPORT` polling, (c) evdev `event264`,
@@ -252,9 +252,24 @@ or a **retail AKP05E / Mirabox N4** unit.
   `GET_FEATURE id 0x01` firmware probe. Currently untracked working
   artefact; the capture pattern is also documented in
   `akp05_input_corrections.md §7.1` for trivial reproduction.
+- `scripts/akp05_color_probe.py` — known-good output round-trip: paints all
+  15 BAT surfaces (wire 1..15). **Re-run this first when output looks broken**
+  — if the probe also renders nothing, the device is wedged (replug), not a
+  code bug. Untracked scratch artefact.
+- `scripts/akp05_strip_probe.py` — maps/​sizes the 4 strip zones (BAT wire
+  1..4); `--sizes` sweeps zone sizes. Untracked. (How the ~128 px zone fit was
+  found, 2026-05-31.)
+- `scripts/akp05_ulend_ab.py` — A/B the `ULEND` offset (5..9 vs 3..7) on one
+  panel. Untracked.
+- Headless app render: launch with `AJAZZ_DEBUG_CONTROL=1`, then
+  `scripts/ajazz-debug device.renderTest --params '{"codename":"akp05e","count":10,"main":true,"encoders":true}'`
+  paints numbered keys + the 4 strip zones (the only headless way to render —
+  QML KeyCells lack objectNames). Launch with plain `nohup … &`; kill by exact
+  PID — a `pkill -f` whose pattern is in your own command line kills its shell.
 - `build/linux-release/src/app/ajazz-control-center` — GUI app. Selecting
   the AKP05E in the sidebar holds a persistent open + sends `LIG`;
-  brightness slider drives the panel live (verified 2026-05-28).
+  brightness slider drives the panel live. Keys + the 4 strip zones render
+  `Rot180` (orientation fixed 2026-05-31, `cd48ea3`+`cb00677`).
 
 ### v1.3 milestone tracking (don't blindly "execute" device phases)
 

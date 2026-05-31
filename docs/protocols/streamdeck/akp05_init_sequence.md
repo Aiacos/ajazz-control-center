@@ -193,6 +193,14 @@ the order seen in disassembly):
    vendor relies on the device firmware to preserve its last on-screen
    image; the first thing the host pushes after VER is the user's
    profile (via `SDDevice::insertSettings`).
+   - ✅ **Confirmed correct for our backend too (2026-05-31).** `open()` sends
+     only the `VER` probe — no `DIS`/reset. **Do not add `CRT DIS` at open():**
+     because the app opens→closes(`STP`)→reopens the device during startup
+     enumeration, a `DIS` in `open()` produces a `DIS,STP,DIS` churn that
+     **wedges the display** (backlit but black) until a physical replug.
+     hardware-tested on `0x0300:0x3004`. (mirajazz sends `DIS` once in its
+     `initialize()` and never reopens, so it gets away with it — we must not
+     replicate that in a per-open hook.) See [`akp05.md`](./akp05.md).
 
 ### 3.3 WinUSB-backed devices (`SDDeviceWinUSB`)
 
