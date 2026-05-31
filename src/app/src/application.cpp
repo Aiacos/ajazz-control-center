@@ -804,6 +804,20 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         for (auto const& manifest : runnable) {
             m_pluginManager->spawn(manifest);
         }
+
+        // Plan 27-02 (PLUGIN-15): trigger a re-scan when a plugin is installed
+        // from the GUI so it runs live with NO app restart (D-27-3 idempotency).
+        // Guard on ok==true so a failed or refused install does not cause a scan.
+        // m_pluginCatalog is constructed before startBackgroundServices() is called
+        // (it is an Application constructor member) so the pointer is always valid here.
+        QObject::connect(m_pluginCatalog.get(),
+                         &PluginCatalogModel::installFinished,
+                         m_pluginManager.get(),
+                         [this](QString const& /*uuid*/, bool ok, QString const& /*error*/) {
+                             if (ok) {
+                                 m_pluginManager->rediscover();
+                             }
+                         });
     }
 #endif
 
