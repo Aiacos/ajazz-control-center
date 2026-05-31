@@ -33,6 +33,7 @@
 #include "fixtures/mock_transport.hpp"
 #include "sd_plugin_server.hpp"
 #include "stream_dock_control_service.hpp"
+#include "stream_dock_input_service.hpp" // GAP-28B regression tests
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -1539,6 +1540,150 @@ TEST_CASE("PluginDeviceBridge populateContexts registers touch zone as Encoder c
     // willAppear must have been emitted to the client.
     auto const names = receivedEventNames(msgSpy);
     CHECK(names.contains(QStringLiteral("willAppear")));
+}
+
+// ---------------------------------------------------------------------------
+// GAP-28B regression: injectSyntheticEvent must deliver dialDown and keyDown
+// to the plugin via the deviceEvent signal path.
+//
+// The gap that tests #708-709 missed: they call populateContextsForActivePage
+// directly and assert byCoord has a value.  They do NOT verify that
+// StreamDockInputService::injectSyntheticEvent -> dispatch -> emit deviceEvent
+// -> PluginDeviceBridge::onDeviceEvent -> sendEvent actually fires.
+//
+// This test wires the two services together (as Application does via
+// QObject::connect), calls injectSyntheticEvent, and asserts the loopback
+// plugin client receives the expected dialDown / keyDown event.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E GAP-28B injectSyntheticEvent delivers dialDown via deviceEvent",
+          "[plugin-device-bridge][e2e][gap-28b]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    // Build bridge (no control service needed for input->plugin routing test).
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Profile: encoder[0].onPress -> plugin action "com.test.plug.enc"
+    ajazz::core::Profile prof;
+    prof.id = "gap28b-enc";
+    ajazz::core::EncoderBinding encBinding;
+    ajazz::core::Action encAct;
+    encAct.kind = ajazz::core::ActionKind::Plugin;
+    encAct.id = "com.test.plug.enc";
+    encBinding.onPress.push_back(encAct);
+    prof.encoders[0] = std::move(encBinding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Build a minimal StreamDockInputService (no device handle needed for
+    // injectSyntheticEvent — dispatch() does not require m_device to be set).
+    ajazz::core::ActionExecutors nopExecs;
+    auto engine = std::make_unique<ajazz::core::ActionEngine>(std::move(nopExecs));
+    ajazz::app::StreamDockInputService inputSvc(
+        [&prof]() -> ajazz::core::Profile const& { return prof; }, std::move(engine), nullptr);
+    // Set the active device codename so deviceEvent carries "akp05e" (not empty).
+    inputSvc.setActiveDeviceCodename(QStringLiteral("akp05e"));
+
+    // Wire the services: deviceEvent -> onDeviceEvent (as Application does).
+    QObject::connect(&inputSvc,
+                     &ajazz::app::StreamDockInputService::deviceEvent,
+                     bridge.get(),
+                     &ajazz::app::PluginDeviceBridge::onDeviceEvent);
+
+    // Connect a loopback plugin client and register it.
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Populate contexts (as commitEncoderBinding -> profileChanged -> lambda would do).
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+    pump19(200);
+    msgSpy.clear(); // discard willAppear
+
+    // Verify context was registered before testing input delivery.
+    REQUIRE(bridge->registry()
+                .byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 0, 0)
+                .has_value());
+
+    // Inject a synthetic EncoderPressed for encoder 0.
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::EncoderPressed;
+    ev.index = 0;
+    ev.value = 0;
+    inputSvc.injectSyntheticEvent(ev);
+    pump19(400);
+
+    // The plugin client must receive dialDown.
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("dialDown")));
+}
+
+TEST_CASE("PluginDeviceBridgeE2E GAP-28B injectSyntheticEvent delivers keyDown via deviceEvent",
+          "[plugin-device-bridge][e2e][gap-28b]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Profile: key 3 (1-based) onPress -> plugin action "com.test.plug.key"
+    // 1-based key 3 -> row=0, col=2 (keyIndex=3, cols=5: row=(3-1)/5=0, col=(3-1)%5=2)
+    ajazz::core::Profile prof;
+    prof.id = "gap28b-key";
+    ajazz::core::Binding keyBinding;
+    ajazz::core::Action keyAct;
+    keyAct.kind = ajazz::core::ActionKind::Plugin;
+    keyAct.id = "com.test.plug.key";
+    keyBinding.onPress.push_back(keyAct);
+    prof.keys[2] = std::move(keyBinding); // profile uses 0-based index 2 for 1-based key 3
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    ajazz::core::ActionExecutors nopExecs;
+    auto engine = std::make_unique<ajazz::core::ActionEngine>(std::move(nopExecs));
+    ajazz::app::StreamDockInputService inputSvc(
+        [&prof]() -> ajazz::core::Profile const& { return prof; }, std::move(engine), nullptr);
+    inputSvc.setActiveDeviceCodename(QStringLiteral("akp05e"));
+
+    QObject::connect(&inputSvc,
+                     &ajazz::app::StreamDockInputService::deviceEvent,
+                     bridge.get(),
+                     &ajazz::app::PluginDeviceBridge::onDeviceEvent);
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+    pump19(200);
+    msgSpy.clear(); // discard willAppear
+
+    // Verify key context was registered.
+    // Profile::keys uses 0-based index 2; populateContextsForActivePage converts to
+    // 1-based (keyIdx1 = 2+1 = 3) and then to grid coords for a 5-column grid.
+    // coordsForKeyIndex(3, 5): row=(3-1)/5=0, col=(3-1)%5=2.
+    REQUIRE(bridge->registry()
+                .byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 2)
+                .has_value());
+
+    // Inject KeyPressed for 1-based index 3.
+    ajazz::core::DeviceEvent ev;
+    ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    ev.index = 3; // 1-based
+    ev.value = 0;
+    inputSvc.injectSyntheticEvent(ev);
+    pump19(400);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("keyDown")));
 }
 
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

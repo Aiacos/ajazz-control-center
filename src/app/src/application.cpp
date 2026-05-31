@@ -402,11 +402,13 @@ Application::Application(QObject* parent)
           },
           // ActionEngine*: the engine owned by m_streamDockInput (moved-in; always non-null).
           m_streamDockInput ? m_streamDockInput->engine() : nullptr,
-          // Phase-19 fallback: logged stub (same as the prior Phase-15 plugin executor body).
-          [](std::string_view id, std::string_view /*settingsJson*/) {
-              AJAZZ_LOG_INFO(
-                  "input", "plugin action {} ignored (plugin host arrives Phase 19)", id);
-          },
+          // ActionEngine plugin executor (Phase 19+): plugin actions are dispatched
+          // by PluginDeviceBridge via the deviceEvent signal path, NOT by the
+          // ActionEngine directly. The engine executor is therefore a deliberate
+          // no-op: the bridge handles routing after dispatch() emits deviceEvent.
+          // Prior stale log "ignored (plugin host arrives Phase 19)" removed — Phase 19
+          // has shipped; the no-op is correct behaviour, not a future TODO.
+          [](std::string_view /*id*/, std::string_view /*settingsJson*/) {},
           this)),
 #ifdef AJAZZ_HAVE_WEBSOCKETS
       // Phase 17 / Phase 19-02: SdPluginServer — Elgato-compatible WebSocket plugin
@@ -500,6 +502,29 @@ Application::Application(QObject* parent)
     //    enumerate bound plugin actions (willAppear on connect/registration).
     m_pluginBridge->setProfileAccessor(
         [this]() -> core::Profile const& { return m_profileController->activeProfile(); });
+
+    // 1b. Wire deviceActivated -> input-service codename + bridge.onDeviceConnected
+    //     (GAP-28B fix): StreamDockControlService::setActiveDevice now emits
+    //     deviceActivated on every successful open. By wiring it here we ensure
+    //     ALL callers — QML auto-select, debug RPC, and the hot-plug path — share
+    //     a single propagation path instead of each one having to know about the
+    //     input service's codename field and the bridge's onDeviceConnected seam.
+    //
+    //     Idempotency: setActiveDeviceCodename just overwrites m_activeDeviceId
+    //     (string assignment — always safe).  onDeviceConnected re-populates
+    //     contexts and re-sends willAppear for all live bindings — also safe.
+    //
+    //     The hot-plug path previously had explicit calls to setActiveDeviceCodename
+    //     and onDeviceConnected after setActiveDevice; those are removed (see
+    //     onHotplug below) so they only fire once via this signal.
+    QObject::connect(m_streamDockControl.get(),
+                     &StreamDockControlService::deviceActivated,
+                     m_streamDockInput.get(),
+                     &StreamDockInputService::setActiveDeviceCodename);
+    QObject::connect(m_streamDockControl.get(),
+                     &StreamDockControlService::deviceActivated,
+                     m_pluginBridge.get(),
+                     &PluginDeviceBridge::onDeviceConnected);
 
     // 2. DeviceEvent tap: StreamDockInputService::deviceEvent -> bridge::onDeviceEvent.
     //    The input service emits the raw DeviceEvent after dispatching the ActionChain.
@@ -937,18 +962,21 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                         m_streamDockControl.get(),
                         [this, codename = QString::fromStdString(d.codename), devId] {
                             // 1. Let the control service open the device and light the panel.
+                            //    setActiveDevice() now emits deviceActivated(codename) on success,
+                            //    which Application wires (in the constructor body above) to:
+                            //      - StreamDockInputService::setActiveDeviceCodename
+                            //      - PluginDeviceBridge::onDeviceConnected
+                            //    No explicit calls needed here (GAP-28B fix: all paths share one
+                            //    propagation channel instead of each call site wiring separately).
                             m_streamDockControl->setActiveDevice(codename);
                             // 2. Share the held handle with the input service (ARCH-03).
                             //    The flyweight open() returns the same shared_ptr<IDevice>
                             //    that the control service holds; no second HID open occurs.
-                            m_streamDockInput->setActiveDeviceCodename(codename);
+                            //    This MUST remain an explicit call: setActiveDevice(handle) sets
+                            //    m_device for real hardware polling, which deviceActivated
+                            //    does not carry (only the codename string is broadcast).
                             auto handle = m_deviceRegistry.open(devId);
                             m_streamDockInput->setActiveDevice(std::move(handle));
-#ifdef AJAZZ_HAVE_WEBSOCKETS
-                            // 3. Phase 19-03: notify the bridge so it populates contexts
-                            //    and sends deviceDidConnect to registered plugins.
-                            m_pluginBridge->onDeviceConnected(codename);
-#endif
                         });
                 }
                 break;

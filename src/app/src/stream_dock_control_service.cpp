@@ -207,6 +207,12 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
     // not idle off into the backlit-but-black wedge. keepAlive() is a no-op on
     // backends that don't implement it (non-AKP05), so this is harmless there.
     m_keepAliveTimer->start();
+
+    // Notify listeners (Application wires this to input-service codename sync
+    // and plugin-bridge onDeviceConnected) so every setActiveDevice caller —
+    // QML auto-select, debug RPC, hot-plug timer — propagates the active device
+    // identity without each call site having to know about those seams.
+    emit deviceActivated(codename);
 }
 
 void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage const& img) {

@@ -382,6 +382,20 @@ signals:
      */
     void pageNavigated(QString const& deviceId, QString const& pageId);
 
+    /**
+     * @brief Emitted at the end of a successful setActiveDevice() call.
+     *
+     * "Successful" means the device was opened and is IDisplayCapable (panel lit).
+     * Connected by Application to StreamDockInputService::setActiveDeviceCodename
+     * and PluginDeviceBridge::onDeviceConnected so that ALL callers of
+     * setActiveDevice() (QML auto-select, debug RPC, hot-plug) propagate the
+     * active-device identity to the input service and plugin bridge without
+     * each call site having to know about those two additional seams.
+     *
+     * @param codename  Active device codename, e.g. "akp05e".
+     */
+    void deviceActivated(QString const& codename);
+
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
     /// clear the map. Runs on the GUI thread via QTimer::singleShot (Pitfall 3).
