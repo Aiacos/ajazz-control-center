@@ -50,6 +50,22 @@ QString g_pluginsDirOverride{};
 /// install() codepath also calls it.
 [[nodiscard]] QString userPluginsDir();
 
+/// WR-01: per-plugin consent predicate. Reads the QSettings key written by
+/// PluginCatalogModel::allowPlugin() (`plugins/allowed/<uuid>=true`). @p
+/// pluginDirName may be either the install dir name (`<uuid>.sdPlugin`) or a
+/// bare uuid; the trailing `.sdPlugin` is stripped so the key matches the one
+/// allowPlugin() stores. CR-01: callers MUST gate this behind a
+/// VerifyVerdict::Unsigned check — it must NEVER promote a Refused/tampered
+/// package (allowPlugin() refuses to even write the key for tampered rows, but
+/// the verdict gate at every read site is the load-bearing invariant).
+[[nodiscard]] bool perPluginAllowed(QString const& pluginDirName) {
+    QString const uuid = pluginDirName.endsWith(QStringLiteral(".sdPlugin"))
+                             ? pluginDirName.chopped(9)
+                             : pluginDirName;
+    QSettings settings;
+    return settings.value(QStringLiteral("plugins/allowed/") + uuid, false).toBool();
+}
+
 } // namespace
 
 PluginCatalogModel* PluginCatalogModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
@@ -153,12 +169,20 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                 continue; // no manifest -> not a valid plugin dir; skip
             }
             VerifyOutcome const vout = verifyStagedPlugin(manifestPath);
-            if (vout.verdict == VerifyVerdict::Unsigned && consentToUnsigned()) {
+            if (vout.verdict == VerifyVerdict::Unsigned &&
+                (consentToUnsigned() || perPluginAllowed(entry))) {
                 // Opt-in: keep the unsigned (no-signature) plugin so it can be
-                // discovered + run. Consent via setting or env var.
+                // discovered + run. Consent via the global setting, the env var,
+                // OR an explicit per-plugin "Allow this plugin" decision
+                // (WR-01: perPluginAllowed) — the per-plugin allow must survive
+                // the launch-sweep even when the global toggle is OFF, otherwise
+                // the affordance is undone on the next restart.
+                // CR-01: this branch is Unsigned-ONLY; the Refused branch below
+                // stays unconditional-quarantine and consults neither predicate.
                 AJAZZ_LOG_WARN("plugin-catalog",
                                "launch-sweep verify: '{}' unsigned ({}); KEPT "
-                               "(allowUnsignedPlugins or AJAZZ_ALLOW_UNTRUSTED_PLUGINS set)",
+                               "(allowUnsignedPlugins, AJAZZ_ALLOW_UNTRUSTED_PLUGINS, "
+                               "or per-plugin allow set)",
                                entry.toStdString(),
                                vout.reason.toStdString());
             } else if (vout.verdict == VerifyVerdict::Unsigned) {
@@ -555,18 +579,28 @@ bool PluginCatalogModel::allowPlugin(QString const& uuid) {
         return false;
     }
 
-    // Record per-plugin consent for Unsigned (developer sideload).
+    // Record per-plugin consent for Unsigned (developer sideload). WR-01: this
+    // key is now READ by perPluginAllowed() in both the launch-sweep and the
+    // installFromFile Unsigned gate, so the consent (a) survives restart (the
+    // sweep keeps the plugin instead of deleting it) and (b) lets a re-install
+    // of this specific plugin proceed without re-prompting — even when the
+    // global allowUnsignedPlugins toggle is OFF.
     {
         QSettings settings;
         settings.setValue(QStringLiteral("plugins/allowed/") + uuid, true);
     }
     AJAZZ_LOG_INFO("plugin-catalog",
-                   "allowPlugin: '{}' consent recorded ({}); emitting installedCountChanged",
+                   "allowPlugin: '{}' consent recorded ({}); driving rediscover",
                    uuid.toStdString(),
                    verdictToTrustLevel(vout.verdict).toStdString());
-    // The plugin is already on disk (in pluginsDir); signal discovery so
-    // callers re-scan and spawn it if not already running.
+    // The plugin is already on disk (in pluginsDir) and now consented. Drive
+    // promotion: installFinished(uuid, true, "") is wired (application.cpp) to
+    // PluginManager::rediscover(), which idempotently spawns the now-allowed
+    // plugin if it is not already live. installedCountChanged() refreshes the
+    // Action Library so its actions appear without a restart. WR-01: this turns
+    // the previously-dead per-plugin "Allow" button into a working affordance.
     emit installedCountChanged();
+    emit installFinished(uuid, true, QString{});
     return true;
 }
 
@@ -823,9 +857,14 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         return false;
     }
 
-    if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned && !consentToUnsigned()) {
+    if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned && !consentToUnsigned() &&
+        !perPluginAllowed(archiveName)) {
         // Unsigned (no signature block) — developer sideload. Requires explicit
-        // user consent, the allowUnsignedPlugins setting, or the env var override.
+        // user consent, the allowUnsignedPlugins setting, the env var override,
+        // OR a prior per-plugin "Allow this plugin" decision (WR-01) so a
+        // re-install of an explicitly-allowed plugin does not re-prompt.
+        // CR-01: this is the Unsigned branch only; the Refused branch above
+        // already quarantined tampered packages unconditionally.
         AJAZZ_LOG_INFO("plugin-catalog",
                        "installFromFile '{}': Unsigned — awaiting user confirm; "
                        "removing staging dir",

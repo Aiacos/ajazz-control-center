@@ -882,6 +882,153 @@ TEST_CASE("PluginCatalog allowPlugin refuses tampered rows", "[plugin-install][t
 }
 
 // ---------------------------------------------------------------------------
+// WR-01: per-plugin "Allow this plugin" survives the launch-sweep with the
+// global allowUnsignedPlugins toggle OFF.
+//
+// Scenario:
+//   1. Install an unsigned plugin into the plugins dir (with per-call consent).
+//   2. Global toggle OFF + env var unset (so consentToUnsigned() == false).
+//   3. allowPlugin(uuid) records the per-plugin decision and returns true.
+//   4. Construct a FRESH model (== app restart) — its constructor runs the
+//      launch-sweep. With the per-plugin key set, the unsigned plugin dir must
+//      SURVIVE even though the global toggle is OFF (the bug WR-01 reported was
+//      the sweep removeRecursively-ing it on restart).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog per-plugin allow survives launch-sweep with global toggle OFF",
+          "[plugin-install][trust][wr-01]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    // Global consent OFF for the whole test.
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.wr01-perplugin-allow");
+    QString const installedManifest =
+        QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin/manifest.json"));
+
+    {
+        PluginCatalogModel model(nullptr);
+        model.setAllowUnsignedPlugins(false);
+
+        // Step 1: install the unsigned plugin WITH explicit per-call consent so
+        // it lands on disk (global toggle is off, so we use the per-call path).
+        QByteArray const unsignedBytes{kMinimalManifest};
+        QString const archivePath = buildSdPluginArchive(tmp.path(), unsignedBytes, pluginId);
+        REQUIRE_FALSE(archivePath.isEmpty());
+        REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+        REQUIRE(QFile::exists(installedManifest));
+
+        // Step 2: record the per-plugin allow decision. Returns true for Unsigned.
+        REQUIRE(model.allowPlugin(pluginId));
+    }
+
+    // Sanity: the global toggle is genuinely OFF in persisted settings.
+    {
+        PluginCatalogModel probe(nullptr);
+        REQUIRE(probe.allowUnsignedPlugins() == false);
+    }
+
+    // Step 4: simulate a restart — a fresh model runs the launch-sweep in its
+    // constructor. With the per-plugin key set and the global toggle OFF, the
+    // unsigned plugin dir MUST survive.
+    REQUIRE(QFile::exists(installedManifest)); // present before the sweep
+    {
+        PluginCatalogModel restarted(nullptr);
+        Q_UNUSED(restarted);
+    }
+    REQUIRE(QFile::exists(installedManifest)); // WR-01: survived the launch-sweep
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// WR-01 + CR-01: per-plugin allow must NOT promote a TAMPERED plugin.
+//
+// A tampered (Refused) plugin on disk must (a) be refused by allowPlugin()
+// (no consent key written, returns false) AND (b) be removed by the
+// launch-sweep on the next "restart" regardless of any stray per-plugin key.
+// This pins that the now-functional per-plugin path stays Unsigned-only.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog per-plugin allow does not promote a tampered plugin (CR-01)",
+          "[plugin-install][trust][security][wr-01]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.wr01-tampered");
+
+    // Build a tampered manifest (signed then byte-flipped -> Refused verdict).
+    QString const keysDir = tmp.filePath("keys-wr01-tampered");
+    QDir().mkpath(keysDir);
+    REQUIRE(
+        runChild(
+            {"python3", verifierScript().string(), "keygen", "--out-dir", keysDir.toStdString()}) ==
+        0);
+
+    fs::path const rawManifest = fs::path{tmp.path().toStdString()} / "manifest_wr01_tampered.json";
+    writeFile(rawManifest, kMinimalManifest);
+    REQUIRE(runChild({"python3",
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      rawManifest.string(),
+                      "--priv-key",
+                      (keysDir + "/priv.pem").toStdString()}) == 0);
+    auto blob = readFile(rawManifest);
+    auto const pos = blob.find("Fixture for");
+    REQUIRE(pos != std::string::npos);
+    blob[pos] = 'Z';
+    writeFile(rawManifest, blob);
+
+    // Place the tampered plugin DIRECTLY in the plugins dir (as if it had been
+    // dropped there), bypassing installFromFile so allowPlugin sees it on disk.
+    QString const tamperedDir = QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin"));
+    QDir().mkpath(tamperedDir);
+    writeFile(fs::path{tamperedDir.toStdString()} / "manifest.json", blob);
+    QString const tamperedManifest = QDir(tamperedDir).filePath(QStringLiteral("manifest.json"));
+    REQUIRE(QFile::exists(tamperedManifest));
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(false);
+
+    // CR-01: allowPlugin() must REFUSE a tampered plugin and write no key.
+    REQUIRE_FALSE(model.allowPlugin(pluginId));
+    {
+        QSettings settings;
+        REQUIRE_FALSE(
+            settings.value(QStringLiteral("plugins/allowed/") + pluginId, false).toBool());
+    }
+
+    // Even if an attacker forged a stray per-plugin key, the launch-sweep must
+    // still quarantine the tampered dir (Refused is unconditional-quarantine).
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowed/") + pluginId, true);
+    }
+    {
+        PluginCatalogModel restarted(nullptr);
+        Q_UNUSED(restarted);
+    }
+    REQUIRE_FALSE(QFile::exists(tamperedManifest)); // CR-01: tampered removed by the sweep
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
 // Regression CR-02: Refused plugin does not land in pluginsDir via any path
 //
 // This test exercises the staging-before-promote invariant: a Refused
