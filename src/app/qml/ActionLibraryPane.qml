@@ -13,8 +13,11 @@
 //
 // MIME: "application/x-ajazz-action" with payload
 //       { actionKind: int, label: string, iconName: string,
-//         actionId: string, iconUrl: string, propertyInspectorPath: string }.
+//         actionId: string, iconUrl: string, propertyInspectorPath: string,
+//         affordanceMask: int }.
 //   actionId is "" for built-in kinds and the action UUID for plugin actions.
+//   affordanceMask is Key=1, Dial=2, TouchZone=4 (bitmask); 0 = non-draggable.
+//   Built-in actions carry affordanceMask:1 (Key-capable); hint row is 0.
 //
 // Width: fixed 240px (configurable via Layout.preferredWidth on the parent).
 pragma ComponentBehavior: Bound
@@ -51,10 +54,12 @@ Rectangle {
         const builtinGroup = qsTr("Built-in actions");
         for (let i = 0; i < _builtins.length; ++i) {
             const b = _builtins[i];
+            // Built-in actions are Key-capable (affordanceMask: 1 = Key).
             actionModel.append({
                 group: builtinGroup, actionLabel: b.actionLabel, kind: b.kind,
                 iconName: b.iconName, actionId: "", pluginName: "",
-                iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: false
+                iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: false,
+                controllers: [], affordanceMask: 1
             });
         }
 
@@ -63,10 +68,12 @@ Rectangle {
             ? PluginCatalog.installedActions() : [];
         if (actions.length === 0) {
             // A non-draggable hint so the empty Plugins section explains itself.
+            // affordanceMask: 0 = non-draggable (hint rows cannot be dropped).
             actionModel.append({
                 group: pluginGroup, actionLabel: qsTr("Install plugins from the store"),
                 kind: 0, iconName: "extension", actionId: "", pluginName: "",
-                iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: true
+                iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: true,
+                controllers: [], affordanceMask: 0
             });
         } else {
             for (let j = 0; j < actions.length; ++j) {
@@ -75,7 +82,8 @@ Rectangle {
                     group: pluginGroup, actionLabel: a.actionName, kind: 0,
                     iconName: "extension", actionId: a.actionId, pluginName: a.pluginName,
                     iconUrl: a.icon || "", propertyInspectorPath: a.propertyInspectorPath || "",
-                    isPlugin: true, isHint: false
+                    isPlugin: true, isHint: false,
+                    controllers: a.controllers || [], affordanceMask: a.affordanceMask || 0
                 });
             }
         }
@@ -172,6 +180,12 @@ Rectangle {
         required property string propertyInspectorPath
         required property bool   isPlugin
         required property bool   isHint
+        required property var    controllers   ///< QStringList (from installedActions)
+        required property int    affordanceMask ///< Key=1,Dial=2,TouchZone=4 bitmask
+
+        // objectName enables debug-channel addressing (qml.get/set/invoke/click).
+        // Every LibraryTile is indexed by its ListView position per CLAUDE.md rule.
+        objectName: "libraryTile_" + index
 
         width:  ListView.view ? ListView.view.width : root.implicitWidth
         height: 48
@@ -196,7 +210,8 @@ Rectangle {
                 iconName: tile.iconName,
                 actionId: tile.actionId,
                 iconUrl: tile.iconUrl,
-                propertyInspectorPath: tile.propertyInspectorPath
+                propertyInspectorPath: tile.propertyInspectorPath,
+                affordanceMask: tile.affordanceMask
             })
         })
 

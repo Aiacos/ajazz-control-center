@@ -454,6 +454,28 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
                            {"connectedCount", srv->connectedPluginCount()}};
     });
 
+    // plugin.installedActions {} -> {count, actions, diagnostics}
+    // Returns every visible installed action with its full QVariantMap (same
+    // shape as PluginCatalogModel::installedActions()) plus the lastScanDiagnostics
+    // counters. Enables live PLUGIN-18 verification without a UI drag-and-drop.
+    // Gated behind AJAZZ_DEBUG_CONTROL=1 (this block). No secrets in payload.
+    server.registerMethod("plugin.installedActions", [&app](QJsonObject const&, QString& err) {
+        auto* cat = app.pluginCatalog();
+        if (cat == nullptr) {
+            err = QStringLiteral("plugin catalog unavailable");
+            return QJsonObject{};
+        }
+        QVariantList const actions = cat->installedActions();
+        QJsonArray arr;
+        for (QVariant const& v : actions) {
+            arr.append(QJsonObject::fromVariantMap(v.toMap()));
+        }
+        return QJsonObject{{QStringLiteral("count"), static_cast<int>(actions.size())},
+                           {QStringLiteral("actions"), arr},
+                           {QStringLiteral("diagnostics"),
+                            QJsonObject::fromVariantMap(cat->lastScanDiagnostics())}};
+    });
+
     server.registerMethod("plugin.sendEvent", [&app](QJsonObject const& params, QString& err) {
         auto* srv = app.pluginServer();
         if (srv == nullptr) {
