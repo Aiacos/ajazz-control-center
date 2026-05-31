@@ -810,6 +810,16 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         // Guard on ok==true so a failed or refused install does not cause a scan.
         // m_pluginCatalog is constructed before startBackgroundServices() is called
         // (it is an Application constructor member) so the pointer is always valid here.
+        //
+        // WR-04 invariant: this fires on bare installFinished(ok=true), which also
+        // covers idempotent successes — the install() "already installed" case
+        // (plugin_catalog_model.cpp) and openUpstream-only fallbacks where nothing
+        // was promoted locally. That is SAFE because PluginManager::rediscover() is
+        // idempotent (diffs against m_live, spawns only newly-added dirs) and trusts
+        // every dir it reaches to be PRE-VERIFIED: each promotion path quarantines
+        // any Refused/tampered or unconsented-Unsigned package before it lands in the
+        // plugins dir, so rediscover() never sees an unverified dir here. See the
+        // contract comment at PluginManager::rediscover().
         QObject::connect(m_pluginCatalog.get(),
                          &PluginCatalogModel::installFinished,
                          m_pluginManager.get(),

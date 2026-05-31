@@ -567,6 +567,19 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 void PluginManager::rediscover() {
     // Re-run the full dir scan.  discover() also extracts leftover *.sdPlugin
     // archives, so this is safe to call repeatedly.
+    //
+    // WR-04 / CR-01 invariant (READ BEFORE WIRING A NEW CALLER): rediscover()
+    // does NOT itself run the Ed25519 verify gate. It trusts that every
+    // *.sdPlugin directory it finds under the plugins dir has ALREADY been
+    // verified by one of the promotion paths — the constructor launch-sweep
+    // (plugin_catalog_model.cpp ctor), installFromFile(), or the network
+    // install() handler — each of which quarantines (removeRecursively) any
+    // Refused/tampered or unconsented-Unsigned dir before it can be discovered.
+    // It is also idempotent: it diffs candidates against the already-live set
+    // (m_live, keyed by .sdPlugin dir name) and spawns ONLY new entries, so
+    // repeated/idempotent successes (e.g. an "already installed" install() or
+    // an openUpstream-only fallback that flips installFinished(ok=true)) are
+    // harmless no-ops. MUST NOT be called on an unverified plugins dir.
     std::vector<PluginManifest> const candidates = discover();
 
     int alreadyLive = 0;
