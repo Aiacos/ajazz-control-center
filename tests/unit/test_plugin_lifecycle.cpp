@@ -518,3 +518,107 @@ TEST_CASE("PluginManagerTest spawn uses codePath as -pluginUUID when puuid is em
     REQUIRE(argv.at(3) == QStringLiteral("-pluginUUID"));
     CHECK(argv.at(4) == QStringLiteral("plugin.js")); // fallback to codePath
 }
+
+// ---------------------------------------------------------------------------
+// Plan 27-02 Tests: PluginManager::rediscover() idempotency (D-27-3)
+// ---------------------------------------------------------------------------
+
+// rediscover-01: after discover+spawn of plugin A (dir on disk) and seeding plugin B,
+// calling rediscover() spawns B but does NOT re-spawn A (already in m_live).
+// The argv stored for A must be unchanged; argv for B must now be present.
+TEST_CASE("PluginManagerTest rediscover spawns only newly-added plugins", "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    // Fake probe: node is "found" so spawn() goes through the node path and populates
+    // m_live (argv stored before process failure). The non-existent binary will eventually
+    // fire QProcess::finished(CrashExit) but we assert before pumping so m_live is intact.
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    // Seed plugin A — a real .sdPlugin dir so discover() returns it with sourceDir set.
+    // The m_live key will be the .sdPlugin dir name: "com.test.pluginA.sdPlugin".
+    QByteArray const manifestA =
+        makeNodeManifest(QStringLiteral("com.test.pluginA"), QStringLiteral("index.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.pluginA"), manifestA);
+
+    // Launch-time discover + spawn (mimics Application::startBackgroundServices).
+    auto const runnable = manager.discover();
+    REQUIRE(runnable.size() == 1);
+    for (auto const& m : runnable) {
+        manager.spawn(m);
+    }
+
+    // Plugin A's argv must be stored (spawn went through the node path).
+    QString const keyA = QStringLiteral("com.test.pluginA.sdPlugin");
+    QStringList const argvA_before = manager.lastNodeArgvForTesting(keyA);
+    REQUIRE_FALSE(argvA_before.isEmpty());
+
+    // Now drop plugin B onto disk.
+    QByteArray const manifestB =
+        makeNodeManifest(QStringLiteral("com.test.pluginB"), QStringLiteral("plugin.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.pluginB"), manifestB);
+
+    // Call rediscover() — must spawn B, must NOT re-spawn A.
+    manager.rediscover();
+
+    // Plugin B's argv must now be present.
+    QString const keyB = QStringLiteral("com.test.pluginB.sdPlugin");
+    QStringList const argvB = manager.lastNodeArgvForTesting(keyB);
+    CHECK_FALSE(argvB.isEmpty());
+
+    // Plugin A's argv must be UNCHANGED (spawn() was not called a second time for A).
+    QStringList const argvA_after = manager.lastNodeArgvForTesting(keyA);
+    CHECK(argvA_after == argvA_before);
+}
+
+// rediscover-02: calling rediscover() a second time with no new dirs is a no-op.
+// Live count stays at 2; plugin A and B argv are unchanged.
+TEST_CASE("PluginManagerTest rediscover is idempotent under repeated calls", "[plugin-manager]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    // Seed and spawn plugin A (launch-time).
+    QByteArray const manifestA =
+        makeNodeManifest(QStringLiteral("com.test.idempA"), QStringLiteral("index.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.idempA"), manifestA);
+
+    auto const runnable = manager.discover();
+    REQUIRE(runnable.size() == 1);
+    for (auto const& m : runnable) {
+        manager.spawn(m);
+    }
+
+    // Seed plugin B.
+    QByteArray const manifestB =
+        makeNodeManifest(QStringLiteral("com.test.idempB"), QStringLiteral("plugin.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.idempB"), manifestB);
+
+    // First rediscover: spawns B.
+    manager.rediscover();
+
+    QString const keyA = QStringLiteral("com.test.idempA.sdPlugin");
+    QString const keyB = QStringLiteral("com.test.idempB.sdPlugin");
+    QStringList const argvA_after1 = manager.lastNodeArgvForTesting(keyA);
+    QStringList const argvB_after1 = manager.lastNodeArgvForTesting(keyB);
+    REQUIRE_FALSE(argvA_after1.isEmpty());
+    REQUIRE_FALSE(argvB_after1.isEmpty());
+
+    // Second rediscover with no new dirs: must be a no-op.
+    manager.rediscover();
+
+    // Both argv stores must be identical to what they were after the first rediscover.
+    CHECK(manager.lastNodeArgvForTesting(keyA) == argvA_after1);
+    CHECK(manager.lastNodeArgvForTesting(keyB) == argvB_after1);
+}
