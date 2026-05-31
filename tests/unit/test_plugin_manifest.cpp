@@ -459,3 +459,61 @@ TEST_CASE("PluginManifestTest affordanceMask Information only maps to zero", "[p
     int const mask = affordanceMask(QStringList{QStringLiteral("Information")});
     CHECK(mask == 0);
 }
+
+// ---------------------------------------------------------------------------
+// GAP-28C regression: top-level "UUID" field must populate puuid when "PUUID"
+// is absent, so PluginManager passes the manifest UUID as -pluginUUID to node
+// processes rather than the .sdPlugin directory name.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManifestTest GAP-28C top-level UUID populates puuid when PUUID absent",
+          "[plugin-manifest][gap-28c]") {
+    // Elgato-format manifest: uses "UUID" at the top level (standard field).
+    // No "PUUID" key present. After the GAP-28C fix, puuid must be set to the
+    // UUID value so PluginManager passes it as -pluginUUID.
+    QByteArray const elgatoManifest(R"({
+        "Name": "Test Plugin",
+        "Author": "Tester",
+        "Version": "1.0.0",
+        "SDKVersion": 2,
+        "UUID": "com.example.testplugin",
+        "OS": [{"Platform": "windows", "MinimumVersion": "10"}],
+        "CodePath": "index.js",
+        "Actions": [
+            { "UUID": "com.example.testplugin.action1",
+              "Name": "Action One",
+              "Controllers": ["Keypad"],
+              "States": [{}] }
+        ]
+    })");
+    auto const maybeManifest = parsePluginManifest(elgatoManifest);
+    REQUIRE(maybeManifest.has_value());
+    // puuid must equal the top-level UUID (GAP-28C fix).
+    CHECK(maybeManifest->puuid == QStringLiteral("com.example.testplugin"));
+}
+
+TEST_CASE("PluginManifestTest GAP-28C PUUID takes precedence over UUID when both present",
+          "[plugin-manifest][gap-28c]") {
+    // When both PUUID (AJAZZ extension) and UUID (standard) are present,
+    // PUUID wins — it is the explicit AJAZZ override.
+    QByteArray const bothManifest(R"({
+        "Name": "Test Plugin",
+        "Author": "Tester",
+        "Version": "1.0.0",
+        "SDKVersion": 2,
+        "UUID": "com.example.testplugin",
+        "PUUID": "com.ajazz.override",
+        "OS": [{"Platform": "windows", "MinimumVersion": "10"}],
+        "CodePath": "index.js",
+        "Actions": [
+            { "UUID": "com.example.testplugin.action1",
+              "Name": "Action One",
+              "Controllers": ["Keypad"],
+              "States": [{}] }
+        ]
+    })");
+    auto const maybeManifest = parsePluginManifest(bothManifest);
+    REQUIRE(maybeManifest.has_value());
+    // PUUID takes precedence.
+    CHECK(maybeManifest->puuid == QStringLiteral("com.ajazz.override"));
+}

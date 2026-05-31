@@ -204,7 +204,17 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     m.description = root.value(QStringLiteral("Description")).toString();
     m.url = root.value(QStringLiteral("URL")).toString();
     m.apiVersion = root.value(QStringLiteral("APIVersion")).toString();
+    // PUUID is the AJAZZ extension field; UUID is the standard Elgato field.
+    // Prefer PUUID when present; fall back to the top-level UUID so that
+    // standard Elgato manifests (which use "UUID" not "PUUID") also produce a
+    // populated puuid that PluginManager can pass as -pluginUUID to the child.
+    // GAP-28C fix: without this, node plugins spawned from Elgato-format manifests
+    // received -pluginUUID=<dir-name>.sdPlugin instead of their dotted manifest UUID,
+    // causing ownerForActionUuid to fail to match their action UUIDs.
     m.puuid = root.value(QStringLiteral("PUUID")).toString();
+    if (m.puuid.isEmpty()) {
+        m.puuid = root.value(QStringLiteral("UUID")).toString();
+    }
 
     // Code paths
     m.codePath = root.value(QStringLiteral("CodePath")).toString();
