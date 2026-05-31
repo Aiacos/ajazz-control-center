@@ -265,3 +265,197 @@ TEST_CASE("PluginManifestTest currentPlatformString is a known value", "[plugin-
     bool const known = (platform == "linux" || platform == "mac" || platform == "windows");
     CHECK(known);
 }
+
+// ---------------------------------------------------------------------------
+// Phase 28 Plan 01: VisibleInActionsList, DisableAutomaticStates, Encoder block,
+// default Settings, state Name/Title/ShowTitle, and affordanceMask() helper.
+// Fixtures: manifest_visibility.json, manifest_affordances.json
+// ASCII-only test names (CLAUDE.md cross-platform ctest requirement).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManifestTest parses VisibleInActionsList false and absent", "[plugin-manifest]") {
+    auto const maybeManifest = parseFixture("manifest_visibility.json");
+    REQUIRE(maybeManifest.has_value());
+    PluginManifest const& m = *maybeManifest;
+    REQUIRE(m.actions.size() == 3);
+
+    SECTION("VisibleInActionsList false is parsed") {
+        // First action has "VisibleInActionsList": false
+        CHECK(m.actions[0].visibleInActionsList == false);
+    }
+
+    SECTION("VisibleInActionsList true is parsed explicitly") {
+        // Second action has "VisibleInActionsList": true
+        CHECK(m.actions[1].visibleInActionsList == true);
+    }
+
+    SECTION("VisibleInActionsList absent defaults to true") {
+        // Third action has no VisibleInActionsList key
+        CHECK(m.actions[2].visibleInActionsList == true);
+    }
+}
+
+TEST_CASE("PluginManifestTest parses DisableAutomaticStates true and absent", "[plugin-manifest]") {
+    auto const maybeManifest = parseFixture("manifest_visibility.json");
+    REQUIRE(maybeManifest.has_value());
+    PluginManifest const& m = *maybeManifest;
+    REQUIRE(m.actions.size() == 3);
+
+    SECTION("DisableAutomaticStates true is parsed") {
+        // Second action has "DisableAutomaticStates": true
+        CHECK(m.actions[1].disableAutomaticStates == true);
+    }
+
+    SECTION("DisableAutomaticStates absent defaults to false") {
+        // First and third actions have no DisableAutomaticStates key
+        CHECK(m.actions[0].disableAutomaticStates == false);
+        CHECK(m.actions[2].disableAutomaticStates == false);
+    }
+}
+
+TEST_CASE("PluginManifestTest parses Encoder block with TriggerDescription", "[plugin-manifest]") {
+    auto const maybeManifest = parseFixture("manifest_visibility.json");
+    REQUIRE(maybeManifest.has_value());
+    PluginManifest const& m = *maybeManifest;
+    REQUIRE(m.actions.size() == 3);
+
+    SECTION("Encoder block fields are populated for dial action") {
+        // Second action has a full Encoder object
+        PluginEncoderBlock const& enc = m.actions[1].encoderBlock;
+        CHECK(enc.icon == "icons/encoder_dial.png");
+        CHECK(enc.layout == "$A0");
+        CHECK(enc.triggerDescriptionRotate == "Turn to adjust");
+        CHECK(enc.triggerDescriptionPush == "Press to confirm");
+        CHECK(enc.triggerDescriptionTouch == "Tap for menu");
+        CHECK(enc.triggerDescriptionLongTouch == "Hold to reset");
+    }
+
+    SECTION("Encoder block is empty for non-encoder actions") {
+        // First action has no Encoder key
+        PluginEncoderBlock const& enc = m.actions[0].encoderBlock;
+        CHECK(enc.icon.isEmpty());
+        CHECK(enc.layout.isEmpty());
+        CHECK(enc.triggerDescriptionRotate.isEmpty());
+    }
+}
+
+TEST_CASE("PluginManifestTest parses default Settings as JSON string", "[plugin-manifest]") {
+    auto const maybeManifest = parseFixture("manifest_visibility.json");
+    REQUIRE(maybeManifest.has_value());
+    PluginManifest const& m = *maybeManifest;
+    REQUIRE(m.actions.size() == 3);
+
+    SECTION("Settings object is stored as compact JSON string") {
+        // Third action has "Settings": {"mode": "default", "brightness": 50}
+        std::string const& settings = m.actions[2].defaultSettings;
+        CHECK(!settings.empty());
+        // Must be valid JSON containing the keys
+        CHECK(settings.find("mode") != std::string::npos);
+        CHECK(settings.find("brightness") != std::string::npos);
+    }
+
+    SECTION("Absent Settings leaves defaultSettings empty") {
+        // First action has no Settings key
+        CHECK(m.actions[0].defaultSettings.empty());
+    }
+}
+
+TEST_CASE("PluginManifestTest parses state Name Title ShowTitle", "[plugin-manifest]") {
+    auto const maybeManifest = parseFixture("manifest_visibility.json");
+    REQUIRE(maybeManifest.has_value());
+    PluginManifest const& m = *maybeManifest;
+    REQUIRE(m.actions.size() == 3);
+
+    SECTION("State with Name Title ShowTitle false is parsed") {
+        // Second action, first state: Name="Off", Title="Idle", ShowTitle=false
+        REQUIRE(m.actions[1].states.size() == 1);
+        PluginActionState const& s = m.actions[1].states[0];
+        CHECK(s.name == "Off");
+        CHECK(s.title == "Idle");
+        CHECK(s.showTitle == false);
+    }
+
+    SECTION("Multi-state action states carry Name Title ShowTitle") {
+        // Third action has 2 states
+        REQUIRE(m.actions[2].states.size() == 2);
+        CHECK(m.actions[2].states[0].name == "State Zero");
+        CHECK(m.actions[2].states[0].title == "Inactive");
+        CHECK(m.actions[2].states[0].showTitle == true);
+        CHECK(m.actions[2].states[1].name == "State One");
+        CHECK(m.actions[2].states[1].title == "Active");
+        CHECK(m.actions[2].states[1].showTitle == false);
+    }
+
+    SECTION("State with absent Name Title ShowTitle uses defaults") {
+        // First action, first state: no Name/Title/ShowTitle
+        REQUIRE(m.actions[0].states.size() == 1);
+        PluginActionState const& s = m.actions[0].states[0];
+        CHECK(s.name.isEmpty());
+        CHECK(s.title.isEmpty());
+        CHECK(s.showTitle == true); // default
+    }
+}
+
+// ---------------------------------------------------------------------------
+// affordanceMask() helper — 7 controller token variants
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManifestTest affordanceMask empty controllers defaults to Key",
+          "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{});
+    CHECK(mask == static_cast<int>(Affordance::Key));
+    // Must include Key, must not include Dial or TouchZone
+    CHECK((mask & static_cast<int>(Affordance::Key)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Dial)) == 0);
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) == 0);
+}
+
+TEST_CASE("PluginManifestTest affordanceMask Knob maps to Dial only", "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{QStringLiteral("Knob")});
+    CHECK((mask & static_cast<int>(Affordance::Dial)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Key)) == 0);
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) == 0);
+}
+
+TEST_CASE("PluginManifestTest affordanceMask Encoder maps to Dial same as Knob",
+          "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{QStringLiteral("Encoder")});
+    CHECK((mask & static_cast<int>(Affordance::Dial)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Key)) == 0);
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) == 0);
+    // Same result as Knob
+    CHECK(mask == affordanceMask(QStringList{QStringLiteral("Knob")}));
+}
+
+TEST_CASE("PluginManifestTest affordanceMask Keypad Knob maps to Key and Dial",
+          "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{QStringLiteral("Keypad"), QStringLiteral("Knob")});
+    CHECK((mask & static_cast<int>(Affordance::Key)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Dial)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) == 0);
+}
+
+TEST_CASE("PluginManifestTest affordanceMask SecondaryScreen maps to TouchZone only",
+          "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{QStringLiteral("SecondaryScreen")});
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Key)) == 0);
+    CHECK((mask & static_cast<int>(Affordance::Dial)) == 0);
+}
+
+TEST_CASE("PluginManifestTest affordanceMask Keypad Information SecondaryScreen maps to Key and "
+          "TouchZone",
+          "[plugin-manifest]") {
+    int const mask = affordanceMask(QStringList{QStringLiteral("Keypad"),
+                                                QStringLiteral("Information"),
+                                                QStringLiteral("SecondaryScreen")});
+    CHECK((mask & static_cast<int>(Affordance::Key)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::TouchZone)) != 0);
+    CHECK((mask & static_cast<int>(Affordance::Dial)) == 0);
+}
+
+TEST_CASE("PluginManifestTest affordanceMask Information only maps to zero", "[plugin-manifest]") {
+    // Information alone has no physical drop target
+    int const mask = affordanceMask(QStringList{QStringLiteral("Information")});
+    CHECK(mask == 0);
+}

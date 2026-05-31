@@ -32,6 +32,19 @@ struct PluginActionState {
     QString fontStyle;      ///< States[i].FontStyle
     QString titleColor;     ///< States[i].TitleColor
     QString titleAlignment; ///< States[i].TitleAlignment
+    QString name;           ///< States[i].Name (Elgato standard, per schema)
+    QString title;          ///< States[i].Title
+    bool showTitle{true};   ///< States[i].ShowTitle (default true)
+};
+
+/// Encoder block descriptor for dial-capable actions (per akp_plugin_sdk.md §2 Encoder object).
+struct PluginEncoderBlock {
+    QString icon;                        ///< Encoder.Icon
+    QString layout;                      ///< Encoder.layout ($A0/$A1/path)
+    QString triggerDescriptionRotate;    ///< Encoder.TriggerDescription.Rotate
+    QString triggerDescriptionPush;      ///< Encoder.TriggerDescription.Push
+    QString triggerDescriptionTouch;     ///< Encoder.TriggerDescription.Touch
+    QString triggerDescriptionLongTouch; ///< Encoder.TriggerDescription.LongTouch
 };
 
 /// A single action descriptor within a plugin (per akp_plugin_sdk.md §2 Actions[]).
@@ -44,6 +57,10 @@ struct PluginAction {
     QStringList controllers; ///< Controllers — subset of Keypad/Knob/Information/SecondaryScreen
     std::vector<PluginActionState> states; ///< States array (empty [{}] is valid)
     bool isK1Pro{false};                   ///< IsK1Pro (AJAZZ extension, per-action level)
+    bool visibleInActionsList{true};       ///< VisibleInActionsList (default true)
+    bool disableAutomaticStates{false};    ///< DisableAutomaticStates (default false)
+    std::string defaultSettings;           ///< Settings object as raw compact JSON string
+    PluginEncoderBlock encoderBlock;       ///< Encoder object (empty for non-dial actions)
 };
 
 /// OS compatibility entry (per akp_plugin_sdk.md §2 OS array element).
@@ -100,6 +117,16 @@ struct PluginManifest {
     /// the plugin's own relative resource paths work.
     QString sourceDir;
 };
+
+/// Bitmask of drop-target affordances derived from a Controllers QStringList.
+/// "Knob" and "Encoder" both map to Dial; absent/[] defaults to Key only.
+/// "Information" is ignored (not a physical drop surface).
+enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
+
+/// Compute the bitmask of drop-target affordances from a Controllers QStringList.
+/// Key=1, Dial=2, TouchZone=4. Empty or absent Controllers list defaults to Key only.
+/// ["Information"]-only returns 0 (non-draggable — no physical drop surface).
+[[nodiscard]] int affordanceMask(QStringList const& controllers) noexcept;
 
 /**
  * @brief Parse a manifest.json byte array into a PluginManifest.
