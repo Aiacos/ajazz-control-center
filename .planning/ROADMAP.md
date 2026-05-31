@@ -94,7 +94,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] 28-01-PLAN.md — Full PluginAction model (VisibleInActionsList/Encoder block/multi-state/Settings) + affordanceMask normalizer + Wave-0 fixtures + manifest tests (PLUGIN-18/20) (wave 1)
 - [x] 28-02-PLAN.md — installedActions() visibility filter + hidden/error diagnostic counters + plugin.installedActions debug RPC + controllers/affordanceMask into the drag MIME payload + catalog tests (PLUGIN-18/20) (wave 2)
 - [x] 28-03-PLAN.md — Fix 6-arg drops on EncoderDial:179 + TouchStripLane:271 + STRICT affordance gating on all three drop targets + C++ persistence round-trip test (PLUGIN-19/20) (wave 3)
-- [ ] 28-04-PLAN.md — Wire profileChanged -> bridge populateContextsForActivePage (activeDeviceId accessor + guarded lambda) + enumerate touchZones.onTap under controller=Encoder + bridge tests (PLUGIN-19) (wave 4)
+- [x] 28-04-PLAN.md — Wire profileChanged -> bridge populateContextsForActivePage (activeDeviceId accessor + guarded lambda) + enumerate touchZones.onTap under controller=Encoder + bridge tests (PLUGIN-19) (wave 4)
 - [ ] 28-05-PLAN.md — LIVE debug-channel verification: installedActions count vs manifest visible count (System Monitor + Weather) + dial round-trip (synthetic input.encoder -> dialRotate/dialDown controller=Encoder) (PLUGIN-18/19/20) (wave 5)
 
 **Milestone constraints (load-bearing — do not lose these):**
@@ -606,4 +606,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 25. Hardware Verification + Real Plugin(HW)         | v1.3      | 1/2            | In Progress             |            |
 | 26. OpenDeck-shaped Device Editor                   | v1.3      | 7/7            | Complete                | 2026-05-28 |
 | 27. Plugin Install/Trust/Persistence Hardening      | v1.3      | 5/5            | Verified (human_needed) | 2026-05-31 |
-| 28. AKP05 Plugin Action Completeness + Drag-to-Bind | v1.3      | 3/5            | In Progress             |            |
+| 28. AKP05 Plugin Action Completeness + Drag-to-Bind | v1.3      | 4/5            | In Progress             |            |
