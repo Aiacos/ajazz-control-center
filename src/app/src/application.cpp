@@ -529,6 +529,26 @@ Application::Application(QObject* parent)
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onActivePageChanged);
 
+    // 5. Wire profileChanged -> populateContextsForActivePage so a drag-drop
+    //    binding registers an ActionContext in the bridge immediately (PLUGIN-19).
+    //
+    //    IN-02 ordering invariant: registered AFTER the repaint connections at
+    //    lines 452-483 so repaintFromProfile fires before context registration
+    //    (repaint first, then register; same ordering as onDeviceConnected).
+    //
+    //    Guard (T-28-09): no-op when activeDeviceId() is empty (startup, no device
+    //    connected yet). Do NOT fall back to a hardcoded codename — register nothing
+    //    until a real device connect has set m_activeDeviceId via onDeviceConnected.
+    QObject::connect(m_profileController.get(),
+                     &ProfileController::profileChanged,
+                     m_pluginBridge.get(),
+                     [this]() {
+                         if (!m_pluginBridge->activeDeviceId().isEmpty()) {
+                             m_pluginBridge->populateContextsForActivePage(
+                                 m_pluginBridge->activeDeviceId());
+                         }
+                     });
+
 #if defined(AJAZZ_HAVE_WEBENGINE)
     // Phase 20-03 (PLUGIN-09): PI JS -> plugin-process relay.
     //
