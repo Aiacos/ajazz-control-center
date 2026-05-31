@@ -8,6 +8,7 @@
  * Phase-17 test harness pattern. Tag: [plugin-manager].
  *
  * Phase: 18-plugin-manifest-discovery-lifecycle-spawn / Plan 18-04 (PLUGIN-07/08)
+ * Plan 27-03: persisted user-disable set (D-27-4) + setPluginEnabled + restart-survival.
  */
 #include "node_runner.hpp"
 #include "plugin_manager.hpp"
@@ -21,7 +22,9 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcessEnvironment>
+#include <QSettings>
 #include <QSignalSpy>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QWebSocket>
 
@@ -621,4 +624,213 @@ TEST_CASE("PluginManagerTest rediscover is idempotent under repeated calls", "[p
     // Both argv stores must be identical to what they were after the first rediscover.
     CHECK(manager.lastNodeArgvForTesting(keyA) == argvA_after1);
     CHECK(manager.lastNodeArgvForTesting(keyB) == argvB_after1);
+}
+
+// ---------------------------------------------------------------------------
+// Plan 27-03 Tests: setPluginEnabled + persisted disabled-set (D-27-4)
+// ---------------------------------------------------------------------------
+
+// D27-01: setPluginEnabled(id, false) marks the plugin as user-disabled in QSettings;
+// a fresh PluginManager constructed over the same dir+settings does NOT spawn it.
+TEST_CASE("PluginManagerTest setPluginEnabled persists disable across restart",
+          "[plugin-manager]") {
+    ensureQCoreApp();
+
+    // Isolate QSettings to a temp location so we don't pollute real user settings.
+    QStandardPaths::setTestModeEnabled(true);
+    // Ensure clean test QSettings state.
+    {
+        QSettings settings;
+        settings.remove(QStringLiteral("plugins/disabled"));
+    }
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    // Seed a plugin dir on disk.
+    QByteArray const manifestData =
+        makeNodeManifest(QStringLiteral("com.example.foo"), QStringLiteral("index.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.example.foo"), manifestData);
+
+    QString const pluginKey = QStringLiteral("com.example.foo.sdPlugin");
+
+    // --- FIRST PluginManager: disable the plugin ---
+    {
+        PluginManager mgr1(scratch.path(), nullptr, fakeProbe);
+        // Disable the plugin via the new API.
+        mgr1.setPluginEnabled(pluginKey, false);
+    }
+
+    // --- SECOND PluginManager (simulated restart): must NOT spawn the disabled plugin ---
+    {
+        PluginManager mgr2(scratch.path(), nullptr, fakeProbe);
+        // discover() + spawn-loop mimics Application::startBackgroundServices.
+        auto const candidates = mgr2.discover();
+        for (auto const& m : candidates) {
+            mgr2.spawn(m);
+        }
+        // The plugin must not have been spawned (no argv stored for it).
+        CHECK(mgr2.lastNodeArgvForTesting(pluginKey).isEmpty());
+    }
+
+    // Restore QStandardPaths to normal mode.
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// D27-02: setPluginEnabled(id, true) clears the persisted disabled flag;
+// a fresh PluginManager then spawns the plugin normally.
+TEST_CASE("PluginManagerTest setPluginEnabled re-enable spawns on next launch",
+          "[plugin-manager]") {
+    ensureQCoreApp();
+
+    QStandardPaths::setTestModeEnabled(true);
+    {
+        QSettings settings;
+        settings.remove(QStringLiteral("plugins/disabled"));
+    }
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    QByteArray const manifestData =
+        makeNodeManifest(QStringLiteral("com.example.bar"), QStringLiteral("plugin.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.example.bar"), manifestData);
+
+    QString const pluginKey = QStringLiteral("com.example.bar.sdPlugin");
+
+    // First: disable the plugin, then immediately re-enable it.
+    {
+        PluginManager mgr1(scratch.path(), nullptr, fakeProbe);
+        mgr1.setPluginEnabled(pluginKey, false);
+        mgr1.setPluginEnabled(pluginKey, true);
+    }
+
+    // Second PluginManager: plugin must be spawned (argv stored).
+    {
+        PluginManager mgr2(scratch.path(), nullptr, fakeProbe);
+        auto const candidates = mgr2.discover();
+        for (auto const& m : candidates) {
+            mgr2.spawn(m);
+        }
+        CHECK_FALSE(mgr2.lastNodeArgvForTesting(pluginKey).isEmpty());
+    }
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// D27-03: the persisted user-disable set is INDEPENDENT of the session-only crash m_disabled.
+// A crash-disabled plugin (m_disabled) is NOT persisted across a restart — the session map
+// resets. A user-disabled plugin IS persisted. The two must not conflict.
+TEST_CASE("PluginManagerTest crash-disable is session-only and does not persist",
+          "[plugin-manager]") {
+    ensureQCoreApp();
+
+    QStandardPaths::setTestModeEnabled(true);
+    {
+        QSettings settings;
+        settings.remove(QStringLiteral("plugins/disabled"));
+    }
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return {}; };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
+
+    QByteArray const manifestData =
+        makeNodeManifest(QStringLiteral("com.example.crashme"), QStringLiteral("index.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.example.crashme"), manifestData);
+
+    QString const pluginKey = QStringLiteral("com.example.crashme.sdPlugin");
+    // The crash path uses the uuid (codePath-based key when sourceDir is empty via
+    // onProcessFailed), but discover() sets sourceDir so the key is the dir name.
+    // Drive the crash-disable via disableWithNotice directly to simulate the crash path.
+    // The session-disable map (m_disabled) uses the same pluginKey.
+
+    {
+        qint64 fakeNow = 0;
+        PluginManager mgr1(
+            scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+
+        // Trigger 3-in-30s crash-disable via onProcessFailed with the dir-name key.
+        fakeNow = 0;
+        mgr1.onProcessFailed(pluginKey);
+        fakeNow = 5000;
+        mgr1.onProcessFailed(pluginKey);
+        fakeNow = 10000;
+        mgr1.onProcessFailed(pluginKey);
+
+        // Plugin is session-disabled in mgr1.
+        CHECK(mgr1.isDisabled(pluginKey));
+    }
+
+    // Second PluginManager: crash-disable must NOT persist; plugin must be spawned.
+    {
+        PluginManager mgr2(scratch.path(), nullptr, fakeProbe);
+        auto const candidates = mgr2.discover();
+        // discover() must return the plugin (not user-disabled).
+        bool found = false;
+        for (auto const& m : candidates) {
+            if (QFileInfo(m.sourceDir).fileName() == pluginKey) {
+                found = true;
+            }
+        }
+        CHECK(found);
+        // isDisabled checks the session map only — must be false for a fresh manager.
+        CHECK_FALSE(mgr2.isDisabled(pluginKey));
+    }
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// D27-04: rediscover() also skips user-disabled plugins (T-27-DISABLE-BYPASS coverage).
+TEST_CASE("PluginManagerTest rediscover skips user-disabled plugins", "[plugin-manager]") {
+    ensureQCoreApp();
+
+    QStandardPaths::setTestModeEnabled(true);
+    {
+        QSettings settings;
+        settings.remove(QStringLiteral("plugins/disabled"));
+    }
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
+
+    // Seed plugin A (will be user-disabled) and plugin B (enabled).
+    QByteArray const manifestA =
+        makeNodeManifest(QStringLiteral("com.test.disabled"), QStringLiteral("index.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.disabled"), manifestA);
+
+    QByteArray const manifestB =
+        makeNodeManifest(QStringLiteral("com.test.enabled"), QStringLiteral("plugin.js"));
+    seedPluginDir(scratch.path(), QStringLiteral("com.test.enabled"), manifestB);
+
+    QString const keyA = QStringLiteral("com.test.disabled.sdPlugin");
+    QString const keyB = QStringLiteral("com.test.enabled.sdPlugin");
+
+    PluginManager mgr(scratch.path(), nullptr, fakeProbe);
+
+    // User-disable plugin A before any spawn.
+    mgr.setPluginEnabled(keyA, false);
+
+    // rediscover() must spawn only B; A must be skipped.
+    mgr.rediscover();
+
+    CHECK(mgr.lastNodeArgvForTesting(keyA).isEmpty());       // A was not spawned
+    CHECK_FALSE(mgr.lastNodeArgvForTesting(keyB).isEmpty()); // B was spawned
+
+    QStandardPaths::setTestModeEnabled(false);
 }
