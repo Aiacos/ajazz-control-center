@@ -355,3 +355,80 @@ The app passes `-pluginUUID = <dir-name>.sdPlugin` (e.g. `com.acc.test.dialdemo.
 - "Drag onto dials to use": bind + persist + affordance + (unit-level) context-registration DONE; **Finding B** (live end-to-end invocation) still open.
 
 Both halves need gap-closure **28-06** before the phase goal is met. Findings A + B were catchable ONLY by live driving — exactly the CLAUDE.md mandate.
+
+______________________________________________________________________
+
+## Gap-closure 28-06 (2026-05-31) — A/B/C all RESOLVED
+
+Root-cause analysis and fixes for all three findings. Commits: `05f99a6` (GAP-B), `a25e46d` (GAP-A), `0e7289a` (GAP-C).
+
+### GAP-B root cause (confirmed)
+
+On startup with an already-connected device, QML `Component.onCompleted` calls
+`StreamDockControlService::setActiveDevice("akp05e")` but NOT
+`StreamDockInputService::setActiveDeviceCodename()` or
+`PluginDeviceBridge::onDeviceConnected()`. The Linux udev hot-plug monitor only
+fires `Arrived` for NEW device connections, not ones present at process start.
+Result: both `m_streamDockInput->m_activeDeviceId` and
+`m_pluginBridge->m_activeDeviceId` were empty at startup.
+
+Two breakage points from the empty device ID:
+
+1. `dispatch()` emits `deviceEvent("", ev)` → bridge `byCoord("", ...)` always returns nullopt → no dialDown/keyDown delivered.
+1. `profileChanged` lambda guard `!m_pluginBridge->activeDeviceId().isEmpty()` evaluated to FALSE → `populateContextsForActivePage` never called → no willAppear.
+
+Fix: Added `deviceActivated(codename)` signal to `StreamDockControlService`,
+emitted at the end of every successful `setActiveDevice()`. `Application` wires
+it to `setActiveDeviceCodename()` + `onDeviceConnected()` in the constructor, so
+ALL call sites (QML auto-select, debug RPC, hot-plug) share one propagation path.
+
+### GAP-A root cause and fix
+
+`installedActions()` silently `continue`d when `manifestRunnableHere()` returned
+false — no counter. Added `m_lastSkippedOsVersion` counter, exposed as
+`"skippedOsVersion"` in `lastScanDiagnostics()` and `plugin.installedActions`
+RPC. Added INFO log line naming the rejected plugin.
+
+### GAP-C root cause and fix
+
+`plugin_manifest.cpp` parsed `puuid` from `"PUUID"` only (AJAZZ extension).
+Standard Elgato `"UUID"` field was ignored. Fixed: if PUUID is empty, fall back
+to `root["UUID"]`. PUUID takes precedence when both present.
+
+### Live verification (2026-05-31)
+
+Environment: `XDG_RUNTIME_DIR=/tmp/claude-1000/tmp.X6iV0sh6n0`, AKP05E physically connected.
+Binary: post-`05f99a6` / `a25e46d` / `0e7289a` (rebuilt 23:51).
+
+Plugin: `com.acc.test.dialdemo.sdPlugin` (Elgato-format manifest, `"UUID"` not `"PUUID"`).
+
+GAP-C verified: `receivedPluginUUIDArg = "com.acc.test.dialdemo"` (dotted UUID, not dir-name).
+
+Sequence:
+
+```
+device.setActiveDevice {"codename":"akp05e"}          -> {"activeDevice":"akp05e"}
+profile.commitEncoderBinding {"index":0, "actionId":"com.acc.test.dialdemo.dial"}
+                                                       -> {"committed":true}
+# Plugin events.log:
+{"event":"deviceDidConnect", ...}
+{"event":"willAppear","payload":{"context":"akp05e#root#Encoder#0#0",...}}
+
+input.encoderPress {"index":0}                         -> {"index":0,"pressed":true}
+# Plugin events.log:
+{"event":"dialDown","payload":{"controller":"Encoder"}}
+{"event":"keyDownCord","payload":{"controller":"Encoder"}}
+
+input.encoder {"index":0,"delta":1}                    -> {"delta":1,"index":0}
+# Plugin events.log:
+{"event":"dialRotate","payload":{"controller":"Encoder","pressed":false,"ticks":1}}
+```
+
+**PASS: willAppear + dialDown + dialRotate all received by the plugin.**
+
+GAP-A: `plugin.installedActions` diagnostics include `"skippedOsVersion":0` (test plugin is Linux-runnable). Counter increments correctly for OS/version-rejected plugins (covered by unit test `CatalogOffline GAP-28A`).
+
+### Test counts
+
+- Before fixes: 734/734 (was the Phase 28 wave-4 baseline)
+- After fixes: 739/739 (+5 new regression tests)
