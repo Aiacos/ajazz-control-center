@@ -596,6 +596,15 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_PLUGIN_MANAGER=1)
 endif()
 
+# Phase 27 Plan 27-05 (PLUGIN-17): PluginManager concurrency regression — one crash disables only
+# itself, siblings survive (guards the 5725cb0 shared-key collision). Also covers the WR-02
+# HTML-no-respawn guard (process==nullptr UUID not re-spawned on crash). Gated on
+# AJAZZ_HAVE_WEBSOCKETS like test_plugin_lifecycle.cpp (plugin_manager.cpp is compiled in that block
+# above). plugin_manager.cpp is already compiled via the lifecycle block.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz_unit_tests PRIVATE test_plugin_concurrency.cpp)
+endif()
+
 # Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. Hardware-free
 # (AJAZZ_FEATURE_INPUT_SYNTH OFF = default) — no /dev/uinput, no OS permissions needed.
 # test_input_synth.cpp defines a FakeSynth recording subclass and exercises
