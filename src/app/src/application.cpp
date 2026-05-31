@@ -923,11 +923,20 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                 // setActiveDevice is NOT thread-safe (touches QTimers and m_device
                 // on the GUI thread). Marshal via Qt::QueuedConnection so it executes
                 // on the GUI thread -- matching the Arrived path's QTimer::singleShot.
+                core::DeviceId const devId{
+                    .vendorId = d.vendorId, .productId = d.productId, .serial = {}};
                 QMetaObject::invokeMethod(
                     m_streamDockInput.get(),
-                    [this, codename = QString::fromStdString(d.codename)] {
+                    [this, codename = QString::fromStdString(d.codename), devId] {
                         m_streamDockInput->setActiveDevice(nullptr);
                         m_streamDockInput->setActiveDeviceCodename({});
+                        // VERIFY-OP-2: evict the flyweight cache slot so the post-replug
+                        // open() (driven by the Arrived path's setActiveDevice) builds a
+                        // FRESH backend on the new /dev/hidrawN node instead of returning
+                        // the cached one bound to the now-dead node. Runs on the GUI thread
+                        // (this lambda) so the stale close() serialises with the keep-alive
+                        // / poll / drain QTimers rather than racing them.
+                        m_deviceRegistry.invalidateOpenDevice(devId);
 #ifdef AJAZZ_HAVE_WEBSOCKETS
                         // Phase 19-03: notify the bridge so it retires contexts
                         // and sends deviceDidDisconnect to registered plugins.
