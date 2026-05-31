@@ -63,7 +63,7 @@ Page {
                         ? qsTr("%1 loaded — all trusted.").arg(LoadedPlugins.count)
                         : qsTr("%1 loaded · %2 need review.").arg(LoadedPlugins.count)
                                                               .arg(LoadedPlugins.untrustedCount)
-                color: Theme.fgSecondary
+                color: Theme.fgMuted
                 font.pixelSize: Theme.fontMd
             }
         }
@@ -73,6 +73,7 @@ Page {
         // Mirrors the Online catalog toggle pattern in PluginStore.qml.
         Switch {
             id: allowUnsignedSwitch
+            objectName: "allowUnsignedSwitch"
             text: qsTr("Allow unsigned plugins")
             checked: PluginCatalog ? PluginCatalog.allowUnsignedPlugins : false
             onToggled: {
@@ -156,7 +157,7 @@ Page {
                             }
                             Text {
                                 text: row.version
-                                color: Theme.fgSecondary
+                                color: Theme.fgMuted
                                 font.pixelSize: Theme.fontSm
                             }
                         }
@@ -164,7 +165,7 @@ Page {
                             text: row.authors === ""
                                 ? row.pluginId
                                 : qsTr("%1 · %2").arg(row.authors).arg(row.pluginId)
-                            color: Theme.fgSecondary
+                            color: Theme.fgMuted
                             font.pixelSize: Theme.fontSm
                             elide: Text.ElideRight
                             Layout.fillWidth: true
@@ -239,6 +240,7 @@ Page {
                     // the action must be absent, not merely greyed out.
                     Button {
                         id: allowPluginButton
+                        objectName: "allowPluginButton"
                         visible: row.trustLevel === "unsigned"
                         text: qsTr("Allow")
                         Layout.preferredHeight: 28

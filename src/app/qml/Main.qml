@@ -244,6 +244,7 @@ ApplicationWindow {
     // ----------------------------------------------------------------------
     Drawer {
         id: loadedPluginsDrawer
+        objectName: "loadedPluginsDrawer"
         edge: Qt.RightEdge
         modal: true
         dragMargin: 0
@@ -303,6 +304,7 @@ ApplicationWindow {
     // ----------------------------------------------------------------------
     Drawer {
         id: settingsDrawer
+        objectName: "settingsDrawer"
         edge: Qt.RightEdge
         modal: true
         dragMargin: 0

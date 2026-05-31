@@ -185,6 +185,38 @@ For v1.3 device phases specifically: **grep code + `devices.yaml` maturity
 before "executing" the phase** — Phases 10/11/12 shipped ad-hoc; GSD
 "planned / 0 summaries" ≠ unimplemented (see commit `2535fe1` reconciliation).
 
+## Debug-channel verification — MANDATORY
+
+The app ships an opt-in out-of-process debug-control channel
+(`src/app/src/debug_control_*`; launch with `AJAZZ_DEBUG_CONTROL=1`; driven by
+`scripts/ajazz-debug` over the Unix socket
+`$XDG_RUNTIME_DIR/ajazz-control-center-debug.sock`). It exposes ~30 RPC methods:
+`ping`, `state`, `qml.tree/get/set/invoke/click`, `screenshot`, `device.*`,
+`input.*`, `plugin.list/sendEvent`, `profile.*`, `log.tail`, …
+
+- **Verify EVERY change live through the debug channel before claiming "done".**
+  `ctest` green is necessary but NOT sufficient — unit tests and grep/code-review
+  miss integration and wiring bugs. The procedure for any UI/behavioral change:
+  build → launch `AJAZZ_DEBUG_CONTROL=1` → drive the relevant controls via
+  `qml.invoke`/`qml.get`/`qml.set` → `screenshot` → **read the screenshot** →
+  confirm the real behavior. Real example (2026-05-31): the Phase-27 per-plugin
+  "Allow" button passed 713/713 unit tests AND a code review, but driving the
+  running app showed it was wired to the Python-host plugin list and was a no-op
+  for `.sdPlugin` plugins — caught ONLY by live debug-channel verification.
+- **Every new interactive control MUST be debug-addressable.** The channel
+  addresses objects by `objectName` (`findByName`); an un-named control is
+  invisible to `qml.get/set/invoke/click`. So every new Button / Switch / Drawer
+  / page / list-delegate / input you add MUST set `objectName:`. New C++
+  user-facing surfaces should expose a debug-control method/state when it enables
+  autonomous verification. Treat "can I drive this from `scripts/ajazz-debug`?"
+  as a definition-of-done checklist item for new code.
+- **Known harness gap:** `qml.invoke toggle` / `qml.click` emit the control's
+  method / `clicked()` but do NOT reproduce a `Switch`/`CheckBox`
+  user-`toggled()` side effect (the `onToggled` handler never fires). To drive a
+  setting end-to-end, expose a dedicated `Q_INVOKABLE`, or verify the C++ setter
+  - the read-binding separately (set the backing store, relaunch, read the bound
+    property).
+
 ## AKP05E / streamdeck investigation glossary (2026-05-21 → 2026-05-28)
 
 Quick-reference index. **Read before any AKP05 / streamdeck device experiment.**

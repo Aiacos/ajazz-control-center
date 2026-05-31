@@ -663,7 +663,6 @@ Page {
             required property string sizeBytes
             required property bool verified
             required property bool installed
-            required property bool enabled
             required property string source
             // In-flight install state: set by the action button onClick,
             // cleared by the Connections block listening on

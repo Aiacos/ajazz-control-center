@@ -84,7 +84,7 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 text: canvas.deviceName
                 visible: canvas.deviceName !== ""
-                color: Theme.fgSecondary
+                color: Theme.fgMuted
                 font: Theme.typeLabelMedium
             }
 

@@ -87,7 +87,7 @@ Item {
         }
     }
 
-    Accessible.role: Accessible.Group
+    Accessible.role: Accessible.Grouping
     Accessible.name: qsTr("Touch strip")
 
     // -------------------------------------------------------------------------
