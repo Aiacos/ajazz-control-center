@@ -83,13 +83,14 @@ inline constexpr std::uint16_t TouchStripRangeX =
     256; ///< Touch X is single byte (0..255), per akp05_input_corrections.md §4 (was 640 — wrong
          ///< BE16 model) (preserved for backwards-compat tests; capture pending).
 
-// Per-encoder LCD overlay rendered as a slice of the LCD strip. Stream Deck
-// Plus uses 200×100 per encoder; the Mirabox N4 strip is 4 × (200×480) when
-// expressed as zones over the underlying 800×480 panel. We expose 100×100
-// for backwards-compat with the legacy code paths until the v3 capture
-// makes the real per-zone resolution explicit.
-inline constexpr std::uint16_t EncoderScreenWidthPx = 100;
-inline constexpr std::uint16_t EncoderScreenHeightPx = 100;
+// Per-encoder strip zone. The AKP05E touch strip carries 4 zones aligned to the
+// 4 encoders (akp_device_matrix §4 — "no separate encoder LCD"). Hardware-probed
+// 2026-05-31 on 0x0300:0x3004: each zone displays a ~128×128 square 1:1 (85 px
+// left visible gaps, 200 px overflowed into the neighbour). Rendered via the
+// SAME BAT opcode as keys at wire bytes 1..4 — the vendor ENC opcode does not
+// paint on this firmware.
+inline constexpr std::uint16_t EncoderScreenWidthPx = 128;
+inline constexpr std::uint16_t EncoderScreenHeightPx = 128;
 
 /// Output reports are padded to this size. The protocol_version 3 AKP05
 /// family uses a 1024-byte vendor OUT endpoint (the IN endpoint is 512 B;

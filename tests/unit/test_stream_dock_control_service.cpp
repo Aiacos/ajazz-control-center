@@ -333,13 +333,15 @@ TEST_CASE("StreamDockControlService: assignMainImage emits MAI header then ULEND
 }
 
 // ===========================================================================
-// DISPLAY-10 ENC: assignEncoderImage emits ENC header with 0-based index at
-//                 byte 12 + ULEND.
+// assignEncoderImage routes the 4 strip/encoder zones through the BAT opcode at
+// wire bytes 1..4 (encoderIndex + 1), NOT the vendor ENC opcode. Hardware-
+// confirmed 2026-05-31 on 0x0300:0x3004: ENC stays blank while BAT wire 1..4
+// paints the strip zones aligned to the dials (akp_device_matrix §4 — the strip
+// zones ARE the encoder displays; there is no separate encoder LCD).
 // ===========================================================================
 
-TEST_CASE(
-    "StreamDockControlService: assignEncoderImage emits ENC header with index byte (DISPLAY-10)",
-    "[stream-dock-control][DISPLAY-10][aux-surface]") {
+TEST_CASE("StreamDockControlService: assignEncoderImage emits BAT header at wire byte index+1",
+          "[stream-dock-control][DISPLAY-10][aux-surface]") {
     ajazz::tests::qtApp();
 
     auto fx = makeFixture();
@@ -353,7 +355,7 @@ TEST_CASE(
     drainQueue();
     auto const writeCountAfterOpen = obs->writeCount();
 
-    // 100x100 image for encoder 2 (0-based).
+    // Image for encoder 2 (0-based) -> strip-zone wire byte 3.
     QImage img(100, 100, QImage::Format_RGBA8888);
     img.fill(qRgba(255, 64, 0, 255));
     svc.assignEncoderImage(2, img); // 0-based encoder index
@@ -362,15 +364,15 @@ TEST_CASE(
     auto const& writes = obs->writes();
     REQUIRE(writes.size() > writeCountAfterOpen + 2);
 
-    // ENC header: bytes[5..7] == E,N,C; byte[12] == 0x02 (0-based index).
-    auto const encIdx = findWriteByCmd0(writes, 0x45, writeCountAfterOpen); // 'E' of ENC
+    // BAT header: bytes[5..7] == B,A,T; byte[12] == 0x03 (wire byte = index + 1).
+    auto const encIdx = findWriteByCmd0(writes, 0x42, writeCountAfterOpen); // 'B' of BAT
     REQUIRE(encIdx < writes.size());
     auto const& encPkt = writes[encIdx];
     REQUIRE(encPkt.size() >= 13);
-    CHECK(encPkt[5] == 0x45);  // 'E'
-    CHECK(encPkt[6] == 0x4e);  // 'N'
-    CHECK(encPkt[7] == 0x43);  // 'C'
-    CHECK(encPkt[12] == 0x02); // 0-based encoder index = 2
+    CHECK(encPkt[5] == 0x42);  // 'B'
+    CHECK(encPkt[6] == 0x41);  // 'A'
+    CHECK(encPkt[7] == 0x54);  // 'T'
+    CHECK(encPkt[12] == 0x03); // wire byte = 0-based encoder index 2 + 1
 
     // ULEND commit sentinel.
     auto const& ulendPkt = writes.back();

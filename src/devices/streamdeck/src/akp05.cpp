@@ -421,7 +421,9 @@ inline ImageTransform akp05EncoderTransform() noexcept {
         .targetWidth = akp05::EncoderScreenWidthPx,
         .targetHeight = akp05::EncoderScreenHeightPx,
         .format = ImageFormat::Jpeg,
-        .rotationDegrees = 0,
+        // Rot180 like the keys — the strip zones share the panel's inverted mount
+        // (hardware-confirmed 2026-05-31 on 0x0300:0x3004).
+        .rotationDegrees = 180,
         .mirror = false,
         .jpegQuality = 85,
     };
@@ -692,10 +694,17 @@ public:
                            static_cast<int>(akp05::EncoderCount - 1));
             return;
         }
-        // ARCH-04: 100×100 per-encoder LCD. RGBA8 → JPEG host-side.
+        // The AKP05E renders the 4 encoder/strip zones through the SAME BAT opcode
+        // as the keys, addressed at wire bytes 1..4 (encoderIndex + 1) — NOT the
+        // vendor ENC opcode (buildEncoderImageHeader), which does not paint on the
+        // live 0x0300:0x3004 firmware. Hardware-confirmed 2026-05-31: BAT wire 1..4
+        // lit the 4 strip zones aligned to the dials; ENC/MAI/DRA stayed blank.
+        // The strip's 4 zones ARE the encoder displays (akp_device_matrix §4: "no
+        // separate encoder LCD"). Image is Rot180 + ~128 px, same as a key.
         auto const jpeg = encodeForDevice(rgba, width, height, akp05EncoderTransform());
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
-        sendImage(akp05::buildEncoderImageHeader(encoderIndex, sized), jpeg);
+        sendImage(akp05::buildKeyImageHeader(static_cast<std::uint8_t>(encoderIndex + 1U), sized),
+                  jpeg);
     }
 
     // ---- Rect-addressable touch-strip update (DRA, roadmap §11.4) -----------
