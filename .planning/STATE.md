@@ -3,31 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
-stopped_at: Phase 28 PLANNED (5 plans, plan-checker PASS 0 blockers) — ready for /gsd:execute-phase 28
-last_updated: '2026-05-31T21:45:00.000Z'
-last_live_verification: '2026-05-31 -- Phase 27 trust UX verified LIVE via the AJAZZ_DEBUG_CONTROL channel (new CLAUDE.md MANDATORY rule). Found + fixed a real bug ctest/code-review missed: the per-plugin "Allow" button was on LoadedPluginsPage (Python OOP-host rows, SEC-003), calling PluginCatalog.allowPlugin(pythonId) = no-op. Moved the .sdPlugin trust UX to PluginStore (global "Allow unsigned" toggle next to "Online catalog" + install-from-file unsigned confirm dialog; backend already emitted "unsigned plugin -- confirm to install"). Also cleared 3 real QML warnings (Theme.fgSecondary->fgMuted, Accessible.Group->Grouping, PluginStore tile enabled-shadow) + added objectNames (pluginStoreDrawer/loadedPluginsDrawer/allowUnsignedSwitch/unsignedConfirmDialog) for debug-addressability. Commits 13257d1 + e6cb806. 713/713 ctest. Remaining: full install->spawn live smoke needs a plugin.installFromFile/plugin.rediscover debug RPC (TEST 2).'
-test2_install_spawn: '2026-05-31 -- TEST 2 PASS (live, no restart). Added plugin.installFromFile + plugin.rediscover debug RPCs (commit 825eccd) + pluginManager()/pluginCatalog() accessors. Drove: install an unsigned node .sdPlugin with consent -> connectedCount 0->1, log "plugin registered: uuid=com.acc.test.unsigned.sdPlugin", rediscover "1 newly-spawned" -- WITHOUT app restart. Without consent -> correctly refused ("Unsigned -- awaiting user confirm"). FOUND + FIXED a 3rd real bug (commit 50055a3): installFromFile named the promoted dir from the full archive filename, so a zipped bundle (foo.sdPlugin.zip / foo.zip, the real FileDialog shape) landed at foo.sdPlugin.zip/ which discover() (scans *.sdPlugin) never matched -> promoted-but-never-spawned. Strip .zip/.streamDeckPlugin + ensure .sdPlugin suffix; regression test added (714/714). The unit suite missed it because buildSdPluginArchive only ever named archives .sdPlugin.'
-last_activity: 2026-05-31 -- Phase 27 EXECUTED + code-reviewed + fixed (5/5 plans; verifier 6/6 PASS human_needed for QML visual + optional live smoke; code review 0 Critical/4 Warning all fixed incl. WR-01 dead per-plugin-Allow now functional + WR-02 Win32 CWE-426 fail-closed). Full suite 713/713 (was 645). CR-01 tampered-always-refuses proven with a real Ed25519 sign-then-flip-byte test AND a forged-allowed-key test. Commits 416ccc7..dcd18c4; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
+stopped_at: Phase 26 UI-SPEC approved
+last_updated: '2026-05-31T19:51:55.001Z'
+last_activity: 2026-05-31
 progress:
   total_phases: 20
-  completed_phases: 18
-  total_plans: 70
-  completed_plans: 68
-  percent: 90
-reconciliation_2026_05_31_pm: >-
-  Autonomous full-lifecycle re-entry found the milestone bookkeeping stale:
-  init.milestone-op reported all-complete (infers from on-disk SUMMARY files) while
-  this frontmatter still said "17/19, Executing Phase 26". Reconciled to disk
-  reality: Phases 14-24/26/27 code-complete; Phase 25 stays PARTIAL (HW-gated
-  input tests on 0x3004 demo unit); Phases 9-12 (v1.2) stay PARTIAL (operator
-  Wireshark captures, out of agent scope). Phase 26 VERIFICATION.md CREATED this
-  session (was missing -- the milestone-audit PHASE-26 blocker): status
-  human_needed, 5/6 verified, only HW-gated REQ-26-E operator sign-off
-  outstanding (already satisfied on-device via cd48ea3+cb00677); full suite
-  714/714; COD-031 clean. complete-milestone NOT run -- milestone REOPENED by a
-  new user goal -> Phase 28 (AKP05 plugin action completeness + drag-to-bind on
-  keys & dials). v1.3-MILESTONE-AUDIT.md MILESTONE-BOUNDARY blocker (v1.2 9-13
-  vs v1.3 14+ conflation) remains open for a later formal v1.2 close.
+  completed_phases: 19
+  total_plans: 68
+  completed_plans: 64
+  percent: 94
 ---
 
 # Project State
@@ -37,12 +21,12 @@ reconciliation_2026_05_31_pm: >-
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 28 — AKP05 plugin action completeness (action library shows ALL declared tools) + drag-to-bind plugin actions onto keys, encoder dials, and touch-strip zones (planning/research).
+**Current focus:** Phase 28 — akp05-plugin-action-completeness-drag-to-bind-on-keys-dials
 
 ## Current Position
 
-Phase: 26 (OpenDeck-shaped Device Editor) — EXECUTING
-Plan: 1 of 7
+Phase: 28 (akp05-plugin-action-completeness-drag-to-bind-on-keys-dials) — EXECUTING
+Plan: 2 of 5
 Plans:
 25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
 25-02 (operator-gated) — PARTIAL (2026-05-28 13:10): autonomous-mode walkthrough recorded results for 11/16 tests. Three PASS (7 brightness, 8 clear, 9 hasClock-honesty). One FAIL (Test 1 image-upload — 3-layer regression; L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26). One NO_AFFORDANCE (Test 6 — no touch-strip drop target in KeyDesigner). Six BLOCKED on demo unit 0x3004 input-streaming gap (Tests 2-5, 15-16). Five NOT_WALKED (Tests 10-12 driven by 4/5/6; 13-14 gated on Phase 26). See `.planning/phases/25-hardware-verification-real-plugin/25-02-SUMMARY.md`.
@@ -50,9 +34,9 @@ Plans:
 Phase: 26 (NEW — OpenDeck-shaped device editor) — PROPOSED 2026-05-28; goal: replace generic KeyDesigner with Elgato/OpenDeck-pattern device-shaped editor (per-SKU geometry: key grid + encoder dials + touch strip), drag-drop action library, auto-wire setActiveDevice on sidebar selection. Closes GAP-25A (setActiveDevice wiring) + GAP-25B (missing affordances) and unblocks Phase 25 resume. Research deliverable: comprehensive analysis of OpenDeck (`nekename/OpenDeck`), `naerschhersch/opendeck-akp05`, `4ndv/mirajazz` — covering all AJAZZ SKUs OpenDeck supports.
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) + 13(2) = 33 plans across 13 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget).
-Status: Executing Phase 26
+Status: Ready to execute
 Branch: feat/streamdock (off develop)
-Last activity: 2026-05-28 -- Phase 26 execution started
+Last activity: 2026-05-31
 
 ### Open follow-up items (operator UAT 2026-05-28)
 
@@ -226,9 +210,9 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Session Continuity
 
-Last session: 2026-05-28T12:51:31.643Z
+Last session: 2026-05-31T19:51:54.991Z
 Stopped at: Phase 26 UI-SPEC approved
-Resume file: .planning/phases/26-opendeck-shaped-device-editor/26-UI-SPEC.md
+Resume file: None
 
 ## 2026-05-17 mid-milestone amendment update
 
