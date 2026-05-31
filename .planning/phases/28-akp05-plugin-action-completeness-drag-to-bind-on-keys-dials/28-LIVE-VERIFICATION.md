@@ -305,3 +305,53 @@ ______________________________________________________________________
    `SystemMonitor.exe`; the user-installed version (178366994579015.sdPlugin, which had
    a proper Linux-runnable executable) was removed by the unsigned-plugin sweep. A future
    test should use a Linux-native Python or HTML plugin for all CI-reachable repro.
+
+______________________________________________________________________
+
+## Orchestrator live re-verification (2026-05-31, supersedes the BLOCKED run above)
+
+The executor's two blockers were re-investigated live by the orchestrator. **BLOCKER-1 was a stale binary, not a registration bug.** New live results below.
+
+### Environment recipe (hard-won — required for headless live drive)
+
+- **Single-instance enforcement** is keyed on the app-ID (`io.github.Aiacos.AjazzControlCenter`), NOT the XDG dir. A second launch silently exits as a secondary even with an isolated `XDG_RUNTIME_DIR`. So ALL prior instances (incl. orphaned ones) MUST be killed before launching, or the new process produces an empty log and dies. Kill by exact binary name; remove the stale `*-debug.sock` file.
+- Launch: `XDG_RUNTIME_DIR=<tmp> XDG_DATA_HOME=<tmp>/data QT_QPA_PLATFORM=offscreen AJAZZ_DEBUG_CONTROL=1 AJAZZ_ALLOW_UNTRUSTED_PLUGINS=1 build/linux-release/src/app/ajazz-control-center`. Poll `scripts/ajazz-debug --socket <sock> ping` for real liveness (not just the socket file).
+
+### BLOCKER-1 (debug RPC registration) — RESOLVED: stale binary
+
+`debug_control_facade.cpp` source was 15 min NEWER than the compiled `.o` + app binary — the 28-05 executor launched a binary built BEFORE its own `profile.commitEncoderBinding` edit. After `cmake --build --target ajazz-control-center` (only the facade TU recompiled + relinked), `methods` returns **34** and BOTH `plugin.installedActions` + `profile.commitEncoderBinding` are present. registerMethod()/m_methods is correct; there was never a registration bug.
+
+### PLUGIN-18 (action-library completeness) — LIVE PASS
+
+Built a well-formed Linux test plugin (`com.acc.test.dialdemo.sdPlugin`: 3 actions — dial [Keypad,Encoder,Knob], key [Keypad], hidden [Keypad, VisibleInActionsList:false]). `plugin.installedActions` returned:
+
+- `count: 2` (dial + key visible), **`hiddenByVisibility: 1`** (hidden action correctly filtered AND counted), `installedCount: 2`.
+- `dial` `affordanceMask: 3` (Keypad bit 1 + Knob/Encoder bit 2 — correct), `key` `affordanceMask: 1`.
+
+The visibility filter + completeness + affordance normalization are PROVEN live on the running app.
+
+### REAL FINDING A (blocks "missing tools" for vendor plugins on Linux) — NEW, unfixed
+
+System Monitor (12 actions) + Weather (1) declare `OS: [mac, windows]` and a `Software.MinimumVersion`; on Linux they are **plugin-level rejected** by `manifestRunnableHere` (the app's `applicationVersion()` is below the manifest minimum → version gate). `installedActions` returns 0 for them with `installedCount: 0` — **but the Phase-28 diagnostics have NO counter for OS/version rejection** (`hiddenByVisibility`/`skippedUuidName`/`skippedParseFailure` only). So a user whose plugin is OS/version-gated sees zero tools with **no explanation** — a likely real contributor to "plugins install but don't show their tools." FIX NEEDED: add a `skippedOsVersion` (or `pluginRejectedRunnable`) diagnostic counter + surface it in the UI.
+
+### REAL FINDING B (drag-to-dial does not fire end-to-end) — NEW, unfixed
+
+With the test plugin registered + authenticated (no-password = auth'd immediately after passHello) and the AKP05E physically connected (activeDeviceId set), driving the dial round-trip:
+
+1. `device.setActiveDevice akp05e` → ok; `profile.commitEncoderBinding {index:0, actionId:"com.acc.test.dialdemo.dial"}` → `committed:true`.
+1. `commitEncoderBinding` DOES `emit profileChanged()` and writes a Plugin action to `binding.onPress`.
+1. Fired `input.encoder` (CW/CCW) + `input.encoderPress`.
+1. **The plugin received NO `willAppear` and NO `dialRotate`/`dialDown`** — only the initial `passHello`. App log on the press: `[input] plugin action com.acc.test.dialdemo.dial ignored (plugin host arrives Phase 19)` (a stale stub at `application.cpp:406-409`, separate ActionEngine path).
+
+So a plugin action bound to a dial is registered but **never invoked on input**. No `willAppear` means `populateContextsForActivePage` did not register a context for the binding under the live app, despite `profileChanged` firing. Candidates to pin (gap-closure 28-06): (a) active-PAGE filtering in `populateContextsForActivePage` skipping the binding; (b) the synthetic `input.encoder` path not emitting `deviceEvent` → `bridge::onDeviceEvent`; (c) encoder ROTATE has no `onCw`/`onCcw` binding (commitEncoderBinding only writes `onPress`; rotate editors deferred "Phase 26 D-09") so a rotate never matches a context; (d) the stale `application.cpp:406-409` ActionEngine stub should route plugin actions to the bridge (or be removed). Unit tests #708-709 prove the registration + byCoord logic in isolation; the gap is in the live integration.
+
+### REAL FINDING C (routing risk) — NEW, low-priority
+
+The app passes `-pluginUUID = <dir-name>.sdPlugin` (e.g. `com.acc.test.dialdemo.sdPlugin`) to node plugins, but `ownerForActionUuid` needs the **manifest UUID** (`com.acc.test.dialdemo`) as a dotted-component prefix of the action UUID. A plugin that echoes the `-pluginUUID` arg verbatim in `registerPlugin` (as SDK samples do) registers under an id that never matches its own action UUIDs → it never receives events. The corpus Weather plugin's `uuid="Weather"` is the same class. Verify whether the app should pass the manifest UUID as `-pluginUUID`.
+
+### Net status
+
+- "Not all tools show": VisibleInActionsList filter DONE + live-proven; **Finding A** (OS/version diagnostic) still open.
+- "Drag onto dials to use": bind + persist + affordance + (unit-level) context-registration DONE; **Finding B** (live end-to-end invocation) still open.
+
+Both halves need gap-closure **28-06** before the phase goal is met. Findings A + B were catchable ONLY by live driving — exactly the CLAUDE.md mandate.
