@@ -117,6 +117,15 @@ std::string extractPublicKey(std::string_view manifestBlob) {
     return wire::findStringField(manifestBlob, "Ed25519PublicKey");
 }
 
+/// Detect whether a manifest blob carries an Ed25519 signature block.
+/// Returns true when BOTH Ed25519Signature AND Ed25519PublicKey fields are
+/// present. Either field absent → no signature block (SignatureState::None).
+bool hasSignatureBlock(std::string const& blob) {
+    bool const hasSig = !wire::findStringField(blob, "Ed25519Signature").empty();
+    bool const hasPub = !wire::findStringField(blob, "Ed25519PublicKey").empty();
+    return hasSig && hasPub;
+}
+
 } // namespace
 
 // loadTrustRoots is now defined exactly once in `manifest_signer_common.cpp`
@@ -129,10 +138,27 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
                                     ManifestSignerConfig const& config) {
     ManifestVerifyResult result;
 
+    // Read the manifest blob first so we can classify signatureState on any
+    // early-return path (fail-closed branches must still populate the field).
+    auto const manifestBlob = readFile(manifestPath);
+    bool const blockPresent = !manifestBlob.empty() && hasSignatureBlock(manifestBlob);
+
     if (config.verifierScript.empty() || !std::filesystem::exists(config.verifierScript)) {
+        // Fail-closed: verifier script unavailable. Classify by presence of
+        // signature block so the caller can distinguish None vs Invalid even
+        // without running the verifier (CR-01 / T-27-FAILOPEN).
+        result.signatureState = blockPresent ? SignatureState::Invalid : SignatureState::None;
         return result;
     }
     if (!std::filesystem::exists(manifestPath)) {
+        result.signatureState = SignatureState::None;
+        return result;
+    }
+
+    // If no signature block is present there is nothing to verify — return
+    // SignatureState::None immediately.
+    if (!blockPresent) {
+        result.signatureState = SignatureState::None;
         return result;
     }
 
@@ -148,12 +174,15 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
     };
     int const rc = runChild(argv);
     if (rc != 0) {
+        // Signature block present but verification failed → tampered.
+        result.signatureState = SignatureState::Invalid;
         return result;
     }
 
-    auto const manifestBlob = readFile(manifestPath);
+    // Signature verified.
     result.publisherKeyB64 = extractPublicKey(manifestBlob);
     result.valid = true;
+    result.signatureState = SignatureState::Valid;
 
     auto const trustRoots = loadTrustRoots(config.trustedPublishersFile);
     for (auto const& publisher : trustRoots) {

@@ -141,15 +141,43 @@ std::string extractPublicKey(std::string_view manifestBlob) {
 // is structurally impossible by construction. The legacy mini-grep cursor walk that
 // used to live here was deleted in the same atomic commit per ARCH-01 SC1.
 
+/// Detect whether a manifest blob carries an Ed25519 signature block.
+/// Returns true when BOTH Ed25519Signature AND Ed25519PublicKey fields are
+/// present. Either field absent → no signature block (SignatureState::None).
+bool hasSignatureBlock(std::string const& blob) {
+    bool const hasSig = !wire::findStringField(blob, "Ed25519Signature").empty();
+    bool const hasPub = !wire::findStringField(blob, "Ed25519PublicKey").empty();
+    return hasSig && hasPub;
+}
+
 ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
                                     ManifestSignerConfig const& config) {
     ManifestVerifyResult result;
 
+    // Read the manifest blob first so we can classify signatureState on any
+    // early-return path (fail-closed branches must still populate the field).
+    auto const manifestBlob = readFile(manifestPath);
+    bool const blockPresent = !manifestBlob.empty() && hasSignatureBlock(manifestBlob);
+
     if (config.verifierScript.empty() || !std::filesystem::exists(config.verifierScript)) {
+        // Fail-closed: verifier script unavailable. Classify by presence of
+        // signature block so the caller can distinguish None vs Invalid even
+        // without running the verifier (CR-01 / T-27-FAILOPEN).
+        result.signatureState = blockPresent ? SignatureState::Invalid : SignatureState::None;
         return result; // valid=false
     }
     if (!std::filesystem::exists(manifestPath)) {
+        // Manifest missing: cannot read a blob, so cannot detect a signature block.
+        result.signatureState = SignatureState::None;
         return result;
+    }
+
+    // If no signature block is present there is nothing to verify — return
+    // SignatureState::None immediately. Spawning the verifier on an unsigned
+    // manifest would exit 1 anyway and we already know the classification.
+    if (!blockPresent) {
+        result.signatureState = SignatureState::None;
+        return result; // valid=false, signatureState=None
     }
 
     // Resolve the interpreter from a vetted absolute path, never via $PATH
@@ -158,6 +186,8 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
     // valid via a possibly-hijacked python.
     std::string const pythonExe = resolveTrustedExecutable(config.pythonExecutable);
     if (pythonExe.empty()) {
+        // Interpreter unresolvable; signature block is present but unverifiable.
+        result.signatureState = SignatureState::Invalid;
         return result; // valid=false
     }
 
@@ -170,13 +200,15 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
     };
     int const rc = runChild(argv);
     if (rc != 0) {
-        return result; // signature invalid OR exec failure
+        // Signature block present but verification failed → tampered.
+        result.signatureState = SignatureState::Invalid;
+        return result;
     }
 
-    // Signature verified; now figure out the publisher.
-    auto const manifestBlob = readFile(manifestPath);
+    // Signature verified.
     result.publisherKeyB64 = extractPublicKey(manifestBlob);
     result.valid = true;
+    result.signatureState = SignatureState::Valid;
 
     auto const trustRoots = loadTrustRoots(config.trustedPublishersFile);
     for (auto const& publisher : trustRoots) {

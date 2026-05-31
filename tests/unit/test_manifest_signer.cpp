@@ -492,7 +492,7 @@ TEST_CASE("manifest verifier: unavailable verifier classifies by signature-block
     ManifestSignerConfig cfg;
     cfg.pythonExecutable = pythonExe();
     cfg.verifierScript = "/nonexistent/no-such-verifier.py"; // script missing
-    cfg.trustedPublishersFile = {};
+    cfg.trustedPublishersFile = fs::path{};
 
     auto const unsignedResult = verifyManifest(unsignedManifest, cfg);
     REQUIRE_FALSE(unsignedResult.valid);
