@@ -4,7 +4,8 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T19:00:00.000Z'
+last_updated: '2026-05-31T20:30:00.000Z'
+last_live_verification: '2026-05-31 -- Phase 27 trust UX verified LIVE via the AJAZZ_DEBUG_CONTROL channel (new CLAUDE.md MANDATORY rule). Found + fixed a real bug ctest/code-review missed: the per-plugin "Allow" button was on LoadedPluginsPage (Python OOP-host rows, SEC-003), calling PluginCatalog.allowPlugin(pythonId) = no-op. Moved the .sdPlugin trust UX to PluginStore (global "Allow unsigned" toggle next to "Online catalog" + install-from-file unsigned confirm dialog; backend already emitted "unsigned plugin -- confirm to install"). Also cleared 3 real QML warnings (Theme.fgSecondary->fgMuted, Accessible.Group->Grouping, PluginStore tile enabled-shadow) + added objectNames (pluginStoreDrawer/loadedPluginsDrawer/allowUnsignedSwitch/unsignedConfirmDialog) for debug-addressability. Commits 13257d1 + e6cb806. 713/713 ctest. Remaining: full install->spawn live smoke needs a plugin.installFromFile/plugin.rediscover debug RPC (TEST 2).'
 last_activity: 2026-05-31 -- Phase 27 EXECUTED + code-reviewed + fixed (5/5 plans; verifier 6/6 PASS human_needed for QML visual + optional live smoke; code review 0 Critical/4 Warning all fixed incl. WR-01 dead per-plugin-Allow now functional + WR-02 Win32 CWE-426 fail-closed). Full suite 713/713 (was 645). CR-01 tampered-always-refuses proven with a real Ed25519 sign-then-flip-byte test AND a forged-allowed-key test. Commits 416ccc7..dcd18c4; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
 progress:
   total_phases: 19
