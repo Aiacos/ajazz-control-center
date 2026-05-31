@@ -152,6 +152,27 @@ public:
     void spawn(PluginManifest const& manifest);
 
     /**
+     * @brief Re-scan the plugins directory and spawn ONLY newly-added plugins.
+     *
+     * Idempotent by design (D-27-3): re-runs the same directory scan as
+     * `discover()`, diffs the runnable manifest list against the already-live
+     * set (`m_live`, keyed by `.sdPlugin` directory name per commit `5725cb0`),
+     * and calls `spawn()` ONLY for manifests whose key is absent from `m_live`.
+     *
+     * Already-live plugins are NEVER torn down, restarted, or double-spawned.
+     * Repeated calls with no new directories on disk are silent no-ops.
+     *
+     * Typical use: wire to `PluginCatalogModel::installFinished(ok==true)` in
+     * `Application` so a plugin installed from the GUI runs live with no restart.
+     *
+     * If the persisted disabled-set (Plan 27-03) is not yet present, the check
+     * is limited to the `m_live` membership test only (no disabled-set consulted).
+     *
+     * Logs: `rediscover: N already-live, M newly-spawned`.
+     */
+    void rediscover();
+
+    /**
      * @brief React to a plugin process failure.
      *
      * Records the crash via PluginCrashTracker using the injected clock. If

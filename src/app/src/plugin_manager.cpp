@@ -511,6 +511,48 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 }
 
 // ---------------------------------------------------------------------------
+// rediscover()
+// ---------------------------------------------------------------------------
+
+void PluginManager::rediscover() {
+    // Re-run the full dir scan.  discover() also extracts leftover *.sdPlugin
+    // archives, so this is safe to call repeatedly.
+    std::vector<PluginManifest> const candidates = discover();
+
+    int alreadyLive = 0;
+    int newlySpawned = 0;
+
+    for (auto const& manifest : candidates) {
+        // Derive the .sdPlugin dir-name key the same way spawn() does: use the
+        // leaf of manifest.sourceDir (e.g. "com.example.myplugin.sdPlugin").
+        // This is the SAME key spawn() inserts into m_live (commit 5725cb0).
+        // When sourceDir is empty (in-memory manifests from unit tests without
+        // a real dir), fall back to the same logic spawn() uses (codePath else
+        // name), giving discover()-sourced manifests the correct key.
+        QString pluginKey;
+        if (!manifest.sourceDir.isEmpty()) {
+            pluginKey = QFileInfo(manifest.sourceDir).fileName();
+        } else if (!manifest.codePath.isEmpty()) {
+            pluginKey = manifest.codePath;
+        } else {
+            pluginKey = manifest.name;
+        }
+
+        if (m_live.count(pluginKey) > 0) {
+            // Already running — do NOT tear down or re-spawn (D-27-3 idempotency).
+            ++alreadyLive;
+        } else {
+            // New plugin not in the live set: spawn it.
+            spawn(manifest);
+            ++newlySpawned;
+        }
+    }
+
+    qInfo(
+        "PluginManager::rediscover: %d already-live, %d newly-spawned", alreadyLive, newlySpawned);
+}
+
+// ---------------------------------------------------------------------------
 // onProcessFailed()
 // ---------------------------------------------------------------------------
 
