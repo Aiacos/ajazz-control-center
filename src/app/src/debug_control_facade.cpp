@@ -20,10 +20,14 @@
 #include "sd_plugin_server.hpp"
 #endif
 
+#include <QColor>
+#include <QFont>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonValue>
+#include <QPainter>
 #include <QString>
 #include <QVariant>
 
@@ -220,6 +224,56 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         }
         control->clearAll(codename);
         return QJsonObject{{"cleared", codename}};
+    });
+
+    // device.renderTest {codename, count?=10, main?=false} -> paints a numbered
+    // colour swatch onto each key so the BAT key-wire -> physical-surface mapping
+    // (commit 037bd8d) can be read off the live panel. Drives the real image path
+    // (assignKeyImage: RGBA -> JPEG -> BAT -> 1024-byte chunks -> ULEND) via the
+    // public control seam -- NOT a raw HID write, so the wire-format hard rule holds.
+    server.registerMethod("device.renderTest", [&app](QJsonObject const& params, QString& err) {
+        auto* control = app.streamDockControl();
+        if (control == nullptr) {
+            err = QStringLiteral("stream dock control unavailable");
+            return QJsonObject{};
+        }
+        QString const codename = params.value("codename").toString();
+        if (codename.isEmpty()) {
+            err = QStringLiteral("missing 'codename'");
+            return QJsonObject{};
+        }
+        control->setActiveDevice(codename);
+        int const count =
+            params.contains("count") ? qBound(1, params.value("count").toInt(), 32) : 10;
+        for (int i = 1; i <= count; ++i) {
+            QImage img(85, 85, QImage::Format_RGBA8888);
+            img.fill(QColor::fromHsv(((i - 1) * 360) / count, 220, 235));
+            QPainter p(&img);
+            p.setRenderHint(QPainter::TextAntialiasing, true);
+            p.setPen(Qt::white);
+            QFont f = p.font();
+            f.setPixelSize(44);
+            f.setBold(true);
+            p.setFont(f);
+            p.drawText(img.rect(), Qt::AlignCenter, QString::number(i));
+            p.end();
+            control->assignKeyImage(static_cast<std::uint8_t>(i), img);
+        }
+        bool const withMain = params.value("main").toBool(false);
+        if (withMain) {
+            QImage strip(800, 100, QImage::Format_RGBA8888);
+            strip.fill(QColor(18, 18, 26));
+            QPainter p(&strip);
+            p.setRenderHint(QPainter::TextAntialiasing, true);
+            p.setPen(Qt::white);
+            QFont f = p.font();
+            f.setPixelSize(52);
+            p.setFont(f);
+            p.drawText(strip.rect(), Qt::AlignCenter, codename);
+            p.end();
+            control->assignMainImage(strip);
+        }
+        return QJsonObject{{"rendered", count}, {"main", withMain}};
     });
 
     // ---- Input simulation (PluginDebugService) -------------------------
