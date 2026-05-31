@@ -550,6 +550,111 @@ TEST_CASE("ProfileController: loaded profile with 2 bound keys repaints via "
     CHECK(ulendCount >= 2);
 }
 
+// ===========================================================================
+// PLUGIN-19: encoder + touch-zone binding round-trip -- actionId persistence
+// ===========================================================================
+
+TEST_CASE("ProfilePersistence encoder binding persists plugin actionId",
+          "[profile-persistence][PLUGIN-19]") {
+    ajazz::tests::qtApp();
+
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    QString const savePath = tmpDir.filePath(QStringLiteral("enc_actionid.json"));
+
+    // --- Originator: commit via ProfileController with a non-empty actionId ---
+    {
+        // Seed a base profile so saveProfile() validates id/name.
+        core::Profile base{};
+        base.id = "test-enc-aid-01";
+        base.name = "Encoder ActionId Test";
+        base.deviceCodename = "akp05e";
+        {
+            std::filesystem::path const fsPath = savePath.toStdString();
+            core::writeProfileToDisk(fsPath, base);
+        }
+        app::ProfileController orig(nullptr);
+        orig.loadProfile(savePath);
+
+        // Drop a plugin action onto encoder 0 with a known actionId.
+        // This is the 6-arg form the fixed EncoderDial.qml now emits.
+        orig.commitEncoderBinding(0,
+                                  QStringLiteral(""),
+                                  QStringLiteral("CPU Usage"),
+                                  static_cast<int>(core::ActionKind::Plugin),
+                                  QStringLiteral("{}"),
+                                  QStringLiteral("com.x.action"));
+        orig.saveProfile(savePath);
+    }
+
+    // --- Fresh controller: reload and check encoder[0].onPress.id ---
+    app::ProfileController fresh(nullptr);
+    bool loaded = false;
+    QObject::connect(
+        &fresh, &app::ProfileController::profileChanged, [&loaded]() { loaded = true; });
+    fresh.loadProfile(savePath);
+    REQUIRE(loaded);
+
+    auto const& p = fresh.activeProfile();
+    auto const it = p.encoders.find(0);
+    REQUIRE(it != p.encoders.end());
+    REQUIRE(it->second.onPress.size() == 1);
+    // The actionId must survive save/load -- this is the PLUGIN-19 routable
+    // persistence contract. If the 5-arg regression returns (id empty), this CHECK fails.
+    CHECK(it->second.onPress[0].id == std::string{"com.x.action"});
+    CHECK(it->second.onPress[0].kind == core::ActionKind::Plugin);
+}
+
+TEST_CASE("ProfilePersistence touch zone binding persists plugin actionId",
+          "[profile-persistence][PLUGIN-19]") {
+    ajazz::tests::qtApp();
+
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    QString const savePath = tmpDir.filePath(QStringLiteral("zone_actionid.json"));
+
+    // --- Originator ---
+    {
+        core::Profile base{};
+        base.id = "test-zone-aid-01";
+        base.name = "TouchZone ActionId Test";
+        base.deviceCodename = "akp05e";
+        {
+            std::filesystem::path const fsPath = savePath.toStdString();
+            core::writeProfileToDisk(fsPath, base);
+        }
+        app::ProfileController orig(nullptr);
+        orig.loadProfile(savePath);
+
+        // Drop a plugin action onto touch zone 1 with a known actionId.
+        // This is the 6-arg form the fixed TouchStripLane.qml now emits.
+        orig.commitTouchZoneBinding(1,
+                                    QStringLiteral(""),
+                                    QStringLiteral("Zone Label"),
+                                    static_cast<int>(core::ActionKind::Plugin),
+                                    QStringLiteral("{}"),
+                                    QStringLiteral("com.x.zone"));
+        orig.saveProfile(savePath);
+    }
+
+    // --- Fresh controller ---
+    app::ProfileController fresh(nullptr);
+    bool loaded = false;
+    QObject::connect(
+        &fresh, &app::ProfileController::profileChanged, [&loaded]() { loaded = true; });
+    fresh.loadProfile(savePath);
+    REQUIRE(loaded);
+
+    auto const& p = fresh.activeProfile();
+    auto const it = p.touchZones.find(1);
+    REQUIRE(it != p.touchZones.end());
+    REQUIRE(it->second.onTap.size() == 1);
+    // The actionId must survive save/load. If the 5-arg regression returns
+    // (id empty), this CHECK fails (PLUGIN-19 round-trip guard).
+    CHECK(it->second.onTap[0].id == std::string{"com.x.zone"});
+    CHECK(it->second.onTap[0].kind == core::ActionKind::Plugin);
+}
+
 // ---------------------------------------------------------------------------
 // Multi-profile library (Workstream D)
 //

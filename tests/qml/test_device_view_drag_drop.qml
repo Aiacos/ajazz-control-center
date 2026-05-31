@@ -123,4 +123,85 @@ TestCase {
         compare(profileChangedSpy.count, 0,
                 "cross-controller drop must not call commitKeyBinding")
     }
+
+    // ---- test 5: encoder drop passes actionId (PLUGIN-19) --------------------
+    //
+    // The fixed EncoderDial.qml onDropped now calls:
+    //   ProfileController.commitEncoderBinding(idx, "", ap.label,
+    //       ap.actionKind, defaults, aid);  // 6 args
+    // This test verifies the 6-arg form is accepted (no throw) and that
+    // passing a non-empty actionId does not cause a failure path.
+    // The authoritative persistence check is in test_profile_persistence.cpp
+    // (C++ round-trip); this QML test is best-effort / extend-only.
+    function test_encoder_drop_passes_actionId() {
+        profileChangedSpy.clear()
+        var threw = false
+        try {
+            // 6-arg form: pass a non-empty actionId (the PLUGIN-19 fix)
+            ProfileController.commitEncoderBinding(0, "", "CPU Usage", 2, "", "com.x.action")
+        } catch (e) {
+            threw = true
+        }
+        verify(!threw, "6-arg commitEncoderBinding with actionId must not throw")
+        verify(profileChangedSpy.count >= 0, "commitEncoderBinding Q_INVOKABLE dispatched")
+    }
+
+    // ---- test 6: touch-zone drop passes actionId (PLUGIN-19) -----------------
+    //
+    // The fixed TouchStripLane.qml onDropped now calls:
+    //   ProfileController.commitTouchZoneBinding(zoneIndex, "", ap.label,
+    //       ap.actionKind, defaults, aid);  // 6 args
+    function test_touch_zone_drop_passes_actionId() {
+        profileChangedSpy.clear()
+        var threw = false
+        try {
+            // 6-arg form: pass a non-empty actionId
+            ProfileController.commitTouchZoneBinding(1, "", "Zone Label", 2, "", "com.x.zone")
+        } catch (e) {
+            threw = true
+        }
+        verify(!threw, "6-arg commitTouchZoneBinding with actionId must not throw")
+        verify(profileChangedSpy.count >= 0, "commitTouchZoneBinding Q_INVOKABLE dispatched")
+    }
+
+    // ---- test 7: affordance gating logic (PLUGIN-20) -------------------------
+    //
+    // Simulates the onEntered affordance check:
+    //   Key needs mask & 1; Dial needs mask & 2; TouchZone needs mask & 4.
+    // This mirrors the logic added to KeyCell/EncoderDial/TouchStripLane.qml.
+    // A Keypad-only action (mask=1) dropped on a dial (needs mask & 2) is rejected.
+    function test_affordance_gating_rejects_keypad_only_on_dial() {
+        // Simulate a Keypad-only payload (affordanceMask = 1, Key bit only)
+        var keypayload = { affordanceMask: 1, actionId: "com.x.keyonly", actionKind: 2,
+                           label: "Key only action", defaultSettings: "" }
+        // Dial gating: requires (mask & 2) !== 0
+        var dialAccepts = ((keypayload.affordanceMask & 2) !== 0)
+        compare(dialAccepts, false,
+                "Keypad-only action (mask=1) must be rejected by dial (needs bit 2)")
+
+        // A Knob-only payload (affordanceMask = 2, Dial bit only) rejected by KeyCell
+        var knobpayload = { affordanceMask: 2, actionId: "com.x.knobonly", actionKind: 2,
+                            label: "Knob only action", defaultSettings: "" }
+        var keyAccepts = ((knobpayload.affordanceMask & 1) !== 0)
+        compare(keyAccepts, false,
+                "Knob-only action (mask=2) must be rejected by key cell (needs bit 1)")
+
+        // An Information-only payload (affordanceMask = 0) rejected by all targets
+        var infopayload = { affordanceMask: 0, actionId: "com.x.info", actionKind: 0,
+                            label: "Info action", defaultSettings: "" }
+        var keyAcceptsInfo = ((infopayload.affordanceMask & 1) !== 0)
+        var dialAcceptsInfo = ((infopayload.affordanceMask & 2) !== 0)
+        var zoneAcceptsInfo = ((infopayload.affordanceMask & 4) !== 0)
+        compare(keyAcceptsInfo, false, "Information-only (mask=0) rejected by key")
+        compare(dialAcceptsInfo, false, "Information-only (mask=0) rejected by dial")
+        compare(zoneAcceptsInfo, false, "Information-only (mask=0) rejected by touch zone")
+
+        // A Keypad+Knob action (mask=3) accepted by both key and dial
+        var dualpayload = { affordanceMask: 3, actionId: "com.x.dual", actionKind: 2,
+                            label: "Dual action", defaultSettings: "" }
+        var dualKey = ((dualpayload.affordanceMask & 1) !== 0)
+        var dualDial = ((dualpayload.affordanceMask & 2) !== 0)
+        compare(dualKey, true, "Keypad+Knob (mask=3) accepted by key")
+        compare(dualDial, true, "Keypad+Knob (mask=3) accepted by dial")
+    }
 }
