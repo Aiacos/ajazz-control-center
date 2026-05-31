@@ -50,20 +50,6 @@ QString g_pluginsDirOverride{};
 /// install() codepath also calls it.
 [[nodiscard]] QString userPluginsDir();
 
-/// Opt-in escape hatch for installing/keeping UNSIGNED third-party plugins
-/// (Elgato Stream Deck store, OpenDeck, arbitrary `.streamDeckPlugin` files).
-/// The PLUGIN-14 verify gate hard-refuses + deletes anything not signed by our
-/// Ed25519 trust root (T-22-backdoor) — correct as a secure DEFAULT, but no
-/// third party signs with our key (the AJAZZ vendor itself signs nothing, per
-/// the RE), so a plugin ecosystem is impossible without this. When
-/// `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` is set (non-empty), Refused/unsigned plugins
-/// are kept + installed as "untrusted" instead of being quarantined. Default
-/// (unset) preserves the delete-on-sight posture. Mirrors the opt-in gating of
-/// the debug control channel.
-[[nodiscard]] bool untrustedPluginsAllowed() {
-    return !qEnvironmentVariable("AJAZZ_ALLOW_UNTRUSTED_PLUGINS").isEmpty();
-}
-
 } // namespace
 
 PluginCatalogModel* PluginCatalogModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
@@ -133,6 +119,13 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
         QSettings settings;
         m_onlineCatalogEnabled =
             settings.value(QStringLiteral("plugins/onlineCatalogEnabled"), true).toBool();
+        // Plan 27-04 / PLUGIN-16: load the allow-unsigned-plugins flag.
+        // Default false — unsigned plugins are blocked until the user
+        // explicitly enables the setting. CR-01: this flag gates ONLY
+        // VerifyVerdict::Unsigned; the Refused/tampered branch is
+        // unconditional-quarantine regardless of this flag.
+        m_allowUnsignedPlugins =
+            settings.value(QStringLiteral("plugins/allowUnsignedPlugins"), false).toBool();
     }
     // First-launch (or post-upgrade) sweep: convert any `.sdPlugin`
     // archive files left in the user plugins directory by older code
@@ -160,14 +153,21 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                 continue; // no manifest -> not a valid plugin dir; skip
             }
             VerifyOutcome const vout = verifyStagedPlugin(manifestPath);
-            if (vout.verdict == VerifyVerdict::Refused && untrustedPluginsAllowed()) {
-                // Opt-in: keep the unsigned/untrusted plugin so it can be
-                // discovered + run. Surfaced as "untrusted" rather than deleted.
+            if (vout.verdict == VerifyVerdict::Unsigned && consentToUnsigned()) {
+                // Opt-in: keep the unsigned (no-signature) plugin so it can be
+                // discovered + run. Consent via setting or env var.
                 AJAZZ_LOG_WARN("plugin-catalog",
-                               "launch-sweep verify: '{}' unsigned/untrusted ({}); KEPT "
-                               "(AJAZZ_ALLOW_UNTRUSTED_PLUGINS set)",
+                               "launch-sweep verify: '{}' unsigned ({}); KEPT "
+                               "(allowUnsignedPlugins or AJAZZ_ALLOW_UNTRUSTED_PLUGINS set)",
                                entry.toStdString(),
                                vout.reason.toStdString());
+            } else if (vout.verdict == VerifyVerdict::Unsigned) {
+                // No consent — quarantine unsigned plugins at launch too.
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "launch-sweep verify: '{}' unsigned ({}); removing (no consent)",
+                               entry.toStdString(),
+                               vout.reason.toStdString());
+                QDir(dir.filePath(entry)).removeRecursively();
             } else if (vout.verdict == VerifyVerdict::Refused) {
                 AJAZZ_LOG_WARN("plugin-catalog",
                                "launch-sweep verify: '{}' refused ({}); removing from plugins dir",
@@ -505,6 +505,71 @@ void PluginCatalogModel::setOnlineCatalogEnabled(bool enabled) {
     }
 }
 
+bool PluginCatalogModel::allowUnsignedPlugins() const {
+    return m_allowUnsignedPlugins;
+}
+
+void PluginCatalogModel::setAllowUnsignedPlugins(bool allow) {
+    if (m_allowUnsignedPlugins == allow) {
+        return;
+    }
+    m_allowUnsignedPlugins = allow;
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowUnsignedPlugins"), allow);
+    }
+    emit allowUnsignedPluginsChanged();
+}
+
+bool PluginCatalogModel::consentToUnsigned() const {
+    // CR-01 guard: call this ONLY from the VerifyVerdict::Unsigned branch.
+    // This predicate is the single source of truth for unsigned consent.
+    return m_allowUnsignedPlugins ||
+           !qEnvironmentVariable("AJAZZ_ALLOW_UNTRUSTED_PLUGINS").isEmpty();
+}
+
+bool PluginCatalogModel::allowPlugin(QString const& uuid) {
+    // CR-01: refuse immediately for tampered rows. Read the installed
+    // plugin's manifest to determine its trust level via the verify gate.
+    // If the plugin dir doesn't exist or the manifest is tampered, return false.
+    QString const pluginsDir = userPluginsDir();
+    QString const pluginDir = QDir(pluginsDir).filePath(uuid + QStringLiteral(".sdPlugin"));
+    QString const manifestPath = QDir(pluginDir).filePath(QStringLiteral("manifest.json"));
+
+    if (!QFile::exists(manifestPath)) {
+        // Unknown UUID — no installed plugin with this id.
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "allowPlugin: '{}' not found in plugins dir; no-op",
+                       uuid.toStdString());
+        return false;
+    }
+
+    // Verify the staged manifest to determine trust level.
+    VerifyOutcome const vout = verifyStagedPlugin(manifestPath);
+    if (vout.verdict == VerifyVerdict::Refused) {
+        // CR-01: tampered plugin — never consentable.
+        AJAZZ_LOG_WARN(
+            "plugin-catalog",
+            "allowPlugin: '{}' is tampered (Refused); refusing per-plugin consent (CR-01)",
+            uuid.toStdString());
+        return false;
+    }
+
+    // Record per-plugin consent for Unsigned (developer sideload).
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowed/") + uuid, true);
+    }
+    AJAZZ_LOG_INFO("plugin-catalog",
+                   "allowPlugin: '{}' consent recorded ({}); emitting installedCountChanged",
+                   uuid.toStdString(),
+                   verdictToTrustLevel(vout.verdict).toStdString());
+    // The plugin is already on disk (in pluginsDir); signal discovery so
+    // callers re-scan and spawn it if not already running.
+    emit installedCountChanged();
+    return true;
+}
+
 void PluginCatalogModel::refreshOnline() {
     // WR-04 fix (PLUGIN-14 / T-22-phonehome): honour the persisted opt-in flag.
     // A user who has explicitly set onlineCatalogEnabled = false must not see
@@ -753,10 +818,9 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         return false;
     }
 
-    if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned &&
-        !untrustedPluginsAllowed()) {
+    if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned && !consentToUnsigned()) {
         // Unsigned (no signature block) — developer sideload. Requires explicit
-        // user consent or the untrusted-plugins env/settings override.
+        // user consent, the allowUnsignedPlugins setting, or the env var override.
         AJAZZ_LOG_INFO("plugin-catalog",
                        "installFromFile '{}': Unsigned — awaiting user confirm; "
                        "removing staging dir",

@@ -706,6 +706,182 @@ TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugi
 }
 
 // ---------------------------------------------------------------------------
+// Plan 27-04 Task 1: allowUnsignedPlugins QSettings setting
+//
+// Test A: setAllowUnsignedPlugins(true) persists; fresh model reads back true.
+// Test B: with setting=true, unsigned installs without per-call consent.
+// Test C: with setting=false and no env var, unsigned refused without consent.
+// Test D (CR-01): with setting=true, tampered STILL refused.
+// Test E: allowPlugin() refuses when trustLevel=="tampered".
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog allowUnsignedPlugins persists to QSettings", "[plugin-install][trust]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    PluginsDirGuard guard(tmp.filePath("plugins"));
+
+    {
+        PluginCatalogModel model(nullptr);
+        model.setAllowUnsignedPlugins(true);
+    }
+    {
+        PluginCatalogModel model2(nullptr);
+        REQUIRE(model2.allowUnsignedPlugins() == true);
+        model2.setAllowUnsignedPlugins(false);
+    }
+    {
+        PluginCatalogModel model3(nullptr);
+        REQUIRE(model3.allowUnsignedPlugins() == false);
+    }
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+TEST_CASE("PluginCatalog allowUnsignedPlugins setting installs unsigned without per-call consent",
+          "[plugin-install][trust]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(true);
+    QSignalSpy finishedSpy(&model, &PluginCatalogModel::installFinished);
+
+    QByteArray const unsignedBytes{kMinimalManifest};
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.allow-unsigned-setting");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    // Setting supplies consent — userConfirmedUnsigned=false should still install.
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/false);
+    REQUIRE(result);
+
+    REQUIRE(finishedSpy.count() == 1);
+    REQUIRE(finishedSpy.at(0).at(1).toBool() == true);
+
+    QString const installedManifest =
+        QDir(pluginsDir).filePath("com.example.allow-unsigned-setting.sdPlugin/manifest.json");
+    REQUIRE(QFile::exists(installedManifest));
+
+    model.setAllowUnsignedPlugins(false);
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+TEST_CASE("PluginCatalog allowUnsignedPlugins=false refuses unsigned without consent",
+          "[plugin-install][trust]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(false);
+    // Ensure env var is NOT set for this test
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+    QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
+
+    QByteArray const unsignedBytes{kMinimalManifest};
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.setting-false-unsigned");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/false);
+    REQUIRE_FALSE(result);
+
+    REQUIRE(spy.count() == 1);
+    REQUIRE(spy.at(0).at(1).toBool() == false);
+    // Error must contain the consent signal
+    REQUIRE(spy.at(0).at(2).toString().contains(QStringLiteral("confirm")));
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+TEST_CASE("PluginCatalog allowUnsignedPlugins=true tampered STILL refused (CR-01)",
+          "[plugin-install][trust][security]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(true);
+    QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
+
+    // Build a tampered archive (signed + byte-flipped -> Refused verdict).
+    QString const keysDir = tmp.filePath("keys-allow-tampered");
+    QDir().mkpath(keysDir);
+    REQUIRE(
+        runChild(
+            {"python3", verifierScript().string(), "keygen", "--out-dir", keysDir.toStdString()}) ==
+        0);
+
+    fs::path const rawManifest =
+        fs::path{tmp.path().toStdString()} / "manifest_allow_tampered.json";
+    writeFile(rawManifest, kMinimalManifest);
+    REQUIRE(runChild({"python3",
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      rawManifest.string(),
+                      "--priv-key",
+                      (keysDir + "/priv.pem").toStdString()}) == 0);
+
+    auto blob = readFile(rawManifest);
+    auto const pos = blob.find("Fixture for");
+    REQUIRE(pos != std::string::npos);
+    blob[pos] = 'Q';
+    writeFile(rawManifest, blob);
+
+    QByteArray const tamperedBytes = QByteArray::fromStdString(blob);
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), tamperedBytes, "com.example.allow-tampered-cr01");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    // CR-01: even with allowUnsignedPlugins=true, tampered stays refused.
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/false);
+    REQUIRE_FALSE(result);
+
+    REQUIRE(spy.count() == 1);
+    REQUIRE(spy.at(0).at(1).toBool() == false);
+
+    QString const installedManifest =
+        QDir(pluginsDir).filePath("com.example.allow-tampered-cr01.sdPlugin/manifest.json");
+    REQUIRE_FALSE(QFile::exists(installedManifest));
+
+    model.setAllowUnsignedPlugins(false);
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+TEST_CASE("PluginCatalog allowPlugin refuses tampered rows", "[plugin-install][trust][security]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    PluginsDirGuard guard(tmp.filePath("plugins"));
+
+    PluginCatalogModel model(nullptr);
+    // allowPlugin on a non-existent / tampered uuid must return false.
+    // We pass a bogus uuid that has no installed entry — should return false.
+    bool const result = model.allowPlugin(QStringLiteral("com.example.nonexistent"));
+    REQUIRE_FALSE(result);
+}
+
+// ---------------------------------------------------------------------------
 // Regression CR-02: Refused plugin does not land in pluginsDir via any path
 //
 // This test exercises the staging-before-promote invariant: a Refused

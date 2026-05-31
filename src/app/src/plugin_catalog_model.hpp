@@ -132,6 +132,8 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_PROPERTY(int opendeckCount READ opendeckCount NOTIFY countChanged)
     Q_PROPERTY(bool onlineCatalogEnabled READ onlineCatalogEnabled WRITE setOnlineCatalogEnabled
                    NOTIFY onlineCatalogEnabledChanged)
+    Q_PROPERTY(bool allowUnsignedPlugins READ allowUnsignedPlugins WRITE setAllowUnsignedPlugins
+                   NOTIFY allowUnsignedPluginsChanged)
 
 public:
     /// QML singleton factory — see BrandingService::create for the pattern.
@@ -390,6 +392,67 @@ public:
     Q_INVOKABLE void refreshOnline();
 
     // ------------------------------------------------------------------
+    // Trust UX: app-level allow-unsigned setting (Plan 27-04 / PLUGIN-16).
+    //
+    // Mirrors the onlineCatalogEnabled pattern (QSettings-persisted,
+    // Q_PROPERTY with READ/WRITE/NOTIFY). The env var
+    // AJAZZ_ALLOW_UNTRUSTED_PLUGINS remains functional for CI/dev runs
+    // and is OR-gated with this setting in the Unsigned install branch.
+    //
+    // CR-01 invariant: this setting gates ONLY VerifyVerdict::Unsigned.
+    // VerifyVerdict::Refused (tampered) is unconditional-quarantine;
+    // the setting NEVER applies to the Refused branch.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Whether unsigned (no signature block) plugins may be installed.
+     *
+     * When false (the default), only plugins with a valid Ed25519 signature
+     * accepted by the trust roots, or an explicit per-call
+     * @p userConfirmedUnsigned=true consent, can be installed. When true,
+     * @ref installFromFile promotes Unsigned plugins without per-call
+     * consent (the setting supplies the consent globally).
+     *
+     * The env var @c AJAZZ_ALLOW_UNTRUSTED_PLUGINS is OR-gated with this
+     * flag so headless / CI runs continue to work without touching the UI.
+     *
+     * Persisted under @c plugins/allowUnsignedPlugins via QSettings.
+     *
+     * CR-01: this flag is NEVER applied to @c VerifyVerdict::Refused
+     * (tampered) packages — those are always quarantined.
+     */
+    [[nodiscard]] Q_INVOKABLE bool allowUnsignedPlugins() const;
+
+    /**
+     * @brief Set and persist the allow-unsigned-plugins flag.
+     *
+     * Callable from QML as @c PluginCatalog.setAllowUnsignedPlugins(true/false).
+     */
+    Q_INVOKABLE void setAllowUnsignedPlugins(bool allow);
+
+    /**
+     * @brief Consent-install a specific unsigned plugin that has already
+     *        been verified as @c VerifyVerdict::Unsigned (no signature block).
+     *
+     * Records per-plugin consent in QSettings
+     * (@c plugins/allowed/<uuid>=true) so subsequent launches do not
+     * require re-consent. Then re-runs the install/promote path for the
+     * plugin so it becomes immediately runnable.
+     *
+     * CR-01: returns @c false immediately when the plugin row's trust level
+     * is @c "tampered" — there is no UI consent path for an Ed25519-invalid
+     * (attack) package. The per-plugin consent mechanism is ONLY for
+     * the @c Unsigned (developer sideload) case.
+     *
+     * @param uuid Plugin UUID (installed directory name without
+     *        @c .sdPlugin, or the manifest UUID field).
+     * @return @c true when consent was recorded and the plugin is now
+     *         in a runnable state; @c false when the UUID is unknown,
+     *         the plugin is tampered/invalid, or the re-install failed.
+     */
+    Q_INVOKABLE bool allowPlugin(QString const& uuid);
+
+    // ------------------------------------------------------------------
     // Test seam: override the plugins directory so unit tests write to a
     // temp dir instead of the real QStandardPaths::AppDataLocation.
     // ------------------------------------------------------------------
@@ -454,6 +517,8 @@ signals:
     void opendeckStateChanged();
     /// Emitted when the online-catalogue-enabled flag changes.
     void onlineCatalogEnabledChanged();
+    /// Emitted when the allow-unsigned-plugins flag changes.
+    void allowUnsignedPluginsChanged();
 
     /**
      * @brief Per-row download progress in [0, 100].
@@ -489,6 +554,16 @@ private:
     /// signed catalogue index defined in docs/architecture/PLUGIN-SDK.md.
     static std::vector<CatalogEntry> mockFixture();
 
+    /// Single source of truth for unsigned-install consent (Plan 27-04).
+    ///
+    /// Returns @c true when the user has granted consent via the
+    /// @c allowUnsignedPlugins setting OR via the
+    /// @c AJAZZ_ALLOW_UNTRUSTED_PLUGINS CI/dev env var.
+    ///
+    /// CR-01: call this ONLY in the @c VerifyVerdict::Unsigned branch.
+    /// Never call it for @c VerifyVerdict::Refused (tampered).
+    [[nodiscard]] bool consentToUnsigned() const;
+
     /// Replace the Streamdock-sourced rows with @p rows, emitting the
     /// minimal `dataChanged` / model reset surface required.
     void replaceStreamdockRows(std::vector<CatalogEntry> rows);
@@ -506,6 +581,12 @@ private:
     /// QSettings-backed flag; default true (online catalog on unless the user
     /// turned it off). Network stays fully gated on this flag — see ctor.
     bool m_onlineCatalogEnabled = true;
+
+    /// QSettings-backed flag; default false (unsigned plugins blocked unless
+    /// the user explicitly enabled the setting or the env var is set).
+    /// Gates ONLY VerifyVerdict::Unsigned installs. CR-01: NEVER applied
+    /// to Refused/tampered packages.
+    bool m_allowUnsignedPlugins = false;
 
     /// Shared QNetworkAccessManager for plugin downloads (install path).
     /// Created lazily on the first `install()` call so the cheap mock
