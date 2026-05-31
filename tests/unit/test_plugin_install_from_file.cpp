@@ -570,6 +570,142 @@ TEST_CASE("PluginInstallFromFile CR-01 Refused verdict -> not installed, success
 }
 
 // ---------------------------------------------------------------------------
+// CR-01 security gate: tampered plugin refused even with userConfirmedUnsigned=true
+//
+// This is the load-bearing CR-01 invariant test. A .sdPlugin whose signature
+// block is present but cryptographically invalid (tampered) MUST be quarantined
+// even when the caller passes userConfirmedUnsigned=true. Consent applies ONLY
+// to truly unsigned (no signature block) packages — not to attack packages.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile tampered plugin refused even with consent",
+          "[plugin-install][security]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
+
+    // Generate key pair, sign the manifest, then tamper it.
+    QString const keysDir = tmp.filePath("keys-cr01-security");
+    QDir().mkpath(keysDir);
+    REQUIRE(
+        runChild(
+            {"python3", verifierScript().string(), "keygen", "--out-dir", keysDir.toStdString()}) ==
+        0);
+
+    fs::path const rawManifest = fs::path{tmp.path().toStdString()} / "manifest_security.json";
+    writeFile(rawManifest, kMinimalManifest);
+    REQUIRE(runChild({"python3",
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      rawManifest.string(),
+                      "--priv-key",
+                      (keysDir + "/priv.pem").toStdString()}) == 0);
+
+    // Tamper: flip one byte so the Ed25519 signature is invalid.
+    auto blob = readFile(rawManifest);
+    auto const pos = blob.find("Fixture for");
+    REQUIRE(pos != std::string::npos);
+    blob[pos] = 'Z';
+    writeFile(rawManifest, blob);
+
+    QByteArray const tamperedBytes = QByteArray::fromStdString(blob);
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), tamperedBytes, "com.example.cr01-tamper-security");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    // CR-01 invariant: userConfirmedUnsigned=true MUST NOT let a tampered
+    // package through. Consent gates ONLY the Unsigned (None) branch.
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true);
+    REQUIRE_FALSE(result);
+
+    REQUIRE(spy.count() == 1);
+    REQUIRE(spy.at(0).at(1).toBool() == false);
+
+    // Plugin MUST NOT be promoted to installedPlugins/ even with consent.
+    QString const installedManifest =
+        QDir(pluginsDir).filePath("com.example.cr01-tamper-security.sdPlugin/manifest.json");
+    REQUIRE_FALSE(QFile::exists(installedManifest));
+}
+
+// ---------------------------------------------------------------------------
+// Unsigned plugin: refused without consent, installs with consent
+//
+// An unsigned (no signature block) .sdPlugin is a developer sideload.
+// It must be refused when the caller does not provide consent, and must
+// be installed when consent is given (userConfirmedUnsigned=true).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile unsigned plugin refused without consent", "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
+
+    // Build an unsigned .sdPlugin (no Ajazz.Signing block).
+    QByteArray const unsignedBytes{kMinimalManifest};
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.unsigned-no-consent");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    // Without consent: must be refused.
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/false);
+    REQUIRE_FALSE(result);
+
+    REQUIRE(spy.count() == 1);
+    REQUIRE(spy.at(0).at(1).toBool() == false);
+
+    // Plugin must NOT be promoted.
+    QString const installedManifest =
+        QDir(pluginsDir).filePath("com.example.unsigned-no-consent.sdPlugin/manifest.json");
+    REQUIRE_FALSE(QFile::exists(installedManifest));
+}
+
+TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+    QSignalSpy finishedSpy(&model, &PluginCatalogModel::installFinished);
+
+    // Build an unsigned .sdPlugin (no Ajazz.Signing block).
+    QByteArray const unsignedBytes{kMinimalManifest};
+    QString const archivePath =
+        buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.install-from-file-test");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    // With consent: must install successfully.
+    bool const result = model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true);
+    REQUIRE(result);
+
+    REQUIRE(finishedSpy.count() == 1);
+    REQUIRE(finishedSpy.at(0).at(1).toBool() == true);
+
+    // Plugin IS promoted.
+    QString const installedManifest =
+        QDir(pluginsDir).filePath("com.example.install-from-file-test.sdPlugin/manifest.json");
+    REQUIRE(QFile::exists(installedManifest));
+}
+
+// ---------------------------------------------------------------------------
 // Regression CR-02: Refused plugin does not land in pluginsDir via any path
 //
 // This test exercises the staging-before-promote invariant: a Refused

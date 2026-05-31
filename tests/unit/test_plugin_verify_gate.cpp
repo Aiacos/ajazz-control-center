@@ -185,9 +185,14 @@ TEST_CASE("PluginVerifyGate verdictToTrustLevel: SelfSigned maps to self-signed"
     REQUIRE(verdictToTrustLevel(VerifyVerdict::SelfSigned) == QStringLiteral("self-signed"));
 }
 
-TEST_CASE("PluginVerifyGate verdictToTrustLevel: Refused maps to unsigned",
+TEST_CASE("PluginVerifyGate verdictToTrustLevel: Unsigned maps to unsigned",
           "[plugin-verify-gate]") {
-    REQUIRE(verdictToTrustLevel(VerifyVerdict::Refused) == QStringLiteral("unsigned"));
+    REQUIRE(verdictToTrustLevel(VerifyVerdict::Unsigned) == QStringLiteral("unsigned"));
+}
+
+TEST_CASE("PluginVerifyGate verdictToTrustLevel: Refused maps to tampered",
+          "[plugin-verify-gate]") {
+    REQUIRE(verdictToTrustLevel(VerifyVerdict::Refused) == QStringLiteral("tampered"));
 }
 
 // ---------------------------------------------------------------------------
@@ -205,9 +210,11 @@ TEST_CASE("PluginVerifyGate signer unavailable -> Refused no crash", "[plugin-ve
     emptyCfg.verifierScript = "/nonexistent-path/no-such-script.py";
     emptyCfg.trustedPublishersFile = fs::path{};
 
-    // verifyStagedPlugin with a non-existent script should return Refused.
+    // verifyStagedPlugin with a non-existent script should return Unsigned
+    // (no signature block = None -> Unsigned) rather than Refused.
     auto const outcome = verifyStagedPlugin("/nonexistent/manifest.json", emptyCfg);
-    REQUIRE(outcome.verdict == VerifyVerdict::Refused);
+    // The manifest path does not exist so no blob can be read -> None -> Unsigned.
+    REQUIRE(outcome.verdict == VerifyVerdict::Unsigned);
     REQUIRE_FALSE(outcome.reason.isEmpty());
 }
 
@@ -252,7 +259,7 @@ TEST_CASE("PluginVerifyGate signed manifest -> SelfSigned", "[plugin-verify-gate
 }
 
 // ---------------------------------------------------------------------------
-// Tampered manifest -> Refused
+// Tampered manifest -> Refused (CR-01: tampered is ALWAYS refused)
 // ---------------------------------------------------------------------------
 
 TEST_CASE("PluginVerifyGate tampered manifest -> Refused", "[plugin-verify-gate]") {
@@ -292,10 +299,10 @@ TEST_CASE("PluginVerifyGate tampered manifest -> Refused", "[plugin-verify-gate]
 }
 
 // ---------------------------------------------------------------------------
-// Unsigned manifest -> Refused
+// Unsigned manifest -> Unsigned (distinct from Refused/tampered)
 // ---------------------------------------------------------------------------
 
-TEST_CASE("PluginVerifyGate unsigned manifest -> Refused", "[plugin-verify-gate]") {
+TEST_CASE("PluginVerifyGate unsigned manifest -> Unsigned", "[plugin-verify-gate]") {
     QTemporaryDir tmp;
     REQUIRE(tmp.isValid());
 
@@ -306,5 +313,7 @@ TEST_CASE("PluginVerifyGate unsigned manifest -> Refused", "[plugin-verify-gate]
     REQUIRE_FALSE(manifestPath.isEmpty());
 
     auto const outcome = verifyStagedPlugin(manifestPath);
-    REQUIRE(outcome.verdict == VerifyVerdict::Refused);
+    // CR-01: unsigned maps to Unsigned (developer sideload, consent-installable)
+    // NOT Refused (which now means tampered only).
+    REQUIRE(outcome.verdict == VerifyVerdict::Unsigned);
 }
