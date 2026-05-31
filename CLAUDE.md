@@ -249,18 +249,17 @@ or a **retail AKP05E / Mirabox N4** unit.
 
 - `scripts/akp05_input_probe.py` — dual-node hidraw input reader with
   mirajazz-exact `DIS`+`LIG` init + `CRT CONNECT` keep-alive +
-  `GET_FEATURE id 0x01` firmware probe. Currently untracked working
-  artefact; the capture pattern is also documented in
-  `akp05_input_corrections.md §7.1` for trivial reproduction.
+  `GET_FEATURE id 0x01` firmware probe. The capture pattern is also documented
+  in `akp05_input_corrections.md §7.1` for trivial reproduction.
 - `scripts/akp05_color_probe.py` — known-good output round-trip: paints all
   15 BAT surfaces (wire 1..15). **Re-run this first when output looks broken**
   — if the probe also renders nothing, the device is wedged (replug), not a
-  code bug. Untracked scratch artefact.
-- `scripts/akp05_strip_probe.py` — maps/​sizes the 4 strip zones (BAT wire
-  1..4); `--sizes` sweeps zone sizes. Untracked. (How the ~128 px zone fit was
-  found, 2026-05-31.)
+  code bug.
+- `scripts/akp05_strip_probe.py` — maps + sizes the 4 strip zones (BAT wire
+  1..4); `--sizes` sweeps zone sizes. (How the ~128 px zone fit was found,
+  2026-05-31.)
 - `scripts/akp05_ulend_ab.py` — A/B the `ULEND` offset (5..9 vs 3..7) on one
-  panel. Untracked.
+  panel.
 - Headless app render: launch with `AJAZZ_DEBUG_CONTROL=1`, then
   `scripts/ajazz-debug device.renderTest --params '{"codename":"akp05e","count":10,"main":true,"encoders":true}'`
   paints numbered keys + the 4 strip zones (the only headless way to render —
