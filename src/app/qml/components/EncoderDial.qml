@@ -156,6 +156,24 @@ ItemDelegate {
                     return;
                 }
             }
+            // PLUGIN-20: strict affordance gate for library-action drags.
+            // Dial requires affordanceMask bit 2. Zero/missing mask (e.g. Information-only)
+            // also fails the check -- fail-safe per T-28-07.
+            if (drag.hasFormat("application/x-ajazz-action")) {
+                var ok2 = false;
+                try {
+                    var ap2 = JSON.parse(drag.getDataAsString("application/x-ajazz-action"));
+                    var mask = ap2.affordanceMask !== undefined ? ap2.affordanceMask : 0;
+                    ok2 = ((mask & 2) !== 0);  // Dial bit
+                } catch (e2) {
+                    ok2 = false;
+                }
+                if (!ok2) {
+                    dragRejected = true;
+                    drag.accepted = false;
+                    return;
+                }
+            }
             dragRejected = false;
             cellScale.xScale = 1.05;
             cellScale.yScale = 1.05;
@@ -176,8 +194,12 @@ ItemDelegate {
             if (drop.hasFormat("application/x-ajazz-action")) {
                 var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
                 // Library -> encoder: commit binding; iconPath empty in v1.
+                // PLUGIN-19: pass actionId as 6th arg (was dropped in 5-arg call).
+                // Seed defaultSettings from the payload if available (RESEARCH §Q3).
+                var aid = ap.actionId ? ap.actionId : "";
+                var defaults = ap.defaultSettings ? ap.defaultSettings : "";
                 ProfileController.commitEncoderBinding(root.index, "", ap.label,
-                                                       ap.actionKind, "");
+                                                       ap.actionKind, defaults, aid);
                 drop.acceptProposedAction();
                 return;
             }

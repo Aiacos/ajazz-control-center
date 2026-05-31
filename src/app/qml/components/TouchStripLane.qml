@@ -249,6 +249,24 @@ Item {
                         return;
                     }
                 }
+                // PLUGIN-20: strict affordance gate for library-action drags.
+                // TouchZone requires affordanceMask bit 4. Zero/missing mask
+                // (e.g. Information-only) also fails -- fail-safe per T-28-07.
+                if (drag.hasFormat("application/x-ajazz-action")) {
+                    var ok2 = false;
+                    try {
+                        var ap2 = JSON.parse(drag.getDataAsString("application/x-ajazz-action"));
+                        var mask = ap2.affordanceMask !== undefined ? ap2.affordanceMask : 0;
+                        ok2 = ((mask & 4) !== 0);  // TouchZone bit
+                    } catch (e2) {
+                        ok2 = false;
+                    }
+                    if (!ok2) {
+                        dragRejected = true;
+                        drag.accepted = false;
+                        return;
+                    }
+                }
                 dragRejected = false;
                 zoneCellScale.xScale = 1.05;
                 zoneCellScale.yScale = 1.05;
@@ -268,8 +286,13 @@ Item {
 
                 if (drop.hasFormat("application/x-ajazz-action")) {
                     var ap = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
+                    // PLUGIN-19: pass actionId as 6th arg (was dropped in 5-arg call).
+                    // Seed defaultSettings from payload if available (RESEARCH §Q3).
+                    var aid = ap.actionId ? ap.actionId : "";
+                    var defaults = ap.defaultSettings ? ap.defaultSettings : "";
                     ProfileController.commitTouchZoneBinding(zoneCell.zoneIndex, "",
-                                                            ap.label, ap.actionKind, "");
+                                                            ap.label, ap.actionKind,
+                                                            defaults, aid);
                     drop.acceptProposedAction();
                     return;
                 }

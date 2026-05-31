@@ -181,7 +181,7 @@ ItemDelegate {
         onEntered: function(drag) {
             // For a "binding" drag (cell-to-cell), reject up front if the source
             // controller is not "Keypad" -- this is the cross-controller drag
-            // path. Library "action" drags are always accepted by any cell.
+            // path.
             if (drag.hasFormat("application/x-ajazz-binding")) {
                 var raw = drag.getDataAsString("application/x-ajazz-binding");
                 var ok = false;
@@ -194,6 +194,24 @@ ItemDelegate {
                 if (!ok) {
                     dragRejected = true;
                     drag.accepted = false;  // visually signal reject
+                    return;
+                }
+            }
+            // PLUGIN-20: strict affordance gate for library-action drags.
+            // Key cell requires affordanceMask bit 1. Zero/missing mask
+            // (e.g. Information-only, affordanceMask=0) also fails -- fail-safe per T-28-07.
+            if (drag.hasFormat("application/x-ajazz-action")) {
+                var ok2 = false;
+                try {
+                    var ap2 = JSON.parse(drag.getDataAsString("application/x-ajazz-action"));
+                    var mask = ap2.affordanceMask !== undefined ? ap2.affordanceMask : 0;
+                    ok2 = ((mask & 1) !== 0);  // Key bit
+                } catch (e2) {
+                    ok2 = false;
+                }
+                if (!ok2) {
+                    dragRejected = true;
+                    drag.accepted = false;
                     return;
                 }
             }
