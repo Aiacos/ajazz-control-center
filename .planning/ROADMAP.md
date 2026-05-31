@@ -577,4 +577,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 24. Family Coverage AKP03/153/815              | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW)    | v1.3      | 1/2            | In Progress      |            |
 | 26. OpenDeck-shaped Device Editor              | v1.3      | 7/7            | Complete         | 2026-05-28 |
-| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/5            | Not started      | —          |
+| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/5            | Planned          | —          |
