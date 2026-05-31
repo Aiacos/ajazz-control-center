@@ -737,17 +737,12 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     VerifyOutcome const vout = verifyStagedPlugin(stagedManifest);
 
     if (vout.verdict == VerifyVerdict::Refused) {
-        // Tampered OR unsigned (hard-refuse) — quarantine staging dir.
-        // NOTE: verifyStagedPlugin cannot yet distinguish "no signature"
-        // (unsigned third-party, opt-in-installable) from "signature present
-        // but invalid" (tampered, must ALWAYS refuse, incl. with
-        // userConfirmedUnsigned — CR-01). Until that split lands in the
-        // verifier, the GUI install-from-file path stays strict; unsigned
-        // third-party plugins (Elgato / OpenDeck) are enabled via the
-        // launch-sweep opt-in (AJAZZ_ALLOW_UNTRUSTED_PLUGINS) by placing the
-        // .sdPlugin directory in the plugins dir.
+        // CR-01 invariant: Refused means signature block present but Ed25519-invalid
+        // (tampered). This is an ATTACK — quarantine unconditionally, even when
+        // userConfirmedUnsigned==true. Consent applies ONLY to the Unsigned branch;
+        // it must NEVER leak into the Refused/tampered branch.
         AJAZZ_LOG_WARN("plugin-catalog",
-                       "installFromFile '{}': signature Refused ({}); quarantining",
+                       "installFromFile '{}': signature Refused/tampered ({}); quarantining",
                        localPath.toStdString(),
                        vout.reason.toStdString());
         QDir(QDir(stagingParent).filePath(archiveName)).removeRecursively();
@@ -755,6 +750,21 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
             vout.reason.isEmpty() ? QStringLiteral("signature verification failed") : vout.reason;
         emit installFinished(
             localPath, false, tr("Plugin signature verification failed: %1").arg(reason));
+        return false;
+    }
+
+    if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned &&
+        !untrustedPluginsAllowed()) {
+        // Unsigned (no signature block) — developer sideload. Requires explicit
+        // user consent or the untrusted-plugins env/settings override.
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "installFromFile '{}': Unsigned — awaiting user confirm; "
+                       "removing staging dir",
+                       localPath.toStdString());
+        QDir(QDir(stagingParent).filePath(archiveName)).removeRecursively();
+        QDir(stagingParent).rmdir(QStringLiteral("."));
+        emit installFinished(
+            localPath, false, QStringLiteral("unsigned plugin -- confirm to install"));
         return false;
     }
 

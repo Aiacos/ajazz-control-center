@@ -42,24 +42,43 @@ VerifyOutcome verifyStagedPlugin(QString const& stagedManifestJsonPath,
 
     // Fail-closed: if the verifier script path is empty (build without
     // AJAZZ_PLUGIN_VERIFIER_SCRIPT, or a test injecting an empty path),
-    // return Refused immediately — never silently trust (D-05 contract).
+    // call verifyManifest which will classify by signature-block presence
+    // (None -> Unsigned; Invalid -> Refused) — we fall through to the
+    // signatureState switch below. If cfg.verifierScript is truly empty we
+    // return early with a distinct Unsigned verdict so no-Python builds can
+    // still consent-install developer plugins (D-05 fail-closed contract).
     if (cfg.verifierScript.empty()) {
         AJAZZ_LOG_WARN("plugin-verify-gate",
                        "verifyStagedPlugin: verifier script not available in this build"
-                       " (AJAZZ_PLUGIN_VERIFIER_SCRIPT not defined) -- refusing");
-        return VerifyOutcome{VerifyVerdict::Refused,
+                       " (AJAZZ_PLUGIN_VERIFIER_SCRIPT not defined) -- treating as unsigned");
+        return VerifyOutcome{VerifyVerdict::Unsigned,
                              {},
                              QStringLiteral("signature verification unavailable in this build")};
     }
 
     auto const result = ajazz::plugins::verifyManifest(stagedManifestJsonPath.toStdString(), cfg);
 
-    if (!result.valid) {
-        AJAZZ_LOG_WARN("plugin-verify-gate",
-                       "verifyStagedPlugin: '{}' -> refused (invalid/unsigned/tampered)",
+    // Map SignatureState -> VerifyVerdict (CR-01 split).
+    switch (result.signatureState) {
+    case ajazz::plugins::SignatureState::None:
+        // No signature block: unsigned developer sideload. Consent-installable.
+        AJAZZ_LOG_INFO("plugin-verify-gate",
+                       "verifyStagedPlugin: '{}' -> Unsigned (no signature block)",
                        stagedManifestJsonPath.toStdString());
-        return VerifyOutcome{
-            VerifyVerdict::Refused, {}, QStringLiteral("signature verification failed")};
+        return VerifyOutcome{VerifyVerdict::Unsigned, {}, QStringLiteral("manifest is unsigned")};
+
+    case ajazz::plugins::SignatureState::Invalid:
+        // Signature block present but Ed25519-invalid: tampered. Always quarantine.
+        AJAZZ_LOG_WARN("plugin-verify-gate",
+                       "verifyStagedPlugin: '{}' -> Refused (signature present but invalid — "
+                       "tampered)",
+                       stagedManifestJsonPath.toStdString());
+        return VerifyOutcome{VerifyVerdict::Refused,
+                             {},
+                             QStringLiteral("signature verification failed -- tampered")};
+
+    case ajazz::plugins::SignatureState::Valid:
+        break; // fall through to publisher lookup below
     }
 
     if (result.publisherName.empty()) {
@@ -87,10 +106,12 @@ QString verdictToTrustLevel(VerifyVerdict verdict) {
         return QStringLiteral("trusted");
     case VerifyVerdict::SelfSigned:
         return QStringLiteral("self-signed");
-    case VerifyVerdict::Refused:
+    case VerifyVerdict::Unsigned:
         return QStringLiteral("unsigned");
+    case VerifyVerdict::Refused:
+        return QStringLiteral("tampered");
     }
-    return QStringLiteral("unsigned"); // unreachable; silence -Wreturn-type
+    return QStringLiteral("tampered"); // unreachable; silence -Wreturn-type
 }
 
 } // namespace ajazz::app

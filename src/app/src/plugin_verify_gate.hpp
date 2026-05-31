@@ -25,17 +25,24 @@
 
 namespace ajazz::app {
 
-/// Three-way verdict for a staged plugin archive.
+/// Four-way verdict for a staged plugin archive.
 ///
 /// Maps to the same strings as @c LoadedPluginsModel::trustLevelOf so the
 /// UI vocabulary is consistent:
 ///   - @c Trusted    → @c "trusted"
 ///   - @c SelfSigned → @c "self-signed"
-///   - @c Refused    → @c "unsigned"
+///   - @c Unsigned   → @c "unsigned"
+///   - @c Refused    → @c "tampered"
+///
+/// CR-01 invariant: @c Refused (Ed25519-invalid / tampered) ALWAYS quarantines,
+/// even when @c userConfirmedUnsigned==true. Consent from the user gates ONLY
+/// the @c Unsigned (no signature block) branch, NEVER the @c Refused branch.
+/// A tampered package is an attack; an unsigned one is a developer sideload.
 enum class VerifyVerdict {
     Trusted,    ///< Ed25519 signature valid; key in trusted_publishers.json.
     SelfSigned, ///< Ed25519 signature valid; key NOT in trusted_publishers.json.
-    Refused,    ///< Unsigned, tampered, or verifier unavailable in this build.
+    Unsigned,   ///< No signature block present — developer sideload, consent-installable.
+    Refused,    ///< Signature block present but Ed25519-invalid (tampered) — always quarantine.
 };
 
 /// Full outcome from @ref verifyStagedPlugin.
@@ -63,12 +70,14 @@ struct VerifyOutcome {
 ///
 /// Behaviour:
 ///   1. If @c AJAZZ_PLUGIN_VERIFIER_SCRIPT is not compiled in (or
-///      @p configOverride has an empty @c verifierScript) → @c Refused,
-///      "signature verification unavailable in this build".
+///      @p configOverride has an empty @c verifierScript) → classify by
+///      @c signatureState returned from @ref ajazz::plugins::verifyManifest
+///      (None → @c Unsigned; Invalid → @c Refused).
 ///   2. Call @ref ajazz::plugins::verifyManifest with the config.
-///   3. @c valid==false → @c Refused, "signature verification failed".
-///   4. @c valid==true && publisherName empty → @c SelfSigned.
-///   5. @c valid==true && publisherName set → @c Trusted.
+///   3. @c signatureState==None → @c Unsigned ("manifest is unsigned").
+///   4. @c signatureState==Invalid → @c Refused ("signature verification failed — tampered").
+///   5. @c valid==true && publisherName empty → @c SelfSigned.
+///   6. @c valid==true && publisherName set → @c Trusted.
 [[nodiscard]] VerifyOutcome
 verifyStagedPlugin(QString const& stagedManifestJsonPath,
                    ajazz::plugins::ManifestSignerConfig configOverride = {});
