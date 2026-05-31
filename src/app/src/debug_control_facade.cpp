@@ -399,6 +399,32 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"id", pc->createProfile(name, codename)}};
     });
 
+    // profile.commitEncoderBinding {index, actionId, label?, settings?}
+    // -> {committed, index, actionId}
+    // Drives ProfileController::commitEncoderBinding directly (ActionKind::Plugin=0)
+    // so the PLUGIN-19/20 live round-trip is automatable without a real drag-and-drop.
+    // Gated behind AJAZZ_DEBUG_CONTROL=1 (this block). No wire-format change.
+    server.registerMethod(
+        "profile.commitEncoderBinding", [&app](QJsonObject const& params, QString& err) {
+            auto* pc = app.profileController();
+            if (pc == nullptr) {
+                err = QStringLiteral("profile controller unavailable");
+                return QJsonObject{};
+            }
+            int const index = params.value("index").toInt(0);
+            QString const actionId = params.value("actionId").toString();
+            if (actionId.isEmpty()) {
+                err = QStringLiteral("require 'actionId'");
+                return QJsonObject{};
+            }
+            QString const label = params.value("label").toString();
+            QString const settings = params.value("settings").toString();
+            // ActionKind::Plugin = 0 (profile.hpp:43)
+            pc->commitEncoderBinding(
+                index, QStringLiteral(""), label, 0 /*ActionKind::Plugin*/, settings, actionId);
+            return QJsonObject{{"committed", true}, {"index", index}, {"actionId", actionId}};
+        });
+
     // ---- Action execution (BuiltinActionsService) ---------------------
     // Dangerous: built-in UUIDs include RunCommand/OpenUrl etc.; unknown
     // UUIDs forward to the plugin path. Gated by the channel being on.
