@@ -31,6 +31,7 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -62,7 +63,7 @@ struct TrustedPublisher {
  *   - @c Invalid → signature block present BUT Ed25519 verification FAILED
  *                  (tampered, must always be quarantined).
  */
-enum class SignatureState {
+enum class SignatureState : std::uint8_t {
     None,    ///< No signature block — unsigned manifest.
     Valid,   ///< Signature block present and cryptographically valid.
     Invalid, ///< Signature block present but Ed25519 verification failed (tampered).
