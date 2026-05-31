@@ -35,6 +35,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QSettings>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
@@ -139,6 +140,34 @@ static constexpr char kEmulatedSdVersion[] = "6.9";
         }
     }
     return childEnv;
+}
+
+// ---------------------------------------------------------------------------
+// QSettings key helpers for the persisted user-disable set (D-27-4)
+// ---------------------------------------------------------------------------
+//
+// Key pattern: plugins/disabled/<pluginId>  (value: bool true when disabled)
+// Uses the DEFAULT QSettings scope (org/app already set globally by Application).
+// QStandardPaths::setTestModeEnabled(true) in tests isolates the file to a
+// temporary location, ensuring hermeticity without a custom path.
+//
+// SEPARATE from m_disabled (session-only crash-disable path) — a user-disable
+// survives app restart; a crash-disable recovers on next launch (T-27-DISABLE-LEAK).
+
+static constexpr char kDisabledGroup[] = "plugins/disabled";
+
+/// Construct the full QSettings key for a pluginId.
+[[nodiscard]] static QString disabledKey(QString const& pluginId) {
+    return QStringLiteral("%1/%2").arg(QString::fromLatin1(kDisabledGroup), pluginId);
+}
+
+// ---------------------------------------------------------------------------
+// shouldSkipSpawn() — single shared predicate for launch loop + rediscover()
+// ---------------------------------------------------------------------------
+
+bool PluginManager::shouldSkipSpawn(QString const& pluginId) {
+    QSettings settings;
+    return settings.value(disabledKey(pluginId), false).toBool();
 }
 
 // ---------------------------------------------------------------------------
@@ -266,6 +295,27 @@ std::vector<PluginManifest> PluginManager::discover() {
 // ---------------------------------------------------------------------------
 
 void PluginManager::spawn(PluginManifest const& manifest) {
+    // D-27-4 user-disable skip (T-27-DISABLE-BYPASS): compute the pluginId key first
+    // so we can check the persisted disabled-set BEFORE doing any work.  The key
+    // derivation here must mirror the one below (same priority order).
+    // We check only with sourceDir to keep it cheap; the full key computation
+    // happens again below for the actual spawn logic.
+    {
+        QString earlyId;
+        if (!manifest.sourceDir.isEmpty()) {
+            earlyId = QFileInfo(manifest.sourceDir).fileName();
+        } else if (!manifest.codePath.isEmpty()) {
+            earlyId = manifest.codePath;
+        } else {
+            earlyId = manifest.name;
+        }
+        if (!earlyId.isEmpty() && shouldSkipSpawn(earlyId)) {
+            qInfo("PluginManager: skip spawn of '%s' (user-disabled via QSettings)",
+                  qPrintable(earlyId));
+            return;
+        }
+    }
+
     // Validate the code path as a filesystem path component (T-18-PATHTRAV).
     // The manifest's CodePath / Name is used as a key in m_live and potentially
     // in per-plugin settings directories. Reject any value that could traverse
@@ -596,6 +646,67 @@ void PluginManager::disableWithNotice(QString const& uuid, QString const& reason
 
 bool PluginManager::isDisabled(QString const& uuid) const {
     return m_disabled.contains(uuid);
+}
+
+// ---------------------------------------------------------------------------
+// setPluginEnabled() — persist user-intent enable/disable (D-27-4)
+// ---------------------------------------------------------------------------
+
+void PluginManager::setPluginEnabled(QString const& pluginId, bool enabled) {
+    if (enabled) {
+        // Clear the persisted disabled flag.
+        {
+            QSettings settings;
+            settings.remove(disabledKey(pluginId));
+        }
+        qInfo("PluginManager: user-enabled plugin '%s' (QSettings cleared)", qPrintable(pluginId));
+
+        // If the manifest is discoverable and the plugin is not already live, spawn it now.
+        if (m_live.count(pluginId) == 0) {
+            // Re-scan to find the manifest for this pluginId.
+            std::vector<PluginManifest> const candidates = discover();
+            for (auto const& m : candidates) {
+                QString candidateKey;
+                if (!m.sourceDir.isEmpty()) {
+                    candidateKey = QFileInfo(m.sourceDir).fileName();
+                } else if (!m.codePath.isEmpty()) {
+                    candidateKey = m.codePath;
+                } else {
+                    candidateKey = m.name;
+                }
+                if (candidateKey == pluginId) {
+                    spawn(m);
+                    break;
+                }
+            }
+        }
+    } else {
+        // Persist the disabled flag.
+        {
+            QSettings settings;
+            settings.setValue(disabledKey(pluginId), true);
+        }
+        qInfo("PluginManager: user-disabled plugin '%s' (QSettings written)", qPrintable(pluginId));
+
+        // Tear down the live plugin if present (mirror the crash-path teardown).
+        auto it = m_live.find(pluginId);
+        if (it != m_live.end()) {
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+            // Step 1: allow the plugin to flush its state.
+            if (m_server) {
+                m_server->sendEvent(pluginId, QStringLiteral("exitApp"));
+            }
+#endif
+            // Step 2 + 3: terminate (1 s grace), then kill.
+            if (it->second.process) {
+                it->second.process->terminate();
+                if (!it->second.process->waitForFinished(1000)) {
+                    it->second.process->kill();
+                }
+            }
+            m_live.erase(it);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------

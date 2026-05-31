@@ -209,8 +209,31 @@ public:
      */
     void disableWithNotice(QString const& uuid, QString const& reason);
 
-    /// @return true if @p uuid is in the disabled set.
+    /// @return true if @p uuid is in the session crash-disabled set (m_disabled).
     [[nodiscard]] bool isDisabled(QString const& uuid) const;
+
+    /**
+     * @brief Persist the user intent to enable or disable a plugin.
+     *
+     * **User-disable** (enabled == false):
+     *   - Writes `plugins/disabled/<pluginId> = true` to QSettings.
+     *   - Tears down the live plugin if it is currently running (sends
+     *     `exitApp`, terminates process, erases from `m_live`).
+     *   - Distinct from the session-only crash-disable (`m_disabled` /
+     *     `disableWithNotice`): a user-disable survives app restart; a
+     *     crash-disable does not.
+     *
+     * **User-enable** (enabled == true):
+     *   - Removes `plugins/disabled/<pluginId>` from QSettings.
+     *   - If the plugin's manifest is discoverable and it is NOT already
+     *     live, calls `spawn()` to start it immediately.
+     *
+     * @param pluginId  The `.sdPlugin` directory-name key used in `m_live`
+     *                  (e.g. `"com.example.myplugin.sdPlugin"`).
+     * @param enabled   true = enable (clear persisted flag); false = disable
+     *                  (persist flag + tear down).
+     */
+    void setPluginEnabled(QString const& pluginId, bool enabled);
 
     /**
      * @brief Test seam: return the argv that would be passed to QProcess for @p uuid.
@@ -247,6 +270,21 @@ signals:
 private:
     /// Resolve the platform-appropriate CodePath from the manifest.
     [[nodiscard]] static QString resolveCodePath(PluginManifest const& manifest);
+
+    /**
+     * @brief Single shared predicate consulted by both the launch loop (discover+spawn)
+     *        and `rediscover()` to decide whether a plugin should be skipped at spawn
+     *        time. Returns true if the plugin is in the QSettings persisted disabled-set.
+     *
+     * Checking ONLY the persisted user-disable (QSettings `plugins/disabled/<pluginId>`).
+     * The session crash-disable (`m_disabled`) is NOT checked here — the crash path
+     * has its own path via `isDisabled()`. Keeping the two predicates separate is the
+     * T-27-DISABLE-LEAK mitigation: crash-disable recovers on restart; user-disable does not.
+     *
+     * @param pluginId  `.sdPlugin` directory-name key (e.g. "com.example.myplugin.sdPlugin").
+     * @return true if the user has persisted a disabled flag for @p pluginId.
+     */
+    [[nodiscard]] static bool shouldSkipSpawn(QString const& pluginId);
 
     /// Build the JSON string passed as the `-info` argv to spawned plugins.
     /// Shape: `{application:{version,platform},devicePixelRatio:1,devices:[]}`.
