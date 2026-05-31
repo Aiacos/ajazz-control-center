@@ -67,20 +67,48 @@ QString normaliseImagePath(std::string const& stored) {
 } // namespace
 
 StreamDockControlService::StreamDockControlService(DeviceLookup lookup, QObject* parent)
-    : QObject(parent), m_lookup(std::move(lookup)), m_drainTimer(new QTimer(this)) {
+    : QObject(parent), m_lookup(std::move(lookup)), m_drainTimer(new QTimer(this)),
+      m_keepAliveTimer(new QTimer(this)) {
     m_drainTimer->setSingleShot(true);
     m_drainTimer->setTimerType(Qt::CoarseTimer);
     connect(m_drainTimer, &QTimer::timeout, this, &StreamDockControlService::drainPendingWrites);
+    initKeepAliveTimer();
 }
 
 StreamDockControlService::StreamDockControlService(DeviceLookup lookup,
                                                    ProfileAccessor profileAccessor,
                                                    QObject* parent)
     : QObject(parent), m_lookup(std::move(lookup)), m_profileAccessor(std::move(profileAccessor)),
-      m_drainTimer(new QTimer(this)) {
+      m_drainTimer(new QTimer(this)), m_keepAliveTimer(new QTimer(this)) {
     m_drainTimer->setSingleShot(true);
     m_drainTimer->setTimerType(Qt::CoarseTimer);
     connect(m_drainTimer, &QTimer::timeout, this, &StreamDockControlService::drainPendingWrites);
+    initKeepAliveTimer();
+}
+
+void StreamDockControlService::initKeepAliveTimer() {
+    // ~1 s CRT CONNECT keep-alive (DISPLAY/idle-wedge fix): the AKP05E display
+    // controller idles off into a backlit-but-black wedge (recoverable only by a
+    // physical replug) unless the host keeps poking it -- mirajazz/probe send
+    // CONNECT at this cadence. Repeating; armed only while an IDisplayCapable
+    // device is active (started/stopped in setActiveDevice).
+    m_keepAliveTimer->setSingleShot(false);
+    m_keepAliveTimer->setInterval(kKeepAliveIntervalMs);
+    m_keepAliveTimer->setTimerType(Qt::CoarseTimer);
+    connect(m_keepAliveTimer, &QTimer::timeout, this, &StreamDockControlService::sendKeepAlive);
+}
+
+void StreamDockControlService::sendKeepAlive() {
+    if (!m_activeDevice) {
+        m_keepAliveTimer->stop();
+        return;
+    }
+    // keepAlive() is a no-op on non-display devices and best-effort (never throws)
+    // on the AKP05-class backends that implement it.
+    auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
+    if (disp != nullptr) {
+        disp->keepAlive();
+    }
 }
 
 StreamDockControlService::~StreamDockControlService() = default;
@@ -114,6 +142,10 @@ void StreamDockControlService::setProfileAccessor(ProfileAccessor accessor) {
 // ---------------------------------------------------------------------------
 
 void StreamDockControlService::setActiveDevice(QString const& codename) {
+    // Pause keep-alive while we (re)resolve; it is re-armed only on full success
+    // below (device open + IDisplayCapable). Leaving it running against a
+    // half-resolved or yanked handle would poke a stale device.
+    m_keepAliveTimer->stop();
     if (!m_lookup) {
         AJAZZ_LOG_WARN("stream-dock-control", "setActiveDevice: DeviceLookup not set");
         return;
@@ -170,6 +202,11 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
                        e.what());
         // Non-fatal: device is open; panel may just be dark.
     }
+
+    // Device is open and display-capable: arm the keep-alive so the panel does
+    // not idle off into the backlit-but-black wedge. keepAlive() is a no-op on
+    // backends that don't implement it (non-AKP05), so this is harmless there.
+    m_keepAliveTimer->start();
 }
 
 void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage const& img) {

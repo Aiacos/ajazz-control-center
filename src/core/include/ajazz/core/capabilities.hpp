@@ -196,6 +196,17 @@ public:
      * all pending image transfers.
      */
     virtual void flush() = 0;
+
+    /**
+     * @brief Periodic keep-alive tick to stop the display controller idling off.
+     *
+     * Default no-op. AKP05-class Stream Docks override this to emit a
+     * `CRT CONNECT` packet (the host calls it ~1 s while the device is active):
+     * without it the panel goes backlit-but-black after a short idle and only a
+     * physical replug recovers it (hardware-confirmed 2026-05-31 on the AKP05E).
+     * Best-effort — implementations must not throw on a transient write failure.
+     */
+    virtual void keepAlive() {}
 };
 
 // -----------------------------------------------------------------------------

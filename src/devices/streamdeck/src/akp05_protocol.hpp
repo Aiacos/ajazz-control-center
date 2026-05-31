@@ -123,6 +123,14 @@ inline constexpr std::array<std::uint8_t, 3> CmdLogo{0x4c,
                                                      0x4f,
                                                      0x47}; ///< Firmware boot-logo upload "LOG".
 
+// 7-byte "CONNECT" keep-alive command word. mirajazz's keep_alive() and the
+// scripts/akp05_color_probe.py harness both send `CRT CONNECT` at ~1 s cadence
+// to stop the display controller wedging when idle (hardware-confirmed
+// 2026-05-31: without it the panel goes backlit-but-black after idle and only a
+// physical replug recovers it). Body occupies buffer offsets 5..11.
+inline constexpr std::array<std::uint8_t, 7>
+    CmdConnect{0x43, 0x4f, 0x4e, 0x4e, 0x45, 0x43, 0x54}; ///< "CONNECT" keep-alive.
+
 /**
  * @brief Build the zero-padded 1024-byte base packet for any command word.
  *
@@ -229,6 +237,15 @@ buildEncoderImageHeader(std::uint8_t encoderIndex, std::uint16_t jpegSize);
  * occasional firmware desync on large image bursts.
  */
 [[nodiscard]] std::array<std::uint8_t, PacketSize> buildUploadFinished();
+
+/**
+ * @brief Build the `CRT CONNECT` keep-alive packet (7-byte command word, no payload).
+ *
+ * "CONNECT" occupies buffer offsets 5..11 (CmdConnect). Sent periodically
+ * (~1 s) while a device is active to keep the display controller awake — see
+ * CmdConnect for the hardware rationale.
+ */
+[[nodiscard]] std::array<std::uint8_t, PacketSize> buildConnect();
 
 /**
  * @brief Build the header packet for a touch-strip rect-addressable image (DRA).

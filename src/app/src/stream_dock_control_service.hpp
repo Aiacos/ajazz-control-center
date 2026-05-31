@@ -387,7 +387,18 @@ private slots:
     /// clear the map. Runs on the GUI thread via QTimer::singleShot (Pitfall 3).
     void drainPendingWrites();
 
+    /// Keep-alive tick: poke the active IDisplayCapable device (CRT CONNECT on
+    /// AKP05-class backends) so the panel does not idle off into the
+    /// backlit-but-black wedge. No-op when no display device is active.
+    void sendKeepAlive();
+
 private:
+    /// Configure the repeating keep-alive timer (shared by both constructors).
+    void initKeepAliveTimer();
+
+    /// Keep-alive cadence. ~1 s matches mirajazz keep_alive() and the probe.
+    static constexpr int kKeepAliveIntervalMs = 1000;
+
     DeviceLookup m_lookup;
     ProfileAccessor m_profileAccessor;
 
@@ -421,6 +432,10 @@ private:
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};
+
+    /// Repeating ~1 s keep-alive timer; armed only while an IDisplayCapable
+    /// device is active (idle-wedge mitigation — see initKeepAliveTimer).
+    QTimer* m_keepAliveTimer{nullptr};
 
     /// Current carousel position index (0 = root, 1+ = sorted page ids).
     /// Maintained across navigate() calls; reset when a new profile is loaded.

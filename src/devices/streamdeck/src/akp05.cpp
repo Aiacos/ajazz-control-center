@@ -144,6 +144,20 @@ std::array<std::uint8_t, PacketSize> buildUploadFinished() {
     return pkt;
 }
 
+std::array<std::uint8_t, PacketSize> buildConnect() {
+    // "CONNECT" keep-alive: "CRT" prefix at bytes 0..2, bytes 3..4 zero per the
+    // family convention, then the 7-byte CmdConnect word at bytes 5..11. Matches
+    // mirajazz keep_alive() and scripts/akp05_color_probe.py (hardware-confirmed).
+    std::array<std::uint8_t, PacketSize> pkt{};
+    pkt[0] = CmdPrefix[0];
+    pkt[1] = CmdPrefix[1];
+    pkt[2] = CmdPrefix[2];
+    for (std::size_t i = 0; i < CmdConnect.size(); ++i) {
+        pkt[5 + i] = CmdConnect[i];
+    }
+    return pkt;
+}
+
 /** @brief Build the header packet for a key-image transfer.
  *
  *  The firmware expects one header packet followed immediately by one or more
@@ -670,6 +684,21 @@ public:
     void flush() override {
         auto const pkt = akp05::buildCmdHeader(akp05::CmdStop);
         (void)m_transport->write(pkt);
+    }
+
+    // CRT CONNECT keep-alive. The host pumps this ~1 s while the device is active
+    // (StreamDockControlService timer) so the display controller does not idle
+    // off into the backlit-but-black wedge that needs a physical replug to clear
+    // (hardware-confirmed 2026-05-31). Best-effort: a transient write failure
+    // (e.g. a device yank between ticks) must not escape the keep-alive tick.
+    void keepAlive() override {
+        if (!m_transport->isOpen()) {
+            return;
+        }
+        try {
+            (void)m_transport->write(akp05::buildConnect());
+        } catch (std::exception const&) { /* best-effort keep-alive */
+        }
     }
 
     // ---- IEncoderCapable ----------------------------------------------------
