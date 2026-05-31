@@ -308,3 +308,255 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
 
     PluginCatalogModel::setPluginsDirOverride(QString{});
 }
+
+// ---------------------------------------------------------------------------
+// Phase 28 Plan 02: VisibleInActionsList filter, diagnostic counters,
+// extended QVariantMap (affordanceMask, controllers, new fields).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("CatalogOffline VisibleInActionsList false filters action", "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    // 3-action manifest: action A is visible, action B has VisibleInActionsList:false,
+    // action C is visible. installedActions() must return only A and C (2 rows).
+    QString const pluginDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.visibility.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Visibility Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.visibility.actionA",
+          "Name": "Visible Action A",
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.visibility.actionB",
+          "Name": "Hidden Internal Action",
+          "VisibleInActionsList": false,
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.visibility.actionC",
+          "Name": "Visible Action C",
+          "Controllers": ["Knob"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+
+    // Only 2 visible actions; the hidden one (actionB) must be absent.
+    REQUIRE(actions.size() == 2);
+    auto const a0 = actions.at(0).toMap();
+    auto const a1 = actions.at(1).toMap();
+    CHECK(a0.value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.visibility.actionA"));
+    CHECK(a1.value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.visibility.actionC"));
+    // Ensure the hidden action UUID is not present in any row.
+    for (int i = 0; i < actions.size(); ++i) {
+        CHECK(actions.at(i).toMap().value(QStringLiteral("actionId")).toString() !=
+              QStringLiteral("com.example.visibility.actionB"));
+    }
+}
+
+TEST_CASE("CatalogOffline diagnostic hidden count vs error count", "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    // Plant a manifest with:
+    //   - 1 visible action (fully valid)
+    //   - 1 hidden action (VisibleInActionsList: false) -> hiddenByVisibility count
+    //   - 1 malformed action (empty UUID) -> skippedUuidName count
+    QString const pluginDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.diagnostic.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Diagnostic Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.diagnostic.visible",
+          "Name": "Visible Action",
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.diagnostic.hidden",
+          "Name": "Hidden Action",
+          "VisibleInActionsList": false,
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "",
+          "Name": "Malformed No UUID",
+          "Controllers": ["Keypad"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    // Only the 1 visible action must appear.
+    REQUIRE(actions.size() == 1);
+    CHECK(actions.at(0).toMap().value(QStringLiteral("actionId")).toString() ==
+          QStringLiteral("com.example.diagnostic.visible"));
+
+    // Diagnostic accessor must distinguish hidden-by-visibility from error-skip.
+    QVariantMap const diag = model.lastScanDiagnostics();
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+
+    CHECK(diag.value(QStringLiteral("installedCount")).toInt() == 1);
+    // hidden-by-visibility is NOT an error: separate counter.
+    CHECK(diag.value(QStringLiteral("hiddenByVisibility")).toInt() == 1);
+    // empty UUID/Name skip is an error.
+    CHECK(diag.value(QStringLiteral("skippedUuidName")).toInt() == 1);
+    // The two must differ (Pitfall 7 guard).
+    CHECK(diag.value(QStringLiteral("hiddenByVisibility")).toInt() !=
+          diag.value(QStringLiteral("skippedUuidName")).toInt() + 1);
+}
+
+TEST_CASE("CatalogOffline controllers in output map", "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    QString const pluginDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.controllers.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Controllers Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.controllers.knob",
+          "Name": "Knob Action",
+          "Controllers": ["Knob"], "States": [ {} ] },
+        { "UUID": "com.example.controllers.nocontrollers",
+          "Name": "No Controllers Action",
+          "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+
+    REQUIRE(actions.size() == 2);
+    auto const knobRow = actions.at(0).toMap();
+    auto const noCtlRow = actions.at(1).toMap();
+
+    // controllers field must be present and contain the manifest value.
+    CHECK(knobRow.value(QStringLiteral("controllers")).toStringList() ==
+          QStringList{QStringLiteral("Knob")});
+    // absent Controllers -> empty list.
+    CHECK(noCtlRow.value(QStringLiteral("controllers")).toStringList().isEmpty());
+}
+
+TEST_CASE("CatalogOffline affordanceMask in output map", "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    QString const pluginDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.affordance.sdPlugin"));
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Affordance Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.affordance.keypad",
+          "Name": "Keypad Action",
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.affordance.knob",
+          "Name": "Knob Action",
+          "Controllers": ["Knob"], "States": [ {} ] },
+        { "UUID": "com.example.affordance.both",
+          "Name": "Key and Dial Action",
+          "Controllers": ["Keypad", "Knob"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+
+    QVariantList const actions = model.installedActions();
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+
+    REQUIRE(actions.size() == 3);
+    auto const keypadRow = actions.at(0).toMap();
+    auto const knobRow = actions.at(1).toMap();
+    auto const bothRow = actions.at(2).toMap();
+
+    // Key=1, Dial=2, TouchZone=4
+    CHECK(keypadRow.value(QStringLiteral("affordanceMask")).toInt() == 1); // Key only
+    CHECK(knobRow.value(QStringLiteral("affordanceMask")).toInt() == 2);   // Dial only
+    CHECK(bothRow.value(QStringLiteral("affordanceMask")).toInt() == 3);   // Key + Dial
+}

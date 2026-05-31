@@ -348,6 +348,12 @@ int PluginCatalogModel::installedCount() const {
 QVariantList PluginCatalogModel::installedActions() const {
     QVariantList out;
 
+    // Diagnostic counters (PLUGIN-18): hidden-by-visibility is NOT an error.
+    int hiddenCount = 0;
+    int errorSkipCount = 0;
+    int parseFailureCount = 0;
+    int totalScanned = 0;
+
     QString const pluginsDirPath = userPluginsDir();
     QDir const dir(pluginsDirPath);
     if (!dir.exists()) {
@@ -372,6 +378,7 @@ QVariantList PluginCatalogModel::installedActions() const {
 
         auto const parsed = parsePluginManifest(json);
         if (!parsed) {
+            ++parseFailureCount;
             continue; // unparsable / missing required keys (T-18-MANIFEST)
         }
         if (!manifestRunnableHere(*parsed, platform, appVer)) {
@@ -379,8 +386,17 @@ QVariantList PluginCatalogModel::installedActions() const {
         }
 
         for (PluginAction const& action : parsed->actions) {
+            ++totalScanned;
+            // Filter intentionally hidden actions BEFORE the UUID/Name check so
+            // they are counted separately and not surfaced as errors (Pitfall 7,
+            // PLUGIN-18, T-28-05 VisibleInActionsList filter).
+            if (!action.visibleInActionsList) {
+                ++hiddenCount;
+                continue;
+            }
             if (action.uuid.isEmpty() || action.name.isEmpty()) {
-                continue; // an action with no id cannot be bound or routed
+                ++errorSkipCount; // malformed — countable diagnostic
+                continue;         // an action with no id cannot be bound or routed
             }
 
             // Prefer the per-action icon, fall back to the plugin icon. Elgato
@@ -424,11 +440,37 @@ QVariantList PluginCatalogModel::installedActions() const {
             // PIBridge uses (AppDataLocation/plugins/<pluginUuid>/settings/).
             m.insert(QStringLiteral("pluginUuid"), entry);
             m.insert(QStringLiteral("controllers"), action.controllers);
+            // Phase-28 Plan-02 extensions (PLUGIN-18 / PLUGIN-20):
+            m.insert(QStringLiteral("affordanceMask"), affordanceMask(action.controllers));
+            m.insert(QStringLiteral("visibleInActionsList"), action.visibleInActionsList);
+            m.insert(QStringLiteral("stateCount"), static_cast<int>(action.states.size()));
+            m.insert(QStringLiteral("disableAutomaticStates"), action.disableAutomaticStates);
+            m.insert(QStringLiteral("defaultSettings"),
+                     QString::fromStdString(action.defaultSettings));
+            m.insert(QStringLiteral("encoderLayout"), action.encoderBlock.layout);
             out.append(m);
         }
     }
 
+    // Persist diagnostic counts for lastScanDiagnostics() so QML / tests can
+    // observe the skip breakdown without re-scanning. installedActions() is
+    // const so the members are declared mutable (PLUGIN-18).
+    m_lastInstalledCount = static_cast<int>(out.size());
+    m_lastHiddenByVisibility = hiddenCount;
+    m_lastSkippedUuidName = errorSkipCount;
+    m_lastSkippedParseFailure = parseFailureCount;
+    m_lastTotalScanned = totalScanned;
+
     return out;
+}
+
+QVariantMap PluginCatalogModel::lastScanDiagnostics() const {
+    return QVariantMap{
+        {QStringLiteral("installedCount"), m_lastInstalledCount},
+        {QStringLiteral("hiddenByVisibility"), m_lastHiddenByVisibility},
+        {QStringLiteral("skippedUuidName"), m_lastSkippedUuidName},
+        {QStringLiteral("skippedParseFailure"), m_lastSkippedParseFailure},
+    };
 }
 
 QVariantMap PluginCatalogModel::actionInfo(QString const& actionId) const {

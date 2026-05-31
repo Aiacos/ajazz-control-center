@@ -203,6 +203,20 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
+     * @brief Diagnostic counters from the most recent installedActions() scan.
+     *
+     * Returns a QVariantMap with integer keys:
+     *   - @c installedCount      — number of actions returned by installedActions().
+     *   - @c hiddenByVisibility  — actions filtered because VisibleInActionsList=false.
+     *   - @c skippedUuidName     — actions skipped due to empty UUID or Name.
+     *   - @c skippedParseFailure — plugins whose manifest failed to parse entirely.
+     *
+     * Hidden actions are intentionally NOT counted as errors (Pitfall 7, PLUGIN-18).
+     * Returns all-zeros before the first installedActions() call.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantMap lastScanDiagnostics() const;
+
+    /**
      * @brief Resolve a single installed action by its UUID (Workstream C).
      *
      * Returns the same QVariantMap shape as one @ref installedActions entry
@@ -509,6 +523,19 @@ public:
 signals:
     /// Emitted when the catalogue size changes (after @ref reload()).
     void countChanged();
+
+    /**
+     * @brief Emitted after installedActions() completes with per-category skip counts.
+     *
+     * @p errorSkipCount  = empty-UUID/Name skips.
+     * @p hiddenCount     = intentionally hidden (VisibleInActionsList=false) — NOT errors.
+     * @p parseFailureCount = plugins that could not be parsed at all.
+     * @p totalScanned    = total action entries examined (including hidden + skipped).
+     */
+    void skippedActionsChanged(int errorSkipCount,
+                               int hiddenCount,
+                               int parseFailureCount,
+                               int totalScanned);
     /// Emitted whenever an install / uninstall flips a row's state.
     void installedCountChanged();
     /// Emitted whenever @ref streamdockState changes.
@@ -577,6 +604,13 @@ private:
 
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
+
+    // Last-scan diagnostic counters (from installedActions()).
+    mutable int m_lastInstalledCount = 0;
+    mutable int m_lastHiddenByVisibility = 0;
+    mutable int m_lastSkippedUuidName = 0;
+    mutable int m_lastSkippedParseFailure = 0;
+    mutable int m_lastTotalScanned = 0;
 
     /// QSettings-backed flag; default true (online catalog on unless the user
     /// turned it off). Network stays fully gated on this flag — see ctor.
