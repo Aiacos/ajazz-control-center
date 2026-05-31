@@ -84,9 +84,16 @@ std::wstring utf8ToWide(std::string const& s) {
 }
 
 /// Spawn a child process synchronously, return its exit code, or -1
-/// on spawn failure. `_wspawnvp(_P_WAIT, …)` returns the child's
+/// on spawn failure. `_wspawnv(_P_WAIT, …)` returns the child's
 /// exit code on success and -1 on failure (errno set), so the
 /// returned value drops in for the POSIX `runChild` contract.
+///
+/// WR-02 / CWE-426: this is `_wspawnv`, NOT `_wspawnvp` — there is no
+/// `p`-variant `$PATH` search. argv[0] is resolved to a concrete,
+/// existing interpreter path by the caller (verifyManifest's
+/// resolveRealPython + GetFileAttributesA guard) BEFORE reaching here,
+/// so a hijacked %PATH% cannot substitute a fake python3.exe. Matches
+/// the POSIX backend's "argv[0] absolute, no PATH lookup" contract.
 int runChild(std::vector<std::string> const& argv) {
     if (argv.empty()) {
         return -1;
@@ -103,7 +110,7 @@ int runChild(std::vector<std::string> const& argv) {
     }
     rawArgv.push_back(nullptr);
 
-    intptr_t const rc = ::_wspawnvp(_P_WAIT, rawArgv[0], rawArgv.data());
+    intptr_t const rc = ::_wspawnv(_P_WAIT, rawArgv[0], rawArgv.data());
     if (rc < 0) {
         std::fprintf(stderr, "spawn %s: errno %d\n", argv[0].c_str(), errno);
         return -1;
@@ -165,8 +172,25 @@ ManifestVerifyResult verifyManifest(std::filesystem::path const& manifestPath,
     // Resolve "python3" to a real interpreter, skipping the Microsoft Store
     // App Execution Alias stub (see win32_python_resolve.hpp) so verification
     // works on a default python.org install (python.exe, no python3.exe).
+    //
+    // WR-02 / CWE-426: mirror the POSIX backend's fail-closed guard
+    // (manifest_signer.cpp resolveTrustedExecutable + the pythonExe.empty()
+    // check). resolveRealPython() returns the bare name UNCHANGED when it
+    // cannot resolve a concrete interpreter, and runChild() spawns argv[0]
+    // with _wspawnv (NOT _wspawnvp), which performs NO $PATH search — but
+    // only an ABSOLUTE/concrete argv[0] is safe to spawn that way. Reject
+    // anything that did not resolve to an existing on-disk file: a writable
+    // dir prepended to %PATH% dropping a fake python3.exe must NEVER be able
+    // to forge a SignatureState::Valid verdict. Fail closed to Invalid
+    // (signature block present but unverifiable) exactly like POSIX.
+    std::string const pythonExe = win32::resolveRealPython(config.pythonExecutable);
+    if (pythonExe.empty() || ::GetFileAttributesA(pythonExe.c_str()) == INVALID_FILE_ATTRIBUTES) {
+        result.signatureState = SignatureState::Invalid;
+        return result; // valid=false — interpreter unresolvable, fail closed
+    }
+
     std::vector<std::string> const argv = {
-        win32::resolveRealPython(config.pythonExecutable),
+        pythonExe,
         config.verifierScript.string(),
         "verify",
         "--manifest",
