@@ -273,7 +273,27 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             p.end();
             control->assignMainImage(strip);
         }
-        return QJsonObject{{"rendered", count}, {"main", withMain}};
+        // encoders:true -> paint the 4 touch-strip zones (assignEncoderImage 0..3),
+        // each a distinct colour labelled E1..E4, so the BAT-wire-1..4 strip path
+        // can be verified on the live panel.
+        bool const withEncoders = params.value("encoders").toBool(false);
+        if (withEncoders) {
+            for (int e = 0; e < 4; ++e) {
+                QImage z(128, 128, QImage::Format_RGBA8888);
+                z.fill(QColor::fromHsv((e * 90) % 360, 200, 230));
+                QPainter p(&z);
+                p.setRenderHint(QPainter::TextAntialiasing, true);
+                p.setPen(Qt::white);
+                QFont f = p.font();
+                f.setPixelSize(56);
+                f.setBold(true);
+                p.setFont(f);
+                p.drawText(z.rect(), Qt::AlignCenter, QStringLiteral("E%1").arg(e + 1));
+                p.end();
+                control->assignEncoderImage(static_cast<std::uint8_t>(e), z);
+            }
+        }
+        return QJsonObject{{"rendered", count}, {"main", withMain}, {"encoders", withEncoders}};
     });
 
     // ---- Input simulation (PluginDebugService) -------------------------
