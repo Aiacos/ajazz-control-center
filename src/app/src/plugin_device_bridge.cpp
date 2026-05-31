@@ -753,6 +753,55 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
         }
     }
+
+    // Enumerate touch-zone bindings (0-based zone index in Profile::touchZones).
+    //
+    // CONVENTION LOCK (A2 / Pitfall 5): touch-zone contexts are registered under
+    // controller="Encoder", row=0, column=zoneIndex.  This MUST match the locked
+    // TouchUp lookup in onDeviceEvent (~line 628):
+    //     m_registry.byCoord(deviceId, "Encoder", 0, zone)
+    // Do NOT change this registration convention without also changing that lookup.
+    for (auto const& [zoneIdx, tzBinding] : prof.touchZones) {
+        for (auto const& action : tzBinding.onTap) {
+            if (action.kind != core::ActionKind::Plugin) {
+                continue;
+            }
+            QString const actionId = QString::fromStdString(action.id);
+            if (actionId.isEmpty()) {
+                continue;
+            }
+            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            if (owner.isEmpty()) {
+                continue;
+            }
+            if (!pluginUuid.isEmpty() && owner != pluginUuid) {
+                continue;
+            }
+
+            // Register under controller="Encoder", row=0, column=zoneIndex.
+            ActionContext ctx;
+            ctx.deviceId = deviceId;
+            ctx.pageId = pageId;
+            ctx.row = 0;
+            ctx.column = static_cast<int>(zoneIdx);
+            ctx.controller = QStringLiteral("Encoder");
+            ctx.actionUUID = actionId;
+            ctx.pluginUuid = owner;
+
+            QString const ctxId = m_registry.registerContext(ctx);
+
+            QJsonObject const coords{
+                {QStringLiteral("row"), 0},
+                {QStringLiteral("column"), static_cast<int>(zoneIdx)},
+            };
+            QJsonObject const payload{
+                {QStringLiteral("context"), ctxId},
+                {QStringLiteral("coordinates"), coords},
+                {QStringLiteral("isInMultiAction"), false},
+            };
+            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+        }
+    }
 }
 
 void PluginDeviceBridge::retirePageContexts(QString const& deviceId,

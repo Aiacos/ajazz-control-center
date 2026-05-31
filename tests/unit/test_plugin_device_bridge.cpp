@@ -1427,4 +1427,118 @@ TEST_CASE("PluginDeviceBridgeE2E CR-02 two-device isolation keyDown routes to co
     CHECK(namesB2.contains(QStringLiteral("keyDown")));
 }
 
+// ---------------------------------------------------------------------------
+// 28-04: populateContextsForActivePage registers encoder + touch-zone contexts
+// ---------------------------------------------------------------------------
+
+// Test: encoder[0].onPress Plugin binding -> byCoord("akp05e","Encoder",0,0) has value
+// + willAppear emitted. Proves the existing encoder enumeration path and that
+// activeDeviceId() is accessible.
+TEST_CASE("PluginDeviceBridge populateContexts registers encoder plugin context",
+          "[plugin-device-bridge][e2e][lifecycle][PLUGIN-19]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Build a Profile with encoder[0].onPress bound to a plugin action.
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-enc";
+    prof.name = "Test Encoder";
+    prof.deviceCodename = "akp05e";
+
+    ajazz::core::EncoderBinding encBinding;
+    ajazz::core::Action encAct;
+    encAct.kind = ajazz::core::ActionKind::Plugin;
+    encAct.id = "com.test.plug.enc.action1";
+    encBinding.onPress.push_back(encAct);
+    prof.encoders[0] = std::move(encBinding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Connect a loopback client as "com.test.plug".
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Register the plugin with the bridge so ownerForActionUuid can resolve it.
+    // (mirrors the onPluginRegistered slot that fires in the live app when the
+    // plugin connects to the WebSocket server).
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    msgSpy.clear(); // discard the willAppear from onPluginRegistered itself
+
+    // Call populateContextsForActivePage directly (mirrors onDeviceConnected path).
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+
+    pump19(500);
+
+    // The ContextRegistry must have an entry at (akp05e, Encoder, row=0, col=0).
+    auto const ctxOpt =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 0, 0);
+    CHECK(ctxOpt.has_value());
+
+    // willAppear must have been emitted to the client.
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("willAppear")));
+}
+
+// Test: touchZones[1].onTap Plugin binding -> byCoord("akp05e","Encoder",0,1) has value
+// after populateContextsForActivePage.  This exercises the NEW touch-zone enumeration
+// path added in 28-04.  controller="Encoder" matches the LOCKED byCoord lookup in
+// onDeviceEvent's TouchUp case (~line 628).
+TEST_CASE("PluginDeviceBridge populateContexts registers touch zone as Encoder context",
+          "[plugin-device-bridge][e2e][lifecycle][PLUGIN-19]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Build a Profile with touchZones[1].onTap bound to a plugin action.
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-tz";
+    prof.name = "Test TouchZone";
+    prof.deviceCodename = "akp05e";
+
+    ajazz::core::TouchZoneBinding tzBinding;
+    ajazz::core::Action tzAct;
+    tzAct.kind = ajazz::core::ActionKind::Plugin;
+    tzAct.id = "com.test.plug.tz.action1";
+    tzBinding.onTap.push_back(tzAct);
+    prof.touchZones[1] = std::move(tzBinding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Connect a loopback client as "com.test.plug".
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Register the plugin with the bridge so ownerForActionUuid can resolve it.
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    msgSpy.clear(); // discard the willAppear from onPluginRegistered itself
+
+    // Call populateContextsForActivePage.
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+
+    pump19(500);
+
+    // Touch zone at index 1 must be registered under controller="Encoder", row=0, col=1.
+    // This matches the LOCKED onDeviceEvent TouchUp lookup:
+    //   m_registry.byCoord(deviceId, "Encoder", 0, zone)  (~line 628)
+    // Do NOT change that lookup — only feed it the registration it expects.
+    auto const ctxOpt =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 0, 1);
+    CHECK(ctxOpt.has_value());
+
+    // willAppear must have been emitted to the client.
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("willAppear")));
+}
+
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

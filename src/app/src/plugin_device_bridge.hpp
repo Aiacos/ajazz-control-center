@@ -446,6 +446,34 @@ public slots:
      */
     void onActivePageChanged(QString const& deviceId, QString const& pageId);
 
+    /**
+     * @brief Register contexts + send willAppear for every bound ActionKind::Plugin
+     *        action on the root page of the active profile that belongs to the
+     *        given plugin (or all registered plugins if pluginUuid is empty).
+     *
+     * Scoped to the root page (A6 simplification: multi-page navigation authority
+     * lives in Phase 16; the bridge populates only what is currently visible).
+     *
+     * Also public so that application.cpp can trigger it on profileChanged
+     * without a dedicated slot (PLUGIN-19 wiring).
+     *
+     * @param deviceId    Device codename, e.g. "akp05e".
+     * @param pluginUuid  If non-empty, only emit willAppear for this plugin's actions.
+     *                    If empty, emit for all registered plugins.
+     */
+    void populateContextsForActivePage(QString const& deviceId, QString const& pluginUuid = {});
+
+    /**
+     * @brief Return the most-recently-connected device codename.
+     *
+     * Empty when no device is connected. Exposed so application.cpp can guard
+     * the profileChanged -> populateContextsForActivePage lambda without needing
+     * a separate slot (PLUGIN-19 / T-28-09).
+     *
+     * Follows the inline-accessor style from branding_service.hpp:74.
+     */
+    [[nodiscard]] QString activeDeviceId() const noexcept { return m_activeDeviceId; }
+
 private:
     /// Dispatch setImage: decode data-URI, check ownership, call assignKeyImage
     /// (or paintPlaceholder on decode failure). No failure event sent back (§5).
@@ -473,20 +501,6 @@ private:
     void paintPlaceholder(ActionContext const& ctx, std::uint8_t keyCols);
 
     // ---- Phase 19-03 private helpers ---------------------------------------
-
-    /**
-     * @brief Register contexts + send willAppear for every bound ActionKind::Plugin
-     *        action on the root page of the active profile that belongs to the
-     *        given plugin (or all registered plugins if pluginUuid is empty).
-     *
-     * Scoped to the root page (A6 simplification: multi-page navigation authority
-     * lives in Phase 16; the bridge populates only what is currently visible).
-     *
-     * @param deviceId    Device codename, e.g. "akp05e".
-     * @param pluginUuid  If non-empty, only emit willAppear for this plugin's actions.
-     *                    If empty, emit for all registered plugins.
-     */
-    void populateContextsForActivePage(QString const& deviceId, QString const& pluginUuid = {});
 
     /**
      * @brief Send willDisappear for every context belonging to the given plugin
