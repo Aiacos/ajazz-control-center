@@ -4,8 +4,8 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T18:30:00.000Z'
-last_activity: 2026-05-31 -- Phase 27 EXECUTED (5/5 plans, sequential-on-main reusing build/linux-release; verifier 6/6 must-haves PASS, status human_needed for QML visual affordance + optional live smoke). Full suite 711/711 pass (was 645). CR-01 tampered-always-refuses gate proven with a real Ed25519 sign-then-flip-byte test. Commits 416ccc7..ffc4f83; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
+last_updated: '2026-05-31T19:00:00.000Z'
+last_activity: 2026-05-31 -- Phase 27 EXECUTED + code-reviewed + fixed (5/5 plans; verifier 6/6 PASS human_needed for QML visual + optional live smoke; code review 0 Critical/4 Warning all fixed incl. WR-01 dead per-plugin-Allow now functional + WR-02 Win32 CWE-426 fail-closed). Full suite 713/713 (was 645). CR-01 tampered-always-refuses proven with a real Ed25519 sign-then-flip-byte test AND a forged-allowed-key test. Commits 416ccc7..dcd18c4; earlier -- Phase 27 PLANNED (plan-checker PASS); plugin install/run epic reconciled into GSD; Phase 25 re-walk + AKP05E robustness fixes; v1.3 audit gaps_found (archive blocked)
 progress:
   total_phases: 19
   completed_phases: 17
