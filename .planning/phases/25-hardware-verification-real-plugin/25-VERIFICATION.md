@@ -15,9 +15,9 @@ human_verification:
   - test: Touch-strip zone UI drop target (Test 6 affordance).
     expected: The device editor exposes a strip-zone drop target so a user can assign an image to a zone.
     why_human: NO_AFFORDANCE in the current KeyDesigner — deferred to Phase 26 (OpenDeck-shaped editor, GAP-25B). The underlying capability works (zones render via BAT wire 1..4, confirmed below).
-  - test: Sustained-session robustness (idle keep-alive + replug re-open).
+  - test: Sustained-session robustness (idle keep-alive + replug re-open) — RESOLVED 2026-05-31.
     expected: Panel stays lit during idle; survives a device power-cycle without an app restart.
-    why_human: Two operational gaps found during this re-walk (see Deferred). Both need a code follow-up + a live soak test.
+    why_human: Both gaps now FIXED + hardware-validated — VERIFY-OP-1 keep-alive (commit 5722ead, soak-tested) and VERIFY-OP-2 cache-evict-on-replug (commit decc85c, replug-tested). No longer pending.
 ---
 
 # Phase 25: Hardware Verification + Real Plugin — Verification Report (re-walk 2026-05-31)
@@ -46,19 +46,21 @@ This supersedes the PARTIAL 25-02 walkthrough (2026-05-28). Re-walked on the liv
 | 2,3,4,5,15,16 | Input round-trips                | BLOCKED       | **BLOCKED**           | Demo-unit 0x3004 input-streaming gap; needs retail unit/Frida                                       |
 | 13,14         | Real plugin handshake/setImage   | NOT_WALKED    | **NOT_WALKED**        | Needs a real .sdPlugin + Phase 26 editor; Test 14 output wire now reachable                         |
 
-## Deferred — operational robustness gaps found during this re-walk
+## Operational robustness gaps — found AND FIXED during this re-walk
 
-These are NEW findings (not render-correctness; the render is correct):
+Both NEW findings are now fixed and hardware-validated (2026-05-31):
 
-- **VERIFY-OP-1 — idle-wedge.** The control service holds the device open but
-  sends no periodic keep-alive. The display controller wedges when idle
-  (backlit/logo, writes don't paint) until a device restart/replug. The
-  reference probe sends `CRT CONNECT` every ~1 s. Fix: add a keep-alive timer in
-  `StreamDockControlService` (or the akp05 backend) + a live soak test.
-- **VERIFY-OP-2 — stale handle on replug.** A device power-cycle changes the
-  hidraw node (observed `hidraw12`→`hidraw13`); the app keeps writing to the old
-  fd. Today's workaround was an app restart. Fix: refresh the active handle on
-  hot-plug remove/add (the registry/control service should re-resolve + re-open).
+- **VERIFY-OP-1 — idle-wedge — FIXED (commit `5722ead`).** The display
+  controller wedged (backlit-but-black) when idle because the app sent no
+  keep-alive. Added a ~1 s `CRT CONNECT` keep-alive timer in
+  `StreamDockControlService` (akp05 `keepAlive()` override). Soak-tested: the
+  panel stays lit after multi-minute idle.
+- **VERIFY-OP-2 — stale handle on replug — FIXED (commit `decc85c`).** A
+  power-cycle re-enumerated onto a new hidraw node but the registry flyweight
+  cache returned the stale backend bound to the dead node. Added
+  `DeviceRegistry::invalidateOpenDevice()` called on hot-plug Removed so the
+  Arrived re-resolve rebuilds a fresh backend on the live node. Validated: after
+  an unplug/replug with the app running, a re-render paints — no app restart.
 
 ## Close-gate status
 
