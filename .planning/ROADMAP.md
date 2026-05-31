@@ -524,7 +524,23 @@ Plans:
 1. Concurrency regression test: ≥3 plugins keyed by distinct `.sdPlugin` dir names register concurrently; crashing one (3-in-30s) disables ONLY that plugin and leaves siblings' sockets/processes intact — guards the `5725cb0` shared-key collision and the `WR-02` HTML-no-respawn guard (PLUGIN-17).
 1. `ctest --preset linux-release -E qml` ≥ current count passed, 0 failed (no regressions). The Python OOP host (`src/plugins/`, SEC-003) is untouched — it remains the separate AJAZZ-Python ecosystem, not the Stream Dock runtime.
 
-**Plans**: ~4-5 (plan via `/gsd-plan-phase 27`). Mostly HW-free; the only hardware-adjacent item (plugin→device `setImage` via a bound profile action on the live AKP05E) is **explicitly out of scope** — it is Phase 25 live-verification debt (the unmet VERIFY-05/06 witness on the input-blocked `0x3004` demo unit). **Phase notes**: reconciliation-born phase; the install/run path already works for unsigned plugins via the env-var launch-sweep, so this phase is about *GUI parity + persistence + a regression net*, not net-new runtime capability.
+**Plans**: 5 plans (3 waves; max 2 concurrent per CLAUDE.md cap). Mostly HW-free; the only hardware-adjacent item (plugin→device `setImage` via a bound profile action on the live AKP05E) is **explicitly out of scope** — it is Phase 25 live-verification debt (the unmet VERIFY-05/06 witness on the input-blocked `0x3004` demo unit). **Phase notes**: reconciliation-born phase; the install/run path already works for unsigned plugins via the env-var launch-sweep, so this phase is about *GUI parity + persistence + a regression net*, not net-new runtime capability.
+
+Plans:
+
+**Wave 1**
+
+- [ ] 27-01-PLAN.md — PLUGIN-16 verifier Unsigned/Tampered split (SignatureState None/Valid/Invalid + VerifyVerdict::Unsigned) + installFromFile CR-01 gate (tampered ALWAYS refuses even with consent) + hostile-zip Catch2 tests (wave 1)
+
+**Wave 2** *(parallel; zero file overlap)*
+
+- [ ] 27-02-PLAN.md — PLUGIN-15 PluginManager::rediscover() (idempotent, spawns only new) + installFinished->rediscover wiring + hermetic idempotency test (wave 2)
+- [ ] 27-05-PLAN.md — PLUGIN-17 concurrency regression test (new tests/unit/test_plugin_concurrency.cpp): one crash disables only itself across 3 distinctly-keyed plugins + WR-02 HTML-no-respawn guard (wave 2)
+
+**Wave 3** *(parallel; zero file overlap; 03 depends 02, 04 depends 01)*
+
+- [ ] 27-03-PLAN.md — PLUGIN-15 persisted per-plugin enable/disable (QSettings plugins/disabled/<id> consulted by discover/spawn+rediscover) + setPluginEnabled + restart-survival test (wave 3)
+- [ ] 27-04-PLAN.md — PLUGIN-16 in-app trust UX: allowUnsignedPlugins setting + per-plugin allowPlugin() (tampered never consentable) + LoadedPluginsPage.qml toggle/allow action + Catch2 gate (wave 3)
 
 ## Progress
 
@@ -561,4 +577,4 @@ v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 
 | 24. Family Coverage AKP03/153/815              | v1.3      | 2/2            | Complete         | 2026-05-24 |
 | 25. Hardware Verification + Real Plugin(HW)    | v1.3      | 1/2            | In Progress      |            |
 | 26. OpenDeck-shaped Device Editor              | v1.3      | 7/7            | Complete         | 2026-05-28 |
-| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/?            | Not started      | —          |
+| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/5            | Not started      | —          |
