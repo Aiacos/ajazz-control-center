@@ -86,6 +86,7 @@ runtime (the Python OOP host stays as-is for SEC-003) · replan v1.3 from scratc
 - [x] **Phase 24: Family Coverage AKP03/153/815** — Same assign-image-and-press flow via the capability-generic service (per-family init + image format honored; AKP03 has 3 encoders). (DEVICES-10) (completed 2026-05-24)
 - [x] **Phase 25: Hardware Verification + Real Plugin** *(PARTIAL — reconciled 2026-05-28: 25-01 shipped (UAT runbook); 25-02 PARTIAL after operator walkthrough — 3 PASS (brightness, clear, hasClock honesty), 1 FAIL (Test 1 image-upload 3-layer regression: L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26), 1 NO_AFFORDANCE (Test 6 — no touch-strip drop target), 6 BLOCKED (demo unit 0x3004 input-streaming gap, awaits retail AKP05E/Mirabox N4/Frida path), 5 NOT_WALKED (gated on Phase 26 + real sdPlugin). Two new gaps GAP-25A/B routed to Phase 26.)* — AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) verified end-to-end (image, key press, encoder rotate+press, touch tap/swipe, brightness, clear); provisional §5 wire items reconciled; `hasClock=false` confirmed; **a real third-party `.sdPlugin` runs live**. HARDWARE-GATED. (VERIFY-05/06) (completed 2026-05-28)
 - [ ] **Phase 26: OpenDeck-shaped Device Editor** *(NEW 2026-05-28; closes GAP-25A + GAP-25B from Phase 25 partial)* — Replace the generic `KeyDesigner.qml` NxN tile grid with an Elgato Stream Deck / OpenDeck-pattern device-shaped editor: per-SKU geometry (AKP05E = 5×2 key grid + 4 encoder dials + 1 touch strip; AKP153 = 3×5; AKP03 = 2×3; AK980 = keyboard view; AJ-mouse = DPI/RGB-only panel), drag-drop action library, per-key + per-encoder-LCD + per-touch-strip-zone drop targets, **auto-wire `StreamDockControlService::setActiveDevice()` on sidebar selection-changed (closes GAP-25A)**. Research deliverable: comprehensive analysis of `nekename/OpenDeck` (Tauri/SvelteKit), `naerschhersch/opendeck-akp05` (Mirajazz plugin), and `4ndv/mirajazz` (Rust reference) — covering ALL AJAZZ / Mirabox SKUs OpenDeck supports, not just AKP05E. Delivers VERIFY-05 affordances + unblocks Phase 25 UAT resume. (UI-01, DISPLAY-11)
+- [ ] **Phase 27: Plugin Install/Trust/Persistence Hardening** *(NEW 2026-05-31; reconciles the 2026-05-30 plugin install/run epic — see STATE.md "2026-05-31 — Plugin install/run epic reconciliation")* — Close the gap between "plugins register over the WS" (shipped 2026-05-30, commits `02bed37`/`8e985f7`/`5725cb0`) and "plugins are fully installable, concurrent, and persistent **from the GUI**": **rediscover-after-install** (spawn a freshly installed `.sdPlugin` with NO app restart — no `rediscover()` exists today; `02bed37` only discovers once at launch), **GUI unsigned-install-with-consent** (split `verifyStagedPlugin`'s `Refused` verdict into unsigned-no-signature vs tampered-bad-signature so tampered ALWAYS refuses but unsigned installs with explicit consent — CR-01, named as the follow-up in `90d97e2`'s body), **in-app trust UX** (settings toggle + per-plugin "allow" action replacing the `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` env var), **persisted per-plugin enable/disable** (today `discover()` spawns every plugin in the dir unconditionally; a user-disabled plugin must stay disabled across restart), and a **concurrency regression guard** (N-plugin `.sdPlugin`-dir-name keying + one-crash-doesn't-disable-siblings, guarding the `5725cb0` fix). HW-free (optional debug-channel install→spawn smoke). The plugin→device `setImage` round-trip via a bound profile action on **real hardware** stays **Phase 25 live-debt**, NOT this phase. (PLUGIN-15/16/17)
 
 **Milestone constraints (load-bearing — do not lose these):**
 
@@ -506,6 +507,25 @@ Plans:
 
 - [x] 26-07-PLAN.md — REQ-26-E operator-gated re-walk of 25-UAT.md Tests 1 + 6 on live AKP05E demo unit; HARDWARE-GATED, autonomous=false (wave 5)
 
+### Phase 27: Plugin Install/Trust/Persistence Hardening
+
+**Goal**: Make the Stream Dock (`.sdPlugin`) plugin system fully usable, concurrent, and persistent **from the GUI** — closing the five gaps that remain after the 2026-05-30 install/run epic (commits `02bed37` PluginManager wired, `8e985f7` HTML in-process run-path, `0f6b949`/`90d97e2`/`5725cb0` id-keying + strict install). The runtime is already concurrent (Node/native = separate `QProcess`; HTML = per-plugin `QWebEnginePage`; `SdPluginServer` holds `std::vector<PluginConnection> m_connections` — 4 plugins proven concurrent). What is missing is the *install→run→persist* loop from the UI.
+
+**Depends on**: the 2026-05-30 plugin landing (PluginManager live at `application.cpp:799`; HTML path at `plugin_manager.cpp:399-442`; install-from-file at `plugin_catalog_model.cpp:668`; verifier at `plugin_verify_gate.cpp:36-82`; `PluginCrashTracker`). Reuses all of these. **No protocol or wire-format changes** (COD-031 + RE hard rules untouched).
+
+**Requirements**: PLUGIN-15 (rediscover + restart-survival), PLUGIN-16 (verifier unsigned-vs-tampered split + GUI consent + trust UX), PLUGIN-17 (concurrency regression guard). No parent `.planning/REQUIREMENTS.md` IDs — Phase 27 is a reconciliation follow-up that closes the install epic's named TODOs.
+
+**Success Criteria**:
+
+1. `PluginManager::rediscover()` exists and is connected to `PluginCatalogModel::installFinished` (or an equivalent signal) so installing a `.sdPlugin` from the GUI **spawns it live with NO app restart** — `connectedPluginCount()` increments. Verified via the debug channel (`plugin.installFromFile` + `plugin.rediscover` RPC, or installFromFile triggering rediscover directly). Re-scan spawns ONLY newly added plugins; already-live plugins are untouched (PLUGIN-15).
+1. `verifyStagedPlugin` splits `VerifyVerdict::Refused` into **Unsigned** (no signature block in manifest) vs **Tampered** (signature present but Ed25519-invalid). Tampered ALWAYS quarantines — even with `userConfirmedUnsigned==true`. Unsigned promotes when `userConfirmedUnsigned==true`. A Catch2 test builds a hostile tampered `.sdPlugin` zip (QZipWriter) and asserts it is refused *even with consent*, while an unsigned zip installs *with consent* (closes CR-01 — PLUGIN-16).
+1. An in-app trust UX replaces the env var: a settings toggle ("Allow unsigned plugins") + a per-plugin "Allow this plugin" action in `LoadedPluginsPage.qml` (which today shows only read-only trust chips). The trust decision persists (QSettings). `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` survives only as a CI/dev override (PLUGIN-16).
+1. Per-plugin **enabled/disabled** state persists across restart: a user-disabled plugin is NOT spawned by `discover()` on the next launch (today `discover()` spawns every `*.sdPlugin/` unconditionally; `m_disabled` is session-only). Round-trip proven by a hermetic test with `QStandardPaths::setTestModeEnabled` (PLUGIN-15).
+1. Concurrency regression test: ≥3 plugins keyed by distinct `.sdPlugin` dir names register concurrently; crashing one (3-in-30s) disables ONLY that plugin and leaves siblings' sockets/processes intact — guards the `5725cb0` shared-key collision and the `WR-02` HTML-no-respawn guard (PLUGIN-17).
+1. `ctest --preset linux-release -E qml` ≥ current count passed, 0 failed (no regressions). The Python OOP host (`src/plugins/`, SEC-003) is untouched — it remains the separate AJAZZ-Python ecosystem, not the Stream Dock runtime.
+
+**Plans**: ~4-5 (plan via `/gsd-plan-phase 27`). Mostly HW-free; the only hardware-adjacent item (plugin→device `setImage` via a bound profile action on the live AKP05E) is **explicitly out of scope** — it is Phase 25 live-verification debt (the unmet VERIFY-05/06 witness on the input-blocked `0x3004` demo unit). **Phase notes**: reconciliation-born phase; the install/run path already works for unsigned plugins via the env-var launch-sweep, so this phase is about *GUI parity + persistence + a regression net*, not net-new runtime capability.
+
 ## Progress
 
 **Execution Order:**
@@ -513,31 +533,32 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13. Phases 10, 11, 1
 
 v1.3 phases execute: 14 → 15 → 16 → 17 → 18 → 19 → 20 → 21 → 22 → 23 → 24 → 25 (replanned 2026-05-23). Phase 14 is the load-bearing foundation (persistent open + brightness + the first capability call reaching the device) and MUST land first. The device slice (15, 16) and the plugin SDK transport/protocol/spawn (17, 18) can proceed in parallel against a MockDevice subject to the 2-agent cap; **Phase 19 is the convergence point** (setImage end-to-end + input→plugin) and depends on 14/15/17/18. Phases 20-22 (Property Inspector, built-in actions, store) build on the SDK. Phase 24 (family coverage) lands after the 14-19 AKP05E slice proves the template. **Phases 23 and 25 are HARDWARE-GATED** (AKP05E connected, fw `V3.AKP05E.01.007`); Phase 25 (incl. running a real `.sdPlugin`) gates the milestone close.
 
-| Phase                                       | Milestone | Plans Complete | Status           | Completed  |
-| ------------------------------------------- | --------- | -------------- | ---------------- | ---------- |
-| 1. SEC-003 Plugin Host                      | v1.0      | 1/1            | Complete (retro) | 2026-05-03 |
-| 2. QML Singleton Sweep                      | v1.0      | 1/1            | Complete (retro) | 2026-05-04 |
-| 3. Architectural Decisions                  | v1.1      | 1/1            | Complete         | 2026-05-14 |
-| 4. Hot-plug Hardening                       | v1.1      | 7/7            | Complete         | 2026-05-14 |
-| 5. Time-Sync Scaffolding                    | v1.1      | 8/8            | Complete         | 2026-05-14 |
-| 6. CR-01 Win32 Env Fix                      | v1.1      | 3/3            | Complete         | 2026-05-14 |
-| 7. WR-01 Trust-Roots Parser                 | v1.1      | 3/3            | Complete         | 2026-05-14 |
-| 8. Scaffolded-Device Wiring                 | v1.1      | 4/4            | Complete         | 2026-05-14 |
-| 9. Research, Captures, Hygiene              | v1.2      | 6/7            | In Progress      |            |
-| 10. AKP05E (0x3004) Promotion               | v1.2      | 0/?            | Not started      | —          |
-| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm   | v1.2      | 0/?            | Not started      | —          |
-| 12. AK980 PRO Promotion                     | v1.2      | 0/?            | Not started      | —          |
-| 13. Catalogue + v1.1 UI Verifies Back-Fill  | v1.2      | 2/2            | Complete         | 2026-05-28 |
-| 14. Stream Dock Control Service             | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 15. Stream Dock Input Routing               | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 16. Device Controls + Persistence + Pages   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 17. Plugin Protocol Completion              | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 18. Plugin Manifest + Spawn + Lifecycle     | v1.3      | 4/4            | Complete         | 2026-05-24 |
-| 19. Device ↔ Plugin Bridge (setImage e2e)   | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 20. Property Inspector + Settings           | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 21. Built-in In-Process Actions             | v1.3      | 3/3            | Complete         | 2026-05-24 |
-| 22. Plugin Store / Local Install            | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 23. Auxiliary Display Surfaces (HW)         | v1.3      | 2/2            | Complete         | 2026-05-26 |
-| 24. Family Coverage AKP03/153/815           | v1.3      | 2/2            | Complete         | 2026-05-24 |
-| 25. Hardware Verification + Real Plugin(HW) | v1.3      | 1/2            | In Progress      |            |
-| 26. OpenDeck-shaped Device Editor           | v1.3      | 7/7            | Complete         | 2026-05-28 |
+| Phase                                          | Milestone | Plans Complete | Status           | Completed  |
+| ---------------------------------------------- | --------- | -------------- | ---------------- | ---------- |
+| 1. SEC-003 Plugin Host                         | v1.0      | 1/1            | Complete (retro) | 2026-05-03 |
+| 2. QML Singleton Sweep                         | v1.0      | 1/1            | Complete (retro) | 2026-05-04 |
+| 3. Architectural Decisions                     | v1.1      | 1/1            | Complete         | 2026-05-14 |
+| 4. Hot-plug Hardening                          | v1.1      | 7/7            | Complete         | 2026-05-14 |
+| 5. Time-Sync Scaffolding                       | v1.1      | 8/8            | Complete         | 2026-05-14 |
+| 6. CR-01 Win32 Env Fix                         | v1.1      | 3/3            | Complete         | 2026-05-14 |
+| 7. WR-01 Trust-Roots Parser                    | v1.1      | 3/3            | Complete         | 2026-05-14 |
+| 8. Scaffolded-Device Wiring                    | v1.1      | 4/4            | Complete         | 2026-05-14 |
+| 9. Research, Captures, Hygiene                 | v1.2      | 6/7            | In Progress      |            |
+| 10. AKP05E (0x3004) Promotion                  | v1.2      | 0/?            | Not started      | —          |
+| 11. AJAZZ 2.4G 8K Mouse Probe-and-Confirm      | v1.2      | 0/?            | Not started      | —          |
+| 12. AK980 PRO Promotion                        | v1.2      | 0/?            | Not started      | —          |
+| 13. Catalogue + v1.1 UI Verifies Back-Fill     | v1.2      | 2/2            | Complete         | 2026-05-28 |
+| 14. Stream Dock Control Service                | v1.3      | 2/2            | Complete         | 2026-05-24 |
+| 15. Stream Dock Input Routing                  | v1.3      | 2/2            | Complete         | 2026-05-24 |
+| 16. Device Controls + Persistence + Pages      | v1.3      | 3/3            | Complete         | 2026-05-24 |
+| 17. Plugin Protocol Completion                 | v1.3      | 3/3            | Complete         | 2026-05-24 |
+| 18. Plugin Manifest + Spawn + Lifecycle        | v1.3      | 4/4            | Complete         | 2026-05-24 |
+| 19. Device ↔ Plugin Bridge (setImage e2e)      | v1.3      | 3/3            | Complete         | 2026-05-24 |
+| 20. Property Inspector + Settings              | v1.3      | 3/3            | Complete         | 2026-05-24 |
+| 21. Built-in In-Process Actions                | v1.3      | 3/3            | Complete         | 2026-05-24 |
+| 22. Plugin Store / Local Install               | v1.3      | 2/2            | Complete         | 2026-05-24 |
+| 23. Auxiliary Display Surfaces (HW)            | v1.3      | 2/2            | Complete         | 2026-05-26 |
+| 24. Family Coverage AKP03/153/815              | v1.3      | 2/2            | Complete         | 2026-05-24 |
+| 25. Hardware Verification + Real Plugin(HW)    | v1.3      | 1/2            | In Progress      |            |
+| 26. OpenDeck-shaped Device Editor              | v1.3      | 7/7            | Complete         | 2026-05-28 |
+| 27. Plugin Install/Trust/Persistence Hardening | v1.3      | 0/?            | Not started      | —          |

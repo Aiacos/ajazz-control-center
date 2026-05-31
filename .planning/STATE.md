@@ -4,10 +4,10 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-05-31T13:10:00.000Z'
-last_activity: 2026-05-31 -- Phase 25 re-walk (Test 1 PASS) + AKP05E robustness fixes (idle keep-alive + replug cache-evict, both hardware-validated); v1.3 audit gaps_found (archive blocked)
+last_updated: '2026-05-31T16:00:00.000Z'
+last_activity: 2026-05-31 -- Plugin install/run epic reconciled into GSD (8 ad-hoc commits 2026-05-29/30 recorded; Phase 27 "Plugin Install/Trust/Persistence Hardening" added to ROADMAP for the 5 genuinely-remaining GUI-parity/persistence gaps); earlier 2026-05-31 -- Phase 25 re-walk (Test 1 PASS) + AKP05E robustness fixes (idle keep-alive + replug cache-evict, both hardware-validated); v1.3 audit gaps_found (archive blocked)
 progress:
-  total_phases: 18
+  total_phases: 19
   completed_phases: 17
   total_plans: 58
   completed_plans: 51
@@ -129,7 +129,7 @@ Phase 9 will ratify three new written ADRs:
 - \[Phase ?\]: AJAZZ_FEATURE_INPUT_SYNTH default OFF; self-emptying OS TUs; no libXtst (uinput Wayland-compatible)
 - \[Phase ?\]: 22-02: SelfSigned->explicit-confirm developer-sideload policy (userConfirmedUnsigned param); hard-Refused always quarantined
 - \[Phase ?\]: 22-02: g_pluginsDirOverride in TU-level anonymous namespace test seam (not private class member) for correct free-function access
-- \[Phase ?\]: 22-02: Phone-home kill via disabled sentinel; QSettings plugins/onlineCatalogEnabled default false; refreshOnline() exposes opt-in live fetch
+- \[Phase ?\]: 22-02: Phone-home kill via disabled sentinel; QSettings plugins/onlineCatalogEnabled default false; refreshOnline() exposes opt-in live fetch — **SUPERSEDED 2026-05-30 (commit `d571c75`): `onlineCatalogEnabled` now defaults to `true` (`plugin_catalog_model.cpp:135`) so fresh installs browse/install out of the box. The no-phone-home contract holds when the user toggles it OFF (network fully gated on the flag; no outbound HTTP when false — `plugin_catalog_model.cpp:448,514`); the milestone "phone-home" anti-feature is now opt-OUT, not opt-IN. See the 2026-05-31 reconciliation section below.**
 - \[Phase ?\]: Encoder accumulator changed from std::array\<int32_t,4> to std::vector\<int32_t> sized at setActiveDevice() time - enables AKP03=3/AKP05=4/AKP153+815=0 without code branching
 - \[Phase ?\]: AKP153 and AKP815 remain MockTransport-only; live hardware confirmation deferred to Phase 25
 - \[2026-05-27\]: AKP05E input wire-format RE'd from the vendor binary (Ghidra on SDLibrary1.dll `readDataFromHidDevice` + Stream Dock AJAZZ.exe `SDActionCanvasWidget::handleKeyEvents`) and partly hardware-confirmed (live `CRT VER` → `V3.AKP05E.01.007`). CONFIRMED: input is HID, key code @ report[9] + press/release @ report[10] (our `parseInputReport` key path is vendor-correct). REFUTED: encoder direction is a distinct report[9] code with NO rotation-delta byte, and touch X is the single byte report[10] (not the BE16 our backend assumes). Full write-up + executable tests committed (`docs/protocols/streamdeck/akp05_input_corrections.md`, `tests/unit/test_akp05_input_corrections.cpp`); the encoder/touch decode+routing rework is a deferred GSD item (see Deferred Items) blocked on a live hidraw keyCode capture. Build-side: fixed a latent no-WebSockets link break (commit 851832b) so the app builds on Qt kits lacking the WebSockets module.
@@ -163,6 +163,7 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 - **GAP-25A (Phase 25 → 26)**: `StreamDockControlService::setActiveDevice()` is declared in C++ but never called from any QML file (`grep -rn setActiveDevice src/app/qml/` returns nothing as of 2026-05-28). `m_activeDevice` stays null, `repaintPage()` early-returns at `if (!m_activeDevice) return;`, so the QML→C++→device image-upload path is broken end-to-end even after the L1+L2 URL handling fixes landed in commit `24651a3`. Phase 26 closes this by wiring `setActiveDevice` on sidebar selection-changed in the device-shaped editor.
 - **GAP-25B (Phase 25 → 26)**: `KeyDesigner.qml` is a generic NxN tile grid with no touch-strip drop target, no encoder-LCD overlay surface, no drag-and-drop from an action library. Operator UAT 2026-05-28 13:00 reports "nella UI dell'applicazione non compare nessuna voce LCD, solo Dial" (no LCD entry in app UI, only Dial). Phase 26 replaces it with an Elgato/OpenDeck-pattern device-shaped editor per SKU (AKP05E: 5×2 + 4 encoders + touch strip; AKP153: 3×5; AKP03: 2×3; AK980: keyboard view; etc.).
+- **PLUGIN-GUI-PARITY (→ Phase 27)**: the plugin install/run path works (8 commits, 2026-05-30) but five GUI-parity/persistence gaps remain — rediscover-after-install (no `rediscover()`; install needs app restart), GUI unsigned-install-with-consent (verifier can't tell unsigned vs tampered — CR-01), in-app trust UX (env-var-only today), persisted per-plugin enable/disable (`discover()` spawns all unconditionally), and a one-crash-doesn't-disable-siblings regression guard. Full grep-verified detail in the "2026-05-31 — Plugin install/run epic reconciliation" section. `/gsd-plan-phase 27` to start.
 - **CAPTURE-01 is MUST-FIX-FIRST inside Phase 9**: capture-data-hygiene policy + `.pcap`/`.pcapng` gitignore + pre-commit reject hook MUST land before any researcher does their first capture (Pitfall 17 — keystroke recovery from raw `.pcap` is deterministic via `tshark` / `USB-Keyboard-Parser`).
 - **Phase 11 (8K mouse) mid-phase research flag**: zero 3rd-party OSS corpus exists for `3151:5007`; if Phase 9 captures reveal AJ199 V1.0 vs Max envelope diverges materially, invoke `/gsd-research-phase` on the SONiX 3151 chipset family before committing to a factory split.
 - **Phase 12 (AK980 PRO) mid-phase research flag**: if Phase 9 captures reveal TFT cmd 0x72 / per-key RGB / macros / layers materially divergent from the TaxMachine baseline, invoke `/gsd-research-phase` on the Microdia 0c45 chipset family.
@@ -238,6 +239,43 @@ ARCH-05.1 ADR: `.planning/phases/09-research-captures-hygiene/ARCH-05.1.md`.
 - Still untouched: **Phase 13** (microdia_dongle_7016 catalogue slice [HW-free] + 4 v1.1 UI verifies [operator]) and **Phase 25** (full UAT + real `.sdPlugin`).
 
 Maturity tiers (mouse/keyboard `functional`, akp05e `partial`) were set deliberately by hardware-informed commits (b09302b/07c5902) and rest on the hardware-confirmed core; the open items above are documented per the Pitfall-29 honesty contract rather than hidden behind a green checkbox.
+
+## 2026-05-31 — Plugin install/run epic reconciliation
+
+**Discovery:** the Stream Dock (`.sdPlugin`) plugin **install + run** path SHIPPED ad-hoc across 8 commits on 2026-05-29/30, ahead of all GSD bookkeeping (no SUMMARY files; STATE/ROADMAP silent). Triggered by the user goal "plugins working, installable concurrently, persistent." All claims below are **grep-verified in code** (per CLAUDE.md "don't grope" + the false-DEVICES-05 lesson); the only record before this was auto-memory `project_plugin_install_epic`.
+
+**The 8 ad-hoc commits (feat/streamdock):**
+
+- `d571c75` — online plugin catalog defaults ON (supersedes Phase 22's default-OFF posture).
+- `a070f67` — plugin action picker in the device editor (`installedActions()` Q_INVOKABLE → ActionLibraryPane drag tiles → `KeyCell.cellActionDropped`).
+- `bda6ee7` — bound-action Property Inspector load/population ("Workstream C"): `actionInfo()` + PI abs-path; closes the unstated Phase-20 UI gap (PIBridge persistence was proven, but the PI was never reachable from the UI).
+- `02bed37` — **PluginManager wired into Application** (`application.cpp:799` — `discover()` + `spawn()` at launch, after `m_pluginServer->start(0)`); child CWD = `sourceDir`; `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` launch-sweep opt-in. *This was the root e2e blocker: spawn was unit-tested but never constructed in the running app — Phase 18/19 verification missed it because the proof was unit-only.*
+- `8e985f7` — **HTML plugins run in-process** (`plugin_manager.cpp:399-442`: shared `QWebEngineProfile` + Mirabox shim + per-plugin `QWebEnginePage`; `connectElgatoStreamDeckSocket()` on loadFinished). Closes the Phase-18 "Known Stub: HTML page-load deferred to Phase 19/20." Emulated SD version 6.9 for the MinimumVersion gate.
+- `0f6b949` / `90d97e2` / `5725cb0` — id-keying + install-strictness: subdir CodePaths allowed; plugins keyed by `.sdPlugin` dir name (CodePath/PUUID collide); `90d97e2` REVERTED an unsigned-bypass in GUI install-from-file (the verifier can't yet tell unsigned from tampered — CR-01). `5725cb0` proved **4 plugins concurrent** (Counter HTML, Weather HTML, Node probe, Node System Monitor — `connectedPluginCount()=4`).
+
+**Verified current state (file:line):**
+
+| Capability                                 | State                                                                                                                        | Evidence                                                        |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| PluginManager live in app                  | ✓ discover+spawn at launch                                                                                                   | `application.cpp:799-806`                                       |
+| Node / native spawn                        | ✓ separate `QProcess` each                                                                                                   | `plugin_manager.cpp:333-393` / `456-510`                        |
+| HTML spawn                                 | ✓ in-process `QWebEnginePage` (was stub)                                                                                     | `plugin_manager.cpp:399-442`                                    |
+| **Concurrency (multithread)**              | ✓ multi-process (node/native) + multi-page (HTML) + multi-connection WS server `std::vector<PluginConnection> m_connections` | `sd_plugin_server.hpp:200`; 4 proven (`5725cb0`)                |
+| Crash/restart                              | ✓ 3-in-30s disable, else auto-respawn (HTML excluded, WR-02)                                                                 | `plugin_manager.cpp:517-539`, `plugin_crash_tracker.cpp:21-37`  |
+| Settings persistence (per-action + global) | ✓ atomic JSON under `AppDataLocation/plugins/<uuid>/`, survives restart                                                      | `pi_bridge.cpp:133,142`                                         |
+| Installed-plugin persistence               | ✓ `discover()` re-scans + re-spawns all on every launch                                                                      | `plugin_manager.cpp:204-262`                                    |
+| Online catalog default ON                  | ✓ (no phone-home when toggled off)                                                                                           | `plugin_catalog_model.cpp:135,448`                              |
+| Install-from-file                          | ✓ extract→zip-slip-guard→verify→atomic-promote                                                                               | `plugin_catalog_model.cpp:668`, `sdplugin_extractor.cpp:23-149` |
+
+**Genuinely-remaining (→ NEW Phase 27 "Plugin Install/Trust/Persistence Hardening"):**
+
+1. **rediscover-after-install** — `grep -rn rediscover src/app/` returns NOTHING. Installing a plugin from the GUI needs an **app restart** before it spawns. The #1 "installabile" gap.
+1. **GUI unsigned-install-with-consent** — `installFromFile` hard-refuses `Refused` unconditionally (`plugin_catalog_model.cpp:739`); `userConfirmedUnsigned` only gates SelfSigned. Unsigned 3rd-party install works ONLY via the `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` env-var launch-sweep (`plugin_catalog_model.cpp:163`). Needs the verifier to split unsigned (no-sig) from tampered (bad-sig) — CR-01, named in `90d97e2`'s body.
+1. **Trust UX** — only the env var; `LoadedPluginsPage.qml:153-198` shows read-only trust chips, no per-plugin "allow" toggle.
+1. **Persisted per-plugin enable/disable** — `discover()` spawns every `*.sdPlugin/` unconditionally; `m_disabled` is session-only (`plugin_manager.cpp:545-557`). A user-disabled plugin does not stay disabled across restart.
+1. **Concurrency regression guard** — 4-plugin happy path proven, but no test pins "one plugin's crash disables ONLY itself" (the `5725cb0` shared-key bug had exactly that failure mode).
+
+**Out of Phase-27 scope (stays Phase 25 live-debt):** the plugin→device `setImage` round-trip via a bound profile action on the **physical** AKP05E — proven only with MockTransport + loopback (Phase 19); the live witness is blocked on the `0x3004` demo unit's input gap (retail AKP05E / Mirabox N4 / Frida path).
 
 ## Operator Next Steps
 
