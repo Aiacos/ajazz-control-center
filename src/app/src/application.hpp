@@ -146,7 +146,14 @@ public:
     }
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
+    /// Live .sdPlugin discover/spawn manager (debug channel: plugin.rediscover).
+    [[nodiscard]] PluginManager* pluginManager() const noexcept { return m_pluginManager.get(); }
 #endif
+    /// Plugin Store catalogue / install pipeline (debug channel:
+    /// plugin.installFromFile). Always present (unguarded).
+    [[nodiscard]] PluginCatalogModel* pluginCatalog() const noexcept {
+        return m_pluginCatalog.get();
+    }
 
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.

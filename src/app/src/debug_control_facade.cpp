@@ -469,6 +469,45 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         bool const sent = srv->sendEvent(uuid, event, params.value("payload").toObject());
         return QJsonObject{{"sent", sent}};
     });
+
+    // plugin.installFromFile {path, confirm?} -> {installed} — drives the
+    // PluginStore install pipeline from the shell so the install->spawn loop is
+    // autonomously verifiable (CLAUDE.md debug-channel rule). `confirm:true`
+    // supplies userConfirmedUnsigned (Unsigned branch only; a tampered/Refused
+    // package is quarantined regardless — CR-01). On success the catalog emits
+    // installFinished, which is wired to PluginManager::rediscover().
+    server.registerMethod(
+        "plugin.installFromFile", [&app](QJsonObject const& params, QString& err) {
+            auto* cat = app.pluginCatalog();
+            if (cat == nullptr) {
+                err = QStringLiteral("plugin catalog unavailable");
+                return QJsonObject{};
+            }
+            QString const path = params.value("path").toString();
+            if (path.isEmpty()) {
+                err = QStringLiteral("require 'path'");
+                return QJsonObject{};
+            }
+            bool const confirm = params.value("confirm").toBool();
+            bool const installed = cat->installFromFile(path, confirm);
+            return QJsonObject{{"installed", installed}, {"confirm", confirm}, {"path", path}};
+        });
+
+    // plugin.rediscover {} -> {rediscovered, connectedCount} — idempotent
+    // re-scan that spawns only newly-installed .sdPlugin plugins with no app
+    // restart. connectedCount is sampled immediately; the WS register handshake
+    // is async, so poll plugin.list again shortly after to see it climb.
+    server.registerMethod("plugin.rediscover", [&app](QJsonObject const&, QString& err) {
+        auto* mgr = app.pluginManager();
+        if (mgr == nullptr) {
+            err = QStringLiteral("plugin manager unavailable");
+            return QJsonObject{};
+        }
+        mgr->rediscover();
+        auto* srv = app.pluginServer();
+        return QJsonObject{{"rediscovered", true},
+                           {"connectedCount", srv != nullptr ? srv->connectedPluginCount() : 0}};
+    });
 #endif
 }
 
