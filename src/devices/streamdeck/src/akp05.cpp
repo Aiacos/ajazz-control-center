@@ -404,7 +404,14 @@ inline ImageTransform akp05KeyTransform() noexcept {
         .targetWidth = akp05::KeyWidthPx,
         .targetHeight = akp05::KeyHeightPx,
         .format = ImageFormat::Jpeg,
-        .rotationDegrees = 0,
+        // Rot180: the AKP05E panel mounts the key LCDs inverted, so each key image
+        // must be pre-rotated 180° to read upright — hardware-confirmed 2026-05-31
+        // on 0x0300:0x3004 (digits rendered upside-down at 0°; upright at 180°).
+        // Per-image rotation only; key ORDER is unaffected (037bd8d wire map).
+        // Matches the sibling AKP815 Rot180 key convention (image_pipeline.hpp).
+        // The RE is silent on key-image orientation (vendor 'setRotation' QUCMD
+        // undecoded); the live device is the source of truth here.
+        .rotationDegrees = 180,
         .mirror = false,
         .jpegQuality = 85,
     };
