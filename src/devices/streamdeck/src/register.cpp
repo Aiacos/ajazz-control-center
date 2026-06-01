@@ -103,6 +103,78 @@ akp03_descriptor(std::uint16_t vid, std::uint16_t pid, char const* model, char c
 
 } // namespace
 
+std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors() {
+    // Descriptors for every Stream Dock SKU the mirajazz sidecar drives (AKP05/
+    // N4, AKP03/N3, AKP153/HSV293S). Mirrors registerAll's matrix exactly but
+    // uses LITERAL geometry — no akp0X:: constants — so it survives the removal
+    // of the C++ wire headers (experiment/mirajazz Slice D). hasClock is false:
+    // the sidecar backend has no IClockCapable, and the Stream Dock family has
+    // no firmware RTC (DEVICES-11 / ARCH-05). The app registers these against
+    // makeSidecarStreamDock; AKP815 stays on its C++ backend (not a mirajazz
+    // device) and is intentionally absent here.
+    using core::DeviceDescriptor;
+    using core::DeviceFamily;
+    std::vector<DeviceDescriptor> out;
+
+    auto akp153 = [](std::uint16_t vid, std::uint16_t pid, char const* model, char const* code) {
+        return DeviceDescriptor{.vendorId = vid,
+                                .productId = pid,
+                                .family = DeviceFamily::StreamDeck,
+                                .model = model,
+                                .codename = code,
+                                .keyCount = 15,
+                                .gridColumns = 5,
+                                .encoderCount = 0,
+                                .keyRows = 3};
+    };
+    auto akp03 = [](std::uint16_t vid, std::uint16_t pid, char const* model, char const* code) {
+        return DeviceDescriptor{.vendorId = vid,
+                                .productId = pid,
+                                .family = DeviceFamily::StreamDeck,
+                                .model = model,
+                                .codename = code,
+                                .keyCount = 6,
+                                .gridColumns = 3,
+                                .encoderCount = 3,
+                                .keyRows = 2};
+    };
+    auto akp05 = [](std::uint16_t vid, std::uint16_t pid, char const* model, char const* code) {
+        return DeviceDescriptor{.vendorId = vid,
+                                .productId = pid,
+                                .family = DeviceFamily::StreamDeck,
+                                .model = model,
+                                .codename = code,
+                                .keyCount = 10,
+                                .gridColumns = 5,
+                                .encoderCount = 4,
+                                .hasTouchStrip = true,
+                                .keyRows = 2,
+                                .touchZoneCount = 4};
+    };
+
+    // AKP153 family (15 keys, no encoders). 0x0300:0x1001 wins over AKP03.
+    out.push_back(akp153(0x0300, 0x1001, "AJAZZ AKP153 / Mirabox HSV293S", "akp153"));
+    out.push_back(akp153(0x0300, 0x1002, "AJAZZ AKP153E", "akp153e"));
+    out.push_back(akp153(0x5548, 0x6674, "AJAZZ AKP153 (Mirabox V1)", "akp153_v1"));
+    out.push_back(akp153(0x0300, 0x1010, "AJAZZ AKP153E (Mirabox V2)", "akp153e_v2"));
+    out.push_back(akp153(0x0300, 0x1020, "AJAZZ AKP153R", "akp153r"));
+    // AKP03 / N3 family (6 LCD keys + 3 side buttons + 3 encoders).
+    out.push_back(akp03(0x0300, 0x3001, "AJAZZ AKP03 (legacy firmware)", "akp03_legacy"));
+    out.push_back(akp03(0x0300, 0x3002, "AJAZZ AKP03E", "akp03e"));
+    out.push_back(akp03(0x0300, 0x1003, "AJAZZ AKP03R", "akp03r"));
+    out.push_back(akp03(0x0300, 0x3003, "AJAZZ AKP03R rev. 2", "akp03r_rev2"));
+    out.push_back(akp03(0x6602, 0x1002, "Mirabox N3 (rev. 1)", "mirabox_n3"));
+    out.push_back(akp03(0x6602, 0x1003, "Mirabox N3E (rev. 1)", "mirabox_n3e"));
+    out.push_back(akp03(0x6603, 0x1002, "Mirabox N3 (rev. 3)", "mirabox_n3_rev3"));
+    out.push_back(akp03(0x6603, 0x1003, "Mirabox N3EN", "mirabox_n3en"));
+    // AKP05 / N4 family (10 keys + 4 encoders + 4 touch zones).
+    out.push_back(akp05(0x0300, 0x5001, "AJAZZ AKP05 (provisional)", "akp05"));
+    out.push_back(akp05(0x6603, 0x1007, "Mirabox N4 / AJAZZ AKP05 family", "mirabox_n4"));
+    out.push_back(akp05(0x0300, 0x3004, "AJAZZ AKP05E (Stream Dock Plus)", "akp05e"));
+
+    return out;
+}
+
 /** @brief Register all known Stream Dock device descriptors with the
  *         caller-owned @ref core::DeviceRegistry.
  *

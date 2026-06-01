@@ -17,6 +17,7 @@
 #include "ajazz/core/transport.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace ajazz::core {
 class DeviceRegistry;
@@ -36,6 +37,20 @@ namespace ajazz::streamdeck {
  *        implicit singleton lookup with constructor injection).
  */
 void registerAll(core::DeviceRegistry& registry);
+
+/**
+ * @brief Descriptors for every Stream Dock SKU driven by the mirajazz sidecar
+ *        (AKP05/N4, AKP03/N3, AKP153/HSV293S). AKP815 is excluded — it is not a
+ *        mirajazz device and stays on its C++ backend via @ref registerAll.
+ *
+ * The application registers these against its out-of-process sidecar factory
+ * (`makeSidecarStreamDock`), so the mirajazz backend — not the in-tree C++ wire
+ * code — drives these devices. Geometry is literal in the implementation, so
+ * the list is independent of the C++ protocol headers.
+ *
+ * @return One DeviceDescriptor per supported (vendorId, productId).
+ */
+[[nodiscard]] std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors();
 
 /**
  * @brief Factory for the AJAZZ AKP153 / Mirabox HSV293S backend.

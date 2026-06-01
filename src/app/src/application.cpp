@@ -650,22 +650,13 @@ void Application::bootstrap() {
     // AJAZZ_NO_SIDECAR to fall back to the in-tree C++ backend (kept as the
     // unit-test fixture and the N4 / 0x5001 stub path).
     if (!qEnvironmentVariableIsSet("AJAZZ_NO_SIDECAR")) {
-        m_deviceRegistry.registerDevice(
-            core::DeviceDescriptor{
-                .vendorId = 0x0300,
-                .productId = 0x3004,
-                .family = core::DeviceFamily::StreamDeck,
-                .model = "AJAZZ AKP05E (mirajazz sidecar)",
-                .codename = "akp05e",
-                .keyCount = 10,
-                .gridColumns = 5,
-                .encoderCount = 4,
-                .hasTouchStrip = true,
-                .keyRows = 2,
-                .touchZoneCount = 4,
-            },
-            &makeSidecarStreamDock);
-        AJAZZ_LOG_INFO("bootstrap", "AKP05E (0x0300:0x3004) routed to mirajazz sidecar backend");
+        auto const sidecarDevices = streamdeck::streamDockSidecarDescriptors();
+        for (auto const& d : sidecarDevices) {
+            m_deviceRegistry.registerDevice(d, &makeSidecarStreamDock);
+        }
+        AJAZZ_LOG_INFO("bootstrap",
+                       "{} Stream Dock SKUs routed to mirajazz sidecar backend",
+                       static_cast<int>(sidecarDevices.size()));
     }
     streamdeck::registerAll(m_deviceRegistry);
     keyboard::registerAll(m_deviceRegistry);
