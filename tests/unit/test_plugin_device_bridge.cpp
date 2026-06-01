@@ -5,7 +5,8 @@
  *
  * 19-01: pure helpers + ContextRegistry unit tests.
  * 19-02 (PLUGIN-10): loopback e2e tests composing SdPluginServer +
- *       StreamDockControlService (MockTransport) + PluginDeviceBridge.
+ *       StreamDockControlService (in-process FakeStreamDockDevice) +
+ *       PluginDeviceBridge.
  *
  * 19-01 test coverage:
  *  - coordsForKeyIndex / keyIndexForCoords round-trip (Pitfall 2).
@@ -14,7 +15,7 @@
  *  - ContextRegistry: registerContext / byContext / byCoord / retire / retirePage / clear.
  *
  * 19-02 e2e test coverage (PLUGIN-10):
- *  - e2e setImage paints the right 1-based key (BAT+ULEND burst via MockTransport).
+ *  - e2e setImage paints the right 1-based key (setKeyImage on the fake device).
  *  - Malformed data-URI -> placeholder (solid fill), no image burst, no crash.
  *  - Cross-plugin denial: unknown-owner context produces no paint.
  *  - Visual family no-crash: setTitle / setBG / setFeedback round-trip without crash.
@@ -29,8 +30,7 @@
 #ifdef AJAZZ_HAVE_WEBSOCKETS
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/profile.hpp"
-#include "ajazz/streamdeck/streamdeck.hpp"
-#include "fixtures/mock_transport.hpp"
+#include "fixtures/fake_stream_dock_device.hpp"
 #include "sd_plugin_server.hpp"
 #include "stream_dock_control_service.hpp"
 #include "stream_dock_input_service.hpp" // GAP-28B regression tests
@@ -605,7 +605,7 @@ TEST_CASE("PluginDeviceBridge ContextRegistry CR-02 two devices same coord do no
 }
 
 // ==========================================================================
-// Phase 19-02 e2e tests (PLUGIN-10): loopback client -> MockTransport spy
+// Phase 19-02 e2e tests (PLUGIN-10): loopback client -> fake-device capability spy
 // Gated on AJAZZ_HAVE_WEBSOCKETS — same as the sd_plugin_server tests.
 // ==========================================================================
 #ifdef AJAZZ_HAVE_WEBSOCKETS
@@ -647,12 +647,9 @@ QString makeSmallPngDataUri() {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture: MockTransport-backed AKP05E device (mirrors test_stream_dock_control_service.cpp).
+// Fixture: in-process fake AKP05E device (mirrors test_stream_dock_control_service.cpp).
 // ---------------------------------------------------------------------------
 struct E2eFixture {
-    std::shared_ptr<ajazz::core::IDevice> device;
-    ajazz::tests::MockTransport* transport; ///< Non-owning observer.
-
     ajazz::app::SdPluginServer* server;
     ajazz::app::StreamDockControlService* control;
     std::unique_ptr<ajazz::app::PluginDeviceBridge> bridge;
@@ -700,33 +697,7 @@ E2eFixture makeE2eFixture(ajazz::app::SdPluginServer* server,
     return fx;
 }
 
-/// Find the first write whose bytes[5..7] == 'B','A','T' starting at startFrom.
-/// Returns writes.size() if not found.
-std::size_t findBatWrite(std::vector<std::vector<std::uint8_t>> const& writes,
-                         std::size_t startFrom = 0) {
-    for (std::size_t i = startFrom; i < writes.size(); ++i) {
-        auto const& w = writes[i];
-        if (w.size() >= 8 && w[5] == 0x42 && w[6] == 0x41 && w[7] == 0x54) {
-            return i;
-        }
-    }
-    return writes.size();
-}
-
-/// Find the first write whose bytes[5..9] == 'U','L','E','N','D' starting at startFrom.
-std::size_t findUlendWrite(std::vector<std::vector<std::uint8_t>> const& writes,
-                           std::size_t startFrom = 0) {
-    for (std::size_t i = startFrom; i < writes.size(); ++i) {
-        auto const& w = writes[i];
-        if (w.size() >= 10 && w[5] == 0x55 && w[6] == 0x4c && w[7] == 0x45 && w[8] == 0x4e &&
-            w[9] == 0x44) {
-            return i;
-        }
-    }
-    return writes.size();
-}
-
-/// Build a minimal AKP05E device descriptor for makeAkp05WithTransport.
+/// Build a minimal AKP05E device descriptor for the in-process fake.
 ajazz::core::DeviceDescriptor makeTestAkp05eDescriptor() {
     ajazz::core::DeviceDescriptor d{};
     d.vendorId = 0x0300;
@@ -735,8 +706,11 @@ ajazz::core::DeviceDescriptor makeTestAkp05eDescriptor() {
     d.model = "AJAZZ AKP05E (e2e-test)";
     d.codename = "akp05e";
     d.keyCount = 10;
+    d.gridColumns = 5;
+    d.keyRows = 2;
     d.encoderCount = 4;
     d.hasTouchStrip = true;
+    d.touchZoneCount = 4;
     d.hasClock = false;
     return d;
 }
@@ -749,6 +723,17 @@ ajazz::core::DeviceId makeTestAkp05eId() {
     return id;
 }
 
+/// Build the in-process fake AKP05E device. Records setKeyImage capability calls
+/// instead of producing BAT/ULEND wire bytes (that framing coverage moved to the
+/// Rust sidecar's cargo tests). The e2e chain (WebSocket -> SdPluginServer ->
+/// PluginDeviceBridge -> StreamDockControlService -> device) is otherwise intact.
+std::shared_ptr<ajazz::tests::FakeStreamDockDevice> makeE2eFake() {
+    auto fake = std::make_shared<ajazz::tests::FakeStreamDockDevice>(makeTestAkp05eDescriptor(),
+                                                                     makeTestAkp05eId());
+    fake->setFirmwareVersion("V3.AKP05E.01.007");
+    return fake;
+}
+
 } // anonymous namespace
 
 // ---------------------------------------------------------------------------
@@ -759,31 +744,17 @@ TEST_CASE("PluginDeviceBridgeE2E setImage paints correct key via control service
           "[plugin-device-bridge][e2e][PLUGIN-10]") {
     ensureQCoreApp();
 
-    // Set up MockTransport-backed AKP05E device.
-    auto owned = std::make_unique<ajazz::tests::MockTransport>();
-    auto* obs = owned.get();
-    // Seed VER feature response for setActiveDevice's probeFirmwareVersion.
-    {
-        std::vector<std::uint8_t> verResp(20, 0);
-        verResp[0] = 0x01;
-        std::string const vs = "V3.AKP05E.01.007";
-        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
-            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
-        }
-        obs->enqueueReadFeature(std::move(verResp));
-    }
-    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
-        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+    // In-process fake AKP05E device (records setKeyImage capability calls).
+    auto fake = makeE2eFake();
 
-    // StreamDockControlService backed by the MockTransport device.
+    // StreamDockControlService backed by the fake device.
     ajazz::app::StreamDockControlService control(
-        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
-        nullptr);
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
     control.setActiveDevice(QStringLiteral("akp05e"));
-    // Drain LIG write from setActiveDevice.
+    // Drain the open/brightness work from setActiveDevice.
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
-    std::size_t const writeCountAfterOpen = obs->writeCount();
+    auto const paintsAfterOpen = fake->keyImages.size();
 
     // SdPluginServer (loopback).
     ajazz::app::SdPluginServer server;
@@ -808,37 +779,24 @@ TEST_CASE("PluginDeviceBridgeE2E setImage paints correct key via control service
             .arg(fx.contextId, makeSmallPngDataUri());
     client.sendTextMessage(imageMsg);
 
-    // Drain until the control service timer fires and writes BAT+ULEND.
+    // Drain until the control service timer fires and paints the key.
     auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
     while (QDateTime::currentMSecsSinceEpoch() < deadline) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
-        auto const& writes = obs->writes();
-        if (writes.size() > writeCountAfterOpen &&
-            findUlendWrite(writes, writeCountAfterOpen) < writes.size()) {
+        if (fake->keyImages.size() > paintsAfterOpen) {
             break;
         }
     }
 
-    auto const& writes = obs->writes();
-    // Must have a BAT burst (header + >= 1 chunk + ULEND) after the open writes.
-    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
-    REQUIRE(batIdx < writes.size());
-    auto const& batPkt = writes[batIdx];
-    REQUIRE(batPkt.size() >= 8);
-    CHECK(batPkt[5] == 0x42); // 'B'
-    CHECK(batPkt[6] == 0x41); // 'A'
-    CHECK(batPkt[7] == 0x54); // 'T'
-
-    // The ULEND must follow the BAT burst.
-    auto const ulendIdx = findUlendWrite(writes, batIdx);
-    REQUIRE(ulendIdx < writes.size());
-    auto const& ulendPkt = writes[ulendIdx];
-    REQUIRE(ulendPkt.size() >= 10);
-    CHECK(ulendPkt[5] == 0x55); // 'U'
-    CHECK(ulendPkt[6] == 0x4c); // 'L'
-    CHECK(ulendPkt[7] == 0x45); // 'E'
-    CHECK(ulendPkt[8] == 0x4e); // 'N'
-    CHECK(ulendPkt[9] == 0x44); // 'D'
+    // The paint must have landed on device key index 3 (row:0, col:2 -> 0*5+2+1).
+    REQUIRE(fake->keyImages.size() > paintsAfterOpen);
+    bool paintedKey3 = false;
+    for (std::size_t i = paintsAfterOpen; i < fake->keyImages.size(); ++i) {
+        if (fake->keyImages[i].index == 3) {
+            paintedKey3 = true;
+        }
+    }
+    CHECK(paintedKey3);
 }
 
 // ---------------------------------------------------------------------------
@@ -849,27 +807,14 @@ TEST_CASE("PluginDeviceBridgeE2E malformed image URI paints placeholder no crash
           "[plugin-device-bridge][e2e][placeholder]") {
     ensureQCoreApp();
 
-    auto owned = std::make_unique<ajazz::tests::MockTransport>();
-    auto* obs = owned.get();
-    {
-        std::vector<std::uint8_t> verResp(20, 0);
-        verResp[0] = 0x01;
-        std::string const vs = "V3.AKP05E.01.007";
-        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
-            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
-        }
-        obs->enqueueReadFeature(std::move(verResp));
-    }
-    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
-        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+    auto fake = makeE2eFake();
 
     ajazz::app::StreamDockControlService control(
-        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
-        nullptr);
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
     control.setActiveDevice(QStringLiteral("akp05e"));
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
-    std::size_t const writeCountAfterOpen = obs->writeCount();
+    auto const paintsAfterOpen = fake->keyImages.size();
 
     ajazz::app::SdPluginServer server;
     QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
@@ -892,24 +837,18 @@ TEST_CASE("PluginDeviceBridgeE2E malformed image URI paints placeholder no crash
             .arg(fx.contextId);
     client.sendTextMessage(badMsg);
 
-    // Drain: the placeholder (solid fill via assignKeyImage -> BAT+ULEND) should fire.
+    // Drain: the placeholder (solid fill via assignKeyImage) should paint the key.
     auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
     while (QDateTime::currentMSecsSinceEpoch() < deadline) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
-        auto const& writes = obs->writes();
-        if (writes.size() > writeCountAfterOpen &&
-            findUlendWrite(writes, writeCountAfterOpen) < writes.size()) {
+        if (fake->keyImages.size() > paintsAfterOpen) {
             break;
         }
     }
 
-    // The placeholder path calls assignKeyImage (solid fill -> BAT+ULEND burst).
-    // Verify the process did not crash (implicit by reaching this point) and that
-    // a write burst occurred.
-    auto const& writes = obs->writes();
-    // Placeholder uses assignKeyImage which produces a BAT+ULEND burst.
-    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
-    REQUIRE(batIdx < writes.size()); // placeholder paint must have fired
+    // The placeholder path calls assignKeyImage (solid fill). Verify the process
+    // did not crash (implicit by reaching this point) and that the key was painted.
+    REQUIRE(fake->keyImages.size() > paintsAfterOpen); // placeholder paint must have fired
 
     // No failure event should have been sent back to the client (spec §5).
     // The msgSpy must not contain any non-passHello frame after the malformed setImage.
@@ -936,27 +875,14 @@ TEST_CASE("PluginDeviceBridgeE2E cross-plugin denial produces no paint",
           "[plugin-device-bridge][e2e][security]") {
     ensureQCoreApp();
 
-    auto owned = std::make_unique<ajazz::tests::MockTransport>();
-    auto* obs = owned.get();
-    {
-        std::vector<std::uint8_t> verResp(20, 0);
-        verResp[0] = 0x01;
-        std::string const vs = "V3.AKP05E.01.007";
-        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
-            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
-        }
-        obs->enqueueReadFeature(std::move(verResp));
-    }
-    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
-        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+    auto fake = makeE2eFake();
 
     ajazz::app::StreamDockControlService control(
-        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
-        nullptr);
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
     control.setActiveDevice(QStringLiteral("akp05e"));
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
-    std::size_t const writeCountAfterOpen = obs->writeCount();
+    auto const paintsAfterOpen = fake->keyImages.size();
 
     ajazz::app::SdPluginServer server;
     QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
@@ -979,15 +905,13 @@ TEST_CASE("PluginDeviceBridgeE2E cross-plugin denial produces no paint",
             .arg(fx.otherContextId, makeSmallPngDataUri());
     client.sendTextMessage(crossMsg);
 
-    // Drain and verify: NO BAT+ULEND burst should occur after the denial.
+    // Drain and verify: NO key paint should occur after the denial.
     pump19(500);
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
 
-    auto const& writes = obs->writes();
-    // No new writes after the open burst — cross-plugin denial.
-    auto const batIdx = findBatWrite(writes, writeCountAfterOpen);
-    CHECK(batIdx == writes.size()); // no BAT write = no paint
+    // No new setKeyImage calls after the open baseline — cross-plugin denial.
+    CHECK(fake->keyImages.size() == paintsAfterOpen);
 }
 
 // ---------------------------------------------------------------------------
@@ -998,27 +922,14 @@ TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
           "[plugin-device-bridge][e2e][visual-family]") {
     ensureQCoreApp();
 
-    auto owned = std::make_unique<ajazz::tests::MockTransport>();
-    auto* obs = owned.get();
-    {
-        std::vector<std::uint8_t> verResp(20, 0);
-        verResp[0] = 0x01;
-        std::string const vs = "V3.AKP05E.01.007";
-        for (std::size_t i = 0; i < vs.size() && i + 1 < verResp.size(); ++i) {
-            verResp[i + 1] = static_cast<std::uint8_t>(vs[i]);
-        }
-        obs->enqueueReadFeature(std::move(verResp));
-    }
-    auto devPtr = ajazz::streamdeck::makeAkp05WithTransport(
-        makeTestAkp05eDescriptor(), makeTestAkp05eId(), std::move(owned));
+    auto fake = makeE2eFake();
 
     ajazz::app::StreamDockControlService control(
-        [devPtr](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return devPtr; },
-        nullptr);
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
     control.setActiveDevice(QStringLiteral("akp05e"));
     QCoreApplication::processEvents();
     QCoreApplication::processEvents();
-    std::size_t const writeCountAfterOpen = obs->writeCount();
+    auto const paintsAfterOpen = fake->keyImages.size();
 
     ajazz::app::SdPluginServer server;
     QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
@@ -1033,25 +944,25 @@ TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
     client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
     REQUIRE(waitForSpy19(registeredSpy));
 
-    // setTitle: must not crash; renders title to QImage -> BAT+ULEND burst.
+    // setTitle: must not crash; renders title to QImage -> setKeyImage paint.
     client.sendTextMessage(
         QStringLiteral(
             R"({"event":"setTitle","context":"%1","payload":{"title":"Hello","target":0}})")
             .arg(fx.contextId));
 
-    // setBG: must not crash; renders solid fill -> BAT+ULEND burst.
+    // setBG: must not crash; renders solid fill -> setKeyImage paint.
     client.sendTextMessage(
         QStringLiteral(R"({"event":"setBG","context":"%1","payload":{"color":"#FF0000"}})")
             .arg(fx.contextId));
 
     // setFeedback: must not crash; acknowledged-but-deferred (Phase 23).
-    // Must NOT produce a key-image burst.
-    // Drain setTitle + setBG first.
+    // Must NOT produce a key-image paint.
+    // Drain setTitle + setBG first (each paints the key once).
     auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
     while (QDateTime::currentMSecsSinceEpoch() < deadline) {
         QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
-        // Wait for at least two BAT bursts (setTitle + setBG).
-        if (obs->writeCount() > writeCountAfterOpen + 2) {
+        // Wait for both paints (setTitle + setBG).
+        if (fake->keyImages.size() >= paintsAfterOpen + 2) {
             break;
         }
     }
@@ -1059,17 +970,14 @@ TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
     client.sendTextMessage(
         QStringLiteral(R"({"event":"setFeedback","context":"%1","payload":{"title":"Enc"}})")
             .arg(fx.contextId));
-    std::size_t const writesBeforeFeedback = obs->writeCount();
+    std::size_t const paintsBeforeFeedback = fake->keyImages.size();
     pump19(300); // drain the setFeedback (should be a no-op paint)
 
-    // setTitle and setBG must have produced write bursts.
-    REQUIRE(obs->writeCount() > writeCountAfterOpen);
-    REQUIRE(findBatWrite(obs->writes(), writeCountAfterOpen) < obs->writes().size());
+    // setTitle and setBG must have painted the key.
+    REQUIRE(fake->keyImages.size() > paintsAfterOpen);
 
-    // setFeedback must NOT produce a new key-image burst (aux-surface deferred).
-    std::size_t const writesAfterFeedback = obs->writeCount();
-    auto const feedbackBatIdx = findBatWrite(obs->writes(), writesBeforeFeedback);
-    CHECK(feedbackBatIdx >= writesAfterFeedback); // no new BAT after setFeedback
+    // setFeedback must NOT produce a new key-image paint (aux-surface deferred).
+    CHECK(fake->keyImages.size() == paintsBeforeFeedback); // no new paint after setFeedback
 
     // Implicit crash-free assertion: reaching this point means nothing threw.
     CHECK(true);
