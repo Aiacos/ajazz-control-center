@@ -72,9 +72,10 @@ inline constexpr std::uint8_t KeyCols = 5;        ///< Physical columns of LCD k
 inline constexpr std::uint8_t EncoderCount = 4;   ///< Endless rotary encoders.
 inline constexpr std::uint8_t TouchZoneCount = 4; ///< Touch-strip zones aligned to encoders.
 inline constexpr std::uint16_t KeyWidthPx =
-    120; ///< Per-key JPEG dim (Stream Dock Plus LCD; 85 left a white margin on 0x3004 hardware —
-         ///< photo 2026-06-01).
-inline constexpr std::uint16_t KeyHeightPx = 120;         ///< Per-key JPEG dim (see KeyWidthPx).
+    112; ///< Per-key JPEG dim — opendeck-akp05 mappings.rs:178 (protocol v3 AKP05/N4/05E). Key 1
+         ///< fills 1:1 on 0x3004; keys 2-10 show a per-key right-margin = a placement-offset bug
+         ///< (NOT size), TODO Phase 29.
+inline constexpr std::uint16_t KeyHeightPx = 112;         ///< Per-key JPEG dim (see KeyWidthPx).
 inline constexpr std::uint16_t TouchStripWidthPx = 800;   ///< LCD strip width.
 inline constexpr std::uint16_t TouchStripHeightPx = 480;  ///< LCD strip height.
 inline constexpr std::uint16_t MainDisplayWidthPx = 800;  ///< Legacy alias for code that wrote
