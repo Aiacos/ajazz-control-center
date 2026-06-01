@@ -37,9 +37,17 @@ and marked PROVISIONAL, the same posture as retail-AKP05E input.
   per-family params (protocol version, key count, image format, usage page) to
   cover AKP03 (pv1/2) and AKP153 (pv2) in addition to AKP05/N4 (pv3). Reference:
   mirajazz protocol versions + opendeck-akp03 / opendeck-akp153 device defs.
+- **A′. Sidecar wire tests (Rust).** The ~10 C++ app suites that use
+  `makeAkp05WithTransport` are **MockTransport wire-level** tests (they assert
+  the BAT/ULEND/LIG byte sequences `StreamDockControlService` emits). With the
+  wire moving into the sidecar, that coverage moves to **cargo tests** in
+  `streamdock-host` (assert the bytes mirajazz/our framing produce). Add them in
+  Slice A so wire coverage is not lost when the C++ wire tests are deleted.
 - **B. Test fixture (C++).** Add `FakeStreamDockDevice` (in-process
-  `core::IDevice + IDisplayCapable + IEncoderCapable`, records calls, injectable
-  input). Migrate the ~10 app test suites off `makeAkp05WithTransport`.
+  `core::IDevice + IDisplayCapable + IEncoderCapable`, records *calls* not bytes,
+  injectable input). Per-test triage of the ~10 suites: **migrate** the
+  app-behavior assertions (repaint-count, binding dispatch, key-index mapping)
+  onto the fake; **delete** the pure wire-byte assertions (now covered by A′).
 - **C. Registration flip (C++).** App `bootstrap` registers
   `makeSidecarStreamDock` for every mirajazz-covered Stream Dock PID
   (AKP03/AKP153/AKP05-N4) before `registerAll`; remove those registrations from
