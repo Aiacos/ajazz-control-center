@@ -2,6 +2,12 @@ app-id: io.github.Aiacos.AjazzControlCenter
 runtime: org.kde.Platform
 runtime-version: '6.7'
 sdk: org.kde.Sdk
+# Rust toolchain for the out-of-process mirajazz Stream Dock sidecar
+# (streamdock-host). org.kde.Sdk is based on org.freedesktop.Sdk, so the
+# rust-stable extension is available; the streamdock-host module below builds
+# offline from the vendored cargo-sources.json.
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: ajazz-control-center
 
 finish-args:
@@ -83,6 +89,10 @@ modules:
       # Resolve hidapi + nlohmann_json from the modules built above (offline
       # sandbox has no network for the default FetchContent clone).
       - -DAJAZZ_USE_SYSTEM_DEPS=ON
+      # The Stream Dock mirajazz sidecar is built offline by the dedicated
+      # `streamdock-host` module below (cargo can't fetch crates in the
+      # flatpak-builder sandbox), so disable the in-CMake cargo build here.
+      - -DAJAZZ_BUILD_SIDECAR=OFF
       # The udev rule installs to an absolute /usr path (read-only in the
       # sandbox) and is a host resource — device access inside Flatpak is via
       # portals + the host's own rule.
@@ -111,3 +121,28 @@ modules:
       # rasterise it ("file-read-error"). The PNG hicolor sizes (incl. 64 + 128)
       # are enough for AppStream and the desktop icon.
       - rm -f /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg
+
+  # Out-of-process mirajazz Rust sidecar driving the AKP03/AKP05-N4/AKP153 Stream
+  # Dock families. Built OFFLINE from the vendored cargo-sources.json (the
+  # flatpak-builder sandbox has no network, so cargo cannot fetch crates).
+  #
+  # Regenerate cargo-sources.json after changing the Rust dependencies:
+  #   python3 flatpak-cargo-generator.py streamdock-host/Cargo.lock \
+  #     -o packaging/flatpak/cargo-sources.json
+  # (flatpak-cargo-generator.py is in flatpak/flatpak-builder-tools/cargo).
+  #
+  # Installed to /app/bin/streamdock-host so the app resolves it via
+  # QCoreApplication::applicationDirPath() (see SidecarStreamDockDevice).
+  - name: streamdock-host
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/streamdock-host/cargo
+    build-commands:
+      - cargo --offline build --release --verbose
+      - install -Dm755 target/release/streamdock-host /app/bin/streamdock-host
+    sources:
+      - type: dir
+        path: ../../streamdock-host
+      - cargo-sources.json

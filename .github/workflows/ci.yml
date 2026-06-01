@@ -114,6 +114,22 @@ jobs:
       - name: Install Python package
         run: pip install -e .[dev]
 
+      # ---- Rust toolchain (mirajazz Stream Dock sidecar) ------------------
+      # The CMake build compiles the out-of-process streamdock-host sidecar via
+      # cargo (cmake/StreamdockSidecar.cmake). GitHub runners ship Rust, but pin
+      # stable explicitly + cache the cargo store so the mirajazz git dependency
+      # is fetched/compiled once per Cargo.lock instead of every run.
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Cache cargo registry + git
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('streamdock-host/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
+
       # ---- Configure, build, test -----------------------------------------
       - name: Configure
         run: cmake --preset ${{ matrix.preset }}

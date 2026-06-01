@@ -54,15 +54,49 @@ function(ajazz_add_streamdock_sidecar app_target)
     # an edit to the Rust code triggers a rebuild.
     file(GLOB_RECURSE sidecar_sources CONFIGURE_DEPENDS "${sidecar_dir}/src/*.rs")
 
-    add_custom_command(
-        OUTPUT "${sidecar_binary}"
-        COMMAND "${CARGO_EXECUTABLE}" build --release --locked --manifest-path "${sidecar_manifest}"
-                --target-dir "${sidecar_target_dir}"
-        WORKING_DIRECTORY "${sidecar_dir}"
-        DEPENDS "${sidecar_manifest}" "${sidecar_lockfile}" ${sidecar_sources}
-        COMMENT "Building streamdock-host Rust sidecar (cargo build --release --locked)"
-        VERBATIM USES_TERMINAL
-    )
+    # macOS universal: when the app is built for both arches the single-arch host cargo binary would
+    # be unusable on the other arch, so build each Apple target explicitly and lipo them into a fat
+    # binary at the canonical release path. (CI-only path — not exercised by the Linux dev build.)
+    # Requires the rustup targets aarch64-apple-darwin + x86_64-apple-darwin to be installed.
+    list(LENGTH CMAKE_OSX_ARCHITECTURES sidecar_n_osx_arch)
+    if(APPLE AND sidecar_n_osx_arch GREATER 1)
+        set(sidecar_arch_binaries "")
+        set(sidecar_cargo_target_flags "")
+        foreach(sidecar_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
+            if(sidecar_arch STREQUAL "arm64")
+                set(sidecar_triple "aarch64-apple-darwin")
+            elseif(sidecar_arch STREQUAL "x86_64")
+                set(sidecar_triple "x86_64-apple-darwin")
+            else()
+                message(FATAL_ERROR "streamdock-host: unsupported macOS arch '${sidecar_arch}'")
+            endif()
+            list(APPEND sidecar_cargo_target_flags --target "${sidecar_triple}")
+            list(APPEND sidecar_arch_binaries
+                 "${sidecar_target_dir}/${sidecar_triple}/release/${sidecar_name}"
+            )
+        endforeach()
+        add_custom_command(
+            OUTPUT "${sidecar_binary}"
+            COMMAND
+                "${CARGO_EXECUTABLE}" build --release --locked --manifest-path "${sidecar_manifest}"
+                --target-dir "${sidecar_target_dir}" ${sidecar_cargo_target_flags}
+            COMMAND lipo -create ${sidecar_arch_binaries} -output "${sidecar_binary}"
+            WORKING_DIRECTORY "${sidecar_dir}"
+            DEPENDS "${sidecar_manifest}" "${sidecar_lockfile}" ${sidecar_sources}
+            COMMENT "Building universal streamdock-host Rust sidecar (cargo + lipo)"
+            VERBATIM USES_TERMINAL
+        )
+    else()
+        add_custom_command(
+            OUTPUT "${sidecar_binary}"
+            COMMAND "${CARGO_EXECUTABLE}" build --release --locked --manifest-path
+                    "${sidecar_manifest}" --target-dir "${sidecar_target_dir}"
+            WORKING_DIRECTORY "${sidecar_dir}"
+            DEPENDS "${sidecar_manifest}" "${sidecar_lockfile}" ${sidecar_sources}
+            COMMENT "Building streamdock-host Rust sidecar (cargo build --release --locked)"
+            VERBATIM USES_TERMINAL
+        )
+    endif()
 
     add_custom_target(
         streamdock_host_sidecar ALL DEPENDS "${sidecar_binary}"

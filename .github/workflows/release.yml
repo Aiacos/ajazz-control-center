@@ -42,6 +42,10 @@ jobs:
               python3-dev rpm file
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version:  6.8.3, cache: true, modules: qtwebsockets }
+      # Rust toolchain for the streamdock-host mirajazz sidecar (bundled into the
+      # deb/rpm by cmake/StreamdockSidecar.cmake).
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - name: Configure
         run: cmake --preset linux-release
       - name: Build
@@ -97,6 +101,10 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756  # v1.13.0
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version:  6.8.3, cache: true, modules: qtwebsockets }
+      # Rust toolchain for the streamdock-host mirajazz sidecar (bundled into the
+      # MSI/ZIP by cmake/StreamdockSidecar.cmake). rustup ships on the runner.
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - name: Configure
         run: cmake --preset windows-release
       - name: Build
@@ -232,6 +240,14 @@ jobs:
           rm -f "$RUNNER_TEMP/cert.p12"
           echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
 
+      # Rust toolchain for the streamdock-host mirajazz sidecar. Both Apple
+      # targets are installed so cmake/StreamdockSidecar.cmake can lipo a
+      # universal (arm64 + x86_64) sidecar matching the universal app bundle.
+      - name: Set up Rust (stable, universal targets)
+        run: |
+          rustup toolchain install stable --profile minimal --no-self-update
+          rustup default stable
+          rustup target add aarch64-apple-darwin x86_64-apple-darwin
       - name: Configure (universal)
         run: |
           cmake -S . -B build/macos-release -G Ninja \
