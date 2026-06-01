@@ -121,6 +121,10 @@ add_executable(
     # sidecar wire protocol — no process spawned, encode/decode functions only.
     test_sidecar_protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_protocol.cpp
+    # experiment/mirajazz Slice B: in-process FakeStreamDockDevice fixture
+    # (header-only) self-test — backs the app-behavior assertions once the C++
+    # AKP05 wire fixture (makeAkp05WithTransport) is removed.
+    test_fake_stream_dock_device.cpp
     test_stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/profile_controller.cpp
