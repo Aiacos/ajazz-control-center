@@ -643,12 +643,13 @@ void Application::bootstrap() {
     // Audit finding A1: pass the owned registry into every backend
     // bootstrap (constructor injection — there is no registry singleton).
     //
-    // experiment/mirajazz Slice 4: when AJAZZ_USE_SIDECAR is set, route the
-    // AKP05E (0x0300:0x3004) to the out-of-process mirajazz sidecar backend
-    // instead of the in-tree C++ wire code. Registered BEFORE registerAll so
-    // it wins the (VID,PID) slot (registerDevice skips later duplicates). Gated
-    // + reversible until the live debug-channel verification passes.
-    if (qEnvironmentVariableIsSet("AJAZZ_USE_SIDECAR")) {
+    // experiment/mirajazz Slice 4c: the AKP05E (0x0300:0x3004) is driven by the
+    // out-of-process mirajazz sidecar backend by default (verified live via the
+    // debug channel). Registered BEFORE registerAll so it wins the (VID,PID)
+    // slot — registerDevice skips the later makeAkp05 duplicate. Set
+    // AJAZZ_NO_SIDECAR to fall back to the in-tree C++ backend (kept as the
+    // unit-test fixture and the N4 / 0x5001 stub path).
+    if (!qEnvironmentVariableIsSet("AJAZZ_NO_SIDECAR")) {
         m_deviceRegistry.registerDevice(
             core::DeviceDescriptor{
                 .vendorId = 0x0300,
