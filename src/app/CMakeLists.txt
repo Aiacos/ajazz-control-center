@@ -136,6 +136,11 @@ qt_add_executable(
     # protocol (newline-delimited JSON over stdio). Qt-Core only, no QProcess/QObject (no nlohmann
     # -> COD-031). The QProcess-backed SidecarStreamDockDevice (Slice 3b) composes this.
     src/sidecar_protocol.cpp
+    # experiment/mirajazz Slice 3b: core::IDevice + IDisplayCapable + IEncoderCapable backed by the
+    # out-of-process streamdock-host (mirajazz) sidecar via QProcess. Holds one persistent handle
+    # (the hardware-confirmed fix for the open/close wedge). Not a QObject (functor connects), so no
+    # AUTOMOC entry needed.
+    src/sidecar_stream_dock_device.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
