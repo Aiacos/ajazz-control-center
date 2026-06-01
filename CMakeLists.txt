@@ -50,6 +50,7 @@ option(AJAZZ_FEATURE_INPUT_SYNTH "Build native OS input synthesis backends" OFF)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(Warnings)
 include(Sanitizers)
+include(StreamdockSidecar)
 
 # -----------------------------------------------------------------------------
 # Dependencies

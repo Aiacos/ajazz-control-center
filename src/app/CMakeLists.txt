@@ -714,6 +714,12 @@ endif()
 
 install(TARGETS ajazz-control-center RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 
+# experiment/mirajazz Slice F: build the out-of-process mirajazz Rust sidecar (streamdock-host) via
+# cargo and stage/install it beside the app binary, so SidecarStreamDockDevice's
+# applicationDirPath() lookup resolves it in both the dev layout and every package generator. Gated
+# by AJAZZ_BUILD_SIDECAR.
+ajazz_add_streamdock_sidecar(ajazz-control-center)
+
 # Windows: bundle the Qt runtime into the install tree so the CPack WIX MSI and ZIP (which harvest
 # the whole install tree) are self-contained. Without this the package ships ONLY
 # ajazz-control-center.exe and the installed app fails to start with "The code execution cannot
