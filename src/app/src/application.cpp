@@ -22,6 +22,7 @@
 #include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
 #include "node_runner.hpp"
+#include "sidecar_stream_dock_device.hpp"
 
 #include <QCoreApplication>
 #include <QDesktopServices>
@@ -641,6 +642,30 @@ void Application::bootstrap() {
 
     // Audit finding A1: pass the owned registry into every backend
     // bootstrap (constructor injection — there is no registry singleton).
+    //
+    // experiment/mirajazz Slice 4: when AJAZZ_USE_SIDECAR is set, route the
+    // AKP05E (0x0300:0x3004) to the out-of-process mirajazz sidecar backend
+    // instead of the in-tree C++ wire code. Registered BEFORE registerAll so
+    // it wins the (VID,PID) slot (registerDevice skips later duplicates). Gated
+    // + reversible until the live debug-channel verification passes.
+    if (qEnvironmentVariableIsSet("AJAZZ_USE_SIDECAR")) {
+        m_deviceRegistry.registerDevice(
+            core::DeviceDescriptor{
+                .vendorId = 0x0300,
+                .productId = 0x3004,
+                .family = core::DeviceFamily::StreamDeck,
+                .model = "AJAZZ AKP05E (mirajazz sidecar)",
+                .codename = "akp05e",
+                .keyCount = 10,
+                .gridColumns = 5,
+                .encoderCount = 4,
+                .hasTouchStrip = true,
+                .keyRows = 2,
+                .touchZoneCount = 4,
+            },
+            &makeSidecarStreamDock);
+        AJAZZ_LOG_INFO("bootstrap", "AKP05E (0x0300:0x3004) routed to mirajazz sidecar backend");
+    }
     streamdeck::registerAll(m_deviceRegistry);
     keyboard::registerAll(m_deviceRegistry);
     mouse::registerAll(m_deviceRegistry);
