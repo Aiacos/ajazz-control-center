@@ -182,6 +182,11 @@ Rectangle {
         required property bool   isHint
         required property var    controllers   ///< QStringList (from installedActions)
         required property int    affordanceMask ///< Key=1,Dial=2,TouchZone=4 bitmask
+        // Qt 6 required-property delegate: when a delegate declares any required
+        // model-role property, the implicit `index` context property is NOT
+        // auto-injected — it must be declared required too, or bare `index`
+        // throws "index is not defined" (caught live via the debug channel).
+        required property int    index
 
         // objectName enables debug-channel addressing (qml.get/set/invoke/click).
         // Every LibraryTile is indexed by its ListView position per CLAUDE.md rule.
