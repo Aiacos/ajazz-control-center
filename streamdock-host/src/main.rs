@@ -29,24 +29,25 @@ use kind::{Family, key_image_format, params_for, zone_image_format};
 /// mirajazz. Queried at both observed vendor usage pages (0xFFA0 on the AKP05E
 /// demo; 0xFF00 in the opendeck consumers) since firmware varies.
 const KNOWN_VID_PIDS: &[(u16, u16)] = &[
+    // AKP05 / N4
     (0x0300, 0x3004),
     (0x0300, 0x5001),
-    (0x6603, 0x1007), // AKP05 / N4
-    (0x0300, 0x1001),
-    (0x0300, 0x1002),
-    (0x0300, 0x1003),
+    (0x6603, 0x1007),
+    // AKP03 / N3
+    (0x0300, 0x3001),
     (0x0300, 0x3002),
+    (0x0300, 0x1003),
     (0x0300, 0x3003),
     (0x6602, 0x1002),
+    (0x6602, 0x1003),
     (0x6603, 0x1002),
-    (0x6603, 0x1003), // AKP03 / N3
+    (0x6603, 0x1003),
+    // AKP153
+    (0x0300, 0x1001),
+    (0x0300, 0x1002),
     (0x5548, 0x6674),
-    (0x5548, 0x6670),
     (0x0300, 0x1010),
     (0x0300, 0x1020),
-    (0x0300, 0x3010),
-    (0x0300, 0x3011),
-    (0x6603, 0x1014), // AKP153 / HSV293S
 ];
 
 fn build_queries() -> Vec<DeviceQuery> {
@@ -58,11 +59,11 @@ fn build_queries() -> Vec<DeviceQuery> {
     q
 }
 
-/// A connected device plus the family parameters it was opened with.
+/// A connected device plus the family it was opened with (protocol version is
+/// only needed at connect time, so it is not retained here).
 struct DeviceEntry {
     device: Arc<Device>,
     family: Family,
-    protocol_version: usize,
 }
 
 type DeviceMap = Arc<Mutex<HashMap<String, DeviceEntry>>>;
@@ -122,14 +123,7 @@ async fn main() {
 
                 spawn_input_reader(device.get_reader(noop_process), serial.clone());
 
-                devices.lock().await.insert(
-                    serial,
-                    DeviceEntry {
-                        device,
-                        family: params.family,
-                        protocol_version: params.protocol_version,
-                    },
-                );
+                devices.lock().await.insert(serial, DeviceEntry { device, family: params.family });
             }
             Err(e) => emit(serde_json::json!({"event": "error", "msg": format!("connect: {e}")})),
         }
@@ -251,7 +245,7 @@ async fn handle_set_image(devices: &DeviceMap, cmd: &serde_json::Value, allow_ou
                 let fmt = if touchzone {
                     zone_image_format()
                 } else {
-                    key_image_format(e.family, e.protocol_version, key)
+                    key_image_format(e.family)
                 };
                 (e.device.clone(), fmt)
             }
@@ -280,10 +274,10 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
         return;
     }
     let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
-    let (device, family, pv, key_count) = {
+    let (device, family, key_count) = {
         let guard = devices.lock().await;
         match guard.get(serial) {
-            Some(e) => (e.device.clone(), e.family, e.protocol_version, e.device.key_count()),
+            Some(e) => (e.device.clone(), e.family, e.device.key_count()),
             None => {
                 emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")}));
                 return;
@@ -303,7 +297,7 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
             let (fmt, dim) = if family == Family::Akp05 && key < 4 {
                 (zone_image_format(), 128u32)
             } else {
-                (key_image_format(family, pv, key), 112u32)
+                (key_image_format(family), 112u32)
             };
             device.set_button_image(key, fmt, make_solid(dim, dim, r, g, b)).await?;
         }
