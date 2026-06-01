@@ -129,7 +129,7 @@ public:
      * Passing a null device stops the timer and releases the held handle.
      *
      * @param device  The device supplied by the Phase-14 StreamDockControlService
-     *                (or by makeAkp05WithTransport in tests). Must already be open.
+     *                (or by FakeStreamDockDevice in tests). Must already be open.
      */
     void setActiveDevice(std::shared_ptr<core::IDevice> device);
 

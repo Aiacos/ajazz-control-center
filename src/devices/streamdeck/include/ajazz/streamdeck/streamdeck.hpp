@@ -58,7 +58,7 @@ void registerAll(core::DeviceRegistry& registry);
  * @brief Factory for the AJAZZ AKP815 backend.
  *
  * 15-key grid (5 rows × 3 columns) with 100×100 JPEG-encoded keys
- * (`Rot180`, no mirror) and an 854×480 LCD strip. Drives the family v1-API
+ * (`Rot180`, no mirror) and an 800×480 LCD strip. Drives the family v1-API
  * framing via its own `akp815_wire.hpp` builders, with a different
  * `key_image_format` per `[ajazz-sdk]/info.rs::Kind::Akp815`.
  *

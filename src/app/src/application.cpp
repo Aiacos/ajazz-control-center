@@ -646,9 +646,11 @@ void Application::bootstrap() {
     // experiment/mirajazz Slice 4c: the AKP05E (0x0300:0x3004) is driven by the
     // out-of-process mirajazz sidecar backend by default (verified live via the
     // debug channel). Registered BEFORE registerAll so it wins the (VID,PID)
-    // slot — registerDevice skips the later makeAkp05 duplicate. Set
-    // AJAZZ_NO_SIDECAR to fall back to the in-tree C++ backend (kept as the
-    // unit-test fixture and the N4 / 0x5001 stub path).
+    // slot ahead of registerAll (which now registers only the AKP815 carve-out).
+    // Set AJAZZ_NO_SIDECAR to skip registering the sidecar SKUs entirely — there
+    // is NO in-tree C++ fallback for AKP03/05/153 anymore (their wire backends
+    // were removed in Slice D), so those families are simply unsupported when it
+    // is set; AKP815 is unaffected.
     if (!qEnvironmentVariableIsSet("AJAZZ_NO_SIDECAR")) {
         auto const sidecarDevices = streamdeck::streamDockSidecarDescriptors();
         for (auto const& d : sidecarDevices) {

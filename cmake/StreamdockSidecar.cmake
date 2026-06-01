@@ -60,8 +60,11 @@ function(ajazz_add_streamdock_sidecar app_target)
     # Requires the rustup targets aarch64-apple-darwin + x86_64-apple-darwin to be installed.
     list(LENGTH CMAKE_OSX_ARCHITECTURES sidecar_n_osx_arch)
     if(APPLE AND sidecar_n_osx_arch GREATER 1)
+        # One cargo invocation per arch (instead of one multi---target build): it is robust across
+        # cargo versions and unambiguous about which per-triple artifact each lipo input refers to.
+        # The per-arch binaries land under <target-dir>/<triple>/release/.
         set(sidecar_arch_binaries "")
-        set(sidecar_cargo_target_flags "")
+        set(sidecar_build_commands "")
         foreach(sidecar_arch IN LISTS CMAKE_OSX_ARCHITECTURES)
             if(sidecar_arch STREQUAL "arm64")
                 set(sidecar_triple "aarch64-apple-darwin")
@@ -70,20 +73,31 @@ function(ajazz_add_streamdock_sidecar app_target)
             else()
                 message(FATAL_ERROR "streamdock-host: unsupported macOS arch '${sidecar_arch}'")
             endif()
-            list(APPEND sidecar_cargo_target_flags --target "${sidecar_triple}")
+            list(
+                APPEND
+                sidecar_build_commands
+                COMMAND
+                "${CARGO_EXECUTABLE}"
+                build
+                --release
+                --locked
+                --manifest-path
+                "${sidecar_manifest}"
+                --target-dir
+                "${sidecar_target_dir}"
+                --target
+                "${sidecar_triple}"
+            )
             list(APPEND sidecar_arch_binaries
                  "${sidecar_target_dir}/${sidecar_triple}/release/${sidecar_name}"
             )
         endforeach()
         add_custom_command(
-            OUTPUT "${sidecar_binary}"
-            COMMAND
-                "${CARGO_EXECUTABLE}" build --release --locked --manifest-path "${sidecar_manifest}"
-                --target-dir "${sidecar_target_dir}" ${sidecar_cargo_target_flags}
+            OUTPUT "${sidecar_binary}" ${sidecar_build_commands}
             COMMAND lipo -create ${sidecar_arch_binaries} -output "${sidecar_binary}"
             WORKING_DIRECTORY "${sidecar_dir}"
             DEPENDS "${sidecar_manifest}" "${sidecar_lockfile}" ${sidecar_sources}
-            COMMENT "Building universal streamdock-host Rust sidecar (cargo + lipo)"
+            COMMENT "Building universal streamdock-host Rust sidecar (cargo per-arch + lipo)"
             VERBATIM USES_TERMINAL
         )
     else()

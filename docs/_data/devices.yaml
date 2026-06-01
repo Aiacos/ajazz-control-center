@@ -211,7 +211,7 @@ devices:
     notes: "Mirabox-branded sibling of AJAZZ AKP03 (opendeck-akp03 catalogue). Same backend; Phase 8 DEVICES-04 promotion #2."
     feature_summary:
       works:
-        - "Descriptor + factory wired in register.cpp (0x6602:0x1002 via akp03_descriptor)"
+        - "Descriptor wired via streamDockSidecarDescriptors() (0x6602:0x1002), driven by the mirajazz sidecar"
         - "Inherited from akp03: per-key image upload, brightness, encoder rotation/press"
         - "Cross-reference protocol doc (mirabox_n3.md) citing akp03.md"
       partial:
@@ -278,7 +278,7 @@ devices:
     maturity: partial
     capabilities: [display, encoder, touch, macros]
     protocol_doc: docs/protocols/streamdeck/akp05.md
-    notes: "White-label demo AKP05E ('Ajazz HOTSPOTEKUSB HID DEMO' dev string; briefly mis-filed as 6-key 'akp03_variant_3004'). Live CRT VER 2026-05-20 returned 'V3.AKP05E.01.007' — AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Output FULLY works (2026-05-31): keys + the 4 strip zones render via BAT (wire 6..15 keys, 1..4 strip zones), Rot180; brightness live. Input (key/encoder/touch) UNREACHABLE on this demo SKU -> maturity 'partial'. See docs/protocols/streamdeck/akp05.md. Routed through makeAkp05."
+    notes: "White-label demo AKP05E ('Ajazz HOTSPOTEKUSB HID DEMO' dev string; briefly mis-filed as 6-key 'akp03_variant_3004'). Live CRT VER 2026-05-20 returned 'V3.AKP05E.01.007' — AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Output FULLY works (2026-05-31): keys + the 4 strip zones render via BAT (wire 6..15 keys, 1..4 strip zones), Rot180; brightness live. Input (key/encoder/touch) UNREACHABLE on this demo SKU -> maturity 'partial'. See docs/protocols/streamdeck/akp05.md. Driven by the out-of-process mirajazz sidecar (the C++ wire backend was removed in experiment/mirajazz Slice D)."
 
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
