@@ -97,12 +97,22 @@ tests. Migration recipe (proven in `test_stream_dock_controls`):
   ULEND envelope, firmware probe) with no app-behavior counterpart → NOT migrated;
   it is deleted in D with akp05.cpp. Also added `ITouchStripDisplayCapable` to BOTH
   FakeStreamDockDevice AND SidecarStreamDockDevice (55dc8fb).
-- [ ] D — `git rm` akp03/05/153.{cpp,\_protocol.hpp} + streamdeck.hpp decls +
-  register.cpp makeAkp\* calls + pure-wire unit tests. **Pure-wire test deletions:**
-  `test_akp05_touch_strip` (whole file); **split** `test_stream_dock_family`
-  (drop AKP03/153 byte cases, keep AKP815) and `test_factory_reset_and_logo`
-  (drop the Akp05 boot-logo case, keep the AjSeriesMouse factory-reset case).
-  Fix test_register_akp05e_clock (assert streamDockSidecarDescriptors, both
-  hasClock=false). Keep AKP815 + common + image_pipeline.
+- [x] D — C++ AKP03/05/153 wire backends removed (2 commits). **D-prep** (3e82aca):
+  relocated the shared v1-API builders AKP815 depended on from akp153.cpp/
+  akp153_protocol.hpp into new AKP815-owned `akp815_wire.{hpp,cpp}` (namespace
+  akp153→akp815, byte-identical). **D** (b79b3b9): `git rm` akp03/05/153.{cpp,
+  \_protocol.hpp}; dropped makeAkp03/05/153 decls from streamdeck.hpp; removed
+  their registerDevice rows + dead PID constants + akp153/03_descriptor helpers
+  from register.cpp (registerAll now registers only AKP815); CMake drops the 3
+  .cpp. Tests: deleted pure-wire test_akp03/05/153_protocol + akp05_input_corrections
+  - akp05_touch_strip; reduced test_stream_dock_family to AKP815-only; renamed
+    test_factory_reset_and_logo→test_factory_reset (dropped AKP05 boot-logo, kept
+    mouse); repointed test_capture_replay at akp815::parseInputReport;
+    test_device_registry deckCount 3→1; test_register_akp05e_clock now queries
+    streamDockSidecarDescriptors (akp05e+mirabox_n4 both hasClock=false);
+    test_time_sync_e2e drives NotImplemented via akp815. **652 unit + 7 integration
+    green.** (NOTE: akp153_protocol.hpp was NOT deletable as the plan assumed —
+    akp815.cpp depended on its builders; user chose the rename-to-akp815 path.)
+    Kept: akp815 + akp_common_protocol.hpp + image_pipeline.
 - [ ] E — docs (CLAUDE.md glossary, README, docstrings, devices.yaml).
 - [ ] F — cmake builds + bundles the Rust sidecar cross-platform + CI Rust step.
