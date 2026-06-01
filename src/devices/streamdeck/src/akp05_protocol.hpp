@@ -72,12 +72,8 @@ inline constexpr std::uint8_t KeyCols = 5;        ///< Physical columns of LCD k
 inline constexpr std::uint8_t EncoderCount = 4;   ///< Endless rotary encoders.
 inline constexpr std::uint8_t TouchZoneCount = 4; ///< Touch-strip zones aligned to encoders.
 inline constexpr std::uint16_t KeyWidthPx =
-    112; ///< Per-key JPEG dim — opendeck-akp05 mappings.rs:166 (protocol v3 AKP05/N4/05E), uniform
-         ///< for all keys (no per-key sizing). Hardware-confirmed 2026-06-01 on 0x0300:0x3004: a
-         ///< byte-identical 112×112 buffer fills all 10 keys 1:1
-         ///< (scripts/akp05_key_margin_probe.py). 120 px overflows the 112 LCD → row-stride skew
-         ///< that reads as a right-margin; the earlier "per-key placement bug" was that stale 120
-         ///< px build, NOT a real defect.
+    112; ///< Per-key JPEG dim, uniform for all 10 keys (opendeck-akp05 mappings.rs:166;
+         ///< 112 fills every key 1:1, hardware-confirmed 2026-06-01). Was 85, then 120.
 inline constexpr std::uint16_t KeyHeightPx = 112;         ///< Per-key JPEG dim (see KeyWidthPx).
 inline constexpr std::uint16_t TouchStripWidthPx = 800;   ///< LCD strip width.
 inline constexpr std::uint16_t TouchStripHeightPx = 480;  ///< LCD strip height.
@@ -89,21 +85,12 @@ inline constexpr std::uint16_t TouchStripRangeX =
     256; ///< Touch X is single byte (0..255), per akp05_input_corrections.md §4 (was 640 — wrong
          ///< BE16 model) (preserved for backwards-compat tests; capture pending).
 
-// Per-encoder strip zone. The AKP05E touch strip carries 4 zones aligned to the
-// 4 encoders (akp_device_matrix §4 — "no separate encoder LCD"), rendered via the
-// SAME BAT opcode as keys at wire bytes 1..4 — the vendor ENC opcode does not
-// paint on this firmware.
-//
-// 192×128, hardware-measured 2026-06-01 on 0x0300:0x3004 with the border-target
-// width sweep (scripts/akp05_key_margin_probe.py --zsweep): the strip is one wide
-// LCD with a ~192 px zone pitch; 128 left visible gaps between zones, the zone
-// fills the strip's full 128 px height. This SUPERSEDES both the earlier eyeballed
-// 128×128 and opendeck-akp05 mappings.rs:174 (176×112) — the latter's 112 height
-// does not fill on real hardware, so the reference's zone values are approximate
-// and the measurement wins (same hardware-over-RE rule as the 112 key size).
-// Pitch is ±8 px (photo-measured); retail N4 should look the same (same strip) but
-// re-confirm if one is on hand. See docs/protocols/streamdeck/akp05.md.
-inline constexpr std::uint16_t EncoderScreenWidthPx = 192;
+// Per-encoder strip-zone image, BAT wire 1..4 (the strip IS the encoder display —
+// no separate LCD; the vendor ENC opcode is blank on this firmware). One 128×128
+// square above each of the 4 knobs. The knobs are physically spaced, so the zones
+// are discrete with gaps between them by design — they do NOT tile into a strip.
+// (opendeck-akp05 mappings.rs:174 uses 176×112; zone size is cosmetic here.)
+inline constexpr std::uint16_t EncoderScreenWidthPx = 128;
 inline constexpr std::uint16_t EncoderScreenHeightPx = 128;
 
 /// Output reports are padded to this size. The protocol_version 3 AKP05

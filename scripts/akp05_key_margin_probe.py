@@ -1,47 +1,22 @@
 #!/usr/bin/env python3
-"""AKP05E per-key margin diagnostic — is the "keys 2-10 right-margin" a code bug
-or a 0x3004 demo-unit firmware quirk?
+"""AKP05E image-size diagnostic — paint a bordered test target to keys/strip zones.
 
-Background
-----------
-Our key path was cross-checked (2026-06-01) against the authoritative
-``ambiso/opendeck-akp05`` reference and matches it exactly:
+Each target is a rect with a border on all 4 edges + corner diagonals + a px-size
+label, Rot180 (the panel mounts inverted). Photograph the panel to read whether a
+given size fills a surface 1:1 or leaves a margin. Used to confirm the 112x112 key
+size (a byte-identical buffer fills every key) and the strip-zone size.
 
-    * key image  = 112x112 JPEG, Rot180        (mappings.rs:166)
-    * top-row    logical 0..4 -> wire 11..15    (device.rs map_position + mirajazz key+1)
-    * bottom-row logical 5..9 -> wire 6..10
-    * encoders   0..3        -> wire 1..4
-
-opendeck uses a UNIFORM 112x112 for every key and runs on retail N4 hardware.
-Yet on the live 0x3004 "HOTSPOTEKUSB HID DEMO" unit, key 1 fills 1:1 at 112 but
-keys 2-10 show a right-margin. Since our encode is byte-identical per key and the
-BAT key-image header carries NO geometry (only JPEG size + wire byte), the only
-per-key variable is the wire byte at offset 13 -> i.e. the firmware's per-LCD
-behaviour. This probe makes that conclusion (or refutes it) directly observable.
-
-Two modes
----------
-* DEFAULT (decisive): build ONE 112x112 JPEG and send the *byte-identical* buffer
-  to all 10 keys (wire 11..15, 6..10). The image has a bright border touching all
-  four edges + corner-to-corner diagonals, so any clipping/margin is obvious and
-  you can read off WHICH edge it is. If key 1 fills and keys 2-10 margin with
-  provably-identical bytes, it is the firmware/per-wire-byte LCD = demo-unit quirk
-  (do NOT "fix" by diverging from the retail-correct 112). Photograph the panel.
-
-* --sweep: paint ascending image sizes per key (112,116,120,...) each labelled
-  with its px size, so IF the LCDs are uniform and simply want a different size,
-  one photo shows which size fills the key. (Conflates if LCDs differ per key.)
-
-Wire format is the live-confirmed AKP05E framing (mirajazz / cc04a54 + 037bd8d),
-identical to scripts/akp05_color_probe.py. DEFENSIVE output-only diagnostic for
-the device owner's own hardware. See docs/protocols/streamdeck/akp05.md.
+Wire format is the live-confirmed AKP05E BAT framing (mirajazz / cc04a54 + 037bd8d),
+as in scripts/akp05_color_probe.py. Sends NO `CRT DIS` (it wedges the display);
+inits with CONNECT + LIG. Output-only; for the device owner's own hardware.
+See docs/protocols/streamdeck/akp05.md.
 
 Usage:
-    python3 scripts/akp05_key_margin_probe.py                 # identical 112 to all keys
-    python3 scripts/akp05_key_margin_probe.py --size 120      # identical 120 to all keys
+    python3 scripts/akp05_key_margin_probe.py                 # identical 112 to all 10 keys
+    python3 scripts/akp05_key_margin_probe.py --size 120      # identical size to all keys
     python3 scripts/akp05_key_margin_probe.py --sweep         # 112,116,120,... per key
-    python3 scripts/akp05_key_margin_probe.py --zones         # 4 strip zones at 176x112
-    python3 scripts/akp05_key_margin_probe.py --zones --zw 160 --zh 112   # iterate zone size
+    python3 scripts/akp05_key_margin_probe.py --zones --zw 128 --zh 128   # 4 strip zones
+    python3 scripts/akp05_key_margin_probe.py --zsweep        # zone widths --widths x --zh
     python3 scripts/akp05_key_margin_probe.py --node /dev/hidraw13
 """
 
@@ -64,7 +39,7 @@ VID, PID = 0x0300, 0x3004
 PACKET = 1024  # protocol_version 3 OUT endpoint payload size
 KEY_SIZE = 112  # authoritative opendeck-akp05 mappings.rs:166 (uniform, all keys)
 ENCODER_WIRE = [1, 2, 3, 4]  # 4 touch-strip zones aligned to encoders E1..E4
-ZONE_W, ZONE_H = 176, 112  # opendeck-akp05 mappings.rs:174 candidate (code currently 128x128)
+ZONE_W, ZONE_H = 128, 128  # established zone square (discrete, gaps by design); cosmetic
 
 
 # logical key (1-based) -> wire byte: top row 1..5 -> 11..15, bottom 6..10 -> 6..10
@@ -176,32 +151,20 @@ def send_image(fd: int, wire_byte: int, jpeg: bytes) -> None:
 
 
 def paint_zones(fd: int, ctrl: str, zw: int, zh: int) -> None:
-    # Touch-strip zones (wire 1..4). The strip is ONE wide LCD; the firmware places
-    # each zone's image at a fixed slot, so an image too small leaves a gap and too
-    # large bleeds into the neighbour zone (doc 2026-05-31: "200px overflowed into
-    # the neighbour"). Paint all 4 zones the SAME w x h and read fill-vs-gap-vs-bleed.
-    # Default 176x112 = opendeck-akp05 mappings.rs:174; re-run with --zw/--zh.
+    # Paint all 4 strip zones (wire 1..4) the same zw x zh square. The zones are
+    # discrete (one per knob) with gaps between them by design — they do not tile.
     jpeg = make_target(zw, zh, f"{zw}x{zh}")
     print(f"# control node: {ctrl}")
-    print(
-        f"# ZONES: {zw}x{zh} (opendeck mappings.rs:174 = 176x112; code 128x128) "
-        f"-> all 4 strip zones (wire 1..4)."
-    )
+    print(f"# ZONES: {zw}x{zh} -> all 4 strip zones (wire 1..4).")
     for e, wire in enumerate(ENCODER_WIRE):
         send_image(fd, wire, jpeg)
         print(f"#   E{e + 1} (wire {wire}) <- {zw}x{zh}  ({len(jpeg)} B)")
         time.sleep(0.02)
-    print("# done. Photograph the strip; per zone: does the MAGENTA border touch all 4")
-    print("#       edges with NO gap and NO bleed into the next zone?")
-    print("#       gap => smaller; bleed => larger; clean fill => that's the size.")
+    print("# done. Photograph the strip.")
 
 
 def paint_zone_sweep(fd: int, ctrl: str, widths: list[int], h: int) -> None:
-    # One photo, 4 candidate zone WIDTHS (height fixed). The strip is one wide LCD
-    # with 4 fixed zone slots; flush-boundary method: the boundary between zone n
-    # (width w_n) and zone n+1 is gap-free exactly when w_n == the firmware's zone
-    # pitch. So the zone whose RIGHT edge meets the next zone's left edge with no
-    # gap and no overlap pins the pitch. 128 left gaps; opendeck says 176 wide.
+    # Paint the 4 zones at 4 candidate widths (height fixed) for one-photo comparison.
     print(f"# control node: {ctrl}")
     print(f"# ZONE-SWEEP: widths {widths} x {h} across the 4 strip zones (wire 1..4).")
     for e, wire in enumerate(ENCODER_WIRE):
@@ -209,8 +172,7 @@ def paint_zone_sweep(fd: int, ctrl: str, widths: list[int], h: int) -> None:
         send_image(fd, wire, make_target(w, h, f"{w}x{h}"))
         print(f"#   E{e + 1} (wire {wire}) <- {w}x{h}")
         time.sleep(0.02)
-    print("# done. Photograph the strip; the boundary E_n|E_n+1 that is flush (no gap,")
-    print("#       no overlap) means w_n == the zone pitch -> that is the fill width.")
+    print("# done. Photograph the strip and compare the 4 widths.")
 
 
 def paint_key_sweep(fd: int, ctrl: str) -> None:

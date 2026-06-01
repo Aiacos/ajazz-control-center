@@ -17,28 +17,19 @@
 
 | Wire byte (BAT offset 12) | Physical surface                                     | Image size  | Rotation   |
 | ------------------------- | ---------------------------------------------------- | ----------- | ---------- |
-| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | **192×128** | **Rot180** |
+| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | 128×128     | **Rot180** |
 | `5`                       | **no visible surface** — do not use                  | —           | —          |
 | `6..10`                   | bottom-row keys K6..K10                              | **112×112** | **Rot180** |
 | `11..15`                  | top-row keys K1..K5                                  | **112×112** | **Rot180** |
 
-> **Key size = 112×112, uniform for all 10 keys** (was wrongly 85 here, then
-> briefly 120). Confirmed two ways on `0x0300:0x3004` (2026-06-01): (1) the
-> authoritative `ambiso/opendeck-akp05` `mappings.rs:166` uses a uniform 112×112
-> Rot180 for every protocol-v3 key (AKP05/05E/N4), with no per-key sizing; (2) a
-> byte-identical 112×112 buffer painted to all 10 wire bytes fills every key 1:1
-> (`scripts/akp05_key_margin_probe.py`). A 120 px image overflows the 112 LCD and
-> the firmware's 112-stride framebuffer skews each row, which *looks* like a
-> per-key right-margin — that was a stale 120 px build, not a device quirk.
+> **Keys = 112×112, uniform for all 10** (opendeck-akp05 `mappings.rs:166`;
+> hardware-confirmed 2026-06-01 — a 112 buffer fills every key 1:1). Was 85, then
+> briefly 120 (overflowed the 112 LCD → row skew that *looked* like a per-key margin).
 >
-> **Touch-zone size = 192×128**, hardware-measured 2026-06-01 with the border
-> width-sweep (`akp05_key_margin_probe.py --zsweep`): the strip is one wide LCD
-> with a ~192 px zone pitch and the zone fills the full 128 px height. This
-> supersedes the earlier eyeballed ~128×128 (too narrow → visible gaps between
-> zones) **and** opendeck-akp05 `mappings.rs:174` (176×112) — opendeck's 112 height
-> does not fill on real hardware, so its zone values are approximate and the
-> measurement wins (same hardware-over-RE rule as the 112 key size). Pitch is ±8 px
-> (photo-measured); retail N4 should match (same strip) but re-confirm if on hand.
+> **Strip zones = 128×128 squares**, one above each knob. The 4 zones are discrete
+> (the knobs are physically spaced) so there are gaps between them by design — they
+> do not tile into a continuous strip. Zone size is cosmetic; opendeck-akp05
+> `mappings.rs:174` uses 176×112.
 
 - **Orientation:** the panel mounts every LCD inverted, so each image is
   **pre-rotated 180°** before encoding (`akp05KeyTransform` / `akp05EncoderTransform`
@@ -47,8 +38,8 @@
   1..5 → wire 11..15 (top row), 6..10 → wire 6..10 (bottom row).
 - **The 4 strip zones ARE the encoder displays** — there is no separate encoder
   LCD. `IEncoderCapable::setEncoderImage(idx 0..3)` renders to BAT wire byte
-  `idx+1` (commit `cb00677`). Zone is **192×128** (zone pitch ~192 px; 128 px
-  leaves gaps, hardware-measured 2026-06-01 — see the size note up top).
+  `idx+1` (commit `cb00677`). One 128×128 square per knob; the 4 zones are
+  discrete with gaps by design (see the size note up top).
 - **Upload framing:** `BAT` header → JPEG payload in 1024-byte chunks → `ULEND`
   commit sentinel. `ULEND` at buffer offset `5..9` (`buildUploadFinished`) is
   hardware-accepted; mirajazz's offset-3 form also works (device is lenient).
@@ -215,11 +206,10 @@ Mirabox devices — to verify):
 
 > ❌ **CORRECTED — see the confirmed render model at the top.** Live `0x3004`:
 > keys are **112×112 JPEG `Rot180`** (NOT 60×60 Rot0, NOT the 85 once recorded
-> here); the strip is **4 zones of 192×128 `Rot180`** (hardware-measured 2026-06-01,
-> supersedes both the eyeballed 128 and opendeck's 176×112 — see top), each
-> addressed by its own `BAT` wire byte
-> (1..4) — NOT a single 800×480 split. The original `[opendeck-akp05]` guess below
-> was wrong on both size and orientation.
+> here); the strip is **4 discrete 128×128 zones `Rot180`** (gaps between them by
+> design — see top), each addressed by its own `BAT` wire byte (1..4) — NOT a
+> single 800×480 split. The original `[opendeck-akp05]` guess below was wrong on
+> both size and orientation.
 
 Per `[opendeck-akp05]/[opendeck-akp03]` the image format for the N4 keys
 was guessed to be close to AKP03 (60×60 JPEG `Rot0`), with the touch strip a
