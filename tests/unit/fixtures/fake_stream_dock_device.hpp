@@ -124,6 +124,10 @@ public:
                          std::span<std::uint8_t const> rgba,
                          std::uint16_t width,
                          std::uint16_t height) override {
+        // Honour the backend contract: out-of-range encoder index is a no-op.
+        if (index >= m_descriptor.encoderCount) {
+            return;
+        }
         encoderImages.push_back({index, width, height, rgba.size()});
     }
 
