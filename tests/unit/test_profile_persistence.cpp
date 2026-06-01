@@ -15,7 +15,7 @@
  */
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_io.hpp"
-#include "fixtures/mock_transport.hpp"
+#include "fixtures/fake_stream_dock_device.hpp"
 #include "profile_controller.hpp"
 #include "qt_app_fixture.hpp"
 #include "stream_dock_control_service.hpp"
@@ -33,9 +33,6 @@
 
 #include <catch2/catch_test_macros.hpp>
 
-// For streamdeck make factory
-#include "ajazz/streamdeck/streamdeck.hpp"
-
 using namespace ajazz;
 
 namespace {
@@ -51,7 +48,13 @@ struct ProfileCtrlFixture {
 };
 
 // ---------------------------------------------------------------------------
-// Akp05E mock device helper (mirrors test_stream_dock_control_service.cpp).
+// Akp05E in-process fake device helper (mirrors test_stream_dock_control_service.cpp).
+//
+// experiment/mirajazz: the repaint-on-load test below asserts that loading a
+// profile repaints its bound keys. That used to be proven by counting BAT/ULEND
+// wire bytes from a MockTransport; it now counts setKeyImage capability calls on
+// the in-process FakeStreamDockDevice (the byte-level coverage moved to the Rust
+// sidecar's cargo tests).
 // ---------------------------------------------------------------------------
 core::DeviceDescriptor makeAkp05eDescriptor() {
     core::DeviceDescriptor d{};
@@ -61,8 +64,11 @@ core::DeviceDescriptor makeAkp05eDescriptor() {
     d.model = "AJAZZ AKP05E (persistence-test)";
     d.codename = "akp05e";
     d.keyCount = 10;
+    d.gridColumns = 5;
+    d.keyRows = 2;
     d.encoderCount = 4;
     d.hasTouchStrip = true;
+    d.touchZoneCount = 4;
     d.hasClock = false;
     return d;
 }
@@ -75,24 +81,11 @@ core::DeviceId makeAkp05eId() {
     return id;
 }
 
-struct Akp05Fixture {
-    core::DevicePtr device;
-    tests::MockTransport* transport;
-};
-
-Akp05Fixture makeAkp05Fixture() {
-    auto owned = std::make_unique<tests::MockTransport>();
-    auto* obs = owned.get();
-    std::vector<std::uint8_t> verResponse(20, 0);
-    verResponse[0] = 0x01;
-    std::string const vstr = "V3.AKP05E.01.007";
-    for (std::size_t i = 0; i < vstr.size() && i + 1 < verResponse.size(); ++i) {
-        verResponse[i + 1] = static_cast<std::uint8_t>(vstr[i]);
-    }
-    obs->enqueueReadFeature(std::move(verResponse));
-    auto dev = streamdeck::makeAkp05WithTransport(
-        makeAkp05eDescriptor(), makeAkp05eId(), std::move(owned));
-    return Akp05Fixture{std::move(dev), obs};
+std::shared_ptr<tests::FakeStreamDockDevice> makeAkp05eFake() {
+    auto fake =
+        std::make_shared<tests::FakeStreamDockDevice>(makeAkp05eDescriptor(), makeAkp05eId());
+    fake->setFirmwareVersion("V3.AKP05E.01.007");
+    return fake;
 }
 
 void drainQueue() {
@@ -500,17 +493,15 @@ TEST_CASE("ProfileController: loaded profile with 2 bound keys repaints via "
         core::writeProfileToDisk(fsPath, p);
     }
 
-    // Build a MockTransport-backed Akp05 device.
-    auto fx = makeAkp05Fixture();
-    auto devPtr = fx.device;
-    auto* obs = fx.transport;
+    // Build an in-process fake Akp05 device (records setKeyImage calls).
+    auto fake = makeAkp05eFake();
 
     // Build the control service with a profile accessor that returns our loaded profile.
     app::ProfileController ctrl(nullptr);
 
     // Wire the service: on profileChanged, repaint.
     app::StreamDockControlService svc(
-        [devPtr](QString const&) -> std::shared_ptr<core::IDevice> { return devPtr; },
+        [fake](QString const&) -> std::shared_ptr<core::IDevice> { return fake; },
         [&ctrl]() -> core::Profile const& { return ctrl.activeProfile(); },
         nullptr);
 
@@ -523,31 +514,33 @@ TEST_CASE("ProfileController: loaded profile with 2 bound keys repaints via "
                      &svc,
                      &app::StreamDockControlService::repaintFromProfile);
 
-    std::size_t const writeCountAfterOpen = obs->writeCount();
+    auto const paintsAfterOpen = fake->keyImages.size();
 
     // Load the saved profile -- this emits profileChanged -> repaintFromProfile.
     ctrl.loadProfile(savePath);
     drainQueue();
 
-    auto const& writes = obs->writes();
-    REQUIRE(writes.size() > writeCountAfterOpen);
+    // 2 bound keys -> at least 2 setKeyImage capability calls beyond the open
+    // baseline. (Byte-level BAT/ULEND framing is now the sidecar's cargo-test
+    // coverage; here we assert the app-level repaint behaviour.)
+    REQUIRE(fake->keyImages.size() >= paintsAfterOpen + 2);
 
-    // Count BAT headers and ULEND commits for the 2 bound keys.
-    std::size_t batCount = 0;
-    std::size_t ulendCount = 0;
-    for (std::size_t i = writeCountAfterOpen; i < writes.size(); ++i) {
-        auto const& pkt = writes[i];
-        if (pkt.size() >= 8 && pkt[5] == 0x42 && pkt[6] == 0x41 && pkt[7] == 0x54) {
-            ++batCount;
+    // Both bound profile keys must have been painted. The control service maps
+    // 0-based profile key indices to 1-based device key indices (see
+    // stream_dock_control_service.cpp: "adds 1 when iterating profile keys"),
+    // so profile keys {0, 1} paint device keys {1, 2}.
+    bool paintedKey1 = false;
+    bool paintedKey2 = false;
+    for (std::size_t i = paintsAfterOpen; i < fake->keyImages.size(); ++i) {
+        if (fake->keyImages[i].index == 1) {
+            paintedKey1 = true;
         }
-        if (pkt.size() >= 10 && pkt[5] == 0x55 && pkt[6] == 0x4c && pkt[7] == 0x45 &&
-            pkt[8] == 0x4e && pkt[9] == 0x44) {
-            ++ulendCount;
+        if (fake->keyImages[i].index == 2) {
+            paintedKey2 = true;
         }
     }
-    // 2 keys -> >= 2 BAT headers and >= 2 ULEND commits.
-    CHECK(batCount >= 2);
-    CHECK(ulendCount >= 2);
+    CHECK(paintedKey1);
+    CHECK(paintedKey2);
 }
 
 // ===========================================================================
