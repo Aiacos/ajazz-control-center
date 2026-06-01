@@ -66,17 +66,19 @@ inline constexpr std::uint16_t ProductId = 0x5001;          ///< Provisional, se
 
 // Physical geometry — corrected after 2026-05-14 research pass.
 // Sources: `[opendeck-akp05]`, `[mirabox-n4]`, `[companion]`.
-inline constexpr std::uint8_t KeyCount = 10;             ///< LCD keys (2×5 grid).
-inline constexpr std::uint8_t KeyRows = 2;               ///< Physical rows of LCD keys.
-inline constexpr std::uint8_t KeyCols = 5;               ///< Physical columns of LCD keys.
-inline constexpr std::uint8_t EncoderCount = 4;          ///< Endless rotary encoders.
-inline constexpr std::uint8_t TouchZoneCount = 4;        ///< Touch-strip zones aligned to encoders.
-inline constexpr std::uint16_t KeyWidthPx = 85;          ///< Per-key JPEG dimension (legacy).
-inline constexpr std::uint16_t KeyHeightPx = 85;         ///< Per-key JPEG dimension (legacy).
-inline constexpr std::uint16_t TouchStripWidthPx = 800;  ///< LCD strip width.
-inline constexpr std::uint16_t TouchStripHeightPx = 480; ///< LCD strip height.
-inline constexpr std::uint16_t MainDisplayWidthPx = 800; ///< Legacy alias for code that wrote
-                                                         ///< to the strip as a "main" display.
+inline constexpr std::uint8_t KeyCount = 10;      ///< LCD keys (2×5 grid).
+inline constexpr std::uint8_t KeyRows = 2;        ///< Physical rows of LCD keys.
+inline constexpr std::uint8_t KeyCols = 5;        ///< Physical columns of LCD keys.
+inline constexpr std::uint8_t EncoderCount = 4;   ///< Endless rotary encoders.
+inline constexpr std::uint8_t TouchZoneCount = 4; ///< Touch-strip zones aligned to encoders.
+inline constexpr std::uint16_t KeyWidthPx =
+    120; ///< Per-key JPEG dim (Stream Dock Plus LCD; 85 left a white margin on 0x3004 hardware —
+         ///< photo 2026-06-01).
+inline constexpr std::uint16_t KeyHeightPx = 120;         ///< Per-key JPEG dim (see KeyWidthPx).
+inline constexpr std::uint16_t TouchStripWidthPx = 800;   ///< LCD strip width.
+inline constexpr std::uint16_t TouchStripHeightPx = 480;  ///< LCD strip height.
+inline constexpr std::uint16_t MainDisplayWidthPx = 800;  ///< Legacy alias for code that wrote
+                                                          ///< to the strip as a "main" display.
 inline constexpr std::uint16_t MainDisplayHeightPx = 100; ///< Legacy alias (full strip height
                                                           ///< is 480 px — UI uses ~100 px band).
 inline constexpr std::uint16_t TouchStripRangeX =
