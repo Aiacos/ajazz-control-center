@@ -90,19 +90,20 @@ inline constexpr std::uint16_t TouchStripRangeX =
          ///< BE16 model) (preserved for backwards-compat tests; capture pending).
 
 // Per-encoder strip zone. The AKP05E touch strip carries 4 zones aligned to the
-// 4 encoders (akp_device_matrix §4 — "no separate encoder LCD"). Hardware-probed
-// 2026-05-31 on 0x0300:0x3004: each zone displayed a ~128×128 square 1:1 (85 px
-// left visible gaps, 200 px overflowed into the neighbour). Rendered via the
+// 4 encoders (akp_device_matrix §4 — "no separate encoder LCD"), rendered via the
 // SAME BAT opcode as keys at wire bytes 1..4 — the vendor ENC opcode does not
 // paint on this firmware.
 //
-// ⚠ UNVERIFIED-VS-REFERENCE: opendeck-akp05 mappings.rs:174 specifies 176×112
-// (Rot180) for the strip zones, not 128×128. The 128 here was eyeballed, not
-// measured with a border target the way the 112 key size was confirmed on
-// 2026-06-01. Re-probe (scripts/akp05_key_margin_probe.py style, on wire 1..4)
-// before changing — the keys taught us a stale/eyeballed size misleads. Do NOT
-// patch to 176×112 blind. See docs/protocols/streamdeck/akp05.md.
-inline constexpr std::uint16_t EncoderScreenWidthPx = 128;
+// 192×128, hardware-measured 2026-06-01 on 0x0300:0x3004 with the border-target
+// width sweep (scripts/akp05_key_margin_probe.py --zsweep): the strip is one wide
+// LCD with a ~192 px zone pitch; 128 left visible gaps between zones, the zone
+// fills the strip's full 128 px height. This SUPERSEDES both the earlier eyeballed
+// 128×128 and opendeck-akp05 mappings.rs:174 (176×112) — the latter's 112 height
+// does not fill on real hardware, so the reference's zone values are approximate
+// and the measurement wins (same hardware-over-RE rule as the 112 key size).
+// Pitch is ±8 px (photo-measured); retail N4 should look the same (same strip) but
+// re-confirm if one is on hand. See docs/protocols/streamdeck/akp05.md.
+inline constexpr std::uint16_t EncoderScreenWidthPx = 192;
 inline constexpr std::uint16_t EncoderScreenHeightPx = 128;
 
 /// Output reports are padded to this size. The protocol_version 3 AKP05

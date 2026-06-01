@@ -17,7 +17,7 @@
 
 | Wire byte (BAT offset 12) | Physical surface                                     | Image size  | Rotation   |
 | ------------------------- | ---------------------------------------------------- | ----------- | ---------- |
-| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | ~128×128 †  | **Rot180** |
+| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | **192×128** | **Rot180** |
 | `5`                       | **no visible surface** — do not use                  | —           | —          |
 | `6..10`                   | bottom-row keys K6..K10                              | **112×112** | **Rot180** |
 | `11..15`                  | top-row keys K1..K5                                  | **112×112** | **Rot180** |
@@ -31,10 +31,14 @@
 > the firmware's 112-stride framebuffer skews each row, which *looks* like a
 > per-key right-margin — that was a stale 120 px build, not a device quirk.
 >
-> † **Touch-zone size is unverified-vs-reference.** opendeck-akp05
-> `mappings.rs:174` specifies **176×112** (Rot180) for the 4 strip zones, not the
-> ~128×128 eyeballed here on 2026-05-31. Re-probe before trusting either (same
-> method as the keys); do **not** patch blind. See `EncoderScreenWidthPx`.
+> **Touch-zone size = 192×128**, hardware-measured 2026-06-01 with the border
+> width-sweep (`akp05_key_margin_probe.py --zsweep`): the strip is one wide LCD
+> with a ~192 px zone pitch and the zone fills the full 128 px height. This
+> supersedes the earlier eyeballed ~128×128 (too narrow → visible gaps between
+> zones) **and** opendeck-akp05 `mappings.rs:174` (176×112) — opendeck's 112 height
+> does not fill on real hardware, so its zone values are approximate and the
+> measurement wins (same hardware-over-RE rule as the 112 key size). Pitch is ±8 px
+> (photo-measured); retail N4 should match (same strip) but re-confirm if on hand.
 
 - **Orientation:** the panel mounts every LCD inverted, so each image is
   **pre-rotated 180°** before encoding (`akp05KeyTransform` / `akp05EncoderTransform`
@@ -43,8 +47,8 @@
   1..5 → wire 11..15 (top row), 6..10 → wire 6..10 (bottom row).
 - **The 4 strip zones ARE the encoder displays** — there is no separate encoder
   LCD. `IEncoderCapable::setEncoderImage(idx 0..3)` renders to BAT wire byte
-  `idx+1` (commit `cb00677`). Zone fits ~128 px (85 px leaves gaps, 200 px
-  overflows the neighbour).
+  `idx+1` (commit `cb00677`). Zone is **192×128** (zone pitch ~192 px; 128 px
+  leaves gaps, hardware-measured 2026-06-01 — see the size note up top).
 - **Upload framing:** `BAT` header → JPEG payload in 1024-byte chunks → `ULEND`
   commit sentinel. `ULEND` at buffer offset `5..9` (`buildUploadFinished`) is
   hardware-accepted; mirajazz's offset-3 form also works (device is lenient).
@@ -211,8 +215,9 @@ Mirabox devices — to verify):
 
 > ❌ **CORRECTED — see the confirmed render model at the top.** Live `0x3004`:
 > keys are **112×112 JPEG `Rot180`** (NOT 60×60 Rot0, NOT the 85 once recorded
-> here); the strip is **4 zones `Rot180`** (~128×128 eyeballed, but opendeck-akp05
-> says 176×112 — unverified, see top), each addressed by its own `BAT` wire byte
+> here); the strip is **4 zones of 192×128 `Rot180`** (hardware-measured 2026-06-01,
+> supersedes both the eyeballed 128 and opendeck's 176×112 — see top), each
+> addressed by its own `BAT` wire byte
 > (1..4) — NOT a single 800×480 split. The original `[opendeck-akp05]` guess below
 > was wrong on both size and orientation.
 
