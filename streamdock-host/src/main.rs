@@ -1,10 +1,13 @@
-//! streamdock-host — out-of-process Rust sidecar (mirajazz) for the AKP05/N4
-//! Stream Dock family. Newline-delimited JSON over stdin/stdout. See Cargo.toml
-//! for the protocol summary.
+//! streamdock-host — out-of-process Rust sidecar (mirajazz) for the Stream Dock
+//! families mirajazz can drive (AKP05/N4, AKP03/N3, AKP153/HSV293S). Newline-
+//! delimited JSON over stdin/stdout. See Cargo.toml for the protocol summary.
 //!
-//! Slice 1 scope: announce connected devices + firmware, stream raw input
-//! events, `ping`, and `set_brightness` (gated behind --allow-output because
-//! it triggers mirajazz `initialize()` → `CRT DIS`, the wedge-risk command).
+//! Per-device parameters (protocol version, key/encoder count, image format)
+//! come from `kind.rs`. Output commands (brightness/images) are gated behind
+//! --allow-output because mirajazz `initialize()` sends `CRT DIS` (wedge risk);
+//! a persistent-handle sidecar sends it once for the handle lifetime.
+
+mod kind;
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
@@ -13,53 +16,56 @@ use image::{DynamicImage, RgbaImage};
 use mirajazz::{
     device::{Device, DeviceQuery, list_devices},
     error::MirajazzError,
-    types::{DeviceInput, ImageFormat, ImageMirroring, ImageMode, ImageRotation},
+    types::DeviceInput,
 };
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     sync::Mutex,
 };
 
-// AKP05 demo unit's vendor control interface is usage_page 0xFFA0 (confirmed by
-// the enum spike — opendeck-akp05's 0xFF00 guess is wrong for this hardware).
-const QUERIES: [DeviceQuery; 3] = [
-    DeviceQuery::new(0xFFA0, 1, 0x0300, 0x3004), // AKP05 control
-    DeviceQuery::new(0xFFA0, 2, 0x0300, 0x3004), // AKP05 secondary
-    DeviceQuery::new(0xFF00, 1, 0x6603, 0x1007), // Mirabox N4 (provisional)
+use kind::{Family, key_image_format, params_for, zone_image_format};
+
+/// (vid, pid) pairs for every Stream Dock SKU the app registers + drives via
+/// mirajazz. Queried at both observed vendor usage pages (0xFFA0 on the AKP05E
+/// demo; 0xFF00 in the opendeck consumers) since firmware varies.
+const KNOWN_VID_PIDS: &[(u16, u16)] = &[
+    (0x0300, 0x3004),
+    (0x0300, 0x5001),
+    (0x6603, 0x1007), // AKP05 / N4
+    (0x0300, 0x1001),
+    (0x0300, 0x1002),
+    (0x0300, 0x1003),
+    (0x0300, 0x3002),
+    (0x0300, 0x3003),
+    (0x6602, 0x1002),
+    (0x6603, 0x1002),
+    (0x6603, 0x1003), // AKP03 / N3
+    (0x5548, 0x6674),
+    (0x5548, 0x6670),
+    (0x0300, 0x1010),
+    (0x0300, 0x1020),
+    (0x0300, 0x3010),
+    (0x0300, 0x3011),
+    (0x6603, 0x1014), // AKP153 / HSV293S
 ];
 
-const PROTOCOL_VERSION: usize = 3;
-const KEY_COUNT: usize = 15;
-const ENCODER_COUNT: usize = 4;
-
-type DeviceMap = Arc<Mutex<HashMap<String, Arc<Device>>>>;
-
-// AKP05 image formats (hardware-confirmed in our corpus): regular keys are
-// 112x112 Rot180 JPEG; the 4 encoder touch zones are discrete ~128x128 LCDs.
-fn key_format() -> ImageFormat {
-    ImageFormat {
-        mode: ImageMode::JPEG,
-        size: (112, 112),
-        rotation: ImageRotation::Rot180,
-        mirror: ImageMirroring::None,
+fn build_queries() -> Vec<DeviceQuery> {
+    let mut q = Vec::with_capacity(KNOWN_VID_PIDS.len() * 2);
+    for &(vid, pid) in KNOWN_VID_PIDS {
+        q.push(DeviceQuery::new(0xFFA0, 1, vid, pid));
+        q.push(DeviceQuery::new(0xFF00, 1, vid, pid));
     }
-}
-fn touchzone_format() -> ImageFormat {
-    ImageFormat {
-        mode: ImageMode::JPEG,
-        size: (128, 128),
-        rotation: ImageRotation::Rot180,
-        mirror: ImageMirroring::None,
-    }
+    q
 }
 
-fn make_solid(w: u32, h: u32, r: u8, g: u8, b: u8) -> DynamicImage {
-    let mut img = RgbaImage::new(w, h);
-    for px in img.pixels_mut() {
-        *px = image::Rgba([r, g, b, 255]);
-    }
-    DynamicImage::ImageRgba8(img)
+/// A connected device plus the family parameters it was opened with.
+struct DeviceEntry {
+    device: Arc<Device>,
+    family: Family,
+    protocol_version: usize,
 }
+
+type DeviceMap = Arc<Mutex<HashMap<String, DeviceEntry>>>;
 
 /// Emit one JSON line to stdout. `println!` locks stdout, so tasks don't interleave.
 fn emit(obj: serde_json::Value) {
@@ -70,13 +76,21 @@ fn noop_process(_input: u8, _state: u8) -> Result<DeviceInput, MirajazzError> {
     Ok(DeviceInput::NoData)
 }
 
+fn make_solid(w: u32, h: u32, r: u8, g: u8, b: u8) -> DynamicImage {
+    let mut img = RgbaImage::new(w, h);
+    for px in img.pixels_mut() {
+        *px = image::Rgba([r, g, b, 255]);
+    }
+    DynamicImage::ImageRgba8(img)
+}
+
 #[tokio::main]
 async fn main() {
     let allow_output = std::env::args().any(|a| a == "--allow-output");
-
     let devices: DeviceMap = Arc::new(Mutex::new(HashMap::new()));
 
-    let matched = match list_devices(&QUERIES).await {
+    let queries = build_queries();
+    let matched = match list_devices(&queries).await {
         Ok(set) => set,
         Err(e) => {
             emit(serde_json::json!({"event": "error", "msg": format!("enumerate: {e}")}));
@@ -84,9 +98,15 @@ async fn main() {
         }
     };
 
-    // One control interface per physical unit (usage_id 1). Skip the secondary.
+    // One control interface per physical unit (usage_id 1).
     for dev in matched.into_iter().filter(|d| d.usage_id == 1) {
-        match Device::connect(&dev, PROTOCOL_VERSION, KEY_COUNT, ENCODER_COUNT).await {
+        let params = match params_for(dev.vendor_id, dev.product_id) {
+            Some(p) => p,
+            None => continue, // not a mirajazz-driven SKU
+        };
+        match Device::connect(&dev, params.protocol_version, params.key_count, params.encoder_count)
+            .await
+        {
             Ok(device) => {
                 let device = Arc::new(device);
                 let serial = device.serial_number().clone();
@@ -96,42 +116,20 @@ async fn main() {
                     "vid": device.vid,
                     "pid": device.pid,
                     "firmware": device.firmware_version.clone(),
+                    "family": format!("{:?}", params.family),
+                    "name": params.human_name,
                 }));
 
-                // Per-device input reader. Uses raw frames (no initialize/DIS).
-                let reader = device.get_reader(noop_process);
-                let serial_for_task = serial.clone();
-                tokio::spawn(async move {
-                    loop {
-                        match reader
-                            .raw_read_data_with_timeout(512, Duration::from_millis(500))
-                            .await
-                        {
-                            Ok(Some(buf)) => {
-                                let hex: String =
-                                    buf.iter().take(16).map(|b| format!("{b:02x}")).collect();
-                                emit(serde_json::json!({
-                                    "event": "input",
-                                    "serial": serial_for_task,
-                                    "code": buf.get(9).copied().unwrap_or(0),
-                                    "state": buf.get(10).copied().unwrap_or(0),
-                                    "raw": hex,
-                                }));
-                            }
-                            Ok(None) => { /* idle timeout */ }
-                            Err(e) => {
-                                emit(serde_json::json!({
-                                    "event": "device_error",
-                                    "serial": serial_for_task,
-                                    "msg": format!("{e}"),
-                                }));
-                                break;
-                            }
-                        }
-                    }
-                });
+                spawn_input_reader(device.get_reader(noop_process), serial.clone());
 
-                devices.lock().await.insert(serial, device);
+                devices.lock().await.insert(
+                    serial,
+                    DeviceEntry {
+                        device,
+                        family: params.family,
+                        protocol_version: params.protocol_version,
+                    },
+                );
             }
             Err(e) => emit(serde_json::json!({"event": "error", "msg": format!("connect: {e}")})),
         }
@@ -143,7 +141,6 @@ async fn main() {
         "output_allowed": allow_output,
     }));
 
-    // Command loop: one JSON object per stdin line.
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     while let Ok(Some(line)) = lines.next_line().await {
         let line = line.trim();
@@ -157,12 +154,9 @@ async fn main() {
                 continue;
             }
         };
-
         match cmd.get("cmd").and_then(|c| c.as_str()) {
             Some("ping") => emit(serde_json::json!({"event": "pong"})),
-            Some("set_brightness") => {
-                handle_set_brightness(&devices, &cmd, allow_output).await;
-            }
+            Some("set_brightness") => handle_set_brightness(&devices, &cmd, allow_output).await,
             Some("set_image") => handle_set_image(&devices, &cmd, allow_output).await,
             Some("render_test") => handle_render_test(&devices, &cmd, allow_output).await,
             other => emit(serde_json::json!({
@@ -173,24 +167,50 @@ async fn main() {
     }
 }
 
+/// Per-device input reader. Uses raw frames (no initialize/DIS).
+fn spawn_input_reader(reader: Arc<mirajazz::state::DeviceStateReader>, serial: String) {
+    tokio::spawn(async move {
+        loop {
+            match reader
+                .raw_read_data_with_timeout(512, Duration::from_millis(500))
+                .await
+            {
+                Ok(Some(buf)) => {
+                    let hex: String = buf.iter().take(16).map(|b| format!("{b:02x}")).collect();
+                    emit(serde_json::json!({
+                        "event": "input",
+                        "serial": serial,
+                        "code": buf.get(9).copied().unwrap_or(0),
+                        "state": buf.get(10).copied().unwrap_or(0),
+                        "raw": hex,
+                    }));
+                }
+                Ok(None) => {}
+                Err(e) => {
+                    emit(serde_json::json!({
+                        "event": "device_error", "serial": serial, "msg": format!("{e}"),
+                    }));
+                    break;
+                }
+            }
+        }
+    });
+}
+
 async fn handle_set_brightness(devices: &DeviceMap, cmd: &serde_json::Value, allow_output: bool) {
     if !allow_output {
-        emit(serde_json::json!({
-            "event": "error",
-            "msg": "output disabled (start with --allow-output); set_brightness sends CRT DIS",
-        }));
+        emit(serde_json::json!({"event": "error", "msg": "output disabled (--allow-output)"}));
         return;
     }
     let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
     let percent = cmd.get("percent").and_then(|p| p.as_u64()).unwrap_or(50) as u8;
-
-    let device = devices.lock().await.get(serial).cloned();
+    let device = devices.lock().await.get(serial).map(|e| e.device.clone());
     match device {
         Some(device) => match device.set_brightness(percent).await {
-            Ok(()) => emit(serde_json::json!({"event": "ok", "cmd": "set_brightness", "serial": serial})),
-            Err(e) => emit(serde_json::json!({"event": "error", "msg": format!("set_brightness: {e}")})),
+            Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"set_brightness"})),
+            Err(e) => emit(serde_json::json!({"event":"error","msg":format!("set_brightness: {e}")})),
         },
-        None => emit(serde_json::json!({"event": "error", "msg": format!("no device {serial}")})),
+        None => emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")})),
     }
 }
 
@@ -223,48 +243,68 @@ async fn handle_set_image(devices: &DeviceMap, cmd: &serde_json::Value, allow_ou
             return;
         }
     };
-    let fmt = if touchzone { touchzone_format() } else { key_format() };
-    let device = devices.lock().await.get(serial).cloned();
-    match device {
-        Some(device) => {
-            let r = async {
-                device.set_button_image(key, fmt, img).await?;
-                device.flush().await
+
+    let (device, fmt) = {
+        let guard = devices.lock().await;
+        match guard.get(serial) {
+            Some(e) => {
+                let fmt = if touchzone {
+                    zone_image_format()
+                } else {
+                    key_image_format(e.family, e.protocol_version, key)
+                };
+                (e.device.clone(), fmt)
             }
-            .await;
-            match r {
-                Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"set_image","key":key})),
-                Err(e) => emit(serde_json::json!({"event":"error","msg":format!("set_image: {e}")})),
+            None => {
+                emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")}));
+                return;
             }
         }
-        None => emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")})),
+    };
+
+    let r = async {
+        device.set_button_image(key, fmt, img).await?;
+        device.flush().await
+    }
+    .await;
+    match r {
+        Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"set_image","key":key})),
+        Err(e) => emit(serde_json::json!({"event":"error","msg":format!("set_image: {e}")})),
     }
 }
 
-/// `{"cmd":"render_test","serial":..}` — one-shot visual test: brightness up,
-/// paint all 15 surfaces with distinct solid colors, flush. Mirrors the C++
-/// `device.renderTest`. WARNING: triggers initialize()/CRT DIS once.
+/// `{"cmd":"render_test","serial":..}` — one-shot visual test, family-aware.
 async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_output: bool) {
     if !allow_output {
         emit(serde_json::json!({"event": "error", "msg": "output disabled (--allow-output)"}));
         return;
     }
     let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
-    let device = match devices.lock().await.get(serial).cloned() {
-        Some(d) => d,
-        None => {
-            emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")}));
-            return;
+    let (device, family, pv, key_count) = {
+        let guard = devices.lock().await;
+        match guard.get(serial) {
+            Some(e) => (e.device.clone(), e.family, e.protocol_version, e.device.key_count()),
+            None => {
+                emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")}));
+                return;
+            }
         }
     };
 
     let r = async {
         device.set_brightness(60).await?;
-        // Indices 0..4 = encoder touch zones; 5..15 = the 10 regular keys
-        // (opendeck mapping). Distinct color per surface to read orientation.
-        for key in 0u8..KEY_COUNT as u8 {
-            let (r, g, b) = (key.wrapping_mul(17), key.wrapping_mul(9).wrapping_add(40), 200u8.wrapping_sub(key.wrapping_mul(13)));
-            let (fmt, dim) = if key < 4 { (touchzone_format(), 128) } else { (key_format(), 112) };
+        for key in 0u8..key_count as u8 {
+            let (r, g, b) = (
+                key.wrapping_mul(17),
+                key.wrapping_mul(9).wrapping_add(40),
+                200u8.wrapping_sub(key.wrapping_mul(13)),
+            );
+            // AKP05 indices 0..3 are encoder touch zones; other families have none.
+            let (fmt, dim) = if family == Family::Akp05 && key < 4 {
+                (zone_image_format(), 128u32)
+            } else {
+                (key_image_format(family, pv, key), 112u32)
+            };
             device.set_button_image(key, fmt, make_solid(dim, dim, r, g, b)).await?;
         }
         device.flush().await
