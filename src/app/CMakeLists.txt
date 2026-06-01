@@ -132,6 +132,10 @@ qt_add_executable(
     # (T-21-lunbo). Opt-in capture gate (T-21-hook OFF by default). OBS auth default-on
     # (T-21-obsauth, inherited from ObsClient). Not QML-exposed.
     src/builtin_actions_service.cpp
+    # experiment/mirajazz Slice 3a: pure encode/decode for the streamdock-host Rust sidecar wire
+    # protocol (newline-delimited JSON over stdio). Qt-Core only, no QProcess/QObject (no nlohmann
+    # -> COD-031). The QProcess-backed SidecarStreamDockDevice (Slice 3b) composes this.
+    src/sidecar_protocol.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on

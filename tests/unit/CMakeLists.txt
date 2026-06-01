@@ -117,6 +117,10 @@ add_executable(
     # explicit flush (DISPLAY-07, DOCK-02), profileChanged repaints all bound
     # keys (DISPLAY-08), firmwareVersionFor returns the seeded VER string (DOCK-01),
     # and the transport is opened only once across multiple assigns (Pitfall 2).
+    # experiment/mirajazz Slice 3a: pure encode/decode for the streamdock-host
+    # sidecar wire protocol — no process spawned, encode/decode functions only.
+    test_sidecar_protocol.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_protocol.cpp
     test_stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_control_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/profile_controller.cpp
