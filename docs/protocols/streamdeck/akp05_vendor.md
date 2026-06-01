@@ -35,7 +35,7 @@
 >   this hidraw path doesn't replicate).
 > - **`ULEND` is sent and works** at buffer offset `5..9`. The §3 "🔴 gap" rows
 >   below ("we never send ULEND", "we only do whole-strip MAI") are **stale**.
-> - **Images are `Rot180`** (panel mounted inverted): 85×85 keys / ~128×128
+> - **Images are `Rot180`** (panel mounted inverted): 112×112 keys / ~128×128
 >   strip zones.
 > - **Do NOT send `CRT DIS` at open()** — it wedges the display on this unit.
 

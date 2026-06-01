@@ -175,6 +175,21 @@ def paint_zone_sweep(fd: int, ctrl: str, widths: list[int], h: int) -> None:
     print("# done. Photograph the strip and compare the 4 widths.")
 
 
+def paint_key_ab(fd: int, ctrl: str, a: int, b: int) -> None:
+    # A/B in one photo: top row (keys 1..5) at size a, bottom row (6..10) at size b.
+    # The row whose magenta border sits exactly at the LCD edge is the right size;
+    # too-small leaves a margin, too-large overflows / row-skews.
+    print(f"# control node: {ctrl}")
+    print(f"# KEY A/B: top row (K1..5) = {a}x{a}, bottom row (K6..10) = {b}x{b}.")
+    for k in range(1, 11):
+        s = a if k <= 5 else b
+        send_image(fd, key_logical_to_wire(k), make_target(s, s, str(s)))
+        print(f"#   K{k:<2} (wire {key_logical_to_wire(k):>2}) <- {s}x{s}")
+        time.sleep(0.02)
+    print("# done. Photograph the keys; which row's border sits flush at the LCD edge")
+    print("#       (no white margin, no overflow/skew)? that size is correct.")
+
+
 def paint_key_sweep(fd: int, ctrl: str) -> None:
     # Ascending sizes so one photo reveals which size fills a (uniform) key LCD.
     sizes = [112, 116, 120, 124, 128, 112, 118, 124, 130, 136]
@@ -212,6 +227,7 @@ def main() -> int:
     ap.add_argument("--node", help="control hidraw node (default: auto 0xFFA0)")
     ap.add_argument("--size", type=int, default=KEY_SIZE, help=f"key image px (default {KEY_SIZE})")
     ap.add_argument("--sweep", action="store_true", help="ascending size per key (112,116,...)")
+    ap.add_argument("--ab", help="A/B two sizes: top row=first, bottom row=second (e.g. 112,120)")
     ap.add_argument(
         "--zones",
         action="store_true",
@@ -255,7 +271,13 @@ def main() -> int:
     time.sleep(0.05)
 
     try:
-        if args.zsweep:
+        if args.ab:
+            pair = [int(x) for x in args.ab.split(",")]
+            if len(pair) != 2:
+                print("ERROR: --ab needs exactly 2 comma-separated sizes", file=sys.stderr)
+                return 2
+            paint_key_ab(fd, ctrl, pair[0], pair[1])
+        elif args.zsweep:
             widths = [int(x) for x in args.widths.split(",")]
             if len(widths) != 4:
                 print("ERROR: --widths needs exactly 4 comma-separated values", file=sys.stderr)
