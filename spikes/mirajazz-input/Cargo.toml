@@ -1,0 +1,17 @@
+[package]
+name = "mirajazz-spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Throwaway spike (experiment/mirajazz branch) — evaluates whether driving the
+# AKP05/N4 family through the `mirajazz` Rust crate behaves better than the
+# in-tree C++ device layer. NOT part of the CMake build. See README.md.
+
+[dependencies]
+mirajazz = { git = "https://github.com/4ndv/mirajazz" }
+# Pin async-hid to the exact version mirajazz uses (its Cargo.toml: 0.5.1) so
+# the DeviceInfo type we enumerate is the same one mirajazz::Device::connect wants.
+async-hid = { version = "0.5.1", default-features = false, features = ["tokio"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "signal"] }
+futures-lite = "2.6"
