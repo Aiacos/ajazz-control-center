@@ -413,10 +413,21 @@ std::once_flag s_warned_akp05;
 // out as free helpers so the per-call setKeyImage / setEncoderImage / setMainImage
 // bodies stay one-liners and the geometry/orientation/quality constants live in
 // exactly one place.
-inline ImageTransform akp05KeyTransform() noexcept {
+//
+// Per-key image dimension. Retail AKP05/N4 = 112×112 (opendeck mappings.rs:166).
+// The 0x0300:0x3004 "HOTSPOTEKUSB HID DEMO" unit's key LCD is physically larger:
+// 112 leaves a margin and 120 fills it (hardware-checked 2026-06-01, photo). That
+// is a quirk of that one demo SKU (same family as its dead touch input), so we
+// override ONLY 0x3004 → 120 and keep every other SKU at the documented 112.
+constexpr std::uint16_t kAkp05eDemoPid = 0x3004;
+[[nodiscard]] inline std::uint16_t akp05KeyDimPx(std::uint16_t productId) noexcept {
+    return (productId == kAkp05eDemoPid) ? std::uint16_t{120} : akp05::KeyWidthPx;
+}
+
+inline ImageTransform akp05KeyTransform(std::uint16_t keyDimPx) noexcept {
     return ImageTransform{
-        .targetWidth = akp05::KeyWidthPx,
-        .targetHeight = akp05::KeyHeightPx,
+        .targetWidth = keyDimPx,
+        .targetHeight = keyDimPx,
         .format = ImageFormat::Jpeg,
         // Rot180: the AKP05E panel mounts the key LCDs inverted, so each key image
         // must be pre-rotated 180° to read upright — hardware-confirmed 2026-05-31
@@ -599,9 +610,10 @@ public:
         // (`buildEncoderImageHeader`, `buildMainImageHeader`) — they are
         // intentionally not exposed via DisplayInfo because the API contract
         // there is per-key-grid only.
+        auto const dim = akp05KeyDimPx(m_id.productId); // 112, or 120 on the 0x3004 demo unit
         return DisplayInfo{
-            .widthPx = akp05::KeyWidthPx,
-            .heightPx = akp05::KeyHeightPx,
+            .widthPx = dim,
+            .heightPx = dim,
             .keyRows = akp05::KeyRows,
             .keyCols = akp05::KeyCols,
             .jpegEncoded = true,
@@ -632,10 +644,11 @@ public:
             return;
         }
         // ARCH-04: caller passes RGBA8 at any resolution per IDisplayCapable contract;
-        // backend resizes to the device's native 85×85 and JPEG-encodes host-side.
-        // The 1-based logical index is mapped to the firmware wire byte (the
-        // AKP05E addresses keys non-linearly — akp05KeyWire(), commit 037bd8d).
-        auto const jpeg = encodeForDevice(rgba, width, height, akp05KeyTransform());
+        // backend resizes to the device's native key size (112, or 120 on the 0x3004
+        // demo unit — akp05KeyDimPx) and JPEG-encodes host-side. The 1-based logical
+        // index is mapped to the firmware wire byte (keys are non-linear — 037bd8d).
+        auto const jpeg =
+            encodeForDevice(rgba, width, height, akp05KeyTransform(akp05KeyDimPx(m_id.productId)));
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
         sendImage(akp05::buildKeyImageHeader(akp05::akp05KeyWire(keyIndex), sized), jpeg);
     }
@@ -647,7 +660,7 @@ public:
         // ARCH-04: synthesise a solid-color JPEG at native dimensions and ship via
         // the standard key-image path. The 1×1 source is upscaled cheaply by
         // QImage::scaled inside encodeSolid. Logical index -> wire byte (037bd8d).
-        auto const jpeg = encodeSolid(color, akp05KeyTransform());
+        auto const jpeg = encodeSolid(color, akp05KeyTransform(akp05KeyDimPx(m_id.productId)));
         auto const sized = static_cast<std::uint16_t>(std::min<std::size_t>(jpeg.size(), 0xffff));
         sendImage(akp05::buildKeyImageHeader(akp05::akp05KeyWire(keyIndex), sized), jpeg);
     }
