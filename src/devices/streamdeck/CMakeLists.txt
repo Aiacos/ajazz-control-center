@@ -4,6 +4,7 @@ add_library(
     src/akp03.cpp
     src/akp05.cpp
     src/akp815.cpp
+    src/akp815_wire.cpp
     # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline via Qt6 QImage + QImageWriter.
     # PRIVATE-linked (Qt6::Gui pulled into the same PRIVATE scope below) — the public
     # ajazz::core interface stays Qt-free per COD-031 sibling boundary.
