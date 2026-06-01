@@ -63,9 +63,38 @@ and marked PROVISIONAL, the same posture as retail-AKP05E input.
   and installs/bundles it beside the app for deb/rpm/flatpak/msi/dmg; CI matrix
   gains a Rust toolchain step. (Heaviest infra slice; sequenced last.)
 
+## Slice B — test migration pattern (established)
+
+The ~7 app suites on `makeAkp05WithTransport` + `MockTransport` are wire-byte
+tests. Migration recipe (proven in `test_stream_dock_controls`):
+
+1. Includes: `fixtures/mock_transport.hpp` → `fixtures/fake_stream_dock_device.hpp`.
+1. Fixture: `makeAkp05WithTransport(desc,id,transport)` →
+   `std::make_shared<tests::FakeStreamDockDevice>(desc, id)`; the lookup lambda
+   returns the fake.
+1. Assertions: byte-packet counting (BAT/ULEND/LIG/CLE via `obs->writes()`) →
+   capability-call counting on the fake (`keyImages` / `brightnessCalls` /
+   `clearedKeys` / `flushCount`). "N keys painted" → `keyImages.size()` delta N.
+1. Input tests: `MockTransport::enqueueRead(rawframe)` + decode → drive
+   `fake->injectEvent(DeviceEvent{...})` directly (skips the deleted decode).
+1. Behaviour tests independent of the wire (QSignalSpy on pageNavRequested,
+   profile model, bridge coords) stay as-is.
+1. Pure wire-format assertions with no behavioural counterpart are DROPPED —
+   that coverage is the sidecar's (cargo) + live verification.
+
 ## Status
 
 - [x] Sidecar Slices 1–2 (announce/firmware/input/output, hw-validated render).
 - [x] C++ protocol helper + tests (3a), `SidecarStreamDockDevice` (3b).
 - [x] AKP05E routed to sidecar by default + live-verified (4c).
-- [ ] A · B · C · D · E · F (this plan).
+- [x] A — sidecar multi-family (AKP03/153/05) + 9 cargo tests, register.cpp parity.
+- [x] C — `streamDockSidecarDescriptors()` + bootstrap wiring (all SKUs → sidecar).
+- [~] B — FakeStreamDockDevice fixture done; migrated 1/7 (`test_stream_dock_controls`).
+  Remaining: control_service, input_service, profile_pages, profile_persistence,
+  plugin_device_bridge, akp05_touch_strip.
+- [ ] D — `git rm` akp03/05/153.{cpp,\_protocol.hpp} + streamdeck.hpp decls +
+  register.cpp makeAkp\* calls + pure-wire unit tests; fix test_register_akp05e_clock
+  (assert streamDockSidecarDescriptors, both hasClock=false). Keep AKP815 + common
+  \+ image_pipeline.
+- [ ] E — docs (CLAUDE.md glossary, README, docstrings, devices.yaml).
+- [ ] F — cmake builds + bundles the Rust sidecar cross-platform + CI Rust step.
