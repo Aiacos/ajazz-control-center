@@ -118,7 +118,7 @@ live under [`docs/protocols/`](docs/protocols/).
 | [AJAZZ AKP153E (China variant)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1002` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version, Host-settable clock (scaffolded) | Legacy VID:PID; canonical AKP153E PID per ajazz-sdk is 0x1010 (also registered as `akp153e_v2`). |
 | [AJAZZ AKP153E (Mirabox V2 firmware)](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1010` | 🟢 functional | Per-key display, RGB backlight, Macros, Firmware version, Host-settable clock (scaffolded) | Canonical AKP153E PID per ajazz-sdk; same protocol as AKP153. |
 | [AJAZZ AKP153R](docs/protocols/streamdeck/akp153.md) | `0x0300:0x1020` | 🟡 scaffolded | Per-key display, RGB backlight, Macros, Firmware version, Host-settable clock (scaffolded) | Regional revision per ajazz-sdk. Protocol identical to AKP153; capture pending to confirm firmware quirks. |
-| [AJAZZ AKP815](docs/protocols/streamdeck/akp815.md) | `0x5548:0x6672` | 🔵 probed | Per-key display, Macros, Firmware version, Host-settable clock (scaffolded) | ✓ Descriptor + factory wired in register.cpp (0x5548:0x6672); Protocol artefact (akp815.md) with byte-0 Report ID convention; Per-key image upload path inherited from AKP153 v1-API state machine · ⚠ 100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output · ✗ Real-device capture to promote probed -> partial; 800x480 strip image upload validation · 15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md. |
+| [AJAZZ AKP815](docs/protocols/streamdeck/akp815.md) | `0x5548:0x6672` | 🔵 probed | Per-key display, Macros, Firmware version, Host-settable clock (scaffolded) | ✓ Descriptor + factory wired in register.cpp (0x5548:0x6672); Protocol artefact (akp815.md) with byte-0 Report ID convention; Per-key image upload path via the v1-API builders in akp815_wire.{hpp,cpp} · ⚠ 100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output · ✗ Real-device capture to promote probed -> partial; 800x480 strip image upload validation · 15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Custom C++ carve-out (NOT a mirajazz device); owns its v1-API wire builders in akp815_wire.{hpp,cpp} with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md. |
 | [AJAZZ AKP03 / Mirabox N3](docs/protocols/streamdeck/akp03.md) | `0x0300:0x1001` | 🟢 functional | Per-key display, Encoder / dial, Macros, Host-settable clock (scaffolded) | 6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility. |
 | [AJAZZ AKP03 (legacy 0x3001 firmware)](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3001` | 🟢 functional | Per-key display, Encoder / dial, Macros, Host-settable clock (scaffolded) | Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup. |
 | [AJAZZ AKP03E](docs/protocols/streamdeck/akp03.md) | `0x0300:0x3002` | 🟢 functional | Per-key display, Encoder / dial, Macros, Host-settable clock (scaffolded) | AKP03 with Mirabox V2 firmware (1024-byte packets per mirajazz). Same wire-format family. |
@@ -184,12 +184,17 @@ ______________________________________________________________________
 └───────────────┘  └─────────────────┘  └──────────────────┘
         │
 ┌────────────────────────────────────────────────────────────┐
-│              Device Modules (C++, plug-in)                   │
-│  streamdeck_akp153 · streamdeck_akp03 · keyboard · mouse_aj  │
+│                       Device backends                       │
+│  Stream Docks (AKP03/05/153) ─► mirajazz Rust sidecar       │
+│  AKP815 · keyboard (AK980) · mouse_aj  ─► custom C++ modules │
 └────────────────────────────────────────────────────────────┘
 ```
 
-Full design in [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
+The AKP03 / AKP05-N4 / AKP153 Stream Dock families are driven by an
+out-of-process Rust sidecar built on [`mirajazz`](https://github.com/4ndv/mirajazz)
+(JSON over stdio), proxied in by `SidecarStreamDockDevice`. The AKP815 (a
+non-mirajazz 800×480-strip device), keyboards and mice keep custom in-tree C++
+backends. Full design in [`docs/architecture/ARCHITECTURE.md`](docs/architecture/ARCHITECTURE.md).
 
 ______________________________________________________________________
 

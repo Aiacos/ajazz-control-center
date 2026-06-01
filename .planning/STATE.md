@@ -26,6 +26,18 @@ progress:
 
 # Project State
 
+## Active experiment (off-milestone): mirajazz sidecar
+
+> Branch `experiment/mirajazz` (off the v1.3 line). The Stream Dock families
+> (AKP03 / AKP05-N4 / AKP153) were migrated from in-tree C++ wire backends to an
+> out-of-process mirajazz Rust sidecar (`streamdock-host/`, proxied by
+> `SidecarStreamDockDevice`). As of 2026-06-01: sidecar Slices 1–4 + A/C done;
+> Slice B (test migration to `FakeStreamDockDevice`) done; **Slice D done** — the
+> C++ `akp03/05/153.{cpp,_protocol.hpp}` + `makeAkp03/05/153` are **removed**
+> (do not expect them to exist). AKP815 is the custom-backend carve-out.
+> Remaining: Slice E (docs, in progress) + Slice F (cross-platform build/bundle
+> of the Rust sidecar + CI). Full tracking: `.planning/experiment-mirajazz-migration.md`.
+
 ## Project Reference
 
 See: .planning/PROJECT.md (updated 2026-05-15)

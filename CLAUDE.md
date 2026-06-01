@@ -159,7 +159,7 @@ Each platform's compiler catches things the others don't. Land all three.
 ## Methodology — be methodical and precise, don't grope
 
 **Hard prerequisite before any device experiment, "new finding" claim, or
-refactor on this codebase.** This branch (`feat/streamdock`) has had heavy
+refactor on this codebase.** This branch (`experiment/mirajazz`) has had heavy
 ad-hoc RE + device work landing ahead of GSD bookkeeping; recent commits
 very often already contain hardware-confirmed answers or pin known
 PROVISIONAL values. Re-running an investigation that already shipped wastes
@@ -216,6 +216,36 @@ The app ships an opt-in out-of-process debug-control channel
   setting end-to-end, expose a dedicated `Q_INVOKABLE`, or verify the C++ setter
   - the read-binding separately (set the backing store, relaunch, read the bound
     property).
+
+## Stream Dock backend = mirajazz sidecar (architecture, 2026-06-01)
+
+**The Stream Dock families (AKP03 / AKP05-N4 / AKP153) are driven by an
+out-of-process Rust sidecar built on the [`mirajazz`](https://github.com/4ndv/mirajazz)
+crate, NOT by in-tree C++ wire code.** The sidecar (`streamdock-host/`, JSON over
+stdin/stdout) is proxied into the app by `SidecarStreamDockDevice`
+(`src/app/src/sidecar_stream_dock_device.*`); the app registers every mirajazz
+SKU via `streamDockSidecarDescriptors()` + `makeSidecarStreamDock` in bootstrap.
+The persistent-handle sidecar renders the live AKP05E correctly with **no wedge**
+(one `CRT DIS` for the handle lifetime vs the old per-interaction open/close
+churn). The old C++ wire backends (`akp03/05/153.cpp` + their `*_protocol.hpp`,
+`makeAkp03/05/153`) were **removed** in the `experiment/mirajazz` Slice D —
+do NOT reintroduce them. Wire-byte coverage lives in the sidecar's cargo tests;
+app-layer tests use the in-process `FakeStreamDockDevice` fixture.
+
+**Carve-out:** **AKP815** is NOT a mirajazz device (800×480 strip) and keeps its
+custom C++ backend (`akp815.cpp` + `akp815_protocol.hpp` + `akp815_wire.{hpp,cpp}`
+
+- `akp_common_protocol.hpp` + `image_pipeline.*`). `streamdeck::registerAll()`
+  registers ONLY the AKP815 now. Keyboards (AK980) and mice (AJ-series) are not
+  stream controllers and stay custom, untouched. Do NOT modify the `mirajazz`
+  crate itself — it is a pristine git dependency.
+
+The glossary below records **hardware-confirmed findings about the AKP05E /
+streamdeck wire protocol** — these remain valid (the protocol did not change,
+only the implementation moved to the sidecar). References to the removed C++
+symbols (`akp05.cpp`, `StreamDockControlService` open/close, `makeAkp05`) are
+historical; the wire facts (image formats, `BAT` surfaces, input-unreachable
+proof) still hold and the sidecar implements the same wire.
 
 ## AKP05E / streamdeck investigation glossary (2026-05-21 → 2026-05-28)
 
@@ -313,16 +343,16 @@ memory `project_phase_tracking_vs_code_divergence`.
 
 ### Latent items (open, low-priority)
 
-- `tests/qml/ajazz_qml_tests` link target has a pre-existing
-  undefined-references issue
-  (`PluginDeviceBridge::onPluginRegistered`/`onPluginDisconnected`/
-  `onActivePageChanged` not linked into the QML-tests target's
-  `application.cpp.o`). Confirmed pre-existing via stash-and-rebuild
-  2026-05-28. Run ctest with `-E qml` to skip; the unit-test suite
-  (`ajazz_unit_tests`) builds and runs clean (645/645).
-- `StreamDockControlService` opens and closes the AKP05E per interaction
-  in the live app instead of holding a persistent handle. Phase 14
-  intent was hold-open. Not a regression; observed 2026-05-28.
+- `tests/qml/ajazz_qml_tests` link target has a pre-existing undefined-references
+  issue: `tests/qml/CMakeLists.txt` compiles `application.cpp` but its source list
+  omits `sidecar_stream_dock_device.cpp` (→ undefined `ajazz::app::makeSidecarStreamDock`)
+  and the bridge slots (`PluginDeviceBridge::onPluginRegistered`/`onPluginDisconnected`/
+  `onActivePageChanged`). Slice-C/D era gap, unrelated to the wire removal. Run ctest
+  with `-E qml` to skip; the unit-test suite (`ajazz_unit_tests`) builds + runs clean.
+- **Resolved by the sidecar:** the old `StreamDockControlService` per-interaction
+  open/close churn on the AKP05E (which wedged the panel) no longer applies — the
+  sidecar holds a persistent handle for the session (one `CRT DIS`), hardware-confirmed
+  no-wedge 2026-06-01.
 
 ## Useful references
 

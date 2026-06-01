@@ -23,18 +23,24 @@ A backend's source tree therefore typically contains:
 
 ```
 src/devices/streamdeck/
-├── include/ajazz/streamdeck/streamdeck.hpp   # registerAll() declaration
+├── include/ajazz/streamdeck/streamdeck.hpp   # registerAll() + makeAkp815 decl
 └── src/
     ├── register.cpp                          # IRegistry registration
-    ├── akp153.cpp                            # IDevice impl
-    ├── akp153_protocol.hpp                   # wire-format helpers
-    ├── akp03.cpp
-    ├── akp03_protocol.hpp
-    ├── akp05.cpp
-    └── akp05_protocol.hpp
+    ├── akp815.cpp                            # IDevice impl (custom carve-out)
+    ├── akp815_protocol.hpp                   # geometry constants
+    ├── akp815_wire.hpp                       # v1-API wire-format helpers
+    ├── akp815_wire.cpp
+    └── akp_common_protocol.hpp               # family-shared command words
 ```
 
-The `*_protocol.hpp` files are **pure wire-format**: no Qt, no logging, no I/O. They consist of `constexpr` constants and free functions that take/return `std::span<std::uint8_t>`. This makes them trivially unit-testable in `tests/unit/` via capture-replay fixtures.
+The AKP03 / AKP05-N4 / AKP153 Stream Dock families no longer have in-tree C++
+backends: they are driven by the out-of-process **mirajazz Rust sidecar**
+(`streamdock-host/`), proxied in by `SidecarStreamDockDevice`
+(`src/app/src/sidecar_stream_dock_device.*`) and registered via
+`streamDockSidecarDescriptors()`. **AKP815** is the carve-out that keeps a custom
+C++ backend (it is not a mirajazz device). The `*_protocol.hpp` / `akp815_wire.*`
+files are **pure wire-format**: no Qt, no logging, no I/O — `constexpr` constants
+and free functions over `std::span<std::uint8_t>`, trivially unit-testable.
 
 ## Capability catalog
 

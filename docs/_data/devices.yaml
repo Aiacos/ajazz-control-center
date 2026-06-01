@@ -40,6 +40,12 @@ capabilities:
 devices:
   # ----- Stream decks ------------------------------------------------------
   #
+  # Backend (2026-06-01): the AKP03 / AKP05-N4 / AKP153 families are driven by
+  # the out-of-process mirajazz Rust sidecar (streamdock-host), registered via
+  # streamDockSidecarDescriptors() + makeSidecarStreamDock. Their in-tree C++
+  # wire backends were removed in experiment/mirajazz Slice D. AKP815 is the
+  # carve-out (not a mirajazz device) and keeps its custom C++ backend.
+  #
   # USB identifier matrix consolidated 2026-05-14 from three independent
   # reverse-engineering catalogues:
   #
@@ -120,12 +126,12 @@ devices:
     maturity: probed
     capabilities: [display, macros, firmware, clock]
     protocol_doc: docs/protocols/streamdeck/akp815.md
-    notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Backend reuses the AKP153 v1-API state machine with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
+    notes: "15-key 5x3 grid; 100x100 JPEG keys (Rot180) plus an 800x480 LCD strip. Custom C++ carve-out (NOT a mirajazz device); owns its v1-API wire builders in akp815_wire.{hpp,cpp} with a different DisplayInfo. Per-revision image pipeline tracked in TODO.md."
     feature_summary:
       works:
         - "Descriptor + factory wired in register.cpp (0x5548:0x6672)"
         - "Protocol artefact (akp815.md) with byte-0 Report ID convention"
-        - "Per-key image upload path inherited from AKP153 v1-API state machine"
+        - "Per-key image upload path via the v1-API builders in akp815_wire.{hpp,cpp}"
       partial:
         - "100x100 Rot180 image transform — implementation present, no real-device capture confirms byte output"
       pending:
