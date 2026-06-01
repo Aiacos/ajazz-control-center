@@ -310,7 +310,7 @@ core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id) {
 
 /**
  * @brief Test-only factory exposing the @c Akp815Device COD-026 DI constructor
- *        across translation-unit boundaries (parallels @c makeAkp05WithTransport).
+ *        across translation-unit boundaries.
  *
  * Production code uses @ref makeAkp815 above; this overload exposes the same
  * backend with a substitutable transport so unit tests can assert byte-level

@@ -12,9 +12,6 @@ add_executable(
     test_debug_control_server.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/debug_control_server.cpp
     test_device_registry.cpp
-    test_akp153_protocol.cpp
-    test_akp03_protocol.cpp
-    test_akp05_protocol.cpp
     # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline. Locks JPEG/PNG magic bytes,
     # rotation/mirror transforms (AKP153 Rot90+mirror, AKP815 Rot180), and validation
     # contracts (zero-area, dim mismatch).
@@ -75,29 +72,11 @@ add_executable(
     # switch at 60, 5 named flag bits across bytes 12..13) plus clamping
     # + cache normalisation contract.
     test_aj_series_omnibus_settings.cpp
-    # 2026-05-18 capability-mixin pair: AJ-series IFactoryResettable
-    # (opcode 0x02 / FEA_CMD_SET_RESERT per aj_series_opcode_table.md sec
-    # 3.2 - no-payload BIT7-checksummed packet) and AKP05 IBootLogoCapable
-    # (CRT LOG opcode per akp05_vendor.md sec 2 row 188 - BE16 size header
-    # plus 512-byte JPEG chunks plus ULEND commit sentinel). Both pin the
-    # exact wire-byte layout end-to-end via MockTransport.
-    test_factory_reset_and_logo.cpp
-    # 2026-05-18 ITouchStripDisplayCapable: byte-level tests for the public
-    # AKP05 touch-strip capability mixin over the existing "DRA" rect-
-    # addressable strip-update path (akp05_vendor.md sec 3 row 190). Pins
-    # touchStripInfo() (800x480, 4 zones), setTouchStripImage() envelope
-    # (DRA header + BE32 size + location + BE16 width/height/x/y + chunks +
-    # ULEND), out-of-range location refusal (zero writes), and
-    # clearTouchStrip() full-panel black-fill envelope.
-    test_akp05_touch_strip.cpp
-    # 2026-05-27: executable companion to akp05_input_corrections.md. GROUP A pins
-    # the RE-CONFIRMED input invariants (ACK discard, key code@9 + edge@10, VER
-    # on-wire layout, live-captured "V3.AKP05E.01.007" parse). GROUP B uses Catch2
-    # [!shouldfail] to characterise the encoder/touch decoding DEFECTS the Ghidra
-    # RE of SDActionCanvasWidget::handleKeyEvents exposed (no rotation-magnitude
-    # byte; touch X is a single byte at report[10], not BE16) — they flip to red
-    # (un-tag them) once parseInputReport is reworked.
-    test_akp05_input_corrections.cpp
+    # 2026-05-18: AJ-series IFactoryResettable (opcode 0x02 / FEA_CMD_SET_RESERT
+    # per aj_series_opcode_table.md sec 3.2 - no-payload BIT7-checksummed packet),
+    # pinned end-to-end via MockTransport. (The former AKP05 IBootLogoCapable half
+    # was removed with the C++ AKP05 wire backend in experiment/mirajazz Slice D.)
+    test_factory_reset.cpp
     # DEVICES-11 / ARCH-05 (Phase 14, Plan 14-01): descriptor honesty pin for
     # akp05e (0x0300:0x3004). Asserts hasClock==false on the akp05e descriptor
     # after ajazz::streamdeck::registerAll() so the phantom Sync-button

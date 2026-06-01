@@ -47,7 +47,11 @@ TEST_CASE("device registry enumerates all three families", "[registry]") {
             break;
         }
     }
-    REQUIRE(deckCount >= 3);
+    // registerAll() now registers exactly one Stream Dock backend (the AKP815
+    // carve-out). The AKP03/AKP05/AKP153 SKUs moved to the mirajazz sidecar and
+    // are registered separately via streamDockSidecarDescriptors() in the app
+    // bootstrap, not by streamdeck::registerAll() (experiment/mirajazz Slice D).
+    REQUIRE(deckCount >= 1);
     REQUIRE(kbdCount >= 2);
     REQUIRE(mouseCount >= 4);
 }

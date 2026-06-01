@@ -1,8 +1,5 @@
 add_library(
     ajazz_streamdeck STATIC
-    src/akp153.cpp
-    src/akp03.cpp
-    src/akp05.cpp
     src/akp815.cpp
     src/akp815_wire.cpp
     # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline via Qt6 QImage + QImageWriter.
