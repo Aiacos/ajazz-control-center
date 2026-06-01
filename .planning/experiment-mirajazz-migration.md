@@ -89,12 +89,20 @@ tests. Migration recipe (proven in `test_stream_dock_controls`):
 - [x] AKP05E routed to sidecar by default + live-verified (4c).
 - [x] A — sidecar multi-family (AKP03/153/05) + 9 cargo tests, register.cpp parity.
 - [x] C — `streamDockSidecarDescriptors()` + bootstrap wiring (all SKUs → sidecar).
-- [~] B — FakeStreamDockDevice fixture done; migrated 1/7 (`test_stream_dock_controls`).
-  Remaining: control_service, input_service, profile_pages, profile_persistence,
-  plugin_device_bridge, akp05_touch_strip.
+- [x] B — FakeStreamDockDevice fixture + all 6 app-behavior suites migrated onto it:
+  `test_stream_dock_controls` (1/7), `test_profile_pages` (2/7),
+  `test_stream_dock_control_service` (3/7), `test_stream_dock_input_service` (4/7),
+  `test_profile_persistence` (5/7), `test_plugin_device_bridge` e2e (6/7). The 7th,
+  `test_akp05_touch_strip`, is **pure-wire `akp05::`** (DRA header bytes, PacketSize,
+  ULEND envelope, firmware probe) with no app-behavior counterpart → NOT migrated;
+  it is deleted in D with akp05.cpp. Also added `ITouchStripDisplayCapable` to BOTH
+  FakeStreamDockDevice AND SidecarStreamDockDevice (55dc8fb).
 - [ ] D — `git rm` akp03/05/153.{cpp,\_protocol.hpp} + streamdeck.hpp decls +
-  register.cpp makeAkp\* calls + pure-wire unit tests; fix test_register_akp05e_clock
-  (assert streamDockSidecarDescriptors, both hasClock=false). Keep AKP815 + common
-  \+ image_pipeline.
+  register.cpp makeAkp\* calls + pure-wire unit tests. **Pure-wire test deletions:**
+  `test_akp05_touch_strip` (whole file); **split** `test_stream_dock_family`
+  (drop AKP03/153 byte cases, keep AKP815) and `test_factory_reset_and_logo`
+  (drop the Akp05 boot-logo case, keep the AjSeriesMouse factory-reset case).
+  Fix test_register_akp05e_clock (assert streamDockSidecarDescriptors, both
+  hasClock=false). Keep AKP815 + common + image_pipeline.
 - [ ] E — docs (CLAUDE.md glossary, README, docstrings, devices.yaml).
 - [ ] F — cmake builds + bundles the Rust sidecar cross-platform + CI Rust step.
