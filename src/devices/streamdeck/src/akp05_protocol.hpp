@@ -72,9 +72,12 @@ inline constexpr std::uint8_t KeyCols = 5;        ///< Physical columns of LCD k
 inline constexpr std::uint8_t EncoderCount = 4;   ///< Endless rotary encoders.
 inline constexpr std::uint8_t TouchZoneCount = 4; ///< Touch-strip zones aligned to encoders.
 inline constexpr std::uint16_t KeyWidthPx =
-    112; ///< Per-key JPEG dim — opendeck-akp05 mappings.rs:178 (protocol v3 AKP05/N4/05E). Key 1
-         ///< fills 1:1 on 0x3004; keys 2-10 show a per-key right-margin = a placement-offset bug
-         ///< (NOT size), TODO Phase 29.
+    112; ///< Per-key JPEG dim — opendeck-akp05 mappings.rs:166 (protocol v3 AKP05/N4/05E), uniform
+         ///< for all keys (no per-key sizing). Hardware-confirmed 2026-06-01 on 0x0300:0x3004: a
+         ///< byte-identical 112×112 buffer fills all 10 keys 1:1
+         ///< (scripts/akp05_key_margin_probe.py). 120 px overflows the 112 LCD → row-stride skew
+         ///< that reads as a right-margin; the earlier "per-key placement bug" was that stale 120
+         ///< px build, NOT a real defect.
 inline constexpr std::uint16_t KeyHeightPx = 112;         ///< Per-key JPEG dim (see KeyWidthPx).
 inline constexpr std::uint16_t TouchStripWidthPx = 800;   ///< LCD strip width.
 inline constexpr std::uint16_t TouchStripHeightPx = 480;  ///< LCD strip height.
@@ -88,10 +91,17 @@ inline constexpr std::uint16_t TouchStripRangeX =
 
 // Per-encoder strip zone. The AKP05E touch strip carries 4 zones aligned to the
 // 4 encoders (akp_device_matrix §4 — "no separate encoder LCD"). Hardware-probed
-// 2026-05-31 on 0x0300:0x3004: each zone displays a ~128×128 square 1:1 (85 px
+// 2026-05-31 on 0x0300:0x3004: each zone displayed a ~128×128 square 1:1 (85 px
 // left visible gaps, 200 px overflowed into the neighbour). Rendered via the
 // SAME BAT opcode as keys at wire bytes 1..4 — the vendor ENC opcode does not
 // paint on this firmware.
+//
+// ⚠ UNVERIFIED-VS-REFERENCE: opendeck-akp05 mappings.rs:174 specifies 176×112
+// (Rot180) for the strip zones, not 128×128. The 128 here was eyeballed, not
+// measured with a border target the way the 112 key size was confirmed on
+// 2026-06-01. Re-probe (scripts/akp05_key_margin_probe.py style, on wire 1..4)
+// before changing — the keys taught us a stale/eyeballed size misleads. Do NOT
+// patch to 176×112 blind. See docs/protocols/streamdeck/akp05.md.
 inline constexpr std::uint16_t EncoderScreenWidthPx = 128;
 inline constexpr std::uint16_t EncoderScreenHeightPx = 128;
 

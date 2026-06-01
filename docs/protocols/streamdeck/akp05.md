@@ -15,12 +15,26 @@
 13 on the wire after the POSIX `0x00` report-id prepend). The vendor `ENC`,
 `MAI`, and `DRA` opcodes **render nothing on this firmware** — do not use them.
 
-| Wire byte (BAT offset 12) | Physical surface                                     | Image size | Rotation   |
-| ------------------------- | ---------------------------------------------------- | ---------- | ---------- |
-| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | ~128×128   | **Rot180** |
-| `5`                       | **no visible surface** — do not use                  | —          | —          |
-| `6..10`                   | bottom-row keys K6..K10                              | 85×85      | **Rot180** |
-| `11..15`                  | top-row keys K1..K5                                  | 85×85      | **Rot180** |
+| Wire byte (BAT offset 12) | Physical surface                                     | Image size  | Rotation   |
+| ------------------------- | ---------------------------------------------------- | ----------- | ---------- |
+| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | ~128×128 †  | **Rot180** |
+| `5`                       | **no visible surface** — do not use                  | —           | —          |
+| `6..10`                   | bottom-row keys K6..K10                              | **112×112** | **Rot180** |
+| `11..15`                  | top-row keys K1..K5                                  | **112×112** | **Rot180** |
+
+> **Key size = 112×112, uniform for all 10 keys** (was wrongly 85 here, then
+> briefly 120). Confirmed two ways on `0x0300:0x3004` (2026-06-01): (1) the
+> authoritative `ambiso/opendeck-akp05` `mappings.rs:166` uses a uniform 112×112
+> Rot180 for every protocol-v3 key (AKP05/05E/N4), with no per-key sizing; (2) a
+> byte-identical 112×112 buffer painted to all 10 wire bytes fills every key 1:1
+> (`scripts/akp05_key_margin_probe.py`). A 120 px image overflows the 112 LCD and
+> the firmware's 112-stride framebuffer skews each row, which *looks* like a
+> per-key right-margin — that was a stale 120 px build, not a device quirk.
+>
+> † **Touch-zone size is unverified-vs-reference.** opendeck-akp05
+> `mappings.rs:174` specifies **176×112** (Rot180) for the 4 strip zones, not the
+> ~128×128 eyeballed here on 2026-05-31. Re-probe before trusting either (same
+> method as the keys); do **not** patch blind. See `EncoderScreenWidthPx`.
 
 - **Orientation:** the panel mounts every LCD inverted, so each image is
   **pre-rotated 180°** before encoding (`akp05KeyTransform` / `akp05EncoderTransform`
@@ -196,10 +210,11 @@ Mirabox devices — to verify):
 ### Image upload
 
 > ❌ **CORRECTED — see the confirmed render model at the top.** Live `0x3004`:
-> keys are **85×85 JPEG `Rot180`** (NOT 60×60 Rot0); the strip is **4 zones of
-> ~128×128 `Rot180`**, each addressed by its own `BAT` wire byte (1..4) — NOT a
-> single 800×480 split. The original `[opendeck-akp05]` guess below was wrong on
-> both size and orientation.
+> keys are **112×112 JPEG `Rot180`** (NOT 60×60 Rot0, NOT the 85 once recorded
+> here); the strip is **4 zones `Rot180`** (~128×128 eyeballed, but opendeck-akp05
+> says 176×112 — unverified, see top), each addressed by its own `BAT` wire byte
+> (1..4) — NOT a single 800×480 split. The original `[opendeck-akp05]` guess below
+> was wrong on both size and orientation.
 
 Per `[opendeck-akp05]/[opendeck-akp03]` the image format for the N4 keys
 was guessed to be close to AKP03 (60×60 JPEG `Rot0`), with the touch strip a
