@@ -159,7 +159,9 @@ jobs:
           cache: true
 
       - name: Configure
-        run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF
+        # AJAZZ_BUILD_SIDECAR=OFF: clang-tidy analyses C++ only and never builds,
+        # so skip wiring the Rust sidecar (no cargo on this lint runner).
+        run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF -DAJAZZ_BUILD_SIDECAR=OFF
 
       - name: Run clang-tidy on every translation unit
         run: |

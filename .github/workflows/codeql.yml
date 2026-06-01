@@ -74,8 +74,11 @@ jobs:
 
       - name: Build (C++)
         if: matrix.language == 'cpp'
+        # AJAZZ_BUILD_SIDECAR=OFF: CodeQL analyses the C++ tree; the Rust sidecar
+        # is out of scope, so skip its cargo build during the manual build.
         run: |
-          cmake --preset dev -DAJAZZ_BUILD_PYTHON_HOST=OFF -DAJAZZ_BUILD_TESTS=OFF
+          cmake --preset dev -DAJAZZ_BUILD_PYTHON_HOST=OFF -DAJAZZ_BUILD_TESTS=OFF \
+            -DAJAZZ_BUILD_SIDECAR=OFF
           cmake --build --preset dev -j 2
 
       - name: Perform CodeQL Analysis
