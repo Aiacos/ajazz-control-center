@@ -317,6 +317,47 @@ void SidecarStreamDockDevice::setEncoderImage(std::uint8_t index,
         sidecar::buildSetImage(effectiveSerial(), index, /*touchzone=*/true, width, height, rgba));
 }
 
+core::TouchStripInfo SidecarStreamDockDevice::touchStripInfo() const noexcept {
+    core::TouchStripInfo info{};
+    if (m_descriptor.touchZoneCount > 0) {
+        info.widthPx = 800; // AKP05 strip: 800x480, 4 zones of 200x480.
+        info.heightPx = 480;
+        info.zoneCount = m_descriptor.touchZoneCount;
+    }
+    return info;
+}
+
+bool SidecarStreamDockDevice::setTouchStripImage(std::span<std::uint8_t const> rgba,
+                                                 std::uint16_t srcWidth,
+                                                 std::uint16_t srcHeight,
+                                                 std::uint8_t location,
+                                                 std::uint16_t /*x*/,
+                                                 std::uint16_t /*y*/,
+                                                 std::uint16_t /*rectWidth*/,
+                                                 std::uint16_t /*rectHeight*/) {
+    if (!isOpen() || location >= m_descriptor.touchZoneCount) {
+        return false;
+    }
+    // Zone `location` maps to the sidecar's touch-zone set_image (index-addressed
+    // render). The C++ "DRA" rect geometry is irrelevant to mirajazz's per-zone
+    // discrete LCD model.
+    writeCommand(sidecar::buildSetImage(
+        effectiveSerial(), location, /*touchzone=*/true, srcWidth, srcHeight, rgba));
+    return true;
+}
+
+bool SidecarStreamDockDevice::clearTouchStrip() {
+    if (!isOpen()) {
+        return false;
+    }
+    std::array<std::uint8_t, 4> const black{0, 0, 0, 255};
+    for (std::uint8_t zone = 0; zone < m_descriptor.touchZoneCount; ++zone) {
+        writeCommand(
+            sidecar::buildSetImage(effectiveSerial(), zone, /*touchzone=*/true, 1, 1, black));
+    }
+    return true;
+}
+
 QString SidecarStreamDockDevice::effectiveSerial() const {
     if (!m_sidecarSerial.isEmpty()) {
         return m_sidecarSerial;

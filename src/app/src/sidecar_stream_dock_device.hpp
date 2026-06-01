@@ -50,7 +50,8 @@ using SidecarBinaryResolver = std::function<QString()>;
  */
 class SidecarStreamDockDevice final : public core::IDevice,
                                       public core::IDisplayCapable,
-                                      public core::IEncoderCapable {
+                                      public core::IEncoderCapable,
+                                      public core::ITouchStripDisplayCapable {
 public:
     SidecarStreamDockDevice(core::DeviceDescriptor descriptor,
                             core::DeviceId id,
@@ -88,6 +89,22 @@ public:
                          std::span<std::uint8_t const> rgba,
                          std::uint16_t width,
                          std::uint16_t height) override;
+
+    // --- ITouchStripDisplayCapable ---------------------------------------
+    // The AKP05 touch strip is the 4 encoder zones; a zone upload maps to the
+    // sidecar's touch-zone set_image (the index-addressed render the live
+    // render_test confirmed). The rect (x/y/rectW/rectH) is the C++ "DRA"
+    // geometry — the sidecar addresses zones by `location` index instead.
+    [[nodiscard]] core::TouchStripInfo touchStripInfo() const noexcept override;
+    bool setTouchStripImage(std::span<std::uint8_t const> rgba,
+                            std::uint16_t srcWidth,
+                            std::uint16_t srcHeight,
+                            std::uint8_t location,
+                            std::uint16_t x,
+                            std::uint16_t y,
+                            std::uint16_t rectWidth,
+                            std::uint16_t rectHeight) override;
+    bool clearTouchStrip() override;
 
 private:
     [[nodiscard]] QString effectiveSerial() const;

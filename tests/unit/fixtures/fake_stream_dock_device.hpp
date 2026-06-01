@@ -31,7 +31,8 @@ namespace ajazz::tests {
 /// Records every capability call; drives input via injectEvent().
 class FakeStreamDockDevice final : public core::IDevice,
                                    public core::IDisplayCapable,
-                                   public core::IEncoderCapable {
+                                   public core::IEncoderCapable,
+                                   public core::ITouchStripDisplayCapable {
 public:
     // ---- Recorded calls (public for direct assertion) -------------------
     struct ImageCall {
@@ -124,6 +125,36 @@ public:
                          std::uint16_t width,
                          std::uint16_t height) override {
         encoderImages.push_back({index, width, height, rgba.size()});
+    }
+
+    // ---- ITouchStripDisplayCapable --------------------------------------
+    std::vector<ImageCall> touchStripImages; ///< setTouchStripImage calls (index = zone/location).
+    int clearTouchStripCount{0};
+
+    [[nodiscard]] core::TouchStripInfo touchStripInfo() const noexcept override {
+        core::TouchStripInfo info{};
+        info.widthPx = 800;
+        info.heightPx = 480;
+        info.zoneCount = m_descriptor.touchZoneCount;
+        return info;
+    }
+    bool setTouchStripImage(std::span<std::uint8_t const> rgba,
+                            std::uint16_t srcWidth,
+                            std::uint16_t srcHeight,
+                            std::uint8_t location,
+                            std::uint16_t /*x*/,
+                            std::uint16_t /*y*/,
+                            std::uint16_t /*rectWidth*/,
+                            std::uint16_t /*rectHeight*/) override {
+        if (location >= m_descriptor.touchZoneCount) {
+            return false;
+        }
+        touchStripImages.push_back({location, srcWidth, srcHeight, rgba.size()});
+        return true;
+    }
+    bool clearTouchStrip() override {
+        ++clearTouchStripCount;
+        return true;
     }
 
     std::vector<ImageCall> mainImages; ///< setMainImage calls (no-op surfaces still recorded).
