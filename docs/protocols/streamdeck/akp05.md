@@ -22,11 +22,9 @@
 | `6..10`                   | bottom-row keys K6..K10                              | **112×112** | **Rot180** |
 | `11..15`                  | top-row keys K1..K5                                  | **112×112** | **Rot180** |
 
-> **Keys = 112×112** retail default (opendeck-akp05 `mappings.rs:166`). The live
-> `0x0300:0x3004` "HOTSPOTEKUSB HID DEMO" unit has a physically larger key LCD —
-> 112 leaves a margin, 120 fills it — so it is overridden to **120** (`akp05KeyDimPx`
-> in `akp05.cpp`); every other AKP05/N4 SKU stays 112. This is a quirk of that one
-> demo SKU, same family as its dead touch input — not a retail-wide change.
+> **Keys = 112×112, uniform for all 10** (opendeck-akp05 `mappings.rs:166`;
+> hardware-confirmed 2026-06-01 — a 112 buffer fills every key 1:1). Was 85, then
+> briefly 120 (overflowed the 112 LCD → row skew that *looked* like a per-key margin).
 >
 > **Strip zones = 128×128 squares**, one above each knob. The 4 zones are discrete
 > (the knobs are physically spaced) so there are gaps between them by design — they

@@ -72,9 +72,8 @@ inline constexpr std::uint8_t KeyCols = 5;        ///< Physical columns of LCD k
 inline constexpr std::uint8_t EncoderCount = 4;   ///< Endless rotary encoders.
 inline constexpr std::uint8_t TouchZoneCount = 4; ///< Touch-strip zones aligned to encoders.
 inline constexpr std::uint16_t KeyWidthPx =
-    112; ///< Per-key JPEG dim, retail AKP05/N4 default (opendeck-akp05 mappings.rs:166). The
-         ///< 0x0300:0x3004 demo unit overrides to 120 (larger LCD) — see akp05KeyDimPx in
-         ///< akp05.cpp.
+    112; ///< Per-key JPEG dim, uniform for all 10 keys (opendeck-akp05 mappings.rs:166;
+         ///< 112 fills every key 1:1, hardware-confirmed 2026-06-01). Was 85, then 120.
 inline constexpr std::uint16_t KeyHeightPx = 112;         ///< Per-key JPEG dim (see KeyWidthPx).
 inline constexpr std::uint16_t TouchStripWidthPx = 800;   ///< LCD strip width.
 inline constexpr std::uint16_t TouchStripHeightPx = 480;  ///< LCD strip height.
