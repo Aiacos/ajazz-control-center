@@ -177,6 +177,14 @@ signals:
     /// / extensibility before the dispatch table grows to cover it.
     void unhandledEventReceived(QString const& pluginUuid, QString const& eventName);
 
+    /// A host->plugin event was just written to a live socket (sendEvent
+    /// succeeded). Surfaced so the debug console can record the OUTBOUND half of
+    /// the protocol (the inbound half is already captured via actionReceived).
+    /// @param targetUuid Recipient plugin UUID.
+    /// @param eventName  The event name (willAppear / keyDown / dialRotate / …).
+    /// @param payload    The payload object as sent (may be empty).
+    void eventSent(QString const& targetUuid, QString const& eventName, QJsonObject const& payload);
+
 private slots:
     void onNewConnection();
     void onClientDisconnected();

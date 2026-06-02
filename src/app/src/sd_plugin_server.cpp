@@ -520,6 +520,9 @@ bool SdPluginServer::sendEvent(QString const& targetUuid,
                     eventName.toStdString(),
                     targetUuid.toStdString(),
                     frame.size());
+    // Surface the OUTBOUND half of the protocol for the debug console
+    // (symmetric with actionReceived on the inbound side).
+    emit eventSent(targetUuid, eventName, payload);
     return true;
 }
 

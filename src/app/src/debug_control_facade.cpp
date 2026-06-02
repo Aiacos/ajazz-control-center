@@ -566,6 +566,29 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"injected", true}, {"event", action.value("event").toString()}};
     });
 
+    // plugin.protocolLog {limit?} -> {lines:[...]} — the recent plugin protocol
+    // log (BOTH directions): inbound plugin->host actions, outbound host->plugin
+    // events (willAppear/keyDown/dialRotate/...), and lifecycle. Lets the shell
+    // observe the FULL plugin conversation for autonomous verification. Newest
+    // first (PluginDebugService prepends); `limit` keeps the newest N.
+    server.registerMethod("plugin.protocolLog", [&app](QJsonObject const& params, QString& err) {
+        auto* dbg = app.pluginDebug();
+        if (dbg == nullptr) {
+            err = QStringLiteral("plugin debug service unavailable");
+            return QJsonObject{};
+        }
+        QStringList lines = dbg->lines();
+        int const limit = params.value("limit").toInt(0);
+        if (limit > 0 && lines.size() > limit) {
+            lines = lines.mid(0, limit); // newest-first, so the head is newest
+        }
+        QJsonArray arr;
+        for (auto const& l : lines) {
+            arr.append(l);
+        }
+        return QJsonObject{{"lines", arr}, {"count", static_cast<int>(arr.size())}};
+    });
+
     // plugin.installFromFile {path, confirm?} -> {installed} — drives the
     // PluginStore install pipeline from the shell so the install->spawn loop is
     // autonomously verifiable (CLAUDE.md debug-channel rule). `confirm:true`

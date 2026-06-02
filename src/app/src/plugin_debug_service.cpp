@@ -84,6 +84,16 @@ void PluginDebugService::attach(
                                     QStringLiteral("plugin"),
                                     QStringLiteral("%1  unhandled: %2").arg(uuid, eventName));
                          });
+        // OUTBOUND half: host->plugin events (willAppear/keyDown/dialRotate/...).
+        QObject::connect(
+            m_server,
+            &SdPluginServer::eventSent,
+            this,
+            [this](QString const& uuid, QString const& eventName, QJsonObject const& payload) {
+                append(QStringLiteral("out"),
+                       QStringLiteral("plugin"),
+                       QStringLiteral("%1  %2 %3").arg(uuid, eventName, shortJson(payload)));
+            });
         QObject::connect(
             m_server, &SdPluginServer::pluginRegistered, this, [this](QString const& uuid) {
                 append(QStringLiteral("in"),
