@@ -690,3 +690,39 @@ TEST_CASE("bundled sdpi.css qrc resource is present and non-empty", "[pi-bridge]
     REQUIRE(data.contains(".sdpi-item"));
     REQUIRE(data.contains(".sdpi-wrapper"));
 }
+
+// ---------------------------------------------------------------------------
+// T-29-03 regression: isSafeComponent must accept '#' (wire context separator)
+// and continue to reject the classic traversal / bad-char cases.
+// These lock the plugin_settings_store::isSafeComponent contract so that
+// wire context ids (device#root#Keypad#row#col) pass the sanitiser unchanged —
+// required for PIBridge per-context settings (PLUGIN-22 / 29-02).
+// ---------------------------------------------------------------------------
+#include "plugin_settings_store.hpp"
+
+TEST_CASE("plugin_settings_store::isSafeComponent accepts wire context id separators",
+          "[plugin-settings][safe-component][t-29-03]") {
+    using ajazz::app::plugin_settings_store::isSafeComponent;
+
+    // Wire context id components: '#' (0x23) is printable ASCII in [0x20,0x7e]
+    // and is not a path separator — it must pass through so the derived context
+    // ids (device#root#Keypad#row#col) are usable as filename components.
+    REQUIRE(isSafeComponent(QStringLiteral("akp05e#root#Keypad#1#2")));
+    REQUIRE(isSafeComponent(QStringLiteral("akp05e#root#Keypad#0#0")));
+    REQUIRE(isSafeComponent(QStringLiteral("akp05e#root#Keypad#1#4")));
+
+    // Reverse-DNS plugin UUIDs must also be accepted (pre-existing behaviour).
+    REQUIRE(isSafeComponent(QStringLiteral("com.elgato.cpu")));
+    REQUIRE(isSafeComponent(QStringLiteral("com.example.my-plugin")));
+
+    // Classic traversal attacks must still be rejected.
+    REQUIRE(!isSafeComponent(QStringLiteral("../x")));
+    REQUIRE(!isSafeComponent(QStringLiteral("a/b")));
+    REQUIRE(!isSafeComponent(QStringLiteral("a\\b")));
+    REQUIRE(!isSafeComponent(QStringLiteral("..")));
+    REQUIRE(!isSafeComponent(QStringLiteral(".")));
+    REQUIRE(!isSafeComponent(QStringLiteral("foo/../bar")));
+
+    // Empty / oversized must be rejected.
+    REQUIRE(!isSafeComponent(QStringLiteral("")));
+}

@@ -273,6 +273,11 @@ add_executable(
     test_pi_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/pi_bridge.cpp
+    # PLUGIN-22 / 29-02: pi_bridge.cpp now routes per-context settings through
+    # the shared plugin_settings_store; link the store TU so the symbols resolve
+    # even when AJAZZ_HAVE_WEBSOCKETS is OFF (the websocket block adds it only
+    # conditionally for test_plugin_device_bridge.cpp).
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_settings_store.cpp
     # Phase 7 / Plan 07-02 / TRUST-03: loadTrustRoots corpus — positive cases
     # (BOM, escape sequences, top-level array, boundary entry counts 1/2/100/1024),
     # negative cases (>1 MB byte cap, 1025-entry overcount, truncated JSON, malformed
@@ -613,8 +618,9 @@ if(AJAZZ_HAVE_WEBSOCKETS)
         ajazz_unit_tests
         PRIVATE test_plugin_device_bridge.cpp
                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
-                # plugin_device_bridge.cpp now persists plugin settings via the shared store.
-                ${CMAKE_SOURCE_DIR}/src/app/src/plugin_settings_store.cpp
+                # plugin_settings_store.cpp is already linked unconditionally above (pi_bridge
+                # block, PLUGIN-22 / 29-02) — do NOT add it again here to avoid duplicate-symbol
+                # linker errors. The websocket-conditional block only adds plugin_device_bridge.cpp.
     )
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()

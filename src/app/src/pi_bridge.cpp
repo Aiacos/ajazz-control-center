@@ -25,6 +25,7 @@
 
 #include "ajazz/core/logger.hpp"
 #include "pi_url_policy.hpp"
+#include "plugin_settings_store.hpp"
 #include "property_inspector_controller.hpp"
 
 #include <QByteArray>
@@ -119,18 +120,6 @@ QString pluginDir(QString const& pluginUuid) {
         return {};
     }
     return root + QLatin1String("/plugins/") + pluginUuid;
-}
-
-/// Path of the per-context settings file. Empty on validation failure.
-QString perContextPath(QString const& pluginUuid, QString const& contextUuid) {
-    if (!isSafeUuidComponent(contextUuid)) {
-        return {};
-    }
-    QString const dir = pluginDir(pluginUuid);
-    if (dir.isEmpty()) {
-        return {};
-    }
-    return dir + QLatin1String("/settings/") + contextUuid + QLatin1String(".json");
 }
 
 /// Path of the plugin-wide settings file. Empty on validation failure.
@@ -273,35 +262,22 @@ void PIBridge::setSettings(QString const& json) {
                    actionUuid_.toStdString(),
                    contextUuid_.toStdString(),
                    static_cast<int>(json.size()));
-    (void)controller_; // routed through the bridge directly in M4.
+    (void)controller_; // routed through the bridge directly.
 
-    QByteArray const utf8 = json.toUtf8();
-    if (utf8.size() > kMaxSettingsBytes) {
+    // PLUGIN-22: route per-context persistence through the shared store so the PI
+    // and the plugin WebSocket path read/write the SAME file keyed by the wire context id.
+    if (!plugin_settings_store::writeContext(pluginUuid_, contextUuid_, json)) {
         AJAZZ_LOG_ERROR("pi-bridge",
-                        "setSettings: payload {} bytes exceeds {}-byte cap; refusing",
-                        static_cast<long long>(utf8.size()),
-                        static_cast<long long>(kMaxSettingsBytes));
-        return;
-    }
-    QJsonParseError perr;
-    QJsonDocument::fromJson(utf8, &perr);
-    if (perr.error != QJsonParseError::NoError) {
-        AJAZZ_LOG_ERROR("pi-bridge",
-                        "setSettings: invalid JSON ({}); refusing",
-                        perr.errorString().toStdString());
-        return;
-    }
-    QString const path = perContextPath(pluginUuid_, contextUuid_);
-    if (path.isEmpty()) {
-        AJAZZ_LOG_ERROR("pi-bridge",
-                        "setSettings: invalid plugin/context uuid (plugin='{}' context='{}'); "
-                        "refusing",
+                        "setSettings: failed to persist (plugin='{}' context='{}'); "
+                        "check store logs for details",
                         pluginUuid_.toStdString(),
                         contextUuid_.toStdString());
-        return;
-    }
-    if (writeJsonAtomic(path, utf8, QStringLiteral("setSettings"))) {
-        AJAZZ_LOG_INFO("pi-bridge", "setSettings: persisted to '{}'", path.toStdString());
+    } else {
+        AJAZZ_LOG_INFO(
+            "pi-bridge",
+            "setSettings: persisted via plugin_settings_store (plugin='{}' context='{}')",
+            pluginUuid_.toStdString(),
+            contextUuid_.toStdString());
     }
 }
 
@@ -310,13 +286,8 @@ void PIBridge::getSettings() {
                    "getSettings: plugin={} context={}",
                    pluginUuid_.toStdString(),
                    contextUuid_.toStdString());
-    QString const path = perContextPath(pluginUuid_, contextUuid_);
-    if (path.isEmpty()) {
-        AJAZZ_LOG_ERROR("pi-bridge", "getSettings: invalid plugin/context uuid; emitting empty");
-        emit didReceiveSettings(QStringLiteral("{}"));
-        return;
-    }
-    emit didReceiveSettings(readJsonOrEmpty(path, QStringLiteral("getSettings")));
+    // PLUGIN-22: read from the shared store keyed by the wire context id.
+    emit didReceiveSettings(plugin_settings_store::readContext(pluginUuid_, contextUuid_));
 }
 
 void PIBridge::setGlobalSettings(QString const& json) {
