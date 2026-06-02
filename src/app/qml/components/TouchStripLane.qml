@@ -100,8 +100,10 @@ Item {
         property int    zoneIndex:  0
         property url    iconSource: ""
         property string zoneLabel:  ""
-        /// True while this zone cell is being dragged (WR-02).
-        readonly property bool dragActive: Drag.active
+        /// True while this zone cell is being dragged (WR-02). Driven by the
+        /// local DragHandler now that drags route through DragRelay (Phase 29)
+        /// instead of a native Drag.Automatic.
+        readonly property bool dragActive: zoneDragHandler.active
 
         signal zoneSwapRequested(int srcIndex, int dstIndex)
         /// Emitted when the user taps this zone cell; forwarded by TouchStripLane to DeviceView.
@@ -198,22 +200,36 @@ Item {
         }
 
         // ----- Drag source (when occupied) ---------------------------------
+        // DragHandler grabs the pointer; the drag is carried by the shared
+        // overlay ghost via DragRelay (Phase 29). MIME "application/x-ajazz-binding"
+        // with controller "TouchZone" → same-controller move.
         DragHandler {
             id: zoneDragHandler
             target: null
             acceptedButtons: Qt.LeftButton
             dragThreshold: 8
             enabled: zoneCell.iconSource.toString() !== ""
-        }
 
-        Drag.active: zoneDragHandler.active
-        Drag.dragType: Drag.Automatic
-        Drag.mimeData: ({
-            "application/x-ajazz-binding": JSON.stringify({
+            readonly property string _payload: JSON.stringify({
                 controller: "TouchZone",
                 position: zoneCell.zoneIndex
             })
-        })
+            onActiveChanged: {
+                if (active)
+                    DragRelay.begin("application/x-ajazz-binding", _payload,
+                                    zoneCell.iconSource, "view_column", zoneCell.zoneLabel,
+                                    centroid.scenePosition.x, centroid.scenePosition.y);
+                else
+                    DragRelay.finish();
+            }
+        }
+        Binding {
+            target: DragRelay
+            property: "hotspot"
+            value: zoneDragHandler.centroid.scenePosition
+            when: zoneDragHandler.active
+            restoreMode: Binding.RestoreNone
+        }
 
         MouseArea {
             anchors.fill: parent

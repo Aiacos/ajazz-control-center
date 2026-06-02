@@ -28,7 +28,9 @@ ItemDelegate {
     property bool            selected: false
     /// True while this encoder cell is being dragged. DeviceView watches this
     /// to set anyDragActive (WR-02: trash-zone 100% opacity during any cell drag).
-    readonly property bool dragActive: Drag.active
+    /// Driven by the local DragHandler now that drags route through DragRelay
+    /// (Phase 29) instead of a native Drag.Automatic.
+    readonly property bool dragActive: dragHandler.active
 
     // Emitted when a same-controller cell-to-cell binding arrives.
     signal encoderSwapRequested(int srcIndex, int dstIndex)
@@ -104,22 +106,36 @@ ItemDelegate {
     }
 
     // ----- Drag source (when occupied) --------------------------------------
+    // DragHandler grabs the pointer; the drag itself is carried by the shared
+    // overlay ghost via DragRelay (Phase 29). MIME "application/x-ajazz-binding"
+    // with controller "Encoder" → same-controller move ("controller" drag).
     DragHandler {
         id: dragHandler
         target: null
         acceptedButtons: Qt.LeftButton
         dragThreshold: 8
         enabled: root.iconSource.toString() !== ""
-    }
 
-    Drag.active: dragHandler.active
-    Drag.dragType: Drag.Automatic
-    Drag.mimeData: ({
-        "application/x-ajazz-binding": JSON.stringify({
+        readonly property string _payload: JSON.stringify({
             controller: "Encoder",
             position: root.index
         })
-    })
+        onActiveChanged: {
+            if (active)
+                DragRelay.begin("application/x-ajazz-binding", _payload,
+                                root.iconSource, "tune", root.label,
+                                centroid.scenePosition.x, centroid.scenePosition.y);
+            else
+                DragRelay.finish();
+        }
+    }
+    Binding {
+        target: DragRelay
+        property: "hotspot"
+        value: dragHandler.centroid.scenePosition
+        when: dragHandler.active
+        restoreMode: Binding.RestoreNone
+    }
 
     MouseArea {
         anchors.fill: parent

@@ -48,9 +48,13 @@ foreach(rel_qml IN LISTS ACC_QML_MODULE_QML_FILES)
     set_source_files_properties("${_abs}" PROPERTIES QT_RESOURCE_ALIAS "${_alias}")
 endforeach()
 
-# The Theme.qml singleton needs the same source-file property the app sets.
+# The Theme.qml + DragRelay.qml singletons need the same source-file property the app sets, or
+# qmlcachegen registers them as plain components.
 set_source_files_properties(
     "${ACC_APP_SOURCE_DIR}/qml/Theme.qml" PROPERTIES QT_QML_SINGLETON_TYPE TRUE
+)
+set_source_files_properties(
+    "${ACC_APP_SOURCE_DIR}/qml/DragRelay.qml" PROPERTIES QT_QML_SINGLETON_TYPE TRUE
 )
 
 qt_add_executable(

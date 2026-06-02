@@ -47,7 +47,9 @@ ItemDelegate {
     property bool selected: false
     /// True while this cell is being dragged. DeviceView watches this to set
     /// anyDragActive (WR-02: trash-zone 100% opacity during any cell drag).
-    readonly property bool dragActive: Drag.active
+    /// Driven by the local DragHandler now that the drag is routed through the
+    /// DragRelay singleton (Phase 29) instead of a native Drag.Automatic.
+    readonly property bool dragActive: dragHandler.active
 
     // Emitted when a cell-to-cell binding arrives; the DeviceView parent
     // orchestrates the actual swap (it owns both source and destination state).
@@ -135,8 +137,11 @@ ItemDelegate {
     }
 
     // ----- Drag source (when occupied) --------------------------------------
-    // DragHandler sits on the cell; target:null means it does not move the
-    // item visually -- Qt handles the drag image automatically.
+    // DragHandler grabs the pointer + enforces the drag threshold; the actual
+    // drag is carried by the shared overlay ghost via the DragRelay singleton
+    // (Phase 29 — native Drag.Automatic is not delivered on Wayland/niri).
+    // MIME "application/x-ajazz-binding" carries {controller, position} for the
+    // cell-to-cell move ("controller" drag in OpenDeck terms).
     DragHandler {
         id: dragHandler
         target: null
@@ -144,16 +149,28 @@ ItemDelegate {
         // dragThreshold 8px prevents accidental drag during a quick tap.
         dragThreshold: 8
         enabled: root.iconSource.toString() !== ""
-    }
 
-    Drag.active: dragHandler.active
-    Drag.dragType: Drag.Automatic
-    Drag.mimeData: ({
-        "application/x-ajazz-binding": JSON.stringify({
+        readonly property string _payload: JSON.stringify({
             controller: "Keypad",
             position: root.index
         })
-    })
+        onActiveChanged: {
+            if (active)
+                DragRelay.begin("application/x-ajazz-binding", _payload,
+                                root.iconSource, "", root.label,
+                                centroid.scenePosition.x, centroid.scenePosition.y);
+            else
+                DragRelay.finish();
+        }
+    }
+    // Feed the live cursor position to the ghost while dragging.
+    Binding {
+        target: DragRelay
+        property: "hotspot"
+        value: dragHandler.centroid.scenePosition
+        when: dragHandler.active
+        restoreMode: Binding.RestoreNone
+    }
 
     // Cursor affordance when occupied -- use a MouseArea overlay so
     // ItemDelegate's own handling is not disrupted.

@@ -197,6 +197,10 @@ Rectangle {
         enabled: !isHint
 
         // ----- Drag source (disabled for the hint row) ---------------------
+        // DragHandler grabs the pointer + enforces the threshold; the drag is
+        // carried by the shared overlay ghost via DragRelay (Phase 29 — native
+        // Drag.Automatic is not delivered on Wayland/niri). MIME
+        // "application/x-ajazz-action" is the OpenDeck "action" (copy) drag.
         DragHandler {
             id: tileDragHandler
             target: null
@@ -204,12 +208,8 @@ Rectangle {
             acceptedButtons: Qt.LeftButton
             // dragThreshold prevents accidental drag during list flick.
             dragThreshold: 8
-        }
 
-        Drag.active: tileDragHandler.active
-        Drag.dragType: Drag.Automatic
-        Drag.mimeData: ({
-            "application/x-ajazz-action": JSON.stringify({
+            readonly property string _payload: JSON.stringify({
                 actionKind: tile.kind,
                 label: tile.actionLabel,
                 iconName: tile.iconName,
@@ -218,7 +218,23 @@ Rectangle {
                 propertyInspectorPath: tile.propertyInspectorPath,
                 affordanceMask: tile.affordanceMask
             })
-        })
+            onActiveChanged: {
+                if (active)
+                    DragRelay.begin("application/x-ajazz-action", _payload,
+                                    tile.iconUrl, tile.iconName, tile.actionLabel,
+                                    centroid.scenePosition.x, centroid.scenePosition.y);
+                else
+                    DragRelay.finish();
+            }
+        }
+        // Feed the live cursor position to the ghost while dragging.
+        Binding {
+            target: DragRelay
+            property: "hotspot"
+            value: tileDragHandler.centroid.scenePosition
+            when: tileDragHandler.active
+            restoreMode: Binding.RestoreNone
+        }
 
         // Cursor affordance.
         MouseArea {

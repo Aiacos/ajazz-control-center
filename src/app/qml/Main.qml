@@ -328,4 +328,101 @@ ApplicationWindow {
             anchors.fill: parent
         }
     }
+
+    // ----------------------------------------------------------------------
+    // Drag ghost (Phase 29) — the single cursor-following drag image for the
+    // whole editor. Every drag source (action library, key cells, encoder
+    // dials, touch-strip zones) routes through the DragRelay singleton because
+    // native (Drag.Automatic) drag is not delivered on Wayland/niri. This item
+    // carries `Drag.active`/`Drag.mimeData`, so internal-drag hit-testing of the
+    // editor's DropAreas works off its scene geometry. It is a plain last child
+    // of the window content (renders above the editor; same scene as the
+    // DropAreas, origin (0,0) so scenePosition maps 1:1) and follows the cursor.
+    // It has no input handlers, so it never steals the source DragHandler's grab.
+    // (We deliberately do NOT reparent into Overlay.overlay: that put the single
+    // item under two parents in the object tree and broke findByName addressing;
+    // a drag never happens with a modal drawer open, so contentItem Z is fine.)
+    // ----------------------------------------------------------------------
+    Item {
+        id: dragGhost
+        objectName: "dragGhost"          // debug-channel addressable (qml.get)
+        z: 100000
+        width: 1
+        height: 1
+        visible: DragRelay.active
+
+        // Top-left tracks the cursor's scene position; Drag.hotSpot is (0,0) so
+        // the internal-drag hit point is exactly under the cursor.
+        x: DragRelay.hotspot.x
+        y: DragRelay.hotspot.y
+
+        Drag.active: DragRelay.active
+        Drag.dragType: Drag.Internal
+        Drag.hotSpot: Qt.point(0, 0)
+        Drag.keys: DragRelay.mimeKey !== "" ? [DragRelay.mimeKey] : []
+        // Only one MIME format is ever active; branch instead of a computed key
+        // so we never feed a DropArea an empty-string format it would falsely
+        // match via hasFormat("").
+        Drag.mimeData: DragRelay.mimeKey === "application/x-ajazz-action"
+            ? ({ "application/x-ajazz-action": DragRelay.payload })
+            : DragRelay.mimeKey === "application/x-ajazz-binding"
+              ? ({ "application/x-ajazz-binding": DragRelay.payload })
+              : ({})
+
+        // Internal drag needs an explicit drop() to fire onDropped; the relay
+        // emits dropRequested() on pointer release while active is still true.
+        Connections {
+            target: DragRelay
+            function onDropRequested() { dragGhost.Drag.drop(); }
+        }
+
+        // Floating drag image — a rounded chip offset down-right of the cursor
+        // so it doesn't sit directly under the pointer hot point.
+        Rectangle {
+            id: ghostChip
+            x: 14
+            y: 14
+            width: ghostRow.implicitWidth + Theme.spacingMd * 2
+            height: Math.max(40, ghostRow.implicitHeight + Theme.spacingSm * 2)
+            radius: Theme.radiusMd
+            color: Theme.surfaceContainer
+            border.color: Theme.accent
+            border.width: 1
+            opacity: 0.96
+
+            Row {
+                id: ghostRow
+                anchors.centerIn: parent
+                spacing: Theme.spacingSm
+
+                Image {
+                    visible: DragRelay.ghostIconUrl.toString() !== ""
+                    source: DragRelay.ghostIconUrl
+                    width: 24
+                    height: 24
+                    sourceSize.width: 24
+                    sourceSize.height: 24
+                    fillMode: Image.PreserveAspectFit
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    visible: DragRelay.ghostIconUrl.toString() === ""
+                             && DragRelay.ghostIconName !== ""
+                    font.family: "Material Symbols Outlined"
+                    font.pixelSize: 24
+                    text: DragRelay.ghostIconName
+                    color: Theme.accent
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+                Text {
+                    visible: DragRelay.ghostLabel !== ""
+                    text: DragRelay.ghostLabel
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.typeBodyMedium.pixelSize
+                    font.weight: Theme.typeBodyMedium.weight
+                    anchors.verticalCenter: parent.verticalCenter
+                }
+            }
+        }
+    }
 }

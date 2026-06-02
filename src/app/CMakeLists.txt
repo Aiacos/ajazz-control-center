@@ -231,6 +231,11 @@ set_source_files_properties(${ACC_BRAND_LOGO} PROPERTIES QT_RESOURCE_ALIAS brand
 # AjazzControlCenter module instead of as a regular component.
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
+# DragRelay.qml is likewise a `pragma Singleton` (Phase 29 — internal-drag relay shared by every
+# editor drag source); mark it so qmlcachegen registers it as a module-level singleton rather than a
+# regular component.
+set_source_files_properties(qml/DragRelay.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+
 # Optional light theme override — packaged so BrandingService can load it from
 # qrc:/qt/qml/AjazzControlCenter/branding/theme-light.json when the user picks Settings → Appearance
 # → Light.
@@ -455,6 +460,7 @@ set(ACC_QML_MODULE_SOURCES
 set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
     qml/Theme.qml
+    qml/DragRelay.qml
     qml/DeviceList.qml
     qml/ProfileEditor.qml
     qml/RgbPicker.qml
