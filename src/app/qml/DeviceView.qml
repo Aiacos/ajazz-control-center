@@ -417,8 +417,8 @@ Item {
                         keys: ["application/x-ajazz-binding"]
 
                         onDropped: function(drop) {
-                            if (drop.hasFormat("application/x-ajazz-binding")) {
-                                var bp = JSON.parse(drop.getDataAsString("application/x-ajazz-binding"));
+                            if (DragRelay.mimeKey === "application/x-ajazz-binding") {
+                                var bp = JSON.parse(DragRelay.payload);
                                 if (bp.controller === "Keypad") {
                                     if (bp.actionPos !== undefined) {
                                         // PLUGIN-23: drag from KeyBindingList row — remove just

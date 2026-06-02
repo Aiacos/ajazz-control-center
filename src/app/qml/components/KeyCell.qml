@@ -195,16 +195,20 @@ ItemDelegate {
         // silently in onDropped. Cleared on exited / dropped.
         property bool dragRejected: false
 
+        // Drag data source: with Drag.Internal (the Wayland-safe relay path), the
+        // drop event's mimeData/formats/getDataAsString are EMPTY (those populate
+        // only for Drag.Automatic/native drags). The active drag's format + JSON
+        // payload live on the DragRelay singleton; read them from there. The
+        // DropArea `keys` property still hover-filters via Drag.keys (which IS
+        // populated for internal drags), so onEntered/onDropped only fire for a
+        // matching drag.
         onEntered: function(drag) {
             // For a "binding" drag (cell-to-cell), reject up front if the source
-            // controller is not "Keypad" -- this is the cross-controller drag
-            // path.
-            if (drag.hasFormat("application/x-ajazz-binding")) {
-                var raw = drag.getDataAsString("application/x-ajazz-binding");
+            // controller is not "Keypad" -- this is the cross-controller drag path.
+            if (DragRelay.mimeKey === "application/x-ajazz-binding") {
                 var ok = false;
                 try {
-                    var payload = JSON.parse(raw);
-                    ok = (payload.controller === "Keypad");
+                    ok = (JSON.parse(DragRelay.payload).controller === "Keypad");
                 } catch (e) {
                     ok = false;
                 }
@@ -217,10 +221,10 @@ ItemDelegate {
             // PLUGIN-20: strict affordance gate for library-action drags.
             // Key cell requires affordanceMask bit 1. Zero/missing mask
             // (e.g. Information-only, affordanceMask=0) also fails -- fail-safe per T-28-07.
-            if (drag.hasFormat("application/x-ajazz-action")) {
+            if (DragRelay.mimeKey === "application/x-ajazz-action") {
                 var ok2 = false;
                 try {
-                    var ap2 = JSON.parse(drag.getDataAsString("application/x-ajazz-action"));
+                    var ap2 = JSON.parse(DragRelay.payload);
                     var mask = ap2.affordanceMask !== undefined ? ap2.affordanceMask : 0;
                     ok2 = ((mask & 1) !== 0);  // Key bit
                 } catch (e2) {
@@ -249,8 +253,8 @@ ItemDelegate {
             cellScale.yScale = 1.0;
             dragRejected = false;
 
-            if (drop.hasFormat("application/x-ajazz-action")) {
-                var actionPayload = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
+            if (DragRelay.mimeKey === "application/x-ajazz-action") {
+                var actionPayload = JSON.parse(DragRelay.payload);
                 // Library -> cell: let DeviceView update the preview model AND
                 // commit (it owns the bindings model; committing here would skip
                 // the live preview and drop the plugin actionId).
@@ -259,8 +263,8 @@ ItemDelegate {
                 return;
             }
 
-            if (drop.hasFormat("application/x-ajazz-binding")) {
-                var bindPayload = JSON.parse(drop.getDataAsString("application/x-ajazz-binding"));
+            if (DragRelay.mimeKey === "application/x-ajazz-binding") {
+                var bindPayload = JSON.parse(DragRelay.payload);
                 if (bindPayload.controller !== "Keypad") {
                     // Cross-controller drag: reject (T-26-17).
                     drop.accepted = false;

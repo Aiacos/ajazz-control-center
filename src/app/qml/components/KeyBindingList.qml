@@ -95,12 +95,12 @@ Rectangle {
                     property bool hovering: false
 
                     onEntered: function(drag) {
-                        if (!drag.hasFormat("application/x-ajazz-binding")) {
+                        if (DragRelay.mimeKey !== "application/x-ajazz-binding") {
                             drag.accepted = false;
                             return;
                         }
                         try {
-                            var bp = JSON.parse(drag.getDataAsString("application/x-ajazz-binding"));
+                            var bp = JSON.parse(DragRelay.payload);
                             // Only accept reorder drags from the same key and controller=Keypad.
                             if (bp.controller !== "Keypad" || bp.position !== root.keyIndex
                                     || bp.actionPos === undefined || bp.actionPos === rowDelegate.index) {
@@ -121,10 +121,10 @@ Rectangle {
 
                     onDropped: function(drop) {
                         hovering = false;
-                        if (!drop.hasFormat("application/x-ajazz-binding"))
+                        if (DragRelay.mimeKey !== "application/x-ajazz-binding")
                             return;
                         try {
-                            var bp2 = JSON.parse(drop.getDataAsString("application/x-ajazz-binding"));
+                            var bp2 = JSON.parse(DragRelay.payload);
                             if (bp2.controller === "Keypad" && bp2.position === root.keyIndex
                                     && bp2.actionPos !== undefined) {
                                 ProfileController.reorderKeyAction(root.keyIndex, bp2.actionPos,
@@ -278,13 +278,13 @@ Rectangle {
                 keys: ["application/x-ajazz-action"]
 
                 onEntered: function(drag) {
-                    if (!drag.hasFormat("application/x-ajazz-action")) {
+                    if (DragRelay.mimeKey !== "application/x-ajazz-action") {
                         drag.accepted = false;
                         return;
                     }
                     // Affordance gate: key bit (bit 1) must be set (mirrors KeyCell.qml:220-234).
                     try {
-                        var ap = JSON.parse(drag.getDataAsString("application/x-ajazz-action"));
+                        var ap = JSON.parse(DragRelay.payload);
                         var mask = ap.affordanceMask !== undefined ? ap.affordanceMask : 0;
                         if ((mask & 1) === 0) {
                             drag.accepted = false;
@@ -298,10 +298,10 @@ Rectangle {
                 }
 
                 onDropped: function(drop) {
-                    if (!drop.hasFormat("application/x-ajazz-action"))
+                    if (DragRelay.mimeKey !== "application/x-ajazz-action")
                         return;
                     try {
-                        var ap2 = JSON.parse(drop.getDataAsString("application/x-ajazz-action"));
+                        var ap2 = JSON.parse(DragRelay.payload);
                         var mask2 = ap2.affordanceMask !== undefined ? ap2.affordanceMask : 0;
                         if ((mask2 & 1) !== 0) {
                             // Additive append — keeps existing actions.
