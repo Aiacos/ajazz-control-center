@@ -80,6 +80,21 @@ Item {
     // ---- Per-key binding model (mirrors KeyDesigner.qml) -------------------
     ListModel { id: bindings }
 
+    // Phase 29 (OpenDeck parity / update_state): when the device renders a key
+    // (a plugin's setImage/setTitle, a built-in icon, or a profile repaint), the
+    // control service emits keyImageAssigned so the on-screen cell mirrors the
+    // SAME live frame the device shows. Point the cell's iconSource at the
+    // "livekey" image provider; the ?r=<revision> query busts QML's image cache.
+    Connections {
+        target: StreamDockControlService
+        function onKeyImageAssigned(keyIndex, revision) {
+            if (keyIndex >= 0 && keyIndex < bindings.count) {
+                bindings.setProperty(keyIndex, "iconSource",
+                                     "image://livekey/" + keyIndex + "?r=" + revision);
+            }
+        }
+    }
+
     function _ensureBindings() {
         while (bindings.count < root.keyCount) {
             bindings.append({ iconSource: "", label: "", actionKind: 0, actionParams: "", actionId: "" });

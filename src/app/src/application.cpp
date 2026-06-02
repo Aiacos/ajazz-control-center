@@ -21,6 +21,7 @@
 #include "debug_control_server.hpp"
 #include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
+#include "live_key_image_provider.hpp"
 #include "node_runner.hpp"
 #include "sidecar_stream_dock_device.hpp"
 
@@ -875,6 +876,17 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     // Registers the same Application-owned instance so QML talks to the held handle,
     // not a separate instance (CLAUDE.md QML_SINGLETON gotcha / Pitfall 2).
     StreamDockControlService::registerInstance(m_streamDockControl.get());
+    // Phase 29 (OpenDeck parity): register the "livekey" image provider so the QML
+    // editor canvas can show the SAME live frame the device shows. A shared store
+    // is written by StreamDockControlService::assignKeyImage and read by the
+    // engine-owned provider; the control service emits keyImageAssigned() so the
+    // editor reloads "image://livekey/<idx>?r=<rev>" on each render.
+    {
+        auto liveKeyStore = std::make_shared<LiveKeyImageStore>();
+        m_streamDockControl->setLiveKeyImageStore(liveKeyStore);
+        engine.addImageProvider(QStringLiteral("livekey"),
+                                new LiveKeyImageProvider(std::move(liveKeyStore)));
+    }
     // Before the vendor firmware tool is launched, drop our HID handle for the
     // matching device family so the vendor flasher can claim the USB interface
     // uncontested (FIRMWARE-UPDATES.md §Launch vendor app). The shared backend

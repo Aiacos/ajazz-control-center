@@ -61,6 +61,8 @@ class QQmlEngine;
 
 namespace ajazz::app {
 
+class LiveKeyImageStore; // Phase 29: shared live-render store mirrored to the editor.
+
 /**
  * @class StreamDockControlService
  * @brief App-layer device paint path for AKP05E Stream Dock panels.
@@ -190,6 +192,13 @@ public:
      * repeated setTitle calls do not stack title layers.
      */
     [[nodiscard]] QImage baseKeyImage(std::uint8_t keyIndex) const;
+
+    /**
+     * @brief Inject the shared store that mirrors live key renders to the QML
+     *        editor canvas (Phase 29, OpenDeck parity). When set, assignKeyImage()
+     *        writes the composited frame here and emits keyImageAssigned().
+     */
+    void setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store);
 
     // -------------------------------------------------------------------------
     // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
@@ -422,6 +431,20 @@ signals:
      */
     void deviceActivated(QString const& codename);
 
+    /**
+     * @brief Emitted after a key's composited image is rendered (Phase 29, OpenDeck parity).
+     *
+     * Mirrors OpenDeck's update_state: every assignKeyImage() pushes the final
+     * frame to the device AND notifies the QML editor so the on-screen KeyCell
+     * shows the same live render (e.g. a plugin's "RAM 43%"). The editor binds the
+     * matching cell's iconSource to "image://livekey/<keyIndex>?r=<revision>"; the
+     * revision changes every emit to bust QML's image cache.
+     *
+     * @param keyIndex  0-based key index (assignKeyImage's 1-based index minus 1).
+     * @param revision  Monotonic counter; only its change matters to the cache.
+     */
+    void keyImageAssigned(int keyIndex, qint64 revision);
+
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
     /// clear the map. Runs on the GUI thread via QTimer::singleShot (Pitfall 3).
@@ -479,6 +502,12 @@ private:
     /// setImage/setState/setBG (assignKeyImage with updateBase=true). setTitle
     /// composites over this (see baseKeyImage()). Cleared on setActiveDevice.
     std::map<std::uint8_t, QImage> m_baseKeyImage;
+
+    /// Phase 29 (OpenDeck parity): shared store + monotonic revision that mirror
+    /// each composited key render to the QML editor canvas via keyImageAssigned().
+    /// Null until Application injects the store in exposeToQml().
+    std::shared_ptr<LiveKeyImageStore> m_liveKeyImages;
+    qint64 m_keyImageRevision{0};
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};

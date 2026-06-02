@@ -117,6 +117,11 @@ ItemDelegate {
             Text {
                 id: overlayText
                 anchors.fill: parent
+                // Phase 29 (OpenDeck parity): a live device render (image://livekey)
+                // already bakes the plugin's title into the frame, so suppress the
+                // separate label overlay to avoid double text -- show only the
+                // rendered key, like OpenDeck. Static icons keep their label.
+                visible: root.iconSource.toString().indexOf("image://livekey") !== 0
                 text: root.label !== ""
                     ? root.label
                     : (root.iconSource.toString() === "" ? (root.index + 1).toString() : "")

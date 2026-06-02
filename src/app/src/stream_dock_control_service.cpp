@@ -31,6 +31,7 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
+#include "live_key_image_provider.hpp"
 
 #include <QImage>
 #include <QQmlEngine>
@@ -239,6 +240,19 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex,
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
     }
+
+    // Phase 29 (OpenDeck parity / update_state): mirror this composited frame to
+    // the QML editor canvas so the on-screen KeyCell shows the same live render
+    // the device shows. keyIndex is 1-based; the editor uses 0-based indices.
+    if (m_liveKeyImages && keyIndex >= 1) {
+        int const keyIndex0 = static_cast<int>(keyIndex) - 1;
+        m_liveKeyImages->set(keyIndex0, img);
+        emit keyImageAssigned(keyIndex0, ++m_keyImageRevision);
+    }
+}
+
+void StreamDockControlService::setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store) {
+    m_liveKeyImages = std::move(store);
 }
 
 QImage StreamDockControlService::lastKeyImage(std::uint8_t keyIndex) const {
