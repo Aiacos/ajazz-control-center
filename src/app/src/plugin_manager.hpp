@@ -278,6 +278,22 @@ public:
      */
     [[nodiscard]] QString stateImagePath(QString const& actionUuid, int stateIndex) const;
 
+    /**
+     * @brief Resolve the owning plugin UUID for an action UUID (stored-owner map).
+     *
+     * Scans the live plugins for the manifest action whose `uuid` matches
+     * @p actionUuid and returns the SAME identity the plugin was spawned with as
+     * its `-pluginUUID` argument (PUUID when present, else the `.sdPlugin`
+     * directory-name key in `m_live`). This is the OpenDeck stored-owner model
+     * (`action.plugin` stamped at load): the bridge consults this instead of the
+     * brittle dotted-prefix match, so an action UUID need NOT be a dotted prefix
+     * of the plugin UUID (the silent-no-willAppear trap, GAP-PLUGIN-OWNER).
+     *
+     * @param actionUuid  Dotted action id, e.g. com.vendor.plugin.action.
+     * @return            Owning plugin UUID, or "" if no live plugin declares it.
+     */
+    [[nodiscard]] QString ownerForAction(QString const& actionUuid) const;
+
 signals:
     /**
      * @brief Emitted when a plugin is permanently disabled (3-in-30s crash or node absent).

@@ -1262,6 +1262,53 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear sent on plugin registration with bou
     CHECK_FALSE(payload.value(QStringLiteral("context")).toString().isEmpty());
 }
 
+TEST_CASE("PluginDeviceBridgeE2E willAppear sent when action UUID is NOT a dotted prefix of "
+          "plugin UUID via stored-owner resolver",
+          "[plugin-device-bridge][e2e][lifecycle][owner]") {
+    // Regression for GAP-PLUGIN-OWNER: a plugin whose action UUIDs are NOT dotted
+    // children of the plugin UUID (e.g. plugin "com.test.plug", action "sysmon.cpu")
+    // must still receive willAppear. The legacy ownerForActionUuid dotted-prefix
+    // match returns empty for such a pair, silently dropping willAppear. The
+    // injected stored-owner resolver (PluginManager::ownerForAction in production)
+    // resolves the owner from the manifest instead. This mirrors OpenDeck stamping
+    // action.plugin at load.
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    ajazz::core::Profile prof;
+    prof.id = "test-profile";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "sysmon.cpu"; // deliberately NOT a dotted child of com.test.plug
+    binding.onPress.push_back(act);
+    prof.keys[0] = std::move(binding); // key 1 -> {row:0, col:0}
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+    // Stored-owner map: sysmon.cpu is owned by com.test.plug.
+    bridge->setActionOwnerResolver([](QString const& actionUuid) -> QString {
+        return actionUuid == QStringLiteral("sysmon.cpu") ? QStringLiteral("com.test.plug")
+                                                          : QString{};
+    });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(500);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("willAppear")));
+}
+
 // ---------------------------------------------------------------------------
 // 19-03 e2e: unbound-coordinate drop (T-19-leak) + no cross-plugin leak
 // ---------------------------------------------------------------------------

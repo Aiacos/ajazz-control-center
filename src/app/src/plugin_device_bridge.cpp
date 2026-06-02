@@ -691,6 +691,24 @@ void PluginDeviceBridge::setStateImageResolver(
     m_stateImageResolver = std::move(resolver);
 }
 
+void PluginDeviceBridge::setActionOwnerResolver(std::function<QString(QString const&)> resolver) {
+    m_actionOwnerResolver = std::move(resolver);
+}
+
+QString PluginDeviceBridge::resolveOwner(QString const& actionUuid) const {
+    // Stored-owner map first (OpenDeck model): the manifest that declares this
+    // action UUID names its owner explicitly, so the action UUID need not be a
+    // dotted prefix of the plugin UUID. Fall back to the legacy longest-prefix
+    // match (still correct for Elgato-style com.x.plugin / com.x.plugin.action).
+    if (m_actionOwnerResolver) {
+        QString const owner = m_actionOwnerResolver(actionUuid);
+        if (!owner.isEmpty()) {
+            return owner;
+        }
+    }
+    return ownerForActionUuid(actionUuid, m_registeredPlugins);
+}
+
 void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEvent const& ev) {
     // T-19-sock: sendEvent re-resolves the live slot each call. Never cache socket*.
     // T-19-leak: only sendEvent to the plugin that owns the context at this coord.
@@ -874,7 +892,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 continue;
             }
             // Resolve the owner via longest-prefix match (T-19-owner).
-            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            QString const owner = resolveOwner(actionId);
             if (owner.isEmpty()) {
                 continue;
             }
@@ -924,7 +942,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             if (actionId.isEmpty()) {
                 continue;
             }
-            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            QString const owner = resolveOwner(actionId);
             if (owner.isEmpty()) {
                 continue;
             }
@@ -976,7 +994,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             if (actionId.isEmpty()) {
                 continue;
             }
-            QString const owner = ownerForActionUuid(actionId, m_registeredPlugins);
+            QString const owner = resolveOwner(actionId);
             if (owner.isEmpty()) {
                 continue;
             }

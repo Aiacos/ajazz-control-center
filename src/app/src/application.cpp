@@ -515,6 +515,15 @@ Application::Application(QObject* parent)
                                    : QString{};
         });
 
+    // 1a-bis. Inject the stored action-owner resolver (PluginManager::ownerForAction)
+    //     so the bridge maps an action UUID to its owning plugin via the discovered
+    //     manifests (OpenDeck stored-owner model) instead of requiring the action
+    //     UUID to be a dotted prefix of the plugin UUID. Lazy m_pluginManager read
+    //     with the same null-guard rationale as the state-image resolver above.
+    m_pluginBridge->setActionOwnerResolver([this](QString const& actionUuid) -> QString {
+        return m_pluginManager ? m_pluginManager->ownerForAction(actionUuid) : QString{};
+    });
+
     // 1b. Wire deviceActivated -> input-service codename + bridge.onDeviceConnected
     //     (GAP-28B fix): StreamDockControlService::setActiveDevice now emits
     //     deviceActivated on every successful open. By wiring it here we ensure

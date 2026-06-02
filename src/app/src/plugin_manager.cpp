@@ -801,4 +801,24 @@ QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex)
     return {};
 }
 
+QString PluginManager::ownerForAction(QString const& actionUuid) const {
+    if (actionUuid.isEmpty()) {
+        return {};
+    }
+    for (auto const& [key, live] : m_live) {
+        for (PluginAction const& action : live.manifest.actions) {
+            if (action.uuid == actionUuid) {
+                // Mirror spawn()'s -pluginUUID identity (WR-03): prefer PUUID,
+                // else the m_live key (the .sdPlugin directory name). This is the
+                // value the plugin registered with, so sendEvent(owner, ...) and
+                // the ctx.pluginUuid ownership check both resolve correctly. This
+                // is the OpenDeck stored-owner model (action.plugin stamped at
+                // load) and removes the dotted-prefix requirement on action UUIDs.
+                return live.manifest.puuid.isEmpty() ? key : live.manifest.puuid;
+            }
+        }
+    }
+    return {};
+}
+
 } // namespace ajazz::app

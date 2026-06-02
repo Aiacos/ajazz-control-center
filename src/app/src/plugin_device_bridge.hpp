@@ -563,6 +563,18 @@ private:
     /// Used by the setState handler to auto-render the declared state image.
     std::function<QString(QString const&, int)> m_stateImageResolver;
 
+    /// Resolver: actionUuid -> owning plugin UUID ("" if unknown). Injected from
+    /// Application (PluginManager::ownerForAction). This is the stored-owner map
+    /// (OpenDeck model); resolveOwner() consults it before falling back to the
+    /// legacy dotted-prefix match. Fixes the silent-no-willAppear trap where an
+    /// action UUID is not a dotted prefix of its plugin UUID.
+    std::function<QString(QString const&)> m_actionOwnerResolver;
+
+    /// Resolve the owning plugin UUID for an action: stored-owner map first
+    /// (m_actionOwnerResolver), then the dotted-prefix fallback over the set of
+    /// currently-registered plugins. Returns "" when no owner can be determined.
+    [[nodiscard]] QString resolveOwner(QString const& actionUuid) const;
+
     /// Current title overlay per 1-based key index (active device). Set by
     /// setTitle, re-applied by reapplyTitle() after a base-changing paint so the
     /// title persists across a later setImage. Cleared on device (re)connect.
@@ -592,6 +604,18 @@ public:
      * @param resolver  (actionUuid, stateIndex) -> absolute image path or "".
      */
     void setStateImageResolver(std::function<QString(QString const&, int)> resolver);
+
+    /**
+     * @brief Inject the stored action-owner resolver (PluginManager::ownerForAction).
+     *
+     * When set, resolveOwner() uses it to map an action UUID to its owning plugin
+     * UUID via the discovered manifests (the OpenDeck stored-owner model), instead
+     * of requiring the action UUID to be a dotted prefix of the plugin UUID. Falls
+     * back to the legacy prefix match when unset or when it returns "".
+     *
+     * @param resolver  actionUuid -> owning plugin UUID, or "" if unknown.
+     */
+    void setActionOwnerResolver(std::function<QString(QString const&)> resolver);
 };
 
 } // namespace ajazz::app
