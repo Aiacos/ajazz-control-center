@@ -34,6 +34,7 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
+#include "plugin_settings_store.hpp"
 #include "sd_plugin_server.hpp"
 #include "stream_dock_control_service.hpp"
 
@@ -163,6 +164,15 @@ bool ContextRegistry::setState(QString const& context, int stateIndex) {
         return false; // stale / unknown context
     }
     it->stateIndex = std::max(0, stateIndex); // Elgato states are 0-based
+    return true;
+}
+
+bool ContextRegistry::updateSettings(QString const& context, QString const& settingsJson) {
+    auto it = m_byContext.find(context);
+    if (it == m_byContext.end()) {
+        return false; // stale / unknown context
+    }
+    it->settingsJson = settingsJson;
     return true;
 }
 
@@ -330,6 +340,19 @@ eventEnvelope(QString const& event, ActionContext const& ctx, QJsonObject const&
     };
 }
 
+/// Resolve the settings JSON for a context at willAppear time: the persisted
+/// store record (set by the plugin or its PI) wins over the binding default,
+/// falling back to the default on first run (empty/"{}" store).
+QString settingsForContext(QString const& pluginUuid,
+                           QString const& contextId,
+                           QString const& bindingDefault) {
+    QString const stored = plugin_settings_store::readContext(pluginUuid, contextId);
+    if (!stored.isEmpty() && stored != QStringLiteral("{}")) {
+        return stored;
+    }
+    return bindingDefault;
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -448,11 +471,92 @@ QImage compositeTitle(QImage const& base, QString const& title) {
 
 } // namespace
 
+bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
+                                              QString const& event,
+                                              QJsonObject const& action) {
+    if (m_server == nullptr) {
+        return false;
+    }
+
+    // --- Plugin-wide (global) settings: keyed by pluginUuid only, no context. ---
+    if (event == QStringLiteral("setGlobalSettings")) {
+        QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
+        QString const json =
+            QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+        if (!plugin_settings_store::writeGlobal(pluginUuid, json)) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "setGlobalSettings: write rejected for '{}'",
+                           pluginUuid.toStdString());
+        }
+        return true;
+    }
+    if (event == QStringLiteral("getGlobalSettings")) {
+        QString const stored = plugin_settings_store::readGlobal(pluginUuid);
+        QJsonObject const settings = QJsonDocument::fromJson(stored.toUtf8()).object();
+        m_server->sendEvent(pluginUuid,
+                            QStringLiteral("didReceiveGlobalSettings"),
+                            QJsonObject{{QStringLiteral("settings"), settings}});
+        return true;
+    }
+
+    // --- Per-context (per-action-instance) settings: keyed by the wire context. ---
+    if (event == QStringLiteral("setSettings") || event == QStringLiteral("getSettings") ||
+        event == QStringLiteral("sendToPropertyInspector")) {
+        QString const contextId = action.value(QStringLiteral("context")).toString();
+        auto const ctxOpt = m_registry.byContext(contextId);
+        if (!ctxOpt.has_value()) {
+            return true; // consumed: stale/unknown context — drop quietly
+        }
+        ActionContext ctx = *ctxOpt;
+        if (ctx.pluginUuid != pluginUuid) {
+            return true; // T-19-xplugin: cross-plugin denial
+        }
+
+        if (event == QStringLiteral("sendToPropertyInspector")) {
+            // Relay to the open Property Inspector (Application wires this to the
+            // active PIBridge). The bridge does not own the PI surface.
+            emit relayToPropertyInspector(
+                pluginUuid, contextId, action.value(QStringLiteral("payload")).toObject());
+            return true;
+        }
+
+        if (event == QStringLiteral("setSettings")) {
+            QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
+            QString const json =
+                QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+            if (plugin_settings_store::writeContext(pluginUuid, contextId, json)) {
+                ctx.settingsJson = json;
+                m_registry.updateSettings(contextId, json); // keep keyDown/willAppear fresh
+            }
+        } else {
+            // getSettings: reflect the persisted record (falls back to the in-ctx value).
+            QString const stored = plugin_settings_store::readContext(pluginUuid, contextId);
+            if (stored != QStringLiteral("{}") || ctx.settingsJson.isEmpty()) {
+                ctx.settingsJson = stored;
+            }
+        }
+        // Echo didReceiveSettings (full Elgato envelope, payload carries settings).
+        m_server->sendEvent(
+            pluginUuid,
+            eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
+        return true;
+    }
+
+    return false; // not a settings/relay event
+}
+
 void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& action) {
     // T-19-input: read defensively — toString returns "" on missing/wrong type.
     QString const event = action.value(QStringLiteral("event")).toString();
+
+    // Settings + PI-relay family (non-visual). Handled before the visual gate so
+    // setSettings/getSettings/global/sendToPropertyInspector are no longer dropped.
+    if (handleSettingsAction(pluginUuid, event, action)) {
+        return;
+    }
+
     if (!isVisualAction(event)) {
-        return; // no-op for non-visual actions (handled in later phases)
+        return; // no-op for other non-visual actions (handled in later phases)
     }
 
     // Resolve context (T-19-stale: unknown context -> no-op).
@@ -945,7 +1049,12 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Keypad");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
-            ctx.settingsJson = QString::fromStdString(action.settingsJson);
+            // Settings precedence: persisted store record (set by the plugin/PI)
+            // wins over the binding's default settingsJson, so willAppear delivers
+            // the live config. Falls back to the binding default on first run.
+            ctx.settingsJson = settingsForContext(owner,
+                                                  ContextRegistry::deriveContextId(ctx),
+                                                  QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
             auto const regOpt = m_registry.byContext(ctxId);
@@ -989,7 +1098,9 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
-            ctx.settingsJson = QString::fromStdString(action.settingsJson);
+            ctx.settingsJson = settingsForContext(owner,
+                                                  ContextRegistry::deriveContextId(ctx),
+                                                  QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
             auto const regOpt = m_registry.byContext(ctxId);
@@ -1035,7 +1146,9 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
-            ctx.settingsJson = QString::fromStdString(action.settingsJson);
+            ctx.settingsJson = settingsForContext(owner,
+                                                  ContextRegistry::deriveContextId(ctx),
+                                                  QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
             auto const regOpt = m_registry.byContext(ctxId);

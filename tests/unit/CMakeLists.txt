@@ -610,8 +610,11 @@ target_sources(ajazz_unit_tests PRIVATE test_input_synth.cpp)
 # by the sd_plugin_server block.
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(
-        ajazz_unit_tests PRIVATE test_plugin_device_bridge.cpp
-                                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
+        ajazz_unit_tests
+        PRIVATE test_plugin_device_bridge.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
+                # plugin_device_bridge.cpp now persists plugin settings via the shared store.
+                ${CMAKE_SOURCE_DIR}/src/app/src/plugin_settings_store.cpp
     )
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()

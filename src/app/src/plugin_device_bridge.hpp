@@ -194,6 +194,11 @@ public:
      */
     bool setState(QString const& context, int stateIndex);
 
+    /// Update the per-instance settings JSON for a context (Elgato setSettings),
+    /// so subsequent keyDown/willAppear events report the live settings.
+    /// @return true if the context was found and updated; false if stale/unknown.
+    bool updateSettings(QString const& context, QString const& settingsJson);
+
     /// @return Number of currently registered contexts.
     [[nodiscard]] int size() const noexcept;
 
@@ -494,7 +499,25 @@ public slots:
      */
     [[nodiscard]] QString activeDeviceId() const noexcept { return m_activeDeviceId; }
 
+signals:
+    /// Emitted when a plugin sends sendToPropertyInspector — the host relays it to
+    /// the open Property Inspector for that context. Application wires this to the
+    /// active PIBridge (the bridge itself does not own the PI surface).
+    void relayToPropertyInspector(QString const& pluginUuid,
+                                  QString const& contextId,
+                                  QJsonObject const& payload);
+
 private:
+    /// Handle the inbound settings + PI-relay family (setSettings / getSettings /
+    /// setGlobalSettings / getGlobalSettings / sendToPropertyInspector) that the
+    /// plugin sends over its WebSocket. Per-context settings persist to the shared
+    /// plugin_settings_store keyed by the WIRE context id and are echoed back via
+    /// didReceiveSettings; global settings persist plugin-wide. Returns true if the
+    /// event was consumed (so onAction skips the visual path).
+    [[nodiscard]] bool handleSettingsAction(QString const& pluginUuid,
+                                            QString const& event,
+                                            QJsonObject const& action);
+
     /// Dispatch setImage: decode data-URI, check ownership, call assignKeyImage
     /// (or paintPlaceholder on decode failure). No failure event sent back (§5).
     void onSetImage(QString const& pluginUuid,

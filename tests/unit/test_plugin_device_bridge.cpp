@@ -47,6 +47,7 @@
 #include <QImage>
 #include <QImageWriter>
 #include <QSet>
+#include <QStandardPaths>
 #include <QString>
 
 #include <catch2/catch_test_macros.hpp>
@@ -1326,6 +1327,78 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear sent when action UUID is NOT a dotte
 
     auto const names = receivedEventNames(msgSpy);
     CHECK(names.contains(QStringLiteral("willAppear")));
+}
+
+TEST_CASE("PluginDeviceBridgeE2E plugin setSettings persists and getSettings echoes "
+          "didReceiveSettings",
+          "[plugin-device-bridge][e2e][settings]") {
+    // Plugin-side settings round-trip: a plugin calls setSettings over its socket,
+    // the host persists it to the shared store (keyed by the wire context) and
+    // echoes didReceiveSettings; a later getSettings returns the same settings.
+    // QStandardPaths test mode isolates the on-disk store to a temp location.
+    QStandardPaths::setTestModeEnabled(true);
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    ajazz::core::Profile prof;
+    prof.id = "test-profile";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.action1";
+    binding.onPress.push_back(act);
+    prof.keys[0] = std::move(binding);
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(300);
+
+    QString const ctxId = QStringLiteral("akp05e#root#Keypad#0#0");
+
+    // Plugin pushes new settings.
+    bridge->onAction(QStringLiteral("com.test.plug"),
+                     QJsonObject{{QStringLiteral("event"), QStringLiteral("setSettings")},
+                                 {QStringLiteral("context"), ctxId},
+                                 {QStringLiteral("payload"),
+                                  QJsonObject{{QStringLiteral("city"), QStringLiteral("Rome")}}}});
+    pump19(200);
+
+    // setSettings echoes didReceiveSettings carrying the saved settings.
+    auto const ev1 = firstEventForEvent(msgSpy, QStringLiteral("didReceiveSettings"));
+    REQUIRE_FALSE(ev1.isEmpty());
+    CHECK(ev1.value(QStringLiteral("payload"))
+              .toObject()
+              .value(QStringLiteral("settings"))
+              .toObject()
+              .value(QStringLiteral("city"))
+              .toString() == QStringLiteral("Rome"));
+
+    // getSettings returns the persisted settings.
+    msgSpy.clear();
+    bridge->onAction(QStringLiteral("com.test.plug"),
+                     QJsonObject{{QStringLiteral("event"), QStringLiteral("getSettings")},
+                                 {QStringLiteral("context"), ctxId}});
+    pump19(200);
+    auto const ev2 = firstEventForEvent(msgSpy, QStringLiteral("didReceiveSettings"));
+    REQUIRE_FALSE(ev2.isEmpty());
+    CHECK(ev2.value(QStringLiteral("payload"))
+              .toObject()
+              .value(QStringLiteral("settings"))
+              .toObject()
+              .value(QStringLiteral("city"))
+              .toString() == QStringLiteral("Rome"));
+
+    QStandardPaths::setTestModeEnabled(false);
 }
 
 // ---------------------------------------------------------------------------

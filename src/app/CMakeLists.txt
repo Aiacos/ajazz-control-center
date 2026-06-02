@@ -52,6 +52,9 @@ qt_add_executable(
     src/debug_control_qml.cpp
     src/device_model.cpp
     src/plugin_catalog_model.cpp
+    # Shared on-disk plugin settings store (per-context + global), used by the plugin WebSocket
+    # settings path and the Property Inspector bridge.
+    src/plugin_settings_store.cpp
     # Extracts downloaded `.sdPlugin` archives in place so the plugin host scans an expanded
     # directory tree (issue #62). Used by the install path and a first-launch sweep.
     src/sdplugin_extractor.cpp
