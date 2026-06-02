@@ -766,4 +766,39 @@ void PluginManager::shutdown() {
     m_live.clear();
 }
 
+QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex) const {
+    if (stateIndex < 0) {
+        return {};
+    }
+    for (auto const& [key, live] : m_live) {
+        for (PluginAction const& action : live.manifest.actions) {
+            if (action.uuid != actionUuid) {
+                continue;
+            }
+            if (stateIndex >= static_cast<int>(action.states.size())) {
+                return {}; // action matched but no such state declared
+            }
+            QString const rel = action.states[static_cast<std::size_t>(stateIndex)].image;
+            if (rel.isEmpty()) {
+                return {};
+            }
+            QDir const base(live.manifest.sourceDir);
+            QString const asDeclared = base.absoluteFilePath(rel);
+            if (QFileInfo::exists(asDeclared)) {
+                return asDeclared;
+            }
+            // Elgato image entries usually OMIT the extension (and ship a hi-dpi
+            // @2x variant); probe the common raster/vector extensions.
+            for (auto const* ext : {".png", "@2x.png", ".jpg", ".jpeg", ".svg", ".gif", ".bmp"}) {
+                QString const probe = asDeclared + QLatin1String(ext);
+                if (QFileInfo::exists(probe)) {
+                    return probe;
+                }
+            }
+            return {}; // matched action+state but the declared file is missing
+        }
+    }
+    return {};
+}
+
 } // namespace ajazz::app

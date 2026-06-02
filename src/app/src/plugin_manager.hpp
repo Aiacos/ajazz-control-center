@@ -259,6 +259,25 @@ public:
      */
     [[nodiscard]] static QProcessEnvironment buildChildEnvironmentForTesting();
 
+    /**
+     * @brief Resolve the absolute image path for an action's manifest state.
+     *
+     * Looks across the live plugins for the manifest action whose `uuid` matches
+     * @p actionUuid, then returns the `States[stateIndex].Image` entry resolved
+     * to an absolute path against the plugin's `sourceDir`. Used by
+     * PluginDeviceBridge to auto-render the declared state image on `setState`
+     * (so a multi-state action changes its key image without the plugin having
+     * to push a `setImage` itself).
+     *
+     * Image entries may carry an extension or omit it (Elgato allows both); when
+     * the path as-declared does not exist, common raster extensions are probed.
+     *
+     * @param actionUuid  Dotted action id, e.g. com.vendor.plugin.action.
+     * @param stateIndex  0-based state index (out-of-range yields "").
+     * @return            Absolute image path, or "" if unresolved.
+     */
+    [[nodiscard]] QString stateImagePath(QString const& actionUuid, int stateIndex) const;
+
 signals:
     /**
      * @brief Emitted when a plugin is permanently disabled (3-in-30s crash or node absent).

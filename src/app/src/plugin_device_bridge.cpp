@@ -39,6 +39,7 @@
 
 #include <QByteArray>
 #include <QColor>
+#include <QImage>
 
 #include <algorithm>
 
@@ -384,6 +385,33 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
                        contextId.toStdString(),
                        newState,
                        ok ? "updated" : "unknown context");
+
+        // Auto-render the manifest's declared image for the new state (Keypad
+        // only for now), so a multi-state action changes its key image without
+        // having to push its own setImage. Graceful no-op if no resolver is set
+        // or the action declares no image for this state.
+        if (ok && m_stateImageResolver && ctx.controller == QStringLiteral("Keypad")) {
+            QString const imgPath = m_stateImageResolver(ctx.actionUUID, newState);
+            if (!imgPath.isEmpty()) {
+                QImage const stateImg(imgPath);
+                if (!stateImg.isNull()) {
+                    std::uint8_t const keyIndex =
+                        keyIndexForCoords(ctx.row, ctx.column, kDefaultKeyCols);
+                    try {
+                        m_control->assignKeyImage(keyIndex, stateImg);
+                    } catch (std::exception const& e) {
+                        AJAZZ_LOG_WARN("plugin-bridge",
+                                       "setState: assignKeyImage threw for key {}: {}",
+                                       static_cast<int>(keyIndex),
+                                       e.what());
+                    }
+                } else {
+                    AJAZZ_LOG_WARN("plugin-bridge",
+                                   "setState: state image failed to load: {}",
+                                   imgPath.toStdString());
+                }
+            }
+        }
     } else if (event == QStringLiteral("setFeedback") || event == QStringLiteral("setText")) {
         // Aux-surface rendering (encoder LCD strip / touch strip) deferred to Phase 23.
         AJAZZ_LOG_INFO("plugin-bridge",
@@ -519,6 +547,11 @@ ContextRegistry const& PluginDeviceBridge::registry() const noexcept {
 
 void PluginDeviceBridge::setProfileAccessor(std::function<core::Profile const&()> accessor) {
     m_profileAccessor = std::move(accessor);
+}
+
+void PluginDeviceBridge::setStateImageResolver(
+    std::function<QString(QString const&, int)> resolver) {
+    m_stateImageResolver = std::move(resolver);
 }
 
 void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEvent const& ev) {

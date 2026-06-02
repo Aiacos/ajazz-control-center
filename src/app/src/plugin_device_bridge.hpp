@@ -550,6 +550,11 @@ private:
     /// Used by populateContextsForActivePage to enumerate bound plugin actions.
     std::function<ajazz::core::Profile const&()> m_profileAccessor;
 
+    /// Resolver: (actionUuid, stateIndex) -> absolute manifest state-image path
+    /// ("" if none). Injected from Application (PluginManager::stateImagePath).
+    /// Used by the setState handler to auto-render the declared state image.
+    std::function<QString(QString const&, int)> m_stateImageResolver;
+
 public:
     /**
      * @brief Inject a profile accessor so the bridge can enumerate bound plugin
@@ -561,6 +566,19 @@ public:
      * @param accessor  Lambda returning `Profile const&` for the active profile.
      */
     void setProfileAccessor(std::function<ajazz::core::Profile const&()> accessor);
+
+    /**
+     * @brief Inject the manifest state-image resolver (PluginManager::stateImagePath).
+     *
+     * When set, a `setState` for a Keypad action auto-renders the manifest's
+     * declared `States[index].Image` onto the key (so a multi-state action
+     * changes its key image without pushing its own `setImage`). If not set, or
+     * the resolver returns "" (no declared image), setState only updates the
+     * tracked state — graceful degradation.
+     *
+     * @param resolver  (actionUuid, stateIndex) -> absolute image path or "".
+     */
+    void setStateImageResolver(std::function<QString(QString const&, int)> resolver);
 };
 
 } // namespace ajazz::app

@@ -504,6 +504,17 @@ Application::Application(QObject* parent)
     m_pluginBridge->setProfileAccessor(
         [this]() -> core::Profile const& { return m_profileController->activeProfile(); });
 
+    // 1a. Inject the manifest state-image resolver so the bridge can auto-render
+    //     a multi-state action's declared States[index].Image on setState. Read
+    //     m_pluginManager lazily (it is constructed later, in
+    //     startBackgroundServices); setState only fires long after startup, and
+    //     the null guard degrades gracefully if discovery has not run.
+    m_pluginBridge->setStateImageResolver(
+        [this](QString const& actionUuid, int stateIndex) -> QString {
+            return m_pluginManager ? m_pluginManager->stateImagePath(actionUuid, stateIndex)
+                                   : QString{};
+        });
+
     // 1b. Wire deviceActivated -> input-service codename + bridge.onDeviceConnected
     //     (GAP-28B fix): StreamDockControlService::setActiveDevice now emits
     //     deviceActivated on every successful open. By wiring it here we ensure
