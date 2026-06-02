@@ -43,6 +43,9 @@
 #include <QFont>
 #include <QGuiApplication>
 #include <QImage>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonParseError>
 #include <QPainter>
 #include <QPen>
 #include <QPointer>
@@ -283,6 +286,51 @@ QString ownerForActionUuid(QString const& dottedActionUuid,
     }
     return best;
 }
+
+// ---------------------------------------------------------------------------
+// Pure helpers: Elgato/OpenDeck event envelope construction
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Build the GenericInstancePayload (Elgato §4.4 / OpenDeck GenericInstancePayload):
+/// `{settings, coordinates:{row,column}, controller, state, isInMultiAction}`.
+/// settings is parsed from ctx.settingsJson (empty/invalid => {}).
+QJsonObject instancePayload(ActionContext const& ctx, bool isInMultiAction = false) {
+    QJsonObject settings;
+    if (!ctx.settingsJson.isEmpty()) {
+        QJsonParseError perr{};
+        auto const doc = QJsonDocument::fromJson(ctx.settingsJson.toUtf8(), &perr);
+        if (perr.error == QJsonParseError::NoError && doc.isObject()) {
+            settings = doc.object();
+        }
+    }
+    return QJsonObject{
+        {QStringLiteral("settings"), settings},
+        {QStringLiteral("coordinates"),
+         QJsonObject{{QStringLiteral("row"), ctx.row}, {QStringLiteral("column"), ctx.column}}},
+        {QStringLiteral("controller"), ctx.controller},
+        {QStringLiteral("state"), ctx.stateIndex},
+        {QStringLiteral("isInMultiAction"), isInMultiAction},
+    };
+}
+
+/// Build the full Elgato/OpenDeck event envelope with top-level action/context/
+/// device siblings to event (the shape real Elgato SDK plugins parse). The
+/// context id is reconstructed from ctx so a byCoord-resolved context needs no
+/// second registry lookup.
+QJsonObject
+eventEnvelope(QString const& event, ActionContext const& ctx, QJsonObject const& payload) {
+    return QJsonObject{
+        {QStringLiteral("event"), event},
+        {QStringLiteral("action"), ctx.actionUUID},
+        {QStringLiteral("context"), ContextRegistry::deriveContextId(ctx)},
+        {QStringLiteral("device"), ctx.deviceId},
+        {QStringLiteral("payload"), payload},
+    };
+}
+
+} // namespace
 
 // ---------------------------------------------------------------------------
 // PluginDeviceBridge constructor / destructor (Phase 19-02)
@@ -738,20 +786,11 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return; // unbound coordinate — silent drop (T-19-leak)
         }
         ActionContext const& ctx = *ctxOpt;
-        // Build §4.4 payload.
-        QJsonObject const coords{
-            {QStringLiteral("row"), gc.row},
-            {QStringLiteral("column"), gc.column},
-        };
-        QJsonObject const payload{
-            {QStringLiteral("coordinates"), coords},
-            {QStringLiteral("state"), ctx.stateIndex}, // §4.4 current action state
-            {QStringLiteral("isInMultiAction"), false},
-        };
         QString const eventName =
             (ev.kind == Kind::KeyPressed) ? QStringLiteral("keyDown") : QStringLiteral("keyUp");
+        // Full Elgato envelope: top-level action/context/device + GenericInstancePayload.
         // sendEvent returns false safely if socket is closed (T-19-sock).
-        m_server->sendEvent(ctx.pluginUuid, eventName, payload);
+        m_server->sendEvent(ctx.pluginUuid, eventEnvelope(eventName, ctx, instancePayload(ctx)));
         break;
     }
 
@@ -768,13 +807,11 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return; // unbound encoder — silent drop
         }
         ActionContext const& ctx = *ctxOpt;
-        QJsonObject const payload{
-            {QStringLiteral("ticks"), ev.value}, // signed (int32) preserved
-            {QStringLiteral("pressed"), false},
-            {QStringLiteral("controller"), QStringLiteral("Encoder")},
-            {QStringLiteral("state"), ctx.stateIndex},
-        };
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialRotate"), payload);
+        QJsonObject payload = instancePayload(ctx);
+        payload.insert(QStringLiteral("ticks"), ev.value); // signed (int32) preserved
+        payload.insert(QStringLiteral("pressed"), false);
+        m_server->sendEvent(ctx.pluginUuid,
+                            eventEnvelope(QStringLiteral("dialRotate"), ctx, payload));
         break;
     }
 
@@ -788,13 +825,12 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return;
         }
         ActionContext const& ctx = *ctxOpt;
-        QJsonObject const payload{
-            {QStringLiteral("controller"), QStringLiteral("Encoder")},
-            {QStringLiteral("state"), ctx.stateIndex},
-        };
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialDown"), payload);
+        QJsonObject const payload = instancePayload(ctx);
+        m_server->sendEvent(ctx.pluginUuid,
+                            eventEnvelope(QStringLiteral("dialDown"), ctx, payload));
         // AJAZZ legacy alias (§4.4 keyDownCord — AJAZZ-only).
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("keyDownCord"), payload);
+        m_server->sendEvent(ctx.pluginUuid,
+                            eventEnvelope(QStringLiteral("keyDownCord"), ctx, payload));
         break;
     }
 
@@ -809,12 +845,10 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return;
         }
         ActionContext const& ctx = *ctxOpt;
-        QJsonObject const payload{
-            {QStringLiteral("controller"), QStringLiteral("Encoder")},
-            {QStringLiteral("state"), ctx.stateIndex},
-        };
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialUp"), payload);
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("keyUpCord"), payload);
+        QJsonObject const payload = instancePayload(ctx);
+        m_server->sendEvent(ctx.pluginUuid, eventEnvelope(QStringLiteral("dialUp"), ctx, payload));
+        m_server->sendEvent(ctx.pluginUuid,
+                            eventEnvelope(QStringLiteral("keyUpCord"), ctx, payload));
         break;
     }
 
@@ -848,12 +882,11 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return;
         }
         ActionContext const& ctx = *ctxOpt;
-        QJsonObject const payload{
-            {QStringLiteral("x"), x},
-            {QStringLiteral("y"), 0},
-            {QStringLiteral("hold"), false},
-        };
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("touchTap"), payload);
+        QJsonObject payload = instancePayload(ctx);
+        payload.insert(QStringLiteral("tapPos"), QJsonArray{x, 0}); // Elgato touchTap: tapPos [x,y]
+        payload.insert(QStringLiteral("hold"), false);
+        m_server->sendEvent(ctx.pluginUuid,
+                            eventEnvelope(QStringLiteral("touchTap"), ctx, payload));
         break;
     }
 
@@ -912,23 +945,20 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Keypad");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
+            ctx.settingsJson = QString::fromStdString(action.settingsJson);
 
             QString const ctxId = m_registry.registerContext(ctx);
             auto const regOpt = m_registry.byContext(ctxId);
-            int const stState = regOpt.has_value() ? regOpt->stateIndex : 0;
+            // registerContext preserves a prior stateIndex; reflect it in the ctx
+            // we serialise so willAppear carries the live state, not the default 0.
+            if (regOpt.has_value()) {
+                ctx.stateIndex = regOpt->stateIndex;
+            }
 
-            // Send willAppear (§4.4) — carries context + coordinates + state.
-            QJsonObject const coords{
-                {QStringLiteral("row"), gc.row},
-                {QStringLiteral("column"), gc.column},
-            };
-            QJsonObject const payload{
-                {QStringLiteral("context"), ctxId},
-                {QStringLiteral("coordinates"), coords},
-                {QStringLiteral("state"), stState},
-                {QStringLiteral("isInMultiAction"), false},
-            };
-            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+            // Full Elgato envelope: top-level action/context/device + payload
+            // {settings, coordinates, controller, state, isInMultiAction}.
+            m_server->sendEvent(
+                owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
         }
     }
 
@@ -959,22 +989,16 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
+            ctx.settingsJson = QString::fromStdString(action.settingsJson);
 
             QString const ctxId = m_registry.registerContext(ctx);
             auto const regOpt = m_registry.byContext(ctxId);
-            int const stState = regOpt.has_value() ? regOpt->stateIndex : 0;
+            if (regOpt.has_value()) {
+                ctx.stateIndex = regOpt->stateIndex;
+            }
 
-            QJsonObject const coords{
-                {QStringLiteral("row"), 0},
-                {QStringLiteral("column"), static_cast<int>(encIdx)},
-            };
-            QJsonObject const payload{
-                {QStringLiteral("context"), ctxId},
-                {QStringLiteral("coordinates"), coords},
-                {QStringLiteral("state"), stState},
-                {QStringLiteral("isInMultiAction"), false},
-            };
-            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+            m_server->sendEvent(
+                owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
         }
     }
 
@@ -1011,19 +1035,16 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
+            ctx.settingsJson = QString::fromStdString(action.settingsJson);
 
             QString const ctxId = m_registry.registerContext(ctx);
+            auto const regOpt = m_registry.byContext(ctxId);
+            if (regOpt.has_value()) {
+                ctx.stateIndex = regOpt->stateIndex;
+            }
 
-            QJsonObject const coords{
-                {QStringLiteral("row"), 0},
-                {QStringLiteral("column"), static_cast<int>(zoneIdx)},
-            };
-            QJsonObject const payload{
-                {QStringLiteral("context"), ctxId},
-                {QStringLiteral("coordinates"), coords},
-                {QStringLiteral("isInMultiAction"), false},
-            };
-            m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
+            m_server->sendEvent(
+                owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
         }
     }
 }
@@ -1048,17 +1069,10 @@ void PluginDeviceBridge::retirePageContexts(QString const& deviceId,
             continue;
         }
         // Send willDisappear — plugin may have already disconnected (socket closed).
-        // sendEvent returns false safely (T-19-sock).
-        QJsonObject const coords{
-            {QStringLiteral("row"), ctx.row},
-            {QStringLiteral("column"), ctx.column},
-        };
-        QJsonObject const payload{
-            {QStringLiteral("context"), ctxId},
-            {QStringLiteral("coordinates"), coords},
-            {QStringLiteral("isInMultiAction"), false},
-        };
-        m_server->sendEvent(ctx.pluginUuid, QStringLiteral("willDisappear"), payload);
+        // sendEvent returns false safely (T-19-sock). Full Elgato envelope.
+        m_server->sendEvent(
+            ctx.pluginUuid,
+            eventEnvelope(QStringLiteral("willDisappear"), ctx, instancePayload(ctx)));
         m_registry.retire(ctxId);
     }
 }
@@ -1106,18 +1120,29 @@ void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
     if (m_server == nullptr) {
         return;
     }
+    // Elgato deviceDidConnect: top-level `device` + `deviceInfo` siblings (NOT
+    // wrapped in payload). type 7 = Stream Deck Plus (keys + 4 dials + touch
+    // strip), matching the AKP05E and opendeck-akp05's DEVICE_TYPE. Geometry is
+    // AKP05E-centric (5x2 + 4 encoders); a per-device registry is Phase 23.
     QJsonObject const deviceInfo{
         {QStringLiteral("name"), deviceId},
-        {QStringLiteral("type"), QStringLiteral("streamdeck")},
+        {QStringLiteral("type"), 7},
         {QStringLiteral("size"),
          QJsonObject{
              {QStringLiteral("columns"), 5},
              {QStringLiteral("rows"), 2},
          }},
+        {QStringLiteral("columns"), 5},
+        {QStringLiteral("rows"), 2},
+        {QStringLiteral("encoders"), 4},
     };
-    QJsonObject const payload{{QStringLiteral("deviceInfo"), deviceInfo}};
+    QJsonObject const event{
+        {QStringLiteral("event"), QStringLiteral("deviceDidConnect")},
+        {QStringLiteral("device"), deviceId},
+        {QStringLiteral("deviceInfo"), deviceInfo},
+    };
     for (QString const& uuid : m_registeredPlugins) {
-        m_server->sendEvent(uuid, QStringLiteral("deviceDidConnect"), payload);
+        m_server->sendEvent(uuid, event);
     }
 }
 
@@ -1140,14 +1165,13 @@ void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
     // above, but calling it keeps the retireDevice path in place for future pages.
     m_registry.retireDevice(deviceId);
 
-    // Send deviceDidDisconnect to all registered plugins (§4.4).
-    QJsonObject const deviceInfo{
-        {QStringLiteral("name"), deviceId},
-        {QStringLiteral("type"), QStringLiteral("streamdeck")},
+    // Send deviceDidDisconnect to all registered plugins (Elgato: top-level device).
+    QJsonObject const event{
+        {QStringLiteral("event"), QStringLiteral("deviceDidDisconnect")},
+        {QStringLiteral("device"), deviceId},
     };
-    QJsonObject const payload{{QStringLiteral("deviceInfo"), deviceInfo}};
     for (QString const& uuid : m_registeredPlugins) {
-        m_server->sendEvent(uuid, QStringLiteral("deviceDidDisconnect"), payload);
+        m_server->sendEvent(uuid, event);
     }
 }
 

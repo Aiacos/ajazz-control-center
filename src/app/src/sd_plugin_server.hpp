@@ -134,6 +134,19 @@ public:
     bool
     sendEvent(QString const& targetUuid, QString const& eventName, QJsonObject const& payload = {});
 
+    /// **Full-envelope sender** for Elgato/OpenDeck-shaped events that carry
+    /// top-level `action` / `context` / `device` siblings to `event` (e.g.
+    /// willAppear, keyDown, dialRotate). The caller passes the COMPLETE event
+    /// object (must contain an `"event"` key); it is written verbatim. The
+    /// 3-arg overload above only emits `{event, payload}` and is kept for simple
+    /// events (deviceDidConnect, exitApp, sendToPlugin relay). Re-resolves the
+    /// socket on every call (Pitfall 4); returns false if no live socket matches.
+    ///
+    /// @param targetUuid  Registered plugin UUID (from pluginRegistered signal).
+    /// @param fullEvent   Complete event object including the `"event"` key.
+    /// @return true if the frame was written; false if no live socket matches.
+    bool sendEvent(QString const& targetUuid, QJsonObject const& fullEvent);
+
     /// **Test-only**: configure a password for the passHello/challenge auth
     /// handshake (PLUGIN-05 / T-17-BRUTE).
     ///

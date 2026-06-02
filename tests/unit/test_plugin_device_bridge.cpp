@@ -1092,6 +1092,18 @@ QJsonObject firstPayloadForEvent(QSignalSpy const& spy, QString const& eventName
     return {};
 }
 
+/// Return the first FULL event object from a spy that matches the given event name
+/// (the complete Elgato envelope: event + top-level action/context/device + payload).
+QJsonObject firstEventForEvent(QSignalSpy const& spy, QString const& eventName) {
+    for (auto const& args : spy) {
+        auto const obj = QJsonDocument::fromJson(args.at(0).toString().toUtf8()).object();
+        if (obj.value(QStringLiteral("event")).toString() == eventName) {
+            return obj;
+        }
+    }
+    return {};
+}
+
 /// Connect a loopback QWebSocket client to server and register with pluginUuid.
 /// Returns the connected client (caller must keep it alive).
 /// REQUIRES: spy for SdPluginServer::pluginRegistered is set up before calling this.
@@ -1255,11 +1267,18 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear sent on plugin registration with bou
     auto const names = receivedEventNames(msgSpy);
     CHECK(names.contains(QStringLiteral("willAppear")));
 
-    auto const payload = firstPayloadForEvent(msgSpy, QStringLiteral("willAppear"));
+    // Full Elgato envelope: action/context/device are TOP-LEVEL siblings to event.
+    auto const event = firstEventForEvent(msgSpy, QStringLiteral("willAppear"));
+    CHECK(event.value(QStringLiteral("action")).toString() ==
+          QStringLiteral("com.test.plug.action1"));
+    CHECK(event.value(QStringLiteral("device")).toString() == QStringLiteral("akp05e"));
+    CHECK_FALSE(event.value(QStringLiteral("context")).toString().isEmpty());
+    auto const payload = event.value(QStringLiteral("payload")).toObject();
     auto const coords = payload.value(QStringLiteral("coordinates")).toObject();
     CHECK(coords.value(QStringLiteral("row")).toInt() == 0);
     CHECK(coords.value(QStringLiteral("column")).toInt() == 2);
-    CHECK_FALSE(payload.value(QStringLiteral("context")).toString().isEmpty());
+    CHECK(payload.value(QStringLiteral("controller")).toString() == QStringLiteral("Keypad"));
+    CHECK(payload.contains(QStringLiteral("settings")));
 }
 
 TEST_CASE("PluginDeviceBridgeE2E willAppear sent when action UUID is NOT a dotted prefix of "

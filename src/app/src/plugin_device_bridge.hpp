@@ -74,14 +74,15 @@ namespace ajazz::app {
  * controller is "Keypad" or "Encoder".
  */
 struct ActionContext {
-    QString deviceId;   ///< Active device codename, e.g. "akp05e".
-    QString pageId;     ///< Profile page id; "root" for the root page.
-    int row{0};         ///< 0-based Elgato row coordinate.
-    int column{0};      ///< 0-based Elgato column coordinate.
-    QString controller; ///< "Keypad" | "Encoder"
-    QString actionUUID; ///< Dotted action id, e.g. com.vendor.plugin.action.
-    QString pluginUuid; ///< Owning plugin uuid, e.g. com.vendor.plugin.
-    int stateIndex{0};  ///< Current 0-based action state (Elgato setState; §4.4 `state`).
+    QString deviceId;     ///< Active device codename, e.g. "akp05e".
+    QString pageId;       ///< Profile page id; "root" for the root page.
+    int row{0};           ///< 0-based Elgato row coordinate.
+    int column{0};        ///< 0-based Elgato column coordinate.
+    QString controller;   ///< "Keypad" | "Encoder"
+    QString actionUUID;   ///< Dotted action id, e.g. com.vendor.plugin.action.
+    QString pluginUuid;   ///< Owning plugin uuid, e.g. com.vendor.plugin.
+    int stateIndex{0};    ///< Current 0-based action state (Elgato setState; §4.4 `state`).
+    QString settingsJson; ///< Per-instance settings JSON (Elgato payload.settings); "" => {}.
 };
 
 // ---------------------------------------------------------------------------
@@ -208,10 +209,13 @@ public:
      */
     [[nodiscard]] QList<std::pair<QString, ActionContext>> snapshot() const;
 
-private:
-    /// Derive the stable encoded-tuple context id from an ActionContext.
-    static QString deriveContextId(ActionContext const& ctx);
+    /// Derive the stable encoded-tuple context id from an ActionContext
+    /// (`deviceId#pageId#controller#row#column`). Public so outbound emitters can
+    /// reconstruct the `context` id for the top-level Elgato envelope field from a
+    /// byCoord-resolved ActionContext without a second registry lookup.
+    [[nodiscard]] static QString deriveContextId(ActionContext const& ctx);
 
+private:
     /// Derive the coord-index key used in m_byCoord.
     /// deviceId is the FIRST component so two devices sharing the same controller/row/col
     /// do not collide (CR-02 multi-device isolation).

@@ -526,4 +526,30 @@ bool SdPluginServer::sendEvent(QString const& targetUuid,
     return true;
 }
 
+bool SdPluginServer::sendEvent(QString const& targetUuid, QJsonObject const& fullEvent) {
+    // Re-resolve the live socket on every call (Pitfall 4 / T-17-UAF guard).
+    QWebSocket* sock = socketForUuid(targetUuid);
+    QString const eventName = fullEvent.value(QStringLiteral("event")).toString();
+    if (!sock) {
+        AJAZZ_LOG_DEBUG("plugin-server",
+                        "sendEvent(full) '{}' -> uuid='{}': no live socket",
+                        eventName.toStdString(),
+                        targetUuid.toStdString());
+        return false;
+    }
+    // The caller owns the complete Elgato/OpenDeck envelope (event + top-level
+    // action/context/device + payload). Write it verbatim.
+    auto const frame = QString::fromUtf8(QJsonDocument(fullEvent).toJson(QJsonDocument::Compact));
+    sock->sendTextMessage(frame);
+    AJAZZ_LOG_DEBUG("plugin-server",
+                    "sendEvent(full) '{}' -> uuid='{}' ({} bytes)",
+                    eventName.toStdString(),
+                    targetUuid.toStdString(),
+                    frame.size());
+    // Surface the OUTBOUND half for the debug console; pass the payload sub-object
+    // so the console shows the instance payload (symmetric with the 3-arg path).
+    emit eventSent(targetUuid, eventName, fullEvent.value(QStringLiteral("payload")).toObject());
+    return true;
+}
+
 } // namespace ajazz::app
