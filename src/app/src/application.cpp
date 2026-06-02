@@ -655,16 +655,16 @@ Application::Application(QObject* parent)
     //
     // STOP gate (20-03): wired only because 17-02-SUMMARY.md is present (sendEvent exists).
     // The live plugin-process round-trip is verified on hardware in Phase 25.
-    QObject::connect(m_propertyInspector.get(),
-                     &PropertyInspectorController::activeBridgeChanged,
-                     this,
-                     [this](ajazz::app::PIBridge* bridge) {
-                         if (!bridge || !m_pluginServer) {
-                             return;
-                         }
-                         auto* server = m_pluginServer.get();
-                         QObject::connect(
-                             bridge,
+    QObject::connect(
+        m_propertyInspector.get(),
+        &PropertyInspectorController::activeBridgeChanged,
+        this,
+        [this](ajazz::app::PIBridge* bridge) {
+            if (!bridge || !m_pluginServer) {
+                return;
+            }
+            auto* server = m_pluginServer.get();
+            QObject::connect(bridge,
                              &ajazz::app::PIBridge::toPluginRequested,
                              bridge, // parent as context: auto-disconnects when bridge dies
                              [server](QString uuid, QString json) {
@@ -672,7 +672,24 @@ Application::Application(QObject* parent)
                                      QJsonDocument::fromJson(json.toUtf8()).object();
                                  server->sendEvent(uuid, QStringLiteral("sendToPlugin"), payload);
                              });
-                     });
+            // Plugin->PI half of the relay: the PluginDeviceBridge surfaces a
+            // plugin's sendToPropertyInspector as relayToPropertyInspector; forward
+            // it to THIS PI page when the plugin UUID matches. bridge is the context
+            // so the connection auto-drops when the PI page is torn down.
+            if (m_pluginBridge) {
+                QObject::connect(
+                    m_pluginBridge.get(),
+                    &ajazz::app::PluginDeviceBridge::relayToPropertyInspector,
+                    bridge,
+                    [bridge](QString uuid, QString /*contextId*/, QJsonObject payload) {
+                        if (bridge->pluginUuid() != uuid) {
+                            return; // not this PI's plugin
+                        }
+                        bridge->deliverToPropertyInspector(QString::fromUtf8(
+                            QJsonDocument(payload).toJson(QJsonDocument::Compact)));
+                    });
+            }
+        });
 #endif // AJAZZ_HAVE_WEBENGINE
 #endif // AJAZZ_HAVE_WEBSOCKETS
 }

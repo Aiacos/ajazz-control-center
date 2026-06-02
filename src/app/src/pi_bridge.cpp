@@ -259,6 +259,13 @@ PIBridge::PIBridge(PropertyInspectorController* controller,
 
 PIBridge::~PIBridge() = default;
 
+void PIBridge::deliverToPropertyInspector(QString const& json) {
+    // Plugin->PI half of the SDK relay: the host received sendToPropertyInspector
+    // from the plugin's WebSocket and forwards it here; the PI JS is bound to the
+    // sendToPropertyInspector signal via the $SD QWebChannel object.
+    emit sendToPropertyInspector(json);
+}
+
 void PIBridge::setSettings(QString const& json) {
     AJAZZ_LOG_INFO("pi-bridge",
                    "setSettings: plugin={} action={} context={} payload-bytes={}",

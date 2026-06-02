@@ -127,6 +127,15 @@ public:
      */
     Q_INVOKABLE QString invoke(QString const& json);
 
+    /// Deliver a plugin-originated `sendToPropertyInspector` payload to the PI page
+    /// (emits the sendToPropertyInspector signal the PI JS is bound to). Called by
+    /// Application when the host relays the event from the plugin's WebSocket — the
+    /// plugin->PI half of the SDK relay (the PI->plugin half is sendToPlugin).
+    void deliverToPropertyInspector(QString const& json);
+
+    /// The plugin UUID this PI bridge belongs to (for relay target matching).
+    [[nodiscard]] QString pluginUuid() const { return pluginUuid_; }
+
 signals:
     /// Emitted when @ref getSettings completes (M4) or after the plugin
     /// process pushes new settings (M5). JS subscribes to receive updates.
