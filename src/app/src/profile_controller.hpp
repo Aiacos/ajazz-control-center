@@ -272,6 +272,68 @@ public:
                                             QString const& settingsJson,
                                             QString const& actionId = {});
 
+    // -------------------------------------------------------------------------
+    // Phase 29-03 (PLUGIN-23): Multi-action editing — append / reorder / remove
+    // on a key's onPress action vector.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Append a new Action onto key[keyIndex].onPress WITHOUT clearing
+     *        existing entries.
+     *
+     * Called by KeyBindingList.qml when the user drops a NEW library action
+     * onto a key that already has one action — the "additive" path. The
+     * "replace-all" path remains commitKeyBinding().
+     *
+     * keyIndex validation mirrors commitKeyBinding (range [0, 65534]).
+     * actionKind validation mirrors commitKeyBinding ([0, BackToParent]).
+     * Out-of-range arguments are no-ops (logged, not asserted).
+     *
+     * Emits profileChanged(). Does NOT save to disk.
+     *
+     * @param keyIndex    0-based key index.
+     * @param actionKind  cast from ajazz::core::ActionKind enum value.
+     * @param settingsJson Opaque JSON string forwarded to Action::settingsJson.
+     * @param actionId    Dotted action identifier (for ActionKind::Plugin).
+     * @invokable Callable from QML as ProfileController.appendKeyAction(...).
+     */
+    Q_INVOKABLE void appendKeyAction(int keyIndex,
+                                     int actionKind,
+                                     QString const& settingsJson,
+                                     QString const& actionId);
+
+    /**
+     * @brief Move the action at fromPos to toPos within key[keyIndex].onPress.
+     *
+     * Implements drag-reorder for the per-key binding list (KeyBindingList.qml).
+     * Out-of-range (fromPos or toPos outside [0, onPress.size()-1]) is a no-op.
+     * Equal indices are a no-op.
+     *
+     * Uses std::rotate to shift the element in O(n) without allocations.
+     * Emits profileChanged(). Does NOT save to disk.
+     *
+     * @param keyIndex  0-based key index.
+     * @param fromPos   Current 0-based position of the action to move.
+     * @param toPos     Target 0-based position.
+     * @invokable Callable from QML as ProfileController.reorderKeyAction(...).
+     */
+    Q_INVOKABLE void reorderKeyAction(int keyIndex, int fromPos, int toPos);
+
+    /**
+     * @brief Erase the action at pos within key[keyIndex].onPress.
+     *
+     * Implements drag-to-trash for individual actions in the binding list.
+     * pos out of range [0, onPress.size()-1] is a no-op. Removing the last
+     * action leaves an empty onPress (key reads as empty/cleared).
+     *
+     * Emits profileChanged(). Does NOT save to disk.
+     *
+     * @param keyIndex  0-based key index.
+     * @param pos       0-based position to erase.
+     * @invokable Callable from QML as ProfileController.removeKeyActionAt(...).
+     */
+    Q_INVOKABLE void removeKeyActionAt(int keyIndex, int pos);
+
     /**
      * @brief Atomically swap two encoder bindings.
      *

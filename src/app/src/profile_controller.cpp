@@ -302,7 +302,8 @@ QVariantList ProfileController::activeKeyBindings() const {
                                          : QString{});
         m.insert(QStringLiteral("label"),
                  binding.state.text ? QString::fromStdString(*binding.state.text) : QString{});
-        // First onPress step defines the action kind / plugin id for the tile.
+        // First onPress step defines the action kind / plugin id for the tile
+        // (back-compat top-level fields — unchanged from Phase 16).
         int kind = 0;
         QString actionId;
         if (!binding.onPress.empty()) {
@@ -311,6 +312,24 @@ QVariantList ProfileController::activeKeyBindings() const {
         }
         m.insert(QStringLiteral("actionKind"), kind);
         m.insert(QStringLiteral("actionId"), actionId);
+
+        // PLUGIN-23: full onPress list exposed as "actionList" — a nested
+        // QVariantList of {actionKind, actionId, label, iconSource} maps.
+        // QML KeyBindingList uses this to render each action row.
+        QVariantList actionList;
+        for (auto const& act : binding.onPress) {
+            QVariantMap am;
+            am.insert(QStringLiteral("actionKind"), static_cast<int>(act.kind));
+            am.insert(QStringLiteral("actionId"), QString::fromStdString(act.id));
+            am.insert(QStringLiteral("label"), QString::fromStdString(act.label));
+            // iconSource for an individual action step is not stored in the core
+            // model (imagePath belongs to KeyState, not Action); leave empty so
+            // QML falls back to the plugin-catalog icon lookup.
+            am.insert(QStringLiteral("iconSource"), QString{});
+            actionList.append(am);
+        }
+        m.insert(QStringLiteral("actionList"), actionList);
+
         out.append(m);
     }
     return out;
@@ -493,6 +512,126 @@ void ProfileController::commitTouchZoneBinding(int zoneIndex,
     act.id = actionId.toStdString();
     act.settingsJson = settingsJson.toStdString();
     binding.onTap = {std::move(act)};
+
+    emit profileChanged();
+}
+
+// ---------------------------------------------------------------------------
+// Phase 29-03 (PLUGIN-23): Multi-action verbs — append / reorder / remove
+// ---------------------------------------------------------------------------
+
+void ProfileController::appendKeyAction(int keyIndex,
+                                        int actionKind,
+                                        QString const& settingsJson,
+                                        QString const& actionId) {
+    // Validate keyIndex: must be in [0, 65534] (mirrors commitKeyBinding).
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "appendKeyAction: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return;
+    }
+    // Validate actionKind: must map to a defined ActionKind value.
+    constexpr int kMaxActionKind = static_cast<int>(ajazz::core::ActionKind::BackToParent);
+    if (actionKind < 0 || actionKind > kMaxActionKind) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "appendKeyAction: actionKind {} out of range [0, {}], ignoring",
+                       actionKind,
+                       kMaxActionKind);
+        return;
+    }
+
+    auto const idx = static_cast<std::uint16_t>(keyIndex);
+    auto& binding = m_profile.keys[idx]; // default-constructs if absent (new key)
+
+    ajazz::core::Action act{};
+    act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
+    act.id = actionId.toStdString();
+    act.settingsJson = settingsJson.toStdString();
+    binding.onPress.push_back(std::move(act)); // additive — does NOT clear existing actions
+
+    emit profileChanged();
+}
+
+void ProfileController::reorderKeyAction(int keyIndex, int fromPos, int toPos) {
+    // Validate keyIndex.
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "reorderKeyAction: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return;
+    }
+
+    auto const idx = static_cast<std::uint16_t>(keyIndex);
+    auto const it = m_profile.keys.find(idx);
+    if (it == m_profile.keys.end()) {
+        return; // No binding for this key — no-op.
+    }
+
+    auto& onPress = it->second.onPress;
+    auto const sz = static_cast<int>(onPress.size());
+
+    // Validate positions against the current vector size (out-of-range = no-op,
+    // mitigates T-29-05).
+    if (fromPos < 0 || fromPos >= sz || toPos < 0 || toPos >= sz) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "reorderKeyAction: pos ({}, {}) out of range [0, {}), ignoring",
+                       fromPos,
+                       toPos,
+                       sz);
+        return;
+    }
+    if (fromPos == toPos) {
+        return; // No-op for self-move.
+    }
+
+    // Use std::rotate to shift the element at fromPos to toPos in O(n).
+    if (fromPos < toPos) {
+        // Moving forward: rotate the sub-range [fromPos, toPos+1) left by 1.
+        std::rotate(
+            onPress.begin() + fromPos, onPress.begin() + fromPos + 1, onPress.begin() + toPos + 1);
+    } else {
+        // Moving backward: rotate the sub-range [toPos, fromPos+1) right by 1
+        // (= left by n-1, or equivalently rotate so the last element becomes first).
+        std::rotate(
+            onPress.begin() + toPos, onPress.begin() + fromPos, onPress.begin() + fromPos + 1);
+    }
+
+    emit profileChanged();
+}
+
+void ProfileController::removeKeyActionAt(int keyIndex, int pos) {
+    // Validate keyIndex.
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "removeKeyActionAt: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return;
+    }
+
+    auto const idx = static_cast<std::uint16_t>(keyIndex);
+    auto const it = m_profile.keys.find(idx);
+    if (it == m_profile.keys.end()) {
+        return; // No binding for this key — no-op.
+    }
+
+    auto& onPress = it->second.onPress;
+    auto const sz = static_cast<int>(onPress.size());
+
+    // Validate pos (T-29-05 range guard).
+    if (pos < 0 || pos >= sz) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "removeKeyActionAt: pos {} out of range [0, {}), ignoring",
+                       pos,
+                       sz);
+        return;
+    }
+
+    onPress.erase(onPress.begin() + pos);
+    // Removing the last action leaves onPress empty — key reads as cleared.
 
     emit profileChanged();
 }
