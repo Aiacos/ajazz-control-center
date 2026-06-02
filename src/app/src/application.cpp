@@ -546,6 +546,52 @@ Application::Application(QObject* parent)
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onPluginDisconnected);
 
+    // 3b. Host-level (context-free) plugin system events. The device bridge
+    //     deliberately ignores everything that is not a key-visual action
+    //     (isVisualAction), so openUrl / logMessage — which Elgato and OpenDeck
+    //     handle at the HOST, not the device — would otherwise be silently
+    //     dropped. Wire them here, reusing the same strict http(s)-only scheme
+    //     guard as the built-in openUrl executor above (WR-01: never
+    //     QUrl::fromUserInput; reject any non-http(s) scheme so a hostile plugin
+    //     cannot smuggle file:// or custom-scheme launches through the WS).
+    QObject::connect(
+        m_pluginServer.get(),
+        &SdPluginServer::actionReceived,
+        this,
+        [](QString const& pluginUuid, QJsonObject const& action) {
+            QString const event = action.value(QStringLiteral("event")).toString();
+            QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+            if (event == QStringLiteral("openUrl")) {
+                QString const url = payload.value(QStringLiteral("url")).toString();
+                QUrl const qurl(url);
+                if (qurl.scheme() != QStringLiteral("http") &&
+                    qurl.scheme() != QStringLiteral("https")) {
+                    AJAZZ_LOG_WARN("plugin",
+                                   "openUrl: rejected non-http(s) URL from plugin {} (scheme '{}')",
+                                   pluginUuid.toStdString(),
+                                   qurl.scheme().toStdString());
+                    return;
+                }
+                AJAZZ_LOG_INFO("plugin",
+                               "openUrl: plugin {} -> {}",
+                               pluginUuid.toStdString(),
+                               url.toStdString());
+                QDesktopServices::openUrl(qurl);
+            } else if (event == QStringLiteral("logMessage")) {
+                QString const msg = payload.value(QStringLiteral("message")).toString();
+                // Bound the logged size: a hostile plugin could otherwise spam the
+                // unified log / ring buffer via logMessage() loops (mirrors the
+                // PIBridge::logMessage cap).
+                constexpr int kMaxLogChars = 2048;
+                QString const bounded =
+                    msg.length() > kMaxLogChars
+                        ? msg.left(kMaxLogChars) + QStringLiteral("...(truncated)")
+                        : msg;
+                AJAZZ_LOG_INFO(
+                    "plugin", "[{}] {}", pluginUuid.toStdString(), bounded.toStdString());
+            }
+        });
+
     // 4. Page navigation: StreamDockControlService::pageNavigated -> bridge::onActivePageChanged.
     //    WR-02: fired from navigatePage() (connected to pageNavRequested in Phase 16) after
     //    the carousel index advances. The bridge retires old-page contexts (willDisappear)

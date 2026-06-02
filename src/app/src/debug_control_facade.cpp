@@ -543,6 +543,29 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"sent", sent}};
     });
 
+    // plugin.simulateAction {uuid, action:{event, payload, context?}} -> {injected}
+    // Inject a synthetic plugin->host action so the FULL production fan-out runs
+    // (device-bridge visual handler + host-level openUrl/logMessage handler),
+    // making a plugin->host action path autonomously verifiable from the shell
+    // without a live plugin WebSocket (CLAUDE.md debug-channel rule). `action`
+    // is the raw Elgato event object, e.g.
+    //   {"event":"openUrl","payload":{"url":"https://example.com"}}
+    server.registerMethod("plugin.simulateAction", [&app](QJsonObject const& params, QString& err) {
+        auto* srv = app.pluginServer();
+        if (srv == nullptr) {
+            err = QStringLiteral("plugin server unavailable");
+            return QJsonObject{};
+        }
+        QString const uuid = params.value("uuid").toString();
+        QJsonObject const action = params.value("action").toObject();
+        if (uuid.isEmpty() || action.value("event").toString().isEmpty()) {
+            err = QStringLiteral("require 'uuid' and 'action' with an 'event'");
+            return QJsonObject{};
+        }
+        srv->injectAction(uuid, action);
+        return QJsonObject{{"injected", true}, {"event", action.value("event").toString()}};
+    });
+
     // plugin.installFromFile {path, confirm?} -> {installed} — drives the
     // PluginStore install pipeline from the shell so the install->spawn loop is
     // autonomously verifiable (CLAUDE.md debug-channel rule). `confirm:true`

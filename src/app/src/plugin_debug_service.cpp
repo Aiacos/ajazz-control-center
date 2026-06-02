@@ -232,7 +232,16 @@ void PluginDebugService::simulatePluginAction(QString const& pluginUuid, QString
            QStringLiteral("plugin"),
            QStringLiteral("%1  %2").arg(pluginUuid, shortJson(doc.object())));
 #ifdef AJAZZ_HAVE_WEBSOCKETS
-    if (m_bridge != nullptr) {
+    // Drive the real production fan-out via the server's actionReceived signal
+    // (injectAction) instead of calling the bridge directly. The SAME simulation
+    // then exercises BOTH the device-bridge visual handler (still reached — the
+    // bridge wires server.actionReceived -> onAction) AND the host-level
+    // openUrl/logMessage handler in Application, so a plugin->host action path is
+    // verifiable end-to-end without a live plugin socket. Falls back to the
+    // bridge only if no server is attached (defensive; not expected in the app).
+    if (m_server != nullptr) {
+        m_server->injectAction(pluginUuid, doc.object());
+    } else if (m_bridge != nullptr) {
         m_bridge->onAction(pluginUuid, doc.object());
     }
 #endif

@@ -144,6 +144,15 @@ public:
     /// @warning Do NOT use in production code.  Call only from unit tests.
     void setPasswordForTesting(QString const& password);
 
+    /// **Debug/simulation seam**: emit `actionReceived` as if a registered
+    /// plugin had sent @p action over the WebSocket. Lets the opt-in debug
+    /// channel (PluginDebugService::simulatePluginAction) drive the exact
+    /// production fan-out — every `actionReceived` consumer (the device bridge's
+    /// visual handler AND the host-level openUrl/logMessage handler) runs — so a
+    /// plugin→host action path can be verified without a live plugin socket.
+    /// Reachable only through the opt-in AJAZZ_DEBUG_CONTROL channel.
+    void injectAction(QString const& pluginUuid, QJsonObject const& action);
+
 signals:
     /// Server started successfully and is now accepting plugin connections.
     void started(std::uint16_t port);

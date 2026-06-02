@@ -488,6 +488,12 @@ void SdPluginServer::setPasswordForTesting(QString const& password) {
     m_password = password;
 }
 
+void SdPluginServer::injectAction(QString const& pluginUuid, QJsonObject const& action) {
+    // Re-emit on the exact production signal so every actionReceived consumer
+    // runs identically to a real plugin message (debug/simulation only).
+    emit actionReceived(pluginUuid, action);
+}
+
 bool SdPluginServer::sendEvent(QString const& targetUuid,
                                QString const& eventName,
                                QJsonObject const& payload) {
