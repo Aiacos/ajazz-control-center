@@ -1059,6 +1059,22 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     // may match a UUID in the catalogue if the user is re-installing).
     QString const candidateUuid =
         archiveName.endsWith(QStringLiteral(".sdPlugin")) ? archiveName.chopped(9) : archiveName;
+
+    // FIX-CONSENT: when the user explicitly confirmed a non-trusted install
+    // (Unsigned / SelfSigned via userConfirmedUnsigned), persist that consent so
+    // the next launch-sweep KEEPS the plugin instead of quarantining it. Without
+    // this, confirm:true was a one-shot: the plugin installed, but the launch
+    // sweep deleted it on the next start (the install-then-vanish trap). Mirrors
+    // the key read by perPluginAllowed() (plugins/allowed/<uuid>). Refused never
+    // reaches here (quarantined above, CR-01), so this never whitelists tampered.
+    if (userConfirmedUnsigned && vout.verdict != VerifyVerdict::Trusted) {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowed/") + candidateUuid, true);
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "installFromFile '{}': persisted per-plugin consent (survives launch-sweep)",
+                       candidateUuid.toStdString());
+    }
+
     int const r = findRow(m_rows, candidateUuid);
     if (r >= 0) {
         auto& rowState = m_install[candidateUuid];
