@@ -492,6 +492,7 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
                                        static_cast<int>(keyIndex),
                                        e.what());
                     }
+                    reapplyTitle(keyIndex); // keep the title over the new state image
                 } else {
                     AJAZZ_LOG_WARN("plugin-bridge",
                                    "setState: state image failed to load: {}",
@@ -574,6 +575,8 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
                        static_cast<int>(keyIndex),
                        e.what());
     }
+    // Re-apply a previously-set title over the new base (Elgato layering).
+    reapplyTitle(keyIndex);
 }
 
 void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
@@ -583,17 +586,18 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
     QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
     QString const title = payload.value(QStringLiteral("title")).toString();
 
-    // Composite the title text OVER the key's base image (the action surface set
-    // by setImage/setState/setBG), not over the currently-displayed image — so
-    // repeated setTitle calls don't stack title layers. The composited result is
-    // assigned as a transient overlay (updateBase=false) so it never redefines
-    // the base. Text is only painted when a GUI app is present (headless tests
-    // skip it; see compositeTitle).
-    //
-    // KNOWN GAP: the title does not yet persist across a later setImage (Elgato
-    // keeps title as an independent layer) — that needs a per-key title cache in
-    // the bridge re-applied on setImage; tracked as a follow-up.
+    // Track the title as an independent layer per key, then composite it over the
+    // BASE image (the action surface set by setImage/setState/setBG) — not over
+    // the displayed image, so repeated setTitle calls don't stack layers. The
+    // tracked title is re-applied by reapplyTitle() after any later base paint,
+    // so it persists across a subsequent setImage (Elgato behaviour).
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
+    if (title.isEmpty()) {
+        m_titleByKey.erase(keyIndex); // clearing the title
+    } else {
+        m_titleByKey[keyIndex] = title;
+    }
+
     QImage const base = m_control->baseKeyImage(keyIndex);
     QImage const composited = compositeTitle(base, title);
     try {
@@ -603,6 +607,19 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
                        "onSetTitle: assignKeyImage threw for key {}: {}",
                        static_cast<int>(keyIndex),
                        e.what());
+    }
+}
+
+void PluginDeviceBridge::reapplyTitle(std::uint8_t keyIndex) {
+    auto const it = m_titleByKey.find(keyIndex);
+    if (it == m_titleByKey.end() || it->second.isEmpty()) {
+        return; // no title overlay for this key
+    }
+    QImage const composited = compositeTitle(m_control->baseKeyImage(keyIndex), it->second);
+    try {
+        m_control->assignKeyImage(keyIndex, composited, /*updateBase=*/false);
+    } catch (std::exception const&) {
+        // Device yank — the title re-applies on the next paint.
     }
 }
 
@@ -631,6 +648,7 @@ void PluginDeviceBridge::onSetBG(QString const& /*pluginUuid*/,
                        static_cast<int>(keyIndex),
                        e.what());
     }
+    reapplyTitle(keyIndex); // keep the title layer over the new background
 }
 
 void PluginDeviceBridge::paintPlaceholder(ActionContext const& ctx, std::uint8_t keyCols) {
@@ -1056,6 +1074,11 @@ void PluginDeviceBridge::onPluginDisconnected(QString const& pluginUuid) {
 void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
     // WR-03: track the most-recently-connected device so that subsequent
     // onPluginRegistered / onPluginDisconnected calls use the correct codename.
+    // A (re)connect invalidates any per-key title overlays from a prior device
+    // (the control service clears its per-key image caches on the same edge).
+    if (m_activeDeviceId != deviceId) {
+        m_titleByKey.clear();
+    }
     m_activeDeviceId = deviceId;
 
     // Populate contexts for the active page.

@@ -45,6 +45,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <map>
 #include <optional>
 
 // AJAZZ_HAVE_WEBSOCKETS gate: the whole PluginDeviceBridge surface compiles away when the
@@ -515,6 +516,13 @@ private:
     /// Sends NO failure event back to the plugin (spec §5).
     void paintPlaceholder(ActionContext const& ctx, std::uint8_t keyCols);
 
+    /// Re-apply the key's tracked title (if any) over its current BASE image.
+    /// Called after a base-changing paint (setImage / setBG / setState image)
+    /// so a previously-set title survives a later setImage — Elgato keeps the
+    /// title as an independent layer over the action icon. No-op if the key has
+    /// no tracked title.
+    void reapplyTitle(std::uint8_t keyIndex);
+
     // ---- Phase 19-03 private helpers ---------------------------------------
 
     /**
@@ -554,6 +562,11 @@ private:
     /// ("" if none). Injected from Application (PluginManager::stateImagePath).
     /// Used by the setState handler to auto-render the declared state image.
     std::function<QString(QString const&, int)> m_stateImageResolver;
+
+    /// Current title overlay per 1-based key index (active device). Set by
+    /// setTitle, re-applied by reapplyTitle() after a base-changing paint so the
+    /// title persists across a later setImage. Cleared on device (re)connect.
+    std::map<std::uint8_t, QString> m_titleByKey;
 
 public:
     /**
