@@ -2,26 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
-status: verifying
-stopped_at: Phase 28 COMPLETE + live-verified (plugin tools all show + drag-to-dial fires end-to-end)
-last_updated: '2026-05-31T23:35:00.000Z'
-last_activity: >
-  2026-05-31 -- Phase 28 EXECUTED (5 waves) + live-driven gap-closure GAP-28-ABC. Goal MET +
-  LIVE-PROVEN via AJAZZ_DEBUG_CONTROL: a plugin action bound to an AKP05E encoder receives
-  willAppear + dialDown + dialRotate (controller:Encoder); the action library shows exactly the
-  visible actions (hiddenByVisibility filter) with affordanceMask. 739/739 (was 714). Live
-  verification caught 3 real bugs all 713+ unit tests missed -- GAP-28B (device present at app
-  start never propagated its id to the input service/bridge -> byCoord("") nullopt + profileChanged
-  guard false -> every plugin binding silently dead; fixed via a deviceActivated signal, 05f99a6),
-  GAP-28A (OS/version-rejected plugins invisible -> skippedOsVersion diagnostic, a25e46d), GAP-28C
-  (app passed -pluginUUID=<dir>.sdPlugin not the manifest UUID; parse top-level UUID as puuid, 0e7289a).
-  Commits dea1382 .. c706541. See 28-VERIFICATION.md (passed) + 28-LIVE-VERIFICATION.md.
+status: executing
+stopped_at: Phase 26 UI-SPEC approved
+last_updated: '2026-06-02T21:10:41.130Z'
+last_activity: 2026-06-02
 progress:
-  total_phases: 20
+  total_phases: 21
   completed_phases: 20
-  total_plans: 68
-  completed_plans: 68
-  percent: 100
+  total_plans: 72
+  completed_plans: 69
+  percent: 95
 ---
 
 # Project State
@@ -43,12 +33,12 @@ progress:
 See: .planning/PROJECT.md (updated 2026-05-15)
 
 **Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 28 — akp05-plugin-action-completeness-drag-to-bind-on-keys-dials
+**Current focus:** Phase 29 — plugin-gui-parity-real-drag-drop-pi-config-multi-action
 
 ## Current Position
 
-Phase: 28 (akp05-plugin-action-completeness-drag-to-bind-on-keys-dials) — EXECUTING
-Plan: 5 of 5
+Phase: 29 (plugin-gui-parity-real-drag-drop-pi-config-multi-action) — EXECUTING
+Plan: 2 of 4
 Plans:
 25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
 25-02 (operator-gated) — PARTIAL (2026-05-28 13:10): autonomous-mode walkthrough recorded results for 11/16 tests. Three PASS (7 brightness, 8 clear, 9 hasClock-honesty). One FAIL (Test 1 image-upload — 3-layer regression; L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26). One NO_AFFORDANCE (Test 6 — no touch-strip drop target in KeyDesigner). Six BLOCKED on demo unit 0x3004 input-streaming gap (Tests 2-5, 15-16). Five NOT_WALKED (Tests 10-12 driven by 4/5/6; 13-14 gated on Phase 26). See `.planning/phases/25-hardware-verification-real-plugin/25-02-SUMMARY.md`.
@@ -56,9 +46,9 @@ Plans:
 Phase: 26 (NEW — OpenDeck-shaped device editor) — PROPOSED 2026-05-28; goal: replace generic KeyDesigner with Elgato/OpenDeck-pattern device-shaped editor (per-SKU geometry: key grid + encoder dials + touch strip), drag-drop action library, auto-wire setActiveDevice on sidebar selection. Closes GAP-25A (setActiveDevice wiring) + GAP-25B (missing affordances) and unblocks Phase 25 resume. Research deliverable: comprehensive analysis of OpenDeck (`nekename/OpenDeck`), `naerschhersch/opendeck-akp05`, `4ndv/mirajazz` — covering all AJAZZ SKUs OpenDeck supports.
 Plan counts: 14(2) 15(2) 16(3) 17(3) 18(4) 19(3) 20(3) 21(3) 22(2) 23(2) 24(2) 25(2) + 13(2) = 33 plans across 13 phases. Each has CONTEXT+RESEARCH+VALIDATION+PLAN committed.
 Plan-checker: ran on Phases 14-22 (all PASS; 17-01 revised once for a 39-vs-41 routed-action BLOCKER, then PASS). Phases 23-25 plans authored + self-audited but the standalone plan-checker was deferred (budget).
-Status: Phase complete — ready for verification
+Status: Ready to execute
 Branch: feat/streamdock (off develop)
-Last activity: 2026-05-31
+Last activity: 2026-06-02
 
 ### Open follow-up items (operator UAT 2026-05-28)
 
@@ -234,7 +224,7 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Session Continuity
 
-Last session: 2026-05-31T20:58:38.640Z
+Last session: 2026-06-02T21:10:41.121Z
 Stopped at: Phase 26 UI-SPEC approved
 Resume file: None
 
