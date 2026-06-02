@@ -1,151 +1,171 @@
 # Technology Stack
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## Languages
 
 **Primary:**
 
-- C++20 - Core application, device drivers, plugin host infrastructure (`src/core/`, `src/devices/`, `src/plugins/`, `src/app/`)
-- C - Conditionally linked for platform-specific sandbox implementations (bwrap on Linux, sandbox-exec on macOS, App Container on Windows)
-- QML - Qt 6 declarative UI for the desktop application (`src/app/qml/`)
+- C++ 20 - Qt6/QML-based desktop application, core device drivers, and plugin system (`src/`, CMakeLists.txt:14)
+- QML 6 - User interface layer (`src/app/qml/`)
+- Rust 2021 edition - Out-of-process sidecar for Stream Deck device families (`streamdock-host/`)
+- Python 3.11+ - Plugin SDK and out-of-process plugin host runtime (`python/`, `pyproject.toml`:9)
 
 **Secondary:**
 
-- Python 3.11+ - Out-of-process plugin runtime; spawned via `execvp("python3", ...)` at runtime with no compile-time dependency (`python/ajazz_plugins/`)
+- C - HID device access via hidapi library (vendored)
+- JavaScript/TypeScript - Vendor plugin Property Inspector HTML pages (embedded in QML via WebEngine)
 
 ## Runtime
 
 **Environment:**
 
-- Qt 6.7+ - Cross-platform application framework (GUI, networking, event loop)
-- CMake 3.28+ - Build configuration and dependency orchestration
-- Ninja - Build system (configured in `CMakePresets.json`)
+- Qt 6.7+ (required, `CMakeLists.txt`:59)
+- Rust toolchain (1.0+) for sidecar binary compilation
+- Python 3.11+ for plugin host (runtime spawned via `execvp`, no embedded interpreter)
+- CMake 3.28+ (build-time, `CMakeLists.txt`:1)
+- Ninja build generator (primary, `CMakePresets.json`:9)
 
 **Package Manager:**
 
-- vcpkg - Vendored dependencies (nlohmann-json 3.12.0) via `vcpkg.json`
-- CMake FetchContent - Vendored builds for reproducibility
-  - hidapi 0.14.0 (from `libusb/hidapi.git`, tag `hidapi-0.14.0`)
-  - nlohmann-json 3.12.0 (from `nlohmann/json.git`, tag `v3.12.0`)
-  - Catch2 3.7.1 (from `catchorg/Catch2.git`, tag `v3.7.1`) - testing only
-  - pybind11 2.13.6 (Flatpak manifest only; not used in current OOP host architecture)
-- Lockfile: `vcpkg.lock.yaml` present
+- CMake/vcpkg for C++/Rust deps - `vcpkg.json` pins nlohmann-json 3.12.0
+- Cargo for Rust sidecar - `streamdock-host/Cargo.toml` (mirajazz as git dependency)
+- setuptools + pip for Python plugin SDK - `pyproject.toml`
+- Lockfile: CMake FetchContent for Qt dependencies; vcpkg baseline managed in `vcpkg.json`; Cargo.lock generated
 
 ## Frameworks
 
 **Core:**
 
-- Qt 6.7 (minimum) - Desktop UI, networking, QML engine, event loop
-  - Qt6::Core - Event loop, strings, containers, logging
-  - Qt6::Gui - Text rendering, image handling
-  - Qt6::Network - QNetworkAccessManager for plugin catalog fetching
-  - Qt6::Quick - QML runtime
-  - Qt6::QuickControls2 - Material Design 3 UI components (optional `Qt6::QuickControls2Material`)
-  - Qt6::Test - Qt testing framework (used by unit tests)
-  - Qt6::Widgets - Legacy fallback components
-  - Qt6::Svg - SVG rendering for icons
-  - Qt6::CorePrivate - Private QZipReader/QZipWriter for `.sdPlugin` archive extraction (`src/app/src/sdplugin_extractor.cpp`)
-  - Qt6::WebSockets - Elgato Stream Deck v6-compatible plugin server (`src/app/src/sd_plugin_server.cpp`); optional but enabled by default
-  - Qt6::WebEngineQuick + Qt6::WebChannelQuick - HTML Property Inspector embedding (optional, graceful fallback to native inspector)
+- Qt 6.7+ - Cross-platform GUI framework with QML, widgets, networking, WebSockets, WebEngine
+  - Core: event loop, JSON, file I/O, settings storage
+  - Gui: image manipulation, QZipReader/Writer for `.sdPlugin` archive extraction
+  - Network: `QNetworkAccessManager` for HTTP(S) catalog/update fetches
+  - Quick/QuickControls2: QML scene graph and Material Design controls
+  - WebSockets: Elgato Stream Deck v6 plugin server (loopback-only)
+  - WebEngineQuick + WebChannelQuick: Property Inspector HTML rendering (optional, fallback to native)
+  - Test: Qt unit test framework (part of the test suite)
+  - Widgets: System tray integration, fallback dialogs
+  - Svg: Application icon and UI graphics
+
+**Plugin System:**
+
+- Python Plugin SDK (`ajazz_plugins` package) - base `Plugin` class, `@action` decorator, `ActionContext`
+- Elgato Stream Deck v6 WebSocket protocol - `SdPluginServer` implements the wire spec
+- JSON-RPC debug control channel (Unix domain socket) - out-of-process `scripts/ajazz-debug` client
+
+**Device Backends:**
+
+- **Stream Deck (AKP03/AKP05/AKP153):** Rust mirajazz sidecar (`streamdock-host/`) over JSON/stdio
+- **Stream Deck (AKP815):** Custom C++ backend (`src/devices/streamdeck/src/akp815*`)
+- **Keyboards (AK-series):** Custom C++ protocol handlers (`src/devices/keyboard/`)
+- **Mice (AJ-series):** Custom C++ protocol handlers (`src/devices/mouse/`)
 
 **Testing:**
 
-- Catch2 3.7.1 - C++ unit and integration test framework
-  - ~286 test cases across `tests/unit/` and `tests/integration/`
-  - Run command: `ctest --preset linux-release` (see `CMakePresets.json`)
-- pytest 8.0+ - Python plugin SDK tests (`python/ajazz_plugins/tests/`)
-- libFuzzer (Clang-only, opt-in via `-DAJAZZ_BUILD_FUZZ_TESTS=ON`) - Security harnesses for plugin-host trust primitives
+- Catch2 (vendored) - C++ unit test framework (~399 test cases in `tests/unit/`)
+- pytest - Python plugin SDK tests (`python/ajazz_plugins/tests/`)
+- libFuzzer (optional, Clang-only) - security fuzzing for trust-root loading (`tests/fuzz/`)
+- Qt Test Framework - QML smoke tests (`tests/qml/`)
 
 **Build/Dev:**
 
-- CMake - Configuration, dependency management, cross-platform build generation
-- pkg-config - Hardware library detection on Linux (optional; fallback to CMake)
-- clang-tidy - Static analysis (CI via `.github/workflows/lint.yml`)
-- sanitizers - ASan/UBSan (Linux Debug preset), ThreadSanitizer (optional), code coverage (optional)
-- flatpak-builder - Containerized builds for Flatpak distribution
+- CMake 3.28+ with Ninja generator
+- Qt6 toolchain (6.7+) with optional MaintenanceTool for private headers
+- Cargo (Rust) for sidecar binary build
+- pre-commit hooks (`.pre-commit-config.yaml`) - formatting, linting, security (gitleaks, typos)
+- ruff (Python linting/formatting), mypy (type checking), black (formatter)
+- clang-format / clang-tidy - C++ code style enforcement
+- doxygen - API documentation generation (`Doxyfile`)
 
 ## Key Dependencies
 
 **Critical:**
 
-- hidapi 0.14.0 - HID device enumeration and I/O
-
-  - Backend: `hidapi_hidraw` (Linux, kernel-native `/dev/hidraw*`) exclusively
-  - libusb backend explicitly disabled (both in CMakeLists.txt and Flatpak manifest)
-  - Used by: `src/core/src/hid_transport.cpp`, device hotplug monitoring
-
-- nlohmann-json 3.12.0 - JSON parsing and serialization
-
-  - **Scoping rule (COD-031):** PRIVATE-linked to `ajazz_plugins` only
-  - **NOT** in `ajazz_core` public headers or `ajazz_app`
-  - Used by: `src/plugins/src/manifest_signer_common.cpp` (plugin trust root loading)
-  - Qt's QJsonDocument/QJsonObject used in `ajazz_core` and `ajazz_app` instead
+- **hidapi 0.14.0** (vendored via FetchContent or system, `CMakeLists.txt`:187–203) - Cross-platform HID device enumeration and I/O. Statically linked. `hidapi::hidraw` backend on Linux (kernel `hidraw*` API), WinUSB on Windows, Darwin native on macOS.
+- **nlohmann/json 3.12.0** (vendored, PRIVATE-linked to `ajazz_plugins` only per COD-031, `CMakeLists.txt`:206–218) - JSON serialization for plugin manifest validation. Not exposed in public headers.
+- **mirajazz (Rust crate, git dependency)** (`streamdock-host/Cargo.toml`:23) - Pure Rust implementation of the Stream Deck AKP05/N4 protocol. Replaces old in-tree C++ wire code; provides async device enumeration, persistent handles, and command dispatch.
 
 **Infrastructure:**
 
-- pybind11 2.13.6 - (Flatpak manifest only; not used in current code path)
-  - Deprecated in favour of out-of-process plugin host (`src/plugins/src/out_of_process_plugin_host.cpp`)
+- **tokio 1.x** (async runtime in sidecar, `streamdock-host/Cargo.toml`:24) - Async/await executor for concurrent device handling
+- **serde_json 1.x** (JSON encoding in sidecar, `streamdock-host/Cargo.toml`:26) - Newline-delimited JSON wire protocol serialization
+- **image 0.25** (sidecar, `streamdock-host/Cargo.toml`:28) - Image decode/encode for Stream Deck button rendering
+- **base64 0.22** (sidecar, `streamdock-host/Cargo.toml`:29) - Base64 codec for image payloads over JSON
+- **futures-lite 2.6** (sidecar, `streamdock-host/Cargo.toml`:25) - Lightweight futures combinators
+
+**Optional (Graceful Fallback):**
+
+- **Qt6::WebEngineQuick + Qt6::WebChannelQuick** - HTML Property Inspector pages (auto-disabled if not found, `src/app/CMakeLists.txt`:13–34)
+- **Qt6::WebSockets** - Elgato plugin server (auto-disabled if missing, `CMakeLists.txt`:140–149)
 
 ## Configuration
 
 **Environment:**
 
-- CMake cache variables (set via `CMakePresets.json` or `-D` flags):
-  - `CMAKE_BUILD_TYPE`: Debug, RelWithDebInfo
-  - `CMAKE_CXX_STANDARD`: 20 (enforced)
-  - `CMAKE_EXPORT_COMPILE_COMMANDS`: ON (for editor integration)
-  - `AJAZZ_BUILD_APP`: ON (desktop application)
-  - `AJAZZ_BUILD_TESTS`: ON (unit/integration tests)
-  - `AJAZZ_BUILD_PYTHON_HOST`: ON (out-of-process plugin host infrastructure)
-  - `AJAZZ_BUILD_PROPERTY_INSPECTOR`: ON (HTML Property Inspector via WebEngine)
-  - `AJAZZ_BUILD_FUZZ_TESTS`: OFF (libFuzzer harnesses, opt-in)
-  - `AJAZZ_ENABLE_WERROR`: ON (treat warnings as errors)
-  - `AJAZZ_ENABLE_SANITIZERS`: ON (Debug builds only)
-  - `AJAZZ_ENABLE_TSAN`: OFF (mutually exclusive with ASan)
-  - `AJAZZ_ENABLE_COVERAGE`: OFF (code coverage instrumentation)
-  - `AJAZZ_BRAND_DIR`: Optional override for app branding assets
+- `AJAZZ_DEBUG_CONTROL` - Enable opt-in JSON-RPC debug channel (empty env var string activates)
+- `FLATPAK_ID` - Auto-detected at runtime; disables auto-update check under Flatpak (Flathub manages updates)
+- `ACC_STREAMDOCK_CATALOG_URL` - Override upstream plugin catalog URL (default: AJAZZ-hosted)
+- `XDG_CACHE_HOME` - Cache directory for downloaded plugin catalogs (falls back to `~/.cache`)
+- `XDG_RUNTIME_DIR` - Unix socket directory for debug control channel (falls back to `/tmp`)
+- `PYTHONPATH` - Injected per-plugin-spawn for isolated plugin SDK discovery
 
 **Build:**
 
-- `CMakeLists.txt` - Root configuration (`cmake_minimum_required(3.28)`)
-- `CMakePresets.json` - Build presets (linux-debug, linux-release, windows-*, macos-*, dev, release, coverage)
-- `src/core/CMakeLists.txt` - Core library (hidapi, Qt6::Core linked PRIVATELY)
-- `src/devices/CMakeLists.txt` - Device family subdirectories (keyboard, mouse, streamdeck)
-- `src/plugins/CMakeLists.txt` - Plugin host infrastructure (nlohmann-json linked PRIVATELY)
-- `src/app/CMakeLists.txt` - Desktop application (Qt6::Quick, WebSockets, WebEngine)
-- `tests/CMakeLists.txt` - Test suite (Catch2 fetched, pytest for Python)
-- `cmake/Warnings.cmake` - Compiler warning configuration per platform
-- `cmake/Sanitizers.cmake` - ASan/UBSan/TSAN configuration
-- `vcpkg.json` - Manifest for vcpkg dependency management
-- `pyproject.toml` - Python package configuration (setuptools backend, ruff linting, mypy typing, pytest)
+- `CMakePresets.json` - Six preset targets (linux-debug/release, windows-debug/release, macos-debug/release) + three abstract aliases (dev, release, coverage)
+- `CMakeLists.txt` global options:
+  - `AJAZZ_BUILD_APP` (ON) - Build the Qt desktop application
+  - `AJAZZ_BUILD_TESTS` (ON) - Build and enable ctest suite
+  - `AJAZZ_BUILD_PYTHON_HOST` (ON) - Build out-of-process plugin host subsystem
+  - `AJAZZ_ENABLE_WERROR` (ON) - Treat warnings as errors
+  - `AJAZZ_ENABLE_SANITIZERS` (OFF) - ASan/UBSan in Debug builds
+  - `AJAZZ_ENABLE_TSAN` (OFF) - ThreadSanitizer (mutually exclusive with ASan)
+  - `AJAZZ_ENABLE_COVERAGE` (OFF) - Code coverage instrumentation (Linux only)
+  - `AJAZZ_BUILD_FUZZ_TESTS` (OFF) - libFuzzer harnesses (Clang-only)
+  - `AJAZZ_FEATURE_INPUT_SYNTH` (OFF) - Native OS input synthesis backends (Linux uinput, Windows SendInput, macOS CGEvent)
+  - `AJAZZ_USE_SYSTEM_DEPS` (OFF) - Resolve hidapi + nlohmann_json via system find_package instead of FetchContent (required for Flatpak)
+  - `AJAZZ_INSTALL_UDEV_RULES` (ON) - Install Linux udev rule to `/usr/lib/udev/rules.d` (OFF for Flatpak)
+  - `AJAZZ_BUILD_PROPERTY_INSPECTOR` (ON) - Embed Property Inspector HTML pages
+
+**Compilation Flags:**
+
+- C++ standard: C++20 (strict, no extensions)
+- Out-of-source builds enforced
+- Compile commands exported for tooling integration
+- Per-platform compiler strictness:
+  - Linux GCC/Clang: default warning set
+  - Apple Clang (macOS): `-Werror`, catches `-Wunused-const-variable` on inline constexpr
+  - MSVC (Windows): `/W4 /WX`, C4996 deprecation warnings treated as errors; prefer `_s` variants
 
 ## Platform Requirements
 
 **Development:**
 
-- GCC 11+ or Clang 14+ (Linux)
-- Apple Clang 14+ (macOS, enforces `-Werror` on `-Wunused-const-variable`)
-- MSVC 2022+ (Windows, enforces `/W4 /WX` with C4996 deprecation warnings)
-- Python 3.11+ (for plugin runtime; not a compile-time requirement)
-- CMake 3.28+ with Ninja
-- Qt 6.7+ SDK (MaintenanceTool or aqtinstall; CI uses aqtinstall which omits `Qt6CorePrivate` CMake config, so CMakeLists synthesizes a fallback)
+- Qt6 6.7+ SDK (developer headers + private headers for `QZipReader`)
+- CMake 3.28+
+- Ninja build tool
+- C++20 compatible compiler (GCC 11+, Clang 14+, MSVC 193+)
+- Rust 1.x toolchain (for sidecar builds)
+- Python 3.11+ (runtime, not compile-time)
+- hidapi development headers (or rely on FetchContent vendor)
+- Linux: `libudev-dev`, PkgConfig for udev rules + hotplug monitoring
+- Windows: MSVC toolchain with WinAPI headers
+- macOS: Xcode Command Line Tools
 
 **Production:**
 
-- Linux (primary) - x86_64, tested on Fedora 44+
-  - Flatpak 1.14+ (optional containerized distribution)
-  - udev rules installed (`resources/linux/70-ajazz.rules`)
-  - Systemd 258+ (note: known ACL regression with synthetic re-enumeration; see CLAUDE.md)
-- macOS 12+ (Intel/Apple Silicon universal binaries)
-- Windows 10 (build 1909+) / Windows 11
+- **Linux:** Qt6 runtime libraries, hidapi-hidraw (or statically linked), Python 3.11+ plugin host, Rust sidecar binary (streamdock-host), udev + systemd for device ACLs
+- **Windows:** Qt6 runtime, MSVC runtime, Python 3.11+ plugin host, Rust sidecar binary
+- **macOS:** Qt6 runtime, Python 3.11+ plugin host, Rust sidecar binary
+- **Cross-platform:** HID device access (Linux hidraw kernel module, Windows libusb-win32/WinUSB, macOS native IOKit)
 
 **Deployment:**
 
-- Linux: `.deb` (Debian), `.rpm` (Fedora), `.flatpak` (containerized)
-- macOS: Universal `.dmg` (Intel + Apple Silicon)
-- Windows: MSI installer, portable ZIP
+- Linux: .deb (Debian/Ubuntu), .rpm (Fedora/RHEL), .flatpak (universal)
+- Windows: .msi (WiX Toolset), .zip (portable)
+- macOS: .dmg (DragNDrop), Universal binary (Apple Silicon + Intel)
+- GitHub Releases: automatic update detection via API
 
 ______________________________________________________________________
 
-*Stack analysis: 2026-05-22*
+*Stack analysis: 2026-06-02*

@@ -1,331 +1,333 @@
 # Coding Conventions
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## Naming Patterns
 
 **Files:**
 
-- C++ header: `snake_case.hpp` (e.g., `pi_bridge.hpp`, `mock_transport.hpp`)
-- C++ implementation: `snake_case.cpp`
-- Python files: `snake_case.py`
-- Test files: `test_<component>.cpp` or `test_<component>.py`
-- Mock/fixture files: `mock_<interface>.hpp`, `<component>_fixture.hpp`
+- C++ headers: `.hpp` (no `.h`); implementations: `.cpp`
+- Source organization: `src/{module}/include/ajazz/{module}/` for headers, `src/{module}/src/` for implementations
+- Test files: `tests/{category}/test_{component}.cpp` (e.g., `tests/unit/test_event_bus.cpp`)
+- Python modules: `python/ajazz_plugins/` with standard package structure; test files under `python/ajazz_plugins/tests/`
 
-**Functions & Methods:**
+**Functions:**
 
-- Member functions: `camelCase` (e.g., `setProfile()`, `firmwareVersion()`)
-- Free functions: `camelCase` (e.g., `makeAppIcon()`, `pluginDir()`)
-- Getters: Use bare name, not `get` prefix; mark with `[[nodiscard]]` (e.g., `QString const& name() const [[nodiscard]]`)
-- Setters: `setXyz()` (e.g., `setSettings()`, `setRgbBrightness()`)
-- Action method names for Qt signals: past tense when emitted as event (e.g., `connected()` signal fired on connection)
+- `camelCase` for local functions and methods: `openDevice()`, `setActiveDpiStage()`, `parseInputReport()`
+- Factory functions: `make{Type}` pattern: `makeAjSeriesWithTransport()`, `makeSidecarStreamDock()`
+- Query methods: no prefix, return type in name: `currentPageId()`, `firmwareVersion()`, `isOpen()`
+- Logging macros: `AJAZZ_LOG_{LEVEL}(module, "message", args)` — `AJAZZ_LOG_INFO`, `AJAZZ_LOG_WARN`, `AJAZZ_LOG_ERROR`
 
-**Variables & Constants:**
+**Variables:**
 
-- Member variables: `m_camelCase` (e.g., `m_transport`, `m_writes`, `m_readFeatures`)
-- Static constants: `kCamelCase` (e.g., `kMaxSettingsBytes`, `kReportSize`, `kMaxTrustRootsBytes`)
-- Template parameters: `PascalCase` (e.g., `typename T`, `typename LogLevel`)
-- Enums: values in UPPER_CASE (e.g., `Warn`, `Error`, `Info`)
-- Type aliases: `PascalCase` (e.g., `DeviceId`, `TransportStats`)
+- Member variables: `m_{name}` prefix: `m_handlers`, `m_open`, `m_nextToken`
+- Local variables and parameters: `camelCase`: `transport`, `descriptor`, `keyIndex`
+- Constants: `camelCase` or `kConstantName` (both used): `kSubscribers`, `kPublishers`, `kEventsPerPublisher`
+- Scoped enums (preferred): `enum class` with `PascalCase` values: `enum class Kind { KeyDown, KeyUp, MouseDown }`
 
-**Types & Structs:**
+**Types:**
 
-- Classes, structs, interfaces: `PascalCase` (e.g., `ITransport`, `PIBridge`, `MockTransport`)
-- Interface classes: prefix with `I` (e.g., `IDevice`, `ITransport`, `ISettingsCapable`, `IBatteryCapable`)
-- Capability mixin interfaces: `I<Capability>Capable` (e.g., `IRgbCapable`, `IMacroCapable`, `IClockCapable`)
-
-**Namespaces:**
-
-- Using qualified names: `ajazz::core`, `ajazz::app`, `ajazz::devices`, `ajazz::keyboard`, `ajazz::mouse`, `ajazz::tests`
-- Anonymous namespaces (`namespace { }`) used for static-linkage helpers in .cpp files
+- Classes and interfaces: `PascalCase`: `EventBus`, `IDevice`, `MockTransport`
+- Interface classes: `I{Name}` prefix: `IDevice`, `ITransport`, `IDisplayCapable`
+- Exception types: `{Name}Error`: `ProfileIoError`, `ProfileBundleError`
+- Struct/data types: `PascalCase`: `DeviceDescriptor`, `DeviceEvent`, `TransportStats`
+- Aliases (type definitions): `camelCase` or `PascalCase` (both used): `using ActionChain = std::vector<Action>`
 
 ## Code Style
 
 **Formatting:**
 
-- Tool: `clang-format` (enforced by pre-commit hook)
-- Config file: `.clang-format`
-- LLVM-based style with C++20 standard
-- Column limit: 100 characters
-- Indent: 4 spaces (no tabs)
-- Brace style: Attach (opening brace on same line)
-- Pointer/reference alignment: Left (e.g., `QString const& s`, not `QString const &s`)
+- Tool: `clang-format` (`.clang-format` at repo root)
+- Standard: C++20
+- Column limit: 100
+- Indentation: 4 spaces, never tabs
+- Brace style: Attach (opening brace on same line as function/class)
+- Namespace indentation: None (blank line before closing brace)
+- Pointer/reference alignment: Left (e.g., `Type* ptr` not `Type *ptr`)
+
+**Key settings from `.clang-format`:**
+
+```yaml
+BasedOnStyle: LLVM
+Standard: c++20
+ColumnLimit: 100
+IndentWidth: 4
+BreakBeforeBraces: Attach
+PointerAlignment: Left
+ReferenceAlignment: Left
+IncludeBlocks: Regroup
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+BinPackParameters: false
+BinPackArguments: false
+AlwaysBreakTemplateDeclarations: Yes
+```
 
 **Linting:**
 
-- Tool: `clang-tidy` (static analysis; runs on pre-push stage, not per-commit)
-- Config: `.clang-tidy` at repo root
-- Pre-commit auto-runs clang-format for auto-fix; clang-tidy is "hook-stage manual" and "pre-push"
-- Python: `ruff` (format + lint), configured in `pyproject.toml`
+- Tool: `clang-tidy` (optional, manual/pre-push stage in `.pre-commit-config.yaml`)
+- Configuration: `.clang-tidy` at repo root (runs configured checks)
+- Pre-commit hooks enforce: trailing whitespace, EOF newlines, mixed line endings, YAML/JSON/TOML validation
 
-**Line-ending & whitespace:**
+**CMake formatting:**
 
-- Pre-commit enforces LF line endings across all files
-- Trailing whitespace is removed automatically (exception: markdown line-break syntax `  ` at EOL)
+- Tool: `cmake-format` (`.cmake-format.yaml` at repo root)
+- Line width: 100
+- Indentation: 4 spaces
+- Dangle parens: true
+- Command case: canonical (uppercase)
 
 ## Import Organization
 
 **Order (C++):**
 
-- Group 1 (priority 1): Local project headers in quotes (e.g., `#include "pi_bridge.hpp"`)
-- Group 2 (priority 3): Qt headers (e.g., `#include <QObject>`, `#include <QString>`)
-- Group 3 (priority 4): Standard library (e.g., `#include <memory>`, `#include <string>`)
-- Special: nlohmann::json is PRIVATE-linked only; appears in `.cpp` files, never in installed public headers (COD-031 boundary)
+1. SPDX license comment + doxygen file doc
+1. Local project headers (quoted): `#include "ajazz/core/event_bus.hpp"`
+1. Qt headers (angle brackets): `#include <Qt...>` (grouped)
+1. Standard library headers (angle brackets, grouped):
+   - `<algorithm>`, `<chrono>`, `<cstdint>`, `<functional>`, `<memory>`, `<mutex>`, `<string>`, `<vector>`, etc.
+1. System headers (angle brackets): `<windows.h>`, `<fcntl.h>`, etc. (platform-conditional)
 
-**Path Aliases:**
+The `clang-format` rule `IncludeBlocks: Regroup` enforces logical grouping and deduplication.
 
-- Not detected — full qualified paths used throughout
+**Qt-specific:**
+
+- `#include <QObject>` before std lib
+- `#include <Q...>` before non-Qt standard library
+- Example: `#include <QList>` → `#include <algorithm>` → `#include <vector>`
+
+**Python imports:**
+
+```python
+from __future__ import annotations
+
+import standard_lib_modules
+from standard_lib_modules import names
+
+import third_party_packages
+
+from ajazz_plugins import names
+from . import relative_imports
+```
+
+**Path aliases:**
+
+- Not used; absolute includes are preferred
+- Core library exports: `#include "ajazz/core/..."`, `#include "ajazz/mouse/..."`, etc.
 
 ## Error Handling
 
-**Pattern — Transport I/O Errors:**
+**Exceptions (C++):**
 
-- Device backends use `try/catch` around `m_transport->write()` and `m_transport->read()` calls that can throw `std::runtime_error`
-- On error, catch and log via `AJAZZ_LOG_ERROR()` with module name and message
-- Example: `proprietary_keyboard.cpp:530-534` wraps write/read in try-catch with error logging
-- For fire-and-forget commands (no response expected), the return value is cast to `(void)` with no error handling (e.g., `(void)m_transport->write(pkt);`)
+- Thrown on unrecoverable conditions: file I/O failures, invalid JSON, missing resources
+- Custom exceptions inherit `std::runtime_error` with additional context if needed
+- Examples: `ProfileIoError`, `ProfileBundleError`
+- Never throw in destructors or noexcept functions
+- Errors logged at throw site via `AJAZZ_LOG_ERROR` / `AJAZZ_LOG_WARN`
 
-**Exception Contract:**
+**Try-catch blocks:**
 
-- `ITransport::open()` throws `std::runtime_error` on failure
-- `ITransport::write()` and `ITransport::read()` throw `std::runtime_error` on transport failure
-- Device capability methods throw `std::runtime_error` for unimplemented features (e.g., `"per-LED RGB buffer: TODO"`)
-- Logging functions (`AJAZZ_LOG_*`) are marked `noexcept` — never throw
+```cpp
+try {
+    auto profile = ajazz::core::readProfileFromDisk(path);
+    // use profile
+} catch (ajazz::core::ProfileIoError const& e) {
+    AJAZZ_LOG_WARN("profile_io", "read failed: {}", e.what());
+    // handle gracefully
+}
+```
 
-**Qt Signal/Slot Errors:**
+**Optional / Result types:**
 
-- Errors in Q_INVOKABLE methods (bridged to QML) are logged via `AJAZZ_LOG_ERROR()`; QML receives a log record, not an exception
+- Return `std::optional<T>` for operations that might fail but are not exceptional (e.g., parsing)
+- Example: `std::optional<DeviceEvent> parseInputReport(std::span<uint8_t> bytes);`
+- Call site: `if (auto ev = parseInputReport(data); ev) { /* use *ev */ }`
+
+**Status booleans:**
+
+- Return `bool` for simple success/failure (no value to return)
+- Example: `bool open()` returns true if opened successfully
+
+**noexcept guarantees:**
+
+- All logging is `noexcept` (never throws)
+- EventBus::unsubscribe is `noexcept`
+- Destructors are implicitly `noexcept`
+- Document `noexcept` on public functions that offer the guarantee
 
 ## Logging
 
-**Framework:** Custom `ajazz::core::Logger` with pluggable `LogSink` interface
+**Framework:** Custom `Logger` class at `src/core/include/ajazz/core/logger.hpp`
 
-**Macros:**
+- Direct access via macros: `AJAZZ_LOG_{LEVEL}(module_name, message, args)`
+- Levels: Trace, Debug, Info (default minimum), Warn, Error, Critical
+- Format: `[<timestamp>] [<LEVEL>] [<module>] <message>`
 
-- `AJAZZ_LOG_TRACE()` — fine-grained tracing
-- `AJAZZ_LOG_DEBUG()` — developer debug
-- `AJAZZ_LOG_INFO()` — normal operational messages (default min level)
-- `AJAZZ_LOG_WARN()` — recoverable abnormal conditions
-- `AJAZZ_LOG_ERROR()` — non-fatal errors requiring attention
-- `AJAZZ_LOG_CRITICAL()` — fatal conditions
+**When to log:**
 
-**Usage Pattern:**
+- **ERROR**: Failures that require user attention (device open failures, malformed input)
+- **WARN**: Recoverable issues (vendor flash close failure before retry, cache misses)
+- **INFO**: Normal operational events (device connected, profile loaded, feature detected)
+- **DEBUG**: Detailed state changes (subscription added, message dispatched)
+- **TRACE**: Fine-grained entry/exit tracing; very verbose
+
+**Examples from codebase:**
 
 ```cpp
-#include "ajazz/core/logger.hpp"
-
-AJAZZ_LOG_INFO("module-name", "message with {} format", value);
-AJAZZ_LOG_ERROR("pi-bridge", "failed to load settings: {}", error);
+AJAZZ_LOG_WARN("registry", "open transport failed: {}", e.what());
+AJAZZ_LOG_INFO("registry", "cache hit for VID={:04x} PID={:04x}", id.vendorId, id.productId);
 ```
 
-Module names (first arg) are conventionally short, kebab-cased (e.g., `"pi-bridge"`, `"device-model"`, `"macro_recorder"`).
+**Thread safety:**
 
-**Sink Contract:**
+- All logging is thread-safe (default StderrSink uses internal mutex)
+- Safe to call from any thread concurrently
 
-- Implementations must be thread-safe (all log calls are serialized internally via mutex)
-- Tests can install a capturing sink via `setLogSink()` to assert on logged messages (see `test_logger.cpp`)
-- Default sink writes timestamped lines to stderr
+**Testing:**
+
+- Tests can install a custom LogSink via `setLogSink()` to capture log output
+- Example: verify a warning was logged when a device fails to open
 
 ## Comments
 
-**When to Comment:**
+**When to comment:**
 
-- Document WHY a design choice or workaround exists, not WHAT the code does
-- "Pitfall N" cross-references (e.g., "Pitfall 13 lock", "Pitfall 11 invariant") point to load-bearing constraints in `CLAUDE.md` or `RETROSPECTIVE.md`
-- Use `TODO:`, `FIXME:`, `HACK:`, `XXX:` for incomplete/broken code
-- Multi-file implications get a cross-reference block (e.g., device backend protocol changes should mention `docs/protocols/`)
+- Explain non-obvious algorithm choices: "copy-on-write snapshot for lock-free publish"
+- Document invariants: "tokens are never zero; fetch_add starts at 1"
+- Explain why (not what): "fsync the parent directory (not the file) for durability across power loss"
+- Mark test doubles: `/// Test double: queues continuations instead of running them, ...`
+- Flag provisional or hardware-unconfirmed findings: "PROVISIONAL" tag in code comments (see CLAUDE.md)
 
-**JSDoc/Doxygen:**
+**Doxygen / Javadoc comments:**
 
-- Used extensively in public headers (`.hpp` files under `src/core/include/`, `src/app/src/`, etc.)
-- Format: `/** @brief ... */` with `@param`, `@return`, `@throws`, `@post`, `@see`
-- Example: `pi_bridge.hpp:2-29` shows full doxygen doc for the bridge class
-- Enforced by convention, not by automated check
+- File headers (every `.hpp`): `/** @file name.hpp ... */` or `///` style
+- Class headers: `/** @brief Class description ... */`
+- Public method headers: `/** ... @param ... @return ... @threadsafe ... @see ... */`
+- Example from codebase:
 
-**Implementation Comments:**
+```cpp
+/**
+ * @brief Register an event handler.
+ *
+ * @param handler Callable invoked for every subsequent publish() call.
+ * @return Opaque token; pass to unsubscribe() to cancel the subscription.
+ */
+Subscription subscribe(Handler handler);
+```
 
-- C++ .cpp files use inline doxygen comments (e.g., line-level `///` comments) to explain non-obvious logic
-- Python docstrings follow Google convention (enforced by ruff rule D102-D107)
+**Inline comments:**
+
+- Use `//` for short inline remarks
+- Use `/* ... */` sparingly (reserved for multi-line doctest blocks)
+- Keep comments close to the code they explain
 
 ## Function Design
 
 **Size:**
 
-- No hard limit, but keep functions focused on a single responsibility
-- Long `switch`/`if` chains indicate refactoring opportunity (e.g., register plugin handlers as polymorphic table)
+- Aim for single-responsibility: each function does one thing
+- Typical range: 5–30 lines for core logic; longer only if the algorithm is inherently sequential
+- Test-heavy modules (fixtures, test doubles) may exceed this for readability
 
 **Parameters:**
 
-- Passed by value: small scalars, enums
-- Passed by const reference: large objects, strings (e.g., `QString const&`, `std::span<std::uint8_t const>`)
-- Mutable reference: rare; reserved for out-parameters (e.g., `bool& oversize` in `manifest_signer_common.cpp:59`)
-- Ownership transfer: use `std::unique_ptr` or `std::move()` semantics
+- Pass by const reference for non-POD types: `Profile const& profile`
+- Pass by value for POD/small types: `int count`, `uint8_t byte`
+- Use `std::span<T>` for array-like ranges (not `const std::vector<T>&`)
+- Avoid out-parameters; prefer return values or structured returns (e.g., `std::optional`, tuples via structured bindings)
 
-**Return Values:**
+**Return values:**
 
-- Bare values, `std::optional<T>`, `std::vector<T>`, or ownership via `std::unique_ptr<T>`
-- All query methods marked `[[nodiscard]]` to prevent accidental ignoring of return values
+- Return by value (rely on NRVO): `std::unique_ptr<IDevice> makeDevice(...)`
+- Return by const reference only if the caller doesn't own the lifetime: `DeviceDescriptor const& descriptor()`
+- Return `std::optional<T>` for "might not exist" (parse failures, lookups)
+- Return `bool` for simple success/failure
+
+**Move semantics:**
+
+- Use `std::move()` when transferring ownership: `std::move(profile)`
+- Implement move constructors and assignment for large types
+- Use `std::unique_ptr` for exclusive ownership; use `std::shared_ptr` sparingly (prefer unique ownership where possible)
 
 ## Module Design
 
-**Exports:**
+**Exports (public headers in `include/`):**
 
-- Public API lives in `src/*/include/ajazz/` — what is installed to system
-- Implementation lives in `src/*/src/*.cpp` — private to the library
-- Namespace hierarchy: `ajazz::{core,app,devices,keyboard,mouse,streamdeck,plugins}`
+- Only interface and value types; no implementation details
+- Hide internal data structures in `.cpp` files or anonymous namespaces
+- Virtual interfaces (e.g., `IDevice`) exported; concrete implementations (e.g., `AjSeriesMouse`) are internal
 
-**Header Inclusion Pattern:**
+**Barrel files (index headers):**
 
-- Public header `#include "ajazz/core/logger.hpp"` is a thin facade
-- Real implementation `#include "logger_impl.hpp"` is private (not in installed include dir)
-- Tests include both public and internal headers
+- Not used; consumers import specific headers
+- Example: `#include "ajazz/core/event_bus.hpp"` not `#include "ajazz/core.hpp"`
 
-**Barrel Files:**
+**Inline implementations:**
 
-- Not heavily used; each subsystem exports its main interface explicitly (e.g., `ajazz/core/device.hpp`, `ajazz/core/capabilities.hpp`)
+- Fixture headers (test doubles) are header-only: `mock_transport.hpp`, `fake_stream_dock_device.hpp`
+- Implementation: define all member functions inline (no `.cpp` translation unit)
+- Document design: "Header-only by design (Phase 09 D-04). No `.cpp` translation unit..."
 
-## Qt/QML-Specific Conventions
-
-**Q_INVOKABLE Methods:**
-
-- Bridged from C++ to QML via these method declarations
-- Return type must be serializable to QVariant (primitives, QString, QUrl, etc.)
-- Example: `pi_bridge.hpp:80` declares `Q_INVOKABLE QString getSettings(QString const& action)`
-
-**Q_OBJECT & QML_SINGLETON:**
-
-- `Q_OBJECT` macro required for signal/slot enabled classes
-- `Q_DISABLE_COPY_MOVE` is the standard way to delete copy and move constructors/operators
-- `QML_SINGLETON` requires pairing with `qmlRegisterSingletonInstance` at initialization; the bare macro creates duplicate instances per QML import (v1.0 bug, fixed by using the instance function)
-- Co-locate `static_assert(!std::is_default_constructible_v<T>)` with `QML_SINGLETON` to catch misuse at compile time
-
-**Property Types:**
-
-- Const references passed to QML cannot be observed via properties; use value or shared_ptr if data binding is needed
-- East-const style (const on right) applied throughout: `QString const&`, `int const value`
-
-## Capability Interface Pattern
-
-The codebase uses capability mix-ins to expose optional device features via dynamic polymorphism.
-
-**Declaration Pattern (`capabilities.hpp`):**
+**Namespace structure:**
 
 ```cpp
-class IRgbCapable {
-public:
-    virtual ~IRgbCapable() = default;
-    [[nodiscard]] virtual std::vector<RgbZone> rgbZones() const = 0;
-    virtual void setRgbColor(std::string_view zone, Rgb const& color) = 0;
-};
+namespace ajazz::core { ... }           // Core library (no Qt/device-specific code)
+namespace ajazz::mouse { ... }          // Mouse devices
+namespace ajazz::keyboard { ... }       // Keyboard devices
+namespace ajazz::streamdeck { ... }     // Stream Deck devices
+namespace ajazz::app { ... }            // App layer (Qt, QML)
+namespace ajazz::plugins { ... }        // Plugin API / runtime
+namespace ajazz::tests { ... }          // Test fixtures and mocks
 ```
 
-**Implementation Pattern (device backend):**
+## Hard Rules (from CLAUDE.md)
 
-```cpp
-class StreamDeck final : public IDevice, public IRgbCapable, public IMacroCapable {
-    // ... implement IDevice methods ...
-    [[nodiscard]] std::vector<RgbZone> rgbZones() const override { /* ... */ }
-    void setRgbColor(std::string_view zone, Rgb const& color) override { /* ... */ }
-};
-```
+**COD-031 boundary:**
 
-**Query Pattern (UI/plugin layer):**
+- No `nlohmann::json` in `src/core/include/` (public headers)
+- PRIVATE-linked to `ajazz_plugins` only
+- Verified by grep: `grep -rn nlohmann src/core/include/` must return 0
+- Violating this is a release-blocker
 
-```cpp
-auto* rgbCap = dynamic_cast<ajazz::core::IRgbCapable*>(device.get());
-if (rgbCap) {
-    auto zones = rgbCap->rgbZones();
-    // ... apply color ...
-}
-```
+**Commit conventions:**
 
-Capability bits in `DeviceDescriptor.hasRgb`, `DeviceDescriptor.hasBattery`, etc., are used by the UI to pre-gate features without dynamic_cast.
+- Use Conventional Commits: `feat:`, `fix:`, `chore:`, `docs:`, `test:`, `refactor:`, `perf:`, `build:`, `ci:`, `revert:`
+- Optional scope in parentheses: `fix(plugins): ...`, `docs(streamdock): ...`
+- Enforced by pre-commit hook (`.pre-commit-config.yaml`, `conventional-pre-commit`)
+- Never skip hooks with `--no-verify` unless the hook itself is broken; document the bypass in commit body
 
-## Schema as Source of Truth
+**Atomic commits:**
 
-**Critical Convention:**
-The JSON schema (`docs/schemas/`) is the authoritative source for wire-format field names. When C++ field names and JSON keys differ (e.g., C++ `Profile::deviceCodename` but JSON `"device"`), the schema wins.
-
-**Example (`Profile` serialization):**
-
-```cpp
-// C++ field: deviceCodename
-// JSON key: "device" (from docs/schemas/profile.schema.json)
-json["device"] = profile.deviceCodename;  // CORRECT: follow schema, not field name
-```
-
-Writers must always check the schema before aligning a serializer to a C++ field name.
-
-## Conventional Commits
-
-**Format:** `<type>(<scope>): <subject>`
-
-**Types (enforced by pre-commit):**
-
-- `feat` — new feature
-- `fix` — bug fix
-- `docs` — documentation
-- `style` — code style (formatting, whitespace)
-- `refactor` — code restructuring without feature change
-- `perf` — performance improvement
-- `test` — test additions or changes
-- `build` — build system or dependencies
-- `ci` — CI/CD changes
-- `chore` — maintenance tasks
-- `revert` — revert a previous commit
-
-**Scope (optional):**
-
-- Device family: `mouse`, `keyboard`, `streamdeck`
-- Component: `app`, `core`, `plugins`, `ui`
-- System: `ci`, `cmake`, `docs`
-- Example: `fix(mouse): correct DPI stage count validation`
-
-**Subject:**
-
-- Imperative mood: "add", "fix", "update", not "adds", "fixed"
-- No period at end
-- Under 50 characters when possible
-
-**Example Commits:**
-
-```
-feat(streamdeck): add per-key RGB brightness control
-fix(mouse): handle battery poll timeout gracefully
-docs: update plugin SDK examples for v1.1
-test(action-engine): add navigation stack boundary tests
-```
-
-## Workflow: Atomic Commits
-
-**Direct-to-main workflow:**
-
-- Fetch + rebase before every push
 - Each commit is one independently-revertable change
-- Never bundle unrelated fixes
-- Expect 3-5 remote commits per session
+- Don't bundle unrelated fixes; create separate commits
 
-**No force-push to main** — the project convention is linear history on main with sequential rebases.
+**Test name ASCII-only:**
 
-## Pre-commit Hooks
+- TEST_CASE titles must contain ASCII only (no em-dashes `—`, right-arrows `→`)
+- Windows CI CMD codepage mangles Unicode; Catch2 filters fail on mangled names
+- Use `-` and `->` instead
+- Enforced by `check-test-names-ascii` pre-commit hook (Python script)
 
-**Hooks that auto-fix:**
+**Debug-channel verification (mandatory):**
 
-- `clang-format` — C++ formatting
-- `ruff` (format + lint) — Python
-- `cmake-format` — CMake
-- `typos` — spelling corrections
-- `mdformat` — Markdown (excluding auto-generated docs with AUTOGEN blocks)
+- Every UI/behavioral change must be verified live via the debug-control channel
+- Build → launch with `AJAZZ_DEBUG_CONTROL=1` → drive controls via `scripts/ajazz-debug` → screenshot → confirm behavior
+- Unit tests + code review are necessary but NOT sufficient
+- Every new interactive control must set `objectName:` (for `qml.get/set/invoke/click` accessibility)
 
-**Hooks that fail on violation:**
+**Cross-platform -Werror strictness:**
 
-- `check-test-names-ascii` — test case/section names must be ASCII only (Windows ctest filter compatibility)
-- `reject-raw-captures` — blocks raw USB capture files (CAPTURE-01 / Pitfall 17)
-- `conventional-pre-commit` — enforces Conventional Commits
-- `clang-tidy` — static analysis (pre-push stage; manual pre-commit stage)
+- Linux GCC + Linux Clang: most permissive
+- Apple Clang on macOS: catches `-Wunused-const-variable` (use `[[maybe_unused]]` if intentional)
+- MSVC on Windows: C4996 deprecation warnings are hard errors; prefer `_s` variants (`_wdupenv_s`, `sprintf_s`)
+- Land changes on all three platforms
 
-**Never skip hooks with `--no-verify`** except when the hook itself is broken (e.g., stash/restore failure under concurrent agents). Document the bypass in the commit message body.
+**No system-level mutations:**
+
+- Code-only fixes inside the project repo
+- Don't write to `/etc/`, `~/.config/niri/`, `~/.config/noctalia/`, `/usr/share/`, etc.
+- Even read-only inspection of user dotfiles should be sparing and justified
 
 ______________________________________________________________________
 
-*Convention analysis: 2026-05-22*
+*Convention analysis: 2026-06-02*

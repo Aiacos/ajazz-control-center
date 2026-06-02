@@ -1,244 +1,273 @@
 # External Integrations
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## APIs & External Services
 
 **Plugin Catalogs:**
 
-- Streamdock Space (Chinese vendor ecosystem)
+- **AJAZZ Streamdock Space Plugin Catalog** - Live mirror of upstream AJAZZ plugin store
 
-  - Endpoint: `https://space.key123.vip/interface/user/productInfo/list`
-  - Method: JSON POST (anonymous, no auth required)
-  - Purpose: Fetch plugin listings with metadata (name, description, icon URL, download URL)
-  - SDK/Client: Qt6::Network (QNetworkAccessManager)
-  - Implementation: `src/app/src/streamdock_catalog_fetcher.cpp`
-  - Fallback chain: Live → cached JSON on disk → bundled fixture
-  - Cache file: `streamdock-catalog.json` in `QStandardPaths::CacheLocation`
-  - Environment override: `ACC_STREAMDOCK_CATALOG_URL`
-  - Notes: Tenant ID hardcoded to `"10000000"`, product type `"1"` for plugins
+  - URL: `ACC_STREAMDOCK_CATALOG_URL` env var (overridable, default internal)
+  - Client: `StreamdockCatalogFetcher` (`src/app/src/streamdock_catalog_fetcher.{hpp,cpp}`)
+  - Method: HTTP POST pagination (10 s timeout per page)
+  - Response: JSON envelope with plugin records translated to `CatalogEntry` shape
+  - Cache: `$XDG_CACHE_HOME/ajazz-control-center/streamdock-catalog.json` (atomic write)
+  - Fallback: Bundled fixture `qrc:/qt/qml/AjazzControlCenter/streamdock-fallback.json`
 
-- OpenDeck (open-source Stream Deck alternative ecosystem)
+- **OpenDeck Legacy Catalog** - Community-scraped archive of Elgato plugins
 
-  - Endpoint: `https://plugins.amankhanna.me/catalogue.json`
-  - Method: Simple HTTPS GET (anonymous)
-  - Purpose: Fetch cross-compatible plugin catalogue as flat JSON array
-  - SDK/Client: Qt6::Network
-  - Implementation: `src/app/src/opendeck_catalog_fetcher.cpp`
-  - Fallback chain: Live → cached JSON → bundled fallback
-  - Cache file: `opendeck-catalog.json` in QStandardPaths::CacheLocation
-  - Environment override: `ACC_OPENDECK_CATALOG_URL`
-  - Dead host filtering: Removes `appstore.elgato.com` (CloudFront retired as of 2026-05-13) to prevent DNS lookups and log spam
+  - URL: `https://plugins.amankhanna.me/catalogue.json`
+  - Client: `OpendeckCatalogFetcher` (`src/app/src/opendeck_catalog_fetcher.{hpp,cpp}`)
+  - Method: Single HTTP GET (no pagination)
+  - Response: Flat JSON array of plugin metadata (link, download URL, icon URL)
+  - Cache: File-based on-disk mirror (same pattern as Streamdock)
 
-**GitHub Releases (Update Checker):**
+**Auto-Update Service:**
 
-- Endpoint (stable): `https://api.github.com/repos/Aiacos/ajazz-control-center/releases/latest`
-- Endpoint (nightly): `https://api.github.com/repos/Aiacos/ajazz-control-center/releases/tags/nightly`
-- Method: HTTPS GET (anonymous, Rate-limited: GitHub API allows unauthenticated requests)
-- Purpose: Polling for newer releases; display in-app Material banner if update available
-- SDK/Client: Qt6::Network
-- Implementation: `src/app/src/app_update_service.cpp`
-- Auto-check cadence: Every 24 hours (5s initial delay to avoid blocking splash screen)
-- User-Agent: `ajazz-control-center (+https://github.com/Aiacos/ajazz-control-center)`
-- Response parsing: Qt's QJsonDocument/QJsonObject (not nlohmann::json per COD-031)
-- Storage: QSettings keys `AppUpdate/autoCheck`, `AppUpdate/includeNightly`, `AppUpdate/dismissedTag`
-- Notes: Notify-only; no auto-download or in-app installation. Disabled under Flatpak (sandbox constraint).
+- **GitHub Releases API** - In-app update checker
+  - URL: `https://api.github.com/repos/Aiacos/ajazz-control-center/releases/latest` (stable)
+  - Alt URL: `https://api.github.com/repos/Aiacos/ajazz-control-center/releases/tags/nightly` (rolling)
+  - Client: `AppUpdateService` (`src/app/src/app_update_service.{hpp,cpp}`)
+  - Auth: None (public repo, no rate-limit gate)
+  - Polling: 24-hour auto-check interval (opt-in, enabled by default)
+  - First check: 5 s after app launch via `QTimer::singleShot`
+  - Response: JSON release envelope (tag, version, body, assets, download_url)
+  - Action: Notify-only; user clicks to `Qt.openUrlExternally(releasePageUrl)` — no silent install
+  - Self-disable: Flatpak (env var `FLATPAK_ID` present → Status::Disabled)
+
+**Firmware Update Deep-Link:**
+
+- **Vendor Firmware Pages** - Read-only, open-in-browser links
+  - Stream Deck: `https://stream-dock.com/pages/support`
+  - AJAZZ Keyboards: `https://ajazzstore.com/blogs/firmware`
+  - AJAZZ Mice: `https://epomaker.com/blogs/software/ajazz-aj159-pro-driver-1`
+  - Implementation: `FirmwareUpdateService` (`src/app/src/firmware_update_service.cpp`) — delegates to platform file associations
 
 ## Data Storage
 
 **Databases:**
 
-- None (application is stateless regarding external databases)
+- None (no server-side database)
+
+**Local Profile Storage:**
+
+- **Profiles:** QSettings (Qt's platform-native storage)
+
+  - Linux: `~/.config/AjazzControlCenter/` (XDG)
+  - Windows: HKEY_CURRENT_USER registry
+  - macOS: ~/Library/Preferences/io.github.Aiacos.AjazzControlCenter.plist
+  - Format: INI (Linux), native (Windows/macOS)
+  - Contents: Profile name, device bindings, per-key action UUIDs + settings JSON
+
+- **Plugin Manifests:** Extracted `.sdPlugin` archives (ZIP format)
+
+  - Location: `~/.config/ajazz-control-center/plugins/` (or `%APPDATA%\...` on Windows)
+  - Client: `PluginCatalogModel` uses `QZipReader` (`src/app/src/sdplugin_extractor.cpp`)
+  - Extract: In-place directory tree per plugin (manifest.json + assets)
+  - Verification: Ed25519 signature validation via `manifest_signer.cpp` / `manifest_signer_win32.cpp`
+
+- **Plugin Catalogs Cache:** JSON snapshot
+
+  - Location: `$XDG_CACHE_HOME/ajazz-control-center/streamdock-catalog.json`
+  - Format: JSON (flat array or envelope, depending on source)
+  - Refresh: On-demand via `StreamdockCatalogFetcher::refresh()` or hourly auto-refresh (TBD)
 
 **File Storage:**
 
-- Local filesystem only
-  - User profiles: `~/.config/ajazz-control-center/profiles/` (XDG spec)
-  - Plugin cache: `~/.cache/ajazz-control-center/` (streamdock-catalog.json, opendeck-catalog.json)
-  - App settings: Qt QSettings (platform-dependent: `~/.config/` on Linux, `~/Library/Preferences/` on macOS, Registry on Windows)
+- **Device Profiles** - Exported as `.ajzz` archives (ZIP bundles of profiles)
+
+  - Format: JSON profile + embedded device images + action metadata
+  - Client-side generation/import via profile controller
+
+- **Application Cache** - Transient
+
+  - Plugin catalog mirrors: `~/.cache/ajazz-control-center/` (Linux) / platform-equivalent
+  - Downloaded plugin archives: Extracted in-place, source archive discarded
 
 **Caching:**
 
-- In-memory: Plugin catalog entries cached in QAbstractListModel after fetch
-- On-disk: Timestamped JSON snapshots to survive app restarts without network
+- None (external HTTP caches managed by CDN/HTTP headers; app caches catalogs on disk per above)
 
 ## Authentication & Identity
 
 **Auth Provider:**
 
-- None (application uses no centralized identity system)
-- All external APIs accessed anonymously
-- Plugin manifests signed with Ed25519 (local verification only; see **Manifest Signing** below)
+- None (no remote authentication required)
 
-## Device & Hardware Integration
+**Internal Security:**
 
-**HID Devices (USB):**
+- **Debug Control Channel** - Unix domain socket (loopback-only, mode 0600)
 
-- Backend: hidapi 0.14.0 (kernel-native `/dev/hidraw*` on Linux only)
-- Enumeration: hotplug monitoring via platform-specific listeners
-  - Linux: udev via Qt QSystemDeviceNotifier or inotify on `/dev/hidraw*`
-  - macOS: IOKit device notifications
-  - Windows: WM_DEVICECHANGE window messages
-- Implementation: `src/core/src/hotplug_monitor.cpp`, `src/core/src/hid_transport.cpp`
+  - Socket path: `$XDG_RUNTIME_DIR/ajazz-control-center-debug.sock`
+  - Activation: `AJAZZ_DEBUG_CONTROL` env var (opt-in)
+  - Protocol: Newline-delimited JSON-RPC
+  - Wire: `{"id": N, "method": "...", "params": {...}}`
+  - Trust model: Same user, file permissions (0600)
 
-**Supported Device VID Prefixes (udev rules in `resources/linux/70-ajazz.rules`):**
+- **Plugin WebSocket Server** - Elgato Stream Deck v6 protocol
 
-- `0x0300` - Stream Deck family (Mirabox HSV293S; AKP153 / AKP153E / AKP03 / AKP05)
-- `0x3151` - AJAZZ VIA-compatible keyboards (SONiX vendor)
-- `0x0c45` - AK980 PRO and Microdia-chipset AK keyboards
-- `0x248a` - AJ-series mice (AJ139 / AJ159 / AJ179 wired + dongle)
-- `0x249a` - AJ-series mice (2.4GHz dongle alternate VID)
-- `0x3554` - AJ199 family mice (AJ199 / AJ199 Max / AJ199 Carbon Fiber)
+  - Binding: `127.0.0.1` (loopback-only, no network exposure)
+  - Port: Auto-assigned (passed to plugins at launch)
+  - Auth: HMAC-SHA256 per `passHello` handshake (optional password)
+  - Challenge: Per-connection random salt nested in authentication payload
+  - Brute-force mitigation: 5-attempt lockout window, connection close on failure
+  - Implementation: `SdPluginServer` (`src/app/src/sd_plugin_server.{hpp,cpp}`)
 
-**Linux udev ACL Setup:**
+- **Manifest Signing** - Ed25519 signatures on plugin manifests
 
-- Rule file: `resources/linux/70-ajazz.rules`
-- Mechanism: `TAG+="uaccess"` for systemd-logind per-user ACLs (no group membership required)
-- Rule numbering: **`70-`** (must sort before `73-seat-late.rules` so `uaccess` tag exists before systemd applies it)
-- Installation: Post-install script or manual `sudo install -m 644 70-ajazz.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules`
-- Known limitation: systemd 258+ has ACL regression on synthetic re-enumeration (physical replug required for recovery)
+  - Public key: Hardcoded in `src/plugins/include/ajazz/plugins/manifest_signer.hpp`
+  - Verification: `loadTrustRoots()` → `manifest_signer_common.cpp` (nlohmann::json, PRIVATE)
+  - Vendor: AJAZZ publishes signed manifests for official plugins
 
 ## Monitoring & Observability
 
 **Error Tracking:**
 
-- None (application logs to `stderr` via Qt's logging framework)
+- None (no remote error reporting; errors logged locally)
 
 **Logs:**
 
-- Qt QLoggingCategory with configurable filtering via environment `QT_LOGGING_RULES`
-- Log categories:
-  - `ajazz.plugins.streamdock` - Streamdock catalog fetch operations
-  - `ajazz.plugins.opendeck` - OpenDeck catalog fetch operations
-  - `plugin-server` - WebSocket plugin server lifecycle
-  - Other component-specific categories in `src/app/src/` (device_model, time_sync_service, etc.)
-- Default suppression: QCDebug messages suppressed unless explicitly enabled
+- **Unified Log Tee** - Ring buffer + stderr + file
+  - Components: `AJAZZ_LOG_*` (C++ core), Qt `qDebug`/`qCDebug` (app)
+  - Sinks: `LogSink` hierarchy (`src/core/src/log_sinks.cpp`)
+  - Ring Buffer: Bounded queryable history (exposed via debug channel `log.tail`)
+  - File: Append-to-file optional (set at construct time)
+  - Debug Channel: `log.tail` RPC exposes live tail (100-line default)
+
+**Device Hot-Plug Monitoring:**
+
+- **Linux:** libudev (via `udev_monitor_*` API for device arrival/removal)
+- **Windows:** Raw USB device notifications (WM_DEVICECHANGE)
+- **macOS:** IOKit notifications
+- Implementation: `HotplugMonitor` (`src/core/src/hotplug_monitor.cpp`) emits device list updates to the registry
 
 ## CI/CD & Deployment
 
 **Hosting:**
 
-- GitHub (primary repository)
-- Releases published to GitHub Releases page (downloadable artifacts)
+- GitHub (public repository)
+- GitHub Releases (binary distribution)
+- Flathub (universal Flatpak distribution)
 
 **CI Pipeline:**
 
-- GitHub Actions workflows in `.github/workflows/`:
-  - `ci.yml` - Per-PR/per-push matrix (ubuntu-latest, windows-2022, macos-14)
-  - `lint.yml` - Clang-tidy static analysis, pre-commit hooks
-  - `codeql.yml` - SAST scanning
-  - `dependency-review.yml` - Dependency audit on PRs
-  - `gitleaks.yml` - Secret scanning
-  - `nightly.yml` - Scheduled + manual builds (stricter, both macOS architectures for Universal DMG)
-  - `release.yml` - Tag-triggered release builds (.deb, .rpm, .flatpak, .dmg, .msi)
-  - `precommit-autoupdate.yml` - Automatic hook updates
-  - `wiki.yml` - Documentation auto-generation
+- **Per-PR/per-push (GitHub Actions, `.github/workflows/ci.yml`)**
 
-**Build Platforms:**
+  - Matrix: Linux (ubuntu-latest), Windows (windows-2022), macOS (macos-14)
+  - Build: CMake + Ninja, all three presets (linux-debug/release, windows-debug/release, macos-debug/release)
+  - Tests: `ctest` suite (~408 cases), verify Windows hot-plug smoke
+  - Lint: pre-commit hooks (gitleaks, typos, formatting)
 
-- Linux (GCC/Clang) - `.deb`, `.rpm`, `.flatpak`
-- Windows (MSVC) - MSI installer, portable ZIP
-- macOS (Apple Clang) - Universal `.dmg` (Intel + Apple Silicon)
+- **Nightly (scheduled + manual dispatch, `.github/workflows/nightly.yml`)**
+
+  - Builds macOS Universal DMG (Apple Silicon + Intel)
+  - Builds Windows MSI/ZIP (stricter than CI — both architectures)
+
+- **Release (triggered by git tags `v*`, `.github/workflows/release.yml`)**
+
+  - Artifacts: .deb + .rpm + .flatpak + .dmg + .msi
+  - Also available via workflow_dispatch for re-test without re-tagging
+
+**Deployment Targets:**
+
+- Linux: Direct .deb/.rpm installation, Flatpak (Flathub), AppImage (not yet)
+- Windows: MSI (Windows Installer), portable ZIP
+- macOS: DMG (Universal), signed + notarized
+- Auto-update: GitHub Releases API (24-hour polling, in-app banner)
 
 ## Environment Configuration
 
-**Required environment variables:**
+**Required env vars:**
 
-- None (all critical paths have hardcoded defaults or graceful fallbacks)
+- `AJAZZ_DEBUG_CONTROL` - Enable debug-control JSON-RPC channel (optional; off by default)
+- At runtime: Python 3.11+ must be on `$PATH` (for plugin host spawn)
 
-**Optional environment variables:**
+**Optional env vars (build-time):**
 
-- `ACC_STREAMDOCK_CATALOG_URL` - Override Streamdock Space endpoint (dev/testing)
-- `ACC_OPENDECK_CATALOG_URL` - Override OpenDeck endpoint (dev/testing)
-- `QT_LOGGING_RULES` - Logging filter (e.g., `"ajazz.plugins.streamdock.debug=true"`)
-- `PYTHONPATH` - Set by plugin host when spawning child process (per-spawn isolation)
+- `FLATPAK_ID` - Detected at runtime to disable auto-update (Flathub manages it)
+- `ACC_STREAMDOCK_CATALOG_URL` - Override plugin catalog endpoint
+- `AJAZZ_USE_SYSTEM_DEPS=ON` - Use system hidapi/nlohmann_json instead of FetchContent (Flatpak)
+- `AJAZZ_BUILD_*` flags - CMake build options (App, Tests, Python Host, Property Inspector, Input Synthesis, Fuzz)
 
 **Secrets location:**
 
-- None (application does not use API keys, tokens, or authentication credentials)
-
-## Plugin System & Wire Formats
-
-**Plugin Manifest Format:**
-
-- JSON schema: `docs/schemas/plugin_manifest.schema.json`
-- Superset of Elgato Stream Deck SDK v2 + OpenDeck extensions
-- Required fields: UUID, Name, Version, Author, Description, Icon, CodePath, Actions, OS, SDKVersion, Software
-- Platform-specific overrides: CodePathMac, CodePathWin, CodePathLin (Linux preferred over generic CodePath)
-- AJAZZ extensions: Nested `Ajazz` object for AJAZZ-specific metadata
-
-**Plugin Archives (`.sdPlugin`):**
-
-- Format: ZIP containers
-- Extraction: Qt's QZipReader (private header `<private/qzipreader_p.h>`)
-- Extraction logic: `src/app/src/sdplugin_extractor.cpp`
-- Manifest signing: Ed25519 signatures verified by `src/plugins/src/manifest_signer.cpp` (POSIX) / `src/plugins/src/manifest_signer_win32.cpp` (Windows)
-
-**Elgato Stream Deck Plugin Protocol (SdPluginServer MVP):**
-
-- Protocol: WebSocket (RFC 6455)
-- Server: `src/app/src/sd_plugin_server.cpp` (loopback-only, localhost:\*)
-- Server name advertised: `"Stream Dock"` (vendor compatibility)
-- Binding: `QHostAddress::LocalHost` (security-critical invariant; never QHostAddress::Any)
-- Conditional: Only built if Qt6::WebSockets available; graceful disable at runtime if missing
-- Port allocation: Dynamic (returned to caller after `start(port)`)
-- WebSocket messages: JSON line-delimited (mirrors vendor protocol)
-- Implementation: Qt6::WebSockets (QWebSocketServer, QWebSocket)
+- None embedded (no hardcoded API keys, auth tokens, or credentials)
+- Debug-control socket: User-owned file in `XDG_RUNTIME_DIR` (owner-only, mode 0600)
+- Plugin WebSocket: Loopback-only, optional password per `setPasswordForTesting()` (test-only setter)
 
 ## Webhooks & Callbacks
 
 **Incoming:**
 
-- None (application is not a server)
+- None (app does not expose HTTP/WebSocket servers for external webhooks)
 
 **Outgoing:**
 
-- None (application does not push events to external services)
+- **HTTP(S) GETs/POSTs to plugin catalogs** - `StreamdockCatalogFetcher` / `OpendeckCatalogFetcher`
+- **HTTP(S) GET to GitHub Releases API** - `AppUpdateService` polling
+- **QProcess spawn of plugin processes** - Node.js plugins launched with WebSocket port and auth challenge
+- **QProcess spawn of Rust sidecar** - `streamdock-host` binary, newline-delimited JSON over stdio
 
-## Python Plugin Runtime
+## Plugin Integration Points
 
-**Spawning:**
+**Plugin Discovery & Installation:**
 
-- Method: `fork()` + `execvp("python3", ...)` (POSIX) / `_spawnvp` (Windows)
-- No compile-time Python dependency
-- Runtime requirement: Python 3.11+
-- Sandboxing (opt-in):
-  - Linux: `bubblewrap` (bwrap) containerization via `LinuxBwrapSandbox`
-  - macOS: `sandbox-exec` (restricted macOS Sandbox) via `MacosSandboxExecSandbox`
-  - Windows: Win32 App Container (AppContainer) via `WindowsAppContainerSandbox`
-  - Default: `NoOpSandbox` (no isolation)
+1. **Discovery:** `PluginManager` scans plugin directories for `manifest.json` (Elgato v6 schema + AJAZZ extensions)
+1. **Catalog Download:** User selects plugin from in-app store → `StreamdockCatalogFetcher` downloads `.sdPlugin` archive
+1. **Extraction:** `PluginCatalogModel::installPlugin()` uses `QZipReader` to extract archive in-place (`src/app/src/sdplugin_extractor.cpp`)
+1. **Verification:** `manifest_signer` validates Ed25519 signature of `manifest.json`
+1. **Spawn:** `PluginManager::spawnPlugin()` launches Node.js runner with `QProcess` (WebSocket port, auth salt)
+1. **Registration:** Plugin connects to `SdPluginServer` via `registerPlugin` event → `pluginRegistered` signal
+1. **Action Dispatch:** App routes key press → `SdPluginServer::sendEvent(uuid, "keyPress", {...})` → plugin handler
 
-**IPC Protocol:**
+**Action & Settings Flow:**
 
-- Medium: Bidirectional pipes (stdin/stdout)
-- Format: Single-line JSON objects (not streaming arrays)
-- Wire spec: `src/plugins/src/wire_protocol.hpp`
-- Operations: `list_plugins`, `add_search_path`, `load_all`, `dispatch`, `shutdown`, `_crash_for_test`
-- Handshake: Child sends `{"event":"ready","pid":<int>,"python":"<version>"}` on startup
-- Error handling: Parent reads with `poll(2)` / `WaitForMultipleObjects` timeouts (configurable, default reasonable)
+1. User configures key action in UI → selects plugin + action UUID
+1. Settings JSON stored in profile (`QSettings` or `.ajzz` export)
+1. Key press triggers: `Profile::lookup(keyIndex)` → action binding → `ActionEngine::run()`
+1. For plugin actions: `BuiltinActionsService::execute()` short-circuits to `SdPluginServer::sendEvent()`
+1. Plugin receives event → parses payload → invokes handler → updates UI
 
-**Plugin SDK:**
+**Property Inspector (HTML):**
 
-- Package: `ajazz_plugins` (Python 3.11+ package)
-- Location: `python/ajazz_plugins/`
-- Public surface: `ajazz_plugins.Plugin` base class, `@ajazz_plugins.action` decorator
-- Context object: `ActionContext(device_codename, key_index, settings)`
-- Testing: pytest in `python/ajazz_plugins/tests/`
+1. Plugin ships HTML PI page (Elgato v6 standard)
+1. QML PropertyInspector page embeds `WebEngineView` (if WebEngineQuick available)
+1. `QQmlWebChannel` bridges QML → JavaScript (`$SD` global in HTML)
+1. User adjusts settings in HTML → `$SD.api.sendToPlugin()` → app receives `settingUpdated` event
+1. Settings JSON persisted to profile
 
-## Third-Party Plugin Ecosystems
+**Python Plugin Host (OOP):**
 
-**Stream Deck SDK v2 Compatibility:**
+1. App spawns child Python process via `execvp` (out-of-process)
+1. Child imports `ajazz_plugins` package from `python/ajazz_plugins/`
+1. Child loads user's plugin module (e.g. `hello.py`)
+1. App sends action dispatch over child's stdout/stdin as JSON
+1. Child imports plugin, calls `plugin.dispatch(action_id, settings_json)`
+1. Plugin handler executes (may call `ctx.notify()` for desktop notifications)
+1. Child's stdout routed to parent's plugin-debug console
 
-- Manifest schema is a strict superset; existing SD plugins load with minimal shims
-- WebSocket plugin protocol implemented (SdPluginServer MVP)
-- Property Inspector HTML support via Qt WebEngineQuick
+## Reverse Engineering & Protocol Documentation
 
-**OpenDeck Compatibility:**
+**Authoritative References:**
 
-- Manifest schema includes CodePathLin extension
-- Plugin catalog aggregates OpenDeck entries
-- Protocol: Same wire format as proprietary Mirabox SDv2 fork
+- `docs/protocols/streamdeck/` - AKP05E / Stream Deck wire format (vendor `.dll` Ghidra audit, device RE)
+
+  - `akp05_vendor.md` - SDLibrary1.dll opcodes, backend implementations
+  - `akp05_init_sequence.md` - Handshake sequence (`CRT VER`, `CRT DIS`, `CRT LIG`)
+  - `akp05_input_corrections.md` - Input report structure (encoder, touch)
+  - `akp_device_matrix.md` - 96 SKUs per-device geometry
+  - `akp_plugin_sdk.md` - Elgato Stream Deck v6 WebSocket protocol
+
+- `docs/protocols/keyboard/` - AK-series keyboard protocols (proprietary opcodes)
+
+- `docs/protocols/mouse/` - AJ-series mouse protocols (battery polling, color modes)
+
+**Hardware RE Resources:**
+
+- MEGAsync corpus (`~/MEGAsync/ajazz-reverse-engineering/`) - Ghidra projects, probe scripts, dossiers
+- `mirajazz` crate (GitHub: `4ndv/mirajazz`) - Authoritative AKP05/N4 Rust implementation
 
 ______________________________________________________________________
 
-*Integration audit: 2026-05-22*
+*Integration audit: 2026-06-02*

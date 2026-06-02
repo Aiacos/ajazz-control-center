@@ -1,296 +1,373 @@
+<!-- refreshed: 2026-06-02 -->
+
 # Architecture
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## System Overview
 
-AJAZZ Control Center is a Qt 6 desktop application with a modular, capability-driven device backend system backed by a C++20 core library and an out-of-process Python 3 plugin host for scripting and third-party integrations.
-
 ```text
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                            Qt 6 / QML UI Layer                              │
-│  Main.qml · DeviceList · ProfileEditor · KeyDesigner · RgbPicker · Tray     │
-│  `src/app/qml/` — Material Design 3 theme, Material attached properties     │
-└─────────────────────────────────────────────────────────────────────────────┘
-                           │ Q_PROPERTY / Q_INVOKABLE
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                         Application Services (C++)                          │
-│  `src/app/src/` — Application · DeviceModel · ProfileController · Services  │
-│  · TimeSyncService · SettingsService · LightingService · PluginHost        │
-│  · HotplugMonitor · BrandingService · TrayController · BatteryService      │
-└─────────────────────────────────────────────────────────────────────────────┘
-        │                          │                    │
-┌───────────────────┐  ┌──────────────────────────┐  ┌─────────────────┐
-│ Device Core       │  │ Python Plugin Host       │  │ Persistence     │
-│ `src/core/`       │  │ `src/plugins/` +         │  │ QSettings +     │
-│ ─────────────── │  │ `python/`                │  │ Profile JSON    │
-│ IDevice          │  │ ─────────────────────── │  │                 │
-│ ITransport (HID) │  │ OutOfProcessPluginHost   │  │ ProfileIO       │
-│ Capabilities     │  │ Manifest signing         │  │                 │
-│ DeviceRegistry   │  │ Sandboxing (bwrap/exec) │  │ Trust roots     │
-│ EventBus         │  │ pybind11 `ajazz` module │  │                 │
-└───────────────────┘  └──────────────────────────┘  └─────────────────┘
-        │
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                   Device Backend Modules (C++, pluggable)                   │
-│  streamdeck_akp153/akp03/akp05/akp815 · keyboard_via/proprietary · mouse_aj │
-│  `src/devices/{streamdeck,keyboard,mouse}/src/`                             │
-│  Protocol builders, wire-format decoders, capability implementations        │
-└─────────────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                         QML UI Layer                                │
+│  Main.qml / DeviceView.qml / ProfileEditor.qml / PluginStore.qml   │
+│              `src/app/qml/`                                         │
+└────────────────────────┬────────────────────────────────────────────┘
+                         │
+┌─────────────────────────┴────────────────────────────────────────────┐
+│                    Qt Application Layer                              │
+├────────────────────────────────────────────────────────────────────┤
+│                                                                    │
+│ Application (main controller)  ← main.cpp (`src/app/src/`)       │
+│ ├─ ProfileController (load/save)                                 │
+│ ├─ DeviceModel (connected devices list)                          │
+│ ├─ StreamDockControlService (render, brightness)                 │
+│ ├─ StreamDockInputService (key/encoder/touch input dispatch)     │
+│ ├─ PluginManager / SdPluginServer (.sdPlugin runtime host)       │
+│ ├─ PluginDeviceBridge (plugin action ↔ device I/O)              │
+│ ├─ DebugControlServer (opt-in JSON-RPC via Unix socket)         │
+│ ├─ Services: ThemeService, BrandingService, LightingService,    │
+│ │  TimeSyncService, BatteryService, SettingsService, ...        │
+│ └─ TrayController (system tray icon + menu)                      │
+│                                                                    │
+│ DeviceRegistry (thread-safe; owns device factories)              │
+│ └─ Opened devices (stream deck, keyboard, mouse)                 │
+│                                                                    │
+│ HotplugMonitor + debouncer (USB enumeration events)              │
+│ RingBufferSink (in-memory log ring for debug channel)            │
+│                                                                    │
+└────────────────┬─────────────────────────────┬────────────────────┘
+                 │                             │
+┌────────────────┴─────────────┐   ┌───────────┴──────────────────────┐
+│   Core Library Layer          │   │  Device Backend Modules          │
+│  (Hardware-agnostic)          │   │  (Transport + Protocol)          │
+│                               │   │                                  │
+│ `src/core/include/` → API     │   │ `src/devices/*/`                │
+│ • IDevice / ITransport        │   │                                  │
+│ • IDisplayCapable (per-key)   │   │ Stream Deck family:             │
+│ • IEncoderCapable             │   │ • AKP05/N4/AKP03/AKP153         │
+│ • ITouchStripDisplayCapable   │   │   (proxied via sidecar)         │
+│ • IRgbCapable                 │   │ • AKP815 (custom C++ backend)   │
+│ • IBatteryCapable             │   │                                  │
+│ • IClockCapable / ISettings   │   │ Keyboard: AK980 (custom)         │
+│ • ActionEngine (key-press →   │   │ Mouse: AJ-series (custom)        │
+│   plugin/sleep/url/command)   │   │                                  │
+│ • Profile (device bindings +  │   │ All backends: HidTransport       │
+│   pages + actions)            │   │ (libhidapi wrapper)              │
+│                               │   │                                  │
+└───────────────┬───────────────┘   └────────────────────────────────┘
+                │
+        ┌───────┴────────────────────┐
+        │                            │
+        │     Out-of-Process         │
+        │    Rust Sidecar            │
+        │                            │
+        │  streamdock-host/          │
+        │  (Mirajazz-based)          │
+        │                            │
+        │  AKP05/N4/AKP03/           │
+        │  AKP153 device handling    │
+        │  JSON over stdin/stdout    │
+        │  (one persistent handle)   │
+        │                            │
+        └────────────────────────────┘
+                │
+        ┌───────┴─────────────┐
+        │   Plugin Layer      │
+        │                     │
+        │ Out-of-Process      │
+        │ Python Host         │
+        │ (POSIX subprocess)  │
+        │                     │
+        │ .sdPlugin runtime   │
+        │ (Node.js WebSocket) │
+        │                     │
+        └─────────────────────┘
 ```
 
 ## Component Responsibilities
 
-| Component                  | Responsibility                                                                                      | File(s)                                                |
-| -------------------------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| **Application**            | Top-level controller; owns registry, device model, services; bootstraps backends; wires QML context | `src/app/src/application.{hpp,cpp}`                    |
-| **DeviceModel**            | List model exposed to QML; tracks connected devices; handles hot-plug events                        | `src/app/src/device_model.{hpp,cpp}`                   |
-| **ProfileController**      | Load/save profile JSON; dispatch actions to plugin host or system                                   | `src/app/src/profile_controller.{hpp,cpp}`             |
-| **DeviceRegistry**         | Maps USB VID/PID → factory functions; owns flyweight shared_ptr cache per device class              | `src/core/include/ajazz/core/device_registry.hpp`      |
-| **IDevice**                | Abstract interface; every backend inherits; lifecycle is open/close/poll                            | `src/core/include/ajazz/core/device.hpp`               |
-| **ITransport**             | Abstract USB I/O; HidTransport is default (libhidapi); MockTransport for tests                      | `src/core/include/ajazz/core/transport.hpp`            |
-| **Capability Mix-ins**     | IDisplayCapable, IRgbCapable, IEncoderCapable, IClockCapable, IBatteryCapable, etc.                 | `src/core/include/ajazz/core/capabilities.hpp` (68 KB) |
-| **HotplugMonitor**         | Polls libhidapi; fires Connected/Disconnected events; triggers DeviceModel refresh                  | `src/core/include/ajazz/core/hotplug_monitor.hpp`      |
-| **Backend: StreamDeck**    | AKP153/03/05/815 (6–15 LCD keys + encoders); JPEG display encoding; touch strip                     | `src/devices/streamdeck/src/`                          |
-| **Backend: Keyboard**      | VIA-compatible (AK820 Pro) + proprietary (AK980 PRO); RGB modes; macro playback; RTC                | `src/devices/keyboard/src/`                            |
-| **Backend: Mouse**         | AJ-series wired + 2.4GHz dongle; DPI stages; RGB zones; battery; TFT clock host-render              | `src/devices/mouse/src/`                               |
-| **OutOfProcessPluginHost** | Spawns Python child; gates plugin loading via manifest signatures; IPC bridge                       | `src/plugins/src/out_of_process_plugin_host*.cpp`      |
-| **TimeSyncService**        | QML singleton; exposes per-device `setTime()` via dynamic_cast to IClockCapable                     | `src/app/src/time_sync_service.{hpp,cpp}`              |
-| **SettingsService**        | AK980 PRO settings batch (opcode 0x07 sub 0x10); ISettingsCapable bridge                            | `src/app/src/settings_service.{hpp,cpp}`               |
-| **LightingService**        | AK980 PRO 20-mode firmware RGB; IFirmwareLightingCapable bridge                                     | `src/app/src/lighting_service.{hpp,cpp}`               |
-| **BatteryService**         | Polls IBatteryCapable for charge level; emits toast notifications on low                            | `src/app/src/battery_service.{hpp,cpp}`                |
+| Component                     | Responsibility                                                                                      | File                                               |
+| ----------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Application**               | Top-level lifecycle; owns registry, device model, services; wires QML engine                        | `src/app/src/application.hpp/.cpp`                 |
+| **DeviceRegistry**            | Maps USB VID/PID to device factories; thread-safe; injects into all `registerAll()` calls           | `src/core/include/ajazz/core/device_registry.hpp`  |
+| **DeviceModel**               | Qt list model for the sidebar; emits device added/removed signals                                   | `src/app/src/device_model.hpp/.cpp`                |
+| **ProfileController**         | Loads/saves profiles from disk; bridges QML ↔ `core::readProfileFromDisk`                           | `src/app/src/profile_controller.hpp/.cpp`          |
+| **StreamDockControlService**  | Converts display actions → HID writes; brightness/image render                                      | `src/app/src/stream_dock_control_service.hpp/.cpp` |
+| **StreamDockInputService**    | Polls devices; converts HID input reports → `DeviceEvent`; invokes action chains                    | `src/app/src/stream_dock_input_service.hpp/.cpp`   |
+| **SidecarStreamDockDevice**   | `core::IDevice` implementation; spawns mirajazz sidecar process; persistent handle lifecycle        | `src/app/src/sidecar_stream_dock_device.hpp/.cpp`  |
+| **SdPluginServer**            | WebSocket server hosting `.sdPlugin` plugins; routes action events → **PluginDeviceBridge**         | `src/app/src/sd_plugin_server.hpp/.cpp`            |
+| **PluginDeviceBridge**        | Converges SdPluginServer ↔ StreamDockControl/Input; context registry (page/row/col ↔ plugin action) | `src/app/src/plugin_device_bridge.hpp/.cpp`        |
+| **PluginManager**             | Discovers and launches `.sdPlugin` bundles (WebSocket subprocesses)                                 | `src/app/src/plugin_manager.hpp/.cpp`              |
+| **DebugControlServer**        | Opt-in Unix socket JSON-RPC channel for `scripts/ajazz-debug` (log/state/QML introspection)         | `src/app/src/debug_control_server.hpp/.cpp`        |
+| **IDevice**                   | Abstract interface: every backend (Stream Deck/keyboard/mouse) implements this                      | `src/core/include/ajazz/core/device.hpp`           |
+| **IDisplayCapable**           | Mixin: per-key LCD or main display (setKeyImage, setBrightness, flush)                              | `src/core/include/ajazz/core/capabilities.hpp`     |
+| **IEncoderCapable**           | Mixin: rotary encoders with image rendering (AKP05)                                                 | `src/core/include/ajazz/core/capabilities.hpp`     |
+| **ITouchStripDisplayCapable** | Mixin: addressable touch-strip zones (AKP05 encoder strip)                                          | `src/core/include/ajazz/core/capabilities.hpp`     |
+| **ActionEngine**              | Executes action chains (sleep → defer, plugin → callback, key press, command, URL, folder nav)      | `src/core/include/ajazz/core/action_engine.hpp`    |
+| **ITransport**                | Abstract USB transport; default is **HidTransport** (libhidapi)                                     | `src/core/include/ajazz/core/transport.hpp`        |
+| **HotplugMonitor**            | Cross-platform USB enumeration watcher; dispatches events to debouncer                              | `src/core/include/ajazz/core/hotplug_monitor.hpp`  |
+| **makeAkp815**                | Stream Deck AKP815 factory (5×3 grid, 800×480 strip, custom C++ backend)                            | `src/devices/streamdeck/src/akp815.cpp`            |
+| **makeSidecarStreamDock**     | Stream Deck AKP05/N4/AKP03/AKP153 factory (mirajazz sidecar proxy)                                  | `src/app/src/sidecar_stream_dock_device.hpp`       |
 
 ## Pattern Overview
 
-**Overall:** Layered architecture with three horizontal planes (UI ↔ Services ↔ Backends) and per-device-family vertical slices.
+**Overall:** Layered architecture with clear separation of concerns:
+
+1. **Core library** (hardware-agnostic, no Qt, no nlohmann::json — COD-031 boundary)
+1. **Device backends** (transport + capability implementations)
+1. **Qt application** (UI, services, IPC, hot-plug)
+1. **Out-of-process subsystems** (Rust sidecar, Python plugin host, Node.js `.sdPlugin` runtime)
 
 **Key Characteristics:**
 
-- **Capability-driven:** UI discovers features via `dynamic_cast<ICapability*>` at runtime; no compile-time coupling to specific backends.
-- **Pluggable backends:** Each device family (streamdeck, keyboard, mouse) is a separate CMake target linked at build time; new backends add themselves via `registerAll(DeviceRegistry&)` at startup.
-- **Shared ownership:** `DevicePtr = std::shared_ptr<IDevice>`; flyweight cache in `DeviceRegistry` ensures one backend instance per (vendorId, productId) pair, shareable across multiple consumers (D-06 flyweight contract).
-- **Out-of-process plugins:** Python plugins run in a sandboxed child process; manifest signatures gate loading (SEC-003); IPC bridge routes action dispatch via JSON wire protocol.
-- **Hot-plug correct:** `HotplugMonitor` fires events → `DeviceModel` updates → UI refreshes; devices are marked offline rather than removed; reconnect is automatic (HOTPLUG contract).
-- **COD-031 boundary:** `nlohmann::json` PRIVATE-linked to `ajazz_plugins` only; never in `ajazz_core` public headers — trust-roots parsing lives inside the sandbox.
+- **Device abstraction** via `IDevice` + capability mix-ins (dynamic_cast); no inheritance hierarchy
+- **Dependency injection** for testing: `DeviceRegistry::HidEnumerator`, `SidecarBinaryResolver`, injected `ITransport`
+- **Single-threaded Qt GUI thread** for all QObject slots; device I/O thread pools or dedicated monitor threads marshal events back via `QMetaObject::invokeMethod`
+- **Persistent IPC handles** (sidecar, WebSocket plugins) to avoid re-spawning overhead
+- **Action-driven dispatch** via `ActionEngine` callbacks; the engine itself has no Qt dependency
 
 ## Layers
 
-**QML UI Layer:**
+**Core Library (`src/core/`):**
 
-- Purpose: Render device list, profile editor, key designer, RGB picker, system tray; Material Design 3.
-- Location: `src/app/qml/`
-- Contains: Main.qml, component library, Material-attached property bindings.
-- Depends on: Application context properties (DeviceModel, ProfileController) and C++ services exposed via `qmlRegisterSingletonInstance`.
-- Used by: End users clicking keys, editing profiles, syncing time, etc.
+- Purpose: Device abstractions, transport interface, profile I/O, action engine, logging
+- Location: `src/core/include/ajazz/core/` (headers), `src/core/src/` (implementation)
+- Contains: Pure C++20, no external dependencies except std
+- Depends on: C++20 stdlib, libhidapi headers (optional, for compile-time transport validation)
+- Used by: Device backends, Qt app, Python plugin host
 
-**Application Services Layer:**
+**Device Backends (`src/devices/`):**
 
-- Purpose: Bridge the UI to device backends; implement cross-device logic (hot-plug debouncing, profile dispatch, plugin IPC).
-- Location: `src/app/src/`
-- Contains: Application (top-level controller), DeviceModel, ProfileController, TimeSyncService, SettingsService, LightingService, BatteryService, HotplugDebouncer, TrayController, BrandingService, AutostartService, FirmwareUpdateService, AppUpdateService.
-- Depends on: Device core, plugin host, persistence (QSettings, JSON profile I/O).
-- Used by: QML UI (via Q_PROPERTY / Q_INVOKABLE) and background daemons (tray, hot-plug, plugin host).
+- Purpose: USB protocol drivers for Stream Deck, keyboard, mouse families
+- Location: `src/devices/{streamdeck,keyboard,mouse}/`
+- Contains:
+  - `streamdeck/src/akp815.cpp` — AKP815 custom C++ backend
+  - `streamdeck/src/register.cpp` — AKP815 + sidecar descriptor registration
+  - `keyboard/src/ak980.cpp` — Keyboard custom backend
+  - `mouse/src/aj_series.cpp` — Mouse custom backend
+  - Wire protocol headers (`*_protocol.hpp`, `*_wire.hpp`)
+- Depends on: Core library, libhidapi at runtime
+- Used by: Qt application via `DeviceRegistry`
 
-**Device Core Layer:**
+**Qt Application (`src/app/src/`):**
 
-- Purpose: Abstract device interface, transport, registry, events, profiles, logging.
-- Location: `src/core/include/ajazz/core/` + `src/core/src/`
-- Contains: IDevice, ITransport (HidTransport, MockTransport), DeviceRegistry, HotplugMonitor, capability mix-ins (IDisplayCapable, IRgbCapable, etc.), DeviceEvent, profile I/O, logger, event bus, action engine.
-- Depends on: Qt6::Core, hidapi, standard C++20.
-- Used by: Application services, device backends, tests.
+- Purpose: GUI, user-facing services, plugin runtime, IPC infrastructure
+- Location: `src/app/src/` (Qt objects), `src/app/qml/` (QML UI)
+- Contains:
+  - Sidecar proxy (`SidecarStreamDockDevice`, `sidecar_protocol.*`)
+  - Plugin runtime (`SdPluginServer`, `PluginManager`, `PluginDeviceBridge`)
+  - Device services (`StreamDockControl/Input`, `LightingService`, `TimeSyncService`, etc.)
+  - Debug channel (`DebugControlServer`, `DebugControlFacade`)
+  - Profile persistence (`ProfileController`)
+  - Tray integration (`TrayController`)
+- Depends on: Core library, Qt6 (Core, Gui, Quick, WebSockets, WebEngine), libhidapi at runtime
+- Used by: QML UI, external debug clients
 
-**Device Backend Layer:**
+**Out-of-Process Sidecar (`streamdock-host/`):**
 
-- Purpose: Implement per-family protocol handlers and USB wire-format encoding/decoding.
-- Location: `src/devices/{streamdeck,keyboard,mouse}/src/`
-- Contains: Per-model concrete device classes (Akp153Device, Akp03Device, Akp05Device, ProprietaryKeyboard, ViaKeyboard, AjSeriesMouse); protocol builders; register.cpp files.
-- Depends on: Device core layer (IDevice, capabilities, ITransport).
-- Used by: DeviceRegistry (via factory functions); application services.
+- Purpose: AKP05/N4/AKP03/AKP153 device I/O via mirajazz crate
+- Language: Rust
+- Protocol: Newline-delimited JSON over stdin/stdout
+- Spawned by: `SidecarStreamDockDevice::open()` as a persistent subprocess
+- Implements: One persistent HID handle per device (fixes per-interaction open/close wedge)
 
-**Plugin Host Layer:**
+**Python Plugin Host (`src/plugins/`):**
 
-- Purpose: Spawn and sandbox Python plugin processes; manage manifest signatures; route action dispatch via IPC.
-- Location: `src/plugins/include/` + `src/plugins/src/` + `python/`
-- Contains: OutOfProcessPluginHost, platform-specific sandboxing (Linux bwrap, macOS sandbox_exec, Windows AppContainer), manifest signer, pybind11 bridge module.
-- Depends on: Device core, nlohmann::json (PRIVATE), standard C++20.
-- Used by: Application (plugin discovery, action dispatch).
-
-**Persistence Layer:**
-
-- Purpose: Save/load profiles, settings, branding.
-- Location: `src/app/src/` (integration with QSettings), `src/core/src/profile_io.cpp`
-- Contains: ProfileIO (JSON file read/write), profile bundle export/import, trust-roots JSON parser.
-- Depends on: Device core (profile schema), nlohmann::json (trust-roots only; PRIVATE to ajazz_plugins).
-- Used by: ProfileController, plugin host trust-roots loader.
+- Purpose: Out-of-process OOP Python plugin runner (abstracting away the in-process pybind11 era)
+- Location: `src/plugins/include/ajazz/plugins/` (C++ interface), `python/` (Python runtime)
+- Implements: `IPluginHost` interface; dispatches actions via JSON IPC to subprocess
+- Depends on: C++ for interface + launcher; Python 3.x at runtime for plugin execution
 
 ## Data Flow
 
-### Primary Request Path: User Presses a Key
+### Primary Request Path: Device Input → Plugin Action → Device Output
 
-1. **HID Input Report** — libhidapi delivers a raw USB input report to a backend's reader thread.
-1. **Backend Parse** — Protocol-specific parser (e.g., `Akp153Device::poll()` → `parseInputReport()`) decodes the key index and emits `DeviceEvent::KeyPressed`.
-1. **Event Callback** — `DeviceEvent` is delivered to the registered callback (set by the Application layer).
-1. **EventBus Publish** — Event is published to all subscribers (profile engine, UI model, etc.).
-1. **Profile Dispatch** — ProfileEngine looks up the key in the active profile and resolves the action chain.
-1. **Action Execution** — Each action is dispatched:
-   - **Direct action** (e.g., "open URL") → DesktopServices call → OS side-effect.
-   - **Plugin action** → ProfileController sends JSON to the OutOfProcessPluginHost via IPC → Python handler runs → result sent back.
-1. **UI Update** — DeviceModel emits signals; QML ListView updates visual state.
+1. **Input Polling** (`StreamDockInputService::run()` on poll thread)
 
-**Example call trace:** `HidTransport::read()` → `Akp153Device::poll()` → `EventCallback()` → `EventBus::publish(KeyPressed)` → `ProfileEngine::dispatch()` → `PluginHost::dispatch(action_id, ...)` → child process Python handler → IPC response → UI toast.
+   - Calls `device->poll()` in a loop
+   - Device (or sidecar) decodes HID input reports → `DeviceEvent` (key/encoder/touch)
+   - `onEvent()` callback fires → `StreamDockInputService::handleEvent()` (`src/app/src/stream_dock_input_service.cpp:71`)
 
-### Secondary Flow: User Syncs Time (Time-Sync Service)
+1. **Profile Navigation & Action Lookup**
 
-1. **User clicks "Sync" button in sidebar** → QML signal invokes `TimeSyncService::syncDevice(deviceId)`.
-1. **Device Lookup** — Service calls `DeviceRegistry::open(deviceId)` → returns `shared_ptr<IDevice>`.
-1. **Capability Query** — `dynamic_cast<IClockCapable*>(device.get())` checks if the device supports clocks.
-1. **Wire Format** — `IClockCapable::setTime(now)` encodes the current UTC timestamp into the device's wire format and writes via the transport.
-1. **Response** — Backend returns `TimeSyncResult::Ok`, `TimeSyncResult::NotImplemented`, or `TimeSyncResult::IoError` (`src/core/include/ajazz/core/capabilities.hpp:1176`) — never `Ok` with a lie if the device cannot do it (D-02 honesty contract).
-1. **UI Feedback** — Service emits a toast or glyph update showing the result (exclamation icon on `NotImplemented`, checkmark on `Ok`); see `src/app/src/time_sync_service.cpp:252`.
+   - Navigation context: current device codename + active page id (starts at "root")
+   - Lookup device's active profile → find page by id → find action at (row, col)
+   - If action.kind == `Kind::Plugin`: extract `plugin.action` id
+   - If action.kind == `Kind::Folder`: push new page onto stack
+   - If action.kind == `Kind::BackToParent`: pop stack
 
-**Example call trace:** `Main.qml` sync button → `TimeSyncService::syncDevice()` → `DeviceRegistry::open()` → `dynamic_cast<IClockCapable*>` → `setTime(now)` → `Akp05Device::setTime()` → wire format build → `ITransport::write()` → USB HID output report → device firmware receives → UI glyph updates.
+1. **Plugin Action Dispatch** (if applicable)
 
-### Tertiary Flow: Device Hot-Plug (Connect / Disconnect)
+   - `PluginDeviceBridge::onActionReceived()` (Phase 19 seam; SdPluginServer→bridge→plugin)
+   - OR `ActionEngine::execute()` with plugin callback wired to `PluginManager::dispatch()`
+   - Plugin UUID + action id → WebSocket plugin subprocess → handler invokes user code
 
-1. **HotplugMonitor polls** — Timer fires every 300 ms (debounce window per HOTPLUG-01).
-1. **Enumerate** — Calls `DeviceRegistry::enumerateConnectedHidKeys()` → `hid_enumerate(0, 0)` from libhidapi.
-1. **Diff** — Compares the new set to the previous snapshot; detects added/removed (vid, pid) pairs.
-1. **Event Fire** — For each changed pair, emits `HotplugEvent::Connected` or `HotplugEvent::Disconnected`.
-1. **Application Handler** — `Application::onHotplug()` forwards to `DeviceModel::handleHotplug()`.
-1. **Model Update** — DeviceModel adds or marks device as offline; emits `dataChanged()` signal.
-1. **UI Refresh** — QML ListView re-renders; offline devices show a grayed-out badge; online devices refresh.
-1. **Zombie Contract (D-06)** — If a consumer holds a `shared_ptr<IDevice>` from before the disconnect, the backend instance stays alive but HID I/O fails safely (not a crash). There is no `Result::DeviceGone` type: the transport throws on the dead handle and backends either swallow-and-log (fire-and-forget setters), return an empty `std::optional` (fallible reads), or surface `TimeSyncResult::IoError` (clock ops). The shared_ptr is naturally released when the consumer drops its reference.
+1. **Action Execution**
 
-**Example call trace:** Hot-plug event → `HotplugMonitor::injectEvent(Disconnected)` → `Application::onHotplug()` → `DeviceModel::handleHotplug()` → `dataChanged()` signal → QML ListView re-renders → device grayed out. Later, user closes key designer → `DevicePtr` released → backend reclaimed from the flyweight cache.
+   - **Sleep:** Deferred via `Executor` (Qt event loop)
+   - **KeyPress:** Calls `InputSynthesizer::synthesizeKeyPress()` → OS key event (if enabled)
+   - **RunCommand:** Spawns shell subprocess
+   - **OpenUrl:** Launches system browser
+   - **OpenFolder:** Pushes page onto navigation stack (updates page id context)
+   - **BackToParent:** Pops stack
+
+1. **Device Output (Render Loop)**
+
+   - `StreamDockControlService::assignKeyImage()` queues image assignment
+   - When page changes or action context updates, UI calls `device->setKeyImage(index, rgba, w, h)`
+   - For mirajazz sidecar: `SidecarStreamDockDevice` encodes JSON `set_image` command → QProcess stdin
+   - Device encodes to JPEG/PNG, applies Rot180, sends HID output report
+   - `device->flush()` ensures batch writes are pushed
+   - `device->keepAlive()` sends keep-alive heartbeat (CRT CONNECT)
+
+### Secondary Flow: Hot-plug → Device Registry Update
+
+1. **HotplugMonitor** spawns OS-specific watcher (udev on Linux, IOKit on macOS, WMI on Windows)
+1. Emits `HotplugEvent` (device added / removed)
+1. **HotplugDebouncer** coalesces rapid events (e.g., re-enumeration storms)
+1. Invoked on main thread → `DeviceModel::onHotplugEvent()` → `Application::bootstrap()` re-scans registry
+1. QML sidebar refreshes bound device list
+
+**State Management:**
+
+- **Registry state:** Thread-safe mutex-protected map of factories; never changes after bootstrap
+- **Device state:** Per-device (open/closed, cached firmware version, image buffer); owned by service layer
+- **Profile state:** `ProfileController` holds in-memory `ajazz::core::Profile`; persists to disk
+- **Navigation state:** `ActionEngine::NavigationContext` (page stack); mutated only on input thread
+- **Plugin context:** `PluginDeviceBridge::ContextRegistry` (opaque context id ↔ ActionContext); guarded by Qt GUI thread
 
 ## Key Abstractions
 
-**IDevice (Core Device Interface):**
+**IDevice:**
 
-- Purpose: Represents a physical USB device; lifecycle is open (acquire HID handle) / poll (drain input reports) / close (release handle).
-- Examples: `Akp153Device`, `ProprietaryKeyboard`, `AjSeriesMouse`.
-- Pattern: CRTP not used; interface is virtual; backends inherit and optionally implement capability mix-ins.
+- Purpose: Common interface for all device backends
+- Examples: `SidecarStreamDockDevice` (AKP05), `Akp815Device` (AKP815), `Ak980Keyboard`, `AjMouseDevice`
+- Pattern: Implement + register factory with `DeviceRegistry::registerDevice()`
+- Key methods: `open()`, `close()`, `poll()`, `onEvent()`, `capabilities()`
 
-**ITransport (USB I/O Abstraction):**
+**ITransport:**
 
-- Purpose: Abstract the underlying USB communication layer; default is `HidTransport` (libhidapi); tests use `MockTransport`.
-- Examples: HidTransport, MockTransport (COD-026 DI seam for testing).
-- Pattern: Dependency injection; IDevice holds `TransportPtr = unique_ptr<ITransport>`.
+- Purpose: Byte-stream transport abstraction (USB, mock, capture-replay)
+- Examples: `HidTransport` (real libhidapi), `MockTransport` (unit tests), `CaptureReplayTransport` (wire-format audit)
+- Pattern: Constructor-injected into device factory; devices never hard-code hidapi calls
 
 **Capability Mix-ins:**
 
-- Purpose: Allow a backend to opt into features dynamically; UI queries at runtime via `dynamic_cast`.
-- Examples: IDisplayCapable (set key image), IRgbCapable (set zone colors), IClockCapable (set time), IBatteryCapable (read charge).
-- Pattern: Virtual inheritance; backend can inherit multiple (e.g., `Akp05Device : public IDevice, public IDisplayCapable, public IEncoderCapable`).
+- `IDisplayCapable` → per-key LCDs or main display
+- `IEncoderCapable` → rotary encoders
+- `ITouchStripDisplayCapable` → touch-strip zones
+- `IRgbCapable` → per-key or global RGB lighting
+- `IBatteryCapable` → wireless device charge level
+- `IClockCapable` → device RTC
+- Pattern: `dynamic_cast<IDisplayCapable*>(device)` to check; `capabilities()` bitset for quick tests
 
-**DeviceRegistry Flyweight Cache:**
+**ActionEngine:**
 
-- Purpose: Ensure one backend instance per (vendorId, productId) across the whole process; multiple consumers share the same backend / one HID handle.
-- Examples: Two threads calling `registry.open(deviceId)` for the same device get the same `shared_ptr<IDevice>`.
-- Pattern: `weak_ptr<IDevice>` cache per (vid, pid); passive eviction when the last consumer drops its `shared_ptr` (no proactive invalidation on hot-plug).
+- Purpose: Lightweight interpreter for action chains (sequences of steps: plugin, sleep, key press, etc.)
+- Callback-driven (no Qt dependency); injected executors for OS operations
+- Pattern: Application creates once at startup with Qt executor; every key press walks its chain
 
-**ProfileEngine / ActionEngine:**
+**Profile / ProfilePage / Action:**
 
-- Purpose: Parse profiles (JSON with key ↔ action mapping); dispatch actions (direct or plugin-routed).
-- Examples: Open URL, play sound, send macro, call plugin handler.
-- Pattern: Visitor pattern over action types; profile is device-agnostic (one profile can be partially reused on multiple device families).
+- Purpose: Device configuration persisted to JSON
+- Structure: Profile → PageMap (named pages) → KeyGrid (per-key actions) → ActionChain
+- Wire format: JSON; schema defined in `docs/schemas/profile.schema.json`
+- Lifetime: Loaded by `ProfileController::loadProfile()`, edited in QML, saved by `ProfileController::saveProfile()`
 
 ## Entry Points
 
-**Application Entry:**
+**Application Bootstrap** (`src/app/src/main.cpp:46`)
 
-- Location: `src/app/src/main.cpp`
-- Triggers: User runs `ajazz-control-center` binary.
-- Responsibilities: Parse CLI flags, enforce single-instance lock, create Application controller, load QML, start background services.
+- Sets Qt app metadata (name, org, version, desktop file)
+- Creates single-instance guard (prevents duplicate launches)
+- Constructs `Application` controller
+- Calls `Application::bootstrap()` → registers all device backends
+- Loads QML engine with `Main.qml` root component
+- Calls `Application::startBackgroundServices()` → starts tray + hot-plug monitor
+- Enters event loop
 
-**Device Registry Bootstrap:**
+**Device Registry Bootstrap** (`src/app/src/application.cpp:bootstrap()`, `src/devices/streamdeck/src/register.cpp`)
 
-- Location: `src/app/src/application.cpp::Application::bootstrap()`
-- Triggers: Application constructor → `bootstrap()`.
-- Responsibilities: Call `registerAll(registry)` for streamdeck, keyboard, mouse modules; populate the registry with all known VID/PID ↔ factory mappings.
+- Called once from `Application::bootstrap()`
+- Each device module calls `registerAll(DeviceRegistry&)`:
+  - `ajazz::streamdeck::registerAll()` → registers AKP815 factory + sidecar descriptors
+  - `ajazz::keyboard::registerAll()` → registers AK980 factory
+  - `ajazz::mouse::registerAll()` → registers AJ-series factory
+- Result: `DeviceRegistry` maps VID/PID → factory callable
 
-**Per-Family Registration:**
+**Input Poll Loop** (`src/app/src/stream_dock_input_service.cpp:122`)
 
-- Locations: `src/devices/{streamdeck,keyboard,mouse}/src/register.cpp`.
-- Triggers: Backend module's `registerAll(DeviceRegistry&)` function called from `Application::bootstrap()`.
-- Responsibilities: Register static `DeviceDescriptor` entries (VID, PID, family, model, codename, capability hints) paired with factory functions (makeAkp153, makeProprietaryKeyboard, makeAjSeries, etc.).
+- Spawned on a worker thread in `StreamDockInputService::start()`
+- Repeatedly calls `device->poll()` (blocking read from HID)
+- On event: decodes `DeviceEvent` → `ActionEngine::execute()` → invokes bound action
 
-**Hot-Plug Polling:**
+**Hot-plug Monitor** (`src/core/include/ajazz/core/hotplug_monitor.hpp`)
 
-- Location: `src/core/src/hotplug_monitor.cpp` + `src/app/src/application.cpp`.
-- Triggers: Timer in HotplugMonitor (300 ms debounce) or test injection via `HotplugMonitor::injectEvent()`.
-- Responsibilities: Poll libhidapi, diff against previous snapshot, fire Connected/Disconnected events, forward to Application → DeviceModel.
-
-**Plugin Host Bootstrap:**
-
-- Location: `src/app/src/application.cpp::Application::initPluginHost()`.
-- Triggers: If `AJAZZ_PYTHON_HOST` is ON and XDG AppLocalDataLocation exists.
-- Responsibilities: Instantiate OutOfProcessPluginHost, scan `~/.local/share/ajazz/plugins/` for manifest.json files, verify signatures, load trusted plugins into LoadedPluginsModel.
+- Spawned on a worker thread; OS-specific watcher (udev / IOKit / WMI)
+- Emits `HotplugEvent` → debounced → `Application::onHotplugEvent()` on GUI thread
+- Triggers device re-enumeration and model refresh
 
 ## Architectural Constraints
 
-- **Threading:** Main thread (Qt event loop) runs QML and all services. Device backends may run internal reader threads (e.g., HidTransport), but `IDevice::onEvent()` callbacks are invoked from the I/O thread. Application-layer signal handlers must be thread-safe or marshal to the main thread.
-- **Global state:** No module-level statics except the deprecated `DeviceRegistry::instance()` singleton shim (audit finding A1 replaced it with constructor injection). Each `Application` owns its `DeviceRegistry m_deviceRegistry` as a data member.
-- **Circular imports:** None documented; all depends-on relationships flow downward (UI → Services → Core → Backends). Backends do not import each other.
-- **Shared ownership:** `DevicePtr = shared_ptr<IDevice>` is the standard; `unique_ptr` is NOT used for devices. This is load-bearing for HOTPLUG-01 (the zombie contract and flyweight cache).
-- **COD-031 Boundary:** `nlohmann::json` is PRIVATE-linked to `ajazz_plugins` only. The public header `src/core/include/ajazz/core/device_registry.hpp` must never include `<nlohmann/json.hpp>`. Verified by grep at audit time: `grep -rn nlohmann src/core/include/ must return 0`.
-- **ITransport Seam (COD-026):** Backends receive ITransport via the DI pattern (`DeviceFactory` functions receive a `TransportPtr` in the anonymous namespace). Tests inject `MockTransport` to capture wire-format exchanges without touching real USB.
-- **QML_SINGLETON Dual-Instance Prevention:** All 9 QML singletons (TimeSyncService, BatteryService, SettingsService, etc.) are registered via `qmlRegisterSingletonInstance` (not the bare `QML_SINGLETON` macro), paired with `static_assert(!std::is_default_constructible_v<T>)` to convert the pattern violation to a build-time error (D-01 amendment 3).
+- **Threading:** Single-threaded Qt GUI thread for all QObject operations; device I/O threads (poll, hot-plug monitor) marshal events back via `QMetaObject::invokeMethod` or signals/slots
+- **Global state:** None; `Application` owns the `DeviceRegistry` (was a Meyers singleton pre-Audit A1, now constructor-injected)
+- **Circular imports:** None enforced by CMake; headers are vigilant about forward declarations
+- **COD-031 boundary:** Core library headers (`src/core/include/ajazz/core/`) must NOT include nlohmann::json (PRIVATE-linked to plugins layer only); QJsonDocument is used in app layer
+- **Sidecar persistence:** One persistent `QProcess` per mirajazz device; closing device → sending `CRT DIS` → process exit
+- **Plugin isolation:** Each `.sdPlugin` runs in its own WebSocket subprocess; plugin crash does not crash the app
 
 ## Anti-Patterns
 
-### Global Device State Mutation
+### Per-Interaction Open/Close (Removed)
 
-**What happens:** Code in one module (e.g., a device backend) modifies global mutable state visible to other modules (e.g., a different backend or the UI).
-**Why it's wrong:** Makes device state machine non-deterministic; concurrent backends can step on each other's writes; tests cannot isolate.
-**Do this instead:** Encapsulate state in the IDevice instance; backends are independent. Communication goes through the EventBus or explicit service calls (e.g., `DeviceModel::handleHotplug()`), never via global variables. See `src/core/include/ajazz/core/event_bus.hpp` for the event-driven pattern.
+**What happens:** Legacy code (removed in mirajazz migration) opened the AKP05 device, sent one command, closed it. This churn caused the panel to wedge (DIS → LIG → DIS sequence disabled input).
 
-### Throwing Exceptions from Device I/O
+**Why it's wrong:** USB devices have state; repeated open/close cycles can desynchronize firmware or hardware state, especially on Stream Decks with stateful displays.
 
-**What happens:** A backend calls `hid_open()` and it fails, so the backend throws `std::runtime_error("device not found")` to the caller.
-**Why it's wrong:** Qt signal-slot connections cannot propagate exceptions safely; the exception disappears and the app crashes unpredictably. QML has no exception handling.
-**Do this instead:** Use the heterogeneous error model the codebase actually implements — `std::optional<T>` for fallible reads (e.g. `parseInputReport`, `batteryPercent`), `TimeSyncResult` for clock ops, and `void`+internal-try/catch+`AJAZZ_LOG_WARN` for fire-and-forget setters. `IDevice::open()` is the one place that throws (`std::runtime_error`) at the lifecycle edge. Application-layer code wraps the lifecycle calls in try-catch and emits a signal with the error message, which QML connects to a toast. See `src/app/src/profile_controller.cpp::loadProfile()` for the pattern.
+**Do this instead:** Hold a persistent `QProcess` for the sidecar or a persistent `ITransport` handle. See `SidecarStreamDockDevice::open()` (opens once, holds handle until `close()` is called). `device->keepAlive()` sends periodic `CRT CONNECT` to prevent idle timeouts.
 
-### Lying Success UX on Unsupported Operations
+### Hardcoded Device Constants in UI (Partially Mitigated)
 
-**What happens:** A device backend's `setTime()` returns `TimeSyncResult::Ok` even though the firmware does not support RTC — the device cannot actually keep the time, but the UI shows a checkmark.
-**Why it's wrong:** User sets time, closes the app, reopens it a week later, thinks the time is synced (it is not) — silent data loss of intent. D-02 honesty contract.
-**Do this instead:** Return `TimeSyncResult::NotImplemented` (and `TimeSyncResult::IoError` on a failed write). Let the UI show an exclamation icon + tooltip "this device does not support time sync" (TIMESYNC-05). This is what `ProprietaryKeyboard::setTime()` does for unsupported backends (before ARCH-05.1 found the AK980 PRO firmware RTC).
+**What happens:** Early QML layouts used magic numbers (15 keys, 4 encoders, etc.) instead of reading from `DeviceDescriptor` or runtime `displayInfo()`.
 
-### Ignoring the Zombie Contract in Device Backends
+**Why it's wrong:** Adding a new device requires editing multiple QML files; descriptor changes don't auto-reflect in the UI.
 
-**What happens:** A device backend stores a raw `HID_HANDLE*` as a data member; when hot-plug removes the device, the handle becomes invalid. Later, someone holds a `shared_ptr<IDevice>` across a reconnect and tries to call a method — the backend dereferences the dead handle → SEGFAULT.
-**Why it's wrong:** Breaks the flyweight cache contract; prevents safe multi-consumer device instances.
-**Do this instead:** Gate every HID I/O operation on an internal `m_alive` flag or check `hid_get_info()` to detect if the USB handle is still valid. On failure, fail safely along the heterogeneous error model — empty `std::optional` for reads, `TimeSyncResult::IoError` for clock ops, swallow-and-log for fire-and-forget setters — rather than letting an exception escape into a Qt slot. See the zombie contract note in `src/core/include/ajazz/core/device.hpp` class doc.
+**Do this instead:** Read `DeviceDescriptor.keyCount`, `gridColumns`, `encoderCount` at startup; bind QML item counts to model properties. Query `displayInfo()` at runtime for sizing. See `DeviceView.qml` and `stream_dock_control_service.cpp` for the pattern.
 
-### Circular Dependency Between Backends
+### nlohmann::json in Core Public Headers (Strictly Prevented)
 
-**What happens:** Backend A includes a header from Backend B; Backend B includes a header from Backend A.
-**Why it's wrong:** Makes it impossible to build either module in isolation; breaks the per-device-family plugin model.
-**Do this instead:** All backends depend exclusively on the core layer (`src/core/include/`). Cross-backend communication happens through shared abstractions (IDevice, ITransport, event bus), never direct includes. See the architecture diagram above.
+**What happens:** Early code leaked JSON parsing into `src/core/include/` headers, breaking COD-031 (the nlohmann boundary).
+
+**Why it's wrong:** Core library is embedded in headless/embedded devices; nlohmann is only used by the app layer and plugin host. Leaking it into core forces the JSON dependency everywhere.
+
+**Do this instead:** Parse JSON at the app layer (e.g., `SidecarStreamDockDevice::handleLine()` uses `QJsonDocument`). Core returns POD structs (e.g., `DeviceEvent`, `DisplayInfo`). If core needs config, pass it as constructor args, not JSON strings.
 
 ## Error Handling
 
-**Strategy:** Layered error handling with different scopes:
+**Strategy:** Exceptions for hard failures; optional/result types for soft failures.
 
-1. **Transport errors** — `ITransport::read()` / `ITransport::write()` throw `std::runtime_error` on HID I/O failure. Backends decide: retry, close the handle, or return a sentinel result to the application layer.
+**Patterns:**
 
-1. **Protocol decode errors** — Wire-format parsers (e.g., `parseInputReport()`) return `std::optional<T>` and never throw on malformed data (defensive against corrupt USB reports). Return empty optional if the report is not parseable.
-
-1. **Device lifecycle errors** — `IDevice::open()` throws `std::runtime_error` on failure (cannot acquire USB handle, permissions denied, etc.). If the device is yanked mid-call, capability methods fail safely instead of throwing into a slot: fallible reads return an empty `std::optional`, clock ops return `TimeSyncResult::IoError`, and fire-and-forget setters catch internally and `AJAZZ_LOG_WARN`. The caller marks the device offline without crashing. (There is no `Result::DeviceGone` enum — that was a documentation fiction; `TimeSyncResult` in `capabilities.hpp:1176` is the only result-enum in the model.)
-
-1. **Application layer** — Services wrap device calls in try-catch and emit Qt signals with error messages (never throw directly from a slot). QML connects those signals to Toast components or other in-app notifications.
-
-1. **UI layer** — QML never throws; all C++ methods exposed to QML are marked `Q_INVOKABLE` and handle errors via signal emission.
+- **Transport errors:** `ITransport::write()` throws `std::runtime_error` if HID write fails
+- **Device open failure:** `IDevice::open()` throws `std::runtime_error` with OS error details
+- **Profile I/O:** `readProfileFromDisk()` throws `std::exception` on JSON parse or file errors; caught by `ProfileController` and emitted as `loadFailed(QString)`
+- **Plugin dispatch:** `IPluginHost::dispatch()` returns `bool` (soft failure: unknown action, handler error) or throws `std::runtime_error` (hard failure: subprocess died)
+- **Action engine:** `ActionEngine::execute()` calls callbacks; callbacks may throw (caller responsibility to catch)
 
 ## Cross-Cutting Concerns
 
-**Logging:** `src/core/include/ajazz/core/logger.hpp` provides a thread-safe logger with levels (DEBUG, INFO, WARN, ERROR). Backends log protocol decisions and errors; services log state changes (hot-plug events, profile loads, plugin discovery). Use `Logger::warn()` for recoverable issues, `Logger::error()` for unrecoverable ones (then emit a signal to the UI).
+**Logging:** `ajazz::core::Logger` (compile-time log level; thread-safe sink pattern). Sinks include:
 
-**Validation:** Protocol builders construct USB packets with explicit length checks and assertions. Profile JSON is validated against a schema at load time (`ProfileIO::readProfileFromDisk()` throws on schema violations). Plugin manifests are validated by the signature verifier (trust-roots parser) before load.
+- File sink (append-only `.log` file)
+- Ring buffer sink (in-memory ring, accessible via debug channel)
+- Qt sink (bridges `qDebug()` / `qCWarning()` into the logger)
 
-**Authentication:** Plugin loading is gated by manifest signature verification (SEC-003). Trust-roots JSON (`trust_roots.json` bundled with the app) lists authorized plugin publishers; manifests must be signed with a matching key. The verifier (`src/plugins/src/manifest_signer*.cpp`) is called inside the sandboxed plugin host process so the main app cannot be tricked into trusting a malicious manifest.
+**Validation:** Profile JSON validated against schema at load time. Action parameters (sleep duration, command string, etc.) validated during action execution (not at profile load).
+
+**Authentication:** Plugin host (Python) validates manifest Ed25519 signature via `scripts/sign-plugin-manifest.py` subprocess. Plugins declared permissions are surfaced at install but NOT enforced at runtime (Phase 3a read-only; future work).
+
+**SdPlugin Isolation:** Each `.sdPlugin` manifest declares which properties/actions it exposes; SdPluginServer dispatches only to actions registered in that manifest. Unknown actions silently fail (soft error).
 
 ______________________________________________________________________
 
-*Architecture analysis: 2026-05-22*
+*Architecture analysis: 2026-06-02*

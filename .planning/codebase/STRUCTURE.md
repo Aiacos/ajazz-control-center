@@ -1,443 +1,487 @@
 # Codebase Structure
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## Directory Layout
 
 ```
 ajazz-control-center/
-├── .github/
-│   └── workflows/               # GitHub Actions CI/release pipelines
-│
-├── .planning/
-│   ├── phases/                  # Per-phase GSD plans (Phase 1–13)
-│   ├── milestones/              # Archived milestone artifacts (v1.0, v1.1)
-│   ├── research/                # Technical research notes and findings
-│   ├── PROJECT.md               # Master project document
-│   ├── STATE.md                 # Current milestone state & blockers
-│   └── codebase/                # Codebase analysis (ARCHITECTURE.md, STRUCTURE.md)
-│
-├── cmake/                       # CMake module utilities (Warnings.cmake, Sanitizers.cmake)
-│
-├── docs/
-│   ├── architecture/            # ARCHITECTURE.md (high-level overview, links to subsystems)
-│   │   ├── THREADING.md
-│   │   ├── HOTPLUG.md
-│   │   ├── PLUGIN-SYSTEM.md
-│   │   ├── PROTOCOLS.md
-│   │   └── BRANDING.md
-│   ├── protocols/               # Per-device USB wire-format reverse-engineering docs
-│   │   ├── CAPTURING.md         # Wireshark + usbmon capture runbook
-│   │   ├── PROFILE_SCHEMA.md    # Profile JSON schema (action types, device fields)
-│   │   ├── REVERSE_ENGINEERING.md
-│   │   ├── streamdeck/
-│   │   │   ├── akp153.md        # 15-key JPEG protocol
-│   │   │   ├── akp03.md         # 6-key + 3-encoder protocol
-│   │   │   ├── akp05.md         # 10-key + 4-encoder + touch strip
-│   │   │   ├── akp815.md        # 15-key + 800×480 strip
-│   │   │   ├── akp_device_matrix.md  # Full vendor codec table (~96 SKUs)
-│   │   │   └── _research-sources.md  # Tag definitions (ajazz-sdk, opendeck-*)
-│   │   ├── keyboard/
-│   │   │   ├── proprietary.md   # AK980 PRO (0x0c45:0x8009) opcodes
-│   │   │   └── via_protocol.md  # QMK VIA standard
-│   │   └── mouse/
-│   │       ├── aj_series.md     # AJ139/159/179/199 opcode table
-│   │       └── aj_series_device_matrix.md  # SKU-to-wire-format mapping
-│
-├── python/
-│   └── ajazz_plugins/           # Python plugin SDK (pytest tests, pybind11 module)
-│       ├── tests/               # pytest unit tests for plugin host / trust-roots
-│       ├── ajazz/               # Runtime `ajazz` module exposed to plugins
-│       └── examples/            # Example plugins (template)
-│
-├── resources/
-│   ├── device-db/               # Device catalogue JSON (keyboards.json, mice.json) — future
-│   ├── linux/
-│   │   ├── 70-ajazz.rules       # udev rules; must sort before 73-seat-late.rules
-│   │   └── ajazz-control-center.desktop
-│   ├── windows/                 # .rc (app icon + version info)
-│   └── macos/                   # .icns bundle icon
-│
-├── scripts/
-│   └── hex-to-cpparray.py       # Convert Wireshark hex dumps to C++ test fixtures
-│
-├── packaging/                   # Installer / package metadata (Flatpak, APT, etc.)
-│
-├── src/
-│   ├── core/                    # Core library (public: abstract interfaces)
-│   │   ├── include/ajazz/core/
-│   │   │   ├── device.hpp               # IDevice interface; DeviceId; DeviceEvent
-│   │   │   ├── device_registry.hpp      # DeviceRegistry (VID/PID ↔ factory; flyweight cache)
-│   │   │   ├── transport.hpp            # ITransport interface (HID I/O seam)
-│   │   │   ├── capabilities.hpp         # 68 KB — mix-in capability interfaces (IDisplayCapable, IRgbCapable, etc.)
-│   │   │   ├── hid_transport.hpp        # HidTransport (libhidapi wrapper)
-│   │   │   ├── hotplug_monitor.hpp      # Hot-plug polling + event injection seam
-│   │   │   ├── profile.hpp              # Profile schema classes (Profile, Action, Key, ...)
-│   │   │   ├── profile_io.hpp           # readProfileFromDisk() / writeProfileToDisk()
-│   │   │   ├── profile_bundle.hpp       # exportProfileBundle() / importProfileBundle()
-│   │   │   ├── event_bus.hpp            # Event pub-sub (publish/subscribe pattern)
-│   │   │   ├── action_engine.hpp        # ActionEngine (dispatch actions from profiles)
-│   │   │   ├── executor.hpp             # Executor interface (Qt event loop executor)
-│   │   │   ├── logger.hpp               # Thread-safe logging (DEBUG/INFO/WARN/ERROR)
-│   │   │   ├── macro_recorder.hpp       # Macro recording API (scaffolded)
-│   │   │   └── notification_service.hpp # OS notification API (non-modal toasts)
-│   │   └── src/
-│   │       ├── device_registry.cpp      # Registry implementation
-│   │       ├── hid_transport.cpp        # libhidapi wrapper; HID report I/O
-│   │       ├── hotplug_monitor.cpp      # Timer-driven enumeration loop
-│   │       ├── profile_io.cpp           # JSON parser/builder for profiles
-│   │       ├── event_bus.cpp
+├── src/                                  # All source code
+│   ├── app/                              # Qt application layer
+│   │   ├── src/                          # C++ sources (Qt objects, services)
+│   │   │   ├── main.cpp                  # Entry point; bootstraps Application
+│   │   │   ├── application.hpp/.cpp      # Top-level controller; owns all services
+│   │   │   ├── device_model.hpp/.cpp     # Qt list model for sidebar (device enumeration)
+│   │   │   ├── profile_controller.hpp/.cpp  # Loads/saves profiles; bridges QML
+│   │   │   ├── stream_dock_control_service.hpp/.cpp  # Render pipeline (key/encoder/strip images)
+│   │   │   ├── stream_dock_input_service.hpp/.cpp    # Input poller; dispatches key/encoder/touch events
+│   │   │   ├── sidecar_stream_dock_device.hpp/.cpp   # IDevice impl for AKP05/N4/AKP03/AKP153 (mirajazz proxy)
+│   │   │   ├── sidecar_protocol.hpp/.cpp             # Pure JSON encode/decode for sidecar JSON/stdin/stdout protocol
+│   │   │   ├── plugin_manager.hpp/.cpp               # Discovers and spawns .sdPlugin bundles
+│   │   │   ├── sd_plugin_server.hpp/.cpp             # WebSocket server hosting .sdPlugin runtime
+│   │   │   ├── plugin_device_bridge.hpp/.cpp         # Converges SdPluginServer ↔ StreamDockControl/Input; context registry
+│   │   │   ├── plugin_debug_service.hpp/.cpp         # RPC surface for plugin introspection
+│   │   │   ├── plugin_catalog_model.hpp/.cpp         # Plugin discovery + install (OpenDeck catalog)
+│   │   │   ├── debug_control_server.hpp/.cpp         # Opt-in Unix socket JSON-RPC (scripts/ajazz-debug client)
+│   │   │   ├── debug_control_facade.hpp/.cpp         # RPC method registry for all subsystems
+│   │   │   ├── tray_controller.hpp/.cpp              # System tray icon + right-click menu
+│   │   │   ├── lighting_service.hpp/.cpp             # RGB per-key lighting UI controls
+│   │   │   ├── time_sync_service.hpp/.cpp            # Device RTC synchronisation (Phase 5)
+│   │   │   ├── battery_service.hpp/.cpp              # Wireless device charge level monitoring
+│   │   │   ├── settings_service.hpp/.cpp             # AK-series settings batch opcode 0x07 sub 0x10
+│   │   │   ├── builtin_actions_service.hpp/.cpp      # Core action registry (KeyPress, RunCommand, OpenUrl, Folder, etc.)
+│   │   │   ├── theme_service.hpp/.cpp                # Light/dark mode management
+│   │   │   ├── branding_service.hpp/.cpp             # App name, version, copyright (from CMake defines)
+│   │   │   ├── autostart_service.hpp/.cpp            # XDG autostart / launchd / Task Scheduler integration
+│   │   │   ├── property_inspector_controller.hpp/.cpp  # Plugin Property Inspector (web-based config UI)
+│   │   │   ├── hotplug_debouncer.hpp/.cpp            # Coalesces rapid USB enumeration events
+│   │   │   ├── node_runner.hpp/.cpp                  # Spawns Node.js child processes for .sdPlugin runtime
+│   │   │   ├── pi_bridge.hpp/.cpp                    # Property Inspector ↔ plugin WebSocket bridge (Phase 17)
+│   │   │   ├── obs_client.hpp/.cpp                   # OBS WebSocket plugin proxy (Elgato StreamDeck OBS Plugin adapter)
+│   │   │   ├── pi_url_policy.hpp/.cpp                # Content Security Policy enforcer for PI web views
+│   │   │   ├── opendeck_catalog_fetcher.hpp/.cpp     # Fetches remote OpenDeck .sdPlugin catalog
+│   │   │   ├── app_update_service.hpp/.cpp           # App version update checker
+│   │   │   ├── firmware_update_service.hpp/.cpp      # Device firmware upgrade orchestrator
+│   │   │   ├── qt_executor.hpp/.cpp                  # ActionEngine executor impl (Qt event loop sleep deferral)
+│   │   │   ├── single_instance_guard.hpp/.cpp        # Enforces single running GUI instance (Unix socket + fallback)
+│   │   │   └── ... (service impls)
+│   │   └── qml/                          # QML UI components
+│   │       ├── Main.qml                  # Root window; TabBar (DeviceList, ProfileEditor, PluginStore, etc.)
+│   │       ├── DeviceView.qml            # Active device canvas; KeyCell grid + EncoderDial + TouchStrip zones
+│   │       ├── ProfileEditor.qml         # Edit/delete device binding + page management
+│   │       ├── PluginStore.qml           # Install/uninstall .sdPlugin; catalog browsing
+│   │       ├── ActionLibraryPane.qml     # Drag-drop action picker (builtin + plugin)
+│   │       ├── LoadedPluginsPage.qml     # View loaded plugin manifests
+│   │       ├── Inspector.qml             # Property Inspector container (native or web-based)
+│   │       ├── components/               # Reusable QML components
+│   │       │   ├── KeyCell.qml           # Individual key UI (image + label + overlay states)
+│   │       │   ├── EncoderDial.qml       # Rotary encoder dial (AKP05)
+│   │       │   ├── TouchStripZone.qml    # Touch strip zone display
+│   │       │   ├── RgbPicker.qml         # Color picker for per-key RGB
+│   │       │   ├── LibraryTile.qml       # Action library drag-drop tile
+│   │       │   └── ... (others)
+│   │       └── ... (other pages)
+│   │
+│   ├── core/                             # Hardware-agnostic core library (NO Qt, NO nlohmann::json)
+│   │   ├── include/ajazz/core/           # Public headers (API boundary)
+│   │   │   ├── device.hpp                # IDevice + DeviceDescriptor + DeviceId + DeviceFamily
+│   │   │   ├── capabilities.hpp          # Capability mix-ins (IDisplayCapable, IEncoderCapable, etc.)
+│   │   │   ├── transport.hpp             # ITransport abstract interface
+│   │   │   ├── hid_transport.hpp         # HidTransport impl (libhidapi wrapper)
+│   │   │   ├── device_registry.hpp       # Thread-safe registry (VID/PID → factory)
+│   │   │   ├── profile.hpp               # Profile / ProfilePage / Action / ActionChain data structures
+│   │   │   ├── profile_io.hpp            # readProfileFromDisk / writeProfileToDisk (JSON parse/serialize)
+│   │   │   ├── profile_bundle.hpp        # Bundle .ajazzprofile export/import (ZIP with JSON + assets)
+│   │   │   ├── action_engine.hpp         # ActionEngine (multi-action interpreter with sleep deferral)
+│   │   │   ├── executor.hpp              # Executor abstraction (blocking vs. Qt event-loop sleep)
+│   │   │   ├── event_bus.hpp             # EventBus (publish-subscribe for core events)
+│   │   │   ├── hotplug_monitor.hpp       # OS-specific USB hot-plug watcher
+│   │   │   ├── logger.hpp                # Logging framework (Logger + Sink pattern)
+│   │   │   ├── log_sinks.hpp             # FileSink, RingBufferSink, StdoutSink implementations
+│   │   │   ├── input_synthesizer.hpp     # IInputSynthesizer abstraction (OS key/mouse synthesis)
+│   │   │   ├── macro_recorder.hpp        # Macro recording (experimental / Phase 21)
+│   │   │   ├── notification_service.hpp  # Desktop notifications (Phase 23)
+│   │   │   └── ... (others)
+│   │   │
+│   │   └── src/                          # Implementation
+│   │       ├── device_registry.cpp
+│   │       ├── hid_transport.cpp
+│   │       ├── profile_io.cpp
 │   │       ├── action_engine.cpp
-│   │       ├── executor.cpp
+│   │       ├── hotplug_monitor.cpp       # Platform-specific: hotplug_monitor_linux.cpp, _macos.cpp, _windows.cpp
 │   │       ├── logger.cpp
-│   │       └── notification_service.cpp
-│
-│   ├── devices/                 # Per-family device backends (pluggable modules)
-│   │   ├── CMakeLists.txt
-│   │   ├── streamdeck/
+│   │       └── ... (others)
+│   │
+│   ├── devices/                          # Device-specific backends (transport + protocol)
+│   │   ├── streamdeck/                   # Stream Deck family (AKP815 custom C++; AKP05/N4/AKP03/AKP153 via sidecar)
 │   │   │   ├── include/ajazz/streamdeck/
-│   │   │   │   ├── streamdeck.hpp       # Public factory functions (makeAkp153, makeAkp03, makeAkp05, makeAkp815)
-│   │   │   │   ├── akp153_device.hpp
-│   │   │   │   ├── akp03_device.hpp
-│   │   │   │   ├── akp05_device.hpp
-│   │   │   │   └── akp815_device.hpp
+│   │   │   │   └── streamdeck.hpp        # Public API: registerAll(), streamDockSidecarDescriptors(), makeAkp815()
 │   │   │   └── src/
-│   │   │       ├── register.cpp         # Backend bootstrap; registerAll(DeviceRegistry&)
-│   │   │       ├── akp153_device.cpp
-│   │   │       ├── akp153_protocol.hpp  # Wire-format builders (AKP153 JPEG encoding, 85×85, …)
-│   │   │       ├── akp03_device.cpp
-│   │   │       ├── akp03_protocol.hpp   # AKP03 protocol (6 keys + 3 encoders, PNG)
-│   │   │       ├── akp05_device.cpp
-│   │   │       ├── akp05_protocol.hpp   # AKP05 protocol (10 keys + 4 encoders + touch)
-│   │   │       ├── akp815_device.cpp
-│   │   │       ├── akp815_protocol.hpp  # AKP815 protocol (15 keys, 100×100, 800×480 strip)
-│   │   │       └── image_pipeline.{hpp,cpp}  # Qt6 QImage JPEG encoder (ARCH-04, Phase 10)
+│   │   │       ├── register.cpp          # Device registration; calls registerDevice() for AKP815 + sidecar descriptors
+│   │   │       ├── akp815.cpp            # Akp815Device impl (5×3 key grid, 800×480 strip)
+│   │   │       ├── akp815_protocol.hpp   # AKP815 constants (opcode enum, report IDs)
+│   │   │       ├── akp815_wire.hpp/.cpp  # AKP815 HID builders (image upload, brightness, etc.)
+│   │   │       ├── akp_common_protocol.hpp  # Shared opcodes (common to AKP05 + AKP815 era, now mostly sidecar)
+│   │   │       └── image_pipeline.hpp/.cpp  # RGBA → JPEG/PNG encoding, Rot180, scaling (shared by all AKP)
 │   │   │
-│   │   ├── keyboard/
+│   │   ├── keyboard/                     # Keyboard family (AK980 VIA-compatible, etc.)
 │   │   │   ├── include/ajazz/keyboard/
-│   │   │   │   ├── keyboard.hpp         # Public factories (makeViaKeyboard, makeProprietaryKeyboard)
-│   │   │   │   ├── via_keyboard.hpp
-│   │   │   │   └── proprietary_keyboard.hpp
+│   │   │   │   └── keyboard.hpp
 │   │   │   └── src/
-│   │   │       ├── register.cpp         # VIA (AK820 Pro @ 0x3151:0x4021) + Proprietary (AK980 PRO @ 0x0c45:0x8009)
-│   │   │       ├── via_keyboard.cpp     # QMK VIA protocol
-│   │   │       ├── proprietary_keyboard.cpp  # Microdia AK980 PRO (RTC @ 0x28, RGB @ 0x13, battery @ 0x20, …)
-│   │   │       └── proprietary_protocol.hpp  # Opcode builders for AK980 PRO
+│   │   │       ├── register.cpp
+│   │   │       ├── ak980.cpp             # Ak980Keyboard impl (RGB per-key, VIA protocol, keymap config)
+│   │   │       ├── ak980_protocol.hpp
+│   │   │       └── ... (others)
 │   │   │
-│   │   └── mouse/
+│   │   └── mouse/                        # Mouse family (AJ-series 2.4G wireless, etc.)
 │   │       ├── include/ajazz/mouse/
-│   │       │   ├── mouse.hpp            # Public factory (makeAjSeries)
-│   │       │   └── aj_series_mouse.hpp
+│   │       │   └── mouse.hpp
 │   │       └── src/
-│   │           ├── register.cpp         # AJ139/159/179/199 families (wired + 2.4GHz dongle)
-│   │           ├── aj_series_mouse.cpp  # Wire-format parsers & builders
-│   │           ├── aj_series_protocol.hpp  # Opcode table (DPI, RGB, TFT clock, battery, macros, …)
-│   │           └── aj_series.hpp        # Protocol constants and helpers
-│
-│   ├── plugins/                 # Out-of-process plugin host (C++ side)
-│   │   ├── include/ajazz/plugins/
-│   │   │   └── plugin_host.hpp          # IPluginHost interface
-│   │   └── src/
-│   │       ├── out_of_process_plugin_host.cpp       # Main IPC broker (Qt / libusb event loop)
-│   │       ├── out_of_process_plugin_host_win32.cpp # Win32 AppContainer sandbox launch
-│   │       ├── sandbox.cpp              # Platform abstraction (launch child + IPC)
-│   │       ├── linux_bwrap_sandbox.cpp  # Bubblewrap sandbox (Flatpak integration)
-│   │       ├── macos_sandbox_exec_sandbox.cpp       # macOS sandbox_exec system call
-│   │       ├── windows_app_container_sandbox.cpp    # Windows AppContainer API
-│   │       ├── win32_env_block.{hpp,cpp}       # UTF-16 environment block builder (CR-01 fix)
-│   │       ├── win32_python_resolve.hpp        # Find python3.exe on Windows PATH
-│   │       ├── manifest_signer*.cpp            # Trust-roots parser + signature verification (SEC-003)
-│   │       ├── wire_protocol.hpp               # JSON IPC message format (action dispatch, results)
-│   │       └── process_attributes_impl_win32.hpp  # Win32 process attributes (CREATE_UNICODE_ENVIRONMENT)
-│
-│   └── app/                     # Qt 6 application layer
-│       ├── qml/                 # QML components (Material Design 3 UI)
-│       │   ├── Main.qml
-│       │   ├── components/      # Component library (DeviceList, KeyDesigner, RgbPicker, ProfileEditor, …)
-│       │   └── icons/           # Material Design Icons SVG embedded
+│   │           ├── register.cpp
+│   │           ├── aj_series.cpp         # AjMouseDevice impl (DPI presets, battery, wireless config)
+│   │           ├── aj_protocol.hpp
+│   │           └── ... (others)
+│   │
+│   └── plugins/                          # Plugin host abstraction (C++ ↔ Python subprocess)
+│       ├── include/ajazz/plugins/
+│       │   ├── i_plugin_host.hpp         # IPluginHost interface (abstract backend)
+│       │   ├── out_of_process_plugin_host.hpp  # OOP impl (POSIX subprocess + JSON IPC)
+│       │   ├── sandbox.hpp               # Sandbox abstraction
+│       │   ├── linux_bwrap_sandbox.hpp   # bubblewrap sandboxer
+│       │   ├── macos_sandbox_exec_sandbox.hpp  # sandbox-exec sandboxer
+│       │   ├── windows_app_container_sandbox.hpp  # AppContainer sandboxer
+│       │   └── manifest_signer.hpp       # Ed25519 manifest signature verification
 │       │
-│       └── src/                 # Application controller & services (C++)
-│           ├── main.cpp         # Entry point; Qt app setup; single-instance lock; QML load
-│           ├── application.{hpp,cpp}        # Top-level controller (bootstrap, backend registration)
-│           ├── device_model.{hpp,cpp}       # QML list model of devices (hot-plug sync)
-│           ├── profile_controller.{hpp,cpp} # Load/save profiles; dispatch actions
-│           ├── property_inspector_controller.{hpp,cpp}  # Plugin HTML property inspector (Qt WebEngine)
-│           ├── pi_bridge.{hpp,cpp}         # WebChannel bridge (property inspector ↔ C++)
-│           ├── time_sync_service.{hpp,cpp} # Phase 5 — per-device Sync button + auto-sync toggle (QML_SINGLETON)
-│           ├── lighting_service.{hpp,cpp}  # Phase 8+ — AK980 PRO 20-mode RGB picker (IFirmwareLightingCapable)
-│           ├── settings_service.{hpp,cpp}  # Phase 3.6+ — AK980 PRO settings batch (ISettingsCapable)
-│           ├── battery_service.{hpp,cpp}   # Battery poller + low-battery toast (IBatteryCapable)
-│           ├── theme_service.{hpp,cpp}     # Light/dark/system theme toggle (QML_SINGLETON)
-│           ├── branding_service.{hpp,cpp}  # Product strings + vendor name
-│           ├── firmware_update_service.{hpp,cpp}  # Firmware flash workflow
-│           ├── app_update_service.{hpp,cpp}      # Check-for-updates + download
-│           ├── autostart_service.{hpp,cpp}       # Launch-at-login toggle (#35)
-│           ├── tray_controller.{hpp,cpp}   # System tray icon + context menu
-│           ├── hotplug_debouncer.{hpp,cpp} # 300 ms debounce for hot-plug events (HOTPLUG-01)
-│           ├── device_model_roles.hpp      # Qt::ItemDataRole enums (Name, Family, Online, …)
-│           ├── device_maturity_map.generated.hpp  # Auto-generated device maturity lookup
-│           ├── loaded_plugins_model.{hpp,cpp}    # QML list model of loaded plugins
-│           ├── plugin_catalog_model.{hpp,cpp}    # QML mock plugin store
-│           ├── sdplugin_extractor.{hpp,cpp}      # Extract .sdPlugin archives at install time (issue #62)
-│           ├── opendeck_catalog_fetcher.{hpp,cpp}# Download OpenDeck device catalogue
-│           ├── streamdock_catalog_fetcher.{hpp,cpp}  # Download Stream Deck device catalogue
-│           ├── single_instance_guard.{hpp,cpp}   # Socket-based single-instance lock
-│           ├── app_icon.{hpp,cpp}                # Multi-size app icon renderer from SVG
-│           └── qt_executor.{hpp,cpp}            # Qt event loop executor (implements Executor interface)
+│       └── src/
+│           ├── out_of_process_plugin_host.cpp
+│           ├── linux_bwrap_sandbox.cpp
+│           ├── macos_sandbox_exec_sandbox.cpp
+│           ├── windows_app_container_sandbox.cpp
+│           └── ... (others)
 │
-├── tests/
-│   ├── CMakeLists.txt
-│   ├── unit/                    # Unit tests (~180 test cases, 286 TEST_CASE invocations as of 2026-05-18)
-│   │   ├── CMakeLists.txt       # Catch2 test runner configuration
-│   │   ├── fixtures/            # Test data and mock helpers
-│   │   │   └── mock_transport.hpp    # MockTransport test double (COD-026 DI seam)
-│   │   ├── test_device_registry.cpp          # Registry enumeration + factory dispatch
-│   │   ├── test_event_bus.cpp                # Pub-sub event routing
-│   │   ├── test_action_engine.cpp            # Action dispatch (direct + plugin-routed)
-│   │   ├── test_profile_io.cpp               # Profile JSON load/save/validate
-│   │   ├── test_time_sync_service.cpp        # TimeSyncService (setTime + IClockCapable integration)
-│   │   ├── test_battery_service.cpp          # Battery polling + low-charge toast
-│   │   ├── test_out_of_process_plugin_host.cpp  # Plugin spawning + manifest sig verification (SEC-003)
-│   │   ├── test_*_protocol.cpp               # Per-device wire-format encoding/decoding
-│   │   │   ├── test_akp153_protocol.cpp
-│   │   │   ├── test_akp03_protocol.cpp
-│   │   │   ├── test_akp05_protocol.cpp
-│   │   │   ├── test_ak980_*.cpp              # AK980 PRO (RTC, RGB, settings, battery)
-│   │   │   └── test_aj_series_*.cpp          # AJ-series mouse (DPI, RGB, macros, TFT clock)
-│   │   ├── test_*_sandbox.cpp                # Platform-specific sandboxing (Linux bwrap, macOS, Win32)
-│   │   ├── test_pi_bridge.cpp                # WebChannel property inspector IPC
-│   │   ├── test_theme_service.cpp            # Theme persistence + Material attached props
-│   │   ├── test_branding_service.cpp
-│   │   ├── test_win32_env_block.cpp          # UTF-16 environment block ordering (CR-01 fix)
-│   │   ├── test_app_update_service.cpp
-│   │   ├── qt_app_fixture.hpp                # Qt QApplication + QQmlApplicationEngine setup
-│   │   └── mock_hid_enumerator.hpp           # Mock HID device enumerator (HOTPLUG-06 test seam)
-│   │
-│   ├── integration/              # Integration tests (cross-layer workflows)
-│   │   ├── CMakeLists.txt
-│   │   ├── fixtures/             # Multi-device test harness (live HidTransport or MockTransport)
-│   │   └── test_multi_device_hotplug.cpp    # Hot-plug symphony test (HOTPLUG-06)
-│   │
-│   └── fuzz/                    # libFuzzer harnesses (opt-in, Clang-only)
-│       ├── CMakeLists.txt
-│       ├── fuzz_trust_roots_parser.cpp  # Fuzz trust-roots JSON (SEC-003 input validation)
-│       └── fuzz_profile_parser.cpp      # Fuzz profile JSON (input validation)
+├── streamdock-host/                      # Out-of-process Rust sidecar (mirajazz-based)
+│   ├── Cargo.toml                        # Rust deps: mirajazz, serde_json, tokio
+│   └── src/
+│       └── main.rs                       # Spawned by SidecarStreamDockDevice; JSON protocol on stdin/stdout
 │
-├── CMakeLists.txt              # Root CMake; project-wide settings, Qt 6 discovery
-├── build/dev/                  # Out-of-source build directory (dev preset)
-│   ├── build.log               # CMake configure output
-│   └── ctest_results.xml       # CTest results (ctest --preset linux-release)
+├── python/                               # Python plugin runtime
+│   └── ajazz_plugins/                    # OOP plugin framework
+│       ├── ajazz_plugins/                # Main module
+│       │   ├── __init__.py
+│       │   ├── plugin.py                 # Plugin base class (user code subclasses this)
+│       │   ├── host.py                   # Host-side IPC server (recv JSON, dispatch to plugin instance)
+│       │   ├── action.py                 # Action descriptor
+│       │   └── ... (framework)
+│       ├── tests/                        # pytest test suite for plugins
+│       └── ... (others)
 │
-├── .gitignore
-├── CLAUDE.md                   # Project conventions (Qt gotchas, direct-to-main workflow, hard rules)
-├── CHANGELOG.md                # Release notes (updated at each milestone)
-├── README.md                   # Auto-generated device tables + quick-start guide
-├── LICENSE                     # GPL-3.0-or-later
-└── .pre-commit-config.yaml     # Pre-commit hooks (ruff, clang-format, gitleaks, …)
+├── resources/                            # Static assets
+│   ├── linux/                            # Linux-specific
+│   │   ├── 70-ajazz.rules                # udev rules (HID device ACL)
+│   │   ├── ajazz-control-center.desktop  # .desktop entry
+│   │   └── ... (others)
+│   ├── macos/                            # macOS-specific
+│   ├── windows/                          # Windows-specific
+│   ├── app.svg                           # Icon artwork
+│   └── ... (others)
+│
+├── docs/                                 # Documentation
+│   ├── schemas/                          # JSON schema definitions
+│   │   ├── profile.schema.json           # Profile format specification
+│   │   ├── plugin_manifest.schema.json   # .sdPlugin manifest spec
+│   │   └── ... (others)
+│   ├── protocols/                        # Hardware RE docs
+│   │   ├── streamdeck/                   # AKP-family RE (opcodes, wire format)
+│   │   ├── keyboard/                     # VIA protocol / AK980 notes
+│   │   └── ... (others)
+│   ├── architecture/                     # System design docs
+│   └── ... (others)
+│
+├── tests/                                # Test suite
+│   ├── unit/                             # Unit tests (per-module)
+│   │   ├── test_action_engine.cpp        # ActionEngine interpreter tests
+│   │   ├── test_device_registry.cpp      # Device registry + factory tests
+│   │   ├── test_profile_io.cpp           # Profile JSON parse/serialize roundtrip
+│   │   ├── test_sidecar_protocol.cpp     # Sidecar JSON encode/decode
+│   │   ├── test_plugin_device_bridge.cpp # Context registry, coord conversion
+│   │   └── ... (many more)
+│   ├── integration/                      # Multi-component tests
+│   │   ├── test_e2e_device_hot_plug.cpp  # Hot-plug enumeration flow
+│   │   └── ... (others)
+│   └── qml/                              # QML smoke tests (offscreen rendering)
+│       └── test_qml_render.cpp
+│
+├── scripts/                              # Utility scripts
+│   ├── ajazz-debug                       # Client for debug-control channel (drives app via JSON-RPC)
+│   ├── sign-plugin-manifest.py           # Ed25519 sign a plugin manifest
+│   ├── akp05_color_probe.py              # Hardware probe (paint all 15 BAT surfaces on AKP05E)
+│   ├── akp05_strip_probe.py              # Map touch-strip zones on AKP05E
+│   ├── akp05_input_probe.py              # Verify AKP05E input (encoder/touch) reachability
+│   └── ... (others)
+│
+├── cmake/                                # CMake modules
+│   ├── Warnings.cmake                    # Cross-platform warning flags
+│   ├── Sanitizers.cmake                  # ASan/UBSan configuration
+│   └── StreamdockSidecar.cmake           # Build rules for Rust sidecar
+│
+├── .planning/                            # GSD planning documents
+│   ├── PROJECT.md                        # Project overview
+│   ├── STATE.md                          # Current state snapshot
+│   ├── ROADMAP.md                        # Phases and milestones
+│   ├── codebase/                         # Auto-generated by codebase mapper
+│   │   ├── ARCHITECTURE.md               # This file: system design
+│   │   ├── STRUCTURE.md                  # Directory layout + file purposes
+│   │   ├── STACK.md                      # Technology stack
+│   │   ├── INTEGRATIONS.md               # External services
+│   │   ├── CONVENTIONS.md                # Code style rules
+│   │   ├── TESTING.md                    # Test patterns
+│   │   └── CONCERNS.md                   # Technical debt
+│   ├── phases/                           # Phase implementations (e.g., Phase 25, 26, 27, etc.)
+│   ├── milestones/                       # v1.0, v1.1, v1.3 milestone artifacts
+│   └── ... (others)
+│
+├── CMakeLists.txt                        # Top-level CMake build configuration
+├── CMakePresets.json                     # Preset configurations (linux-release, windows-2022, macos-universal)
+├── pyproject.toml                        # Python build config (plugin host)
+├── CLAUDE.md                             # Project memory for AI contributors (conventions, gotchas, glossary)
+├── Makefile                              # Helper targets (build, test, run, fmt, lint)
+├── README.md                             # User-facing overview
+├── CONTRIBUTING.md                       # Developer guide
+├── CHANGELOG.md                          # Release notes
+└── ... (git, CI, config files)
 ```
 
 ## Directory Purposes
 
-**`.planning/`:**
+**`src/app/`**
 
-- Purpose: GSD (Generate Structured Designs) phases, milestone artifacts, technical research.
-- Contains: Phase 1–13 plans, v1.0/v1.1 archived milestones, PROJECT.md (master requirements), STATE.md (current progress), research findings.
-- Key files: `.planning/PROJECT.md` (updated 2026-05-15), `.planning/STATE.md` (current position), `.planning/phases/` (per-phase plan artifacts).
+- Purpose: Qt GUI application layer; owns all services and user-facing subsystems
+- Key entry: `main.cpp` (creates QApplication, loads QML, spins event loop)
+- Qt services: TrayController, LightingService, BatteryService, TimeSyncService, SettingsService, PluginManager, SdPluginServer, PluginDeviceBridge, DebugControlServer
+- Sidecar proxy: SidecarStreamDockDevice, sidecar_protocol
+- Plugin catalog: PluginCatalogModel (OpenDeck downloads)
+- Profile persistence: ProfileController (load/save JSON)
 
-**`cmake/`:**
+**`src/core/`**
 
-- Purpose: CMake module utilities shared across the build.
-- Contains: Warnings.cmake (`-Wall -Wextra -Wpedantic`), Sanitizers.cmake (ASan/UBSan/TSAN options).
+- Purpose: Hardware-agnostic, zero-dependency core library shared by all layers
+- Exports: IDevice, ITransport, Capability mix-ins, ActionEngine, Profile, Logger, DeviceRegistry
+- No external deps (except C++20 stdlib); no Qt; no nlohmann::json
+- Used by: device backends, Qt app, Python plugin host
 
-**`docs/`:**
+**`src/devices/`**
 
-- Purpose: User documentation and reverse-engineering reference.
-- Key files:
-  - `docs/architecture/ARCHITECTURE.md` — High-level overview with links to subsystem docs.
-  - `docs/architecture/THREADING.md`, `HOTPLUG.md`, `PLUGIN-SYSTEM.md`, `PROTOCOLS.md` — Deep dives on specific subsystems.
-  - `docs/protocols/CAPTURING.md` — Wireshark + usbmon runbook for USB protocol capture.
-  - `docs/protocols/streamdeck/akp{153,03,05,815}.md` — Per-model wire formats.
-  - `docs/protocols/keyboard/proprietary.md` — AK980 PRO opcodes.
-  - `docs/protocols/mouse/aj_series*.md` — AJ-series wire formats.
+- Purpose: USB protocol drivers per device family
+- Stream Deck: AKP815 custom C++ (5×3 keys, 800×480 strip); AKP05/N4/AKP03/AKP153 registered as sidecar factories
+- Keyboard: AK980 (RGB per-key, VIA-compatible keymap)
+- Mouse: AJ-series (DPI stages, wireless battery, 2.4G dongle)
+- All: Implement IDevice + capability mix-ins; use HidTransport
 
-**`python/ajazz_plugins/`:**
+**`streamdock-host/`**
 
-- Purpose: Python plugin SDK and tests (pytest).
-- Contains: `ajazz` runtime module (pybind11), example plugins, trust-roots parser test suite.
+- Purpose: Out-of-process Rust sidecar (mirajazz crate)
+- Spawned by: SidecarStreamDockDevice::open()
+- Drives: AKP05/N4/AKP03/AKP153 via one persistent handle (no per-interaction open/close wedge)
+- Protocol: Newline-delimited JSON over stdin/stdout
 
-**`resources/`:**
+**`src/plugins/`**
 
-- Purpose: Data files, icons, udev rules.
-- Key files:
-  - `resources/linux/70-ajazz.rules` — udev rules (MUST sort before `73-seat-late.rules`).
-  - `resources/device-db/` — Future device catalogue JSON (not yet integrated).
+- Purpose: Plugin host abstraction (C++ ↔ Python subprocess)
+- Interface: IPluginHost (abstract)
+- Impl: OutOfProcessPluginHost (POSIX subprocess + JSON-RPC)
+- Sandboxing: Pluggable per-OS (bubblewrap on Linux, sandbox-exec on macOS, AppContainer on Windows)
 
-**`scripts/`:**
+**`python/`**
 
-- Purpose: Dev-time utility scripts.
-- Key: `hex-to-cpparray.py` — Convert Wireshark hex dumps to C++ test fixture headers.
+- Purpose: Python OOP plugin runtime
+- Entry: `python/ajazz_plugins/` (framework + base Plugin class)
+- Startup: OutOfProcessPluginHost spawns `python3 -m ajazz_plugins.host`
+- Protocol: JSON-RPC over stdin/stdout
 
-**`src/core/`:**
+**`src/app/qml/`**
 
-- Purpose: Core library (public abstract interfaces, no device-specific code).
-- Public headers: `include/ajazz/core/*.hpp` — IDevice, ITransport, capabilities, registry, profiles, logger.
-- Implementation: `src/*.cpp` — HID transport, registry, hot-plug monitor, profile I/O, event bus.
+- Purpose: Qt Quick (QML) declarative UI
+- Root: Main.qml (TabBar with tabs for DeviceList, ProfileEditor, PluginStore)
+- Active device: DeviceView.qml (canvas with KeyCell grid + EncoderDial + TouchStrip zones)
+- Drag-drop: ActionLibraryPane.qml (action picker for bindings)
+- Config: Inspector.qml (property inspector for plugin actions)
+- Components: `components/` subdirectory (reusable KeyCell, EncoderDial, etc.)
 
-**`src/devices/{streamdeck,keyboard,mouse}/`:**
+**`resources/`**
 
-- Purpose: Per-family device backend modules.
-- Structure:
-  - `include/ajazz/{streamdeck,keyboard,mouse}/` — Public factory functions (`makeAkp153`, `makeViaKeyboard`, `makeAjSeries`).
-  - `src/register.cpp` — Bootstrap function (`registerAll(DeviceRegistry&)`); VID/PID ↔ factory mapping.
-  - `src/*_device.cpp` — Concrete device class implementations.
-  - `src/*_protocol.hpp` — Wire-format constants, builders, and decoders.
+- Purpose: Platform-specific static assets
+- Linux: udev rules (70-ajazz.rules), .desktop entry, app icon
+- macOS: Info.plist template, app icon (ICNS)
+- Windows: .rc icon resource, installer metadata
 
-**`src/plugins/`:**
+**`docs/`**
 
-- Purpose: Out-of-process plugin host (C++ side).
-- Contains: IPC broker, sandboxing (platform-specific), trust-roots parser, manifest signer.
+- Purpose: Specifications and research
+- `schemas/`: JSON schema for profile.json, plugin manifests, etc.
+- `protocols/`: Hardware reverse-engineering (opcode tables, wire format, AKP-family notes)
+- `architecture/`: System design documents (PLUGIN-SYSTEM.md, etc.)
 
-**`src/app/`:**
+**`tests/`**
 
-- Purpose: Qt 6 application layer (UI and services).
-- `qml/` — QML components (Material Design 3 UI).
-- `src/` — Application controller, services (time sync, battery, settings, lighting, etc.), models (device list, loaded plugins).
+- Purpose: Unit, integration, and QML smoke tests
+- `unit/`: Per-module tests (action_engine, device_registry, profile_io, sidecar_protocol, etc.)
+- `integration/`: Multi-component (e.g., hot-plug enumeration flow)
+- `qml/`: Offscreen QML rendering smoke tests
 
-**`tests/unit/`:**
+**`.planning/`**
 
-- Purpose: Unit tests for the core library and all backends.
-- Contains: ~180 test cases covering registry, event bus, action engine, all wire-format protocols, plugin host, platform sandboxing.
-- Naming: `test_<subsystem>.cpp` (e.g., `test_akp153_protocol.cpp`, `test_time_sync_service.cpp`).
-
-**`tests/integration/`:**
-
-- Purpose: Cross-layer integration tests (multi-device hot-plug, etc.).
-- Key: `test_multi_device_hotplug.cpp` — Harness to test device addition/removal without real USB.
-
-**`tests/fuzz/`:**
-
-- Purpose: libFuzzer harnesses (opt-in, Clang-only).
-- Key: `fuzz_trust_roots_parser.cpp` (SEC-003 input validation), `fuzz_profile_parser.cpp` (profile JSON validation).
+- Purpose: GSD project planning and codebase documentation (auto-generated)
+- `codebase/`: ARCHITECTURE.md, STRUCTURE.md, STACK.md, TESTING.md, CONVENTIONS.md, CONCERNS.md
+- `phases/`: Implementation phases (Phase 25, 26, 27, etc.) with tasklists
+- `milestones/`: v1.0, v1.1, v1.3 retrospectives and artifacts
+- `PROJECT.md`: Project overview and goals
+- `ROADMAP.md`: Milestone timeline and phase descriptions
 
 ## Key File Locations
 
 **Entry Points:**
 
-- `src/app/src/main.cpp`: Qt application entry point; parses CLI flags; single-instance gate; loads QML; starts background services.
-- `src/app/src/application.cpp` (method `bootstrap()`): Calls `registerAll()` on all device families; populates registry.
+- `src/app/src/main.cpp`: QApplication creation, QML loading, event loop
+- `src/app/src/application.cpp`: Application controller, bootstrap device backends, wire services
 
 **Configuration:**
 
-- `CMakeLists.txt`: Root CMake; Qt 6 discovery, options (AJAZZ_BUILD_APP, AJAZZ_BUILD_TESTS, AJAZZ_BUILD_PYTHON_HOST).
-- `.pre-commit-config.yaml`: Hook plugins (ruff for Python, clang-format for C++, gitleaks for secrets).
-- `CLAUDE.md`: Project memory (Qt gotchas, workflow conventions, hard rules).
+- `CMakeLists.txt`: Build configuration (dependencies, compiler flags, Qt modules)
+- `CMakePresets.json`: Build presets (linux-release, windows-2022, macos-universal)
+- `pyproject.toml`: Python plugin host build
+- `CLAUDE.md`: Project memory for AI contributors
 
 **Core Logic:**
 
-- `src/core/include/ajazz/core/capabilities.hpp`: 68 KB capability interface definitions (68 KB — load-bearing for the dynamic_cast discovery pattern).
-- `src/core/include/ajazz/core/device_registry.hpp`: Registry interface and flyweight cache contract.
-- `src/devices/{family}/src/register.cpp`: Per-family bootstrap; VID/PID registration.
+- `src/core/include/ajazz/core/device.hpp`: IDevice interface
+- `src/core/include/ajazz/core/action_engine.hpp`: Multi-action interpreter
+- `src/core/include/ajazz/core/profile.hpp`: Profile data structures
+- `src/core/include/ajazz/core/device_registry.hpp`: Device factory registry
+
+**Device Backends:**
+
+- `src/devices/streamdeck/src/akp815.cpp`: AKP815 custom C++ backend
+- `src/devices/streamdeck/src/register.cpp`: Backend registration + sidecar descriptor list
+- `src/app/src/sidecar_stream_dock_device.hpp/.cpp`: AKP05/N4 proxy to Rust sidecar
+
+**Plugin System:**
+
+- `src/app/src/sd_plugin_server.hpp/.cpp`: .sdPlugin WebSocket host
+- `src/app/src/plugin_manager.hpp/.cpp`: .sdPlugin discovery and spawn
+- `src/app/src/plugin_device_bridge.hpp/.cpp`: Plugin action ↔ device I/O convergence
+- `src/plugins/include/ajazz/plugins/i_plugin_host.hpp`: OOP plugin host interface
+- `python/ajazz_plugins/plugin.py`: Python plugin base class
+
+**Services:**
+
+- `src/app/src/stream_dock_control_service.hpp/.cpp`: Device render (key/encoder/strip image upload)
+- `src/app/src/stream_dock_input_service.hpp/.cpp`: Device input polling + event dispatch
+- `src/app/src/profile_controller.hpp/.cpp`: Profile load/save
+- `src/app/src/tray_controller.hpp/.cpp`: System tray integration
+
+**Debug Control:**
+
+- `src/app/src/debug_control_server.hpp/.cpp`: Unix socket JSON-RPC server
+- `src/app/src/debug_control_facade.hpp/.cpp`: RPC method registration
+- `scripts/ajazz-debug`: Client script (shell wrapper over `socat` + `jq`)
 
 **Testing:**
 
-- `tests/unit/test_device_registry.cpp`: Registry enumeration test.
-- `tests/unit/test_*_protocol.cpp`: Wire-format encode/decode tests for each backend.
-- `tests/unit/mock_hid_enumerator.hpp`: Mock for DeviceRegistry::HidEnumerator (HOTPLUG-06 test seam).
-- `tests/unit/fixtures/mock_transport.hpp`: MockTransport test double (COD-026 DI seam).
-
-**Reverse-Engineering Docs:**
-
-- `docs/protocols/streamdeck/akp{153,03,05,815}.md`: Per-model USB protocol.
-- `docs/protocols/keyboard/proprietary.md`: AK980 PRO opcode table.
-- `docs/protocols/mouse/aj_series_opcode_table.md`: AJ-series opcode reference.
-- `docs/protocols/CAPTURING.md`: Wireshark + usbmon capture runbook (Phase 9 prerequisite).
+- `tests/unit/test_action_engine.cpp`: ActionEngine interpreter tests
+- `tests/unit/test_device_registry.cpp`: Device factory registration
+- `tests/unit/test_profile_io.cpp`: Profile JSON roundtrip
+- `tests/unit/test_sidecar_protocol.cpp`: Sidecar JSON encode/decode
+- `CMakeLists.txt`: Test target configuration (ctest)
 
 ## Naming Conventions
 
 **Files:**
 
-- **Backend implementations:** `<model>_device.cpp` (e.g., `akp153_device.cpp`, `proprietary_keyboard.cpp`, `aj_series_mouse.cpp`).
-- **Protocol headers:** `<model>_protocol.hpp` (e.g., `akp05_protocol.hpp`); contains opcode enums, packet builders, wire-format constants.
-- **Tests:** `test_<subsystem>.cpp` (e.g., `test_akp03_protocol.cpp`, `test_time_sync_service.cpp`); unit tests are in `tests/unit/`, integration in `tests/integration/`.
-- **Service implementations:** `<service_name>_service.{hpp,cpp}` (e.g., `time_sync_service.hpp`, `battery_service.cpp`).
+- C++ headers: `snake_case.hpp` (e.g., `device_registry.hpp`, `action_engine.hpp`)
+- C++ sources: `snake_case.cpp` (e.g., `application.cpp`)
+- QML files: `PascalCase.qml` (e.g., `Main.qml`, `DeviceView.qml`, `ActionLibraryPane.qml`)
+- Test files: `test_<component>.cpp` (e.g., `test_action_engine.cpp`)
+- Python modules: `snake_case.py` (e.g., `plugin.py`, `host.py`)
+- Shell scripts: `kebab-case` (e.g., `ajazz-debug`, `sign-plugin-manifest`)
 
 **Directories:**
 
-- **Device backends:** `src/devices/{streamdeck,keyboard,mouse}/` — lowercase, plural when family is diverse (keyboard covers VIA + proprietary; mouse covers AJ-series variants).
-- **Include structure:** `include/ajazz/{core,streamdeck,keyboard,mouse,plugins}/` — double-nested under namespace + project (allows coexistence with other `ajazz::*` libraries if ever extracted).
+- C++ module: `src/<module>/` with `include/ajazz/<module>/` and `src/` subdirs
+- QML components: `src/app/qml/components/` for reusable items
+- Tests: `tests/<type>/` (unit, integration, qml)
+- Device family: `src/devices/<family>/` (streamdeck, keyboard, mouse)
 
-**Codenames** (used throughout codebase):
+**C++ Classes:**
 
-- **Stream Deck:** `akp153`, `akp03`, `akp05`, `akp815`, `mirabox_n3`, `mirabox_n4` (lowercase, underscore-separated).
-- **Keyboard:** `ak820pro`, `ak980pro` (lowercase, underscore-separated if multi-word).
-- **Mouse:** `aj_series_wired_primary`, `aj159_apex_wired`, `ajazz_24g_8k` (consistently lowercase + underscore).
+- Interface: `I<Name>` (e.g., `IDevice`, `ITransport`, `IDisplayCapable`)
+- Implementation: `<Name>` or `<Name>Impl` (e.g., `Akp815Device`, `HidTransport`, `SidecarStreamDockDevice`)
+- Service: `<Name>Service` (e.g., `TimeSyncService`, `LightingService`)
+- Qt Object: Any `QObject` subclass kept as-is, not prefixed (e.g., `Application`, `ProfileController`)
+
+**Qt Singletons / Models:**
+
+- QML_SINGLETON with static factory: `create(QQmlEngine*, QJSEngine*)` + `registerInstance()`
+  Example: `ProfileController`, `BrandingService`
+- List models: `<Name>Model` (e.g., `DeviceModel`, `LoadedPluginsModel`, `PluginCatalogModel`)
 
 ## Where to Add New Code
 
-**New Device Backend:**
+**New Feature (Device Support):**
 
-1. Create `src/devices/<family>/` if it does not exist (e.g., `src/devices/gamepad/`).
-1. Add a header file: `src/devices/<family>/include/ajazz/<family>/<family>.hpp` — declare `DeviceDescriptor` and factory functions (`make<Model>`).
-1. Add a device class file: `src/devices/<family>/src/<model>_device.cpp` — inherit `IDevice` and optionally capability mix-ins (IDisplayCapable, IRgbCapable, etc.).
-1. Add a protocol file: `src/devices/<family>/src/<model>_protocol.hpp` — opcode enums, wire-format builders, constants (widthPx, heightPx, etc.).
-1. Add a registration file: `src/devices/<family>/src/register.cpp` — `void registerAll(core::DeviceRegistry& registry)` function; register each VID/PID pair with its factory.
-1. Update `src/app/src/application.cpp::Application::bootstrap()` — call the new family's `registerAll(m_deviceRegistry)`.
-1. Add CMakeLists.txt in `src/devices/<family>/` — define the library target; link against `ajazz_core`.
-1. Add unit tests: `tests/unit/test_<model>_protocol.cpp` — test wire-format encode/decode with mock transport.
+- New device backend: `src/devices/<family>/`
+- Public API: `src/devices/<family>/include/ajazz/<family>/<family>.hpp` (registerAll, factory)
+- Implementation: `src/devices/<family>/src/` (device class, protocol headers, wire builders)
+- Descriptor registration: Call `registry.registerDevice(descriptor, factory)` from `registerAll()`
+- Tests: `tests/unit/test_<family>_<component>.cpp`
 
-**New Service (QML Singleton):**
+**New Feature (GUI Component):**
 
-1. Create `src/app/src/<service_name>_service.{hpp,cpp}` — inherit from `QObject`, add `Q_OBJECT` macro.
-1. Add slots for actions (e.g., `void syncDevice(QString deviceId)`).
-1. Emit signals for results (e.g., `void syncCompleted(bool success, QString message)`).
-1. Register in `src/app/src/application.cpp::Application::Application()` — construct the service and call `qmlRegisterSingletonInstance<ServiceName>(...)`.
-1. Add a build-break assertion: `static_assert(!std::is_default_constructible_v<ServiceName>, ...)` (prevents the QML_SINGLETON dual-instance bug; see CLAUDE.md).
-1. Add unit tests: `tests/unit/test_<service_name>.cpp` — mock DeviceRegistry, inject mock devices, verify signals.
+- QML component: `src/app/qml/components/<Component>.qml` (if reusable) or `src/app/qml/<Page>.qml` (if page-level)
+- C++ backend (if needed): `src/app/src/<component>.hpp/.cpp`
+- Qt services should be added as member fields to `Application` in `src/app/src/application.hpp`
+- Expose to QML: `Application::exposeToQml()` as a context property
+- Tests: `tests/qml/` or `tests/unit/test_<component>.cpp`
 
-**New QML Component:**
+**New Feature (Service):**
 
-1. Create `src/app/qml/components/<ComponentName>.qml`.
-1. Use Material Design 3 components from QtQuick.Controls, apply Material attached properties (Material.primary, Material.backgroundColor, etc.).
-1. Connect to Application context properties (DeviceModel, ProfileController, etc.) or services (TimeSyncService, etc.).
-1. Add a corresponding `.qmltype` descriptor if the component is exposed as a custom type (not needed for one-off components in Main.qml or other QML files).
+- Header: `src/app/src/<service>_service.hpp` (QObject, if Qt-dependent; plain class if not)
+- Implementation: `src/app/src/<service>_service.cpp`
+- Ownership: Add as unique_ptr member to `Application` (constructed in ctor body)
+- Exposure: If QML-accessible, expose via context property in `exposeToQml()`
+- Tests: `tests/unit/test_<service>.cpp`
 
-**New Test:**
+**New Action Type:**
 
-1. Unit test → `tests/unit/test_<subsystem>.cpp` — use Catch2 `TEST_CASE` and `REQUIRE` macros.
-1. Integration test → `tests/unit/test_<subsystem>.cpp` or `tests/integration/test_<scenario>.cpp` — use the multi-device fixture if testing hot-plug or multi-backend interaction.
-1. Fuzz test → `tests/fuzz/fuzz_<subsystem>.cpp` (opt-in; Clang only) — link against libFuzzer runtime.
+- Action definition: Add `Kind::<NewKind>` enum to `ajazz::core::Action` in `src/core/include/ajazz/core/profile.hpp`
+- Engine callback: Add callback to `ajazz::core::ActionExecutors` struct
+- Executor impl: Add executor lambda in `src/app/src/application.cpp` (or in `src/app/src/qt_executor.cpp`)
+- Tests: `tests/unit/test_action_engine.cpp` (parametrized test on `Kind`)
 
-**New Protocol Doc:**
+**New Plugin Capability (Python):**
 
-1. Create `docs/protocols/{streamdeck,keyboard,mouse}/<model>.md`.
-1. Include sections: USB descriptors, opcode reference, packet layout (hex tables), known limitations, reverse-engineering source citations (`[ajazz-sdk]`, `[opendeck-*]`, etc.).
-1. Link from the family overview (e.g., `docs/protocols/streamdeck/akp03.md` is referenced in `docs/protocols/streamdeck/akp_device_matrix.md`).
+- Plugin base class: Edit `python/ajazz_plugins/plugin.py`
+- Manifest schema: Update `docs/schemas/plugin_manifest.schema.json`
+- Host dispatcher: Edit `python/ajazz_plugins/host.py` if new RPC methods needed
+- Tests: `python/ajazz_plugins/tests/test_*.py`
+
+**Utilities (Core Library, No Qt):**
+
+- Header: `src/core/include/ajazz/core/<utility>.hpp`
+- Implementation: `src/core/src/<utility>.cpp`
+- Tests: `tests/unit/test_<utility>.cpp`
+- NO external dependencies; C++20 stdlib only
 
 ## Special Directories
 
-**`build/dev/`:**
+**`src/app/src/`** (not `src/app/include/`)
 
-- Purpose: Out-of-source CMake build directory.
-- Generated by: `cmake -B build/dev -DCMAKE_BUILD_TYPE=Release` (or `Debug` for dev).
-- Key files: `ctest_results.xml` (CTest output), `compile_commands.json` (for IDE integration).
-- Committed: No — `.gitignore` excludes the entire `build/` tree.
+- Qt application layer does NOT split headers/source by directory; all `.hpp` files live alongside `.cpp`
+- Reason: QObject MOC integration; CMake target_include_directories directly adds this dir
 
-**`.planning/phases/`:**
+**`.planning/codebase/`**
 
-- Purpose: GSD phase artifacts (one subdirectory per phase; e.g., `09-research-captures-hygiene/`).
-- Contains: Phase plan (markdown), per-plan artifacts (ADRs, decision docs), commit hashes for traceability.
-- Pattern: Phase naming follows GSD convention: `<NN>-<slug>/` where NN is the phase number and slug is a kebab-case descriptor.
+- Purpose: Auto-generated codebase documentation (ARCHITECTURE.md, STRUCTURE.md, STACK.md, etc.)
+- Owner: GSD codebase mapper agent (`/gsd:map-codebase`)
+- Not committed manually; regenerated on request
 
-**`.planning/milestones/`:**
+**`streamdock-host/`** (Rust subproject)
 
-- Purpose: Archived milestone documents (sealed after completion).
-- Contains: v1.0 and v1.1 retrospectives, phase summaries, completion date.
+- Cargo workspace: Independent build; produces `streamdock-host` binary
+- CMake integration: `cmake/StreamdockSidecar.cmake` handles Cargo invocation
+- Output: Binary copied to `build/` + installed alongside app executable on release builds
 
-**`tests/unit/fixtures/`:**
+**`python/`** (Python subproject)
 
-- Purpose: Mock helpers and test data.
-- Key: `mock_transport.hpp` (MockTransport for USB I/O testing), `qt_app_fixture.hpp` (Qt event loop setup for each test), `mock_hid_enumerator.hpp` (synthetic USB device enumeration).
+- Poetry / pip integration: `pyproject.toml` specifies deps
+- Runtime: `OutOfProcessPluginHost` spawns `python3 -m ajazz_plugins.host` as subprocess
+- Not a traditional Python package install; shipped alongside app (embedded or PATH)
+
+**`tests/qml/`**
+
+- Headless Qt Quick rendering (no X11/Wayland display needed)
+- Used by CI on Linux (offscreen) and macOS (offscreen)
+- Currently a smoke test; full QML coverage deferred to Phase 28+
 
 ______________________________________________________________________
 
-*Structure analysis: 2026-05-22*
+*Structure analysis: 2026-06-02*

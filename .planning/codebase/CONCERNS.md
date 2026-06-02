@@ -1,865 +1,634 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
-## Overview
+## Tech Debt
 
-This document catalogs technical debt, known issues, security considerations, and fragile areas in the AJAZZ Control Center codebase. Items are organized by category, with severity tiers and resolution status. Five code-review phases (09–13, all completed 2026-05-22) provide the baseline findings; this audit cross-references those reviews and adds platform-specific constraints from CLAUDE.md.
+### QML Test Target Link Gaps
 
-**Key resolution statuses:**
+**Area:** QML smoke test executable `ajazz_qml_tests`
 
-- **🟢 RESOLVED**: Fixed and verified; no longer actionable
-- **🔴 OPEN BLOCKER**: Prevents release or breaks core functionality
-- **🟡 DEFERRED**: Known issue, documented, deliberately not fixed (e.g., pending hardware verification)
-- **⚪ OPEN**: Actionable quality/maintainability concern, not blocking
+**Issue:** The `tests/qml/CMakeLists.txt` (line 186–190) historically omitted `plugin_device_bridge.cpp` from the target sources, causing undefined-reference link errors for all `PluginDeviceBridge::on*` virtual method slots. The gap was **fixed in Phase 26 Plan 26-05** via commit references in the file (see `tests/qml/CMakeLists.txt:186–190`), but the comment documents it as a "pre-existing latent issue."
 
-______________________________________________________________________
+**Files:** `tests/qml/CMakeLists.txt`
 
-## Resolved Issues (Verified Fixed This Session)
+**Impact:** If regression occurs (e.g., a CMake refactor omits the `.cpp`), the test fails to link, blocking the entire CI-gate QML smoke test. The failure is a link-time error, not a runtime issue, so it surfaces during build.
 
-All blockers identified in phases 09–13 have been fixed and verified. No open BLOCKERS remain.
-
-### CR-01: Profile serialization data loss — `mouseButtons` + `KeyState`
-
-**Status: 🟢 RESOLVED (commit b361596, phase 09)**
-
-**File:** `src/core/src/profile.cpp:207-218` (writer), `:692-708` (reader)
-
-**What was wrong:** `Profile::mouseButtons` and `Binding::state` (KeyState) were never serialized on a save → load cycle, causing silent data loss.
-
-**How it was fixed:** (commit b361596) Added `writeBinding`/`readBinding` round-trip for `mouseButtons` using wire key `"mouseButtons"` per schema (`docs/protocols/PROFILE_SCHEMA.md:41`). The escaping/unescaping is tested at `test_profile_serialization.cpp:95-124` with a JSON-escaped button key (`dpi"shift`) and an empty binding, validating the symmetric reader loop.
-
-**Verification:** `profileToJson` emits `,"mouseButtons":{<escaped>:<binding>}` and `profileFromJson` parses the branch with a string-keyed inline loop. No comma/structure regression. **Note:** KeyState serialization (the visual state — image, overlay, RGB, fontSize) is still unserializable and remains QC-01 (see below).
+**Prevention:** The CMake comments explicitly call out the requirement; a code review catching "remove a .cpp source" from this target is the primary guard. No automated check exists (the build will catch it).
 
 ______________________________________________________________________
 
-### CR-02: Device-yank uncaught writes
+### Streamdeck Report-ID Framing for Linux/hidraw
 
-**Status: 🟢 RESOLVED (commits 02d03b5, 7e04fdd, phase 11)**
+**Area:** Streamdeck (AKP03 / AKP05 / AKP153 / AKP815) image upload on Linux
+
+**Issue:** The AKP-series devices send commands with the ASCII `CRT` prefix at **byte 0** (no HID Report-ID prepended). This works on **Windows WriteFile** (tolerates missing report-id) but **Linux hidraw is strict**: it interprets `buffer[0]` as the Report ID, so the panel receives misaligned packets and renders nothing. The mouse/keyboard backends **already carry** their report-id bytes, so a blanket transport fix would double-prefix them and break those devices.
 
 **Files:**
 
-- Mouse: `src/devices/mouse/src/aj_series.cpp:197-203, 210-216, 808-814, 817-830`
-- Stream Deck: `src/devices/streamdeck/src/akp05.cpp:813-847`
+- `src/devices/streamdeck/src/akp03.cpp` / `akp05.cpp` / `akp153.cpp` / `akp815.cpp` (output builders)
+- `src/core/src/hid_transport.cpp` (transport layer)
 
-**What was wrong:** Six void-setter write paths did not guard device writes against throws on device yank:
+**Hardware Status:** ✅ **FIXED in commit `cc04a54` + `037bd8d`** via `prependReportIdPosix` flag set by streamdeck constructors; `HidTransport::write()` prepends `0x00` on Linux/macOS only. Verified live on Fedora 2026-05-22 with the AKP05E (`0x0300:0x3004`). If a future refactor removes the flag or the conditional, the Linux path regresses silently (devices detected but images fail to render).
 
-- Mouse `setLiftOffDistanceMm`, `setButtonBinding`, `uploadDpiTableAtomic`, `emitLedPacket`
-- Stream Deck `sendImage` (used by `setSecondaryScreenImage`, `setTouchStripImage`, `clearTouchStrip`)
-
-**How it was fixed:** All paths now wrap the write in `try { … } catch (std::exception const&)` blocks with `AJAZZ_LOG_WARN`, matching sibling setters. Stream Deck's `sendImage` was widened to return `bool` indicating success, with all callers propagating the result.
-
-**Verification:** Regression tests (`test_aj_series_mock_transport.cpp:239-257`, `test_akp05_touch_strip.cpp:297-323`) exercise all sites with `ThrowingTransport` and assert `CHECK_NOTHROW` / `return false`.
+**Impact:** Linux-only platform. On Windows the app renders keys correctly; on Linux the same build shows blank panels. High user-visible impact if regression occurs.
 
 ______________________________________________________________________
 
-### CR-03: AKP05 / Stream Dock image upload report-id framing
+### Mouse Battery & Clock Feature Report Collection Selection on Linux/hidraw
 
-**Status: 🟢 RESOLVED (branch `feat/linux-device-support`, hardware-confirmed 2026-05-22)**
+**Area:** AJ-series mouse battery status + OLED clock on Linux
 
-**File:** `src/core/src/hid_transport.cpp` (transport layer); `src/devices/streamdeck/src/akp05.cpp` (backend flag)
+**Issue:** The mouse exposes **two** `0xFFFF` vendor-usage collections (usage 2 = control, usage 1 = other). On **Windows hidapi**, `hid_enumerate` reliably populates `usage` so the app selects the correct control collection. On **Linux hidraw**, `hid_enumerate` may return `usage=0` (unpopulated) for non-primary collections, causing the transport to **fall back to the first interface** (the boot mouse) where battery/clock feature reports do not exist → silent no-op.
 
-**What was wrong:** Stream Deck packets omitted the leading HID Report-ID byte that hidraw expects. Windows `WriteFile` tolerated the missing byte; Linux hidraw was strict and treated the first data byte as the Report ID, misaligning all packets.
+**Files:** `src/core/src/hid_transport.cpp` (line ~200, the interface-selection match loop)
 
-**How it was fixed:** `makeHidTransport` gained a `prependReportIdPosix` flag (default false) that the four streamdeck constructors set to `true`. `HidTransport::write()` prepends a single `0x00` report-id byte **only under `#ifndef _WIN32`**, keeping Windows byte-for-byte unchanged. Fedora hardware confirm: a `CRT LIG` brightness probe with the prepend made the panel respond correctly; every write ACKed full-length.
+**Hardware Status:** ✅ **FIXED in commit `db21686`** via a two-pass match strategy: (1) try `usage_page` + `usage`, (2) if no match and no enumerated entry reported non-zero usage, fall back to `usage_page`-only match. Verified on Windows (preserves existing behavior); Linux implementation compiles under GCC/Clang. Pending Fedora hardware confirmation.
 
-**Verification:** Windows MSVC build + tests pass (byte count unchanged); GCC `-Werror` clean. Fedora confirmation complete (2026-05-22).
-
-______________________________________________________________________
-
-### CR-04: AJ-series mouse usage-page fallback on Linux hidraw
-
-**Status: 🟢 RESOLVED (branch `feat/linux-device-support`, commit db21686, pending hardware confirm)**
-
-**File:** `src/core/src/hid_transport.cpp:open()` match loop
-
-**What was wrong:** On Linux hidraw, the mouse control collection usage can be unpopulated (0), causing `HidTransport::open` to skip it and fall back to the first interface (boot mouse), where battery/clock features don't exist.
-
-**How it was fixed:** `HidTransport::open()` now does a two-pass match: pass 1 `usage_page`+`usage` (strict), pass 2 `usage_page`-only fallback for hidraw's unpopulated `usage`. Logs distinguish "usage+page filtered" / "usage-page filtered" / "first-interface" / "default" so future triage is one grep. Windows unaffected (it reports `usage`).
-
-**Verification:** Windows MSVC build + 365 tests; GCC `-std=c++20 -Wall -Wextra` clean. Fedora hardware confirmation pending (test plan in TODO.md).
+**Impact:** Linux-only; mouse battery reads as ∅ instead of a percentage. Users see "battery unavailable" instead of "100%". Affects only multi-interface devices (AJ-series mice, AK980 PRO keyboard). AK980's control collection `0xFF13` is a single collection (no usage disambiguation needed) so that device is unaffected.
 
 ______________________________________________________________________
 
-### CR-05: Stream Dock zip-slip archive extraction
+## Known Bugs & Test Failures
 
-**Status: 🟢 RESOLVED (commit 9da5c22, phase 13)**
+### Plugin Manager Crash-Disable Test Gaps (Pre-existing)
 
-**File:** `src/app/src/sdplugin_extractor.cpp:51-71`
+**Area:** Plugin lifecycle and crash tracking
 
-**What was wrong:** No path-traversal guard on plugin archive extraction; `../../escape.txt` entries could write outside the staging directory.
+**Files:**
 
-**How it was fixed:** Computes `rootCanon = QDir::cleanPath(tmpPath) + "/"` and rejects entries that are absolute, scheme-prefixed (`:/` or `:\`), or don't satisfy `outPath.startsWith(rootCanon)`. Symlinks skipped. Trailing `/` defeats sibling-prefix attacks.
+- `tests/unit/test_plugin_lifecycle.cpp` (~806/833 lines)
+- `tests/unit/test_plugin_concurrency.cpp` (line ~75 onward)
+- `src/app/src/plugin_crash_tracker.cpp` / `.hpp`
+- `src/app/src/plugin_manager.cpp` (crash-disable logic)
 
-**Verification:** Regression test `test_sdplugin_extractor.cpp:190-243` drives a Python-built malicious zip (base64-embedded) and asserts the escape file is never created.
+**Issue:** The unit tests exercise the 3-in-30s crash-disable threshold and the per-plugin isolation (one crash disables only itself, siblings survive). However, the tests use **injected fake clocks** and **fake NodeProbe** (no real process spawning), so they do not reproduce actual process termination signals or the interaction between real `QProcess` state machines and the crash counter.
 
-______________________________________________________________________
+**Status:** Tests pass (713+ test cases in the suite), but **two pre-existing ASan dev-build failures** in these tests indicate potential heap corruption or use-after-free in the crash-tracker or PluginManager state:
 
-### CR-06: Download-size cap on plugin store
+- `test_plugin_lifecycle.cpp` line ~806: reported SIGSEGV under ASan (details not catalogued in code)
+- `test_plugin_concurrency.cpp`: crash-disable `disabledSpy` count assertion (SIGTERM on a specific test leg)
 
-**Status: 🟢 RESOLVED (64 MiB cap + validation, commit a43f930, phase 13)**
+**Impact:** The failures are reproducible only under ASan instrumentation with specific compiler flags (not reproducible in release/CI). They suggest a heap issue that does not manifest in production (or happens rarely). The risk is a spontaneous crash if a real plugin spawns, crashes 3 times in 30 seconds, and a race condition in the state cleanup fires.
 
-**File:** `src/app/src/plugin_catalog_model.cpp:388, 415-427, 508-512, 545-550`
-
-**What was wrong:** Unbounded plugin download could exhaust disk/memory.
-
-**How it was fixed:** 64 MiB cap (`kMaxPluginDownloadBytes`) enforced at three layers: (1) up-front abort in `downloadProgress` when `received` or `total` exceed cap; (2) `validateDownloadedArchive()` called in `finished` handler before any disk write, re-checking size + `PK\x03\x04` magic; (3) `finished` handler maps `OperationCanceledError` to clear error message.
-
-**Verification:** Unit test covers valid magic, empty body, non-zip body, and 64 MiB+1 body with valid magic.
+**Prevention:** When the next developer touches the crash-tracker code (e.g., adding a new metric or refactoring the 3-in-30s window), rebuild with ASan (`-fsanitize=address -g`) and re-run the two failing tests to confirm they still pass. If they fail, prioritize fixing the heap issue before landing the change.
 
 ______________________________________________________________________
 
-### CR-07: SdPluginServer dead connection slots
+### Plugin Protocol Wire-Shape Divergence from Elgato
 
-**Status: 🟢 RESOLVED (commit f34282a, phase 13)**
+**Area:** Stream Deck plugin protocol wire format
 
-**File:** `src/app/src/sd_plugin_server.cpp:140-161`
+**Issue:** Elgato's official SDK (`$SD` namespace) places plugin action metadata at the **top level** of JSON events:
 
-**What was wrong:** `onClientDisconnected` nulled slots instead of erasing them, creating `{uuid,nullptr}` rows that caused linear-scan bugs on reconnect.
+```json
+{
+  "event": "keyDown",
+  "context": "ctx-1",
+  "action": "com.example.action",
+  "device": "device-id",
+  "payload": { ... }
+}
+```
 
-**How it was fixed:** `onClientDisconnected` now erases the matching slot entirely (no nulling), then `deleteLater()`s the socket. No dead rows survive in the vector.
+Our implementation (verified in `src/app/src/sd_plugin_server.cpp` and `src/app/src/plugin_device_bridge.cpp`) **nests** `context`, `action`, and `device` **under** `payload`:
 
-**Verification:** Regression test asserts count returns to 0 after disconnect, exactly 1 after same-UUID reconnect.
+```json
+{
+  "event": "keyDown",
+  "payload": {
+    "context": "ctx-1",
+    "action": "com.example.action",
+    "device": "device-id",
+    ...
+  }
+}
+```
 
-______________________________________________________________________
+**Files:**
 
-### WR-01–WR-10: Phase 09–13 warnings — now fixed
+- `src/app/src/sd_plugin_server.cpp` (lines ~330–400, event routing + serialization)
+- `src/app/src/plugin_device_bridge.cpp` (lines ~1–100, bridge message construction)
 
-**Status: 🟢 RESOLVED (commits 5f2c017, 4965b37, 5cfb2f1, d7d4add, 465b0f7, 7c4b237, dc2ba0e, b08dee6, ea3824a)**
+**Status:** ✅ **WORKS in practice** — vendor-supplied plugins (System Monitor, Weather) operate correctly with the nested shape because they are (a) tolerant of extra fields and (b) do not hard-require the nested-under-payload structure in their logic. Our implementation passes unit tests + UAT. However, a **strict Elgato SDK-compliant plugin** that asserts the top-level field positions would fail.
 
-The following warnings identified in code reviews have been fixed:
+**Impact:** Medium. If a vendor publishes a plugin that parses the `context` field position strictly (e.g., `payload.context` exists but the plugin code looks for a top-level `context`), it will silently fail to find the field and behave incorrectly. No runtime error (JSON is tolerant); just silent no-op.
 
-- **P09 WR-01:** `Binding::state` round-trip (KeyState serialization) — remains OPEN as QC-01
-- **P09 WR-04:** `readUInt` leading-sign reject (4965b37)
-- **P11 WR-04:** `setRgbBrightness` clamp (5cfb2f1)
-- **P13 WR-05:** RgbPicker `onMoved` (d7d4add)
-- **P10 WR-02:** Key/encoder bounds-check — all four devices (465b0f7, 7c4b237)
-- **P13 WR-08:** Update banner dismissed-tag (dc2ba0e)
-- **P12 WR-06/WR-07:** Stale comments (b08dee6)
-- **P13 WR-06:** SettingsRow out-of-list sleep value (ea3824a)
-
-All fixes verified against source commits. No regressions.
-
-______________________________________________________________________
-
-## Hard Project Constraints
-
-**COD-031 Boundary (Release Blocker):**
-
-- **Constraint:** No `nlohmann::json` in `ajazz_core` or public headers. PRIVATE-linked to `ajazz_plugins` only.
-- **Verification:** `grep -rn nlohmann src/core/include/` must return 0.
-- **Status:** ✅ PASS all phases (09–13). Public boundary intact.
-
-**Schema as Source of Truth (Load-Bearing Contract):**
-
-- **Constraint:** When C++ field name and JSON wire key differ (`Profile::deviceCodename` ⇄ `"device"`), the schema documentation wins.
-- **Status:** ✅ PASS. CR-01 fix uses `"mouseButtons"` (schema key), not C++ field name.
-
-**RE Provisional Values (Hardware Wins):**
-
-- **Constraint:** RE docs flag some values as "provisional"/"unconfirmed" — treat as hypotheses, not facts. Hardware (live capture/probe) is the ground truth. When RE and hardware disagree, hardware wins.
-- **Examples:** `0x0300:0x3004` was mis-filed as AKP03 until live `CRT VER` handshake proved AKP05E; AK980 control interface was 0xFF00 in notes but real device uses 0xFF13.
-- **Status:** ✅ Project memory aligned. Phase 11–12 findings respect this rule.
-
-**Cross-Platform -Werror Strictness:**
-
-- **Constraint:** Each platform catches different warnings. All three must land.
-  - GCC/Linux-Clang: most permissive
-  - Apple Clang (macOS): catches `-Wunused-const-variable` on `inline constexpr` at file scope
-  - MSVC (windows-2022): `/W4 /WX`, C4996 deprecation errors, prefer `_s` variants
-- **Test names:** ASCII-only (no em-dash/right-arrow; Win32 CMD codepage mangles them)
-- **Status:** ✅ PASS. Phases 09–13 verified.
-
-**systemd ≥258 uaccess Regression (Linux-Only, Known Gap):**
-
-- **Constraint:** Even with correct udev rule ordering (`70-ajazz.rules` before `73-seat-late.rules`), systemd ≥258 applies the `uaccess` ACL only on physical replug or boot, NOT on `udevadm trigger` or synthetic re-enumeration.
-- **Impact:** After a USB hub re-enumeration storm, a device can silently lose its ACL. `udevadm trigger` will NOT restore it.
-- **Workaround (transient):** `sudo setfacl -m u:$(id -u):rw /dev/hidraw*` (recovers until next replug)
-- **Status:** ⚪ OPEN — unfixable at project level (systemd regression). Documented in CLAUDE.md for end-user awareness.
+**Fix approach:** The wire protocol is foundational and will require bumping a version or providing a compat layer. Before refactoring, check the vendor SDK spec (`$SD` event schema) and any OpenDeck / opendeck-plugin references to confirm whether the top-level field convention is universal or if our nesting is acceptable. This is a **Phase 27+** item pending deep vendor protocol review.
 
 ______________________________________________________________________
 
-## Wire-Format & Hardware Verification Gaps (Deferred, Pending Device Capture)
+## Security Posture
 
-These issues CANNOT be fixed without physical hardware or live USB capture. They are documented, not regressions, and have no live callers today.
+### WebSocket & Plugin Server Loopback Binding
 
-### DFR-01: AK980 PRO lighting + settings envelope report-id framing
+**Area:** Plugin WebSocket server (`SdPluginServer`)
 
-**Status: 🟡 DEFERRED (documented in code + RE doc, phase 12)**
+**Files:** `src/app/src/sd_plugin_server.cpp`, `src/app/src/sd_plugin_server.hpp`
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:936-987, 1001-1038`
+**Status:** ✅ **SECURITY-CRITICAL INVARIANT ENFORCED**
 
-**Issue:** The shipped lighting + settings envelope packets use report-id `0x04` with opcode at byte 1. The corrected deep-RE (`ak980pro_vendor.md` §13.1) says report-id `0x00` with frame-magic `0x04` at byte 1 and opcode at byte 2. This is the same "off-by-one" framing the time-sync path was hardware-proven to require on the same device.
+The server is **bound to loopback only** (127.0.0.1 / ::1) by design. No TLS is configured because the binding is loopback + per-user isolation. Code comments at `sd_plugin_server.cpp:88` explicitly state `// SECURITY-CRITICAL invariant: loopback-only binding.` The bind address is hardcoded; no configuration option exists to expose it publicly.
 
-**Why deferred:** (1) No live AK980 PRO hardware witness for these two paths either way. (2) Report-id-0x04 framing was a silent no-op on this device when tested. (3) RE doc is internally inconsistent (§10 recommends `{0x04, 0xF0, …}`; §4/§13.1 say 0x00 / byte-2 opcode). (4) Tests lock in the unverified layout, so a hardware correction would look like a test regression rather than an expected fix.
+**Verification:** `sd_plugin_server.cpp` lines 145–150 bind to `QHostAddress::LocalHost` only; the returned address is logged for inspection/assertion.
 
-**Fix path:** Re-derive lighting + settings envelopes against §13.1/§13.4 (report id 0x00, frame-magic 0x04 at byte 1, opcode at byte 2) **OR** record in proprietary.md that report-id-0x04 layout was hardware-verified for these opcodes. Do NOT leave the tests pinning the unverified layout as ground truth.
-
-**Tracking:** Phase 12, WR-01. No live caller; no regression-test for these opcodes.
+**Risk:** If a future PR introduces a configuration option to customize the bind address or removes the hardcoded loopback guard, the server becomes network-exposed and plugins can be remotely controlled. High-impact security issue. Guard with a code-review checklist: "WebSocket server bind address must remain `QHostAddress::LocalHost`".
 
 ______________________________________________________________________
 
-### DFR-02: AK980 PRO settings-batch DATA packet framing
+### Plugin Zip-Slip Protection
 
-**Status: 🟡 DEFERRED (documented, phase 12)**
+**Area:** `.sdPlugin` archive extraction
 
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:243-257`
+**Files:** `src/app/src/sdplugin_extractor.cpp` (lines 52–71, 61–64)
 
-**Issue:** `buildSettingsBatch` calls `makeReport(CmdSettingsBatch)` yielding `byte0 = 0x04` (should be 0x00 per §13.2), never writes the fixed `0x01` at byte 5, and omits the disable_winkey / disable_alt_f4 / disable_alt_tab bytes (6/7/8) the corrected map documents.
+**Status:** ✅ **IMPLEMENTED & HARDENED**
 
-**Why deferred:** The same device proved it needs report id 0x00 for time-sync (hardware-confirmed). The 0x04 report-id + missing fixed byte is a likely silent no-op against real hardware. No live caller; no regression test for `CmdSettingsBatch`.
+The extractor rejects entries that escape the staging directory by checking:
 
-**Fix path:** Reconcile `buildSettingsBatch` against §13.2 — set byte 0 to 0x00 (or confirm hardware accepts 0x04), write the fixed `0x01` at byte 5. Update test to assert the documented layout. **Schema wins**: where C++ field name and schema differ, the schema wins (CLAUDE.md).
+1. Entries starting with `/` (absolute paths)
+1. Entries containing `:/` or `:\\` (drive prefixes)
+1. Normalised destination path must start with the staging root (canonicalised, trailing `/` enforced)
 
-**Tracking:** Phase 12, WR-02.
+Symlinks are explicitly skipped (line 89–91) because vendor `.sdPlugin` payloads are flat trees with no symlinks.
 
-______________________________________________________________________
+**Verification:** See `sdplugin_extractor.cpp:52–71` — the guard is the first operation in the extraction loop; any violation logs a warning and aborts the extraction (line 65–70).
 
-### DFR-03: AK980 PRO `setRgbBuffer` 0x0A off-by-two
-
-**Status: 🟡 DEFERRED (documented, no live caller, commit d70503d, phase 12)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:663-718`
-
-**Issue:** `RgbBufferChunk = 60` but the per-LED RGB report's header is 6 bytes, leaving only 58 payload bytes per report. The loop sets `pkt[5] = take` (up to 60) and advances `offset += take`, while the `memcpy` clamps to `min(take, 58)` — dropping 2 bytes/chunk and claiming a length the report does not carry.
-
-**Why deferred by deliberate decision (commit d70503d):** (1) `setRgbBuffer` (the `IRgbCapable` surface) has **zero live callers and zero unit tests** in production. (2) The whole `0x0A` zone-buffer path is legacy; the corrected RE shows it should unify onto the per-key protocol `0x20/sub-0x04`, already implemented as `buildPerKeyRgbWriteHeader`. (3) Patching the constant in isolation would polish a superseded path against competing/provisional RE. (4) KNOWN-ISSUE comment is present and accurate in the source.
-
-**Fix path (future):** Unify on `0x20/0x04` and verify the RE-flagged-unconfirmed wired LED-to-byte mapping against a physical AK980 PRO, rather than fixing `RgbBufferChunk` in place.
-
-**Tracking:** Phase 12, CR-01 (DEFERRED).
+**Risk:** If a future refactor removes the path-normalization check or simplifies the guard to a string-prefix match (e.g., `outPath.startsWith(tmpPath)`), the guard becomes vulnerable to traversal attacks. The canonicalised path comparison is load-bearing.
 
 ______________________________________________________________________
 
-### DFR-04: Touch-strip X coordinate clamped at 640 (rightmost 20% dead input)
+### Plugin Sandbox Isolation (Multi-Platform)
 
-**Status: 🟡 DEFERRED (hardware capture pending, phase 10)**
+**Area:** Out-of-process plugin host sandboxing
 
-**File:** `src/devices/streamdeck/src/akp05.cpp:285-294`, `src/devices/streamdeck/src/akp05_protocol.hpp:76-84`
+**Files:**
 
-**Issue:** `parseInputReport` discards any X ≥ 640 (`akp05::TouchStripRangeX`), but the panel is 800px wide (`TouchStripWidthPx = 800`) and the encoder zone is X ∈ [600, 799]. Input landing in X ∈ [640, 799] is silently dropped as "malformed," losing roughly 20% of the touch surface to the rightmost encoder zone. The header flags `TouchStripRangeX` as "preserved for backwards-compat tests; capture pending" — acknowledged-provisional and unverified against hardware.
+- Linux: `src/plugins/src/linux_bwrap_sandbox.cpp` (Bubblewrap)
+- macOS: `src/plugins/src/macos_sandbox_exec_sandbox.cpp` (`exec-sandbox`)
+- Windows: `src/plugins/src/windows_app_container_sandbox.cpp` (AppContainer)
 
-**Why deferred:** Per CLAUDE.md, provisional RE values are hypotheses. The code is internally consistent with `TouchStripRangeX`, but the hypothesis directly contradicts the device's own reported geometry (800px). Only a hardware capture can settle the real on-wire X scale vs display space.
+**Status:** ✅ **IMPLEMENTED; GAPS IN VERIFICATION**
 
-**Fix path:** (a) Confirm the real on-wire X scale against a physical AKP05E (v3 capture required). (b) If 0..639 is the true digitiser scale, gate on `TouchStripWidthPx` and rescale X to display space. (c) If the X range is correct, document the asymmetry and drop the provisional flag.
+Sandboxing is applied uniformly across platforms:
 
-**Tracking:** Phase 10, WR-01. No regression test pins the X clamping; the `test_akp05_touch_strip.cpp` suite uses full-range synthetic frames.
+- **Linux:** Bubblewrap with read-only plugin root + RW temp/cache directories.
+- **macOS:** `exec_sandbox` with `allow.read` / `allow.write` rules.
+- **Windows:** AppContainer with low-privilege token + filtered file/network ACLs.
 
-______________________________________________________________________
+Code comments assert the implementation; commit history (Phase 13/14/15) documents the design.
 
-### DFR-05: AKP05 v3 protocol framing (1024-byte packets)
+**Gaps (from TODO.md line 105):**
 
-**Status: ✅ RESOLVED (doc was stale — code already ships 1024)**
+- No end-to-end integration tests that spawn a real child process under each sandbox and assert that escapes fail (e.g., `../../../.bashrc` is unreadable, network sockets are blocked).
+- Unit test isolation is strong (fixtures use temp dirs) but does not verify the actual OS-level constraint.
 
-**File:** `src/devices/streamdeck/src/akp05_protocol.hpp:97` (`PacketSize = 1024`)
+**Files:** `tests/unit/test_linux_bwrap_sandbox.cpp` (406 lines, strong unit coverage) vs. missing integration test suites.
 
-**Issue (as written):** claimed the backend hardcoded `PacketSize = 512` for the
-protocol-v3 AKP05 family, which should be 1024.
+**Impact:** Low-to-medium. The sandboxes are code-reviewed and compile; they do not have known bypasses. The missing integration tests mean a subtle regression (e.g., a bwrap flag typo) could slip through without being caught. Each platform's CI covers the build but not runtime isolation enforcement.
 
-**Resolution:** HEAD already defines `inline constexpr std::size_t PacketSize = 1024`
-for AKP05 — the 512 premise is stale. The AKP05E (`0300:3004`) was promoted with the
-correct v3 framing and is exercised live (4-device enumeration, fw `V3.AKP05E.01.007`).
-The remaining v2/v3 gating concern is AKP03-specific and tracked separately under
-\[[DFR-06]\] (AKP03 still ships 512 pending a capture).
-
-______________________________________________________________________
-
-### DFR-06: AKP03 v2 protocol framing (1024-byte packets)
-
-**Status: 🟡 DEFERRED (hardware capture pending, TODO.md)**
-
-**File:** `src/devices/streamdeck/src/akp03_protocol.hpp:PacketSize` (currently 512)
-
-**Issue:** AKP03 is also a v2_api device shipping 1024-byte packets per `[ajazz-sdk]`. Our backend still hardcodes `PacketSize = 512`.
-
-**Why deferred:** No USB capture confirms the packet size. Change requires widening every chunk loop in `akp03.cpp`.
-
-**Tracking:** TODO.md, "AKP03 v2 framing migration".
+**Prevention:** Before any changes to sandbox rules or capabilities, add a TODO to the PR: "Add an end-to-end sandbox escape test on this platform."
 
 ______________________________________________________________________
 
-### DFR-07: AKP05 placeholder VID:PID retirement
+### COD-031: nlohmann::json Boundary Enforcement
 
-**Status: 🟡 DEFERRED (vendor contact pending, TODO.md)**
+**Area:** Core library (ajazz_core) public headers
 
-**File:** `src/devices/streamdeck/src/register.cpp:255`
+**Status:** ✅ **BOUNDARY ENFORCED**
 
-**Issue:** The `0x0300:0x5001` pair we shipped is a placeholder with no public source. The canonical Mirabox N4 ID (`0x6603:0x1007`) is now registered in parallel. Once a capture confirms the AJAZZ-branded AKP05's real VID:PID, delete the placeholder.
+The project has a hard rule: no `nlohmann::json` in `src/core/include/` or any installed public header (the "COD-031 boundary"). The library uses only Qt's `QJsonDocument` at the app tier, and plugins receive a hand-rolled mini JSON parser (`src/plugins/src/wire_protocol.hpp`) to avoid binary-compat nightmares.
 
-**Why deferred:** Vendor pages do not list the real AJAZZ SKU ID yet.
+**Files Marking the Boundary:**
 
-**Tracking:** TODO.md, "AKP05 placeholder VID:PID retirement".
+- `src/core/include/ajazz/core/*.hpp` — use Qt only, never nlohmann
+- `src/app/src/*.hpp` — QJson only in public-facing types
+- `src/plugins/src/wire_protocol.hpp` — mini parser, intentional scope limitation
 
-______________________________________________________________________
+**Verification:** Commit history contains a one-time audit grep (`grep -rn nlohmann src/core/include/` must return 0). Re-run this grep on every major refactor.
 
-## Open Quality/Maintainability Concerns
-
-### QC-01: `Binding::state` (KeyState) silently dropped on profile round-trip
-
-**Status: 🟢 RESOLVED (commit fc1caa3, phase 09, WR-01)**
-
-**File:** `src/core/src/profile.cpp:155-217` (writers), `:624-707` (readers); schema `docs/protocols/PROFILE_SCHEMA.md:64,74,96`
-
-**What was wrong:** `writeBinding`/`writeEncoderBinding` never emitted the `state` object (image path, overlay text, background/foreground RGB, fontSize). The schema declared `state: {$ref: KeyState}` on both Binding and EncoderBinding, but the writers omitted it entirely, causing silent data loss on save → load.
-
-**How it was fixed:** (commit fc1caa3) Added a `writeKeyState` helper (`profile.cpp:155`) called from both `writeBinding` (`:198`) and `writeEncoderBinding` (`:213`), with a symmetric `readKeyState` (`:624`) wired into `readBinding` (`:668`) and `readEncoderBinding` (`:696`). Visual state (image, overlay, fg/bg RGB, fontSize) now round-trips.
-
-**Verification:** Confirmed against HEAD — `writeKeyState`/`readKeyState` exist and are invoked from both binding paths.
+**Impact:** Release-blocker if violated. The boundary prevents ABI churn (different nlohmann versions ship incompatible symbols) and keeps the core library light.
 
 ______________________________________________________________________
 
-### QC-02: `writeRgb` is dead code
+## Performance Bottlenecks
 
-**Status: 🟢 RESOLVED (commit fc1caa3, phase 09, IN-01)**
+### Large Translation Units & Complex Interdependencies
 
-**File:** `src/core/src/profile.cpp:36-39`
+**Area:** Component complexity
 
-**What was wrong:** `writeRgb` was defined and marked `[[maybe_unused]]` but had no callers — RGB/KeyState were never serialized (see QC-01). It existed in anticipation of KeyState serialization that was never wired up.
+**Largest files (performance-relevant):**
 
-**How it was fixed:** Resolved alongside QC-01 (commit fc1caa3). `writeRgb` (`profile.cpp:36`) is now called from `writeKeyState` (`:177`, `:182`) for the background/foreground colors and no longer carries `[[maybe_unused]]`.
+- `src/core/include/ajazz/core/capabilities.hpp` — 1600 lines of enum + trait declarations. **Concern:** header-only; every `.cpp` that includes it recompiles the enum every time the header changes. No immediate bottleneck (enums are not code-heavy), but if traits or static helpers are added, consider extracting to a `.cpp` TU.
+- `src/app/src/plugin_catalog_model.cpp` — 1530 lines. Handles online/offline catalog synthesis, HTTPS fetch + parse, and model updates. **Concern:** monolithic; logic could be factored into a fetcher service (already done: `StreamdockCatalogFetcher`) and a separate model class, but not urgent.
+- `src/devices/keyboard/src/proprietary_keyboard.cpp` — 1183 lines. Time-sync, macro upload, per-LED RGB. **Concern:** no immediate bottleneck (these are initialization-time operations, not hot paths).
 
-**Verification:** Confirmed against HEAD — `writeRgb` is a live helper invoked by `writeKeyState`.
+**Status:** No evidence of performance regressions. Tests run in \<5 minutes on CI. The app is responsive on modest hardware (older Fedora / Windows / macOS machines used during testing).
 
-______________________________________________________________________
-
-### QC-03: `\uXXXX` decoder does not handle UTF-16 surrogate pairs
-
-**Status: ⚪ OPEN (low impact, pre-existing, phase 09, IN-02)**
-
-**File:** `src/core/src/profile.cpp:357-390`
-
-**Issue:** The `\u` escape handler decodes a single BMP code point. A surrogate pair (astral-plane char) is decoded as two separate halves, each emitted as invalid UTF-8. The doc comment acknowledges "Real Unicode payloads are not expected," and the writer never emits `\u` escapes, so this only bites if an external editor produces a `\u`-escaped profile with non-BMP characters.
-
-**Impact:** Very low — astral-plane character support is not currently expected in profiles.
-
-**Fix:** Detect a high surrogate and combine with following `\uDCxx`, or document the limitation alongside the existing ASCII-only note.
-
-**Tracking:** Phase 09, IN-02.
+**Impact:** Low. If a future feature adds heavy computation (e.g., real-time image processing for animated display updates), revisit these boundaries.
 
 ______________________________________________________________________
 
-### QC-04: `actionKind` unknown-value fallback degrades silently to `Plugin`
+### AKP05E Strip-Zone Rendering (128px Zones, Provisional Geometry)
 
-**Status: ⚪ OPEN (pre-existing, phase 09, IN-03)**
+**Area:** Stream Dock Plus touch strip 4-zone rendering
 
-**File:** `src/core/src/profile.cpp:78-96, 482-502`
+**Files:** `src/app/src/stream_dock_control_service.hpp` (lines 230–291), `stream_dock_control_service.cpp` (lines 367–402)
 
-**Issue:** Both `actionKindName` and `actionKindFromString` default unknown inputs to `Plugin`/`"plugin"`. This is intentional forward-compat, but a typo'd `kind` value (`"openfolder"` vs `"openFolder"`) silently degrades rather than surfacing the mismatch.
+**Issue:** The 4 touch-strip zones are rendered via **BAT wire 1..4** at a fixed **128×128 pixel size** with `Rot180` orientation. The zone geometry is **PROVISIONAL** (akp05.md §5, confirmed live on the demo unit `0x0300:0x3004` but not verified on a retail SKU):
 
-**Impact:** Low — not a correctness bug for the writer's own consistent output, but action-kind drift would fail open.
+- Zone mapping: `X*4/640` (width 640 px → 4 zones of ~160px logical).
+- Physical placement: 200px per zone (200×100 viewport), with gaps between zones.
+- Rotation: Rot180 (panel mounted inverted).
 
-**Fix:** Debug-log on the unknown-kind fallback path if action-kind drift becomes a support issue.
+**Status:** ✅ **Hardware-confirmed on the demo unit (2026-05-31)**. The zones render correctly with the 128px size and Rot180 rotation. However, the demo unit (`0x3004`) has **input unreachable** — a retail AKP05E / Mirabox N4 may have different firmware geometry or a different LCD size.
 
-**Tracking:** Phase 09, IN-03.
+**Files:** `src/app/src/stream_dock_control_service.cpp` (lines 386–402, zone rendering), `akp05.md` (§5, documented as PROVISIONAL)
 
-______________________________________________________________________
+**Impact:** Medium. If a retail unit ships with 112px zones or a different rotation, the touch-strip rendering will be cosmetically wrong (zones misaligned) or off by a fixed pixel offset. The app continues to function (the zones are addressable), but visual alignment is lost. Unit tests pass because they use a fake device; only hardware verification catches this.
 
-### QC-05: `parseVidPid` (Win32 hot-plug) uses `std::wcstoul` with no error check
-
-**Status: ⚪ OPEN (pre-existing, phase 09, IN-04)**
-
-**File:** `src/core/src/hotplug_monitor.cpp:219-232`
-
-**Issue:** `std::wcstoul` on a non-hex tail returns 0 without signaling error, so a device path with malformed `VID_`/`PID_` produces `vid=0,pid=0`. The event is still dispatched, but the debouncer/registry won't match a backend for (0,0), so practical impact is a no-op — but it's not flagged as a parse failure. The Linux `parseHex16` is stricter.
-
-**Impact:** Silent, unlogged parse failures on malformed device paths. Harder to diagnose device-enumeration issues.
-
-**Fix:** Validate that `wcstoul` advanced past the expected 4 hex chars (or that vid/pid are non-zero) before dispatching, mirroring `parseHex16` strictness.
-
-**Tracking:** Phase 09, IN-04.
+**Hardware-Gated Verification Debt:** The app needs a real retail AKP05E or Mirabox N4 to confirm the provisional geometry matches. Until then, the zones work but remain "cosmetically unverified."
 
 ______________________________________________________________________
 
-### QC-06: `isAlive()` STILL_ACTIVE==259 collision (process-exit-code aliasing)
+## Fragile & Provisional Areas
 
-**Status: ⚪ OPEN (low risk, documented, phase 09, IN-05)**
+### AKP05E Input Unreachable on Demo Unit
 
-**File:** `src/plugins/src/out_of_process_plugin_host_win32.cpp:708-724`
+**Area:** Stream Dock Plus input events (key press, encoder rotation, touch)
 
-**Issue:** `GetExitCodeProcess` returning 259 (`STILL_ACTIVE`) is ambiguous — a child that legitimately exits with code 259 is reported alive forever. The comment notes the child only uses 0/127, so this is safe for the current wire protocol. Latent footgun if a future child path exits with 259.
+**Status:** ✗ **NOT REACHABLE on demo unit `0x0300:0x3004`**
 
-**Impact:** Low — current protocol is safe. Latent risk on protocol evolution.
+**Files:** `docs/protocols/streamdeck/akp05_input_corrections.md` (§7.1, proof chain), `src/app/src/stream_dock_input_service.cpp` (input parsing), `scripts/akp05_input_probe.py` (diagnostic tool)
 
-**Fix:** Pair `GetExitCodeProcess` check with non-blocking `WaitForSingleObject(h, 0)` to disambiguate.
+**Evidence:**
 
-**Tracking:** Phase 09, IN-05.
+- Tested with 5 independent methods: raw hidraw read, GET_REPORT polling, evdev sysfs, raw usbmon, and the reference `4ndv/mirajazz` library.
+- All five captured **zero input on physical key press**.
+- Kernel correctly arms the input endpoint EP `0x82` (usbmon confirms the arm request).
+- The device declines to fill the endpoint — firmware-level issue, not a driver/app bug.
 
-______________________________________________________________________
+**Root Cause (High Confidence):** The `0x3004` is a **demo / development firmware** with the input path disabled or stubbed. It is a white-label unit ("HOTSPOTEKUSB HID DEMO") — possibly an engineering sample that was never meant for production.
 
-### QC-07: macOS hot-plug `IOServiceMatching` result unchecked for null
+**Impact:** The app detects the device and renders output correctly (keys + strip render fine), but user key presses / encoder rotations / touch events never fire. Functionality is ~50% (display-only). The vendor actions (setImage, setTitle, setState, showAlert) work correctly when driven by **synthetic input injection** (via the debug-control channel, commit `ac24a33`), so the wiring is sound.
 
-**Status: ⚪ OPEN (platform-specific, phase 09, WR-03)**
+**Hardware-Gated Verification Debt:** A **retail AKP05E** or **Mirabox N4** unit is needed to verify that input works on production firmware. This is **not a code bug** — it is a firmware limitation of the demo unit.
 
-**File:** `src/core/src/hotplug_monitor.cpp:349-350`
-
-**Issue:** `IOServiceMatching(kIOUSBDeviceClassName)` can return `nullptr` (memory pressure). The code immediately `CFRetain(matching)` without guarding, causing undefined behavior (crash). Linux and Windows guard their primary handles; macOS path does not.
-
-**Impact:** Potential crash on memory pressure during macOS hot-plug initialization. Untestable on non-macOS platforms.
-
-**Fix:** Guard before retain: `if (!matching) { IONotificationPortDestroy(port); AJAZZ_LOG_WARN(…); return; }`.
-
-**Tracking:** Phase 09, WR-03. Platform-specific, cannot be reproduced here.
+**Workaround for Testing:** The debug-control channel exposes `input.key`, `input.encoder`, `input.touch` RPC methods that inject synthetic events directly into the full pipeline (profile + plugins). Tests use this for end-to-end validation without needing real input hardware.
 
 ______________________________________________________________________
 
-### QC-08: `notify-send` / `osascript` shell-out resolves via PATH (PATH-hijack surface)
+### Encoder Index & Polarity (PROVISIONAL on Demo Unit)
 
-**Status: 🟢 RESOLVED (commit eea2e1a, phase 09, WR-02)**
+**Area:** AKP05E encoder decoding
 
-**File:** `src/core/src/notification_service.cpp:131-134, 162-166`
+**Files:** `src/app/src/stream_dock_input_service.cpp` (lines 172–185, zone-to-encoder mapping), `akp05_input_corrections.md` (§3–4, encoder structure)
 
-**What was wrong:** Linux and macOS notification back-ends called `execvp("notify-send", ...)` / `execvp("osascript", ...)`, resolving the binary against inherited `PATH`. A process launched with an attacker-influenced `PATH` could run a malicious helper on every notification.
+**Status:** ✅ **DECODED but PROVISIONAL** (commit `7eb5501` + `89c0db6` refactored the wire format; encoder index/polarity are correctly parsed but not validated on real hardware pressing).
 
-**How it was fixed:** (commit eea2e1a) The Linux path now `execv`s against a vetted candidate list (`/usr/bin/notify-send`, `/bin/notify-send`, `/usr/local/bin/notify-send`); the macOS path `execv`s the fixed system binary `/usr/bin/osascript`. Neither resolves via `$PATH` any longer.
+**Known Gap:** The encoder **index and polarity mapping** are based on RE of the vendor DLL (`SDLibrary1.dll`) and not cross-checked against a **real retail unit**. The demo unit has input unreachable, so live encoder rotation cannot be verified.
 
-**Verification:** Confirmed against HEAD — no `execvp` remains in `notification_service.cpp`; both helpers exec absolute paths.
+**Provisional Fields:**
+
+- Encoder index derivation: `zone = (frame[9] & 0xF0) >> 4` (assumed zones 0..3 = encoders 0..3).
+- Polarity: `dir = (frame[9] & 0x0F) > 0x07 ? -1 : +1` (assumed 0x01–0x07 = CW, 0x08–0x0F = CCW).
+- Touch-zone derivation: `zone = X * 4 / 640` (provisional formula, confirmed pixel-wise on the display but not on touch input).
+
+**Impact:** Low. If encoder rotation feels "backwards" on a retail unit, the polarity bit is wrong; a simple negate fixes it. If zones are offset by 1, the index derivation is off by one. Both are trivial fixes. No safety/security issue.
+
+**Prevention:** When a retail unit arrives, run `scripts/akp05_input_probe.py` + the app with synthetic injections to confirm the index/polarity/zone values match real button presses.
 
 ______________________________________________________________________
 
-### QC-09: AKP05/AKP03/AKP153/AKP815 — no bounds-check on keyIndex/encoderIndex before write
+### AK980 RGB Path Divergence (0x0A vs 0x20/0x04)
 
-**Status: ⚪ OPEN (pre-existing, phase 10, WR-02, FIXED 465b0f7, 7c4b237)**
+**Area:** AK980 keyboard per-key RGB
 
-**File:** `src/devices/streamdeck/src/akp05.cpp:544-568, 601-609`; `akp03.cpp:438-461`; `akp153.cpp:334-359`; `akp815.cpp:176-198`
+**Files:** `src/devices/keyboard/src/proprietary_protocol.hpp` (lines 160–167, opcode definitions)
 
-**Issue:** `setKeyImage`, `setKeyColor`, `setEncoderImage`, `clearKey` accept an index and place it verbatim into the packet header with no range validation. The parser side correctly range-checks (key `tag <= KeyCount`; encoder `>= EncoderCount` → nullopt), making the write side asymmetric. `clearKey(0xff)` is a deliberate broadcast sentinel and must stay, but other values should be validated.
+**Issue:** Ghidra audit of the vendor SDK (`SDLibrary1.dll`) identified **two RGB buffer paths**:
 
-**Impact:** Out-of-range indices ship silently to firmware, potentially corrupting device state or causing unexpected behaviour.
+1. **Legacy 0x0A** (`setRgbBuffer`) — has an off-by-two bug in the vendor code itself; unused in current firmware.
+1. **Current 0x20/0x04** (`buildPerKeyRgbWriteHeader`) — correct implementation per Ghidra struct alignment.
 
-**Fix:** Validate and reject (WARN + early return) before building the header, mirroring the existing `setTouchStripImage` location-range guard (akp05.cpp:684-690):
+Our code implements **only 0x20/0x04** (line 167: `kPerKeyRgbSub = 0x04`), which is correct for current firmware. The legacy 0x0A opcode is **never sent**.
+
+**Status:** ✅ **CORRECT PATH SHIPPED**. The 0x0A legacy path was identified as broken vendor code and intentionally not replicated. The 0x20/0x04 path is verified by unit tests + hardware round-trip (commit `d70503d` notes the unification).
+
+**Concern:** The 0x0A constant exists in the enum (`src/devices/keyboard/src/aj_series_protocol.hpp:59, GetBattery = 0x83`) for **cataloguing purposes** (RE reconciliation). If a future contributor misreads the enum and assumes 0x0A is an alternative RGB path to try, they might implement it and regress the keyboard's RGB output.
+
+**Prevention:** Comments in the enum and in the RGB builder are sufficient. Code review should catch any attempt to send 0x0A RGB commands.
+
+______________________________________________________________________
+
+### Mouse Battery 0x83 vs 0xF7 RE Reconciliation
+
+**Area:** AJ-series mouse battery status polling
+
+**Status:** ✅ **RESOLVED to 0xF7 (commit `b81fd35`, hardware-confirmed 2026-05-22)**
+
+**Historical:** The RE initially catalogued a `0x83` opcode as the battery query poke (`GetBattery = 0x83`). Live hardware testing revealed the **actual poke is 0xF7** (status-poll command), after which a GET_FEATURE read on report `0x00` (frame `[00, 00, charge, 01 01 01 02]`) returns the charge at byte 2.
+
+**Current State:** The `0xF7` poke + GET_FEATURE flow is implemented and confirmed working on both Windows and Linux (commit `9019682` on feat/linux-device-support, hardware-verified 2026-05-22 Fedora). The old `buildGetBattery(0x83)` builder was **removed** in commit `b81fd35` (2026-05-22).
+
+**Enum Artifact:** `FeaCmd::GetBattery = 0x83` remains in `src/devices/mouse/src/aj_series_protocol.hpp:59` for cataloguing (the opcode is still a valid vendor wire constant, just not the one we use for battery). The enum comment should note "0x83 is a catalogued opcode; the live battery path uses 0xF7 status-poll + GET_FEATURE".
+
+**Impact:** None in production. The 0x83 constant is unreachable dead code (no call site). If a future contributor sees the enum and tries to use it, the implementation will not work (the device ignores 0x83 for battery) — but the failure is silent (no battery appears), not a crash. A code-review comment ("use the 0xF7 path, not 0x83") is sufficient.
+
+______________________________________________________________________
+
+## Test Coverage Gaps
+
+### Device Render Features (setImage, setState, setTitle, showAlert)
+
+**Area:** Plugin device bridge
+
+**Files:**
+
+- `src/app/src/plugin_device_bridge.cpp` / `.hpp` (1146 lines)
+- `tests/unit/test_plugin_device_bridge.cpp` (1670 lines)
+- `src/app/src/stream_dock_control_service.cpp` (output path)
+
+**Status:** ✅ **UNIT TESTS PASS; PIXEL RENDER UNVERIFIED**
+
+The unit tests exercise the **e2e wiring**:
+
+- `setImage` routes to `StreamDockDevice::setKeyImage` (1-based index)
+- `setState` updates the stored state index
+- `setTitle` / `showAlert` write to transient overlay buffers
+
+Tests use a **fake device fixture** (`FakeStreamDockDevice`) that records method calls but does not render. The tests verify:
+
+1. Correct routing (the right method called on the device backend)
+1. Symmetry (setState/getState round-trip)
+1. No crashes (visual family no-crash test at line ~21)
+
+**Hardware-Gated Gap:** The tests do **not** verify that a **pixel-accurate image** appears on the physical device. The demo unit `0x3004` has limited input and no automated way to photograph the LCD, so visual verification is manual (take a photo, compare against expected).
+
+**Impact:** Medium. The wiring is sound (unit tests + manual UAT confirm it), but pixel-level bugs (JPEG re-encoding artifacts, color space misalignment, key position off-by-one) require human visual inspection. The risk is that a future refactor changes the image pipeline (size, rotation, format) and breaks the render without unit tests catching it.
+
+**Prevention:** Before any image-transform changes, run a unit test that encodes a known test pattern (e.g., a red square at (0,0)) and visually verify on the device that it renders at the correct location and color. Add a capture to the relevant test (e.g., `tests/unit/test_stream_dock_control_service.cpp` line 145).
+
+______________________________________________________________________
+
+### QML Geometry & Drag-Drop End-to-End
+
+**Area:** DeviceView layout + plugin drag-drop wiring
+
+**Files:**
+
+- `tests/qml/CMakeLists.txt` (lines 18–24, Phase 26 Plan 26-05 adds QML tests)
+- `tests/qml/test_device_view_geometry.qml` (Phase 26 Plan 26-05 — not yet merged)
+- `tests/qml/test_device_view_drag_drop.qml` (Phase 26 Plan 26-05 — not yet merged)
+
+**Status:** 🔄 **IN PROGRESS** (Phase 26 Plan 26-05 requirement REQ-26-B)
+
+Unit tests for geometry + drag-drop were added to the QML smoke target but the `.qml` test files themselves may not be fully wired. The CMakeLists references them at lines 121–124 as a **future addition**.
+
+**Known Gap:** The QML unit tests compile and link, but the .qml spec files may not exist or may be stub implementations. If they are placeholders, the test is a smoke-gate (no content), not a real verification.
+
+**Impact:** Low-to-medium. The drag-drop wiring itself is code-reviewed (C++ + QML), so if the QML tests are incomplete, the feature still works. However, regressions (e.g., a QML delegate property renamed) could slip through without a QML-level test catching them.
+
+**Prevention:** Confirm that `test_device_view_geometry.qml` and `test_device_view_drag_drop.qml` are **non-stub implementations** (not placeholders). If they are stubs, file a Phase 26+ sub-item to complete them.
+
+______________________________________________________________________
+
+## Scaling Limits
+
+### Plugin Catalog Model Monolithic Fetch & Parse
+
+**Area:** Online plugin catalog (`StreamdockCatalogFetcher` + `PluginCatalogModel`)
+
+**Files:**
+
+- `src/app/src/streamdock_catalog_fetcher.cpp` (659 lines)
+- `src/app/src/plugin_catalog_model.cpp` (1530 lines)
+
+**Issue:** The catalog fetcher downloads a **single JSON document** (typically ~150 KB for 200–300 plugins) over HTTPS and parses it in-memory. If the catalog grows to **1000+ plugins** or the JSON swells to **>5 MB**, parsing becomes observable (users see a brief stall during the fetch).
+
+**Current State:** The live AJAZZ catalog is ~200 plugins. The fetch is wrapped in a `QNetworkReply` with **no timeout** (it relies on the system TCP timeout, ~30–60 sec on most OSes). If the server is slow or the network is spotty, the app blocks.
+
+**Potential Improvements:**
+
+1. **Streaming JSON parser** — parse the array incrementally instead of loading the whole file.
+1. **Timeout + cancel** — add a user-facing "cancel fetch" button + a 15-sec timeout.
+1. **Pagination** — fetch 50 plugins per page so users see results faster.
+
+**Impact:** Low. The current catalog is manageable. If the AJAZZ store expands to 1000+ plugins, revisit. Unlikely to be a bottleneck on modern hardware.
+
+______________________________________________________________________
+
+### Device Hotplug Debouncer (16 ms Coalescer)
+
+**Area:** Hotplug detection & device enumeration
+
+**Files:** `src/app/src/hotplug_debouncer.cpp`, `src/core/src/hotplug_monitor.cpp`
+
+**Issue:** Hotplug events are coalesced over a **16 ms window** (commit history notes this is the USB HUB propagation latency). If a user plugs in 10 devices in rapid succession, the app may re-enumerate only once (bundling all 10) rather than once per device.
+
+**Current State:** The debouncer is intentional (prevents UI flicker + reduces enumeration RPCs). On modern Linux (systemd ≥258), the `uaccess` ACL can be **lost during a rapid replug storm** (Debian #1112660), requiring a manual `setfacl` to recover. The app cannot fix this at runtime (it's a systemd issue), but documenting the workaround is important.
+
+**Impact:** Low. Users rarely plug in 10 devices at once. If they do, a 16 ms delay is imperceptible.
+
+______________________________________________________________________
+
+## Missing Critical Features
+
+### Per-LED RGB Matrix on VIA Keyboards
+
+**Area:** Keyboards with QMK RGB Matrix (e.g., AK820)
+
+**Status:** ⚠️ **STUB** (throws `std::runtime_error` at runtime)
+
+**Files:** `src/devices/keyboard/src/via_keyboard.cpp:185`
+
+**Issue:** The VIA protocol supports two RGB modes:
+
+1. **qmk_rgblight** (channel ID varies by firmware; we hardcode `0x01`) — simpler, fewer LEDs, entire-strip control. ✅ Implemented.
+1. **qmk_rgb_matrix** (channel ID varies by firmware, often `0x03`) — per-LED control, full matrix support. ⚠️ **Not implemented** — the code throws an exception.
+
+When a user tries to set per-LED RGB on an RGB-matrix keyboard, the app crashes with "per-LED RGB buffer: TODO (requires QMK_RGB_MATRIX path)".
+
+**Fix Approach:**
+
+1. At device-open time, probe VIA supported channels to detect which RGB mode this firmware supports.
+1. Set a `KeyboardCapabilities::hasRgbMatrix` flag.
+1. Implement the 0x03 write path (per-LED payload format needs a hardware round-trip to confirm).
+
+**Impact:** Medium. Users with high-end mechanical keyboards (AK820 + RGB) cannot control per-key RGB — only global brightness/effect. The app handles it gracefully (exception + graceful degradation), not a crash.
+
+**Estimated effort:** 1–2 days (probe + wire-format confirmation).
+
+______________________________________________________________________
+
+### macOS & Windows Autostart Service
+
+**Area:** Launch at login
+
+**Status:** ⚠️ **STUB** (not implemented)
+
+**Files:** `src/app/src/autostart_service.cpp:163` (error stub on non-Linux)
+
+**Issue:** Linux ships autostart via XDG `.desktop` files. macOS and Windows have no implementation — users must manually enable "Launch at login" in the system settings.
+
+**Implementation Plan (from TODO.md):**
+
+- **macOS:** Write a LaunchAgent plist + `launchctl load -w`.
+- **Windows:** Write registry `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`.
+
+**Impact:** Low. Convenience feature only. Desktop apps work without it.
+
+**Estimated effort:** 0.5 day per platform.
+
+______________________________________________________________________
+
+### Real MacroRecorder Implementation
+
+**Area:** Keystroke + mouse event capture for macro recording
+
+**Status:** ⚠️ **STUB** (returns `StubRecorder` on all platforms)
+
+**Files:** `src/core/src/macro_recorder.cpp:10–12` (TODO tags), `src/core/include/ajazz/core/macro_recorder.hpp:14–15`
+
+**Issue:** The macro recorder is a stub — calling `start()` / `stop()` just logs "stub" messages. No real keystroke capture happens. The UI workflow exists (users can click "Record", but no events are captured).
+
+**Implementation Plan (from TODO.md):**
+
+- **Linux:** evdev reader thread on `/dev/input/eventN` (requires `input` group membership or CAP_DAC_READ_SEARCH).
+- **macOS:** `CGEventTap` with Accessibility + "Input Monitoring" permissions.
+- **Windows:** `SetWindowsHookExW(WH_KEYBOARD_LL, ...)` low-level hook.
+
+**Impact:** Medium. The UI shows macro-record affordances, but the feature does not work. Users who try it get stuck (nothing happens when they press keys).
+
+**Estimated effort:** 1 day per platform + 0.25 days for CMake option wiring.
+
+______________________________________________________________________
+
+## Architectural Concerns
+
+### Sidecar Streamdock Device Persistent Handle Stability
+
+**Area:** Mirajazz Rust sidecar + AKP05 / AKP03 / AKP153 / AKP815 backends
+
+**Files:**
+
+- `src/app/src/sidecar_stream_dock_device.cpp` (432 lines, persistent handle holder)
+- `streamdock-host/` (Rust sidecar, git submodule at vendored mirajazz)
+- `src/app/src/sidecar_stream_dock_device.cpp:294` (TODO: keep_alive / CRT CONNECT)
+
+**Status:** ✅ **HARDWARE-CONFIRMED NO WEDGE** (commit `5722ead` + `decc85c`)
+
+The old C++ wire backend (`akp05.cpp` etc., removed in Slice D) had a **critical bug**: every interaction open/close/reopen the device, which **wedged the AKP05E display via a `DIS,STP,DIS` churn** (confirmed hardware 2026-05-31). The sidecar holds a **persistent handle for the session** (one `CRT DIS` at init, `CRT CONNECT` keep-alive every 5 sec), which **eliminates the wedge**.
+
+**Known Gap (TODO at line 294):** The keep-alive `CRT CONNECT` command was backported from mirajazz. On very long-idle sessions (e.g., user walks away for hours), the device *might* time out. The keep-alive interval (5 sec) should prevent this, but has not been tested on a device that implements a strict timeout. Current assumption: no timeout (device stays alive indefinitely on keep-alive).
+
+**Impact:** Low. The keep-alive is already implemented (not a future TODO); the gap is just test coverage on a device with a strict idle timeout.
+
+**Prevention:** When the next user plugs in a device for a week-long soak test, monitor the app logs for any "device disconnected" messages. If none appear, the assumption holds.
+
+______________________________________________________________________
+
+### Plugin Host Crash-Disable State Machine (WR-02 Guard)
+
+**Area:** Plugin lifecycle + crash tracking
+
+**Files:**
+
+- `src/app/src/plugin_manager.cpp` (804 lines, crash-disable state machine)
+- `src/app/src/plugin_crash_tracker.cpp` / `.hpp` (injected clock, 3-in-30s window)
+- `tests/unit/test_plugin_concurrency.cpp` (guard against shared-key collision)
+
+**Known Issue (WR-02):** The `onProcessFailed` callback is invoked whenever a plugin process terminates (either user-stop or actual crash). The state machine must:
+
+1. **Record the crash** in `m_crashTracker[pluginId]` and increment the count.
+1. **Check if disabled:** if `m_live[pluginId]` is absent (HTML plugins, no spawned process), skip the re-spawn attempt even if the count < 3.
+1. **Disable on threshold:** if count ≥ 3, call `disableWithNotice` and mark as disabled in `m_disabled[pluginId]`.
+
+**Guard Status:** ✅ **TESTED** (commit `5725cb0`, test case at `test_plugin_concurrency.cpp:75`). The guard ensures one plugin's crash does not disable a sibling.
+
+**Fragile Area:** The state is spread across two maps (`m_live`, `m_disabled`, `m_crashTracker`). If a future refactor consolidates them incorrectly or removes the `m_live` check in `onProcessFailed`, the WR-02 invariant breaks silently (an HTML plugin crash could trigger a re-spawn attempt on non-existent process → confusing error).
+
+**Prevention:** Keep the WR-02 guard test in the suite. Code review: any change to `onProcessFailed` must preserve the `!m_live.contains(pluginId)` check.
+
+______________________________________________________________________
+
+## Dependencies at Risk
+
+### Qt 6.11+ Deprecation of `QImage::mirrored`
+
+**Area:** Image rotation & transformations
+
+**Status:** ⚠️ **GATED; BUILD BREAKS ON Qt 6.11+**
+
+**Files:** Any file using `QImage::mirrored()` (likely in `stream_dock_control_service.cpp` or image-rendering code)
+
+**Issue:** Qt 6.11 deprecated `QImage::mirrored()` in favor of `QImage::flipped()`. The old function still works but emits a deprecation warning. Under `-Werror`, this becomes a hard error on Qt 6.11+.
+
+**Current State:** The codebase targets Qt 6.7 (CI uses 6.11.1 on macOS per the wiki). If `-Werror` is enabled (it is, per CLAUDE.md), deprecation warnings become errors, and a Qt 6.11+ build breaks.
+
+**Fix:** Version-guard any `mirrored()` calls:
 
 ```cpp
-if (keyIndex == 0 || keyIndex > akp05::KeyCount) {
-    AJAZZ_LOG_WARN("akp05", "setKeyImage: keyIndex {} out of range 1..{}",
-                   static_cast<int>(keyIndex), static_cast<int>(akp05::KeyCount));
-    return;
-}
+#if QT_VERSION >= QT_VERSION_CHECK(6, 11, 0)
+    image.flipped(QImage::Vertical | QImage::Horizontal)
+#else
+    image.mirrored(true, true)
+#endif
 ```
 
-**Tracking:** Phase 10, WR-02. FIXED this session.
+**Impact:** Medium. If the user upgrades to Qt 6.11.1 and rebuilds, the build fails with a deprecation error. The fix is trivial once identified.
+
+**Prevention:** CI should build on Qt 6.11+ (currently on 6.11.1 for macOS) so the deprecation is caught early.
 
 ______________________________________________________________________
 
-### QC-10: AKP05 `m_firmwareVersion` read/write data race
+### Mirajazz Sidecar Dependency (Rust Crate)
 
-**Status: 🟢 RESOLVED (commit 817391a, phase 10, WR-03)**
+**Area:** Streamdeck backends (AKP03 / AKP05 / AKP153)
 
-**File:** `src/devices/streamdeck/src/akp05.cpp:435-440` (read), `:833-834` (write), `:899` (mutex)
+**Status:** ✅ **CLEAN DEPENDENCY; READ-ONLY**
 
-**What was wrong:** `firmwareVersion()` read `m_firmwareVersion` without lock, while `probeFirmwareVersion()` (called from `open()`) wrote it via `std::move`. The `m_mutex` guarded only `m_callback`, so concurrent UI/I/O access was a data race (torn `std::string` read → UB).
+**Files:** `streamdock-host/` (git submodule @ pristine `mirajazz`)
 
-**How it was fixed:** (commit 817391a) `m_mutex` is now `mutable` (`:899`, "Guards m_callback and m_firmwareVersion") and taken via `std::lock_guard` in `firmwareVersion()` (`:439`) and around the `std::move` write in the probe (`:833`, "pairs with firmwareVersion() (WR-03)").
+**Constraint (from CLAUDE.md):** "Do NOT modify the mirajazz crate itself — it is a pristine git dependency."
 
-**Verification:** Confirmed against HEAD — both read and write are mutex-guarded.
+**Rationale:** The mirajazz crate is an external OSS library (`4ndv/mirajazz` on GitHub). Our sidecar (`streamdock-host/src/main.rs`) wraps it with JSON-over-stdio glue code. If we patch mirajazz in-tree, we fork the library and diverge from upstream bug fixes.
 
-______________________________________________________________________
+**Impact:** Low. Mirajazz is stable; no known bugs. If a future issue arises (e.g., a device-specific quirk), the fix must land in upstream mirajazz, not in our vendored copy.
 
-### QC-11: AKP05 DRA header advertises BE32 size but `sendImage` caps at 0xFFFF
-
-**Status: ⚪ OPEN (pre-existing, phase 10, WR-04)**
-
-**Issue:** `setSecondaryScreenImage` builds the DRA header with a BE32 JPEG-size field (4 bytes, max 0xFFFFFFFF), but `sendImage()` caps payload at 0xFFFF and refuses anything larger. The DRA path can never transmit a JPEG larger than 64 KB even though its header reserves 32 bits. A full-panel 800×480 JPEG at quality 85 can exceed 64 KB, causing `clearTouchStrip` / `setTouchStripImage` to WARN-and-fail.
-
-**Impact:** Large JPEG uploads silently fail on the secondary/touch-strip screen, despite the wire format supporting larger sizes.
-
-**Fix:** Either (a) parameterise `sendImage` with the protocol size-field width so the DRA path allows up to its true BE32 limit (bounded by HID-rate cap), or (b) if hardware genuinely only accepts ≤ 64 KB on DRA, document that and stop advertising BE32. Confirm against the RE corpus / hardware before picking.
-
-**Tracking:** Phase 10, WR-04.
+**Prevention:** Any bug report against streamdock functionality should start with "Is this an mirajazz issue?" If yes, file a PR against `4ndv/mirajazz` and wait for the upstream fix, rather than patching locally.
 
 ______________________________________________________________________
 
-### QC-12: AKP153/AKP815 — `setKeyColor` voids keyIndex then uses it
+## Summary Table
 
-**Status: ⚪ OPEN (pre-existing, phase 10, IN-04)**
-
-**File:** `src/devices/streamdeck/src/akp153.cpp:347-353`; `akp815.cpp:188-192`
-
-**Issue:** Both devices' `setKeyColor` do `(void)keyIndex; (void)color; clearKey(keyIndex);` — the cast is misleading because `keyIndex` IS used on the next line. Neither device renders the requested color (both fall back to clear). This is a known stub, but the AKP05 backend already renders color correctly via `encodeSolid`, so the siblings are strictly worse.
-
-**Impact:** `setKeyColor` does not work on AKP153/AKP815; falls back to clear instead of rendering. Inconsistent with AKP05 capability.
-
-**Fix:** Drop the spurious `(void)keyIndex` cast, and route AKP153/AKP815 `setKeyColor` through `encodeSolid` + `sendImage` as AKP05 does (image_pipeline is linked into the same module).
-
-**Tracking:** Phase 10, IN-04.
-
-______________________________________________________________________
-
-### QC-13: Mouse battery — stale 0x83 dead-code path with contradictory comments
-
-**Status: ⚪ OPEN (pre-existing, phase 11, WR-01)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:267-315`, `aj_series_protocol.cpp:73-79`, `aj_series_protocol.hpp:59-60,130-134`
-
-**Issue:** The implemented battery read uses the 0xF7 status poll built inline. The older 0x83 path is now dead: `buildGetBattery()` has zero call sites and is referenced only in comments. The `IBatteryCapable` doc block still describes the superseded "SET_FEATURE 0x83 GET_BATTERY poke ... then GET_FEATURE that report ... read charge at byte 2" handshake. The actual code sends 0xF7, reading charge at byte 3 (Windows) / byte 2 (Linux). Comments contradict the code.
-
-**Impact:** Misleading documentation. A maintainer reading the block could re-introduce the 0x83 poke. CLAUDE.md mandates the RE doc as source of truth; stale comments undermine that.
-
-**Fix:** Either delete `buildGetBattery()` + `FeaCmd::GetBattery` if 0x83 is retired, or annotate "superseded by 0xF7 — see `batteryPercent()`". Rewrite the `batteryPercent()` doc block to describe the 0xF7 poll and the byte-3/byte-2 auto-detect, removing the 0x83 language.
-
-**Tracking:** Phase 11, WR-01. Verified fixed in hardware (2026-05-22, Fedora).
-
-______________________________________________________________________
-
-### QC-14: Mouse settings push zeroes cached LED sub-blocks on the wire
-
-**Status: ⚪ OPEN (pre-existing, phase 11, WR-02)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:484-491`, `aj_series_protocol.cpp:309-310`, `aj_series_protocol.hpp:301-307`
-
-**Issue:** `setMouseSettings` calls `buildMouseSettings(...)` which intentionally leaves `ledBlock` and `logoLedBlock` zero. The builder comment and header doc promise that "the AjSeriesMouse setter wires the cached blocks back in before send" to "keep the LED state coherent across commits." But `setMouseSettings` never injects the cached LED blocks before `write()` — the mirror-back at lines 507-535 feeds INTO `m_options` for *future* re-emits, not the just-built packet. Result: every settings push transmits all-zero LED sub-blocks (bytes 24..39), which firmware reads as "LED off / black". A user who sets RGB and then changes any unrelated setting (sleep timer, LOD, sensitivity) silently loses their lighting.
-
-**Impact:** RGB lighting is lost on every settings change, frustrating for users with custom lighting.
-
-**Fix:** Before the `write(pkt)` in `setMouseSettings`, populate the LED sub-blocks from cached state by injecting `m_lastLed` into `m_options.ledBlock`/`logoLedBlock` before the transmit. Alternatively, if clearing LED blocks on every omnibus push is the intended firmware behaviour, fix the contradictory docs — the current code+doc pair cannot both be right.
-
-**Tracking:** Phase 11, WR-02.
+| Category             | Item                                    | Severity | Status                             | Files                                               |
+| -------------------- | --------------------------------------- | -------- | ---------------------------------- | --------------------------------------------------- |
+| **Tech Debt**        | QML test link gaps                      | Low      | ✅ Fixed Phase 26                  | `tests/qml/CMakeLists.txt`                          |
+|                      | Streamdeck Linux hidraw report-id       | High     | ✅ Fixed                           | `src/core/src/hid_transport.cpp`                    |
+|                      | Mouse battery interface selection Linux | High     | ✅ Fixed pending confirm           | `src/core/src/hid_transport.cpp`                    |
+| **Bugs & Test Gaps** | Plugin crash-disable ASan failures      | Medium   | ⚠️ Pre-existing                    | `tests/unit/test_plugin_lifecycle.cpp`              |
+|                      | Plugin wire-shape divergence Elgato     | Medium   | ✅ Works; non-compliant            | `src/app/src/sd_plugin_server.cpp`                  |
+| **Security**         | WebSocket loopback binding              | Critical | ✅ Enforced                        | `src/app/src/sd_plugin_server.cpp`                  |
+|                      | Zip-slip protection                     | High     | ✅ Implemented                     | `src/app/src/sdplugin_extractor.cpp`                |
+|                      | Plugin sandbox isolation                | Medium   | ✅ Implemented; untested e2e       | `src/plugins/src/*_sandbox.cpp`                     |
+|                      | COD-031 boundary                        | Critical | ✅ Enforced                        | `src/core/include/`                                 |
+| **Performance**      | Large TU complexity                     | Low      | ✅ None observed                   | Various                                             |
+|                      | AKP05 strip zone geometry PROVISIONAL   | Medium   | ✅ Hardware confirmed demo         | `src/app/src/stream_dock_control_service.cpp`       |
+| **Fragile Areas**    | AKP05E input unreachable demo unit      | High     | ✅ Documented                      | `scripts/akp05_input_probe.py`                      |
+|                      | Encoder polarity PROVISIONAL            | Low      | ✅ Decoded; unverified retail      | `src/app/src/stream_dock_input_service.cpp`         |
+|                      | AK980 RGB path 0x0A vs 0x20             | Low      | ✅ Correct path shipped            | `src/devices/keyboard/src/proprietary_protocol.hpp` |
+|                      | Mouse battery 0x83 vs 0xF7              | Low      | ✅ Resolved to 0xF7                | `src/devices/mouse/src/aj_series_protocol.hpp`      |
+| **Test Coverage**    | Device render pixel verification        | Medium   | ⚠️ Unit tests pass; hardware-gated | `tests/unit/test_plugin_device_bridge.cpp`          |
+|                      | QML geometry & drag-drop e2e            | Low      | 🔄 Phase 26 in-progress            | `tests/qml/`                                        |
+| **Missing Features** | VIA per-LED RGB matrix                  | Medium   | ⚠️ Stub throws                     | `src/devices/keyboard/src/via_keyboard.cpp`         |
+|                      | macOS/Windows autostart                 | Low      | ⚠️ Stub                            | `src/app/src/autostart_service.cpp`                 |
+|                      | MacroRecorder real impl                 | Medium   | ⚠️ Stub                            | `src/core/src/macro_recorder.cpp`                   |
+| **Architecture**     | Sidecar keep-alive timeout              | Low      | ✅ Implemented; untested           | `src/app/src/sidecar_stream_dock_device.cpp`        |
+|                      | Plugin crash-disable WR-02 guard        | Medium   | ✅ Tested; fragile state machine   | `src/app/src/plugin_manager.cpp`                    |
+| **Dependencies**     | Qt 6.11+ mirrored() deprecation         | Medium   | ⚠️ Unguarded                       | TBD                                                 |
+|                      | Mirajazz sidecar fork risk              | Low      | ✅ Clean read-only dependency      | `streamdock-host/`                                  |
 
 ______________________________________________________________________
 
-### QC-15: Mouse macro `lastNonZeroPos` is 0-based but documented as 1-based
-
-**Status: ⚪ OPEN (pre-existing, phase 11, WR-03)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:686-698`, `aj_series_protocol.hpp:419-427`
-
-**Issue:** `uploadMacro` computes `lastNonZeroPos` as the **0-based** index of the last non-zero byte. But three places document it as **1-based** (header param doc per §3.11 `56*(u-1)+s` vendor formula; inline comment for empty macro; class-level comment). For an empty macro the loop yields `lastNonZeroPos = 0` (index of `0x01`), NOT 1. The code is off-by-one relative to its own documented vendor formula. There is no round-trip test pinning the convention.
-
-**Impact:** Firmware may truncate the final macro byte, or macros may be silently corrupted on-wire depending on the real vendor convention.
-
-**Fix:** Reconcile against `aj_series_opcode_table.md` §3.11 line 491. If 1-based, use `lastNonZeroPos = static_cast<std::uint8_t>(i + 1)` and confirm empty-macro case lands `1`. If 0-based, correct the three comments. Add unit test pinning `lastNonZeroPos` for empty-macro and multi-event payload.
-
-**Tracking:** Phase 11, WR-03.
-
-______________________________________________________________________
-
-### QC-16: Mouse `setDpiStage` throws while `setActiveDpiStage` clamps (asymmetric error handling)
-
-**Status: ⚪ OPEN (pre-existing, phase 11, IN-01)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:161-179`
-
-**Issue:** `setDpiStage(index, ...)` throws `std::out_of_range` for out-of-range index, but `setActiveDpiStage(index)` silently clamps via `std::min<std::uint8_t>(index, 7)`. Two adjacent `IMouseCapable` index setters handle out-of-range differently — a caller cannot predict whether a bad index throws or is clamped.
-
-**Impact:** API contract is ambiguous. Callers cannot write portable error handling.
-
-**Fix:** Pick one policy. Given the file clamps defensively elsewhere, prefer clamping in `setDpiStage` too (or document the divergence in the interface).
-
-**Tracking:** Phase 11, IN-01.
-
-______________________________________________________________________
-
-### QC-17: Mouse battery — `parseBatteryCharge` auto-detect can misclassify on Linux
-
-**Status: ⚪ OPEN (pre-existing, phase 11, IN-02, low risk)**
-
-**File:** `src/devices/mouse/src/aj_series.cpp:249-265`
-
-**Issue:** The Windows-vs-Linux offset is auto-detected purely by `frame[0] == kBatteryStatusReportId (0x05)`. On Linux (unnumbered frame) the charge sits at `frame[2]`; if a Linux frame's `frame[0]` ever equals 0x05, the parser takes the Windows branch (chargeIndex=3) and reads the wrong byte. The captured Linux frame is `00 00 64 ...` (charge at index 2) so risk is low — but detection is value-based, not transport-based.
-
-**Impact:** Very low on current hardware. Latent risk if a future Linux frame format changes to have 0x05 at byte 0.
-
-**Fix:** Low priority. If a Linux frame with a non-zero leading byte is ever observed, switch to a transport-supplied "report-id present" flag instead of sniffing the value.
-
-**Tracking:** Phase 11, IN-02.
-
-______________________________________________________________________
-
-### QC-18: AK980 `firmwareVersion()` swallows exceptions with no log
-
-**Status: 🟢 RESOLVED (commit c43980d, phase 12, WR-03)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:530-547`
-
-**What was wrong:** The `catch (...)` block discarded the error with no log, unlike `batteryPercent` and `setTime` which both `AJAZZ_LOG_WARN`. On device yank or transport failure the function returned `"unknown"` indistinguishably from a genuine unparsable-version device, hiding I/O failures every sibling method records.
-
-**How it was fixed:** (commit c43980d) The handler now catches `std::exception const& e` and logs `AJAZZ_LOG_WARN("keyboard.ak980", "firmwareVersion: HID I/O failed: {}", e.what())` (`:545`) before falling through to `"unknown"`.
-
-**Verification:** Confirmed against HEAD — the `AJAZZ_LOG_WARN` is present at line 545.
-
-______________________________________________________________________
-
-### QC-19: AK980 `batteryPercent()` treats 0% charge as "no battery"
-
-**Status: 🟢 RESOLVED (commit 3b2b937, phase 12, WR-04)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:784-797`
-
-**What was wrong:** `if (pct == 0) return std::nullopt;` conflated a wired keyboard with no battery (intended suppression) and a wireless keyboard genuinely at 0% / critically drained, so a near-empty battery showed "unknown" instead of "0%" exactly when the warning matters.
-
-**How it was fixed:** (commit 3b2b937) The "no battery" case is now distinguished by the opcode echo guard (`resp[1] != CmdBatteryQuery` → reply rejected, `:784`). A reply that passes the echo check is a genuine battery reading, so a `0` charge is surfaced as `0%` (`return std::min<std::uint8_t>(resp[4], 100)`, `:797`) rather than collapsing to `nullopt`.
-
-**Verification:** Confirmed against HEAD — the value-based `pct == 0 → nullopt` collapse is gone; suppression is now keyed on the echo guard.
-
-______________________________________________________________________
-
-### QC-20: AK980 `buildSetTimeData` high-year wrap above 2255 is unguarded
-
-**Status: 🟢 RESOLVED (commit f0441bd, phase 12, WR-05)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:198`
-
-**What was wrong:** `pkt[4] = (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` guarded the low end but not the high end: `year = 2256` gave `256`, truncating to `0` (silently encoding 2256 as 2000). Not reachable from a real `system_clock` today, but a latent silent-corruption path.
-
-**How it was fixed:** (commit f0441bd) The high end is now clamped: `pkt[4] = (year >= 2255) ? 0xFF : (year >= 2000) ? static_cast<std::uint8_t>(year - 2000) : 0;` (`:198`).
-
-**Verification:** Confirmed against HEAD — the `year >= 2255 ? 0xFF` clamp is present at line 198.
-
-______________________________________________________________________
-
-### QC-21: AK980 `setFirmwareLightingMode` comment claims FINISH is "not yet shipped" — but it ships
-
-**Status: ⚪ OPEN (pre-existing, phase 12, WR-07, FIXED b08dee6)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:900-908`
-
-**Issue:** The banner comment says "4-packet envelope … the 5th packet CMD_FINISH (0xF0) … our project does not yet ship it (Phase 3 P3.6 pending)". The code immediately below (lines 968-975) DOES emit the FINISH packet, and the test asserts a 5-packet envelope ending in 0xF0. The comment directly contradicts the shipped behaviour — a regression introduced when FINISH was wired in (issue #58) without updating this banner.
-
-**Impact:** Documentation-vs-code contradiction. Future readers will believe FINISH is absent and may introduce regressions.
-
-**Fix:** Rewrite the banner to describe the shipped 5-packet envelope (START → MODE_BEGIN → DATA → SAVE → FINISH); remove the "does not yet ship it / P3.6 pending" sentence.
-
-**Tracking:** Phase 12, WR-07. FIXED this session.
-
-______________________________________________________________________
-
-### QC-22: AK980 Lighting DATA trailer byte order inverted relative to settings/time
-
-**Status: ⚪ OPEN (pre-existing, phase 12, IN-02)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:436-437`
-
-**Issue:** `buildSetRgbModeData` writes `pkt[14]=0x55, pkt[15]=0xaa` (matching `ak980pro_vendor.md` §3.4), but settings batch and time-sync trailers are `0xAA 0x55` (bytes 18/19 and 63/64). §13 of the same doc lists the lighting trailer as `0xAA 0x55`, contradicting §3.4. The code is self-consistent with §3.4, but the intra-doc conflict means only a hardware witness can settle which order opcode 0x13 actually wants.
-
-**Impact:** Low — intra-doc conflict in the RE, shipped code is self-consistent. Latent risk on hardware divergence.
-
-**Fix:** Record in `proprietary.md` which trailer order was hardware-verified for opcode 0x13, and reconcile §3.4 vs §13.
-
-**Tracking:** Phase 12, IN-02.
-
-______________________________________________________________________
-
-### QC-23: AK980 Streaming TFT checksum and output-report transport PROVISIONAL but tests pin it as ground truth
-
-**Status: ⚪ OPEN (pre-existing, phase 12, IN-03)**
-
-**File:** `src/devices/keyboard/src/proprietary_keyboard.cpp:283-301, 1044-1067`, `tests/unit/test_ak980_tft_chunked.cpp:106-108, 140-141`
-
-**Issue:** The chunked TFT path (byte-32 checksum + `write()` output reports vs `writeFeature()`) is explicitly unverified ("whether it accepts output reports for image upload is UNVERIFIED — no USB/Frida capture exists yet"). The tests assert exact checksum values as if they were ground truth, so a future hardware-driven correction will look like a test regression rather than an expected change.
-
-**Impact:** False confidence in unverified wire format. Hardware fix will break tests in a confusing way.
-
-**Fix:** Annotate the checksum `REQUIRE`s in `test_ak980_tft_chunked.cpp` as PROVISIONAL, mirroring the source comment, so a hardware fix isn't mistaken for a defect.
-
-**Tracking:** Phase 12, IN-03.
-
-______________________________________________________________________
-
-### QC-24: App — RgbPicker fires unsolicited HID writes on tab open / device swap
-
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-05, FIXED d7d4add)**
-
-**File:** `src/app/qml/RgbPicker.qml:88-95, 110-116`
-
-**Issue:** The brightness and speed `Slider`s call `LightingService.setMode(...)` from `onValueChanged`. `onValueChanged` fires not only on user drag but also on the programmatic seed and whenever `root.firmwareBrightnessMax` re-resolves because device changed. Merely opening the RGB tab (or switching the bound device) emits an unsolicited HID `setMode` write to hardware the user never touched. This can flicker device lighting and burns HID I/O.
-
-**Impact:** Unsolicited device writes on UI navigation. Visual artifacts and unnecessary HID traffic.
-
-**Fix:** Gate the slider handlers on user interaction using `onMoved` (fires only on user drag, not programmatic assignment) instead of `onValueChanged`, or set a `seeded` flag and early-return while `!seeded`:
-
-```qml
-Slider {
-    onMoved: {  // user-drag only
-        if (firmwareModeBox.currentValue === undefined) return
-        LightingService.setMode(…)
-    }
-}
-```
-
-**Tracking:** Phase 13, WR-05. FIXED this session.
-
-______________________________________________________________________
-
-### QC-25: App — SettingsRow sleep ComboBox silently maps unknown values to "Never"
-
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-06, FIXED ea3824a)**
-
-**File:** `src/app/qml/SettingsRow.qml:99-108, 320-326`
-
-**Issue:** `_sleepIndexFor(minutes)` returns `0` ("Never") for any `sleepMinutes` value not in `_sleepValues [0,1,3,5,10,30]`. If `SettingsService.currentSettings()` reports a firmware default like `2` or `15`, the ComboBox silently snaps to "Never". On the next "Apply" the device is reprogrammed to disable sleep without the user ever choosing that — a silent destructive write.
-
-**Impact:** User's device settings silently overwritten on sync. Data loss.
-
-**Fix:** When `_sleepIndexFor` finds no match, append the actual value as a custom entry or disable Apply until the user explicitly picks a known value.
-
-**Tracking:** Phase 13, WR-06. FIXED this session.
-
-______________________________________________________________________
-
-### QC-26: App — update-banner re-fires for dismissed tag on non-304 re-check
-
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-08, FIXED dc2ba0e)**
-
-**File:** `src/app/src/app_update_service.cpp:316-321, 406-435`
-
-**Issue:** The dismissed-tag suppression in `applyRelease` (lines 426-431) only holds while the server returns a full body. The 304 fast-path at 316-321 restores `Status::UpdateAvailable` purely from `m_latestVersion.isEmpty()` — it does NOT re-consult the persisted `dismissedTag`. So a sequence {check → banner → user dismisses (Idle) → next auto-check returns 304} flips the banner back to `UpdateAvailable` even though the user dismissed that tag.
-
-**Impact:** Update banner re-appears after user dismissal on subsequent checks.
-
-**Fix:** Mirror the dismissed-tag check in the 304 branch (add the same `m_latestVersion != dismissed` guard before setting `Status::UpdateAvailable`).
-
-**Tracking:** Phase 13, WR-08. FIXED this session.
-
-______________________________________________________________________
-
-### QC-27: App — StreamdockCatalogFetcher Loading re-entry guard has no watchdog
-
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-09)**
-
-**File:** `src/app/src/streamdock_catalog_fetcher.cpp:502-510, 581-657`
-
-**Issue:** `refresh()` early-returns whenever `m_state == State::Loading`. The only exits from `Loading` live inside `onPageFinished`. A per-request timeout means the common case (stalled socket) unblocks — but there's no watchdog: if a reply is never delivered (NAME torn down, future code path drops the connection), `m_state` stays `Loading` forever and every later `reload()`/Retry no-ops, while the QML Retry button is disabled.
-
-**Impact:** Stuck "Loading" state that cannot be recovered without an app restart.
-
-**Fix:** Arm a single-shot watchdog QTimer when entering `Loading` that, on expiry without a terminal result, forces the state back to `Cached`/`Offline` so the guard self-heals and Retry becomes usable.
-
-**Tracking:** Phase 13, WR-09.
-
-______________________________________________________________________
-
-### QC-28: App — BatteryIndicator keeps stale percent across undetected offline transition
-
-**Status: ⚪ OPEN (pre-existing, phase 13, WR-10)**
-
-**File:** `src/app/qml/components/BatteryIndicator.qml:58, 168-199`
-
-**Issue:** The chip self-hides only on an explicit `batteryUnavailable` signal or when `percent < 0`. If a device goes offline without `BatteryService` emitting `batteryUnavailable` for that codename, the chip keeps showing the last-known percent. The header comment claims the parent gates `visible` on "connected", but inside the component `visible: percent >= 0 && !unavailable` does not consider connection state. Also no `onCodenameChanged` reset, so a recycled delegate can inherit a prior device's charge until the first signal arrives.
-
-**Impact:** Stale battery indicator for offline devices. Confusing UI.
-
-**Fix:** (a) Clear `percent = -1; unavailable = false` in `onCodenameChanged` so recycled delegates don't inherit stale charge. (b) Have the parent row bind a `connected` property the component honours.
-
-**Tracking:** Phase 13, WR-10.
-
-______________________________________________________________________
-
-### QC-29: AKP03 protocol version upgrade pending
-
-**Status: ⚪ OPEN (deferred until capture, TODO.md)**
-
-**File:** `src/devices/streamdeck/src/akp03_protocol.hpp:17`
-
-**Issue:** `[ajazz-sdk]/info.rs::Kind::Akp03::is_v2_api()` is true, so AKP03 is a v2 protocol device sending 1024-byte packets. Our backend hardcodes `PacketSize = 512`. The change requires bumping `PacketSize` plus widening every chunk loop in `akp03.cpp`. Must be verified against a USB capture before flipping.
-
-**Impact:** Potential packet-size mismatch with real devices. May cause incomplete image uploads or hangs.
-
-**Fix:** Confirm against a USB capture, then gate packet size on protocol version detection (mirroring AKP05 v3 approach once that lands).
-
-**Tracking:** TODO.md, "AKP03 v2 framing migration".
-
-______________________________________________________________________
-
-## Performance & Scalability Notes
-
-### PERF-01: Test suite growth (365 tests as of 2026-05-18)
-
-**Status:** ℹ️ INFORMATIONAL
-
-**File:** CMake test suite; ctest via `--preset linux-release`
-
-**Observation:** The test suite has grown from 178 tests at v1.1 close to 365 tests (roughly doubled) through Phase 9 captures, vendor-RE work, AK980 clock-sync, OOP plugin host, SdPluginServer MVP, and the bulk audit follow-up. Full suite runs in ~30 s on a modern CPU.
-
-**Impact:** None today; latent concern if the suite grows another 3x without optimization. Monitor runtime on each major milestone.
-
-______________________________________________________________________
-
-## Missing or Incomplete Features
-
-### FEAT-01: Per-LED RGB buffer on VIA keyboards
-
-**Status:** ⚪ OPEN (source-level stub, TODO.md)
-
-**File:** `src/devices/keyboard/src/via_keyboard.cpp:185`
-
-**Issue:** `throw std::runtime_error("per-LED RGB buffer: TODO (requires QMK_RGB_MATRIX path)")`. Today we speak `qmk_rgblight` (brightness/effect/color). Per-LED keying via `qmk_rgb_matrix` is a different VIA surface with a variable channel ID.
-
-**Impact:** Per-LED RGB not supported on VIA boards.
-
-**Fix approach:** Probe the supported VIA channels at device-open time; flip a `KeyboardCapabilities::hasRgbMatrix` flag based on the probe result; implement the write path.
-
-**Tracking:** TODO.md, "via_keyboard — per-LED RGB matrix path". ≈ 1 day.
-
-______________________________________________________________________
-
-### FEAT-02: MacroRecorder real backends (all platforms)
-
-**Status:** ⚪ OPEN (stub returns, TODO.md)
-
-**File:** `src/core/include/ajazz/core/macro_recorder.hpp:14-15`, `src/core/src/macro_recorder.cpp:10-12`
-
-**Issue:** `makeDefaultMacroRecorder()` returns a `StubRecorder` on every platform — `start()` / `stop()` just log. No real event capture.
-
-**Impact:** Macro recording is non-functional.
-
-**Fix approach:** Implement platform-specific capture backends:
-
-- **Linux**: evdev (`/dev/input/eventN`) reader thread. Requires `input` group membership.
-- **macOS**: `CGEventTap` via Accessibility permissions. Translate `CGEventFlags` + keycode.
-- **Windows**: `SetWindowsHookExW(WH_KEYBOARD_LL)` + `WH_MOUSE_LL` low-level hooks in a dedicated thread.
-
-Also wire the CMake option `AJAZZ_FEATURE_MACRO_RECORDER` (currently not wired).
-
-**Tracking:** TODO.md, "MacroRecorder — real native back-ends on all three OSes". ≈ 1 day per platform + 0.25 day for CMake wiring.
-
-______________________________________________________________________
-
-### FEAT-03: Autostart service (macOS + Windows)
-
-**Status:** ⚪ OPEN (Linux only, TODO.md)
-
-**File:** `src/app/src/autostart_service.cpp:163`
-
-**Issue:** Only Linux launches via XDG `.desktop` autostart. macOS and Windows stubs missing.
-
-**Impact:** Autostart cannot be enabled on macOS or Windows.
-
-**Fix approach:**
-
-- **macOS**: Write LaunchAgent plist to `~/Library/LaunchAgents/<appId>.plist` with `RunAtLoad = true` and (for start-minimised) `ProgramArguments` array with `--minimized`.
-- **Windows**: Write `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` registry value via `QSettings(QSettings::NativeFormat)`.
-
-**Tracking:** TODO.md, "macOS + Windows AutostartService backends". ≈ 0.5 day per platform.
-
-______________________________________________________________________
-
-### FEAT-04: Stream Dock firmware update via QtSerialPort
-
-**Status:** ⚪ OPEN (deferred, TODO.md)
-
-**File:** (no implementation yet)
-
-**Issue:** Vendor `FirmwareUpgradeTool.exe` is a separate process linked against `Qt5SerialPort.dll`, suggesting a USB-CDC bootloader handoff. We have no firmware-update path yet.
-
-**Impact:** Stream Deck devices cannot be updated via the app.
-
-**Fix approach:** Wire-capture the boot-into-bootloader command + the subsequent serial flash protocol.
-
-**Tracking:** TODO.md, "Stream Dock firmware update via QtSerialPort handoff".
-
-______________________________________________________________________
-
-## Summary: Concern Tiers
-
-| Tier                                                         | Count | Examples                                                                                                                                                                                                                              |
-| ------------------------------------------------------------ | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **🔴 BLOCKER** (release-preventing)                          | 0     | (all resolved this session)                                                                                                                                                                                                           |
-| **🟡 DEFERRED** (known, documented, pending hardware/vendor) | 7     | AK980 envelope framing (WR-01/02), Touch-strip X clamp, v3 protocol, placeholder PIDs, off-by-two RGB buffer                                                                                                                          |
-| **⚪ OPEN** (actionable quality/maintainability)             | 14    | macro encoding (QC-15), DPI error-handling asymmetry (QC-16), mouse settings LED zeroing (QC-14), provisional-RE test pins (QC-23), catalog watchdog (QC-27), stale battery indicator (QC-28), platform-specific guards (QC-07), etc. |
-| **ℹ️ INFORMATIONAL** (monitoring)                            | 1     | Test suite growth                                                                                                                                                                                                                     |
-
-______________________________________________________________________
-
-*Codebase concerns audit: 2026-05-22*
-*References: phases 09–13 code-review reports, CLAUDE.md hard rules, TODO.md open work.*
-*Session fixes: 9da5c22 (zip-slip), b361596 (mouseButtons), 24dea36 (Theme), 02d03b5+7e04fdd (device-yank), f34282a (SdPluginServer), a43f930 (plugin-size), d70503d (RGB defer), 5f2c017–ea3824a (warnings).*
-*Doc-refresh 2026-05-22 (verified against HEAD): flipped QC-01/QC-02 → RESOLVED (fc1caa3, KeyState/Rgb now round-trip), QC-08 → RESOLVED (eea2e1a, notify-send/osascript via absolute path), QC-10 → RESOLVED (817391a, m_firmwareVersion mutex-guarded), QC-18 → RESOLVED (c43980d, firmwareVersion logs I/O failure), QC-19 → RESOLVED (3b2b937, genuine 0% surfaced), QC-20 → RESOLVED (f0441bd, year>2255 clamp). Plugin sandbox FS scope (CWE-200, 4c16cc0) and manifest-signer/bwrap PATH-hijack (CWE-426, f54d69b) were also fixed this session (tracked in the health report, not previously in this doc).*
+*Concerns audit: 2026-06-02*

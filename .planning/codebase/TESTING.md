@@ -1,366 +1,408 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-05-22
+**Analysis Date:** 2026-06-02
 
 ## Test Framework
 
-**Runner:**
+**C++ Unit & Integration Tests:**
 
-- C++: Catch2 v3.7.1 (fetched via FetchContent in `tests/CMakeLists.txt`)
-- Python: pytest (configured in `pyproject.toml` with `testpaths` = `["tests", "python/ajazz_plugins/tests"]`)
-- Coverage: pytest-cov for Python
+- Framework: Catch2 v3.7.1
+- Runner: ctest (CMake)
+- Config: `CMakeLists.txt` in each test directory; fetch via FetchContent from GitHub
+- Primary preset: `ctest --preset linux-release` (≈631+ cases across all categories)
 
-**Assertion Library:**
+**C++ Test Targets:**
 
-- C++: Catch2 built-in assertions (REQUIRE, CHECK, REQUIRE_THROWS, etc.)
-- Python: standard `assert` statements with explicit equality checks
+- `ajazz_unit_tests`: Unit tests (439 Catch2 TEST_CASE cases in `tests/unit/`)
+- `ajazz_integration_tests`: Integration tests (capture-replay, plugin host, time-sync; `tests/integration/`)
+- `ajazz_qml_tests`: QML smoke-load harness (offscreen QML component load tests; `tests/qml/`) — requires `AJAZZ_BUILD_APP=ON`
+- **Known gap:** `ajazz_qml_tests` has undefined-reference link issues (missing `sidecar_stream_dock_device.cpp` and plugin bridge slots); skip with `-E qml` if building without app
 
-**Run Commands:**
+**Python Tests:**
 
-```bash
-# C++ tests (preset-based)
-ctest --preset linux-release      # Run all tests (~399 test cases)
-ctest --preset linux-debug        # Debug build variant
-ctest -R <pattern>                # Filter by regex (e.g., ctest -R "time_sync")
+- Framework: pytest
+- Location: `python/ajazz_plugins/tests/`
+- Test files: `test_*.py`
+- Discover & run: `pytest python/ajazz_plugins/tests/`
 
-# Python tests
-pytest python/ajazz_plugins/tests/
-pytest -v python/ajazz_plugins/tests/test_plugin_api.py
-pytest --cov=ajazz_plugins        # With coverage report
+**Rust Tests (Sidecar):**
 
-# Watch mode (C++)
-# Not native to ctest, but CMake presets support incremental builds
-
-# Coverage (C++)
-# Built into ctest output with gcov/llvm-cov; exact report path depends on compiler
-```
+- Framework: cargo test (standard Rust)
+- Location: `streamdock-host/src/` (inline module tests)
+- Wire-byte coverage for mirajazz sidecar lives in cargo tests (not C++ app tests)
+- Run: `cd streamdock-host && cargo test`
 
 ## Test File Organization
 
-**Location (C++ tests):**
+**Location patterns:**
 
-- Unit tests: `tests/unit/test_<component>.cpp`
-- Integration tests: `tests/integration/test_<scenario>.cpp`
-- Fixtures/helpers: `tests/unit/fixtures/*.hpp` (header-only for reuse)
-- Mocks: `tests/unit/mock_*.hpp`
+- C++ unit tests: `tests/unit/test_{component}.cpp` (co-located by module)
+- C++ integration: `tests/integration/test_{flow}.cpp` (end-to-end scenarios)
+- Fixtures: `tests/{unit,integration}/fixtures/` (header-only mocks, test data)
+  - `fixtures/mock_transport.hpp` — header-only ITransport mock
+  - `fixtures/fake_stream_dock_device.hpp` — in-process device fixture (no wire bytes, records capability calls)
+  - `hex_loader.hpp` — binary fixture loader for capture-replay tests
+- Python: `python/ajazz_plugins/tests/test_*.py`
 
-**Location (Python tests):**
+**Naming:**
 
-- Plugin SDK tests: `python/ajazz_plugins/tests/test_*.py`
-- Test infrastructure does not auto-discover; explicitly listed in `pyproject.toml`
+- Test files: `test_{feature}.cpp` or `test_{component}.cpp`
+- Test cases: `TEST_CASE("description", "[tag1][tag2]")` — use tags for filtering (`ctest -R tag`)
+- ASCII-only test names (no em-dashes `—` or right-arrows `→`; use `-` and `->`)
 
-**Naming Convention:**
+**Directory structure:**
 
-- Test function: `test_<description>()` (C++: `TEST_CASE()`, Python: `def test_<name>()`)
-- Section grouping (C++): `SECTION("description")` (optional, nested under TEST_CASE)
-- **ASCII-only rule:** Test case and section titles must be ASCII-only (no em-dash, right-arrow, etc.). Windows CI ctest filter uses Win32 CMD codepage; Unicode gets mangled. Pre-commit hook `check-test-names-ascii` enforces this at commit time.
-
-**Test Counts:**
-
-- C++ test cases: ~399 TEST_CASE invocations across unit + integration
-- Python test functions: 3 files (`test_plugin_api.py`, `test_manifest_signing.py`, `test_host_child_safety.py`)
+```
+tests/
+├── CMakeLists.txt              # Main test CMake config
+├── unit/
+│   ├── CMakeLists.txt
+│   ├── test_*.cpp              # Unit test files (~439 cases)
+│   ├── fixtures/
+│   │   ├── mock_transport.hpp
+│   │   ├── fake_stream_dock_device.hpp
+│   │   └── ...
+│   ├── mock_hid_enumerator.hpp
+│   └── qt_app_fixture.hpp
+├── integration/
+│   ├── CMakeLists.txt
+│   ├── test_*.cpp              # Integration tests (~10+ tests)
+│   ├── fixtures/
+│   │   └── {device}/{event}.hex    # Binary capture-replay fixtures
+│   └── hex_loader.hpp
+├── qml/
+│   ├── CMakeLists.txt          # Offscreen QML smoke harness
+│   └── ...
+└── fuzz/                        # libFuzzer harnesses (optional, Clang-only, -DAJAZZ_BUILD_FUZZ_TESTS=ON)
+```
 
 ## Test Structure
 
-**Suite Organization (C++):**
+**Catch2 suite organization:**
 
 ```cpp
-// tests/unit/test_action_engine.cpp
-#include "ajazz/core/action_engine.hpp"
-#include <catch2/catch_test_macros.hpp>
-
-namespace {
-    // Fixtures and helpers at file scope in anonymous namespace
-    struct RecordingExecutors {
-        std::vector<std::string> log;
-        [[nodiscard]] ActionExecutors make() { /* ... */ }
-    };
-}
-
 TEST_CASE("ActionEngine fires chains in order", "[action_engine]") {
+    // Arrange
     RecordingExecutors rec;
     ActionEngine engine(rec.make());
-
-    // Arrange
     Profile p{};
     p.id = "p1";
     p.deviceCodename = "akp153";
     engine.setProfile(std::move(p));
 
     // Act
-    ActionChain chain{ /* ... */ };
+    ActionChain chain{
+        Action{.kind = ActionKind::Plugin, .id = "obs.switch", .settingsJson = "scn"},
+        Action{.kind = ActionKind::KeyPress, .settingsJson = "F1"},
+    };
     engine.run(chain);
 
     // Assert
     REQUIRE(rec.log.size() == 3);
     REQUIRE(rec.log[0] == "plugin:obs.switch:scn");
 }
-
-TEST_CASE("ActionEngine honours Sleep steps", "[action_engine]") {
-    // ... another test ...
-}
-
-TEST_CASE("ActionEngine pushes / pops navigation pages", "[action_engine][folders]") {
-    ActionEngine engine;
-    engine.setProfile(Profile{});
-
-    REQUIRE(engine.currentPageId() == "root");
-
-    engine.run(ActionChain{Action{.kind = ActionKind::OpenFolder, .id = "music"}});
-    REQUIRE(engine.currentPageId() == "music");
-
-    // Optional nested section
-    SECTION("nested operations") {
-        engine.run(ActionChain{Action{.kind = ActionKind::OpenFolder, .id = "playlists"}});
-        REQUIRE(engine.currentPageId() == "playlists");
-    }
-}
 ```
 
 **Patterns:**
 
-- **Arrange-Act-Assert:** Comments separate test phases (optional but encouraged)
-- **Fixtures:** Defined in anonymous namespace at file scope; instantiated per test
-- **Tags:** `[component]` tags in square brackets enable filtering; can be chained (e.g., `[action_engine][folders]`)
-- **Cleanup:** RAII handles cleanup (destructors run at end of TEST_CASE scope); explicit teardown is rare
+- **Arrange-Act-Assert (AAA):** Set up fixtures → invoke code under test → assert outcomes
+- **Sections for nested scenarios:**
+
+```cpp
+TEST_CASE("Stream Dock v1-API parser rejects malformed frames", "[integration][streamdeck-v1]") {
+    using namespace ajazz::streamdeck::akp815;
+
+    SECTION("truncated frame") {
+        auto const bytes = loadHexFixture(fixture("malformed/short_frame.hex"));
+        REQUIRE_FALSE(parseInputReport(bytes).has_value());
+    }
+
+    SECTION("invalid key index") {
+        auto const bytes = loadHexFixture(fixture("malformed/invalid_key.hex"));
+        REQUIRE_FALSE(parseInputReport(bytes).has_value());
+    }
+}
+```
+
+- **Setup/teardown:** Fixtures via local scope or Catch2's `class`-based approach (rare; lambda captures preferred)
+- **Assertions:** `REQUIRE(condition)` (hard fail) vs. `CHECK(condition)` (soft fail, log and continue)
 
 ## Mocking
 
-**Framework:** Custom mock classes (no external framework like GTest/gmock)
+**Frameworks:**
 
-**Transport Mocking (COD-026):**
+- Manual mocks (no external mocking library): header-only test doubles
+- Catch2 matchers for assertions (Catch2 built-in)
 
-- Header-only fixture: `tests/unit/fixtures/mock_transport.hpp`
-- Implements `ajazz::core::ITransport` interface fully
-- Records every `write()` and `writeFeature()` call as byte vectors
-- Inspection API: `writes()`, `writeCount()`, `writeFeatureCount()`, `reset()`
-- Input injection: `enqueueRead()`, `enqueueReadFeature()` for canned responses
+**Patterns:**
 
-**Usage Example:**
+**MockTransport (header-only, `fixtures/mock_transport.hpp`):**
 
 ```cpp
 auto transport = std::make_unique<ajazz::tests::MockTransport>();
-auto* observer = transport.get();
+auto* observer = transport.get();   // hold observer ptr
 transport->open();
 
-auto device = ajazz::mouse::makeAjSeriesWithTransport(descriptor, id, std::move(transport));
+auto device = ajazz::mouse::makeAjSeriesWithTransport(
+    descriptor, id, std::move(transport));  // ownership transfer
 auto* dpi = dynamic_cast<ajazz::core::IMouseCapable*>(device.get());
 dpi->setActiveDpiStage(0);
 
 REQUIRE(observer->writeFeatureCount() == 1);
-REQUIRE(observer->writes().at(0)[1] == 0x21);  // cmd byte
+REQUIRE(observer->writes().at(0).size() == 64);
+CHECK(observer->writes().at(0)[1] == 0x21);  // cmd byte
 ```
 
-**Design Notes:**
+**FakeStreamDockDevice (header-only, `fixtures/fake_stream_dock_device.hpp`):**
 
-- Header-only by design (single translation unit includes; no separate CMake link entry)
-- Single-threaded (parent `ITransport` doesn't promise thread safety)
-- Not copyable or movable (inherits from `ITransport`)
+- Records capability calls instead of producing wire bytes (mirajazz sidecar owns wire coverage)
+- Injects input events via `injectEvent()`
 
-**Log Mocking (test_logger.cpp):**
+```cpp
+FakeStreamDockDevice device(descriptor, id);
+device.injectEvent(DeviceEvent{...});  // synthetic input
 
-- Custom `CapturingSink` extends `ajazz::core::LogSink`
-- Records `(level, module, message)` tuples from all accepted log calls
-- Thread-safe (uses mutex like production sink)
-- Installed via `setLogSink()` at test start; reset to nullptr at end
+REQUIRE(device.keyImages.size() == 2);
+REQUIRE(device.brightnessCalls[0] == 50);
+REQUIRE(device.flushCount > 0);
+```
 
-**Enumerator Mocking:**
+**MockHidEnumerator (header-only, `tests/unit/mock_hid_enumerator.hpp`):**
 
-- Parallel mock: `mock_hid_enumerator.hpp` (device enumeration layer)
-- Pattern: fixture struct with builder method returning fake device list
+- Mock for device enumeration (which VID/PIDs are "currently connected")
+- Used by device-registry tests to inject virtual devices
+
+**What to mock:**
+
+- **ITransport** (wire-level I/O) — use MockTransport for byte-level assertions
+- **IDevice implementations** — use FakeStreamDockDevice for app-layer behavior (image/brightness calls)
+- **Device enumeration** — use MockHidEnumerator for hot-plug scenarios
+- **System calls** — use platform-specific mocks (e.g., for Win32EnvBlock, setfacl)
+
+**What NOT to mock:**
+
+- Core library value types (Profile, Action, etc.) — construct real instances
+- EventBus, ActionEngine, Logger — these are simple enough to test directly
+- Plugin API (SDK layer) — test via the real Python host child (integration tests only)
 
 ## Fixtures and Factories
 
-**Test Data (C++):**
+**Test data (C++):**
 
-- Inline construction: `Profile p{.id = "p1", .deviceCodename = "akp153"}`
-- Struct aggregates: `.member = value` syntax preferred over constructor calls
-- Factories: named functions like `makeAjSeriesWithTransport()` that return fully-initialized objects
+```cpp
+namespace {
+    struct RecordingExecutors {
+        std::vector<std::string> log;
+        [[nodiscard]] ActionExecutors make() {
+            return ActionExecutors{
+                .plugin = [this](auto id, auto settings) {
+                    log.emplace_back("plugin:" + std::string{id});
+                },
+                // ...
+            };
+        }
+    };
+}
+```
 
-**Test Data (Python):**
+**Hex fixtures (binary capture-replay):**
 
-- Class fixtures: inline `MyPlugin()` instance
-- Settings dict: `{"foo": "bar"}` passed as JSON string to dispatch
+- Location: `tests/integration/fixtures/{device}/{event}.hex`
+- Format: ASCII hex bytes (one per line or space-separated)
+- Loaded via `ajazz::tests::loadHexFixture(path)` → `std::vector<uint8_t>`
+- Examples: `akp153/key_press_07.hex`, `malformed/short_frame.hex`
+- Injected into parsers for byte-level regression tests
+
+**Qt application fixture (`tests/unit/qt_app_fixture.hpp`):**
+
+- Sets up QCoreApplication (or QGuiApplication) for tests that need Qt
+- Manages QML engine initialization for app-layer tests
 
 **Location:**
 
-- Single-file fixtures: defined in anonymous namespace in the .cpp
-- Multi-file fixtures: in `tests/unit/fixtures/` (e.g., `qt_app_fixture.hpp`, `mock_transport.hpp`)
+- Header-only fixtures live in their test directory: `tests/unit/fixtures/` or `tests/unit/`
+- Shared between multiple test files if needed; otherwise co-located with the test
 
 ## Coverage
 
-**Requirements:**
+**Requirements:** None enforced at build time; coverage runs on CI nightly
 
-- No minimum enforced; coverage metrics are informational
-- Python: pytest-cov can generate reports (`pytest --cov=ajazz_plugins`)
-- C++: gcov/llvm-cov integration available; exact invocation depends on preset
+**View coverage:**
 
-**View Coverage:**
+- Linux only (gcov/lcov integration via CMake preset)
+- Build: `cmake --preset coverage && cmake --build build/coverage`
+- Report: `lcov --list build/coverage/coverage.info`
 
-```bash
-# Python
-pytest --cov=ajazz_plugins --cov-report=html
-# HTML report at htmlcov/index.html
+**Test count (as of 2026-05-22):**
 
-# C++ (example for Linux)
-ctest --preset linux-debug   # Build with coverage
-# Coverage files in build/_deps/ (compiler-specific location)
-```
+- ~631+ ctest cases total:
+  - ≈439 Catch2 unit tests (`tests/unit/`)
+  - ≈10+ integration tests (`tests/integration/`)
+  - ≈1 QML smoke test (`tests/qml/`)
+  - ~180 Python pytest cases (plugin SDK tests)
+  - Rust cargo tests (sidecar, inline)
 
 ## Test Types
 
 **Unit Tests:**
 
-- Scope: Single component in isolation (e.g., ActionEngine, Logger, Profile I/O)
-- Location: `tests/unit/test_*.cpp`
-- Isolation: Achieved via dependency injection (MockTransport, capturing sink)
-- Execution: \<15 sec for full suite
+- **Scope:** Single module / component in isolation
+- **Location:** `tests/unit/test_{component}.cpp`
+- **Approach:** Mock external dependencies (ITransport, device enumeration)
+- **Examples:** ActionEngine behavior, EventBus concurrency, Profile JSON I/O, logger filtering
+- **Run:** `ctest --preset linux-release` (fastest; ~5 seconds)
 
 **Integration Tests:**
 
-- Scope: Multi-component workflows (e.g., time-sync end-to-end, capture-replay)
-- Location: `tests/integration/test_*.cpp`
-- Isolation: May use real file I/O, real network (with timeouts)
-- Execution: ~10 sec for full suite
+- **Scope:** Multi-component workflows end-to-end
+- **Location:** `tests/integration/test_{flow}.cpp`
+- **Approach:** Real components (EventBus, ActionEngine) + fixtures for I/O boundaries (MockTransport, hex fixtures)
+- **Examples:** Capture-replay (USB HID parsing), time-sync E2E with real clock, Win32 environment block round-trip
+- **Run:** `ctest --preset linux-release` or `ctest -R integration` to filter
 
-**E2E Tests:**
+**E2E Tests (QML / App-layer):**
 
-- Scope: Not detected in unit/integration
-- Framework: Manual testing or external test harness (beyond ctest scope)
+- **Scope:** Full UI rendering and QML component interaction
+- **Location:** `tests/qml/` (offscreen harness) or via debug-control channel (live)
+- **Approach:** Offscreen QML engine; debug-control for live verification
+- **Examples:** Component load-time smoke tests, profile switching re-renders keys
+- **Run:** `ctest -R qml` (currently has link issues; skip with `-E qml` if building without app)
 
-**Smoke Tests (CI):**
+**Python Plugin Tests:**
 
-- "Verify Windows hot-plug smoke ran" gate in CI ensures Windows environment works
-- Hot-plug tests exercise device enumeration without hardware (virtual/mock)
+- **Scope:** Plugin SDK decorator registration, dispatch routing, manifest validation
+- **Location:** `python/ajazz_plugins/tests/`
+- **Approach:** Unit tests of the SDK surface; no integration with the C++ host
+- **Run:** `pytest python/ajazz_plugins/tests/`
+
+**Fuzzing (optional):**
+
+- **Framework:** libFuzzer (Clang-only)
+- **Build:** `-DAJAZZ_BUILD_FUZZ_TESTS=ON` (default OFF)
+- **Location:** `tests/fuzz/`
+- **Purpose:** Crash-finding for parsers (e.g., HID input report parsing)
 
 ## Common Patterns
 
-**Async Testing (C++):**
-
-- Catch2 supports synchronous testing; async code under test is called directly in the test
-- Waits use busy-loop or condition variable with timeout (example: battery poll test in `test_battery_service.cpp` if it exists)
-- Qt event loop may be spun manually if needed (see `qt_app_fixture.hpp` for Qt-aware test setup)
-
-**Error Testing (C++):**
+**Async testing (sleep / threading):**
 
 ```cpp
-TEST_CASE("throwsError on invalid input", "[component]") {
-    REQUIRE_THROWS_AS(functionThatThrows(badInput), std::runtime_error);
-}
+TEST_CASE("ActionEngine defers Sleep steps", "[action_engine][async]") {
+    RecordingExecutors rec;
+    ActionEngine engine(rec.make());
+    engine.setProfile(Profile{});
 
-TEST_CASE("catchesException and logs", "[component]") {
-    // Use capturing sink to assert error was logged
-    auto sink = std::make_shared<CapturingSink>();
-    setLogSink(sink);
+    ActionChain chain{
+        Action{.kind = ActionKind::Sleep, .delayMs = 50},
+        Action{.kind = ActionKind::Plugin, .id = "after"},
+    };
+    engine.run(chain);  // Returns immediately; sleep happens in continuation
 
-    functionThatThrowsButCatches();
-
-    auto records = sink->snapshot();
-    REQUIRE(records.size() == 1);
-    CHECK(records[0].level == LogLevel::Error);
+    REQUIRE(rec.log[0] == "sleep:50");
+    REQUIRE(rec.log[1] == "plugin:after:");
 }
 ```
 
-**Python Testing (pytest):**
-
-```python
-def test_dispatch_routes_to_method() -> None:
-    """dispatch() deserialises settings JSON and passes ActionContext."""
-    plugin = MyPlugin()
-    plugin.dispatch("hello", '{"foo": "bar"}')
-    assert plugin.calls == [("hello", {"foo": "bar"})]
-
-def test_dispatch_raises_on_unknown_action() -> None:
-    """dispatch() raises KeyError for unregistered action ids."""
-    plugin = MyPlugin()
-    try:
-        plugin.dispatch("missing", "{}")
-    except KeyError:
-        pass
-    else:
-        raise AssertionError("expected KeyError")
-```
-
-**Wire-Format Testing (MockTransport Pattern):**
+**Concurrency testing:**
 
 ```cpp
-TEST_CASE("battery poll sends correct opcode", "[battery]") {
-    auto transport = std::make_unique<ajazz::tests::MockTransport>();
-    auto* observer = transport.get();
-    transport->open();
+TEST_CASE("event bus is safe under concurrent publish/subscribe", "[eventbus][concurrency]") {
+    ajazz::core::EventBus bus;
+    constexpr int kSubscribers = 8;
+    constexpr int kPublishers = 4;
 
-    auto device = ajazz::mouse::makeAjSeriesWithTransport(descriptor, id, std::move(transport));
-    auto* battery = dynamic_cast<ajazz::core::IBatteryCapable*>(device.get());
+    std::atomic<int> totalCalls{0};
+    std::vector<std::thread> publishers;
+    for (int p = 0; p < kPublishers; ++p) {
+        publishers.emplace_back([&]() {
+            for (int e = 0; e < 200; ++e) {
+                bus.publish({}, {});
+            }
+        });
+    }
+    for (auto& t : publishers) { t.join(); }
 
-    battery->pollBattery();
-
-    // Assert exact byte sequence
-    REQUIRE(observer->writeFeatureCount() >= 1);
-    auto const& sent = observer->writes().back();
-    REQUIRE(sent.size() == 64);
-    CHECK(sent[0] == 0x00);   // report id
-    CHECK(sent[1] == 0x83);   // opcode
+    REQUIRE(totalCalls == kSubscribers * kPublishers * 200);
 }
 ```
 
-## CMake Integration
+- Run under `-fsanitize=thread` (ThreadSanitizer) in CI "Sanitizers · TSan" job
+- Catch data races, deadlocks, torn reads
 
-**Test Discovery:**
+**Error testing:**
 
-- CMake uses Catch2's `catch_discover_tests()` to enumerate TEST_CASE invocations at configure time
-- Tests are added as CTest entries with tags for filtering
-- Presets in `CMakePresets.json` define standard build + test configurations
+```cpp
+TEST_CASE("profile I/O rejects malformed JSON", "[profile_io]") {
+    auto path = std::filesystem::temp_directory_path() / "malformed.json";
+    std::ofstream out{path};
+    out << "{ invalid json }";
+    out.close();
 
-**Preset Commands:**
-
-```bash
-ctest --preset linux-release    # Release build, run all tests
-ctest --preset linux-debug      # Debug build with symbols
-ctest --preset windows-release  # Windows MSVC build
-ctest --preset macos-release    # macOS Clang build
+    REQUIRE_THROWS_AS(
+        ajazz::core::readProfileFromDisk(path),
+        ajazz::core::ProfileIoError
+    );
+}
 ```
 
-**CI Matrix:**
+**Capture-replay testing:**
 
-- Runs on ubuntu-24.04 (Linux GCC + Clang), windows-2022 (MSVC), macos-14 (Apple Clang)
-- Each platform matrix job builds Release variant only (saves CI time)
-- Full matrix: 3 platforms × 1 build type = 3 jobs per commit
+```cpp
+TEST_CASE("AJ Series mouse DPI button parsing", "[integration][capture-replay]") {
+    using namespace ajazz::mouse;
 
-## Python Plugin Tests
+    auto const bytes = ajazz::tests::loadHexFixture(
+        std::filesystem::path(AJAZZ_FIXTURES_DIR) / "aj_series/dpi_button_press.hex");
+    auto const ev = parseInputReport(bytes);
 
-**Scope:**
-
-- `python/ajazz_plugins/tests/test_plugin_api.py` — @action decorator, dispatch routing, JSON handling
-- `python/ajazz_plugins/tests/test_manifest_signing.py` — trust-roots loading, signature verification
-- `python/ajazz_plugins/tests/test_host_child_safety.py` — IPC message handling
-
-**Key Patterns:**
-
-- Import helpers directly from implementation (e.g., `from ajazz_plugins import Plugin, action, ActionContext`)
-- `__main__` guards in `_host_child.py` allow calling test helpers without subprocess
-- No fixtures/mocking framework; plain pytest with inline test plugins
-- Type hints throughout (enforced by mypy strict mode in `pyproject.toml`)
-
-**Example (`test_plugin_api.py:17-38`):**
-
-```python
-class MyPlugin(Plugin):
-    """Minimal test fixture."""
-    id = "test.my-plugin"
-    name = "Test plugin"
-
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, dict[str, object]]] = []
-
-    @action(id="hello", label="Hello")
-    def _hello(self, ctx: ActionContext) -> None:
-        self.calls.append(("hello", dict(ctx.settings)))
-
-def test_actions_are_discovered() -> None:
-    plugin = MyPlugin()
-    assert set(plugin.actions().keys()) == {"hello", "no-ctx"}
+    REQUIRE(ev.has_value());
+    REQUIRE(ev->kind == InputEventKind::DpiButton);
+}
 ```
+
+- Fixtures are sanitised USB captures (never raw `.pcap` files; see CAPTURE-01 policy)
+- Use `AJAZZ_FIXTURES_DIR` CMake variable (injected at build time)
+
+## Debug-Channel Verification Workflow
+
+**Mandatory for every UI/behavioral change:**
+
+1. **Build:** `cmake --build build/linux-release --preset linux-release`
+1. **Launch with debug channel:** `AJAZZ_DEBUG_CONTROL=1 build/linux-release/src/app/ajazz-control-center &`
+1. **Drive controls:** `scripts/ajazz-debug {method} --params '...'`
+1. **Capture state:** `scripts/ajazz-debug screenshot > before.ppm`
+1. **Verify:** Read the screenshot; confirm the real behavior matches expectation
+
+**Available debug-control methods:**
+
+- `ping` — sanity check (responds `{"event":"pong"}`)
+- `state` — full app state dump
+- `qml.tree` — QML object hierarchy
+- `qml.get {objectName} {propertyName}` — read a property
+- `qml.set {objectName} {propertyName} {value}` — write a property
+- `qml.invoke {objectName} {methodName} --params '{...}'` — call a method
+- `qml.click {objectName}` — emit `clicked()`
+- `screenshot` — PPM screenshot (read visually, don't assert)
+- `device.setActiveDevice {codename}` — select a device
+- `device.renderTest --params '{"codename":"akp05e","count":10,"main":true,"encoders":true}'` — headless key+encoder render
+- `input.key {index}` — inject key press
+- `input.encoder {index} {delta}` — inject encoder turn
+- `input.touch {x}` — inject touch input
+- `profile.commitEncoderBinding {keyIndex} {actionJson}` — test encoder binding persistence
+- `plugin.list` — enumerate loaded plugins
+- `plugin.sendEvent {pluginId} {actionId} {settingsJson}` — dispatch an action
+
+**Every new interactive control must:**
+
+- Set `objectName:` in QML (for `qml.get/set/invoke/click` accessibility)
+- Be testable via debug-control before claiming "done"
+- Have an associated integration test that exercises the full pipeline
+
+**Known harness gap:**
+
+- `qml.invoke toggle` / `qml.click` do NOT fire `onToggled()` for Switch/CheckBox
+- Workaround: expose a dedicated `Q_INVOKABLE` setter, or verify the C++ backing store separately (write value, relaunch, read binding)
 
 ______________________________________________________________________
 
-*Testing analysis: 2026-05-22*
+*Testing analysis: 2026-06-02*
