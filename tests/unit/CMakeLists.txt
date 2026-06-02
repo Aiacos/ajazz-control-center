@@ -176,6 +176,12 @@ add_executable(
     test_aj_series_keymatrix_readback.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
+    # Phase 29 Plan 29-03 (PLUGIN-23): multi-action verbs for ProfileController.
+    # Tests: appendKeyAction keeps existing, reorderKeyAction within onPress,
+    # removeKeyActionAt (last action -> empty), activeKeyBindings exposes full
+    # onPress actionList, and 2-action round-trip through save/load.
+    # profile_controller.cpp is already in the binary via the 14-02 entry above.
+    test_profile_multiaction.cpp
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
