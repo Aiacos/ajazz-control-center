@@ -4,13 +4,13 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-06-02T21:27:21.946Z'
+last_updated: '2026-06-02T21:47:18.299Z'
 last_activity: 2026-06-02
 progress:
   total_phases: 21
   completed_phases: 20
   total_plans: 72
-  completed_plans: 70
+  completed_plans: 71
   percent: 95
 ---
 
@@ -38,7 +38,7 @@ See: .planning/PROJECT.md (updated 2026-05-15)
 ## Current Position
 
 Phase: 29 (plugin-gui-parity-real-drag-drop-pi-config-multi-action) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 Plans:
 25-01 (autonomous) — COMPLETE (2026-05-28): 25-UAT.md operator runbook authored (329 lines, 16 tests covering VERIFY-05 + provisional-§5 reconciliation + VERIFY-06); `hasClock=false` on akp05e already pre-landed via commit `07c5902` (Phase 14). Suite green: `ctest --preset linux-release -E qml` = 645/645.
 25-02 (operator-gated) — PARTIAL (2026-05-28 13:10): autonomous-mode walkthrough recorded results for 11/16 tests. Three PASS (7 brightness, 8 clear, 9 hasClock-honesty). One FAIL (Test 1 image-upload — 3-layer regression; L1+L2 fixed in commit `24651a3`, L3 routes to Phase 26). One NO_AFFORDANCE (Test 6 — no touch-strip drop target in KeyDesigner). Six BLOCKED on demo unit 0x3004 input-streaming gap (Tests 2-5, 15-16). Five NOT_WALKED (Tests 10-12 driven by 4/5/6; 13-14 gated on Phase 26). See `.planning/phases/25-hardware-verification-real-plugin/25-02-SUMMARY.md`.
@@ -224,7 +224,7 @@ After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-
 
 ## Session Continuity
 
-Last session: 2026-06-02T21:27:21.936Z
+Last session: 2026-06-02T21:47:18.289Z
 Stopped at: Phase 26 UI-SPEC approved
 Resume file: None
 
