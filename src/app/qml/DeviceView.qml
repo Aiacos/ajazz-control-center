@@ -118,13 +118,38 @@ Item {
 
     Connections {
         target: ProfileController
-        function onProfileChanged() { root._syncFromProfile(); }
+        function onProfileChanged() {
+            root._syncFromProfile();
+            root._refreshSelectedKeyActionList();
+        }
     }
 
     readonly property var selectedBinding:
         selectedKeyIndex >= 0 && selectedKeyIndex < bindings.count
             ? bindings.get(selectedKeyIndex)
             : null
+
+    // PLUGIN-23: full onPress action list for the selected key.
+    // Derived from activeKeyBindings() "actionList" field. Updated on profileChanged.
+    property var _selectedKeyActionList: []
+
+    function _refreshSelectedKeyActionList() {
+        if (root.selectedKeyIndex < 0) {
+            root._selectedKeyActionList = [];
+            return;
+        }
+        var kb = ProfileController.activeKeyBindings();
+        for (var i = 0; i < kb.length; ++i) {
+            var b = kb[i];
+            if (b.index === root.selectedKeyIndex) {
+                root._selectedKeyActionList = b.actionList ? b.actionList : [];
+                return;
+            }
+        }
+        root._selectedKeyActionList = [];
+    }
+
+    onSelectedKeyIndexChanged: { root._refreshSelectedKeyActionList(); }
 
     function updateSelectedBinding(field, value) {
         if (root.selectedKeyIndex < 0 || root.selectedKeyIndex >= bindings.count) return;
@@ -141,7 +166,9 @@ Item {
     // Using a counter (not a simple bool) handles the case where two drags
     // start before the first ends (rare, but avoids a stuck-high bug).
     property int  _activeDragCount: 0
-    readonly property bool anyDragActive: _activeDragCount > 0
+    // anyDragActive: true during any cell-to-cell drag OR any KeyBindingList row drag.
+    // DragRelay.active covers both (all drag sources call DragRelay.begin/finish).
+    readonly property bool anyDragActive: _activeDragCount > 0 || DragRelay.active
 
     // ---- Layout JSON loader (D-06, D-07) ------------------------------------
     // Fetches qrc:/qt/qml/AjazzControlCenter/device-layouts/<codename>.json
@@ -392,14 +419,20 @@ Item {
                         onDropped: function(drop) {
                             if (drop.hasFormat("application/x-ajazz-binding")) {
                                 var bp = JSON.parse(drop.getDataAsString("application/x-ajazz-binding"));
-                                // Phase 26 v1: clearBinding does not exist; route trash drops
-                                // through commitXxxBinding with empty params (effectively clears
-                                // the visual; full clearBinding lands in a follow-up plan).
                                 if (bp.controller === "Keypad") {
-                                    ProfileController.commitKeyBinding(bp.position, "", "", 0, "");
-                                    if (bp.position >= 0 && bp.position < bindings.count) {
-                                        bindings.set(bp.position, { iconSource: "", label: "",
-                                                                     actionKind: 0, actionParams: "" });
+                                    if (bp.actionPos !== undefined) {
+                                        // PLUGIN-23: drag from KeyBindingList row — remove just
+                                        // that action from the onPress chain (not the whole key binding).
+                                        ProfileController.removeKeyActionAt(bp.position, bp.actionPos);
+                                    } else {
+                                        // Phase 26 v1: key-cell drag — clear the entire binding.
+                                        ProfileController.commitKeyBinding(bp.position, "", "", 0, "");
+                                        if (bp.position >= 0 && bp.position < bindings.count) {
+                                            bindings.set(bp.position, {
+                                                iconSource: "", label: "",
+                                                actionKind: 0, actionParams: ""
+                                            });
+                                        }
                                     }
                                 } else if (bp.controller === "TouchZone") {
                                     ProfileController.commitTouchZoneBinding(bp.position, "", "", 0, "");
@@ -426,6 +459,20 @@ Item {
                 }
             }
         }
+
+            // ---- Per-key multi-action binding list (PLUGIN-23, Phase 29-03) -----
+            // Shown only when a key is selected AND it has >= 1 action in its
+            // onPress chain. Surfaces the full action list for reorder/remove/append.
+            // Hosted here in DeviceView, NOT inside Inspector.qml (merge-safety).
+            KeyBindingList {
+                objectName: "keyBindingList"
+                Layout.fillWidth: true
+                Layout.maximumHeight: 260
+                visible: root.selectedKeyIndex >= 0
+                         && root._selectedKeyActionList.length > 0
+                keyIndex: root.selectedKeyIndex
+                actionList: root._selectedKeyActionList
+            }
 
             // Property Inspector docked at the bottom (OpenDeck layout).
             Inspector {

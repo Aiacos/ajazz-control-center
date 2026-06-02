@@ -490,6 +490,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/components/FirmwarePanel.qml
     qml/components/EncoderCard.qml
     qml/components/EncoderDial.qml
+    qml/components/KeyBindingList.qml
     qml/components/KeyCell.qml
     qml/components/TouchStripLane.qml
     qml/components/Notification.qml
