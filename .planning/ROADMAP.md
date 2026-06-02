@@ -587,7 +587,16 @@ Plans:
 
 **Deferred to a later phase** (explicitly OUT of scope here to keep Phase 29 shippable): per-application automatic profile switching (foreground-window watcher, OpenDeck `application_watcher.rs` parity) and visual action **folders/pages** organization. Captured so they are not lost; they are organization features, not blockers to using a plugin.
 
-**Plans**: TBD (authored by `/gsd:plan-phase 29`). Expected shape: Wave 1 = pin + fix the real-Wayland mouse-drag gesture (DragRelay/Drag.Internal) with a debug-channel pointer-drag driver + regression test (the user-blocking defect, fastest path); Wave 2 = PI context-id unification + live PI settings round-trip; Wave 3 = multi-action core model + ProfileController multi-bind + QML binding-list editor (reorder/remove); Wave 4 = LIVE debug-channel verification of all three on the AKP05E. **Phase notes**: the Phase-28 trap — verifying the commit path is NOT verifying the real drag gesture; PLUGIN-21 verification MUST drive a real pointer drag through the GUI, not `commitBinding`.
+**Plans**: 4 plans (4 waves; max 2 concurrent per CLAUDE.md cap — waves 2's two plans have zero file overlap so they may run in parallel).
+
+Plans:
+
+- [ ] 29-01-PLAN.md — PLUGIN-21: debug-channel real pointer-drag driver (qml.drag/input.pointer) + root-cause + fix the Wayland DragRelay/Drag.Internal dead-drag (wave 1)
+- [ ] 29-02-PLAN.md — PLUGIN-22: Inspector.qml passes the wire context id + unify PIBridge persistence onto plugin_settings_store (one shared record) (wave 2)
+- [ ] 29-03-PLAN.md — PLUGIN-23: ProfileController multi-action verbs over onPress + per-key KeyBindingList editor (drag-reorder + drag-to-trash) (wave 2)
+- [ ] 29-04-PLAN.md — LIVE debug-channel verification of all three deliverables on the AKP05E (PLUGIN-21 proven by a driven pointer drag, not commitBinding) (wave 3)
+
+**Phase notes**: the Phase-28 trap — verifying the commit path is NOT verifying the real drag gesture; PLUGIN-21 verification MUST drive a real pointer drag through the GUI, not `commitBinding`. The commit/data path is correct and must not be rewritten (CONTEXT.md); only the gesture layer is fixed. Wave 4 (29-04) depends on all three. Every new control sets `objectName`; new drag/PI drivers are RPC methods; COD-031 clean; no protocol/opcode/wire/hidraw changes.
 
 ## Progress
 
