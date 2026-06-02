@@ -39,6 +39,7 @@
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
+#include <QTimer>
 
 #include <utility>
 
@@ -620,26 +621,48 @@ void PluginManager::rediscover() {
 // ---------------------------------------------------------------------------
 
 void PluginManager::onProcessFailed(QString const& uuid) {
+    // Record the crash and decide disable SYNCHRONOUSLY so observable state
+    // (crash count, isDisabled, pluginDisabled signal) is updated immediately —
+    // disableWithNotice only sets m_disabled + emits, it never touches a QProcess.
     qint64 const now = m_clock();
     m_crashTracker.recordCrash(uuid, now);
-
     if (m_crashTracker.shouldDisable(uuid, now)) {
         // 3-in-30s: disable + surface (akp_plugin_sdk.md §3 crash policy).
         disableWithNotice(uuid, QStringLiteral("crashed 3 times within 30 seconds"));
-        // Clean up process but do NOT re-spawn.
-        m_live.erase(uuid);
-    } else {
-        // Fewer/slower crashes: restart (teardown + re-spawn).
-        // WR-02: guard against re-spawning HTML/WebEngine plugins (process == nullptr in m_live).
-        // An HTML plugin runs in-process via Chromium and has no owned QProcess. Re-spawning it
-        // would re-inject the Mirabox shim script, causing duplicate inserts into the WebEngine
-        // profile. Only restart plugins that have an actual process-backed entry.
-        auto it = m_live.find(uuid);
-        if (it != m_live.end() && it->second.process != nullptr) {
-            PluginManifest const manifest = it->second.manifest;
-            m_live.erase(it);
-            spawn(manifest);
-        }
+    }
+
+    // DEFER the destructive teardown (m_live.erase deletes the QProcess, and the
+    // respawn). This slot runs INSIDE the QProcess::finished / errorOccurred
+    // emission; erasing m_live here would delete the QProcess from within its own
+    // signal handler — a use-after-free that crashed the host when a plugin was
+    // SIGKILLed. Coalesce per uuid so a double-fire (errorOccurred + finished) or
+    // multiple synchronous failures schedule a single teardown.
+    if (!m_failurePending.contains(uuid)) {
+        m_failurePending.insert(uuid);
+        QTimer::singleShot(0, this, [this, uuid]() { handleProcessFailure(uuid); });
+    }
+}
+
+void PluginManager::handleProcessFailure(QString const& uuid) {
+    m_failurePending.remove(uuid);
+    auto it = m_live.find(uuid);
+    if (it == m_live.end()) {
+        return; // already torn down (uninstall/shutdown) or never process-backed
+    }
+    if (isDisabled(uuid)) {
+        // Disabled synchronously in onProcessFailed: clean up, do NOT re-spawn.
+        m_live.erase(it);
+        return;
+    }
+    // Fewer/slower crashes: restart (teardown + re-spawn).
+    // WR-02: guard against re-spawning HTML/WebEngine plugins (process == nullptr
+    // in m_live). An HTML plugin runs in-process via Chromium and has no owned
+    // QProcess; re-spawning it would re-inject the Mirabox shim. Only restart
+    // process-backed entries.
+    if (it->second.process != nullptr) {
+        PluginManifest const manifest = it->second.manifest;
+        m_live.erase(it);
+        spawn(manifest);
     }
 }
 

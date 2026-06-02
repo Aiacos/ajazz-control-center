@@ -55,6 +55,7 @@
 
 #include <QHash>
 #include <QObject>
+#include <QSet>
 #include <QString>
 
 #include <functional>
@@ -181,9 +182,27 @@ public:
      *
      * Connected to `QProcess::finished` (abnormal exit) and `QProcess::errorOccurred`.
      *
+     * This slot runs DURING the QProcess signal emission, so it must not destroy
+     * the QProcess synchronously (erasing m_live would delete the QProcess from
+     * within its own finished() handler — a use-after-free that crashes the host
+     * when a plugin is SIGKILLed). It records the crash and defers the actual
+     * teardown/respawn to handleProcessFailure() via the event loop.
+     *
      * @param uuid  Plugin UUID of the failed process.
      */
     void onProcessFailed(QString const& uuid);
+
+    /**
+     * @brief Deferred teardown/respawn for a failed plugin (off the signal stack).
+     *
+     * Invoked via a 0ms single-shot timer from onProcessFailed() so the QProcess
+     * is no longer on the call stack when m_live erases (and thus deletes) it.
+     * Applies the 3-in-30s disable policy, else tears down + re-spawns. Idempotent
+     * via m_failurePending so a double-fire schedules a single handling.
+     *
+     * @param uuid  Plugin UUID of the failed process.
+     */
+    void handleProcessFailure(QString const& uuid);
 
     /**
      * @brief Gracefully shut down all live plugins.
@@ -333,6 +352,10 @@ private:
     std::function<qint64()> m_clock;
 
     PluginCrashTracker m_crashTracker;
+
+    /// UUIDs with a teardown/respawn already scheduled (off the signal stack) so
+    /// a QProcess double-fire (errorOccurred + finished) handles the failure once.
+    QSet<QString> m_failurePending;
 
     /// Live plugin state keyed by UUID.
     struct LivePlugin {
