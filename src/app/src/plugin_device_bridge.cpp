@@ -40,6 +40,11 @@
 #include <QByteArray>
 #include <QColor>
 #include <QImage>
+#include <QPainter>
+#include <QPen>
+#include <QPointer>
+#include <QPolygon>
+#include <QTimer>
 
 #include <algorithm>
 
@@ -302,13 +307,45 @@ PluginDeviceBridge::~PluginDeviceBridge() = default;
 
 namespace {
 
-/// Visual action family: the six events that target a device key.
-/// All other routed events (getSettings, openUrl, logMessage, etc.) are handled
-/// in later phases and are a no-op here.
+/// Visual action family: the events that target a device key (so they get
+/// context resolution + ownership + control-service access in onAction). All
+/// other routed events (getSettings, openUrl, logMessage, …) are handled
+/// elsewhere (app layer) and are a no-op here.
 bool isVisualAction(QString const& event) {
     return event == QStringLiteral("setImage") || event == QStringLiteral("setTitle") ||
            event == QStringLiteral("setState") || event == QStringLiteral("setBG") ||
-           event == QStringLiteral("setFeedback") || event == QStringLiteral("setText");
+           event == QStringLiteral("setFeedback") || event == QStringLiteral("setText") ||
+           event == QStringLiteral("showAlert") || event == QStringLiteral("showOk");
+}
+
+/// Render a transient feedback glyph (Elgato showAlert/showOk) onto an 85x85
+/// key image. Drawn with geometric QPainter ops ONLY (no text) so it is safe in
+/// a headless QCoreApplication test environment (text needs a font backend).
+QImage makeFeedbackGlyph(bool ok) {
+    constexpr int kSize = 85;
+    QImage img(kSize, kSize, QImage::Format_RGBA8888);
+    img.fill(ok ? QColor(20, 90, 30) : QColor(110, 80, 10)); // dark green / amber bg
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    if (ok) {
+        // Green check mark (two strokes).
+        QPen pen(QColor(120, 230, 130), 9, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        p.setPen(pen);
+        p.drawLine(22, 45, 38, 61);
+        p.drawLine(38, 61, 65, 26);
+    } else {
+        // Amber warning triangle with an exclamation bar + dot.
+        p.setBrush(QColor(240, 200, 60));
+        p.setPen(Qt::NoPen);
+        QPolygon tri;
+        tri << QPoint(kSize / 2, 16) << QPoint(16, 68) << QPoint(kSize - 16, 68);
+        p.drawPolygon(tri);
+        p.setBrush(QColor(40, 30, 0));
+        p.drawRect(kSize / 2 - 3, 34, 6, 18); // exclamation bar
+        p.drawRect(kSize / 2 - 3, 57, 6, 6);  // exclamation dot
+    }
+    p.end();
+    return img;
 }
 
 } // namespace
@@ -411,6 +448,33 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
                                    imgPath.toStdString());
                 }
             }
+        }
+    } else if (event == QStringLiteral("showAlert") || event == QStringLiteral("showOk")) {
+        // Transient feedback flash (Elgato): paint a warning/ok glyph, then
+        // revert to the cached key image after a short dwell. Keypad only.
+        if (ctx.controller == QStringLiteral("Keypad")) {
+            bool const okGlyph = (event == QStringLiteral("showOk"));
+            std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, kDefaultKeyCols);
+            QImage const prev = m_control->lastKeyImage(keyIndex);
+            try {
+                m_control->assignKeyImage(keyIndex, makeFeedbackGlyph(okGlyph));
+            } catch (std::exception const& e) {
+                AJAZZ_LOG_WARN(
+                    "plugin-bridge", "{}: assignKeyImage threw: {}", event.toStdString(), e.what());
+            }
+            // showOk dwells ~0.5s, showAlert ~1.3s (Elgato-ish). Revert to the
+            // image that was on the key before the flash.
+            int const dwellMs = okGlyph ? 500 : 1300;
+            QPointer<StreamDockControlService> control(m_control);
+            QTimer::singleShot(dwellMs, this, [control, keyIndex, prev]() {
+                if (control && !prev.isNull()) {
+                    try {
+                        control->assignKeyImage(keyIndex, prev);
+                    } catch (std::exception const&) {
+                        // Device yanked during the dwell — nothing to restore.
+                    }
+                }
+            });
         }
     } else if (event == QStringLiteral("setFeedback") || event == QStringLiteral("setText")) {
         // Aux-surface rendering (encoder LCD strip / touch strip) deferred to Phase 23.

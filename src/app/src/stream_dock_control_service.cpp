@@ -151,6 +151,13 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
         return;
     }
 
+    // Switching to a different device invalidates the per-key image cache (the
+    // surfaces belong to the previous device). A same-codename re-resolve
+    // (hot-plug refresh) keeps it — the page repaints anyway.
+    if (m_activeCodename != codename) {
+        m_lastKeyImage.clear();
+    }
+
     // Hold the shared_ptr for the session (ARCH-03 / DISPLAY-06 Pitfall 2).
     // Re-resolve on every call so hot-plug arrival refreshes a yanked handle.
     m_activeDevice = m_lookup(codename);
@@ -219,9 +226,17 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
     // Record in the pending map (last-write-wins) and arm the drain timer.
     // The drain slot converts to RGBA8 and calls setKeyImage (Pattern 3).
     m_pendingWrites[PendingKey{SurfaceTag::Key, keyIndex}] = img;
+    // Cache the intended key image so setTitle/showAlert can composite over or
+    // revert to it (the current surface) without re-deriving it.
+    m_lastKeyImage[keyIndex] = img;
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
     }
+}
+
+QImage StreamDockControlService::lastKeyImage(std::uint8_t keyIndex) const {
+    auto const it = m_lastKeyImage.find(keyIndex);
+    return it != m_lastKeyImage.end() ? it->second : QImage{};
 }
 
 // ---------------------------------------------------------------------------

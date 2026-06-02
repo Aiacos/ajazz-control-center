@@ -116,6 +116,34 @@ TEST_CASE("StreamDockControlService: assignKeyImage paints the key (DISPLAY-07+D
     CHECK(fake->keyImages.back().index == 1);
 }
 
+TEST_CASE("StreamDockControlService: lastKeyImage caches the assigned image per key",
+          "[stream-dock-control][state]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+    app::StreamDockControlService svc(
+        [fake](QString const&) -> std::shared_ptr<core::IDevice> { return fake; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+
+    // No image assigned yet -> null.
+    CHECK(svc.lastKeyImage(1).isNull());
+
+    // Assigning caches the source image (synchronously, no drain needed).
+    QImage const src = solid(85, 85);
+    svc.assignKeyImage(1, src);
+    QImage const cached = svc.lastKeyImage(1);
+    REQUIRE_FALSE(cached.isNull());
+    CHECK(cached.size() == src.size());
+
+    // A different key stays empty.
+    CHECK(svc.lastKeyImage(2).isNull());
+
+    // Switching to a DIFFERENT device invalidates the cache (surfaces belong to
+    // the previous device).
+    svc.setActiveDevice(QStringLiteral("akp03"));
+    CHECK(svc.lastKeyImage(1).isNull());
+}
+
 TEST_CASE("StreamDockControlService: repaintFromProfile repaints all bound keys (DISPLAY-08)",
           "[stream-dock-control][DISPLAY-08]") {
     ajazz::tests::qtApp();

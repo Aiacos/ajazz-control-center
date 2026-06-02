@@ -165,6 +165,21 @@ public:
      */
     void assignKeyImage(std::uint8_t keyIndex, QImage const& img);
 
+    /**
+     * @brief Return the last image assigned to @p keyIndex (a null QImage if
+     *        none, or the cache was cleared by a device change).
+     *
+     * The cache records the most recent assignKeyImage() source per key so
+     * callers that need to composite onto / restore the current key surface —
+     * e.g. setTitle (title over the current image) and showAlert/showOk (flash
+     * then revert) — do not have to re-derive it. Updated unconditionally in
+     * assignKeyImage (it is the "intended" key image regardless of whether a
+     * device is currently attached) and cleared on setActiveDevice.
+     *
+     * @param keyIndex 1-based key index.
+     */
+    [[nodiscard]] QImage lastKeyImage(std::uint8_t keyIndex) const;
+
     // -------------------------------------------------------------------------
     // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
     //
@@ -443,6 +458,11 @@ private:
 
     /// Pending write map: last-write-wins per (surface, sub-index) pair (Pattern 3).
     std::map<PendingKey, QImage> m_pendingWrites;
+
+    /// Last image assigned per 1-based key index (see lastKeyImage()). Lets
+    /// setTitle composite over / showAlert revert to the current key surface
+    /// without re-deriving it. Cleared on setActiveDevice (stale across devices).
+    std::map<std::uint8_t, QImage> m_lastKeyImage;
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};
