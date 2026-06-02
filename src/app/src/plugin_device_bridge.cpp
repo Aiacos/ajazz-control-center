@@ -39,11 +39,15 @@
 
 #include <QByteArray>
 #include <QColor>
+#include <QCoreApplication>
+#include <QFont>
+#include <QGuiApplication>
 #include <QImage>
 #include <QPainter>
 #include <QPen>
 #include <QPointer>
 #include <QPolygon>
+#include <QRect>
 #include <QTimer>
 
 #include <algorithm>
@@ -348,6 +352,52 @@ QImage makeFeedbackGlyph(bool ok) {
     return img;
 }
 
+/// Composite @p title over a copy of @p base (or a neutral fill if base is
+/// null), returning the 85x85 result. The text is rendered ONLY when a GUI
+/// application is present — QPainter::drawText needs a font backend, which a
+/// headless QCoreApplication (unit tests) lacks; there it returns the base
+/// unchanged (title acknowledged, not painted) so the bridge stays crash-safe.
+QImage compositeTitle(QImage const& base, QString const& title) {
+    constexpr int kKeySize = 85;
+    QImage img(kKeySize, kKeySize, QImage::Format_RGBA8888);
+    if (base.isNull()) {
+        img.fill(QColor(30, 30, 30)); // dark neutral background
+    } else {
+        img.fill(Qt::transparent);
+        QPainter bp(&img);
+        bp.drawImage(
+            QRect(0, 0, kKeySize, kKeySize),
+            base.scaled(kKeySize, kKeySize, Qt::IgnoreAspectRatio, Qt::SmoothTransformation));
+        bp.end();
+    }
+    if (title.isEmpty() ||
+        qobject_cast<QGuiApplication*>(QCoreApplication::instance()) == nullptr) {
+        return img; // no GUI font backend (headless) -> skip text
+    }
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+    QFont font;
+    font.setPixelSize(16);
+    font.setBold(true);
+    p.setFont(font);
+    QRect const rect(2, 2, kKeySize - 4, kKeySize - 4);
+    auto const flags = Qt::AlignHCenter | Qt::AlignBottom | Qt::TextWordWrap;
+    // 1px black outline (8 offsets) so the title stays legible over any image.
+    p.setPen(QColor(0, 0, 0, 210));
+    for (int dx = -1; dx <= 1; ++dx) {
+        for (int dy = -1; dy <= 1; ++dy) {
+            if (dx != 0 || dy != 0) {
+                p.drawText(rect.translated(dx, dy), flags, title);
+            }
+        }
+    }
+    p.setPen(QColor(255, 255, 255));
+    p.drawText(rect, flags, title);
+    p.end();
+    return img;
+}
+
 } // namespace
 
 void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& action) {
@@ -457,19 +507,21 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
             std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, kDefaultKeyCols);
             QImage const prev = m_control->lastKeyImage(keyIndex);
             try {
-                m_control->assignKeyImage(keyIndex, makeFeedbackGlyph(okGlyph));
+                // updateBase=false: the flash is a transient overlay, it must
+                // not redefine the key's base image.
+                m_control->assignKeyImage(keyIndex, makeFeedbackGlyph(okGlyph), false);
             } catch (std::exception const& e) {
                 AJAZZ_LOG_WARN(
                     "plugin-bridge", "{}: assignKeyImage threw: {}", event.toStdString(), e.what());
             }
             // showOk dwells ~0.5s, showAlert ~1.3s (Elgato-ish). Revert to the
-            // image that was on the key before the flash.
+            // image that was on the key before the flash (also transient).
             int const dwellMs = okGlyph ? 500 : 1300;
             QPointer<StreamDockControlService> control(m_control);
             QTimer::singleShot(dwellMs, this, [control, keyIndex, prev]() {
                 if (control && !prev.isNull()) {
                     try {
-                        control->assignKeyImage(keyIndex, prev);
+                        control->assignKeyImage(keyIndex, prev, false);
                     } catch (std::exception const&) {
                         // Device yanked during the dwell — nothing to restore.
                     }
@@ -529,20 +581,23 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
                                     ActionContext const& ctx,
                                     std::uint8_t keyCols) {
     QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
-    [[maybe_unused]] QString const title = payload.value(QStringLiteral("title")).toString();
+    QString const title = payload.value(QStringLiteral("title")).toString();
 
-    // Phase 19: render the key with a solid neutral background to acknowledge the
-    // setTitle command. Full text rendering (QPainter overlay) is deferred to
-    // Phase 23 where a real GUI context is guaranteed; this avoids QPainter on
-    // a QCoreApplication environment (no screen backend, potential SIGABRT).
-    // The title string is acknowledged-but-deferred for text rendering (noted in SUMMARY).
-    constexpr int kKeySize = 85;
-    QImage img(kKeySize, kKeySize, QImage::Format_RGBA8888);
-    img.fill(QColor(30, 30, 30)); // dark neutral background (title visible in Phase 23)
-
+    // Composite the title text OVER the key's base image (the action surface set
+    // by setImage/setState/setBG), not over the currently-displayed image — so
+    // repeated setTitle calls don't stack title layers. The composited result is
+    // assigned as a transient overlay (updateBase=false) so it never redefines
+    // the base. Text is only painted when a GUI app is present (headless tests
+    // skip it; see compositeTitle).
+    //
+    // KNOWN GAP: the title does not yet persist across a later setImage (Elgato
+    // keeps title as an independent layer) — that needs a per-key title cache in
+    // the bridge re-applied on setImage; tracked as a follow-up.
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
+    QImage const base = m_control->baseKeyImage(keyIndex);
+    QImage const composited = compositeTitle(base, title);
     try {
-        m_control->assignKeyImage(keyIndex, img);
+        m_control->assignKeyImage(keyIndex, composited, /*updateBase=*/false);
     } catch (std::exception const& e) {
         AJAZZ_LOG_WARN("plugin-bridge",
                        "onSetTitle: assignKeyImage threw for key {}: {}",

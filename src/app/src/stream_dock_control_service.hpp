@@ -160,25 +160,36 @@ public:
      * with the 1-based key index; the backend encodes RGBA -> JPEG -> BAT -> 1024-
      * byte chunks -> ULEND (DISPLAY-07, DOCK-02).
      *
-     * @param keyIndex 1-based key index (1..10 for AKP05E).
-     * @param img      Source image at any resolution; backend resizes to 85x85.
+     * @param keyIndex   1-based key index (1..10 for AKP05E).
+     * @param img        Source image at any resolution; backend resizes to 85x85.
+     * @param updateBase When true (the default), @p img also becomes the key's
+     *                   BASE image — the action's persistent surface set by
+     *                   setImage / setState / setBG. Pass false for transient
+     *                   overlays (setTitle's composited result, showAlert's
+     *                   glyph) that must NOT redefine the base, so a later
+     *                   setTitle composites over the real base rather than over
+     *                   a previously-titled / flashed image (avoids double
+     *                   compositing).
      */
-    void assignKeyImage(std::uint8_t keyIndex, QImage const& img);
+    void assignKeyImage(std::uint8_t keyIndex, QImage const& img, bool updateBase = true);
 
     /**
-     * @brief Return the last image assigned to @p keyIndex (a null QImage if
-     *        none, or the cache was cleared by a device change).
+     * @brief Return the last image DISPLAYED on @p keyIndex (null if none / the
+     *        cache was cleared by a device change).
      *
-     * The cache records the most recent assignKeyImage() source per key so
-     * callers that need to composite onto / restore the current key surface —
-     * e.g. setTitle (title over the current image) and showAlert/showOk (flash
-     * then revert) — do not have to re-derive it. Updated unconditionally in
-     * assignKeyImage (it is the "intended" key image regardless of whether a
-     * device is currently attached) and cleared on setActiveDevice.
-     *
-     * @param keyIndex 1-based key index.
+     * The most recent assignKeyImage() source regardless of base/overlay. Used
+     * by showAlert/showOk to restore exactly what was on the key before a flash.
      */
     [[nodiscard]] QImage lastKeyImage(std::uint8_t keyIndex) const;
+
+    /**
+     * @brief Return the BASE image of @p keyIndex — the persistent action
+     *        surface set by setImage / setState / setBG (null if none).
+     *
+     * setTitle composites the title text over THIS (not the displayed image) so
+     * repeated setTitle calls do not stack title layers.
+     */
+    [[nodiscard]] QImage baseKeyImage(std::uint8_t keyIndex) const;
 
     // -------------------------------------------------------------------------
     // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
@@ -459,10 +470,15 @@ private:
     /// Pending write map: last-write-wins per (surface, sub-index) pair (Pattern 3).
     std::map<PendingKey, QImage> m_pendingWrites;
 
-    /// Last image assigned per 1-based key index (see lastKeyImage()). Lets
-    /// setTitle composite over / showAlert revert to the current key surface
-    /// without re-deriving it. Cleared on setActiveDevice (stale across devices).
+    /// Last image DISPLAYED per 1-based key index (see lastKeyImage()). Lets
+    /// showAlert/showOk restore exactly what was on the key. Updated on every
+    /// assignKeyImage; cleared on setActiveDevice (stale across devices).
     std::map<std::uint8_t, QImage> m_lastKeyImage;
+
+    /// BASE image per 1-based key index — the persistent action surface set by
+    /// setImage/setState/setBG (assignKeyImage with updateBase=true). setTitle
+    /// composites over this (see baseKeyImage()). Cleared on setActiveDevice.
+    std::map<std::uint8_t, QImage> m_baseKeyImage;
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};

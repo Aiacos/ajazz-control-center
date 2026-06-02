@@ -156,6 +156,7 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
     // (hot-plug refresh) keeps it — the page repaints anyway.
     if (m_activeCodename != codename) {
         m_lastKeyImage.clear();
+        m_baseKeyImage.clear();
     }
 
     // Hold the shared_ptr for the session (ARCH-03 / DISPLAY-06 Pitfall 2).
@@ -222,13 +223,19 @@ void StreamDockControlService::setActiveDevice(QString const& codename) {
     emit deviceActivated(codename);
 }
 
-void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage const& img) {
+void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex,
+                                              QImage const& img,
+                                              bool updateBase) {
     // Record in the pending map (last-write-wins) and arm the drain timer.
     // The drain slot converts to RGBA8 and calls setKeyImage (Pattern 3).
     m_pendingWrites[PendingKey{SurfaceTag::Key, keyIndex}] = img;
-    // Cache the intended key image so setTitle/showAlert can composite over or
-    // revert to it (the current surface) without re-deriving it.
+    // Always record the displayed image (for showAlert/showOk revert).
     m_lastKeyImage[keyIndex] = img;
+    // Only base-setting calls (setImage/setState/setBG) redefine the BASE image
+    // that setTitle composites over; transient overlays pass updateBase=false.
+    if (updateBase) {
+        m_baseKeyImage[keyIndex] = img;
+    }
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
     }
@@ -237,6 +244,11 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex, QImage cons
 QImage StreamDockControlService::lastKeyImage(std::uint8_t keyIndex) const {
     auto const it = m_lastKeyImage.find(keyIndex);
     return it != m_lastKeyImage.end() ? it->second : QImage{};
+}
+
+QImage StreamDockControlService::baseKeyImage(std::uint8_t keyIndex) const {
+    auto const it = m_baseKeyImage.find(keyIndex);
+    return it != m_baseKeyImage.end() ? it->second : QImage{};
 }
 
 // ---------------------------------------------------------------------------

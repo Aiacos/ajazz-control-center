@@ -135,13 +135,27 @@ TEST_CASE("StreamDockControlService: lastKeyImage caches the assigned image per 
     REQUIRE_FALSE(cached.isNull());
     CHECK(cached.size() == src.size());
 
+    // A base-setting assign (updateBase=true, the default) also sets the BASE.
+    CHECK(svc.baseKeyImage(1).size() == src.size());
+
     // A different key stays empty.
     CHECK(svc.lastKeyImage(2).isNull());
+    CHECK(svc.baseKeyImage(2).isNull());
 
-    // Switching to a DIFFERENT device invalidates the cache (surfaces belong to
-    // the previous device).
+    // A TRANSIENT overlay (updateBase=false — setTitle/showAlert) updates the
+    // DISPLAYED image but must NOT redefine the BASE, so a later setTitle still
+    // composites over the real action image.
+    QImage overlay(40, 40, QImage::Format_RGBA8888);
+    overlay.fill(Qt::red);
+    svc.assignKeyImage(1, overlay, /*updateBase=*/false);
+    CHECK(svc.lastKeyImage(1).size() == overlay.size()); // displayed = overlay
+    CHECK(svc.baseKeyImage(1).size() == src.size());     // base unchanged
+
+    // Switching to a DIFFERENT device invalidates both caches (surfaces belong
+    // to the previous device).
     svc.setActiveDevice(QStringLiteral("akp03"));
     CHECK(svc.lastKeyImage(1).isNull());
+    CHECK(svc.baseKeyImage(1).isNull());
 }
 
 TEST_CASE("StreamDockControlService: repaintFromProfile repaints all bound keys (DISPLAY-08)",
