@@ -56,6 +56,13 @@ Rectangle {
     property bool   hasSelection: selectionLabel.length > 0
     property var    binding: null
 
+    // Wire context inputs — fed by DeviceView so the PI settings context
+    // matches the wire context id (device#page#controller#row#column).
+    // See PLUGIN-22 / 29-02-PLAN.md: Inspector.qml does NOT know the codename
+    // or numeric index on its own; DeviceView binds them.
+    property string deviceCodename: ""
+    property int    keyIndex: -1
+
     signal bindingFieldChanged(string field, var value)
 
     // Clip so the form can never paint outside the docked pane and bleed
@@ -93,17 +100,28 @@ Rectangle {
         }
 
         var pluginUuid = (info && info.pluginUuid) ? info.pluginUuid : "";
-        PropertyInspectorController.loadInspector(pluginUuid, piAbs, actionId, root._contextUuid());
+        var ctx = root._contextUuid();
+        if (ctx === "") {
+            // No valid key selection — cannot build a wire context id yet.
+            PropertyInspectorController.closeInspector();
+            return;
+        }
+        PropertyInspectorController.loadInspector(pluginUuid, piAbs, actionId, ctx);
     }
 
-    // Stable per-profile, per-selection settings context so the PIBridge
-    // persists settings to a deterministic file across sessions. Distinct
-    // profiles/keys get distinct contexts (so settings do not bleed across).
+    // Stable wire context id that the PIBridge and the plugin WebSocket path both
+    // key their per-context settings records on (PLUGIN-22 / 29-02-PLAN.md).
+    // Format: device#page#controller#row#column — matches ContextRegistry::deriveContextId
+    // byte-for-byte.  AKP05E grid is 5-wide: col = keyIndex % 5, row = floor(keyIndex / 5).
+    // Returns "" when keyIndex < 0 (no key selected) so loadInspector is not called
+    // with a bogus context.
     function _contextUuid() {
-        var pid = (typeof ProfileController !== "undefined" && ProfileController)
-            ? ProfileController.activeProfileId() : "";
-        var sel = root.selectionLabel.replace(/[^A-Za-z0-9_-]/g, "_");
-        return (pid === "" ? "default" : pid) + "_" + (sel === "" ? "sel" : sel);
+        if (root.keyIndex < 0 || root.deviceCodename === "") {
+            return "";
+        }
+        var col = root.keyIndex % 5;
+        var row = Math.floor(root.keyIndex / 5);
+        return root.deviceCodename + "#root#Keypad#" + row + "#" + col;
     }
 
     // React to binding changes (new key selected, selection cleared, binding updated).

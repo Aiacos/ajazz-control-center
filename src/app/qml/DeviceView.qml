@@ -444,6 +444,10 @@ Item {
                           ? qsTr("Zone %1").arg(root.selectedZoneIndex + 1)
                           : ""))
                 binding: root.selectedBinding
+                // PLUGIN-22: feed the wire context inputs so the Inspector can
+                // assemble the wire context id (device#root#Keypad#row#col).
+                deviceCodename: root.codename
+                keyIndex: root.selectedKeyIndex
                 onBindingFieldChanged: function(field, value) {
                     root.updateSelectedBinding(field, value);
                 }
