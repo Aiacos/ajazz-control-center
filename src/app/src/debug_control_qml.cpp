@@ -17,6 +17,8 @@
 #include "debug_control_facade.hpp"
 #include "debug_control_server.hpp"
 
+#include <QCoreApplication>
+#include <QEvent>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -24,7 +26,9 @@
 #include <QList>
 #include <QMetaMethod>
 #include <QMetaObject>
+#include <QMouseEvent>
 #include <QObject>
+#include <QPointF>
 #include <QQmlApplicationEngine>
 #include <QQuickItem>
 #include <QQuickWindow>
@@ -254,6 +258,89 @@ void registerQmlControlMethods(DebugControlServer& server, QQmlApplicationEngine
             return QJsonObject{};
         }
         return QJsonObject{{"path", path}, {"width", frame.width()}, {"height", frame.height()}};
+    });
+
+    // qml.drag {from, to, steps?=12} -> synthesizes a REAL pointer drag: a left-button
+    // press at the source item's scene-centre, `steps` interpolated move events to the
+    // target item's scene-centre, then a release. Delivered as QMouseEvents to the owning
+    // QQuickWindow so the full delivery path (incl. PointerHandlers / DragHandler) runs —
+    // unlike qml.invoke/qml.click which only emit signals (the Phase-28 trap). This is how
+    // the Wayland drag-drop gesture is autonomously regression-tested.
+    server.registerMethod("qml.drag", [&engine](QJsonObject const& params, QString& err) {
+        QObject* from = findByName(engine, params.value("from").toString());
+        QObject* to = findByName(engine, params.value("to").toString());
+        if (from == nullptr || to == nullptr) {
+            err = QStringLiteral("from/to object not found");
+            return QJsonObject{};
+        }
+        auto* fromItem = qobject_cast<QQuickItem*>(from);
+        auto* toItem = qobject_cast<QQuickItem*>(to);
+        if (fromItem == nullptr || toItem == nullptr) {
+            err = QStringLiteral("from/to is not a QQuickItem");
+            return QJsonObject{};
+        }
+        QQuickWindow* win = fromItem->window();
+        if (win == nullptr) {
+            err = QStringLiteral("source item has no window");
+            return QJsonObject{};
+        }
+        QPointF const p0 = fromItem->mapToScene(fromItem->boundingRect().center());
+        QPointF const p1 = toItem->mapToScene(toItem->boundingRect().center());
+        int steps = params.value("steps").toInt(12);
+        if (steps < 2) {
+            steps = 2;
+        }
+        auto deliver = [win](QEvent::Type t, QPointF wp, Qt::MouseButton b, Qt::MouseButtons bs) {
+            QPointF const gp = win->mapToGlobal(wp);
+            QMouseEvent ev(t, wp, wp, gp, b, bs, Qt::NoModifier);
+            QCoreApplication::sendEvent(win, &ev);
+        };
+        deliver(QEvent::MouseButtonPress, p0, Qt::LeftButton, Qt::LeftButton);
+        for (int i = 1; i <= steps; ++i) {
+            QPointF const wp = p0 + (p1 - p0) * (static_cast<double>(i) / steps);
+            deliver(QEvent::MouseMove, wp, Qt::NoButton, Qt::LeftButton);
+        }
+        deliver(QEvent::MouseButtonRelease, p1, Qt::LeftButton, Qt::NoButton);
+        return QJsonObject{{"from", from->objectName()},
+                           {"to", to->objectName()},
+                           {"steps", steps},
+                           {"delivered", true}};
+    });
+
+    // input.pointer {action: press|move|release, x, y} -> posts a single QMouseEvent at
+    // window-local (x,y) so a press->move->release drag can be scripted step-by-step. Same
+    // real-event delivery as qml.drag; use when objectName centres are not the right targets.
+    server.registerMethod("input.pointer", [&engine](QJsonObject const& params, QString& err) {
+        QQuickWindow* win = firstWindow(engine);
+        if (win == nullptr) {
+            err = QStringLiteral("no QQuickWindow available");
+            return QJsonObject{};
+        }
+        QString const action = params.value("action").toString();
+        QPointF const wp(params.value("x").toDouble(), params.value("y").toDouble());
+        QEvent::Type t{};
+        Qt::MouseButton b{};
+        Qt::MouseButtons bs{};
+        if (action == QStringLiteral("press")) {
+            t = QEvent::MouseButtonPress;
+            b = Qt::LeftButton;
+            bs = Qt::LeftButton;
+        } else if (action == QStringLiteral("release")) {
+            t = QEvent::MouseButtonRelease;
+            b = Qt::LeftButton;
+            bs = Qt::NoButton;
+        } else if (action == QStringLiteral("move")) {
+            t = QEvent::MouseMove;
+            b = Qt::NoButton;
+            bs = Qt::LeftButton;
+        } else {
+            err = QStringLiteral("action must be press|move|release");
+            return QJsonObject{};
+        }
+        QPointF const gp = win->mapToGlobal(wp);
+        QMouseEvent ev(t, wp, wp, gp, b, bs, Qt::NoModifier);
+        QCoreApplication::sendEvent(win, &ev);
+        return QJsonObject{{"action", action}, {"x", wp.x()}, {"y", wp.y()}, {"delivered", true}};
     });
 }
 
