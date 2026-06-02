@@ -80,6 +80,7 @@ struct ActionContext {
     QString controller; ///< "Keypad" | "Encoder"
     QString actionUUID; ///< Dotted action id, e.g. com.vendor.plugin.action.
     QString pluginUuid; ///< Owning plugin uuid, e.g. com.vendor.plugin.
+    int stateIndex{0};  ///< Current 0-based action state (Elgato setState; §4.4 `state`).
 };
 
 // ---------------------------------------------------------------------------
@@ -176,6 +177,20 @@ public:
 
     /// Remove all registrations.
     void clear();
+
+    /**
+     * @brief Update the current state index of a registered context (setState).
+     *
+     * The state index is NOT part of the context-id tuple, so this mutates the
+     * stored entry in place without changing the opaque context string the
+     * plugin holds. Negative indices clamp to 0 (Elgato states are 0-based).
+     *
+     * @param context     The opaque context id (from setState's `context`).
+     * @param stateIndex  The new 0-based action state.
+     * @return            true if the context was found and updated; false if no
+     *                    such context is registered (stale/unknown).
+     */
+    bool setState(QString const& context, int stateIndex);
 
     /// @return Number of currently registered contexts.
     [[nodiscard]] int size() const noexcept;

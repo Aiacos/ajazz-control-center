@@ -382,6 +382,79 @@ TEST_CASE("PluginDeviceBridge ContextRegistry registerContext and byContext roun
     CHECK(found->pluginUuid == ctx.pluginUuid);
 }
 
+TEST_CASE("PluginDeviceBridge ContextRegistry setState updates the stored state index",
+          "[plugin-device-bridge][registry][state]") {
+    ensureQCoreApp();
+
+    ContextRegistry reg;
+    ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 1;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.x.plugin.toggle");
+    ctx.pluginUuid = QStringLiteral("com.x.plugin");
+
+    QString const ctxId = reg.registerContext(ctx);
+    // A freshly-registered context starts at state 0 (Elgato default).
+    REQUIRE(reg.byContext(ctxId).has_value());
+    CHECK(reg.byContext(ctxId)->stateIndex == 0);
+
+    // setState updates the stored entry (not a copy) and returns true.
+    CHECK(reg.setState(ctxId, 1));
+    CHECK(reg.byContext(ctxId)->stateIndex == 1);
+
+    // Re-setState to a different index.
+    CHECK(reg.setState(ctxId, 3));
+    CHECK(reg.byContext(ctxId)->stateIndex == 3);
+
+    // Negative indices clamp to 0 (states are 0-based).
+    CHECK(reg.setState(ctxId, -5));
+    CHECK(reg.byContext(ctxId)->stateIndex == 0);
+
+    // byCoord must also observe the updated state (same backing entry).
+    reg.setState(ctxId, 2);
+    auto const byCoord = reg.byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 1);
+    REQUIRE(byCoord.has_value());
+    CHECK(byCoord->stateIndex == 2);
+}
+
+TEST_CASE("PluginDeviceBridge ContextRegistry setState returns false for unknown context",
+          "[plugin-device-bridge][registry][state]") {
+    ensureQCoreApp();
+
+    ContextRegistry reg;
+    CHECK_FALSE(reg.setState(QStringLiteral("nonexistent#root#Keypad#0#0"), 1));
+}
+
+TEST_CASE("PluginDeviceBridge ContextRegistry registerContext preserves state on re-registration",
+          "[plugin-device-bridge][registry][state]") {
+    ensureQCoreApp();
+
+    ContextRegistry reg;
+    ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 0;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.x.plugin.toggle");
+    ctx.pluginUuid = QStringLiteral("com.x.plugin");
+
+    QString const ctxId = reg.registerContext(ctx);
+    REQUIRE(reg.setState(ctxId, 1));
+
+    // Idempotent re-registration (e.g. page re-activation) builds a fresh
+    // ActionContext (stateIndex 0). The registry must PRESERVE the prior state so
+    // a navigated-away-and-back action does not silently reset to state 0.
+    ActionContext fresh = ctx; // stateIndex defaults to 0
+    QString const ctxId2 = reg.registerContext(fresh);
+    CHECK(ctxId2 == ctxId); // same encoded-tuple id (state excluded from the id)
+    REQUIRE(reg.byContext(ctxId).has_value());
+    CHECK(reg.byContext(ctxId)->stateIndex == 1); // preserved, not reset
+}
+
 TEST_CASE("PluginDeviceBridge ContextRegistry byCoord lookup", "[plugin-device-bridge][registry]") {
     ensureQCoreApp();
 

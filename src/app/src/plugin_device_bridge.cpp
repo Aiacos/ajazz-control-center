@@ -65,7 +65,15 @@ ContextRegistry::coordKey(QString const& deviceId, QString const& controller, in
 
 QString ContextRegistry::registerContext(ActionContext const& ctx) {
     QString const ctxId = deriveContextId(ctx);
-    m_byContext.insert(ctxId, ctx);
+    ActionContext stored = ctx;
+    // Idempotent re-registration (e.g. page re-activation) must NOT wipe the
+    // current action state: the context id excludes stateIndex, so preserve the
+    // prior stateIndex if this context already exists (setState tracks it).
+    auto const it = m_byContext.constFind(ctxId);
+    if (it != m_byContext.constEnd()) {
+        stored.stateIndex = it->stateIndex;
+    }
+    m_byContext.insert(ctxId, stored);
     QString const ck = coordKey(ctx.deviceId, ctx.controller, ctx.row, ctx.column);
     m_byCoord.insert(ck, ctxId);
     return ctxId;
@@ -134,6 +142,15 @@ void ContextRegistry::retirePage(QString const& deviceId, QString const& pageId)
 void ContextRegistry::clear() {
     m_byContext.clear();
     m_byCoord.clear();
+}
+
+bool ContextRegistry::setState(QString const& context, int stateIndex) {
+    auto it = m_byContext.find(context);
+    if (it == m_byContext.end()) {
+        return false; // stale / unknown context
+    }
+    it->stateIndex = std::max(0, stateIndex); // Elgato states are 0-based
+    return true;
 }
 
 int ContextRegistry::size() const noexcept {
@@ -352,12 +369,21 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
     } else if (event == QStringLiteral("setBG")) {
         onSetBG(pluginUuid, action, ctx, kDefaultKeyCols);
     } else if (event == QStringLiteral("setState")) {
-        // setState changes the action state index (triggers a different image/title).
-        // Phase 19: resolve the key index but defer full multi-state rendering to
-        // Phase 23 UI binding. Log + no-op for the paint step.
+        // setState changes the current 0-based action state. Track it on the
+        // context so subsequent willAppear / keyDown / keyUp / dial* events report
+        // the correct `state` (Elgato §4.4). The state survives idempotent
+        // re-registration (registerContext preserves it). Auto-rendering the
+        // manifest's States[index].Image is a follow-up (needs the action manifest
+        // plumbed into the bridge); today a plugin pairs setState with its own
+        // setImage, which still paints via onSetImage above.
+        QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+        int const newState = payload.value(QStringLiteral("state")).toInt(0);
+        bool const ok = m_registry.setState(contextId, newState);
         AJAZZ_LOG_INFO("plugin-bridge",
-                       "setState: deferred to Phase 23 multi-state rendering for context '{}'",
-                       contextId.toStdString());
+                       "setState: context '{}' -> state {} ({})",
+                       contextId.toStdString(),
+                       newState,
+                       ok ? "updated" : "unknown context");
     } else if (event == QStringLiteral("setFeedback") || event == QStringLiteral("setText")) {
         // Aux-surface rendering (encoder LCD strip / touch strip) deferred to Phase 23.
         AJAZZ_LOG_INFO("plugin-bridge",
@@ -531,6 +557,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         };
         QJsonObject const payload{
             {QStringLiteral("coordinates"), coords},
+            {QStringLiteral("state"), ctx.stateIndex}, // §4.4 current action state
             {QStringLiteral("isInMultiAction"), false},
         };
         QString const eventName =
@@ -557,6 +584,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             {QStringLiteral("ticks"), ev.value}, // signed (int32) preserved
             {QStringLiteral("pressed"), false},
             {QStringLiteral("controller"), QStringLiteral("Encoder")},
+            {QStringLiteral("state"), ctx.stateIndex},
         };
         m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialRotate"), payload);
         break;
@@ -574,6 +602,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         ActionContext const& ctx = *ctxOpt;
         QJsonObject const payload{
             {QStringLiteral("controller"), QStringLiteral("Encoder")},
+            {QStringLiteral("state"), ctx.stateIndex},
         };
         m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialDown"), payload);
         // AJAZZ legacy alias (§4.4 keyDownCord — AJAZZ-only).
@@ -594,6 +623,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         ActionContext const& ctx = *ctxOpt;
         QJsonObject const payload{
             {QStringLiteral("controller"), QStringLiteral("Encoder")},
+            {QStringLiteral("state"), ctx.stateIndex},
         };
         m_server->sendEvent(ctx.pluginUuid, QStringLiteral("dialUp"), payload);
         m_server->sendEvent(ctx.pluginUuid, QStringLiteral("keyUpCord"), payload);
@@ -696,8 +726,10 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.pluginUuid = owner;
 
             QString const ctxId = m_registry.registerContext(ctx);
+            auto const regOpt = m_registry.byContext(ctxId);
+            int const stState = regOpt.has_value() ? regOpt->stateIndex : 0;
 
-            // Send willAppear (§4.4) — carries context + coordinates.
+            // Send willAppear (§4.4) — carries context + coordinates + state.
             QJsonObject const coords{
                 {QStringLiteral("row"), gc.row},
                 {QStringLiteral("column"), gc.column},
@@ -705,6 +737,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             QJsonObject const payload{
                 {QStringLiteral("context"), ctxId},
                 {QStringLiteral("coordinates"), coords},
+                {QStringLiteral("state"), stState},
                 {QStringLiteral("isInMultiAction"), false},
             };
             m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
@@ -740,6 +773,8 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.pluginUuid = owner;
 
             QString const ctxId = m_registry.registerContext(ctx);
+            auto const regOpt = m_registry.byContext(ctxId);
+            int const stState = regOpt.has_value() ? regOpt->stateIndex : 0;
 
             QJsonObject const coords{
                 {QStringLiteral("row"), 0},
@@ -748,6 +783,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             QJsonObject const payload{
                 {QStringLiteral("context"), ctxId},
                 {QStringLiteral("coordinates"), coords},
+                {QStringLiteral("state"), stState},
                 {QStringLiteral("isInMultiAction"), false},
             };
             m_server->sendEvent(owner, QStringLiteral("willAppear"), payload);
