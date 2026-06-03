@@ -52,6 +52,7 @@
 #include <QPointer>
 #include <QPolygon>
 #include <QRect>
+#include <QSet>
 #include <QTimer>
 
 #include <algorithm>
@@ -1018,6 +1019,16 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
     constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
     QString const pageId = QStringLiteral("root");
 
+    // RECONCILE (PLUGIN-move parity, mirrors OpenDeck move_instance): collect the
+    // set of context ids that SHOULD be live for this device/page given the current
+    // profile. After the willAppear pass we diff this against the registry snapshot
+    // and send willDisappear + retire for any context that is registered but no
+    // longer desired (e.g. the key a binding was just moved away from). Without this
+    // pass the vacated key keeps a stale context and the plugin never learns the
+    // action left it, so a moved plugin action renders in two places / never on the
+    // new key. The id form here is exactly the registry key (registerContext return).
+    QSet<QString> desired;
+
     // Enumerate key bindings (0-based uint16_t key index in Profile::keys).
     for (auto const& [keyIdx0, binding] : prof.keys) {
         for (auto const& action : binding.onPress) {
@@ -1057,6 +1068,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                   QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
+            desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
             // registerContext preserves a prior stateIndex; reflect it in the ctx
             // we serialise so willAppear carries the live state, not the default 0.
@@ -1103,6 +1115,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                   QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
+            desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
             if (regOpt.has_value()) {
                 ctx.stateIndex = regOpt->stateIndex;
@@ -1151,6 +1164,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                   QString::fromStdString(action.settingsJson));
 
             QString const ctxId = m_registry.registerContext(ctx);
+            desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
             if (regOpt.has_value()) {
                 ctx.stateIndex = regOpt->stateIndex;
@@ -1159,6 +1173,29 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             m_server->sendEvent(
                 owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
         }
+    }
+
+    // RECONCILE retire pass: send willDisappear + retire for every context that is
+    // currently registered for this device's root page (respecting the optional
+    // pluginUuid filter) but is NOT in the desired set we just rebuilt from the
+    // profile. This is what makes "move a binding to another control" correct: the
+    // source control's context is no longer desired, so the plugin receives
+    // willDisappear for it (matching OpenDeck move_instance's willDisappear(old)).
+    // Scoped to pageId=="root" because that is the only page populate registers.
+    for (auto const& [ctxId, ctx] : m_registry.snapshot()) {
+        if (ctx.deviceId != deviceId || ctx.pageId != pageId) {
+            continue;
+        }
+        if (!pluginUuid.isEmpty() && ctx.pluginUuid != pluginUuid) {
+            continue;
+        }
+        if (desired.contains(ctxId)) {
+            continue;
+        }
+        m_server->sendEvent(
+            ctx.pluginUuid,
+            eventEnvelope(QStringLiteral("willDisappear"), ctx, instancePayload(ctx)));
+        m_registry.retire(ctxId);
     }
 }
 
@@ -1294,6 +1331,34 @@ void PluginDeviceBridge::onActivePageChanged(QString const& deviceId, QString co
     retirePageContexts(deviceId, QStringLiteral("root"), {});
     populateContextsForActivePage(deviceId);
     Q_UNUSED(pageId); // multi-page scope deferred to Phase 16
+}
+
+void PluginDeviceBridge::onPropertyInspectorSettings(QString const& pluginUuid,
+                                                     QString const& contextId,
+                                                     QString const& json) {
+    if (m_server == nullptr) {
+        return;
+    }
+    // Resolve the wire context id to the live ActionContext. If nothing is
+    // registered under it the action has no mounted instance (e.g. the PI is
+    // open for a control on a page that is not active) — there is nothing to
+    // notify, so this is a safe no-op. The PI still persisted to disk, and the
+    // next willAppear will carry the value via settingsForContext().
+    auto const ctxOpt = m_registry.byContext(contextId);
+    if (!ctxOpt.has_value()) {
+        return;
+    }
+    // Keep the registry's cached settings in sync so a subsequent willAppear /
+    // keyDown for this context carries the just-edited value, not the stale one.
+    m_registry.updateSettings(contextId, json);
+
+    ActionContext ctx = *ctxOpt;
+    ctx.settingsJson = json;
+    // Prefer the bridge-known owner; fall back to the PI-supplied uuid if the
+    // registry entry has none (defensive — registration always sets it).
+    QString const owner = ctx.pluginUuid.isEmpty() ? pluginUuid : ctx.pluginUuid;
+    m_server->sendEvent(
+        owner, eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
 }
 
 } // namespace ajazz::app

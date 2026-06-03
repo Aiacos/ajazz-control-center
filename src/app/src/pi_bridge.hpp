@@ -144,6 +144,15 @@ signals:
     /// Plugin-wide counterpart to @c didReceiveSettings.
     void didReceiveGlobalSettings(QString json);
 
+    /// Emitted after the PI persists new per-context settings via setSettings,
+    /// carrying the plugin uuid, the wire context id, and the settings JSON.
+    /// The Application routes this to PluginDeviceBridge so the LIVE plugin
+    /// process receives a @c didReceiveSettings event for that context — the
+    /// PI->plugin half of the settings round-trip (mirrors OpenDeck set_settings,
+    /// which notifies the plugin when the change originated in the PI). Without
+    /// this the plugin only learns of PI edits on the next willAppear.
+    void contextSettingsChanged(QString pluginUuid, QString contextId, QString json);
+
     /// Forward a payload from the plugin process to this PI's JS.
     void sendToPropertyInspector(QString json);
 

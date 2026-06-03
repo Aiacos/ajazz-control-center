@@ -472,6 +472,26 @@ public slots:
     void onActivePageChanged(QString const& deviceId, QString const& pageId);
 
     /**
+     * @brief Deliver a Property-Inspector-originated settings change to the live
+     *        plugin process as a @c didReceiveSettings event.
+     *
+     * Wired (in application.cpp, per fresh PIBridge) from
+     * @c PIBridge::contextSettingsChanged. Resolves @p contextId via the registry
+     * to the full ActionContext, refreshes its stored settings, and sends the
+     * Elgato @c didReceiveSettings envelope to the owning plugin — the PI->plugin
+     * half of the settings round-trip (mirrors OpenDeck set_settings notifying the
+     * plugin when the edit came from the PI). No-op if the context is not
+     * registered (no live instance) or the server is absent.
+     *
+     * @param pluginUuid  Owning plugin uuid (relay target).
+     * @param contextId   Wire context id (device#page#controller#row#column).
+     * @param json        New per-context settings JSON.
+     */
+    void onPropertyInspectorSettings(QString const& pluginUuid,
+                                     QString const& contextId,
+                                     QString const& json);
+
+    /**
      * @brief Register contexts + send willAppear for every bound ActionKind::Plugin
      *        action on the root page of the active profile that belongs to the
      *        given plugin (or all registered plugins if pluginUuid is empty).

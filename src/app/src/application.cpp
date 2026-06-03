@@ -673,6 +673,16 @@ Application::Application(QObject* parent)
                                      QJsonDocument::fromJson(json.toUtf8()).object();
                                  server->sendEvent(uuid, QStringLiteral("sendToPlugin"), payload);
                              });
+            // PI->plugin settings round-trip: when the PI persists per-context
+            // settings, notify the live plugin process with didReceiveSettings.
+            // Routed through the bridge so the wire context id resolves to the
+            // full ActionContext (coordinates/controller/state) via the registry.
+            if (m_pluginBridge) {
+                QObject::connect(bridge,
+                                 &ajazz::app::PIBridge::contextSettingsChanged,
+                                 m_pluginBridge.get(),
+                                 &ajazz::app::PluginDeviceBridge::onPropertyInspectorSettings);
+            }
             // Plugin->PI half of the relay: the PluginDeviceBridge surfaces a
             // plugin's sendToPropertyInspector as relayToPropertyInspector; forward
             // it to THIS PI page when the plugin UUID matches. bridge is the context

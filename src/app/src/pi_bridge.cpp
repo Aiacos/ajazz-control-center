@@ -279,6 +279,14 @@ void PIBridge::setSettings(QString const& json) {
             pluginUuid_.toStdString(),
             contextUuid_.toStdString());
     }
+
+    // PI->plugin half of the settings round-trip: notify the live plugin process
+    // that this context's settings changed so it gets a didReceiveSettings event
+    // (Application routes this to PluginDeviceBridge). Mirrors OpenDeck
+    // set_settings, which notifies the plugin when the edit came from the PI.
+    // Emitted even if the disk write failed above so an in-memory plugin still
+    // sees the user's intent; the store error is already logged.
+    emit contextSettingsChanged(pluginUuid_, contextUuid_, json);
 }
 
 void PIBridge::getSettings() {

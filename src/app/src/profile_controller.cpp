@@ -335,6 +335,32 @@ QVariantList ProfileController::activeKeyBindings() const {
     return out;
 }
 
+QVariantList ProfileController::activeEncoderBindings() const {
+    // Keypad analog: activeKeyBindings(). The dial's bound action is its onPress
+    // front (commitEncoderBinding assigns there); CW/CCW chains are a follow-up,
+    // so the tile/PI key off onPress exactly like a key does.
+    QVariantList out;
+    for (auto const& [idx, binding] : m_profile.encoders) {
+        QVariantMap m;
+        m.insert(QStringLiteral("index"), static_cast<int>(idx));
+        m.insert(QStringLiteral("iconSource"),
+                 binding.state.imagePath ? QString::fromStdString(*binding.state.imagePath)
+                                         : QString{});
+        m.insert(QStringLiteral("label"),
+                 binding.state.text ? QString::fromStdString(*binding.state.text) : QString{});
+        int kind = 0;
+        QString actionId;
+        if (!binding.onPress.empty()) {
+            kind = static_cast<int>(binding.onPress.front().kind);
+            actionId = QString::fromStdString(binding.onPress.front().id);
+        }
+        m.insert(QStringLiteral("actionKind"), kind);
+        m.insert(QStringLiteral("actionId"), actionId);
+        out.append(m);
+    }
+    return out;
+}
+
 ajazz::core::Profile const& ProfileController::activeProfile() const noexcept {
     return m_profile;
 }
@@ -657,6 +683,31 @@ void ProfileController::swapEncoderBindings(int srcIndex, int dstIndex) {
     auto src_copy = m_profile.encoders[s];
     m_profile.encoders[s] = m_profile.encoders[d];
     m_profile.encoders[d] = std::move(src_copy);
+    emit profileChanged();
+}
+
+void ProfileController::swapKeyBindings(int srcIndex, int dstIndex) {
+    // Keypad analog of swapEncoderBindings. Moves the WHOLE core::Binding so a
+    // multi-action onPress chain (PLUGIN-23) survives a move/swap intact — the
+    // old QML two-commit path collapsed it to a single action.
+    constexpr int kMaxIdx = static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1);
+    if (srcIndex < 0 || srcIndex > kMaxIdx || dstIndex < 0 || dstIndex > kMaxIdx) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "swapKeyBindings: index out of range (src={}, dst={}), ignoring",
+                       srcIndex,
+                       dstIndex);
+        return;
+    }
+    if (srcIndex == dstIndex) {
+        return; // No-op for self-swap.
+    }
+    auto const s = static_cast<std::uint16_t>(srcIndex);
+    auto const d = static_cast<std::uint16_t>(dstIndex);
+    // operator[] on an absent key default-constructs an empty Binding, which is
+    // the correct semantics for "swap with an empty slot moves the binding".
+    auto src_copy = m_profile.keys[s];
+    m_profile.keys[s] = m_profile.keys[d];
+    m_profile.keys[d] = std::move(src_copy);
     emit profileChanged();
 }
 

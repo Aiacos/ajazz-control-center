@@ -158,6 +158,13 @@ public:
     /// switch (DeviceView listens to profileChanged()).
     [[nodiscard]] Q_INVOKABLE QVariantList activeKeyBindings() const;
 
+    /// Active profile's ENCODER (dial) bindings as a QVariantList of
+    /// {index, iconSource, label, actionKind, actionId} maps (only populated
+    /// encoders). The keypad analog above is activeKeyBindings(); this lets the
+    /// QML editor resolve the action bound to the selected dial so the Property
+    /// Inspector can configure it (the encoder's onPress is the bound action).
+    [[nodiscard]] Q_INVOKABLE QVariantList activeEncoderBindings() const;
+
     // -------------------------------------------------------------------------
     // Phase 16-02 (PROFILE-01): default path + commit + active-profile save/load
     // -------------------------------------------------------------------------
@@ -354,6 +361,31 @@ public:
      * @invokable Callable from QML as ProfileController.swapEncoderBindings(...).
      */
     Q_INVOKABLE void swapEncoderBindings(int srcIndex, int dstIndex);
+
+    /**
+     * @brief Atomically swap (or move) two KEY bindings, whole-Binding.
+     *
+     * The keypad analog of swapEncoderBindings, added for the "move a bound
+     * action to another button" gesture (goal: drag an occupied key onto
+     * another key). Unlike the previous QML-side workaround in DeviceView's
+     * onKeySwapRequested — which re-issued two commitKeyBinding() calls and so
+     * collapsed a multi-action onPress chain down to a single action and dropped
+     * onRelease/onLongPress — this moves the ENTIRE core::Binding (the full
+     * onPress vector incl. multi-action, onRelease, onLongPress, and the visual
+     * KeyState) so no chain data is lost on a move/swap.
+     *
+     * Swapping with an empty destination effectively MOVES the binding there and
+     * clears the source (operator[] default-constructs an empty Binding for an
+     * absent key, which is the correct "moved away" state). The subsequent
+     * profileChanged() drives the bridge's context reconcile so the plugin
+     * receives willDisappear(old key) + willAppear(new key).
+     *
+     * Out-of-range indices (negative or > uint16_t max - 1) are logged and
+     * ignored; equal indices are a no-op. Emits profileChanged() once on success.
+     *
+     * @invokable Callable from QML as ProfileController.swapKeyBindings(...).
+     */
+    Q_INVOKABLE void swapKeyBindings(int srcIndex, int dstIndex);
 
     /**
      * @brief Atomically swap two touch-zone bindings.

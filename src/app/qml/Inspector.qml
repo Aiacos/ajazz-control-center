@@ -62,6 +62,9 @@ Rectangle {
     // or numeric index on its own; DeviceView binds them.
     property string deviceCodename: ""
     property int    keyIndex: -1
+    // Dial selection: when >= 0 (and keyIndex < 0) the PI targets an Encoder
+    // context instead of a Keypad context, so dial plugin actions configure.
+    property int    encoderIndex: -1
 
     signal bindingFieldChanged(string field, var value)
 
@@ -116,16 +119,32 @@ Rectangle {
     // Returns "" when keyIndex < 0 (no key selected) so loadInspector is not called
     // with a bogus context.
     function _contextUuid() {
-        if (root.keyIndex < 0 || root.deviceCodename === "") {
+        if (root.deviceCodename === "") {
             return "";
         }
-        var col = root.keyIndex % 5;
-        var row = Math.floor(root.keyIndex / 5);
-        return root.deviceCodename + "#root#Keypad#" + row + "#" + col;
+        // Keypad context: device#root#Keypad#row#col (AKP05E grid is 5-wide).
+        if (root.keyIndex >= 0) {
+            var col = root.keyIndex % 5;
+            var row = Math.floor(root.keyIndex / 5);
+            return root.deviceCodename + "#root#Keypad#" + row + "#" + col;
+        }
+        // Encoder (dial) context: device#root#Encoder#0#column — matches the
+        // bridge's encoder registration (row=0, column=encoderIndex) in
+        // populateContextsForActivePage byte-for-byte so the PI and the plugin
+        // WebSocket path key the SAME per-context settings record.
+        if (root.encoderIndex >= 0) {
+            return root.deviceCodename + "#root#Encoder#0#" + root.encoderIndex;
+        }
+        return "";
     }
 
     // React to binding changes (new key selected, selection cleared, binding updated).
     onBindingChanged: maybeLoadInspector()
+    // Also reload when the selected control's index settles, so the wire context
+    // id (_contextUuid) is rebuilt from the final keyIndex/encoderIndex rather
+    // than a stale value when switching key<->dial. The last call wins.
+    onKeyIndexChanged: maybeLoadInspector()
+    onEncoderIndexChanged: maybeLoadInspector()
 
     color: Theme.bgSidebar
 

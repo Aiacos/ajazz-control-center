@@ -136,6 +136,7 @@ Item {
         function onProfileChanged() {
             root._syncFromProfile();
             root._refreshSelectedKeyActionList();
+            root._refreshSelectedEncoderBinding();
         }
     }
 
@@ -165,6 +166,34 @@ Item {
     }
 
     onSelectedKeyIndexChanged: { root._refreshSelectedKeyActionList(); }
+
+    // Selected ENCODER (dial) binding, resolved from activeEncoderBindings() so
+    // the Property Inspector can configure a plugin action bound to a dial. Kept
+    // reactive by re-resolving when the encoder selection changes AND on
+    // profileChanged (a drag-bind/move mutates the profile, not this property).
+    property var _selectedEncoderBinding: null
+    function _refreshSelectedEncoderBinding() {
+        if (root.selectedEncoderIndex < 0) {
+            root._selectedEncoderBinding = null;
+            return;
+        }
+        var eb = ProfileController.activeEncoderBindings();
+        for (var i = 0; i < eb.length; ++i) {
+            if (eb[i].index === root.selectedEncoderIndex) {
+                root._selectedEncoderBinding = eb[i];
+                return;
+            }
+        }
+        root._selectedEncoderBinding = null;
+    }
+    onSelectedEncoderIndexChanged: { root._refreshSelectedEncoderBinding(); }
+
+    // The control whose action the Inspector edits: the selected key, else the
+    // selected dial. (Touch-zone PI is a follow-up; zones already bind via tap.)
+    readonly property var selectedInspectorBinding:
+        selectedKeyIndex >= 0
+            ? selectedBinding
+            : (selectedEncoderIndex >= 0 ? _selectedEncoderBinding : null)
 
     function updateSelectedBinding(field, value) {
         if (root.selectedKeyIndex < 0 || root.selectedKeyIndex >= bindings.count) return;
@@ -330,25 +359,18 @@ Item {
                         root.keyActivated(index);
                     }
                     onKeySwapRequested: function(src, dst) {
-                        // Phase 26 v1: no swapKeyBindings Q_INVOKABLE yet; swap the
-                        // two model rows + commit both (a dedicated atomic swap for
-                        // keys lands in a follow-up, like encoders/zones already have).
-                        if (src < 0 || src >= bindings.count) return;
-                        if (dst < 0 || dst >= bindings.count) return;
-                        var srcRow = bindings.get(src);
-                        var dstRow = bindings.get(dst);
-                        var srcId = srcRow.actionId !== undefined ? srcRow.actionId : "";
-                        var dstId = dstRow.actionId !== undefined ? dstRow.actionId : "";
-                        bindings.set(src, { iconSource: dstRow.iconSource, label: dstRow.label,
-                                            actionKind: dstRow.actionKind, actionParams: dstRow.actionParams,
-                                            actionId: dstId });
-                        bindings.set(dst, { iconSource: srcRow.iconSource, label: srcRow.label,
-                                            actionKind: srcRow.actionKind, actionParams: srcRow.actionParams,
-                                            actionId: srcId });
-                        ProfileController.commitKeyBinding(src, dstRow.iconSource, dstRow.label,
-                                                           dstRow.actionKind, dstRow.actionParams, dstId);
-                        ProfileController.commitKeyBinding(dst, srcRow.iconSource, srcRow.label,
-                                                           srcRow.actionKind, srcRow.actionParams, srcId);
+                        // Move/swap a bound action between two keys. The atomic
+                        // whole-Binding swap lives in C++ (ProfileController.
+                        // swapKeyBindings) so a multi-action onPress chain survives
+                        // the move intact — the old two-commitKeyBinding workaround
+                        // collapsed it to a single action and dropped onRelease/
+                        // onLongPress. The visual `bindings` model + the live key
+                        // render are refreshed by the profileChanged() handler that
+                        // rebuilds the model, and the plugin lifecycle (willDisappear
+                        // on the vacated key, willAppear on the new one) is driven by
+                        // the bridge's context reconcile on the same signal.
+                        if (src < 0 || dst < 0 || src === dst) return;
+                        ProfileController.swapKeyBindings(src, dst);
                     }
 
                     // Library -> key drop (Workstream B): update the live preview
@@ -505,11 +527,16 @@ Item {
                        : (root.selectedZoneIndex >= 0
                           ? qsTr("Zone %1").arg(root.selectedZoneIndex + 1)
                           : ""))
-                binding: root.selectedBinding
+                // Key OR dial binding, so the PI configures whichever control is
+                // selected (goal: configure plugin settings for dials too).
+                binding: root.selectedInspectorBinding
                 // PLUGIN-22: feed the wire context inputs so the Inspector can
-                // assemble the wire context id (device#root#Keypad#row#col).
+                // assemble the wire context id. Controller-aware: keyIndex for a
+                // Keypad context (device#root#Keypad#row#col), encoderIndex for an
+                // Encoder context (device#root#Encoder#0#col).
                 deviceCodename: root.codename
                 keyIndex: root.selectedKeyIndex
+                encoderIndex: root.selectedEncoderIndex
                 onBindingFieldChanged: function(field, value) {
                     root.updateSelectedBinding(field, value);
                 }

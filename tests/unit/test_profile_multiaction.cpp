@@ -384,3 +384,123 @@ TEST_CASE("ProfileController: 2-action onPress survives save and load",
     CHECK(op[1].kind == core::ActionKind::OpenUrl);
     CHECK(op[1].settingsJson == "{\"url\":\"https://b.com\"}");
 }
+
+// ===========================================================================
+// Move-to-another-button: swapKeyBindings moves the WHOLE Binding
+// ===========================================================================
+
+TEST_CASE("ProfileController: swapKeyBindings moves a multi-action chain intact to an empty key",
+          "[move][swap-key]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-swapkey-move");
+
+    // Build a 2-action chain on key 0 (the exact case the old QML two-commit
+    // workaround collapsed to a single action on a move).
+    ctrl.commitKeyBinding(0,
+                          QStringLiteral("/tmp/a.png"),
+                          QStringLiteral("Alpha"),
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{\"k\":1}"),
+                          QStringLiteral("com.test.a"));
+    ctrl.appendKeyAction(0,
+                         static_cast<int>(core::ActionKind::OpenUrl),
+                         QStringLiteral("{\"url\":\"https://b\"}"),
+                         QStringLiteral(""));
+    REQUIRE(onPressFor(ctrl, 0).size() == 2);
+
+    // Move key 0 -> empty key 7.
+    ctrl.swapKeyBindings(0, 7);
+
+    // Source key is now empty (moved away); destination has the FULL chain +
+    // the visual state (icon/label), proving whole-Binding relocation.
+    CHECK(onPressFor(ctrl, 0).empty());
+    REQUIRE(onPressFor(ctrl, 7).size() == 2);
+    CHECK(onPressFor(ctrl, 7)[0].id == "com.test.a");
+    CHECK(onPressFor(ctrl, 7)[0].settingsJson == "{\"k\":1}");
+    CHECK(onPressFor(ctrl, 7)[1].kind == core::ActionKind::OpenUrl);
+    REQUIRE(ctrl.activeProfile().keys.at(7).state.imagePath.has_value());
+    CHECK(*ctrl.activeProfile().keys.at(7).state.imagePath == "/tmp/a.png");
+    REQUIRE(ctrl.activeProfile().keys.at(7).state.text.has_value());
+    CHECK(*ctrl.activeProfile().keys.at(7).state.text == "Alpha");
+}
+
+TEST_CASE("ProfileController: swapKeyBindings exchanges two occupied keys", "[move][swap-key]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-swapkey-swap");
+
+    ctrl.commitKeyBinding(
+        1, {}, {}, static_cast<int>(core::ActionKind::Plugin), {}, QStringLiteral("com.one"));
+    ctrl.commitKeyBinding(
+        4, {}, {}, static_cast<int>(core::ActionKind::Plugin), {}, QStringLiteral("com.four"));
+
+    ctrl.swapKeyBindings(1, 4);
+
+    REQUIRE(onPressFor(ctrl, 1).size() == 1);
+    REQUIRE(onPressFor(ctrl, 4).size() == 1);
+    CHECK(onPressFor(ctrl, 1)[0].id == "com.four");
+    CHECK(onPressFor(ctrl, 4)[0].id == "com.one");
+}
+
+TEST_CASE("ProfileController: swapKeyBindings out-of-range / self-swap are no-ops",
+          "[move][swap-key]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-swapkey-oor");
+
+    ctrl.commitKeyBinding(
+        2, {}, {}, static_cast<int>(core::ActionKind::Plugin), {}, QStringLiteral("com.keep"));
+
+    ctrl.swapKeyBindings(2, 2);     // self-swap
+    ctrl.swapKeyBindings(2, -1);    // negative dst
+    ctrl.swapKeyBindings(70000, 2); // > uint16 range
+
+    REQUIRE(onPressFor(ctrl, 2).size() == 1);
+    CHECK(onPressFor(ctrl, 2)[0].id == "com.keep");
+}
+
+// ===========================================================================
+// Dial PI: activeEncoderBindings resolves the dial's bound action
+// ===========================================================================
+
+TEST_CASE("ProfileController: activeEncoderBindings exposes the bound dial action",
+          "[dial][encoder-bindings]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-enc-bindings");
+
+    ctrl.commitEncoderBinding(2,
+                              QStringLiteral("/tmp/dial.png"),
+                              QStringLiteral("Volume"),
+                              static_cast<int>(core::ActionKind::Plugin),
+                              QStringLiteral("{}"),
+                              QStringLiteral("com.test.dial"));
+
+    auto const eb = ctrl.activeEncoderBindings();
+    bool found = false;
+    for (auto const& v : eb) {
+        auto const m = v.toMap();
+        if (m.value(QStringLiteral("index")).toInt() == 2) {
+            found = true;
+            CHECK(m.value(QStringLiteral("actionId")).toString() ==
+                  QStringLiteral("com.test.dial"));
+            CHECK(m.value(QStringLiteral("label")).toString() == QStringLiteral("Volume"));
+            CHECK(m.value(QStringLiteral("actionKind")).toInt() ==
+                  static_cast<int>(core::ActionKind::Plugin));
+        }
+    }
+    CHECK(found);
+}
