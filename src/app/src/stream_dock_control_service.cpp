@@ -251,6 +251,36 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex,
     }
 }
 
+void StreamDockControlService::clearKeyImage(std::uint8_t keyIndex) {
+    // Blank the key on the device LCD so a moved/removed action's render does not
+    // linger. A black frame at the device key resolution is the "off" state.
+    if (m_activeDevice) {
+        auto* disp = dynamic_cast<core::IDisplayCapable*>(m_activeDevice.get());
+        if (disp != nullptr) {
+            auto const info = disp->displayInfo();
+            auto const w = info.widthPx > 0 ? static_cast<int>(info.widthPx) : 85;
+            auto const h = info.heightPx > 0 ? static_cast<int>(info.heightPx) : 85;
+            QImage black(w, h, QImage::Format_RGBA8888);
+            black.fill(qRgba(0, 0, 0, 255));
+            m_pendingWrites[PendingKey{SurfaceTag::Key, keyIndex}] = black;
+            if (!m_drainTimer->isActive()) {
+                m_drainTimer->start(0);
+            }
+        }
+    }
+    // Drop cached frames so setTitle/showAlert revert logic cannot resurrect the
+    // old render on this now-empty key.
+    m_lastKeyImage.erase(keyIndex);
+    m_baseKeyImage.erase(keyIndex);
+    // Clear the editor mirror so the on-screen cell reverts to the empty-tile look
+    // (its index number) rather than the stale render or a black square.
+    if (m_liveKeyImages && keyIndex >= 1) {
+        int const keyIndex0 = static_cast<int>(keyIndex) - 1;
+        m_liveKeyImages->clear(keyIndex0);
+        emit keyImageCleared(keyIndex0);
+    }
+}
+
 void StreamDockControlService::setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store) {
     m_liveKeyImages = std::move(store);
 }
@@ -507,7 +537,31 @@ void StreamDockControlService::repaintPage(QString const& pageId) {
                                binding.state.background->b,
                                255));
             } else {
-                // No image and no background -- skip this key.
+                // No static image and no background fill. Distinguish two cases:
+                //   - The binding has NO actions: it is an empty/vacated slot (e.g.
+                //     an action was just moved to another key). CLEAR it so the
+                //     previous render does not linger ("tool stays on the old
+                //     button" bug), matching OpenDeck move_instance clearing the
+                //     source device image.
+                //   - The binding HAS actions but no static image: it is plugin-
+                //     live-rendered (e.g. System Monitor paints "CPU 9%" via
+                //     setTitle). Leave the current frame for the plugin to paint;
+                //     repainting black here would flash-clear a live render.
+                // "Real" = a bound action: a plugin action with a non-empty id, or
+                // any built-in (non-Plugin) action. A placeholder Plugin action with
+                // an empty id (what commitKeyBinding writes on a trash-clear) is NOT
+                // real, so a trashed key is also cleared.
+                auto const hasRealAction = [](std::vector<core::Action> const& v) {
+                    return std::any_of(v.begin(), v.end(), [](core::Action const& a) {
+                        return !a.id.empty() || a.kind != core::ActionKind::Plugin;
+                    });
+                };
+                bool const hasActions = hasRealAction(binding.onPress) ||
+                                        hasRealAction(binding.onRelease) ||
+                                        hasRealAction(binding.onLongPress);
+                if (!hasActions) {
+                    clearKeyImage(deviceKeyIndex);
+                }
                 continue;
             }
         }

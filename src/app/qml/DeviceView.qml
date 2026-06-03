@@ -93,6 +93,14 @@ Item {
                                      "image://livekey/" + keyIndex + "?r=" + revision);
             }
         }
+        // OpenDeck parity: when a key is cleared (action moved/removed away), drop
+        // the live-render URL so the cell reverts to the empty-tile look instead of
+        // keeping the stale render of the action that used to live there.
+        function onKeyImageCleared(keyIndex) {
+            if (keyIndex >= 0 && keyIndex < bindings.count) {
+                bindings.setProperty(keyIndex, "iconSource", "");
+            }
+        }
     }
 
     function _ensureBindings() {

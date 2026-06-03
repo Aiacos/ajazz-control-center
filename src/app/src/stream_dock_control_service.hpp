@@ -176,6 +176,20 @@ public:
     void assignKeyImage(std::uint8_t keyIndex, QImage const& img, bool updateBase = true);
 
     /**
+     * @brief Clear a key: blank it on the device AND in the editor mirror.
+     *
+     * Called when an action is moved or removed from a key so the previous render
+     * does not linger (fixes the "tool stays on the old button" bug after a drag-
+     * move). Pushes a black frame to the device LCD key, drops the cached
+     * last/base/live images for the key, and emits keyImageCleared() so the
+     * on-screen KeyCell reverts to the empty-tile look. Mirrors OpenDeck
+     * move_instance clearing the source slot's device image (clear_on_device).
+     *
+     * @param keyIndex  1-based device key index (same convention as assignKeyImage).
+     */
+    void clearKeyImage(std::uint8_t keyIndex);
+
+    /**
      * @brief Return the last image DISPLAYED on @p keyIndex (null if none / the
      *        cache was cleared by a device change).
      *
@@ -444,6 +458,19 @@ signals:
      * @param revision  Monotonic counter; only its change matters to the cache.
      */
     void keyImageAssigned(int keyIndex, qint64 revision);
+
+    /**
+     * @brief Emitted when a key's render is CLEARED (Phase 29, OpenDeck parity).
+     *
+     * Fired by clearKeyImage() when an action is moved/removed from a key. The
+     * editor binds the matching cell back to an empty iconSource so the on-screen
+     * KeyCell reverts to the empty-tile look instead of showing the stale render
+     * of the action that used to live there (the "tool stays on the old button"
+     * bug). Mirrors OpenDeck move_instance clearing the source slot's device image.
+     *
+     * @param keyIndex  0-based key index (the cleared key).
+     */
+    void keyImageCleared(int keyIndex);
 
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then

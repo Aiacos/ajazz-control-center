@@ -48,6 +48,14 @@ public:
         return it != m_images.end() ? it->second : QImage{};
     }
 
+    /// Drop the cached frame for a key (e.g. when an action is moved away). The
+    /// editor cell stops pointing at image://livekey for this key, so it reverts
+    /// to the empty-tile look instead of showing a stale render.
+    void clear(int keyIndex) {
+        QMutexLocker lock(&m_mutex);
+        m_images.erase(keyIndex);
+    }
+
 private:
     mutable QMutex m_mutex;
     std::map<int, QImage> m_images;

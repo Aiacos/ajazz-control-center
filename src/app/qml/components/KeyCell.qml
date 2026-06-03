@@ -153,7 +153,14 @@ ItemDelegate {
         acceptedButtons: Qt.LeftButton
         // dragThreshold 8px prevents accidental drag during a quick tap.
         dragThreshold: 8
-        enabled: root.iconSource.toString() !== ""
+        // A key is draggable when it is BOUND — which is icon OR label. A plugin
+        // action with no manifest icon (e.g. System Monitor, icon="") renders as a
+        // label-only cell; gating on iconSource alone left such occupied keys
+        // un-draggable, so a bound-but-iconless tool could not be moved.
+        enabled: root.iconSource.toString() !== "" || root.label !== ""
+        // Take over the pointer grab from the ItemDelegate's own press/click so a
+        // deliberate drag wins over key selection (real-mouse move on Wayland).
+        grabPermissions: PointerHandler.CanTakeOverFromAnything
 
         readonly property string _payload: JSON.stringify({
             controller: "Keypad",
