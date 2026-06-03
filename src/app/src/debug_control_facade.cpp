@@ -17,6 +17,7 @@
 #include "stream_dock_control_service.hpp"
 
 #ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "plugin_device_bridge.hpp"
 #include "sd_plugin_server.hpp"
 #endif
 
@@ -450,6 +451,29 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             return QJsonObject{{"committed", true}, {"index", index}, {"actionId", actionId}};
         });
 
+    // profile.swapKeyBinding {src, dst} -> {swapped, src, dst}
+    // Drives ProfileController::swapKeyBindings — the "move a bound action to
+    // another button" gesture — so the move (and the bridge's willDisappear(old)
+    // + willAppear(new) reconcile) can be exercised autonomously without a real
+    // mouse drag. Swapping with an empty dst MOVES the binding there and clears
+    // the source. Gated behind AJAZZ_DEBUG_CONTROL=1. No wire-format change.
+    server.registerMethod("profile.swapKeyBinding",
+                          [&app](QJsonObject const& params, QString& err) {
+                              auto* pc = app.profileController();
+                              if (pc == nullptr) {
+                                  err = QStringLiteral("profile controller unavailable");
+                                  return QJsonObject{};
+                              }
+                              if (!params.contains("src") || !params.contains("dst")) {
+                                  err = QStringLiteral("require 'src' and 'dst'");
+                                  return QJsonObject{};
+                              }
+                              int const src = params.value("src").toInt(-1);
+                              int const dst = params.value("dst").toInt(-1);
+                              pc->swapKeyBindings(src, dst);
+                              return QJsonObject{{"swapped", true}, {"src", src}, {"dst", dst}};
+                          });
+
     // ---- Action execution (BuiltinActionsService) ---------------------
     // Dangerous: built-in UUIDs include RunCommand/OpenUrl etc.; unknown
     // UUIDs forward to the plugin path. Gated by the channel being on.
@@ -565,6 +589,38 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         srv->injectAction(uuid, action);
         return QJsonObject{{"injected", true}, {"event", action.value("event").toString()}};
     });
+
+    // plugin.simulatePiSettings {pluginUuid, contextId, settings} -> {delivered}
+    // Drive the production PI->plugin settings notify slot
+    // (PluginDeviceBridge::onPropertyInspectorSettings) without a live WebEngine
+    // Property Inspector. The real PI's JS `$SD.setSettings()` reaches the SAME
+    // slot via PIBridge::contextSettingsChanged; this RPC exercises the
+    // substantive half (resolve the wire context -> send didReceiveSettings to
+    // the plugin), which is what unit tests + grep cannot prove. Watch the result
+    // in plugin.protocolLog: an OUT `didReceiveSettings` to the plugin for that
+    // context. `settings` is a JSON string. Mirrors how input.key injects
+    // synthetic device events to test the pipeline (CLAUDE.md debug-channel rule).
+    server.registerMethod(
+        "plugin.simulatePiSettings", [&app](QJsonObject const& params, QString& err) {
+            auto* bridge = app.pluginBridge();
+            if (bridge == nullptr) {
+                err = QStringLiteral("plugin device bridge unavailable");
+                return QJsonObject{};
+            }
+            QString const pluginUuid = params.value("pluginUuid").toString();
+            QString const contextId = params.value("contextId").toString();
+            if (pluginUuid.isEmpty() || contextId.isEmpty()) {
+                err = QStringLiteral("require 'pluginUuid' and 'contextId'");
+                return QJsonObject{};
+            }
+            QString settings = params.value("settings").toString();
+            if (settings.isEmpty()) {
+                settings = QStringLiteral("{}");
+            }
+            bridge->onPropertyInspectorSettings(pluginUuid, contextId, settings);
+            return QJsonObject{
+                {"delivered", true}, {"pluginUuid", pluginUuid}, {"contextId", contextId}};
+        });
 
     // plugin.protocolLog {limit?} -> {lines:[...]} — the recent plugin protocol
     // log (BOTH directions): inbound plugin->host actions, outbound host->plugin

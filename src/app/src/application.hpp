@@ -148,6 +148,8 @@ public:
     [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
     /// Live .sdPlugin discover/spawn manager (debug channel: plugin.rediscover).
     [[nodiscard]] PluginManager* pluginManager() const noexcept { return m_pluginManager.get(); }
+    /// Device<->plugin event bridge (debug channel: plugin.simulatePiSettings).
+    [[nodiscard]] PluginDeviceBridge* pluginBridge() const noexcept { return m_pluginBridge.get(); }
 #endif
     /// Plugin Store catalogue / install pipeline (debug channel:
     /// plugin.installFromFile). Always present (unguarded).
