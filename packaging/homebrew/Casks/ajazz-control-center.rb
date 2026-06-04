@@ -1,6 +1,6 @@
 cask "ajazz-control-center" do
-  version "0.1.0"
-  sha256 "b2b034f2b55ea61d7ae30c438a425b68728a9e841d7e853a6071f0ceb5368347"
+  version "0.1.1"
+  sha256 "51b63dc5ae30c52f09bd81b91a093a5dec6019612622da6bf95414389dbc21f7"
 
   url "https://github.com/Aiacos/ajazz-control-center/releases/download/v#{version}/ajazz-control-center-#{version}-Darwin.dmg",
       verified: "github.com/Aiacos/ajazz-control-center/"

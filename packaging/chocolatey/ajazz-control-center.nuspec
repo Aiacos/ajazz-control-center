@@ -2,13 +2,13 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>ajazz-control-center</id>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <packageSourceUrl>https://github.com/Aiacos/ajazz-control-center/tree/main/packaging/chocolatey</packageSourceUrl>
     <owners>Aiacos</owners>
     <title>AJAZZ Control Center</title>
     <authors>AJAZZ Control Center contributors</authors>
     <projectUrl>https://github.com/Aiacos/ajazz-control-center</projectUrl>
-    <iconUrl>https://raw.githubusercontent.com/Aiacos/ajazz-control-center/v0.1.0/resources/icons/hicolor/app-256.png</iconUrl>
+    <iconUrl>https://raw.githubusercontent.com/Aiacos/ajazz-control-center/v0.1.1/resources/icons/hicolor/app-256.png</iconUrl>
     <licenseUrl>https://github.com/Aiacos/ajazz-control-center/blob/main/LICENSE</licenseUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
     <projectSourceUrl>https://github.com/Aiacos/ajazz-control-center</projectSourceUrl>
@@ -28,7 +28,7 @@ profiles, host time-sync to firmware RTCs, and wireless battery readout.
 This package installs the official signed-by-CI MSI published on the project's
 GitHub Releases.
     </description>
-    <releaseNotes>https://github.com/Aiacos/ajazz-control-center/releases/tag/v0.1.0</releaseNotes>
+    <releaseNotes>https://github.com/Aiacos/ajazz-control-center/releases/tag/v0.1.1</releaseNotes>
   </metadata>
   <files>
     <file src="tools\**" target="tools" />

@@ -3,7 +3,7 @@
 # (PKGBUILD is sourced by makepkg, which both consumes these "unused"
 #  variables and provides $pkgdir/$srcdir at build time.)
 pkgname=ajazz-control-center
-pkgver=0.1.0
+pkgver=0.1.1
 pkgrel=1
 pkgdesc="Cross-platform control center for AJAZZ devices (stream decks, keyboards, mice)"
 arch=('x86_64')
@@ -36,7 +36,7 @@ makedepends=(
     'python'
 )
 source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('9ec5342db63a905e3ab97d6596a053fd25e0b0142efdad6f09e293429613fe7f')
+sha256sums=('4da5a993d11c04f6f2a45a8fae3329a493a14c09ccb5d4e41ef05d2c154b7838')
 
 build() {
     # AJAZZ_USE_SYSTEM_DEPS=ON resolves hidapi + nlohmann_json via find_package

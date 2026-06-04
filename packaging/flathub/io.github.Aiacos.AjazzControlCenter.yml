@@ -105,8 +105,8 @@ modules:
       # per-release checklist in SUBMITTING.md).
       - type: git
         url: https://github.com/Aiacos/ajazz-control-center.git
-        tag: v0.1.0
-        commit: 731c70b2b0bc078b317fcc97fa2e8ae9c22a8c22
+        tag: v0.1.1
+        commit: 48551fb9073828597e2d06ff50f786254a26c5a2
     post-install:
       # CMake's `ninja install` already placed the AppStream metainfo and the
       # SVG + PNG icons under /app/share with the app-id names, and the desktop

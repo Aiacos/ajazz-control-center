@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 # Uninstall by the MSI ProductCode of v0.1.0 (msiexec /x). When newer versions
 # ship, prefer resolving the code at runtime from the registry so the uninstall
 # tracks whatever version is actually installed.
-$productCode = '{95C04736-6ED7-49B6-879E-534784599357}'
+$productCode = '{722843FB-8862-4EAB-9640-AF078C3B550D}'
 
 $key = Get-UninstallRegistryKey -SoftwareName 'ajazz-control-center*'
 if ($key -and $key.Count -eq 1) {

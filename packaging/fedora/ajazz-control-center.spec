@@ -13,7 +13,7 @@
 #     https://docs.fedoraproject.org/en-US/packaging-guidelines/#_desktop_files
 
 Name:           ajazz-control-center
-Version:        0.1.0
+Version:        0.1.1
 Release:        1%{?dist}
 Summary:        Cross-platform control center for AJAZZ devices
 

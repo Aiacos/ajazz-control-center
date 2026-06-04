@@ -1,3 +1,9 @@
+ajazz-control-center (0.1.1-1~noble1) noble; urgency=medium
+
+  * Release 0.1.1. See https://github.com/Aiacos/ajazz-control-center/releases/tag/v0.1.1
+
+ -- AJAZZ Control Center contributors <noreply@github.com>  Thu, 04 Jun 2026 09:52:41 +0000
+
 ajazz-control-center (0.1.0-1~noble1) noble; urgency=medium
 
   * Initial Ubuntu / Launchpad PPA packaging of AJAZZ Control Center.
