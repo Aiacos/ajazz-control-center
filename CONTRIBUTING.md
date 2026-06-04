@@ -183,3 +183,6 @@ By submitting a PR you certify that your contribution complies with the [Develop
 A release is cut by promoting `develop` into `main` via a pull request;
 tags `v*` are then created from `main` and trigger the release workflow.
 Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
+
+The full branching model, the CI/CD pipeline, and the step-by-step release
+runbook live in **[`docs/RELEASING.md`](docs/RELEASING.md)**.

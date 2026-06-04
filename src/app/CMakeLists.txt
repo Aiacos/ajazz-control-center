@@ -507,6 +507,22 @@ endif()
 
 install(TARGETS ajazz-control-center RUNTIME DESTINATION bin BUNDLE DESTINATION .)
 
+# Windows: bundle the Qt runtime into the install tree so the CPack WIX MSI and ZIP (which harvest
+# the whole install tree) are self-contained. Without this the package ships ONLY
+# ajazz-control-center.exe and the installed app fails to start with "The code execution cannot
+# proceed because Qt6Widgets.dll was not found" (Qt6Widgets is pulled in by QApplication in main.cpp
+# + QSystemTrayIcon in tray_controller.cpp). qt_generate_deploy_qml_app_script runs windeployqt (Qt
+# libs + platform/style/imageformat/tls plugins + the QML module imports) at `cmake --install` time,
+# populating bin/ before CPack harvests it. NOTE: validated by the windows-2022 MSI job — cannot be
+# exercised on Linux.
+if(WIN32)
+    qt_generate_deploy_qml_app_script(
+        TARGET ajazz-control-center OUTPUT_SCRIPT _ajazz_deploy_script
+        NO_UNSUPPORTED_PLATFORM_ERROR NO_TRANSLATIONS
+    )
+    install(SCRIPT "${_ajazz_deploy_script}")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/ajazz-control-center.desktop
             DESTINATION share/applications
