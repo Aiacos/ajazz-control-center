@@ -39,6 +39,11 @@ ApplicationWindow {
     readonly property bool _activeIsDeck:
         editor.capabilities && editor.capabilities.family === 1
 
+    // True while the debounced deck auto-save is writing, so the profileSaved
+    // toast stays silent for auto-saves (OpenDeck shows no per-edit toast).
+    // Explicit Apply (keyboard/mouse) leaves this false, so it still toasts.
+    property bool _autoSaving: false
+
     // Register the bundled Material Symbols Outlined icon font at startup so the
     // app-wide `font.family: "Material Symbols Outlined"` references resolve to
     // real glyphs instead of falling back to a system font (absent on stock
@@ -99,6 +104,9 @@ ApplicationWindow {
     Connections {
         target: ProfileController
         function onProfileSaved(path) {
+            // Deck auto-saves are silent (OpenDeck shows no per-edit confirmation);
+            // only an explicit Apply on the keyboard/mouse footer toasts.
+            if (root._autoSaving) return;
             toast.show(qsTr("Profile saved"), "success");
         }
         function onSaveFailed(reason) {
@@ -265,22 +273,31 @@ ApplicationWindow {
 
     Toast { id: toast }
 
-    // ── OpenDeck live-persistence model ───────────────────────────────────
+    // ── OpenDeck live-persistence model (decks only) ──────────────────────
     // OpenDeck has no Apply button: every edit persists immediately. We mirror
     // that by debouncing saveActiveProfile() on profileChanged(). Binding
     // mutations (commitKeyBinding / swap*) emit profileChanged() but do NOT
     // write to disk; this timer coalesces a burst of edits into one atomic
     // save ~500 ms after the last change. No signal loop: saveActiveProfile()
-    // emits the distinct profileSaved(), never profileChanged().
+    // emits the distinct profileSaved(), never profileChanged(). _autoSaving
+    // brackets the call so the profileSaved toast stays silent for auto-saves.
     Timer {
         id: autoSaveTimer
         interval: 500
         repeat: false
-        onTriggered: ProfileController.saveActiveProfile()
+        onTriggered: {
+            root._autoSaving = true;
+            ProfileController.saveActiveProfile();
+            root._autoSaving = false;
+        }
     }
     Connections {
         target: ProfileController
-        function onProfileChanged() { autoSaveTimer.restart(); }
+        // Gate on _activeIsDeck: keyboards/mice keep their explicit Apply/Revert
+        // footer, and Revert (loadActiveProfile) reloads the last *saved* file —
+        // auto-saving them would overwrite that file on every edit and silently
+        // break Revert. Only decks (no footer) use live-persistence.
+        function onProfileChanged() { if (root._activeIsDeck) autoSaveTimer.restart(); }
     }
 
     // Compact green confirmation, top-right, ONLY for a user-initiated "Sync
