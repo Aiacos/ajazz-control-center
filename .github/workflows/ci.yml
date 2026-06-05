@@ -114,6 +114,29 @@ jobs:
       - name: Install Python package
         run: pip install -e .[dev]
 
+      # The Ed25519 verify gate (manifest_signer.cpp::resolveTrustedExecutable)
+      # runs the verifier with the SYSTEM python3 from a vetted dir
+      # (/usr/bin, /usr/local/bin, /bin) — NEVER via $PATH — so a PATH-hijack
+      # cannot forge a "valid signature" verdict (CWE-426). `setup-python`
+      # installs `cryptography` into its OWN interpreter, which the vetted
+      # /usr/bin/python3 cannot import; on macOS that interpreter therefore
+      # exits 1 on every `verify` (ModuleNotFoundError), which the C++ side
+      # maps to SignatureState::Invalid → every signed plugin verifies as
+      # Refused and the self-signed gate tests fail. The Linux runner's
+      # /usr/bin/python3 already carries cryptography, so this is macOS-only.
+      # Install cryptography INTO the vetted interpreter the verifier actually
+      # uses; the final import is a hard gate so a silent install miss fails
+      # loudly here instead of as a confusing verdict mismatch later.
+      - name: Install cryptography into the vetted python3 (macOS verifier)
+        if: runner.os == 'macOS'
+        run: |
+          sudo /usr/bin/python3 -m ensurepip 2>/dev/null || true
+          sudo /usr/bin/python3 -m pip install "cryptography>=42.0" \
+            || sudo /usr/bin/python3 -m pip install --break-system-packages "cryptography>=42.0" \
+            || /usr/bin/python3 -m pip install --user "cryptography>=42.0" \
+            || /usr/bin/python3 -m pip install --user --break-system-packages "cryptography>=42.0"
+          /usr/bin/python3 -c "import sys, cryptography; print('cryptography', cryptography.__version__, 'importable by', sys.executable)"
+
       # ---- Rust toolchain (mirajazz Stream Dock sidecar) ------------------
       # The CMake build compiles the out-of-process streamdock-host sidecar via
       # cargo (cmake/StreamdockSidecar.cmake). GitHub runners ship Rust, but pin
