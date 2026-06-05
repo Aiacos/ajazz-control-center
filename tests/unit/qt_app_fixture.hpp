@@ -59,7 +59,37 @@ namespace ajazz::tests {
 /// `Appearance/Mode` key and one would observe the other's value
 /// after its own `clearThemeSettings()` — a real flake we observed
 /// in the wild after the Toast polish landed.
+
+/// Pin the plugin-catalogue fetchers offline for this test process.
+///
+/// Constructing a `PluginCatalogModel` calls `reload()`, which — with the
+/// online catalogue ON by default (PLUGIN-14) — fires a live
+/// `QNetworkAccessManager` POST to the real Stream Dock / OpenDeck
+/// catalogue URLs. A unit test never spins the event loop, so that
+/// `QNetworkReply` is left in flight and torn down with the fetcher on
+/// process exit; on CI (ubuntu/macOS) that teardown SegFaults
+/// non-deterministically. (It passed on the dev box only because the
+/// reply never reached a crashing state there.) Unit tests must not depend
+/// on outbound network, so every fixture caller pins both fetchers to the
+/// documented `disabled` override — the same mechanism
+/// test_catalog_offline.cpp already uses explicitly. `overwrite = 0` lets a
+/// test that genuinely wants a mock URL set the env var itself first.
+inline void disableLiveCatalogs() {
+#ifdef _WIN32
+    if (std::getenv("ACC_STREAMDOCK_CATALOG_URL") == nullptr) {
+        _putenv_s("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    }
+    if (std::getenv("ACC_OPENDECK_CATALOG_URL") == nullptr) {
+        _putenv_s("ACC_OPENDECK_CATALOG_URL", "disabled");
+    }
+#else
+    ::setenv("ACC_STREAMDOCK_CATALOG_URL", "disabled", /*overwrite*/ 0);
+    ::setenv("ACC_OPENDECK_CATALOG_URL", "disabled", /*overwrite*/ 0);
+#endif
+}
+
 inline QCoreApplication& qtApp() {
+    disableLiveCatalogs();
     if (QCoreApplication::instance() == nullptr) {
         static int argc = 0;
         static std::array<char*, 1> argv{nullptr};
