@@ -35,6 +35,7 @@
 #include "ajazz/core/executor.hpp"
 #include "ajazz/core/profile.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <cstddef>
 #include <functional>
@@ -112,6 +113,25 @@ public:
                           std::shared_ptr<Executor> executor = nullptr) noexcept;
 
     /**
+     * @brief Destructor — invalidates any in-flight deferred continuations.
+     *
+     * Sleep / post-step-delay chains schedule a continuation through the
+     * @ref Executor that captures `this`. If the engine is destroyed while
+     * such a continuation is still queued (e.g. app shutdown with a pending
+     * delay), running it would dereference freed memory. The destructor flips
+     * a shared "alive" flag the continuation re-checks before touching `this`,
+     * so a late-firing continuation becomes a safe no-op. (Executors here run
+     * on the engine's own thread — Qt main loop or the synchronous
+     * BlockingExecutor — so the check is race-free in practice.)
+     */
+    ~ActionEngine();
+
+    ActionEngine(ActionEngine const&) = delete;
+    ActionEngine& operator=(ActionEngine const&) = delete;
+    ActionEngine(ActionEngine&&) = delete;
+    ActionEngine& operator=(ActionEngine&&) = delete;
+
+    /**
      * @brief Replace the active profile.
      *
      * Resets the navigation stack to the profile's "root" page.
@@ -163,6 +183,9 @@ private:
     std::shared_ptr<Executor> executor_;
     Profile profile_;
     NavigationContext nav_;
+    /// Shared liveness flag. Deferred continuations capture a copy and bail if
+    /// it is false (set by the destructor), so they never touch a freed engine.
+    std::shared_ptr<std::atomic<bool>> alive_{std::make_shared<std::atomic<bool>>(true)};
 };
 
 } // namespace ajazz::core
