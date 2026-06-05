@@ -8,12 +8,6 @@
  * profileFromJson() restores them byte-equivalent.
  */
 #include "ajazz/core/profile.hpp"
-#include "ajazz/core/profile_bundle.hpp"
-
-#include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <string>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -318,57 +312,4 @@ TEST_CASE("profile reader fails with byte offset on malformed input", "[profile]
         profileFromJson(
             R"({"id":"x","name":"Y","device":"d","keys":{"0":{"onPress":[{"id":"a","delayMs":-1}]}}})"),
         std::runtime_error);
-}
-
-// Regression: out-of-range integers must be rejected, not truncated. On LP64
-// std::stoul is 64-bit, so values in (type-max, ULONG_MAX] parsed without
-// throwing and then truncated on the cast — e.g. delayMs 4294967296 -> 0 or
-// key index 65536 -> 0 (silently overwriting binding 0). See audit 2026-06-05.
-TEST_CASE("profileFromJson rejects out-of-range integers instead of truncating",
-          "[profile][hardening]") {
-    using namespace ajazz::core;
-
-    // delayMs above UINT32_MAX.
-    REQUIRE_THROWS_AS(
-        profileFromJson(
-            R"({"id":"x","name":"Y","device":"d","keys":{"0":{"onPress":[{"id":"a","delayMs":4294967296}]}}})"),
-        std::runtime_error);
-
-    // keys map index above UINT16_MAX (would fold to a low index and clobber it).
-    REQUIRE_THROWS_AS(profileFromJson(R"({"id":"x","name":"Y","device":"d","keys":{"70000":{}}})"),
-                      std::runtime_error);
-
-    // touchZones map index above UINT8_MAX (the old `& 0xFFu` mask folded 256 -> 0).
-    REQUIRE_THROWS_AS(
-        profileFromJson(R"({"id":"x","name":"Y","device":"d","keys":{},"touchZones":{"256":{}}})"),
-        std::runtime_error);
-}
-
-// Regression: the bundle manifest's free-form `author` field must be JSON-escaped.
-// Unescaped, an author containing a quote/backslash produced malformed bundle
-// JSON. See audit 2026-06-05.
-TEST_CASE("exportProfileBundle escapes the author field", "[profile_bundle]") {
-    using namespace ajazz::core;
-
-    Profile p{};
-    p.id = "bundle-uuid";
-    p.name = "Bundle";
-    p.deviceCodename = "akp05";
-
-    auto const dir = std::filesystem::temp_directory_path() / "ajazz_bundle_escape_test";
-    std::filesystem::create_directories(dir);
-    auto const path = dir / "out.bundle.json";
-
-    // Author with a double-quote and a backslash — unescaped, these break JSON.
-    exportProfileBundle(path, p, std::string(R"(He said "hi"\done)"));
-
-    std::ifstream in(path, std::ios::binary);
-    std::ostringstream buf;
-    buf << in.rdbuf();
-    auto const contents = buf.str();
-
-    // The manifest must carry the escaped author, never the raw bytes.
-    REQUIRE(contents.find(R"("author":"He said \"hi\"\\done")") != std::string::npos);
-
-    std::filesystem::remove_all(dir);
 }

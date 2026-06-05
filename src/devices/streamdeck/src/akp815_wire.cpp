@@ -118,16 +118,10 @@ std::optional<KeyEvent> parseInputReport(std::span<std::uint8_t const> frame) {
         return std::nullopt;
     }
 
-    // WR-03 (audit 2026-06-05): there is NO release frame to parse. The
-    // AKP153/AKP815 v1 API (512-byte reports) is press-only by protocol — the
-    // firmware emits exactly one transition frame with no press/release
-    // discriminator byte (akp153.md §Input-reports; mirajazz proto-version 1 =
-    // "press-only", per ~/MEGAsync/.../dossier/akp-streamdeck.md:19,64; only
-    // proto-version 3 — AKP05/N4 — carries full press+release). So pressed=true
-    // is the correct, honest decode, not a stub. Real key-release support, if
-    // ever needed, must be HOST-SYNTHESISED (diff successive frames / timeout),
-    // never decoded from a nonexistent wire byte — and needs a hardware capture
-    // to tune timing (no live AKP815 unit exists in this project).
+    // TODO(WR-03): the release-byte format is not documented in akp815.md /
+    // akp153.md §Input-reports as of 2026-05-24. Until a hardware capture
+    // surfaces the release encoding, always report pressed=true (known honest
+    // limitation — we do NOT invent the wire format).
     return KeyEvent{.keyIndex = keyIndex, .pressed = true};
 }
 

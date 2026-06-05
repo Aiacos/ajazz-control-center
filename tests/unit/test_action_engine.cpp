@@ -194,33 +194,6 @@ TEST_CASE("ActionEngine async executor defers continuation off caller",
     REQUIRE(executor->pending.empty());
 }
 
-// Regression (audit 2026-06-05): a deferred continuation captures `this`; if the
-// engine is destroyed while one is still queued in the executor, draining it must
-// NOT dereference the freed engine. The engine's "alive" flag makes the late
-// continuation a safe no-op. Under ASan the pre-fix code is a heap-use-after-free.
-TEST_CASE("ActionEngine continuation is a safe no-op after the engine is destroyed",
-          "[action_engine][executor][lifetime]") {
-    RecordingExecutors rec;
-    auto executor = std::make_shared<FakeAsyncExecutor>(); // outlives the engine
-
-    {
-        ActionEngine engine(rec.make(), executor);
-        engine.setProfile(Profile{});
-        engine.run(ActionChain{
-            Action{.kind = ActionKind::Plugin, .id = "before"},
-            Action{.kind = ActionKind::Sleep, .delayMs = 5},
-            Action{.kind = ActionKind::Plugin, .id = "after"},
-        });
-        // Pre-Sleep step ran; the remainder is queued, capturing `this`.
-        REQUIRE(executor->pending.size() == 1);
-        REQUIRE(rec.log.size() == 2);
-    } // engine destroyed here with a continuation still pending
-
-    executor->drain();            // must not touch the freed engine
-    REQUIRE(rec.log.size() == 2); // "after" never executed
-    REQUIRE(executor->pending.empty());
-}
-
 TEST_CASE("ActionEngine post-step delayMs also defers via executor", "[action_engine][executor]") {
     RecordingExecutors rec;
     auto executor = std::make_shared<FakeAsyncExecutor>();

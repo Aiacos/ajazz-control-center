@@ -29,12 +29,6 @@ ActionEngine::ActionEngine(ActionExecutors executors, std::shared_ptr<Executor> 
     : executors_{std::move(executors)},
       executor_{executor ? std::move(executor) : defaultExecutor()} {}
 
-ActionEngine::~ActionEngine() {
-    // Invalidate any deferred continuation still queued in the executor so it
-    // becomes a no-op instead of dereferencing this (now-freed) engine.
-    alive_->store(false);
-}
-
 void ActionEngine::setProfile(Profile profile) {
     profile_ = std::move(profile);
     nav_.pageStack.clear();
@@ -75,14 +69,8 @@ void ActionEngine::runFrom(std::shared_ptr<ActionChain const> const& chain, std:
             // calling thread (HID poll / Qt main) is not blocked.
             std::shared_ptr<ActionChain const> chainCopy = chain;
             std::size_t const next = i + 1;
-            auto alive = alive_;
             executor_->scheduleAfter(std::chrono::milliseconds{step.delayMs},
-                                     [this, alive, chainCopy, next]() {
-                                         if (!alive->load()) {
-                                             return; // engine destroyed before this fired
-                                         }
-                                         runFrom(chainCopy, next);
-                                     });
+                                     [this, chainCopy, next]() { runFrom(chainCopy, next); });
             return;
         }
         case ActionKind::KeyPress:
@@ -119,14 +107,8 @@ void ActionEngine::runFrom(std::shared_ptr<ActionChain const> const& chain, std:
             }
             std::shared_ptr<ActionChain const> chainCopy = chain;
             std::size_t const next = i + 1;
-            auto alive = alive_;
             executor_->scheduleAfter(std::chrono::milliseconds{step.delayMs},
-                                     [this, alive, chainCopy, next]() {
-                                         if (!alive->load()) {
-                                             return; // engine destroyed before this fired
-                                         }
-                                         runFrom(chainCopy, next);
-                                     });
+                                     [this, chainCopy, next]() { runFrom(chainCopy, next); });
             return;
         }
     }

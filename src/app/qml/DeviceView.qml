@@ -372,34 +372,13 @@ Item {
                         // swapKeyBindings) so a multi-action onPress chain survives
                         // the move intact — the old two-commitKeyBinding workaround
                         // collapsed it to a single action and dropped onRelease/
-                        // onLongPress.
-                        //
-                        // Canvas mirror: immediately swap iconSource/label in the
-                        // bindings model via setProperty (in-place mutation —
-                        // identical to the onKeyImageCleared path that is confirmed
-                        // to update KeyCell reliably). This covers the case where
-                        // repaintPage() returns early (no active device), which
-                        // would otherwise skip the clearKeyImage/keyImageCleared
-                        // path and leave the source cell stale. The profileChanged
-                        // -> _syncFromProfile path also runs as a consistency
-                        // guarantee; the setProperty calls here are the primary
-                        // visual update.
+                        // onLongPress. The visual `bindings` model + the live key
+                        // render are refreshed by the profileChanged() handler that
+                        // rebuilds the model, and the plugin lifecycle (willDisappear
+                        // on the vacated key, willAppear on the new one) is driven by
+                        // the bridge's context reconcile on the same signal.
                         if (src < 0 || dst < 0 || src === dst) return;
-                        if (src < bindings.count && dst < bindings.count) {
-                            var srcIcon  = bindings.get(src).iconSource;
-                            var srcLabel = bindings.get(src).label;
-                            var dstIcon  = bindings.get(dst).iconSource;
-                            var dstLabel = bindings.get(dst).label;
-                            bindings.setProperty(src, "iconSource", dstIcon);
-                            bindings.setProperty(src, "label",       dstLabel);
-                            bindings.setProperty(dst, "iconSource", srcIcon);
-                            bindings.setProperty(dst, "label",       srcLabel);
-                        }
                         ProfileController.swapKeyBindings(src, dst);
-                        // Plugin lifecycle (willDisappear on the vacated key,
-                        // willAppear on the new one) is driven by the bridge's
-                        // context reconcile on the profileChanged() signal fired
-                        // inside swapKeyBindings.
                     }
 
                     // Library -> key drop (Workstream B): update the live preview
@@ -547,8 +526,8 @@ Item {
                 // params) so it rarely needs to scroll; the Inspector clips +
                 // scrolls internally so it never overflows onto the controls
                 // below regardless of this value or the window size.
-                Layout.preferredHeight: 260
-                Layout.minimumHeight: 180
+                Layout.preferredHeight: 320
+                Layout.minimumHeight: 200
                 selectionLabel: root.selectedKeyIndex >= 0
                     ? qsTr("Key %1").arg(root.selectedKeyIndex + 1)
                     : (root.selectedEncoderIndex >= 0

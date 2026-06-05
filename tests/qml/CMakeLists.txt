@@ -95,12 +95,6 @@ qt_add_executable(
     ${ACC_APP_SOURCE_DIR}/src/plugin_debug_service.cpp
     ${ACC_APP_SOURCE_DIR}/src/plugin_manager.cpp
     ${ACC_APP_SOURCE_DIR}/src/plugin_crash_tracker.cpp
-    # The Stream Dock sidecar backend: application.cpp unconditionally references
-    # streamDockSidecarDescriptors() + makeSidecarStreamDock() (the AJAZZ_NO_SIDECAR guard is
-    # runtime, not compile-time), so these must be recompiled here too or the test fails to link
-    # with "undefined reference to makeSidecarStreamDock".
-    ${ACC_APP_SOURCE_DIR}/src/sidecar_protocol.cpp
-    ${ACC_APP_SOURCE_DIR}/src/sidecar_stream_dock_device.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)
@@ -194,10 +188,6 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # already in ACC_QML_MODULE_SOURCES for AUTOMOC; the .cpp must match (pre-existing latent issue
     # fixed in Phase 26 Plan 26-05).
     target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_device_bridge.cpp")
-    # plugin_device_bridge.cpp calls plugin_settings_store::{read,write}{Global,Context}; its
-    # definitions live in plugin_settings_store.cpp. Only needed when the bridge is compiled (i.e.
-    # under WebSockets), so it is scoped to this block.
-    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_settings_store.cpp")
     target_link_libraries(ajazz_qml_tests PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz_qml_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 endif()

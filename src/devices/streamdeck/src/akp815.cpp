@@ -31,7 +31,6 @@
 #include "ajazz/streamdeck/streamdeck.hpp"
 #include "akp815_protocol.hpp"
 #include "akp815_wire.hpp"
-#include "image_pipeline.hpp"
 
 #include <algorithm>
 #include <array>
@@ -187,32 +186,12 @@ public:
                            static_cast<int>(akp815::KeyCount));
             return;
         }
-        // Encode the RGBA8888 the caller hands us (stream_dock_control_service
-        // converts to Format_RGBA8888) to the device's wire image: 100×100 JPEG,
-        // Rot180, no mirror. These per-key values are RE-confirmed (akp815.md
-        // §Image format / [ajazz-sdk] key_image_format(); akp_device_matrix.md)
-        // and match image_pipeline.hpp's documented AKP815 transform. (Rot180 is
-        // RE-sourced; final orientation is pending visual confirmation on a
-        // physical AKP815, exactly as AKP05E's render was.) Before this the raw
-        // RGBA was sent as-is under a jpegEncoded=true header, so keys could not
-        // render at all.
-        ImageTransform const xform{
-            .targetWidth = akp815::KeyWidthPx,
-            .targetHeight = akp815::KeyHeightPx,
-            .format = ImageFormat::Jpeg,
-            .rotationDegrees = 180,
-            .mirror = false,
-            .jpegQuality = 85,
-        };
-        try {
-            auto const jpeg = encodeForDevice(rgba, width, height, xform);
-            sendImage(keyIndex, jpeg);
-        } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("akp815",
-                           "setKeyImage: encode failed for key {}: {}",
-                           static_cast<int>(keyIndex),
-                           e.what());
-        }
+        // The image pipeline that resizes to 100×100 and rotates 180° is
+        // tracked in `TODO.md` → "AKP815 image pipeline". Here we accept
+        // pre-encoded JPEG payloads verbatim, mirroring the AKP153 path.
+        (void)width;
+        (void)height;
+        sendImage(keyIndex, rgba);
     }
 
     void setKeyColor(std::uint8_t keyIndex, Rgb color) override {

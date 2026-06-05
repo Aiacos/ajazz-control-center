@@ -30,7 +30,6 @@
 #include <QtWebEngineQuick/QtWebEngineQuick>
 #endif
 
-#include <csignal>
 #include <iostream>
 #include <optional>
 
@@ -45,15 +44,6 @@
 #endif
 
 int main(int argc, char* argv[]) {
-#ifndef _WIN32
-    // Ignore SIGPIPE process-wide. The out-of-process plugin host writes to a
-    // child via a pipe; if the child exits/crashes mid-IPC, the next ::write()
-    // to the closed read end raises SIGPIPE, whose default disposition kills
-    // the whole GUI app *before* the write()'s EPIPE return can be handled.
-    // Ignoring it lets ::write() return -1/EPIPE so the host's existing error
-    // path runs instead. Windows _write() returns EPIPE without a signal.
-    ::signal(SIGPIPE, SIG_IGN);
-#endif
 #ifdef AJAZZ_HAVE_WEBENGINE
     // Qt WebEngine requires its renderer-process initialiser to run BEFORE
     // any QGuiApplication / QApplication is constructed; otherwise the

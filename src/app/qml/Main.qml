@@ -33,17 +33,6 @@ ApplicationWindow {
     title: Branding.productName
     color: Theme.bgBase
 
-    // True when the device currently being edited is a Stream Deck
-    // (DeviceFamily::StreamDeck == 1) — drives the OpenDeck pure-view chrome
-    // (the per-device settings button in the nav; the deck has no editor tabs).
-    readonly property bool _activeIsDeck:
-        editor.capabilities && editor.capabilities.family === 1
-
-    // True while the debounced deck auto-save is writing, so the profileSaved
-    // toast stays silent for auto-saves (OpenDeck shows no per-edit toast).
-    // Explicit Apply (keyboard/mouse) leaves this false, so it still toasts.
-    property bool _autoSaving: false
-
     // Register the bundled Material Symbols Outlined icon font at startup so the
     // app-wide `font.family: "Material Symbols Outlined"` references resolve to
     // real glyphs instead of falling back to a system font (absent on stock
@@ -103,9 +92,6 @@ ApplicationWindow {
     Connections {
         target: ProfileController
         function onProfileSaved(path) {
-            // Deck auto-saves are silent (OpenDeck shows no per-edit confirmation);
-            // only an explicit Apply on the keyboard/mouse footer toasts.
-            if (root._autoSaving) return;
             toast.show(qsTr("Profile saved"), "success");
         }
         function onSaveFailed(reason) {
@@ -145,105 +131,15 @@ ApplicationWindow {
             visible: AppUpdate.status === AppUpdate.UpdateAvailable
         }
 
-        // ── Top nav: profile switcher (left) + plugin/runtime/settings (right) ──
-        // The device list itself lives in the left sidebar below (DeviceList),
-        // NOT here — a dropdown for devices was rejected (regression). The nav
-        // keeps the per-device "Device" button, the plugin/loaded/debug/settings
-        // surfaces, and minimize-to-tray. The profile switcher (ProfileManager
-        // equivalent) sits top-left.
-        Rectangle {
-            id: nav
+        AppHeader {
             Layout.fillWidth: true
-            // One row tall (profile bar + buttons). Floor keeps the band stable
-            // even before the ProfileBar populates.
-            Layout.preferredHeight: Math.max(56, navRow.implicitHeight + Theme.spacingMd * 2)
-            color: Theme.bgSidebar
-
-            RowLayout {
-                id: navRow
-                anchors.fill: parent
-                anchors.leftMargin: Theme.spacingLg
-                anchors.rightMargin: Theme.spacingLg
-                anchors.topMargin: Theme.spacingMd
-                anchors.bottomMargin: Theme.spacingMd
-                spacing: Theme.spacingLg
-
-                // Profile switcher (top-left). Device selection is the sidebar.
-                ProfileBar {
-                    objectName: "navProfileBar"
-                    Layout.alignment: Qt.AlignVCenter
-                    visible: editor.codename !== ""
-                    deviceCodename: editor.codename
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Right cluster. The per-device settings/firmware button shows
-                // only for decks (keyboards/mice still reach those via their
-                // tabbed editor); the rest mirror the old AppHeader actions.
-                ToolButton {
-                    objectName: "navDeviceSettings"
-                    visible: editor.codename !== "" && root._activeIsDeck
-                    text: qsTr("Device")
-                    font.pixelSize: Theme.fontMd
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Per-device settings and firmware")
-                    onClicked: deviceDrawer.open()
-                }
-                ToolButton {
-                    objectName: "navPlugins"
-                    text: qsTr("Plugins")
-                    font.pixelSize: Theme.fontMd
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Open the plugin store")
-                    onClicked: pluginStoreDrawer.open()
-                }
-                ToolButton {
-                    objectName: "navLoaded"
-                    text: qsTr("Loaded")
-                    font.pixelSize: Theme.fontMd
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Open the loaded-plugins panel")
-                    onClicked: loadedPluginsDrawer.open()
-                }
-                ToolButton {
-                    objectName: "navDebug"
-                    text: qsTr("Debug")
-                    font.pixelSize: Theme.fontMd
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Open the plugin debug console")
-                    onClicked: debugDrawer.open()
-                }
-                ToolButton {
-                    objectName: "navSettings"
-                    text: qsTr("Settings")
-                    font.pixelSize: Theme.fontMd
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Open application settings")
-                    onClicked: settingsDrawer.open()
-                }
-                ToolButton {
-                    objectName: "navMinimize"
-                    text: "—"
-                    font.pixelSize: Theme.fontLg
-                    ToolTip.visible: hovered
-                    ToolTip.text: qsTr("Minimize to tray")
-                    onClicked: root.hide()
-                }
-            }
-
-            // Bottom hairline separator.
-            Rectangle {
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                height: 1
-                color: Theme.borderSubtle
-            }
+            onMinimizeRequested: root.hide()
+            onPluginStoreRequested: pluginStoreDrawer.open()
+            onLoadedPluginsRequested: loadedPluginsDrawer.open()
+            onSettingsRequested: settingsDrawer.open()
+            onDebugConsoleRequested: debugDrawer.open()
         }
 
-        // Body: device sidebar (left) + editor (right). The vertical device
-        // list is the device selector — a dropdown for devices was rejected.
         RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
@@ -265,43 +161,30 @@ ApplicationWindow {
                 id: editor
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                // Apply/Revert/Restore stay wired for the keyboard/mouse footer;
-                // decks have no footer and auto-save via the debounced timer below.
+                // Phase 16-02 (PROFILE-01): Apply -> saveActiveProfile persists
+                // the active profile to AppDataLocation/profiles/<id>.json via the
+                // atomic core writer (profileToJson + writeProfileToDisk). Revert ->
+                // loadActiveProfile reloads the last saved version from the same
+                // default path, resetting any unsaved edits (profileChanged fires and
+                // the UI refreshes). RestoreDefaults: explicit clear + save so the
+                // user always gets an honest behaviour (no silent no-op); the profile
+                // fields are reset to empty/defaults and saved at the default path.
                 onApplyRequested: ProfileController.saveActiveProfile()
                 onRevertRequested: ProfileController.loadActiveProfile()
                 onRestoreDefaultsRequested: ProfileController.resetActiveProfile()
             }
+
+            // The per-key Inspector now lives inside KeyDesigner (Keys tab)
+            // so it has direct access to the binding ListModel and stays in
+            // sync with cell-preview updates without cross-component
+            // plumbing. Quick task 260514-1je. The previous top-level
+            // Inspector placeholder is removed — non-Keys tabs (RGB, Mouse)
+            // will grow their own embedded inspectors as those features
+            // mature.
         }
     }
 
     Toast { id: toast }
-
-    // ── OpenDeck live-persistence model (decks only) ──────────────────────
-    // OpenDeck has no Apply button: every edit persists immediately. We mirror
-    // that by debouncing saveActiveProfile() on profileChanged(). Binding
-    // mutations (commitKeyBinding / swap*) emit profileChanged() but do NOT
-    // write to disk; this timer coalesces a burst of edits into one atomic
-    // save ~500 ms after the last change. No signal loop: saveActiveProfile()
-    // emits the distinct profileSaved(), never profileChanged(). _autoSaving
-    // brackets the call so the profileSaved toast stays silent for auto-saves.
-    Timer {
-        id: autoSaveTimer
-        interval: 500
-        repeat: false
-        onTriggered: {
-            root._autoSaving = true;
-            ProfileController.saveActiveProfile();
-            root._autoSaving = false;
-        }
-    }
-    Connections {
-        target: ProfileController
-        // Gate on _activeIsDeck: keyboards/mice keep their explicit Apply/Revert
-        // footer, and Revert (loadActiveProfile) reloads the last *saved* file —
-        // auto-saving them would overwrite that file on every edit and silently
-        // break Revert. Only decks (no footer) use live-persistence.
-        function onProfileChanged() { if (root._activeIsDeck) autoSaveTimer.restart(); }
-    }
 
     // Compact green confirmation, top-right, ONLY for a user-initiated "Sync
     // time now" (manualSyncSucceeded). Automatic syncs (startup sweep,
@@ -443,75 +326,6 @@ ApplicationWindow {
 
         SettingsPage {
             anchors.fill: parent
-        }
-    }
-
-    // ----------------------------------------------------------------------
-    // Per-device settings + firmware drawer (OpenDeck parity).
-    //
-    // A deck's editor is now chrome-less (no Settings/Firmware tabs), so its
-    // per-device time-sync settings and firmware updater live here, opened from
-    // the nav "Device" button. Reuses the same SettingsRow + FirmwarePanel the
-    // keyboard/mouse tabbed editor uses; properties are read off the active
-    // device's capability map (editor.capabilities).
-    // ----------------------------------------------------------------------
-    Drawer {
-        id: deviceDrawer
-        objectName: "deviceDrawer"
-        edge: Qt.RightEdge
-        modal: true
-        dragMargin: 0
-        width: Math.min(560, Math.max(360, root.width * 0.4))
-        height: root.height
-
-        Material.theme: root.materialTheme
-        Material.accent: Theme.accent
-        Material.primary: Theme.accent2
-
-        background: Rectangle {
-            color: Theme.surfaceContainer
-            border.color: Theme.borderSubtle
-            border.width: 1
-        }
-
-        ScrollView {
-            anchors.fill: parent
-            anchors.margins: Theme.spacingLg
-            clip: true
-
-            ColumnLayout {
-                width: parent.width
-                spacing: Theme.spacingLg
-
-                Text {
-                    Layout.fillWidth: true
-                    text: editor.capabilities && editor.capabilities.model
-                              ? editor.capabilities.model
-                              : editor.codename
-                    color: Theme.fgPrimary
-                    font.pixelSize: Theme.fontXl
-                    font.bold: true
-                    elide: Text.ElideRight
-                }
-
-                SettingsRow {
-                    Layout.fillWidth: true
-                    deviceCodename: editor.codename
-                    hasSettings: editor.capabilities && editor.capabilities.hasSettings
-                                     ? editor.capabilities.hasSettings : false
-                    hasClock: editor.capabilities && editor.capabilities.hasClock
-                                  ? editor.capabilities.hasClock : false
-                    deviceMaturity: editor.capabilities && editor.capabilities.maturity
-                                        ? editor.capabilities.maturity : "scaffolded"
-                }
-
-                FirmwarePanel {
-                    Layout.fillWidth: true
-                    deviceCodename: editor.codename
-                    deviceFamily: editor.capabilities && editor.capabilities.family !== undefined
-                                      ? editor.capabilities.family : 0
-                }
-            }
         }
     }
 

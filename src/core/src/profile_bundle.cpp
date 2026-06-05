@@ -24,7 +24,6 @@
 #include <filesystem>
 #include <fstream>
 #include <sstream>
-#include <string_view>
 #include <system_error>
 
 namespace ajazz::core {
@@ -32,38 +31,6 @@ namespace ajazz::core {
 namespace {
 
 constexpr char const* kBundleSchemaVersion = "1";
-
-/// Write @p s as a JSON-escaped, double-quoted string into @p out.
-///
-/// Mirrors the minimal RFC 8259 escaper in profile.cpp (that one is file-local).
-/// Without this, an `author` containing `"` or `\` produced malformed bundle
-/// JSON that the validator/reader then rejected — a silently corrupt export.
-void writeJsonString(std::ostringstream& out, std::string_view s) {
-    out << '"';
-    for (char const ch : s) {
-        switch (ch) {
-        case '"':
-            out << "\\\"";
-            break;
-        case '\\':
-            out << "\\\\";
-            break;
-        case '\n':
-            out << "\\n";
-            break;
-        case '\r':
-            out << "\\r";
-            break;
-        case '\t':
-            out << "\\t";
-            break;
-        default:
-            out << ch;
-            break;
-        }
-    }
-    out << '"';
-}
 
 /// Read the entire contents of a regular file into memory.
 [[nodiscard]] std::string readFileFully(std::filesystem::path const& path) {
@@ -107,9 +74,8 @@ void exportProfileBundle(std::filesystem::path const& path,
     std::ostringstream out;
     auto profileJson = profileToJson(profile);
     if (profileJson.size() >= 2 && profileJson.front() == '{') {
-        out << "{\"_bundle\":{\"schema\":\"" << kBundleSchemaVersion << "\",\"author\":";
-        writeJsonString(out, author);
-        out << "},";
+        out << "{\"_bundle\":{\"schema\":\"" << kBundleSchemaVersion << "\",\"author\":\"" << author
+            << "\"},";
         out.write(profileJson.data() + 1, static_cast<std::streamsize>(profileJson.size() - 1));
     } else {
         out << profileJson;
