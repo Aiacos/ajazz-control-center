@@ -18,6 +18,7 @@
 #include "ajazz/core/profile.hpp"
 
 #include <cstdint>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -501,11 +502,20 @@ public:
             fail("expected integer");
         }
         std::string const tok{src_.substr(start, pos_ - start)};
+        // std::stoul returns unsigned long, which is 64-bit on LP64 platforms,
+        // so values in (UINT32_MAX, ULONG_MAX] parse without throwing and then
+        // truncate on the cast (e.g. "4294967296" -> 0). Range-check explicitly
+        // so an out-of-range delayMs fails loudly instead of becoming garbage.
+        unsigned long parsed = 0;
         try {
-            return static_cast<std::uint32_t>(std::stoul(tok));
+            parsed = std::stoul(tok);
         } catch (std::exception const&) {
             fail("integer out of range: " + tok);
         }
+        if (parsed > std::numeric_limits<std::uint32_t>::max()) {
+            fail("integer out of range: " + tok);
+        }
+        return static_cast<std::uint32_t>(parsed);
     }
 
     /// Skip a complete JSON value (string, number, array, object, true, false, null).
@@ -779,7 +789,11 @@ void readUintKeyedMap(JsonReader& r,
         std::string const idxStr = r.readString();
         std::uint16_t idx = 0;
         try {
-            idx = static_cast<std::uint16_t>(std::stoul(idxStr));
+            unsigned long const parsed = std::stoul(idxStr);
+            if (parsed > std::numeric_limits<std::uint16_t>::max()) {
+                throw std::out_of_range(idxStr); // key index would truncate; reject
+            }
+            idx = static_cast<std::uint16_t>(parsed);
         } catch (std::exception const&) {
             std::ostringstream err;
             err << "profileFromJson: invalid uint16 map key \"" << idxStr << "\"";
@@ -883,7 +897,13 @@ Profile profileFromJson(std::string_view json) {
                         std::string const idxStr = r.readString();
                         std::uint8_t idx = 0;
                         try {
-                            idx = static_cast<std::uint8_t>(std::stoul(idxStr) & 0xFFu);
+                            unsigned long const parsed = std::stoul(idxStr);
+                            // The old `& 0xFFu` mask silently folded e.g. "256" -> 0;
+                            // reject anything that would not fit a uint8 instead.
+                            if (parsed > std::numeric_limits<std::uint8_t>::max()) {
+                                throw std::out_of_range(idxStr);
+                            }
+                            idx = static_cast<std::uint8_t>(parsed);
                         } catch (std::exception const&) {
                             std::ostringstream err;
                             err << "profileFromJson: invalid uint8 touchZone key \"" << idxStr
