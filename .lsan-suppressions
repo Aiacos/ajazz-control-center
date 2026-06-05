@@ -69,3 +69,40 @@ leak:QGtk3Storage
 leak:QApplicationPrivate::basePalette
 leak:QGuiApplicationPrivate::updatePalette
 leak:QGuiApplicationPrivate::setPalette
+
+# --- Qt 6 FreeType font-engine face cache (libQt6Gui). qt_getFreetypeData()
+#     allocates a per-process QFreetypeFace cache the first time text is
+#     rendered (QPainter::drawText) or a QFont is resolved; it is freed only
+#     at FreeType shutdown, which Qt does not perform. Surfaces from every
+#     test that paints text (renderClockDpiFace) or instantiates a QML engine.
+leak:qt_getFreetypeData
+leak:QFreetypeFace
+leak:QFontEngineFT
+# QFontDatabase's per-process QFontEngine cache (a QHash<QFontEngine*> filled by
+# QFontDatabasePrivate::load / QFontPrivate::engineForScript on first text layout)
+# is also retained for the process lifetime.
+leak:QFontDatabasePrivate
+leak:QFontPrivate::engineForScript
+
+# --- Qt 6 QML / V4 JS engine built-ins (libQt6Qml). Each QQmlEngine creates
+#     the V4 JS heap prototypes/constructors (Array/DataView/Date/...,
+#     setupXmlHttpRequestExtension) once; they live for the engine's lifetime.
+#     The offscreen QML smoke tests instantiate components without tearing the
+#     engine down before process exit, so LSan reports these engine-lifetime
+#     allocations. Not our memory — confined to the QML smoke tests.
+leak:libQt6Qml.so
+leak:QV4::ExecutionEngine
+leak:QJSEngine
+
+# --- Qt 6 WebSockets server-side handshake internals (libQt6WebSockets). The
+#     mock OBS server in test_obs_client.cpp owns its sockets correctly
+#     (unique_ptr<QWebSocketServer> + nextPendingConnection() children freed on
+#     server destruction), but Qt allocates per-connection handshake helpers
+#     (QWebSocketDataProcessor / QWebSocketHandshakeOptions) inside
+#     QWebSocketServerPrivate::handshakeReceived that LSan still flags at exit.
+#     Scoped to the SERVER handshake symbols so a real CLIENT-side QWebSocket
+#     leak in our ObsClient / SdPluginServer would still surface.
+leak:QWebSocketServerPrivate::handshakeReceived
+leak:QWebSocketDataProcessor
+leak:QWebSocketHandshakeOptions
+leak:QWebSocketPrivate::makeConnections
