@@ -48,7 +48,19 @@ QCoreApplication* ensureQCoreApp() {
     static QCoreApplication* app = []() {
         static int argc = 0;
         static char* argv[] = {nullptr};
-        return new QCoreApplication(argc, argv);
+        auto* a = new QCoreApplication(argc, argv);
+        // The user-disable persistence (setPluginEnabled / shouldSkipSpawn) uses
+        // a default-scope QSettings, which needs a non-empty organization +
+        // application name. With both empty the disabled flag does NOT round-trip
+        // through the Windows registry backend, so a plugin disabled by one
+        // PluginManager is re-spawned by the next (it round-trips fine on the
+        // Linux/macOS INI backend, which is why this only surfaced on windows-2022).
+        // Mirror qt_app_fixture::qtApp(): a stable org + a PID-suffixed app name so
+        // parallel `ctest -j` invocations still get isolated stores.
+        QCoreApplication::setOrganizationName(QStringLiteral("Aiacos"));
+        QCoreApplication::setApplicationName(QStringLiteral("ajazz-control-center-tests-%1")
+                                                 .arg(QCoreApplication::applicationPid()));
+        return a;
     }();
     return app;
 }
