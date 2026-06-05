@@ -465,6 +465,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/Theme.qml
     qml/DragRelay.qml
     qml/DeviceList.qml
+    qml/DeviceSelector.qml
     qml/ProfileEditor.qml
     qml/RgbPicker.qml
     qml/SettingsRow.qml

@@ -547,8 +547,8 @@ Item {
                 // params) so it rarely needs to scroll; the Inspector clips +
                 // scrolls internally so it never overflows onto the controls
                 // below regardless of this value or the window size.
-                Layout.preferredHeight: 320
-                Layout.minimumHeight: 200
+                Layout.preferredHeight: 260
+                Layout.minimumHeight: 180
                 selectionLabel: root.selectedKeyIndex >= 0
                     ? qsTr("Key %1").arg(root.selectedKeyIndex + 1)
                     : (root.selectedEncoderIndex >= 0

@@ -69,7 +69,11 @@ RowLayout {
 
     ComboBox {
         id: combo
-        Layout.fillWidth: true
+        // Compact fixed width for the top nav (OpenDeck's ProfileManager is a
+        // small dropdown, not a full-width bar). ProfileBar is only mounted in
+        // the nav now, so a fixed preferredWidth keeps the +/edit/copy/delete
+        // buttons tucked next to it instead of spread across the window.
+        Layout.preferredWidth: 180
         Layout.preferredHeight: 36
         model: root._profiles
         textRole: "name"

@@ -43,6 +43,11 @@ Rectangle {
 
     color: Theme.bgBase
 
+    // Clip so the centered device canvas (which can be slightly taller than its
+    // chassis slot and otherwise overflows upward with no clip) can never paint
+    // over the top nav and occlude the profile-management buttons.
+    clip: true
+
     // ---- Capability shortcuts ----------------------------------------------
     readonly property int  _keyCount:      capabilities && capabilities.keyCount      ? capabilities.keyCount      : 0
     readonly property int  _gridColumns:   capabilities && capabilities.gridColumns   ? capabilities.gridColumns   : 5
@@ -61,6 +66,15 @@ Rectangle {
     // Coarse core DeviceFamily int (from DeviceModel.capabilitiesFor) — fed to
     // the Firmware tab so it can resolve the FirmwareUpdate.Family.
     readonly property int  _family:        capabilities && capabilities.family !== undefined ? capabilities.family : 0
+
+    // OpenDeck single-view parity: a Stream Deck (DeviceFamily::StreamDeck == 1)
+    // has only one editable surface — the key/encoder/touch grid — so it drops
+    // ALL editor chrome (the in-editor device header, the Keys/RGB/Mouse/Settings/
+    // Firmware TabBar, and the Apply/Revert footer) and renders the bare
+    // DeviceView, exactly like OpenDeck. Its per-device Settings (time-sync) and
+    // Firmware move to the top-right device drawer in Main.qml. Keyboards and
+    // mice (AJAZZ-only, no OpenDeck analogue) keep their full tabbed editor.
+    readonly property bool _isDeck:        _family === 1
 
     readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
@@ -92,7 +106,9 @@ Rectangle {
 
         RowLayout {
             Layout.fillWidth: true
-            visible: root.codename !== ""
+            // Decks render header-less (OpenDeck parity — the nav device dropdown
+            // is the device identity). Keyboards/mice keep the photo + name header.
+            visible: root.codename !== "" && !root._isDeck
             spacing: Theme.spacingMd
 
             // Product photo (remote, per-codename) with per-family SVG fallback.
@@ -133,15 +149,9 @@ Rectangle {
             }
         }
 
-        // Profile switcher bar (Workstream D) --------------------------------
-        // Profiles are device-scoped. Selecting a device activates that
-        // device's profile (creating a "Default" the first time); this bar
-        // lets the user switch between them and create/rename/duplicate/delete.
-        ProfileBar {
-            Layout.fillWidth: true
-            visible: root.codename !== ""
-            deviceCodename: root.codename
-        }
+        // Profile switching now lives in the top nav (OpenDeck parity — the
+        // ProfileManager dropdown sits under the device dropdown), so the
+        // in-editor ProfileBar has been removed for every device class.
 
         // Empty state when nothing is selected -------------------------------
         EmptyState {
@@ -157,7 +167,9 @@ Rectangle {
         TabBar {
             id: tabs
             Layout.fillWidth: true
-            visible: root.codename !== ""
+            // Hidden for decks (single-surface OpenDeck view); shown for
+            // keyboards/mice which have multiple editable facets.
+            visible: root.codename !== "" && !root._isDeck
             TabButton {
                 text: qsTr("Keys")
                 visible: root._showKeys
@@ -192,7 +204,8 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: root.codename !== ""
-            currentIndex: tabs.currentIndex
+            // Decks have no TabBar, so pin to the Keys/DeviceView panel (0).
+            currentIndex: root._isDeck ? 0 : tabs.currentIndex
 
             Loader {
                 active: stack.currentIndex === 0 && root._showKeys
@@ -217,9 +230,12 @@ Rectangle {
         }
 
         // Sticky footer with Apply / Revert / Restore defaults --------------
+        // Decks auto-save (OpenDeck live-persistence model — Main.qml debounces
+        // saveActiveProfile on profileChanged), so they drop the footer entirely.
+        // Keyboards/mice keep explicit Apply/Revert until their editors migrate.
         Rectangle {
             Layout.fillWidth: true
-            visible: root.codename !== ""
+            visible: root.codename !== "" && !root._isDeck
             Layout.preferredHeight: 56
             color: Theme.bgSidebar
             radius: Theme.radiusMd
