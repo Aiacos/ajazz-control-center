@@ -224,9 +224,14 @@ endif()
 add_subdirectory(src/core)
 add_subdirectory(src/devices)
 
-if(AJAZZ_BUILD_PYTHON_HOST)
-    add_subdirectory(src/plugins)
-endif()
+# ajazz::plugins is built UNCONDITIONALLY: the app links it unconditionally so the Ed25519
+# plugin-verify gate is always present (fail-closed — see Phase 22 note at src/app/CMakeLists.txt).
+# The library is Qt-free and pybind11-free (the out-of-process host execs python3 at runtime, no
+# compile-time Python dep), so it builds regardless of AJAZZ_BUILD_PYTHON_HOST; only the host
+# *runtime* defs in src/app are gated by that option. Guarding this subdir behind
+# AJAZZ_BUILD_PYTHON_HOST broke -DAJAZZ_BUILD_PYTHON_HOST=OFF builds (CodeQL) with "Target
+# ajazz-control-center links to ajazz::plugins but the target was not found".
+add_subdirectory(src/plugins)
 
 if(AJAZZ_BUILD_APP)
     add_subdirectory(src/app)

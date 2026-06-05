@@ -175,7 +175,7 @@ public:
      *
      * Calling this on Removed erases the cache entry (and best-effort `close()`s
      * the stale backend if still live) so the next `open()` is a cache MISS →
-     * the factory builds a fresh backend whose `hid_open(vid, pid)` resolves the
+     * the factory builds a fresh backend whose HID open (vid/pid) resolves the
      * current node. Consumers must re-resolve (setActiveDevice) to pick it up —
      * the hot-plug Arrived path already does.
      *
