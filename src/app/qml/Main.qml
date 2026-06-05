@@ -64,7 +64,6 @@ ApplicationWindow {
                 StreamDockControlService.setActiveDevice(cn);
                 editor.codename = cn;
                 editor.capabilities = DeviceModel.capabilitiesFor(cn);
-                deviceSelector.selectCodename(cn); // sync the nav dropdown
             }
         }
     }
@@ -146,19 +145,18 @@ ApplicationWindow {
             visible: AppUpdate.status === AppUpdate.UpdateAvailable
         }
 
-        // ── OpenDeck-style top nav (replaces AppHeader + the left DeviceList) ──
-        // Top-left: the device dropdown with the profile dropdown stacked
-        // beneath it (OpenDeck's DeviceSelector + ProfileManager). Top-right:
-        // the plugin / runtime / settings surfaces as compact buttons. The
-        // former 320 px device sidebar is gone — OpenDeck has no device list.
+        // ── Top nav: profile switcher (left) + plugin/runtime/settings (right) ──
+        // The device list itself lives in the left sidebar below (DeviceList),
+        // NOT here — a dropdown for devices was rejected (regression). The nav
+        // keeps the per-device "Device" button, the plugin/loaded/debug/settings
+        // surfaces, and minimize-to-tray. The profile switcher (ProfileManager
+        // equivalent) sits top-left.
         Rectangle {
             id: nav
             Layout.fillWidth: true
-            // Fixed height tall enough for the two stacked dropdowns (device
-            // over profile). Computing from navRow.implicitHeight collapsed to a
-            // single row, letting the editor canvas paint over the profile
-            // buttons; a floor keeps the whole nav cluster inside its band.
-            Layout.preferredHeight: Math.max(104, navRow.implicitHeight + Theme.spacingMd * 2)
+            // One row tall (profile bar + buttons). Floor keeps the band stable
+            // even before the ProfileBar populates.
+            Layout.preferredHeight: Math.max(56, navRow.implicitHeight + Theme.spacingMd * 2)
             color: Theme.bgSidebar
 
             RowLayout {
@@ -170,25 +168,12 @@ ApplicationWindow {
                 anchors.bottomMargin: Theme.spacingMd
                 spacing: Theme.spacingLg
 
-                // Device + profile dropdowns, stacked (OpenDeck top-left).
-                ColumnLayout {
+                // Profile switcher (top-left). Device selection is the sidebar.
+                ProfileBar {
+                    objectName: "navProfileBar"
                     Layout.alignment: Qt.AlignVCenter
-                    spacing: Theme.spacingXs
-
-                    DeviceSelector {
-                        id: deviceSelector
-                        onDeviceSelected: codename => {
-                            StreamDockControlService.setActiveDevice(codename); // REQ-26-A, closes GAP-25A
-                            editor.codename = codename;
-                            editor.capabilities = DeviceModel.capabilitiesFor(codename);
-                        }
-                    }
-
-                    ProfileBar {
-                        objectName: "navProfileBar"
-                        visible: editor.codename !== ""
-                        deviceCodename: editor.codename
-                    }
+                    visible: editor.codename !== ""
+                    deviceCodename: editor.codename
                 }
 
                 Item { Layout.fillWidth: true }
@@ -257,17 +242,35 @@ ApplicationWindow {
             }
         }
 
-        // Center editor — full width (OpenDeck has no left sidebar). The action
-        // library and property inspector live inside the editor's DeviceView.
-        ProfileEditor {
-            id: editor
+        // Body: device sidebar (left) + editor (right). The vertical device
+        // list is the device selector — a dropdown for devices was rejected.
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            // Apply/Revert/Restore stay wired for the keyboard/mouse footer;
-            // decks have no footer and auto-save via the debounced timer below.
-            onApplyRequested: ProfileController.saveActiveProfile()
-            onRevertRequested: ProfileController.loadActiveProfile()
-            onRestoreDefaultsRequested: ProfileController.resetActiveProfile()
+            spacing: 0
+
+            DeviceList {
+                id: sidebar
+                Layout.preferredWidth: root.width < 700 ? 64 : 320
+                Layout.fillHeight: true
+                model: DeviceModel
+                onDeviceSelected: codename => {
+                    StreamDockControlService.setActiveDevice(codename); // REQ-26-A, closes GAP-25A
+                    editor.codename = codename;
+                    editor.capabilities = DeviceModel.capabilitiesFor(codename);
+                }
+            }
+
+            ProfileEditor {
+                id: editor
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                // Apply/Revert/Restore stay wired for the keyboard/mouse footer;
+                // decks have no footer and auto-save via the debounced timer below.
+                onApplyRequested: ProfileController.saveActiveProfile()
+                onRevertRequested: ProfileController.loadActiveProfile()
+                onRestoreDefaultsRequested: ProfileController.resetActiveProfile()
+            }
         }
     }
 
