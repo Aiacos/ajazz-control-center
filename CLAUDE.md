@@ -343,12 +343,16 @@ memory `project_phase_tracking_vs_code_divergence`.
 
 ### Latent items (open, low-priority)
 
-- `tests/qml/ajazz_qml_tests` link target has a pre-existing undefined-references
-  issue: `tests/qml/CMakeLists.txt` compiles `application.cpp` but its source list
-  omits `sidecar_stream_dock_device.cpp` (→ undefined `ajazz::app::makeSidecarStreamDock`)
-  and the bridge slots (`PluginDeviceBridge::onPluginRegistered`/`onPluginDisconnected`/
-  `onActivePageChanged`). Slice-C/D era gap, unrelated to the wire removal. Run ctest
-  with `-E qml` to skip; the unit-test suite (`ajazz_unit_tests`) builds + runs clean.
+- **RESOLVED 2026-06-05** (`042153a`): the `tests/qml/ajazz_qml_tests` link gap.
+  `tests/qml/CMakeLists.txt` was missing `sidecar_protocol.cpp` +
+  `sidecar_stream_dock_device.cpp` (→ undefined `ajazz::app::makeSidecarStreamDock`,
+  referenced unconditionally by `application.cpp`) and `plugin_settings_store.cpp`
+  (→ undefined `plugin_settings_store::*` from the WebSockets-gated
+  `plugin_device_bridge.cpp`). All three are now in the test target's source list,
+  so the **full build is green and all ctest cases pass with NO `-E`/`-LE` filter**
+  (the old `-E qml` advice never actually matched — the qml tests are labelled
+  `qml` and named `QML…`/`DeviceView…`, so exclusion is by label `-LE qml`). The
+  9 qml tests (smoke, DeviceView geometry + drag-drop) now run + pass.
 - **Resolved by the sidecar:** the old `StreamDockControlService` per-interaction
   open/close churn on the AKP05E (which wedged the panel) no longer applies — the
   sidecar holds a persistent handle for the session (one `CRT DIS`), hardware-confirmed

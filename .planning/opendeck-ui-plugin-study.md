@@ -10,6 +10,18 @@ API over a local WebSocket — the same protocol family our `SdPluginServer`
 already speaks. So this is mostly a **gap-closing + correctness** exercise, not
 a green-field rebuild.
 
+> **2026-06-05 — single-view shell landed (`16db0f0`).** The app now mirrors
+> OpenDeck's pure-view chrome: the old AppHeader + 320px left `DeviceList` sidebar
+> are replaced by a top nav with a `DeviceSelector` dropdown + `ProfileManager`
+> (`ProfileBar`) stacked top-left, and plugin/loaded/debug/settings/minimize on the
+> right. Stream Deck devices render chrome-less (no in-editor header, no TabBar, no
+> Apply/Revert footer) and live-persist every edit via a debounced auto-save —
+> matching OpenDeck's no-Apply model; per-device settings + firmware moved to a
+> right-edge drawer. Keyboards/mice (no OpenDeck analogue) keep their tabbed editor.
+> Remaining OpenDeck UI gaps below still stand: `InstanceEditor` multi/toggle-action
+> states, per-app profile switching (`application_watcher.rs`), and the device-sleep
+> keep-alive (sidecar TODO). See STATE.md "Active experiment" 2026-06-05.
+
 ## Architecture map (OpenDeck → our app)
 
 | OpenDeck (Svelte/Rust)                                                                              | Our app                                              | Status                                                            |

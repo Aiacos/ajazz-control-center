@@ -4,8 +4,8 @@ milestone: v1.3
 milestone_name: Stream Dock End-to-End / Elgato-compatible Plugin SDK
 status: executing
 stopped_at: Phase 26 UI-SPEC approved
-last_updated: '2026-06-02T21:47:18.299Z'
-last_activity: 2026-06-02
+last_updated: '2026-06-05T00:00:00.000Z'
+last_activity: 2026-06-05
 progress:
   total_phases: 21
   completed_phases: 20
@@ -27,6 +27,21 @@ progress:
 > (do not expect them to exist). AKP815 is the custom-backend carve-out.
 > Remaining: Slice E (docs, in progress) + Slice F (cross-platform build/bundle
 > of the Rust sidecar + CI). Full tracking: `.planning/experiment-mirajazz-migration.md`.
+>
+> **2026-06-05 — OpenDeck single-view shell + audit.** The editor was reshaped to
+> OpenDeck's pure-view model (`16db0f0`): the AppHeader + 320px left DeviceList are
+> replaced by a top nav (device dropdown + ProfileBar stacked, plugin/loaded/debug/
+> settings/minimize on the right); decks render chrome-less (no header/TabBar/footer)
+> and live-persist via a debounced auto-save; per-device settings/firmware moved to a
+> right-edge drawer. Keyboards/mice keep their tabbed editor. Drag-move now clears the
+> source key (`91b5864`). A methodical whole-project audit (6 parallel reviewers,
+> grep-verified) then landed three fixes: deck-scoped auto-save + silent toast
+> (`9dae75f`, fixing a Revert regression the shell introduced for keyboards/mice),
+> `SIGPIPE` ignored so a dying plugin can't kill the app (`8045e45`), and the
+> long-standing `tests/qml` link gap closed (`042153a`) → **full build green, all
+> ctest cases pass with NO `-E`/`-LE` filter** (the 9 qml tests now run). Open
+> pre-existing items triaged in memory `project_audit_2026_06_05` (AKP815
+> RGBA-as-JPEG, action_engine `this`-capture UAF, AKP815 key-release decode).
 
 ## Project Reference
 
