@@ -238,6 +238,15 @@ cmake --build --preset linux-release
 ctest --preset linux-release --output-on-failure
 ```
 
+> **Rust toolchain (Stream Dock sidecar).** The Stream Dock families
+> (AKP03 / AKP05-N4 / AKP153) are driven by the out-of-process
+> [`streamdock-host`](streamdock-host/) Rust sidecar, which CMake builds with
+> `cargo` and stages beside the app. A stable Rust toolchain is therefore a
+> build prerequisite (installed by `make bootstrap`). To build the app without
+> the sidecar — e.g. for static analysis or a Rust-free environment — pass
+> `-DAJAZZ_BUILD_SIDECAR=OFF` (Stream Dock devices then won't open at runtime;
+> keyboards and mice are unaffected).
+
 The full reference — every preset, `-D` option and CPack generator — lives in
 [`docs/guides/BUILDING.md`](docs/guides/BUILDING.md). Protocol work follows a
 documented clean-room procedure: see
