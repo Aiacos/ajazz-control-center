@@ -437,6 +437,13 @@ target_link_libraries(
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration
+            # Qt6::Quick: stream_dock_control_service.cpp (compiled into this target) includes
+            # live_key_image_provider.hpp -> <QQuickImageProvider>, which lives in Qt6Quick.
+            # Previously QtQuick's include dir only reached this target *transitively* through the
+            # optional WebEngine block below, so the build broke whenever WebEngine wasn't found
+            # (e.g. the `dev` preset): "fatal error: QQuickImageProvider: No such file". Link it
+            # explicitly so the dependency is honest and preset-independent.
+            Qt6::Quick
             Qt6::Test # QSignalSpy
 )
 
