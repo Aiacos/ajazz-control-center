@@ -138,18 +138,11 @@ devices:
         - "Real-device capture to promote probed -> partial"
         - "800x480 strip image upload validation"
 
-  - codename: akp03
-    family: streamdeck
-    name: "AJAZZ AKP03 / Mirabox N3"
-    vid: "0x0300"
-    pid: "0x1001"
-    keys: 6
-    encoders: 3
-    maturity: functional
-    capabilities: [display, encoder, macros, clock]
-    protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Canonical PID per ajazz-sdk; legacy 0x3001 kept registered for compatibility."
-
+  # NOTE: there is deliberately no bare `akp03` @ 0x0300:0x1001 entry. That PID
+  # belongs to AKP153 at runtime (see register.cpp: "0x0300:0x1001 wins over
+  # AKP03"), so a codename: akp03 row here would advertise a device that can
+  # never bind. The real AKP03 family is the akp03_legacy/akp03e/akp03r rows
+  # below plus the Mirabox N3 rebadges.
   - codename: akp03_legacy
     family: streamdeck
     name: "AJAZZ AKP03 (legacy 0x3001 firmware)"
@@ -160,7 +153,7 @@ devices:
     maturity: functional
     capabilities: [display, encoder, macros, clock]
     protocol_doc: docs/protocols/streamdeck/akp03.md
-    notes: "Pre-2026-05-14 placeholder PID. Same backend as `akp03`; retained until removed in a future cleanup."
+    notes: "6 LCD keys (2x3) + 3 pressable encoders + 3 non-LCD side buttons. JPEG 60x60 (Rot0) keys. Earliest AKP03 firmware PID; same backend as the rest of the AKP03 family."
 
   - codename: akp03e
     family: streamdeck
@@ -219,6 +212,18 @@ devices:
       pending:
         - "Real Mirabox N3 (rev. 1) capture to promote partial -> functional"
         - "USB-suspend handling on bus reset (Mirabox-specific quirks if any)"
+
+  - codename: mirabox_n3e
+    family: streamdeck
+    name: "Mirabox N3E (rev. 1)"
+    vid: "0x6602"
+    pid: "0x1003"
+    keys: 6
+    encoders: 3
+    maturity: scaffolded
+    capabilities: [display, encoder, macros, clock]
+    protocol_doc: docs/protocols/streamdeck/akp03.md
+    notes: "Mirabox-branded AKP03E sibling (opendeck-akp03 catalogue, 0x6602:0x1003). Same backend; registered in register.cpp but was previously missing from this table."
 
   - codename: mirabox_n3_rev3
     family: streamdeck
