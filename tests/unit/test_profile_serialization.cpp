@@ -370,5 +370,9 @@ TEST_CASE("exportProfileBundle escapes the author field", "[profile_bundle]") {
     // The manifest must carry the escaped author, never the raw bytes.
     REQUIRE(contents.find(R"("author":"He said \"hi\"\\done")") != std::string::npos);
 
+    // Close the reader before removing: on Windows std::filesystem::remove_all
+    // throws "file being used by another process" while the ifstream still holds
+    // the bundle open, unlike POSIX where unlink-while-open succeeds.
+    in.close();
     std::filesystem::remove_all(dir);
 }

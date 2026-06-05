@@ -166,6 +166,10 @@ TEST_CASE("FileSink appends records in the legacy format", "[logsinks][file]") {
     REQUIRE(line.find("[hid]") != std::string::npos);
     REQUIRE(line.find("device 7 dropped") != std::string::npos);
 
+    // Close the reader before removing: on Windows std::filesystem::remove throws
+    // "file being used by another process" while any handle (here the ifstream)
+    // is still open, unlike POSIX where unlink-while-open succeeds.
+    in.close();
     std::filesystem::remove(path);
 }
 
