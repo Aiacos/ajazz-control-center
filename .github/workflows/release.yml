@@ -156,6 +156,35 @@ jobs:
           cpack -G ZIP
           if ($LASTEXITCODE -ne 0) { throw "ZIP packaging failed" }
 
+      - name: Verify Qt runtime bundled in package
+        working-directory: build/windows-release
+        shell: pwsh
+        # Guard against the v0.1.0 regression: cpack -G WIX/ZIP succeeds even when the install
+        # tree is missing every Qt DLL, shipping an MSI that fails at launch with
+        # "Qt6Widgets.dll was not found". Unzip the built ZIP (same install tree the MSI
+        # harvests) and assert the Qt runtime is actually present: the core widget DLL plus the
+        # windows platform plugin (without qwindows.dll the app aborts with "no Qt platform
+        # plugin could be initialized"). Runs before code-signing so a broken package fails the
+        # release job loudly instead of publishing an unrunnable installer.
+        run: |
+          $zip = Get-ChildItem *.zip | Select-Object -First 1
+          if (-not $zip) { throw "No ZIP produced — cannot verify Qt runtime" }
+          $dest = Join-Path $env:RUNNER_TEMP "acc-pkg-verify"
+          if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
+          Expand-Archive -Path $zip.FullName -DestinationPath $dest
+          $required = @("Qt6Widgets.dll", "qwindows.dll")
+          $missing = @()
+          foreach ($f in $required) {
+            if (-not (Get-ChildItem -Recurse -Path $dest -Filter $f)) { $missing += $f }
+          }
+          if ($missing.Count -gt 0) {
+            Write-Host "::group::package contents"
+            Get-ChildItem -Recurse -Path $dest | ForEach-Object { Write-Host $_.FullName }
+            Write-Host "::endgroup::"
+            throw "Qt runtime missing from Windows package: $($missing -join ', '). windeployqt did not populate the install tree."
+          }
+          Write-Host "OK: Qt runtime bundled ($($required -join ', '))"
+
       - name: Code-sign MSI
         if: env.WIN_CERT_BASE64 != ''
         shell: pwsh

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 project(
     ajazz-control-center
-    VERSION 0.1.0
+    VERSION 0.1.1
     DESCRIPTION "Cross-platform control center for AJAZZ devices"
     HOMEPAGE_URL "https://github.com/Aiacos/ajazz-control-center"
     LANGUAGES CXX C
