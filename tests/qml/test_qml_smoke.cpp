@@ -53,9 +53,12 @@
 #include <QVariant>
 #include <QVariantMap>
 
+#include <cstdio>
+#include <cstdlib>
 #include <mutex>
 #include <vector>
 
+#include <catch2/catch_session.hpp>
 #include <catch2/catch_test_macros.hpp>
 
 // ---------------------------------------------------------------------------
@@ -304,4 +307,24 @@ TEST_CASE("QML top-level pages compile without errors", "[qml][smoke]") {
     }
     WARN("QML top-level pages compiled: " << covered);
     REQUIRE(covered == static_cast<int>(std::size(kCompileOnlyComponents)));
+}
+
+// ---------------------------------------------------------------------------
+// Custom Catch2 entry point (replaces Catch2WithMain).
+//
+// world() deliberately leaks its QApplication / QQmlApplicationEngine /
+// Application controller because tearing them down in C++ static-destruction
+// order races Qt's atexit cleanup and segfaults. Leaking the heap objects is
+// not enough on its own: at a NORMAL process exit Qt's GLOBAL statics (the
+// Quick scene-graph, the offscreen QPA plugin, the network/SSL backends) still
+// run their own destructors, and on the headless CI runners that teardown
+// intermittently SegFaults *after* the per-test result has already been
+// reported (each `catch_discover_tests` case is its own process). Catch2 has
+// finished reporting by the time run() returns, so we flush and hard-exit with
+// std::_Exit, skipping the racy exit-time teardown entirely. A clean run can no
+// longer be flipped to a SegFault by global-destructor ordering.
+int main(int argc, char* argv[]) {
+    int const result = Catch::Session().run(argc, argv);
+    std::fflush(nullptr); // flush Catch2's stdout/stderr before the hard exit
+    std::_Exit(result < 0 ? 255 : (result > 255 ? 255 : result));
 }

@@ -165,7 +165,10 @@ target_link_libraries(
             # — same reason the app target links it unconditionally after the un-gate.
             ajazz::plugins
             ajazz::warnings
-            Catch2::Catch2WithMain
+            # Custom main() in test_qml_smoke.cpp (std::_Exit past Qt's racy exit-time
+            # global-destructor teardown) — link Catch2 WITHOUT its provided main to avoid a
+            # duplicate-symbol clash.
+            Catch2::Catch2
             Qt6::Core
             Qt6::CorePrivate # QZipReader in sdplugin_extractor / plugin_catalog_model
             Qt6::Gui
