@@ -76,12 +76,18 @@ namespace ajazz::tests {
 /// test that genuinely wants a mock URL set the env var itself first.
 inline void disableLiveCatalogs() {
 #ifdef _WIN32
-    if (std::getenv("ACC_STREAMDOCK_CATALOG_URL") == nullptr) {
-        _putenv_s("ACC_STREAMDOCK_CATALOG_URL", "disabled");
-    }
-    if (std::getenv("ACC_OPENDECK_CATALOG_URL") == nullptr) {
-        _putenv_s("ACC_OPENDECK_CATALOG_URL", "disabled");
-    }
+    // MSVC /W4 /WX rejects std::getenv (C4996); use the Annex K getenv_s to
+    // probe presence (buffer == nullptr / size 0 returns the required length,
+    // 0 == not set) so a test that set a mock URL first still wins.
+    auto setIfUnset = [](char const* name) {
+        size_t len = 0;
+        getenv_s(&len, nullptr, 0, name);
+        if (len == 0) {
+            _putenv_s(name, "disabled");
+        }
+    };
+    setIfUnset("ACC_STREAMDOCK_CATALOG_URL");
+    setIfUnset("ACC_OPENDECK_CATALOG_URL");
 #else
     ::setenv("ACC_STREAMDOCK_CATALOG_URL", "disabled", /*overwrite*/ 0);
     ::setenv("ACC_OPENDECK_CATALOG_URL", "disabled", /*overwrite*/ 0);
