@@ -241,8 +241,12 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
     // is enforced at install time, not at enumerate time.
     PluginCatalogModel model(nullptr);
 
-    // Lay down one installed plugin with two declared actions. OS lists only
-    // mac/windows; the LOCKED Linux-accept policy keeps it runnable here.
+    // Lay down one installed plugin with two declared actions. OS lists
+    // windows + mac so the fixture is runnable on every CI host: mac/windows
+    // match directly, and on Linux the LOCKED Linux-accept policy (no "linux"
+    // entry present) keeps it runnable too. (A windows-only manifest would be
+    // correctly rejected by the OS gate on macOS — this test exercises action
+    // flattening, not OS gating.)
     QString const pluginDir =
         QDir(pluginsDir).filePath(QStringLiteral("com.example.demo.sdPlugin"));
     REQUIRE(QDir().mkpath(pluginDir));
@@ -251,7 +255,7 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 1,
-      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
       "CodePath": "code/index.js",
       "Actions": [
         { "UUID": "com.example.demo.first",  "Name": "First Action",
@@ -338,7 +342,7 @@ TEST_CASE("CatalogOffline VisibleInActionsList false filters action", "[catalog-
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 1,
-      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
       "CodePath": "code/index.js",
       "Actions": [
         { "UUID": "com.example.visibility.actionA",
@@ -405,7 +409,7 @@ TEST_CASE("CatalogOffline diagnostic hidden count vs error count", "[catalog-off
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 1,
-      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
       "CodePath": "code/index.js",
       "Actions": [
         { "UUID": "com.example.diagnostic.visible",
@@ -470,7 +474,7 @@ TEST_CASE("CatalogOffline controllers in output map", "[catalog-offline]") {
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 1,
-      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
       "CodePath": "code/index.js",
       "Actions": [
         { "UUID": "com.example.controllers.knob",
@@ -525,7 +529,7 @@ TEST_CASE("CatalogOffline affordanceMask in output map", "[catalog-offline]") {
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 1,
-      "OS": [ { "Platform": "windows", "MinimumVersion": "10" } ],
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
       "CodePath": "code/index.js",
       "Actions": [
         { "UUID": "com.example.affordance.keypad",
@@ -609,7 +613,9 @@ TEST_CASE("CatalogOffline GAP-28A skippedOsVersion counter for OS or version rej
         f.close();
     }
 
-    // Plugin B: linux-runnable, so its actions DO appear.
+    // Plugin B: runnable on every host (lists linux + mac + windows), so its
+    // action DOES appear on all CI platforms while plugin A stays rejected
+    // (by version everywhere, and additionally by OS on macOS).
     QString const pluginDirB =
         QDir(pluginsDir).filePath(QStringLiteral("com.example.linuxok.sdPlugin"));
     REQUIRE(QDir().mkpath(pluginDirB));
@@ -618,7 +624,7 @@ TEST_CASE("CatalogOffline GAP-28A skippedOsVersion counter for OS or version rej
       "Author": "Tester",
       "Version": "1.0.0",
       "SDKVersion": 2,
-      "OS": [ { "Platform": "linux", "MinimumVersion": "1" } ],
+      "OS": [ { "Platform": "linux", "MinimumVersion": "1" }, { "Platform": "mac", "MinimumVersion": "1" }, { "Platform": "windows", "MinimumVersion": "1" } ],
       "CodePath": "index.js",
       "Actions": [
         { "UUID": "com.example.linuxok.action1",
