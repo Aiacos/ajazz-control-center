@@ -161,6 +161,14 @@ async fn main() {
     }
 }
 
+/// True if `buf` is an "ACK..OK" command-acknowledgement frame rather than an
+/// input report. ACK frames begin with the ASCII bytes `A` `C` `K` (0x41 0x43
+/// 0x4b) and share the input channel; they must not be decoded as input.
+/// See docs/protocols/streamdeck/akp05_input_corrections.md §2.1.
+fn is_ack_frame(buf: &[u8]) -> bool {
+    buf.len() >= 3 && buf[0] == 0x41 && buf[1] == 0x43 && buf[2] == 0x4b
+}
+
 /// Per-device input reader. Uses raw frames (no initialize/DIS).
 fn spawn_input_reader(reader: Arc<mirajazz::state::DeviceStateReader>, serial: String) {
     tokio::spawn(async move {
@@ -170,6 +178,14 @@ fn spawn_input_reader(reader: Arc<mirajazz::state::DeviceStateReader>, serial: S
                 .await
             {
                 Ok(Some(buf)) => {
+                    // Discard "ACK..OK" acknowledgement frames: they ride the same
+                    // input-report channel but are command acknowledgements, not
+                    // input events. Emitting one as {code: buf[9]} would surface a
+                    // bogus key/encoder event. See
+                    // docs/protocols/streamdeck/akp05_input_corrections.md §2.1.
+                    if is_ack_frame(&buf) {
+                        continue;
+                    }
                     let hex: String = buf.iter().take(16).map(|b| format!("{b:02x}")).collect();
                     emit(serde_json::json!({
                         "event": "input",
@@ -307,5 +323,25 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
     match r {
         Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"render_test","serial":serial})),
         Err(e) => emit(serde_json::json!({"event":"error","msg":format!("render_test: {e}")})),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_ack_frame;
+
+    #[test]
+    fn ack_frame_is_detected_and_input_is_not() {
+        // "ACK" prefix (0x41 0x43 0x4b) -> acknowledgement, must be filtered.
+        assert!(is_ack_frame(b"ACK,OK\0\0\0\0\0\0"));
+        assert!(is_ack_frame(&[0x41, 0x43, 0x4b, 0x00]));
+        // A real input report (code at byte 9) must NOT be treated as ACK.
+        let mut input = [0u8; 16];
+        input[9] = 0x05; // key index 5
+        input[10] = 0x01; // pressed
+        assert!(!is_ack_frame(&input));
+        // Too-short / empty buffers are not ACK.
+        assert!(!is_ack_frame(&[0x41, 0x43]));
+        assert!(!is_ack_frame(&[]));
     }
 }
