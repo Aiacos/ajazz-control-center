@@ -41,7 +41,12 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 1. `grep -rn "QHostAddress::Any" src/` returns 0 and SIGPIPE handler is confirmed present in `main.cpp` — both CI-gated
 1. The 3-in-30s disable + notify, restart, and `exitApp` plugin lifecycle behaviours all pass in `ctest --preset linux-release`; pre-registration exits do NOT count toward the crash window
 1. ADR committed to `.planning/phases/30-*/`: IPluginHost2 unification decision (keep `.sdPlugin` WS path and Python OOP path separate or unify) documented with rationale, so downstream phases do not re-derive it
-   **Plans**: TBD
+
+**Plans**: 3 plans
+
+- [ ] 30-01-PLAN.md — Wave 0 scaffold: RED pre-registration tests, QHostAddress::Any+SIGPIPE CI gate, IPluginHost2 UNIFY ADR
+- [ ] 30-02-PLAN.md — Sentinel-UUID pre-registration crash isolation (HOST-02): rekey + crash-window guard
+- [ ] 30-03-PLAN.md — IPluginHost2 unified contract + PluginManager/OOP refactor + four-runtime no-regression + SKU audit (HOST-01/03)
 
 ### Phase 31: ActionInstance Core Model + Profile Schema v2
 
