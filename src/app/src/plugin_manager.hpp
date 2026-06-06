@@ -49,6 +49,7 @@
  */
 #pragma once
 
+#include "i_plugin_host2.hpp"
 #include "node_runner.hpp"
 #include "plugin_crash_tracker.hpp"
 #include "plugin_manifest.hpp"
@@ -81,10 +82,14 @@ class PropertyInspectorController;
 /**
  * @brief Orchestrates plugin discovery, spawn, crash lifecycle, and shutdown.
  *
+ * Implements @ref IPluginHost2 as the .sdPlugin sub-host (Node/HTML/native over
+ * WebSocket). Device I/O from plugins must flow ONLY through PluginDeviceBridge —
+ * this class has zero SKU-specific branches in dispatch.
+ *
  * Constructed with injectable dependencies so tests can exercise the logic
  * without a real node binary, real server port, or real process.
  */
-class PluginManager : public QObject {
+class PluginManager : public QObject, public IPluginHost2 {
     Q_OBJECT
 
 public:
@@ -116,6 +121,43 @@ public:
                            QObject* parent = nullptr);
 
     ~PluginManager() override;
+
+    // ---- IPluginHost2 overrides (the .sdPlugin sub-host) -------------------
+    //
+    // discover() and spawn() already exist as the primary public API below.
+    // These overrides provide IPluginHost2 implementations delegating to them.
+    // dispatch() handles ONLY the .sdPlugin WebSocket action path — Python routing
+    // lives in UnifiedPluginHost, NOT here.
+    // plugins() returns ONLY the .sdPlugin inventory — Python folding is in the aggregator.
+
+    /**
+     * @brief IPluginHost2::dispatch — routes a .sdPlugin action via SdPluginServer::sendEvent.
+     *
+     * Looks up the plugin in m_live to confirm it is registered, then sends the event
+     * JSON over the WebSocket. This is the .sdPlugin-only dispatch path; Python UUIDs
+     * must be handled by UnifiedPluginHost before reaching here.
+     */
+    bool dispatch(QString const& pluginUuid,
+                  QString const& actionId,
+                  QJsonObject const& payload) override;
+
+    /**
+     * @brief IPluginHost2::plugins — returns the .sdPlugin-only inventory.
+     *
+     * Converts the m_live manifest entries to PluginInfo objects. Python plugins are
+     * NOT included — the aggregator (UnifiedPluginHost) folds both inventories.
+     */
+    [[nodiscard]] std::vector<plugins::PluginInfo> plugins() override;
+
+    /**
+     * @brief IPluginHost2::connectedPluginCount — delegates to SdPluginServer.
+     */
+    [[nodiscard]] int connectedPluginCount() const noexcept override;
+
+    /**
+     * @brief IPluginHost2::pluginServer — returns the injected SdPluginServer.
+     */
+    [[nodiscard]] SdPluginServer* pluginServer() const noexcept override { return m_server; }
 
     // Non-copyable, non-movable (owns QProcess children).
     PluginManager(PluginManager const&) = delete;

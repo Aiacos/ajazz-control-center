@@ -876,4 +876,59 @@ QString PluginManager::ownerForAction(QString const& actionUuid) const {
     return {};
 }
 
+// ---------------------------------------------------------------------------
+// IPluginHost2 overrides (the .sdPlugin sub-host implementation)
+// ---------------------------------------------------------------------------
+
+bool PluginManager::dispatch(QString const& pluginUuid,
+                             QString const& actionId,
+                             QJsonObject const& payload) {
+    // This is the .sdPlugin WebSocket dispatch path. Routes the event to the
+    // live plugin via SdPluginServer::sendEvent. Python UUIDs are handled by
+    // UnifiedPluginHost before they reach this method.
+    //
+    // HOST-03: no SKU-specific branch here. Device I/O lives in PluginDeviceBridge.
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+    if (!m_server) {
+        return false;
+    }
+    if (m_live.find(pluginUuid) == m_live.end()) {
+        return false; // plugin not registered / not live
+    }
+    return m_server->sendEvent(pluginUuid, actionId, payload);
+#else
+    Q_UNUSED(pluginUuid)
+    Q_UNUSED(actionId)
+    Q_UNUSED(payload)
+    return false;
+#endif
+}
+
+std::vector<plugins::PluginInfo> PluginManager::plugins() {
+    // Return the .sdPlugin-only inventory. Python plugins are NOT included here —
+    // the aggregator (UnifiedPluginHost) folds both inventories.
+    std::vector<plugins::PluginInfo> result;
+    result.reserve(m_live.size());
+    for (auto const& [uuid, livePlugin] : m_live) {
+        plugins::PluginInfo info;
+        info.id = uuid.toStdString();
+        info.name = livePlugin.manifest.name.toStdString();
+        info.version = livePlugin.manifest.version.toStdString();
+        info.authors = livePlugin.manifest.author.toStdString();
+        for (auto const& action : livePlugin.manifest.actions) {
+            info.actionIds.push_back(action.uuid.toStdString());
+        }
+        result.push_back(std::move(info));
+    }
+    return result;
+}
+
+int PluginManager::connectedPluginCount() const noexcept {
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+    return m_server ? m_server->connectedPluginCount() : 0;
+#else
+    return 0;
+#endif
+}
+
 } // namespace ajazz::app

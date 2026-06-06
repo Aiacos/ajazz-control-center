@@ -144,6 +144,11 @@ qt_add_executable(
     # (the hardware-confirmed fix for the open/close wedge). Not a QObject (functor connects), so no
     # AUTOMOC entry needed.
     src/sidecar_stream_dock_device.cpp
+    # Phase 30 Plan 30-03 (HOST-01): UnifiedPluginHost aggregator — the single IPluginHost2
+    # implementation that routes dispatch by UUID across all four runtimes (.sdPlugin WS path via
+    # PluginManager + Python OOP path via OutOfProcessPluginHost). Qt->STL conversion lives at the
+    # aggregator boundary. COD-031: app-layer, no nlohmann in public surface.
+    src/unified_plugin_host.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
