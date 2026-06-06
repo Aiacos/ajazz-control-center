@@ -13,6 +13,7 @@
 #include <QEvent>
 #include <QJsonDocument>
 #include <QRandomGenerator>
+#include <QUuid>
 #include <QWebSocket>
 #include <QWebSocketServer>
 
@@ -147,10 +148,17 @@ QHostAddress SdPluginServer::bindAddress() const noexcept {
     return QHostAddress(QHostAddress::LocalHost);
 }
 
+// static
+bool SdPluginServer::isSentinelUuid(QString const& uuid) noexcept {
+    return uuid.startsWith(QStringLiteral("__pending__"));
+}
+
 int SdPluginServer::connectedPluginCount() const noexcept {
     return static_cast<int>(
         std::count_if(m_connections.begin(), m_connections.end(), [](auto const& c) {
-            return c.socket != nullptr && !c.uuid.isEmpty();
+            // Only count fully-registered plugins: socket live, UUID non-empty,
+            // and NOT a sentinel (pre-registration) UUID (HOST-02).
+            return c.socket != nullptr && !c.uuid.isEmpty() && !isSentinelUuid(c.uuid);
         }));
 }
 
@@ -166,11 +174,17 @@ void SdPluginServer::onNewConnection() {
         connect(
             client, &QWebSocket::textMessageReceived, this, &SdPluginServer::onClientTextMessage);
         connect(client, &QWebSocket::disconnected, this, &SdPluginServer::onClientDisconnected);
-        // Empty UUID until the first registerPlugin message arrives.
-        // Salt and auth state are filled when registerPlugin arrives.
-        m_connections.push_back({QString{}, client, QString{}, 0, false});
+        // HOST-02 (SINGLE MAP + SENTINEL UUID): insert a synthetic sentinel UUID so
+        // the socket is tracked in m_connections from the moment it connects, without
+        // exposing it as a registered plugin. The sentinel is rekeyed to the real UUID
+        // when registerPlugin arrives (see dispatchClientMessage). This prevents dangling
+        // pointer leaks if the socket dies before registration (T-30-rekey-race).
+        QString const sentinelUuid =
+            QStringLiteral("__pending__") + QUuid::createUuid().toString(QUuid::WithoutBraces);
+        m_connections.push_back({sentinelUuid, client, QString{}, 0, false});
         AJAZZ_LOG_INFO("plugin-server",
-                       "client connected (pending registration), total slots {}",
+                       "client connected (pre-registration sentinel={}), total slots {}",
+                       sentinelUuid.toStdString(),
                        m_connections.size());
     }
 }
@@ -190,9 +204,18 @@ void SdPluginServer::onClientDisconnected() {
                                        [client](auto const& c) { return c.socket == client; }),
                         m_connections.end());
     client->deleteLater();
-    if (!uuid.isEmpty()) {
+    if (!uuid.isEmpty() && !isSentinelUuid(uuid)) {
+        // Fully-registered plugin disconnected: notify the app layer.
         AJAZZ_LOG_INFO("plugin-server", "plugin disconnected: uuid={}", uuid.toStdString());
         emit pluginDisconnected(uuid);
+    } else if (isSentinelUuid(uuid)) {
+        // HOST-02: pre-registration client disconnected before sending registerPlugin.
+        // Do NOT emit pluginDisconnected (no real plugin UUID to report) and do NOT
+        // count this toward the crash window (PluginManager::onProcessFailed guards
+        // that side via m_live.find). Just log for diagnostics.
+        AJAZZ_LOG_INFO("plugin-server",
+                       "pre-registration client disconnected (sentinel={})",
+                       uuid.toStdString());
     } else {
         AJAZZ_LOG_INFO("plugin-server", "unregistered client disconnected");
     }
@@ -233,6 +256,18 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
             return c.socket == client;
         });
         if (it != m_connections.end()) {
+            // --- T-30-rekey-race: socket-dying-during-rekey guard (HOST-02) ---
+            // If the socket pointer has been cleared (onClientDisconnected fired
+            // concurrently), the slot is mid-teardown. Bail out immediately to avoid
+            // writing a real UUID into a dead slot (UAF / Pitfall 4 extension).
+            if (it->socket == nullptr) {
+                AJAZZ_LOG_WARN("plugin-server",
+                               "registerPlugin for uuid={} but slot socket is null "
+                               "(mid-teardown); ignoring",
+                               uuid.toStdString());
+                return;
+            }
+
             // --- CR-03: UUID collision guard (T-17-IMPERSONATION) ---
             // Reject a new client that tries to claim a UUID already held by a
             // different live socket. Without this guard, two entries share the
@@ -251,11 +286,13 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
                 return;
             }
 
-            // --- WR-02: re-registration clean-up ---
-            // If this socket already holds a different UUID, emit pluginDisconnected
-            // for the old UUID before overwriting so the app layer does not retain
-            // a stale UUID binding.
-            if (!it->uuid.isEmpty() && it->uuid != uuid) {
+            // --- WR-02: re-registration clean-up (HOST-02 sentinel guard) ---
+            // If this socket already holds a REAL (non-sentinel) UUID different from
+            // the incoming uuid, emit pluginDisconnected for the old UUID so the app
+            // layer does not retain a stale UUID binding. Sentinel-to-real rekey must
+            // NOT emit pluginDisconnected (the sentinel was never exposed as a real
+            // plugin UUID) — guard with isSentinelUuid() to suppress it.
+            if (!it->uuid.isEmpty() && it->uuid != uuid && !isSentinelUuid(it->uuid)) {
                 AJAZZ_LOG_WARN("plugin-server",
                                "socket re-registering: old uuid={} replaced by uuid={}",
                                it->uuid.toStdString(),

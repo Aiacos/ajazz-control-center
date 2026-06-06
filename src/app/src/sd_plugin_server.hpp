@@ -216,6 +216,14 @@ private:
     /// Called on EVERY sendEvent invocation — never cache the result (Pitfall 4).
     [[nodiscard]] QWebSocket* socketForUuid(QString const& uuid) const;
 
+    /// Returns true when @p uuid is a sentinel (pre-registration) UUID.
+    ///
+    /// Sentinel UUIDs are inserted on socket connect (HOST-02) and carry the
+    /// prefix "__pending__" to distinguish them from real plugin UUIDs. They are
+    /// rekeyed to the real UUID on registerPlugin, and they do NOT count toward
+    /// connectedPluginCount() or trigger pluginDisconnected signals.
+    [[nodiscard]] static bool isSentinelUuid(QString const& uuid) noexcept;
+
     std::unique_ptr<QWebSocketServer> m_server;
     // Plugin-UUID → connection map. Multiple plugins may register over the
     // same server lifetime; one WebSocket per plugin.
