@@ -20,7 +20,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 
 ## Phases
 
-- [ ] **Phase 30: Plugin-Host Modular Foundation** - Ratify the host-abstraction ADR; close the mid-handshake crash gap; enforce device-coupling decoupling; establish the modularity contract all later phases build on
+- [x] **Phase 30: Plugin-Host Modular Foundation** - Ratify the host-abstraction ADR; close the mid-handshake crash gap; enforce device-coupling decoupling; establish the modularity contract all later phases build on (completed 2026-06-06)
 - [ ] **Phase 31: ActionInstance Core Model + Profile Schema v2** - Add `ActionInstance`/`ActionState` to `src/core/` with hand-rolled serialization; v1→v2 profile schema migration; COD-031 preserved throughout
 - [ ] **Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor** - Fix `profileChanged`→`populateContextsForActivePage` wire; implement Multi Action and Toggle Action dispatch; extend setState rendering; device-view overflow scroll for large SKUs
 - [ ] **Phase 33: Property Inspector End-to-End** - Complete PI HTML rendering (cefQuery polyfill, sdpi.css, $SD WebChannel bridge, per-plugin profile isolation); settings round-trip; PI lifecycle events
@@ -46,7 +46,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 
 - [x] 30-01-PLAN.md — Wave 0 scaffold: RED pre-registration tests, QHostAddress::Any+SIGPIPE CI gate, IPluginHost2 UNIFY ADR
 - [x] 30-02-PLAN.md — Sentinel-UUID pre-registration crash isolation (HOST-02): rekey + crash-window guard
-- [ ] 30-03-PLAN.md — IPluginHost2 unified contract + PluginManager/OOP refactor + four-runtime no-regression + SKU audit (HOST-01/03)
+- [x] 30-03-PLAN.md — IPluginHost2 unified contract + PluginManager/OOP refactor + four-runtime no-regression + SKU audit (HOST-01/03)
 
 ### Phase 31: ActionInstance Core Model + Profile Schema v2
 
@@ -122,11 +122,11 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 
 ## Progress
 
-| Phase                                                                    | Plans Complete | Status      | Completed |
-| ------------------------------------------------------------------------ | -------------- | ----------- | --------- |
-| 30. Plugin-Host Modular Foundation                                       | 2/3            | In Progress |           |
-| 31. ActionInstance Core Model + Profile Schema v2                        | 0/TBD          | Not started | -         |
-| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -         |
-| 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -         |
-| 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -         |
-| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -         |
+| Phase                                                                    | Plans Complete | Status      | Completed  |
+| ------------------------------------------------------------------------ | -------------- | ----------- | ---------- |
+| 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
+| 31. ActionInstance Core Model + Profile Schema v2                        | 0/TBD          | Not started | -          |
+| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -          |
+| 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
+| 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
+| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
