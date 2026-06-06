@@ -610,12 +610,15 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz_unit_tests PRIVATE test_plugin_concurrency.cpp)
 endif()
 
-# Phase 30 Plan 30-01 (HOST-02 Wave-0 scaffold): RED Catch2 cases pinning the pre-registration
-# safety contract. disconnect-before-register and pre-registration-exit cases are EXPECTED to FAIL
-# (RED) at this stage -- they turn GREEN in Plan 30-02 when the sentinel-UUID guard and m_live
-# pre-registration check are wired. plugin_manager.cpp + SdPluginServer are already compiled above.
+# Phase 30 Plan 30-01 (HOST-02 Wave-0 scaffold / Plan 30-03 HOST-01 four-runtime + dispatch proof):
+# HOST-02 tests (GREEN after 30-02) + HOST-01 four-runtime no-regression + IPluginHost2*-pointer
+# dispatch contract test (WARNING-2 fix). unified_plugin_host.cpp linked for the aggregator tests.
+# plugin_manager.cpp + SdPluginServer are already compiled above.
 if(AJAZZ_HAVE_WEBSOCKETS)
-    target_sources(ajazz_unit_tests PRIVATE test_plugin_host2.cpp)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_plugin_host2.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/unified_plugin_host.cpp
+    )
 endif()
 
 # Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. Hardware-free
