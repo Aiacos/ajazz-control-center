@@ -24,26 +24,40 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** Phase 30 — plugin-host-modular-foundation
+**Current focus:** Phase 30 COMPLETE — autonomous run PAUSED before Phase 31 (Sonnet quota exhausted)
 
 ## Current Position
 
-Phase: 30 (plugin-host-modular-foundation) — EXECUTING
-Plan: 3 of 3
-Status: Ready to execute
+Phase: 30 (plugin-host-modular-foundation) — COMPLETE ✓ (VERIFICATION: passed, 701/701 tests, HOST-01/02/03)
+Plan: 3 of 3 complete
+Status: PAUSED — autonomous run stopped after Phase 30; awaiting Sonnet quota reset (Jun 7 ~18:00 Europe/Rome)
+Next: Phase 31 (ActionInstance Core Model + Profile Schema v2) — not started
+Resume with: `/gsd-autonomous --from 31`
 Last activity: 2026-06-06
 
 ### Progress bar
 
 ```
-v2.0 [                              ] 0/6 phases (0%)
-Phase 30 ....
+v2.0 [█████                         ] 1/6 phases (17%)
+Phase 30 DONE
 Phase 31 ....
 Phase 32 ....
 Phase 33 ....
 Phase 34 ....
 Phase 35 ....
 ```
+
+## Blockers / Concerns
+
+- **Autonomous run paused (2026-06-06):** Sonnet daily quota exhausted mid-Phase-30 (the 30-03
+  executor was rate-limited after committing all task work; orchestrator closed it out + verified
+  on Opus). GSD researcher/checker/executor/verifier default to Sonnet, so Phases 31–35 wait for
+  the reset (Jun 7 ~18:00 Europe/Rome). Resume: `/gsd-autonomous --from 31`. Alternatively re-run
+  with Opus-override or inline-Opus if continuing before reset.
+- **Phase 30 advisory follow-ups (non-blocking):** (1) live debug-channel merged-inventory check of
+  the unified host (`.sdPlugin` + Python via `plugin.list`) deferred during close-out — see
+  30-VERIFICATION.md "Human Verification"; (2) Phase 30 code-review gate (gsd-code-review) was NOT
+  run (Sonnet down) — optionally run `/gsd:code-review 30` after reset.
 
 ## mirajazz sidecar (experiment/mirajazz branch baseline)
 
