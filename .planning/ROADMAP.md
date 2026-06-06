@@ -45,7 +45,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 **Plans**: 3 plans
 
 - [x] 30-01-PLAN.md — Wave 0 scaffold: RED pre-registration tests, QHostAddress::Any+SIGPIPE CI gate, IPluginHost2 UNIFY ADR
-- [ ] 30-02-PLAN.md — Sentinel-UUID pre-registration crash isolation (HOST-02): rekey + crash-window guard
+- [x] 30-02-PLAN.md — Sentinel-UUID pre-registration crash isolation (HOST-02): rekey + crash-window guard
 - [ ] 30-03-PLAN.md — IPluginHost2 unified contract + PluginManager/OOP refactor + four-runtime no-regression + SKU audit (HOST-01/03)
 
 ### Phase 31: ActionInstance Core Model + Profile Schema v2
@@ -124,7 +124,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 
 | Phase                                                                    | Plans Complete | Status      | Completed |
 | ------------------------------------------------------------------------ | -------------- | ----------- | --------- |
-| 30. Plugin-Host Modular Foundation                                       | 1/3            | In Progress |           |
+| 30. Plugin-Host Modular Foundation                                       | 2/3            | In Progress |           |
 | 31. ActionInstance Core Model + Profile Schema v2                        | 0/TBD          | Not started | -         |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -         |
 | 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -         |

@@ -4,13 +4,13 @@ milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
 stopped_at: v2.0 roadmap creation
-last_updated: '2026-06-06T11:10:08.094Z'
+last_updated: '2026-06-06T11:25:49.718Z'
 last_activity: 2026-06-06
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -29,7 +29,7 @@ silently leaking host state into plugin children.
 ## Current Position
 
 Phase: 30 (plugin-host-modular-foundation) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 Last activity: 2026-06-06
 
@@ -98,11 +98,13 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ### Decisions (v2.0)
 
-| Plan  | Decision                                                                                                                                         |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate |
-| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                         |
-| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                       |
+| Plan  | Decision                                                                                                                                                |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate        |
+| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                |
+| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                              |
+| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed |
+| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                       |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -130,6 +132,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-06T11:10:08.086Z
-Stopped at: v2.0 roadmap creation
-Resume: `/gsd:plan-phase 30`
+Last session: 2026-06-06T13:42:00Z
+Stopped at: Completed 30-02-PLAN.md (HOST-02 sentinel-UUID + pre-reg exit guard; 696/696 tests green)
+Resume: `/gsd:execute-phase 30` (Plan 3 of 3 remaining)
