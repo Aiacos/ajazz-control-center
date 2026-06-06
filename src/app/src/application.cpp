@@ -967,6 +967,19 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         QDir().mkpath(pluginsDir);
         m_pluginManager = std::make_unique<PluginManager>(
             pluginsDir, m_pluginServer.get(), makeDefaultNodeProbe(), m_propertyInspector.get());
+
+        // HOST-01 (Phase 30-03): construct the UnifiedPluginHost aggregator now that both
+        // sub-hosts are known. m_pluginHost may still be nullptr if AJAZZ_PYTHON_HOST is
+        // not set or the Python host failed to start — the aggregator degrades gracefully.
+        // Declaration order in application.hpp guarantees m_pluginHost2 is destroyed BEFORE
+        // m_pluginManager (so the aggregator's raw pointer is always valid while it lives).
+#ifdef AJAZZ_PYTHON_HOST
+        plugins::IPluginHost* pythonHost = m_pluginHost.get();
+#else
+        plugins::IPluginHost* pythonHost = nullptr;
+#endif
+        m_pluginHost2 = std::make_unique<UnifiedPluginHost>(m_pluginManager.get(), pythonHost);
+
         auto const runnable = m_pluginManager->discover();
         AJAZZ_LOG_INFO(
             "app", "plugin discovery: {} runnable plugin(s)", static_cast<int>(runnable.size()));

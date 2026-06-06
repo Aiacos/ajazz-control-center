@@ -35,6 +35,7 @@
 #include "plugin_device_bridge.hpp"
 #include "plugin_manager.hpp"
 #include "sd_plugin_server.hpp"
+#include "unified_plugin_host.hpp"
 #endif
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
@@ -150,6 +151,11 @@ public:
     [[nodiscard]] PluginManager* pluginManager() const noexcept { return m_pluginManager.get(); }
     /// Device<->plugin event bridge (debug channel: plugin.simulatePiSettings).
     [[nodiscard]] PluginDeviceBridge* pluginBridge() const noexcept { return m_pluginBridge.get(); }
+    /// Unified IPluginHost2 surface (HOST-01): aggregates .sdPlugin (PluginManager) and
+    /// Python (OutOfProcessPluginHost) sub-hosts. pluginHost2()->dispatch() routes by UUID
+    /// internally so NO routing logic remains in Application. May be nullptr before
+    /// startBackgroundServices() completes.
+    [[nodiscard]] UnifiedPluginHost* pluginHost2() const noexcept { return m_pluginHost2.get(); }
 #endif
     /// Plugin Store catalogue / install pipeline (debug channel:
     /// plugin.installFromFile). Always present (unguarded).
@@ -288,6 +294,13 @@ private:
                          ///< AFTER m_pluginServer is listening (spawn() reads its port).
                          ///< Declared last so it is destroyed first (shutdown() sends
                          ///< exitApp to children before the server/bridge tear down).
+    /// HOST-01 (Phase 30-03): UnifiedPluginHost aggregator — the single IPluginHost2
+    /// surface backed by both m_pluginManager (.sdPlugin) and m_pluginHost (Python).
+    /// Constructed in startBackgroundServices() AFTER m_pluginManager is ready.
+    /// Declared after m_pluginManager so it is destroyed BEFORE m_pluginManager
+    /// (destruction order: m_pluginHost2 first, then m_pluginManager, since the
+    /// aggregator holds a raw pointer to the manager). Non-owning sub-host pointers.
+    std::unique_ptr<UnifiedPluginHost> m_pluginHost2;
 #endif
     /// Developer debug console: logs plugin/device protocol traffic and injects
     /// simulated device input + plugin->host actions. Always present (logging
