@@ -41,25 +41,35 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 ### Active
 
-## Current Milestone: v1.3 Stream Dock End-to-End
+## Current Milestone: v2.0 Modular Plugin & Binding System (OpenDeck/Elgato-correct)
 
-**Goal:** Make the Stream Dock family actually functional from the app — assigning an image to a key shows it on the device, pressing keys / turning encoders fires the bound actions, and brightness / clear / displays are driven from the UI. v1.2 built and capture-verified the device-side wire protocol; v1.3 builds the missing **app→device integration layer** (`scaffolded` → `functional`).
+**Goal:** Reimplement the entire plugin system and the key/dial/touch action-assignment layer as a rigorous, **modular** architecture aligned with OpenDeck and the Elgato Stream Deck SDK, running on top of the **mirajazz** device backend — closing for good what v1.3 marked `[x]` but never made genuinely complete, robust, or modular. Strategy is a **modular refactor that reuses what already works**, not a green-field rewrite.
 
 **Target features:**
 
-- A persistent Stream Dock control service (holds the device open, brightness-on at `open()`) that pushes key images live on assign and on profile load — closing the Phase-10 UAT gap where assigned images never reached the device.
-- Device input routing: a poll loop drives connected Stream Decks and routes key press/release + encoder rotate/press (+ touch gestures, provisional) to the bound actions via the core `ActionEngine` (instantiated in the app for the first time).
-- Brightness + clear UI controls, and key-binding persistence (image / label / action round-tripping through the profile, repainting the device on load).
-- Encoder LCDs, main LCD strip, and touch-strip image surfaces (layouts hardware-gated).
-- Extend the same capability-generic flow to AKP03 / AKP153 / AKP815.
-- On-device verification on the connected AKP05E (fw `V3.AKP05E.01.007`); RE docs updated wherever hardware contradicts a provisional value.
+- A modular, unified **plugin-host abstraction** (Node / HTML / native / Python) behind a clean interface, fully decoupled from the device/wire layer.
+- A **device-generic binding layer** (key / encoder-dial / touch-zone) reusable across every SKU, whose device-facing edge is always the mirajazz sidecar.
+- A genuinely working **Property Inspector** (QWebEngine + QWebChannel) — close the v1.3 stub.
+- An **event-parity audit** end-to-end vs OpenDeck (inbound/outbound) + Elgato SDK, with a coverage table as an explicit verification gate.
+- **Action instances + states** (Multi Action / Toggle Action, per-state image/title/settings) — OpenDeck InstanceEditor parity.
+- **Per-app profiles** (foreground-app-driven profile switching; OpenDeck `application_watcher` equivalent).
+- **Native (non-Wine) support for Windows-only `.sdPlugin` plugins where feasible** — Wine kept only as a documented fallback if a native path proves impractical.
+- Reuse of the working parts: zip-slip-guarded `.sdPlugin` extractor, signature verify-gate, `SdPluginServer` (Elgato v6 WS), host-owned catalog with no phone-home.
+
+**mirajazz role (explicit):**
+
+- The device backend **IS** the mirajazz sidecar: `streamdock-host` (Rust, JSON over stdin/stdout) proxied in-app by `SidecarStreamDockDevice`. It is the ONLY I/O path to the Stream Dock SKUs (AKP03 / AKP05-N4 / AKP153). Do NOT reintroduce the removed C++ AKP wire backends (Slice D).
+- The binding layer is device-generic, but its hardware edge ALWAYS goes through the sidecar: input (key/dial/touch) consumed from the sidecar stream; image/feedback rendering pushed to the sidecar (persistent handle, no wedge).
+- The `mirajazz` crate is a **pristine git dependency — do NOT modify it.** Changes go in `streamdock-host/` (the sidecar) and `SidecarStreamDockDevice` (the app proxy).
+- Carve-out: AKP815 keeps its custom C++ backend (NOT mirajazz). AK980 keyboards and AJ mice are not stream controllers and stay out of scope.
+- Known dependency: encoder/touch **input parity may require decode work in the sidecar and is HARDWARE-GATED** (needs a retail AKP05E; current values are PROVISIONAL).
 
 **Key context:**
 
-- Root cause (Phase 10 UAT, 2026-05-22): the `akp05` wire layer (`BAT`/`LIG`/`CLE`/`ULEND`, capture-verified) is correct, but NO app code calls it — the entire app→device pipeline is missing; `open()` doesn't even set brightness; `ActionEngine` is never instantiated; `KeyDesigner` bindings are session-only.
-- RE is the source of truth (CLAUDE.md hard rule): the BAT header (JPEG size BE16@10-11, key index 1-based@12) MATCHES real capture `43 52 54 00 00 42 41 54 00 00 08 7C 0D` — do NOT change it. Sources: `docs/protocols/streamdeck/**` + `~/MEGAsync/ajazz-reverse-engineering/dossier/{akp-streamdeck,capture-evidence}.md`.
-- AKP05E connected (`0300:3004`, codename `akp05e`); `uaccess` ACL present (replug/`setfacl` if `/dev/hidraw*` is root-only after a re-enumeration — systemd ≥258).
-- Built on branch `feat/streamdock` (off `develop`). COD-031 boundary preserved.
+- Rigor over checkboxes: every requirement must be verified end-to-end (debug-control channel + AKP05E hardware), not merely ticked — the explicit lesson from the v1.3 checked-but-not-working divergence.
+- Mandatory fresh research: sources **and** docs of OpenDeck (`ninjadev64/OpenDeck`, OpenAction) + the Elgato Stream Deck SDK + the local RE corpus (`~/MEGAsync/ajazz-reverse-engineering/`, `docs/protocols/**`).
+- COD-031 boundary preserved (`nlohmann::json` PRIVATE to `ajazz_plugins` only). Built on `experiment/mirajazz`.
+- Prior plugin/binding history: memories `project_plugin_install_epic`, `project_plugin_profile_epic`, `project_phase_25_to_26_pivot`, `project_opendeck_parity_track`; study `.planning/opendeck-ui-plugin-study.md`.
 
 ### Out of Scope
 
@@ -152,4 +162,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ______________________________________________________________________
 
-*Last updated: 2026-05-23 — v1.3 milestone "Stream Dock End-to-End" bootstrap*
+*Last updated: 2026-06-06 — v2.0 milestone "Modular Plugin & Binding System" bootstrap*
