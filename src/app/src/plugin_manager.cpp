@@ -621,6 +621,21 @@ void PluginManager::rediscover() {
 // ---------------------------------------------------------------------------
 
 void PluginManager::onProcessFailed(QString const& uuid) {
+    // HOST-02 (T-30-pre-reg): pre-registration-exit guard.
+    // If the UUID is not in m_live, the process exited before its WebSocket sent
+    // registerPlugin (or the entry was already torn down by uninstall/shutdown).
+    // In either case, do NOT record a crash credit or call shouldDisable: this exit
+    // must not count toward the 3-in-30s disable window. The sentinel UUID on the
+    // SdPluginServer side (onNewConnection) and this m_live guard together enforce
+    // the HOST-02 contract: a plugin that crashes mid-handshake never crashes the
+    // host and never consumes a crash credit.
+    if (m_live.find(uuid) == m_live.end()) {
+        qInfo("PluginManager::onProcessFailed: pre-registration exit for '%s' — "
+              "not counted toward crash window (not in m_live)",
+              qPrintable(uuid));
+        return;
+    }
+
     // Record the crash and decide disable SYNCHRONOUSLY so observable state
     // (crash count, isDisabled, pluginDisabled signal) is updated immediately —
     // disableWithNotice only sets m_disabled + emits, it never touches a QProcess.
@@ -759,6 +774,23 @@ QStringList PluginManager::lastNodeArgvForTesting(QString const& uuid) const {
 
 QProcessEnvironment PluginManager::buildChildEnvironmentForTesting() {
     return buildChildEnv();
+}
+
+// ---------------------------------------------------------------------------
+// seedLiveForTest() — HOST-02 test seam
+// ---------------------------------------------------------------------------
+
+void PluginManager::seedLiveForTest(QString const& uuid) {
+    // Insert a no-process LivePlugin entry so onProcessFailed treats this UUID
+    // as a registered plugin (m_live authority). Tests that verify the 3-in-30s
+    // crash-window logic without spawning a real process MUST call this first;
+    // otherwise the m_live.find guard in onProcessFailed will treat the UUID as a
+    // pre-registration exit and return early without counting the crash.
+    if (m_live.count(uuid) == 0) {
+        m_live.emplace(std::piecewise_construct,
+                       std::forward_as_tuple(uuid),
+                       std::forward_as_tuple(PluginManifest{}, nullptr));
+    }
 }
 
 // ---------------------------------------------------------------------------

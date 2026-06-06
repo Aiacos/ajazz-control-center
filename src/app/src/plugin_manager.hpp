@@ -267,6 +267,25 @@ public:
     [[nodiscard]] QStringList lastNodeArgvForTesting(QString const& uuid) const;
 
     /**
+     * @brief Test seam: insert a synthetic live-plugin entry for @p uuid WITHOUT spawning.
+     *
+     * Inserts `{PluginManifest{}, nullptr}` into `m_live` under @p uuid so that
+     * `onProcessFailed` treats the UUID as a registered plugin and applies the normal
+     * crash-window logic (rather than the pre-registration early-exit guard).
+     *
+     * Use this in Catch2 test cases that need to verify the 3-in-30s crash-disable
+     * behaviour without launching a real node/native process.
+     *
+     * HOST-02 context: the `m_live.find` guard in `onProcessFailed` distinguishes a
+     * registered-plugin crash (UUID in m_live → apply crash window) from a
+     * pre-registration exit (UUID absent → skip crash credit). Tests that simulate
+     * post-registration crashes MUST call this before calling `onProcessFailed`.
+     *
+     * @warning Do NOT use in production code.  Call only from unit tests.
+     */
+    void seedLiveForTest(QString const& uuid);
+
+    /**
      * @brief Test seam: return the child process environment built by buildChildEnv().
      *
      * Exposes the allowlist QProcessEnvironment that spawn() sets on every child

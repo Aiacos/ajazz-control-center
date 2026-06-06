@@ -254,6 +254,12 @@ TEST_CASE("PluginManagerTest crash 3 in 30s disables not restarts", "[plugin-man
 
     QString const uuid = QStringLiteral("com.test.crash");
 
+    // HOST-02: seed m_live so onProcessFailed treats this UUID as a registered
+    // plugin (not a pre-registration exit). Without this, the m_live.find guard
+    // would skip the crash credit (correct behaviour for pre-reg exits, wrong for
+    // simulated post-registration crashes in tests).
+    manager.seedLiveForTest(uuid);
+
     // Manually call onProcessFailed three times within 30s (injected clock).
     fakeNow = 0;
     manager.onProcessFailed(uuid);
@@ -284,6 +290,9 @@ TEST_CASE("PluginManagerTest 2 crashes restarts not disables", "[plugin-manager]
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
     QString const uuid = QStringLiteral("com.test.restart");
+
+    // HOST-02: seed m_live so onProcessFailed treats this UUID as a registered plugin.
+    manager.seedLiveForTest(uuid);
 
     fakeNow = 0;
     manager.onProcessFailed(uuid);
@@ -772,6 +781,9 @@ TEST_CASE("PluginManagerTest crash-disable is session-only and does not persist"
         qint64 fakeNow = 0;
         PluginManager mgr1(
             scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+
+        // HOST-02: seed m_live so onProcessFailed treats pluginKey as a registered plugin.
+        mgr1.seedLiveForTest(pluginKey);
 
         // Trigger 3-in-30s crash-disable via onProcessFailed with the dir-name key.
         fakeNow = 0;

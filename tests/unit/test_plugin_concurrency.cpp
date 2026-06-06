@@ -232,9 +232,12 @@ TEST_CASE("PluginManager WR-02 HTML plugin not re-spawned on failure", "[plugin-
     manager.spawn(makeManifest(QStringLiteral("sibling.js")));
     disabledSpy.clear(); // clear the node-absent disable that spawn() fires
 
-    // Simulate a single crash for an HTML plugin UUID that was NEVER registered
-    // into m_live. The WR-02 guard must not re-spawn it.
+    // Simulate a single crash for an HTML plugin UUID. HTML plugins run in-process
+    // via Chromium (process == nullptr in m_live); they ARE in m_live, just without
+    // an owned QProcess. Seed m_live so the crash credit is counted (HOST-02 guard:
+    // UUIDs absent from m_live are pre-registration exits and get no crash credit).
     QString const htmlUuid = QStringLiteral("com.test.html.plugin.html");
+    manager.seedLiveForTest(htmlUuid);
     fakeNow = 0;
     manager.onProcessFailed(htmlUuid);
 
@@ -274,8 +277,10 @@ TEST_CASE("PluginManager WR-02 HTML UUID disabled at threshold without re-spawn"
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
-    // Drive an HTML-UUID (no m_live entry) to the 3-crash threshold.
+    // Drive an HTML-UUID to the 3-crash threshold. HTML plugins have process == nullptr
+    // in m_live but ARE in m_live; seed so the HOST-02 pre-reg guard does not skip them.
     QString const htmlUuid = QStringLiteral("com.test.html.three.html");
+    manager.seedLiveForTest(htmlUuid);
     fakeNow = 0;
     manager.onProcessFailed(htmlUuid);
     fakeNow = 5000;
