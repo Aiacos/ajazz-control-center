@@ -99,7 +99,39 @@ ______________________________________________________________________
 
 ## Traceability
 
-*(Filled by the roadmapper — every requirement above maps to exactly one phase.)*
+| Requirement | Phase    | Status  |
+| ----------- | -------- | ------- |
+| HOST-01     | Phase 30 | Pending |
+| HOST-02     | Phase 30 | Pending |
+| HOST-03     | Phase 30 | Pending |
+| BIND-01     | Phase 31 | Pending |
+| BIND-02     | Phase 31 | Pending |
+| BIND-03     | Phase 32 | Pending |
+| BIND-04     | Phase 32 | Pending |
+| BIND-05     | Phase 32 | Pending |
+| BIND-06     | Phase 32 | Pending |
+| BIND-07     | Phase 32 | Pending |
+| PI-01       | Phase 33 | Pending |
+| PI-02       | Phase 33 | Pending |
+| PI-03       | Phase 33 | Pending |
+| PI-04       | Phase 33 | Pending |
+| EVENT-01    | Phase 34 | Pending |
+| EVENT-02    | Phase 34 | Pending |
+| EVENT-03    | Phase 34 | Pending |
+| EVENT-04    | Phase 34 | Pending |
+| APROF-01    | Phase 34 | Pending |
+| APROF-02    | Phase 34 | Pending |
+| APROF-03    | Phase 34 | Pending |
+| APROF-04    | Phase 34 | Pending |
+| WINPLG-01   | Phase 35 | Pending |
+| WINPLG-02   | Phase 35 | Pending |
+| WINPLG-03   | Phase 35 | Pending |
+| PLGSEC-01   | Phase 35 | Pending |
+| PLGSEC-02   | Phase 35 | Pending |
+| PLGSEC-03   | Phase 35 | Pending |
+| EDIT-01     | Phase 32 | Pending |
+| VERIF-01    | Phase 35 | Pending |
+| VERIF-02    | Phase 35 | Pending |
 
 ______________________________________________________________________
 

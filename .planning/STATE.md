@@ -3,10 +3,10 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: planning
-last_updated: '2026-06-06T07:52:16.220Z'
+last_updated: '2026-06-06T00:00:00.000Z'
 last_activity: 2026-06-06
 progress:
-  total_phases: 0
+  total_phases: 6
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -15,280 +15,115 @@ progress:
 
 # Project State
 
-## Active experiment (off-milestone): mirajazz sidecar
-
-> Branch `experiment/mirajazz` (off the v1.3 line). The Stream Dock families
-> (AKP03 / AKP05-N4 / AKP153) were migrated from in-tree C++ wire backends to an
-> out-of-process mirajazz Rust sidecar (`streamdock-host/`, proxied by
-> `SidecarStreamDockDevice`). As of 2026-06-01: sidecar Slices 1–4 + A/C done;
-> Slice B (test migration to `FakeStreamDockDevice`) done; **Slice D done** — the
-> C++ `akp03/05/153.{cpp,_protocol.hpp}` + `makeAkp03/05/153` are **removed**
-> (do not expect them to exist). AKP815 is the custom-backend carve-out.
-> Remaining: Slice E (docs, in progress) + Slice F (cross-platform build/bundle
-> of the Rust sidecar + CI). Full tracking: `.planning/experiment-mirajazz-migration.md`.
-
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-05-15)
+See: `.planning/PROJECT.md` (updated 2026-06-06)
 
-**Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin system — never lying about what a device can do, never crashing when a device is yanked, never silently leaking host state into plugin children.
-**Current focus:** Phase 29 — plugin-gui-parity-real-drag-drop-pi-config-multi-action
+**Core value:** Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin
+system — never lying about what a device can do, never crashing when a device is yanked, never
+silently leaking host state into plugin children.
+
+**Current focus:** v2.0 planning complete — ready to execute Phase 30
 
 ## Current Position
 
-Phase: Not started (defining requirements)
+Phase: 30 — Plugin-Host Modular Foundation (not started)
 Plan: —
-Status: Defining requirements
-Last activity: 2026-06-06 — Milestone v2.0 started
+Status: Roadmap created; awaiting Phase 30 plan
+Last activity: 2026-06-06 — v2.0 ROADMAP.md written
 
-### Open follow-up items (operator UAT 2026-05-28)
+### Progress bar
 
-These observations came out of the VERIFY-CHECKLIST.md (v1.1 back-fill) operator walkthrough. They are NOT regressions of the verifies (all 4 closed PASS for exercised sub-criteria) and they are NOT in any v1.3 phase scope; they are noted here for triage into a future minor sweep.
+```
+v2.0 [                              ] 0/6 phases (0%)
+Phase 30 ....
+Phase 31 ....
+Phase 32 ....
+Phase 33 ....
+Phase 34 ....
+Phase 35 ....
+```
 
-- **TimeSyncService: retry on HID recovery after rapid replug.** During VERIFY-02 replug, the mouse (`ajazz_24g_8k`) arrival fired the 300ms-debounced auto-sync timer at +311ms when hidraw was still mid-re-enumeration. The orchestrator logged `[time-sync] auto-sync skipped for ajazz_24g_8k: HID write failed when pushing time to 'ajazz_24g_8k'` and did NOT re-attempt setTime. Battery polls 15s later succeed (HID is now open), but the OLED clock remained unsynchronized for the entire session. Honesty contract intact (INFO skip with verbatim reason; no false success); the gap is UX (the user's OLED shows stale time until the next process arrival event or manual click). Possible fix: on a subsequent successful HID open of the same VID:PID within N minutes of an auto-sync HID-failure skip, re-fire the setTime once. Bound the retry to avoid spamming devices that genuinely return NotImplemented (those skip with a different reason string). Witnessed live 2026-05-28 / Phase 13 operator UAT.
+## mirajazz sidecar (experiment/mirajazz branch baseline)
 
-### Phase 13 finding — RETRACTED (was a false positive, 2026-05-28)
+The Stream Dock families (AKP03 / AKP05-N4 / AKP153) are driven by the mirajazz Rust sidecar
+(`streamdock-host/`, proxied by `SidecarStreamDockDevice`). The removed C++ AKP wire backends
+(`akp03/05/153.cpp` + `*_protocol.hpp` + `makeAkp03/05/153`) were removed in Slice D and must
+NOT be reintroduced (VERIF-02). AKP815 keeps its custom C++ backend. The sidecar holds a
+persistent HID handle (no per-interaction open/close, no wedge — hardware-confirmed 2026-06-01).
 
-A prior version of this section reported "DEVICES-05 / DEVICES-06 clock
-demotions NOT in code" from the 13-02 executor's summary. **That finding
-was wrong** and has been retracted. Grep-verified reality:
+Sidecar encoder/touch input decode is **HARDWARE-GATED/PROVISIONAL** — the demo unit
+(`0x0300:0x3004`) delivers zero input across all five verification methods. Routing pipeline tests
+use synthetic `input.*` debug RPCs; wire values wait for a retail AKP05E.
 
-- `src/devices/streamdeck/src/register.cpp:309` — `akp05e` has
-  `.hasClock = false` (DEVICES-11 / ARCH-05, landed via commit `07c5902`
-  during Phase 14). DEVICES-05 is closed.
+## v2.0 Phase Dependency Map
 
-- `src/devices/keyboard/src/register.cpp:61` — `ak980pro` has
-  `.hasClock = true` — **correct by design** per ARCH-05.1 (real 4-packet
-  `0x28` firmware RTC, hardware-confirmed). There is no "DEVICES-06
-  demotion"; that idea was a pre-ARCH-05.1 draft that ARCH-05.1
-  superseded with hardware evidence.
+```
+Phase 30 (HOST, ADR)
+    └── Phase 31 (BIND core model)
+            ├── Phase 32 (BIND wire + Multi/Toggle + EDIT)
+            │       └── Phase 34 (APROF + EVENT)
+            └── Phase 33 (PI round-trip)
+                    └── Phase 34 (APROF + EVENT)
+                            └── Phase 35 (WINPLG + PLGSEC + VERIF)
+```
 
-The executor reported a code state without grepping the code, and the
-orchestrator (this session) propagated it without verifying. Both
-violated CLAUDE.md's "be methodical and precise, don't grope" rule. The
-`VERIFY-CHECKLIST.md` deliverable has been corrected to reflect the real
-expected state (commit follow-up to `c96bd5c`).
+Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concurrently
+(under the 2-agent cap). Phase 34 depends on both 32 and 33.
 
-### Execution dependency map (for the operator)
+## Key Architecture Decisions (v2.0 context)
 
-- 14 (foundation) → 15, 16, 23 build on it. 17 (independent, MockDevice) → 18. **19 = convergence** (depends 14,15,17,18). 20 (PI) ← 18. 21 (built-ins) ← 15,16,19. 22 (store) ← 18. 24 (family) ← 14,15,16,19. 25 (HW verify) ← whole slice.
-- Every dependent phase's FIRST task is a STOP-if-SUMMARY-absent gate, so out-of-order execution halts safely.
-- HARDWARE-GATED (need the physical AKP05E + uaccess): Phase 23 (aux-surface live framing) + Phase 25 (full UAT + real `.sdPlugin`). Everything else lands hardware-free.
-
-**Phase 14 execution prerequisites (for the operator):** the build needs Qt6 private headers (`qt6-qtbase-private-devel` on Fedora — Phase-10 review flagged CorePrivate missing). System-package install is the operator's action (project hard rule: no system-level mutations from tooling). Verification is hardware-free (MockTransport + `makeAkp05WithTransport`); the live power-cycle smoke is deferred to Phase 25.
-
-### v1.3 replan decisions (locked 2026-05-23)
-
-- **Scope = Full Elgato SDK, 1:1** — WebSocket plugin server, manifest schema, Property Inspector, 13 Elgato + 26 AJAZZ messages, node/native/HTML plugin spawn, plugin store. Source of truth: `docs/protocols/streamdeck/akp_plugin_sdk.md` + `akp05_vendor.md` + `akp05_init_sequence.md` + `akp05.md`.
-- **Runtime = Elgato-compatible WebSocket** — extend the existing `SdPluginServer` (`src/app/src/`, already LocalHost-bound + 13 standard messages). The Python OOP host (`src/plugins/`) stays as-is (SEC-003); it is NOT the Stream Dock plugin runtime. Do NOT create a `src/host/plugin-host/` module.
-- **Structure = replan v1.3 from scratch** — Phases 14-25 supersede the prior Phases 14-19. Reuse-first: `SdPluginServer`, `ActionEngine` (folder nav), `Profile`/`ProfilePage`, the `.sdPlugin` extractor, `image_pipeline`.
-- **Device facts (verified):** AKP05E (`0300:3004`, fw `V3.AKP05E.01.007`) = 10 LCD keys (2×5) + **4 endless pressable rotary encoders** + touch strip; encoders emit press-only → synthesise release; per-encoder graphics are touch-strip zones (provisional vs in-code ENC-LCD model — Phase 25). `register.cpp` currently advertises `hasClock=true` for `akp05e` → must be `false` (DEVICES-11, Phase 14).
-- **Anti-features NOT replicated:** bind `Any`, unsigned plugins, phone-home, plaintext OBS, always-on global hook, bundled node.
-- Convergence at **Phase 19** (setImage e2e + input→plugin). HARDWARE-GATED: Phases 23, 25.
+- **Do NOT modify the mirajazz crate** — sidecar protocol changes go in `streamdock-host/`
+- **COD-031** — `nlohmann::json` PRIVATE to `ajazz_plugins` only; `src/core/include/` must have zero nlohmann hits
+- **IPluginHost unification** — Phase 30 ADR to decide whether the `.sdPlugin` WS path and Python OOP path are unified or kept separate; research verdict is "keep separate in v2.0" but must be documented
+- **profileChanged → populateContextsForActivePage** is the foundational wire fix (Pitfall 3); must land in Phase 32 before any binding work is declared done
+- **QWebEngineScript::DocumentCreation** is the mandatory injection point for the cefQuery polyfill; never defer to runJavaScript
+- **Composition at Application root** — Application owns all services; seams via std::function injection, not raw pointer coupling
 
 ## Performance Metrics
 
-**Velocity (v1.0 + v1.1 carried forward):**
+**v2.0 baseline (2026-06-06):**
 
-- Total plans completed: 54 (1 retro + 26 forward-planned in v1.1)
-- v1.1 calendar duration: ~2 days end-to-end, ~80 commits
+- Tests at start: 694/694 ctest green (linux-release, post audit 2026-06-05)
+- Phases: 6 (Phases 30–35)
+- Plans: TBD (filled by plan-phase)
 
-**v1.2 baseline:** Counters reset to 0/5 phases, 0/? plans (plan counts TBD per phase).
+**Historical velocity:**
 
-**Recent Trend:**
-
-- v1.1 sustained ≥6 plans/day with 178/178 ctest pass.
-- Cap concurrent execute agents at 2 in autonomous runs (v1.1 retrospective lesson).
-
-*Updated after each plan completion.*
+- v1.3 sustained ~54 plans across 16 phases
+- Cap concurrent execute agents at 2 in autonomous runs
 
 ## Accumulated Context
 
-### Decisions
+### Decisions (v2.0)
 
-See PROJECT.md Key Decisions table for the full log (v1.0 + v1.1 entries with outcomes).
+Decisions will be logged here as phases are planned and executed, following the PROJECT.md
+Key Decisions table format.
 
-Phase 9 will ratify three new written ADRs:
+### Pending Todos (pre-Phase 30)
 
-- **ARCH-04**: AKP03 image-encoding pipeline location (recommended: Qt6 `QImage::scaled(SmoothTransformation)` + `QImageWriter` JPEG host-side in `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}`, PRIVATE-linked).
-- **ARCH-05**: per-device `setTime` outcome (default verdict: NO RTC opcode in any AJAZZ corpus → `hasClock=false` on `akp05e` and `ak980pro`; `setTime` stays `NotImplemented`).
-- **ARCH-06**: composite-HID dedup (default verdict: NOT firing — topology proves `0c45:7016` is a separate dongle on a different bus branch).
-- \[Phase 9\]: ARCH-04 default verdict ratified at `.planning/phases/09-research-captures-hygiene/ARCH-04.md` — AKP03 image-pipeline at `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` (Option C), PRIVATE-linked to `ajazz_devices_streamdeck`; Option B (new `ajazz_imaging` static lib) deferred to v1.3+; D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION) — Phase 10 gates on Phase 9.x captures-confirmation run (Pitfall 22). [commit: 60f3140]
-- \[Phase 9\]: Phase 10/11/12 reuse pattern: makeAjSeriesWithTransport public factory overload exposes anonymous-namespace COD-026 DI ctor across TU boundaries (CAPTURE-04)
-- \[Phase 9\]: MockTransport is header-only under tests/unit/fixtures/ in the ajazz::tests:: namespace; static_asserts lock rule-of-five contract inherited from ITransport (CAPTURE-04)
-- \[Phase 9\]: ARCH-05 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-05.md - per-device IClockCapable::setTime outcome: hasClock=false on akp05e and ak980pro; setTime stays NotImplemented; PROJECT.md Out-of-Scope row preserved; Pitfall 19 three-witness rule STRUCTURALLY unsatisfiable for clock on AKP03 + ak980pro; anti-feature forbidden: synthesizing fake setSystemTimeOn from bytes that look like time; acceptable alternative: host-rendered TftClockWidget via display capability (DISPLAY-05, v1.2.x); D-05 honesty contract preserved (status: DEFAULT VERDICT - PENDING CAPTURE CONFIRMATION); Phase 10 DEVICES-05 + Phase 12 DEVICES-06 + Phase 13 VERIFY-01/03 bind to this ADR; gate on Phase 9.x finalization run. [commit: 5410c2a] — Four-corpus convergence (mirajazz + opendeck-akp03 + ajazz-sdk + TaxMachine AK820 Pro) shows NO RTC opcode in any AJAZZ reference corpus. Pitfall 19 three-witness rule applied: round-trip witness STRUCTURALLY unavailable on AKP03 (no firmware-rendered LCD clock widget per docs/protocols/streamdeck/akp03.md:113-114) and on ak980pro (TFT clock is host-pushed image via cmd 0x72, not firmware time). Two of three witnesses unavailable; even positive capture witness alone cannot satisfy promotion. v1.1 D-02 honesty contract reinforced - no lying success UX on setTime returning Ok when device cannot.
-- \[Phase 9\]: ARCH-06 default verdict ratified at .planning/phases/09-research-captures-hygiene/ARCH-06.md — composite-HID dedup NOT firing in DeviceRegistry::enumerate (topology evidence from live lsusb 2026-05-15 refutes the composite hypothesis at the USB devicefs layer); 0c45:7016 enters Phase 13 DEVICES-08 as separate microdia_dongle_7016 at probed tier; v1.1 ARCH-02 (vid, pid, serial) keying preserved unchanged. D-05 honesty contract preserved (status: DEFAULT VERDICT — PENDING CAPTURE CONFIRMATION). Captures-confirmation trigger is a 2-minute physical unplug test (no capture tooling required). CONDITIONAL: if test contradicts, new Phase 12.5 lands dedup BEFORE Phase 12 and Phase 13 re-sequences (LOW probability). [commit: 4619bb8]
-- \[Phase ?\]: DEVICES-11 scope: akp05e only; akp05/mirabox_n4 hasClock flip deferred to a later honesty sweep
-- \[Phase ?\]: ARCH-03 flyweight handle share: DeviceRegistry::open(same devId) post-setActiveDevice returns same shared_ptr for input service
-- \[Phase ?\]: QtExecutor non-owning shared_ptr wrapper pattern: unique_ptr owned by Application, non-owning shared_ptr alias passed to ActionEngine (no-op deleter, lifetime guaranteed by Application)
-- \[Phase ?\]: StreamDockInputService owns ActionEngine: Application constructs then moves the engine into the service; m_actionEngine null after ctor; Phase 19 accesses engine via m_streamDockInput
-- \[Phase ?\]: Departure handler added to onHotplug for StreamDeck: setActiveDevice(nullptr) stops input poll pump on device removal (T-15-05 UAF mitigation)
-- \[Phase ?\]: Linux OS-accept locked (18-01)
-- \[Phase ?\]: argv contract: codePath is argv[0], node binary NOT in list (PLUGIN-08/Pitfall3)
-- \[Phase ?\]: NodeProbe struct defaults uninitialised; makeDefaultNodeProbe() wires QStandardPaths+QProcess; tests inject fakes directly
-- \[Phase ?\]: PLUGIN-13 persistence round-trip proved by hermetic Catch2 tests: unique UUID isolation + QStandardPaths::setTestModeEnabled
-- \[Phase ?\]: IInputSynthesizer HID Usage IDs for platform-neutral key rep: Linux KEY\_*, Windows VK\_*, macOS kVK\_\*
-- \[Phase ?\]: captureHotkeys gate: OFF by default; stub always returns false; T-21-hook LOCKED (Phase 25 deferred for real grab)
-- \[Phase ?\]: AJAZZ_FEATURE_INPUT_SYNTH default OFF; self-emptying OS TUs; no libXtst (uinput Wayland-compatible)
-- \[Phase ?\]: 22-02: SelfSigned->explicit-confirm developer-sideload policy (userConfirmedUnsigned param); hard-Refused always quarantined
-- \[Phase ?\]: 22-02: g_pluginsDirOverride in TU-level anonymous namespace test seam (not private class member) for correct free-function access
-- \[Phase ?\]: 22-02: Phone-home kill via disabled sentinel; QSettings plugins/onlineCatalogEnabled default false; refreshOnline() exposes opt-in live fetch — **SUPERSEDED 2026-05-30 (commit `d571c75`): `onlineCatalogEnabled` now defaults to `true` (`plugin_catalog_model.cpp:135`) so fresh installs browse/install out of the box. The no-phone-home contract holds when the user toggles it OFF (network fully gated on the flag; no outbound HTTP when false — `plugin_catalog_model.cpp:448,514`); the milestone "phone-home" anti-feature is now opt-OUT, not opt-IN. See the 2026-05-31 reconciliation section below.**
-- \[Phase ?\]: Encoder accumulator changed from std::array\<int32_t,4> to std::vector\<int32_t> sized at setActiveDevice() time - enables AKP03=3/AKP05=4/AKP153+815=0 without code branching
-- \[Phase ?\]: AKP153 and AKP815 remain MockTransport-only; live hardware confirmation deferred to Phase 25
-- \[2026-05-27\]: AKP05E input wire-format RE'd from the vendor binary (Ghidra on SDLibrary1.dll `readDataFromHidDevice` + Stream Dock AJAZZ.exe `SDActionCanvasWidget::handleKeyEvents`) and partly hardware-confirmed (live `CRT VER` → `V3.AKP05E.01.007`). CONFIRMED: input is HID, key code @ report[9] + press/release @ report[10] (our `parseInputReport` key path is vendor-correct). REFUTED: encoder direction is a distinct report[9] code with NO rotation-delta byte, and touch X is the single byte report[10] (not the BE16 our backend assumes). Full write-up + executable tests committed (`docs/protocols/streamdeck/akp05_input_corrections.md`, `tests/unit/test_akp05_input_corrections.cpp`); the encoder/touch decode+routing rework is a deferred GSD item (see Deferred Items) blocked on a live hidraw keyCode capture. Build-side: fixed a latent no-WebSockets link break (commit 851832b) so the app builds on Qt kits lacking the WebSockets module.
+1. Wayland foreground-window detection needs a sub-agent research sweep before Phase 34
+   implementation: `wlr-foreign-toplevel-management-v1` compositor coverage map (wlroots,
+   Hyprland, KDE, GNOME gap), `xdotool`/`hyprctl`/`swaymsg` subprocess fallback. X11,
+   Windows, macOS paths are HIGH confidence and can start without waiting.
 
-### Pending Todos
+1. Windows-only `.sdPlugin` plugin ecosystem composition (JS-bundled vs pure Win32 PE) needs
+   a WINPLG-01 feasibility spike at Phase 35 start — do not implement the native-exe path
+   before running the spike.
 
-**Phase 9.x follow-up (user-driven, gates Phase 10 start):**
+1. The PI human-verify checkpoint (Phase 33 criterion 5) requires the user to interact with
+   a real plugin's PI HTML. Agree with the user when this checkpoint will be run.
 
-1. Install Wireshark + usbmon prereqs on dev box per `docs/protocols/CAPTURING.md`:
-   - `sudo dnf install wireshark tshark` (or `sudo apt install wireshark tshark dumpcap`)
-   - `sudo modprobe usbmon`
-   - Optional: add user to `wireshark` group for unprivileged capture (`sudo usermod -aG wireshark $USER`)
-1. Produce sanitised captures for all 4 connected devices following the CAPTURING.md runbook (CAPTURE-05):
-   - `akp05e` (`0300:3004`, AKP05E Stream Dock Plus — 10 LCD keys / 4 endless encoders / LCD touch strip / protocol_version 3 / firmware "V3.AKP05E.01.007", routed via makeAkp05): image upload (first + last chunk), `CLE`, `LIG`, encoder rotate/press, `HAN`, negative-test for hypothetical `TIM` opcode
-   - `ak980pro` (`0c45:8009`): 20 RGB modes (cmd 0x13), sleep-timer (cmd 0x17), TFT chunked send (close TaxMachine TODO), `lsusb -v -d 0c45:8009` HID descriptor dump
-   - `ajazz_24g_8k` (`3151:5007`): DPI cycle, polling-rate dropdown, LOD, button bind, per-zone RGB, battery, flash commit; AJ199 V1.0 vs Max probe
-   - `microdia_dongle_7016` (`0c45:7016`): `lsusb -v`, `udevadm info -a /dev/hidraw{5,6}`, paired-input identification via `evtest`
-1. Run `scripts/hex-to-cpparray.py` per device to produce `tests/integration/fixtures/<codename>_*.h` headers + SHA-256 metadata in `.planning/research/captures/INDEX.md` (CAPTURE-06).
-1. Produce per-device wire-format diff docs:
-   - Extend `docs/protocols/streamdeck/akp03.md` with `0300:3004` first-party findings
-   - Create `docs/protocols/keyboard/ak980pro.md` if diverges from `proprietary.md`
-   - Create `docs/protocols/mouse/ajazz_24g_8k.md` if diverges from `aj_series.md`
-1. Run the 2-minute physical unplug test for ARCH-06 finalization: unplug `ak980pro`, observe whether `0c45:7016` disappears simultaneously. Default verdict expects NO simultaneous disappearance (separate dongle confirmed).
-1. Finalize ARCH-04 / ARCH-05 / ARCH-06 — flip from "DEFAULT VERDICT (PENDING CAPTURE CONFIRMATION)" to "FINAL" if captures confirm, or amend if they contradict. Update ADR Status section + PROJECT.md Key Decisions outcome column.
+### Blockers / Concerns
 
-After all 6 items land, re-run `/gsd-plan-phase 9` or invoke a `Phase 9.x` plan-only run to close the deferred plans (CAPTURE-05, CAPTURE-06, ARCH-04/05/06 finalization). Then Phase 10 can start.
-
-**v1.1 carry-overs (inherited):** VERIFY-01..04 (Phase 13) closes the real-hardware UI back-fills (Phase 5 Sync button visibility, Settings auto-sync persistence, glyph behavior; Phase 8 MaturityRole tooltip).
-
-### Blockers/Concerns
-
-- **GAP-25A (Phase 25 → 26)**: `StreamDockControlService::setActiveDevice()` is declared in C++ but never called from any QML file (`grep -rn setActiveDevice src/app/qml/` returns nothing as of 2026-05-28). `m_activeDevice` stays null, `repaintPage()` early-returns at `if (!m_activeDevice) return;`, so the QML→C++→device image-upload path is broken end-to-end even after the L1+L2 URL handling fixes landed in commit `24651a3`. Phase 26 closes this by wiring `setActiveDevice` on sidebar selection-changed in the device-shaped editor.
-- **GAP-25B (Phase 25 → 26)**: `KeyDesigner.qml` is a generic NxN tile grid with no touch-strip drop target, no encoder-LCD overlay surface, no drag-and-drop from an action library. Operator UAT 2026-05-28 13:00 reports "nella UI dell'applicazione non compare nessuna voce LCD, solo Dial" (no LCD entry in app UI, only Dial). Phase 26 replaces it with an Elgato/OpenDeck-pattern device-shaped editor per SKU (AKP05E: 5×2 + 4 encoders + touch strip; AKP153: 3×5; AKP03: 2×3; AK980: keyboard view; etc.).
-- **PLUGIN-GUI-PARITY (→ Phase 27)**: the plugin install/run path works (8 commits, 2026-05-30) but five GUI-parity/persistence gaps remain — rediscover-after-install (no `rediscover()`; install needs app restart), GUI unsigned-install-with-consent (verifier can't tell unsigned vs tampered — CR-01), in-app trust UX (env-var-only today), persisted per-plugin enable/disable (`discover()` spawns all unconditionally), and a one-crash-doesn't-disable-siblings regression guard. Full grep-verified detail in the "2026-05-31 — Plugin install/run epic reconciliation" section. `/gsd-plan-phase 27` to start.
-- **CAPTURE-01 is MUST-FIX-FIRST inside Phase 9**: capture-data-hygiene policy + `.pcap`/`.pcapng` gitignore + pre-commit reject hook MUST land before any researcher does their first capture (Pitfall 17 — keystroke recovery from raw `.pcap` is deterministic via `tshark` / `USB-Keyboard-Parser`).
-- **Phase 11 (8K mouse) mid-phase research flag**: zero 3rd-party OSS corpus exists for `3151:5007`; if Phase 9 captures reveal AJ199 V1.0 vs Max envelope diverges materially, invoke `/gsd-research-phase` on the SONiX 3151 chipset family before committing to a factory split.
-- **Phase 12 (AK980 PRO) mid-phase research flag**: if Phase 9 captures reveal TFT cmd 0x72 / per-key RGB / macros / layers materially divergent from the TaxMachine baseline, invoke `/gsd-research-phase` on the Microdia 0c45 chipset family.
-- **Concurrent agent cap**: 2 max in autonomous runs. Three concurrent agents created a git race during v1.1 (split Phase 7 atomic commit + forced Phase 5 `--no-verify`).
-- **COD-031 boundary**: no `nlohmann::json` in `ajazz_core` or any installed public header. Capture-extraction tooling is dev-time Python; runtime code reads `std::array<uint8_t>` literals.
-
-## Deferred Items
-
-| Category                                               | Item                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Status                                                  | Deferred At              |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------- | ------------------------ |
-| v1.3 (INPUT, Phase 25-adjacent)                        | AKP05E encoder/touch input decode + routing rework — vendor RE refuted the wire model (encoder direction is a distinct report[9] code, NO rotation-delta byte; touch X is the single byte report[10], not BE16). Separate the valid routing (CW/CCW/zone/swipe) from the provisional wire-decode, refactor `test_stream_dock_input_service.cpp` to inject DeviceEvents (not raw frames), and land the exact AKP05E codes. Spec: `docs/protocols/streamdeck/akp05_input_corrections.md` §7. Interim parser keeps the provisional decode (marked PROVISIONAL). | Blocked on a live hidraw keyCode capture (native Linux) | 2026-05-27               |
-| v1.3+ (KEYBOARD)                                       | AK980 PRO per-key custom RGB / macros / layers / battery (KEYBOARD-05..08)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | Pending captures                                        | v1.2 milestone-bootstrap |
-| v1.2.x (DISPLAY)                                       | AK980 PRO 1.14" TFT chunked image upload (DISPLAY-05; cmd 0x72)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Capture in Phase 9; impl deferred                       | v1.2 milestone-bootstrap |
-| v1.2.x / v1.3                                          | AKP815 + Mirabox N3 promotion (devices not physically connected)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Blocked on captures                                     | v1.1 close               |
-| v1.2.x                                                 | Explicit `Toast.qml` cap=1 implementation (A-05)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Carried                                                 | v1.1 close               |
-| v1.2.x                                                 | TimeSyncService Pitfall-13 contextual INFO message                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | Carried                                                 | v1.1 close               |
-| v1.2.x                                                 | Codename→maturity map → Qt resource + runtime YAML parse (if catalogue grows)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Carried                                                 | v1.1 close               |
-| v1.2.x                                                 | libFuzzer Fedora packaging once `libclang_rt.fuzzer.a` lands                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Upstream                                                | v1.1 close               |
-| Phase 9 P03                                            | 6min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 2 tasks                                                 | 2 files                  |
-| Phase 9 P04                                            | 4min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 3 tasks                                                 | 5 files                  |
-| Phase 9 P05                                            | 3min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 1 tasks                                                 | 2 files                  |
-| Phase 9 P06                                            | 3min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 1 tasks                                                 | 2 files                  |
-| Phase 9 P07                                            | 7min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | 1 tasks                                                 | 6 files                  |
-| Phase 14 P14-01                                        | 8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 2 tasks                                                 | 6 files                  |
-| Phase 14-stream-dock-control-service P02               | 90                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 3 tasks                                                 | 9 files                  |
-| Phase 15-stream-dock-input-routing P02                 | 8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 1 tasks                                                 | 3 files                  |
-| Phase 17-plugin-protocol-completion P01                | 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 2 tasks                                                 | 3 files                  |
-| Phase 17 P03                                           | 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 3 tasks                                                 | 3 files                  |
-| Phase 18 P01                                           | 8                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 2 tasks                                                 | 9 files                  |
-| Phase 18-plugin-manifest-discovery-lifecycle-spawn P02 | 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 2 tasks                                                 | 5 files                  |
-| Phase 18-plugin-manifest-discovery-lifecycle-spawn P04 | 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 3 tasks                                                 | 6 files                  |
-| Phase 19-device-plugin-bridge P01                      | 20                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 5 files                  |
-| Phase 19-device-plugin-bridge P02                      | 95                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 6 files                  |
-| Phase 19-device-plugin-bridge P03                      | 45                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 7 files                  |
-| Phase 20-property-inspector-settings P01               | 7                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | 2 tasks                                                 | 2 files                  |
-| Phase 21 P01                                           | 35                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 9 files                  |
-| Phase 21-builtin-in-process-actions P21-02             | 11                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 6 files                  |
-| Phase 21 P03                                           | 210                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | 2 tasks                                                 | 10 files                 |
-| Phase 22 P22-01                                        | 10                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 7 files                  |
-| Phase 22-plugin-store-local-install P02                | 60                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 6 files                  |
-| Phase 24-family-coverage-akp03-153-815 P02             | 95                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 6 files                  |
-| Phase 23 P01                                           | 50                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 3 files                  |
-| Phase 23-auxiliary-display-surfaces P23-02             | 25                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 4 files                  |
-| Phase 28 P02                                           | 25                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 5 files                  |
-| Phase 28 P04                                           | 25                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | 2 tasks                                                 | 4 files                  |
+- **HARDWARE-GATED**: encoder/touch input wire decode (retail AKP05E needed). Does NOT block
+  any v2.0 phase — routing pipeline is tested via synthetic `input.*` RPCs.
+- **PLATFORM-GATED (Wayland)**: per-app profile switching on Wayland compositors without a
+  foreign-toplevel protocol. Phase 34 must document the limitation and show a UI warning chip.
+- **Concurrent agent cap**: 2 max in autonomous runs (v1.1 retrospective lesson, CLAUDE.md).
 
 ## Session Continuity
 
-Last session: 2026-06-02T21:47:18.289Z
-Stopped at: Phase 26 UI-SPEC approved
-Resume file: None
-
-## 2026-05-17 mid-milestone amendment update
-
-Two atomic commits landed ahead of Phase 10 schedule (autonomous research + execute run, 2026-05-17):
-
-- **acc239e** `feat(streamdeck): implement ARCH-04 host-side image pipeline for AKP05` — Qt6 QImage + QImageWriter pipeline at `src/devices/streamdeck/src/image_pipeline.{hpp,cpp}` (Option C from ARCH-04 default verdict). AKP05 backend now does RGBA8 → resize → JPEG host-side per IDisplayCapable contract; setKeyColor no longer falls back to clearKey. 10 new unit tests (32 assertions). Phase 10 DEVICES-05 prerequisite ARCH-04 implementation now in place; per-byte JPEG quality tuning still pending Phase 9.x AKP05E 0x3004 capture confirmation (Pitfall 22).
-
-- **9787962** `feat(keyboard): implement AK980 PRO firmware RTC setTime (ARCH-05.1)` — partial flip of ARCH-05 default verdict. Two independent corpora (gohv/EPOMAKER-Ajazz-AK820-Pro + KyleBoyer/TFTTimeSync-node, both targeting Sonix SN32F299 family at VID:PID 0x0c45:0x8009) document a host-settable firmware RTC at opcode 0x28. ProprietaryKeyboard::setTime() now writes the 3-packet (preamble + data + save) envelope. 6 new [clock]-tagged unit tests (203 assertions) pin byte-precise layout. ak980pro.maturity promoted scaffolded → partial. Phase 9.x physical round-trip witness (TFT clock widget shows the time we sent) gates partial → functional promotion. ARCH-05 stands for Stream Dock family (AKP03/AKP05/Mirabox N3/N4) — Companion streamdock.ts audit confirms zero time opcodes there; clock widget on AKP05 main LCD strip is a v1.2.x deferred host-rendered TftClockWidget via the new image_pipeline.
-
-ARCH-05.1 ADR: `.planning/phases/09-research-captures-hygiene/ARCH-05.1.md`.
-
-## 2026-05-27 — Phase 10/11/12 tracking reconciliation
-
-**Discovery:** the device-promotion work for Phases 10/11/12 SHIPPED ad-hoc across many commits ahead of GSD bookkeeping (no SUMMARY files, unticked ROADMAP). Triggered by inspecting the user's RE ground truth at `~/MEGAsync/ajazz-reverse-engineering/` (Frida-hooked vendor-driver + Ghidra dossiers — NOT live pcaps; sanitised, committable). Verified tree green: **640/640 ctest pass (linux-release)**. Reconciled (verify + retrospective summaries, NO code churn):
-
-- **Phase 10 (AKP05E) — `partial`:** 10-01 shipped (image_pipeline + 1024-byte AKP05 packets + setKeyImage/setKeyColor + wire tests); 10-02 PARTIAL (EncoderReleased + `hasClock=false` shipped; **16ms encoder_coalescer NOT built**); 10-03 **deferred → Phase 25** (LIVE-HW render smoke never shipped). AKP05 image wire bytes are Ghidra-derived, NOT live-captured (dossier §7.4); Linux `0x00` report-id render bug unconfirmed (§2.2). Stays honestly `partial`.
-- **Phase 11 (8K mouse) — `functional`:** substantially shipped (DPI `0x54` / poll `0x04`+`_RateToNum` / RGB `0x07` / clock `0x28` / battery `0x05`+`0xF7`, all tested). **Opcode supersession:** plan's `0x21/0x22/0x23` were a pre-corpus guess; shipped code uses the corpus-correct `0x54/0x53/0x04`. Open: USB-2.0 SOF-cap UI warning unbound (HW-free).
-- **Phase 12 (AK980 PRO) — `functional`:** clock (4-packet `0xFF13` + 30ms handshake) + battery (`0x20 0x01`, 65-byte buf) + 20-mode RGB `0x13` shipped & hardware-confirmed. **Unshipped (mostly HW-free):** wireless RGB rate-limiter (Pitfall 24), RGB `direction` plumbing (caller hardcodes 0), dedicated `0x17` sleep-timer, Save-vs-Push UX (Pitfall 25). TFT `0x7F` PROVISIONAL (no capture); `0x0A`-vs-`0x20/0x04` per-key RGB unify deferred (CR-01).
-
-**Genuinely-remaining work after reconciliation:**
-
-- HW-free backlog (could land now): P12 rate-limiter + direction + dedicated 0x17 sleep-timer + Save/Push UX; P10 encoder_coalescer; P11 SOF-cap UI warning.
-- LIVE-HW (need physical AKP05E): P10-03 render smoke, AKP05 wire-byte confirmation + Linux render-bug fix verification → all roll into **Phase 25**.
-- Still untouched: **Phase 13** (microdia_dongle_7016 catalogue slice [HW-free] + 4 v1.1 UI verifies [operator]) and **Phase 25** (full UAT + real `.sdPlugin`).
-
-Maturity tiers (mouse/keyboard `functional`, akp05e `partial`) were set deliberately by hardware-informed commits (b09302b/07c5902) and rest on the hardware-confirmed core; the open items above are documented per the Pitfall-29 honesty contract rather than hidden behind a green checkbox.
-
-## 2026-05-31 — Plugin install/run epic reconciliation
-
-**Discovery:** the Stream Dock (`.sdPlugin`) plugin **install + run** path SHIPPED ad-hoc across 8 commits on 2026-05-29/30, ahead of all GSD bookkeeping (no SUMMARY files; STATE/ROADMAP silent). Triggered by the user goal "plugins working, installable concurrently, persistent." All claims below are **grep-verified in code** (per CLAUDE.md "don't grope" + the false-DEVICES-05 lesson); the only record before this was auto-memory `project_plugin_install_epic`.
-
-**The 8 ad-hoc commits (feat/streamdock):**
-
-- `d571c75` — online plugin catalog defaults ON (supersedes Phase 22's default-OFF posture).
-- `a070f67` — plugin action picker in the device editor (`installedActions()` Q_INVOKABLE → ActionLibraryPane drag tiles → `KeyCell.cellActionDropped`).
-- `bda6ee7` — bound-action Property Inspector load/population ("Workstream C"): `actionInfo()` + PI abs-path; closes the unstated Phase-20 UI gap (PIBridge persistence was proven, but the PI was never reachable from the UI).
-- `02bed37` — **PluginManager wired into Application** (`application.cpp:799` — `discover()` + `spawn()` at launch, after `m_pluginServer->start(0)`); child CWD = `sourceDir`; `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` launch-sweep opt-in. *This was the root e2e blocker: spawn was unit-tested but never constructed in the running app — Phase 18/19 verification missed it because the proof was unit-only.*
-- `8e985f7` — **HTML plugins run in-process** (`plugin_manager.cpp:399-442`: shared `QWebEngineProfile` + Mirabox shim + per-plugin `QWebEnginePage`; `connectElgatoStreamDeckSocket()` on loadFinished). Closes the Phase-18 "Known Stub: HTML page-load deferred to Phase 19/20." Emulated SD version 6.9 for the MinimumVersion gate.
-- `0f6b949` / `90d97e2` / `5725cb0` — id-keying + install-strictness: subdir CodePaths allowed; plugins keyed by `.sdPlugin` dir name (CodePath/PUUID collide); `90d97e2` REVERTED an unsigned-bypass in GUI install-from-file (the verifier can't yet tell unsigned from tampered — CR-01). `5725cb0` proved **4 plugins concurrent** (Counter HTML, Weather HTML, Node probe, Node System Monitor — `connectedPluginCount()=4`).
-
-**Verified current state (file:line):**
-
-| Capability                                 | State                                                                                                                        | Evidence                                                        |
-| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| PluginManager live in app                  | ✓ discover+spawn at launch                                                                                                   | `application.cpp:799-806`                                       |
-| Node / native spawn                        | ✓ separate `QProcess` each                                                                                                   | `plugin_manager.cpp:333-393` / `456-510`                        |
-| HTML spawn                                 | ✓ in-process `QWebEnginePage` (was stub)                                                                                     | `plugin_manager.cpp:399-442`                                    |
-| **Concurrency (multithread)**              | ✓ multi-process (node/native) + multi-page (HTML) + multi-connection WS server `std::vector<PluginConnection> m_connections` | `sd_plugin_server.hpp:200`; 4 proven (`5725cb0`)                |
-| Crash/restart                              | ✓ 3-in-30s disable, else auto-respawn (HTML excluded, WR-02)                                                                 | `plugin_manager.cpp:517-539`, `plugin_crash_tracker.cpp:21-37`  |
-| Settings persistence (per-action + global) | ✓ atomic JSON under `AppDataLocation/plugins/<uuid>/`, survives restart                                                      | `pi_bridge.cpp:133,142`                                         |
-| Installed-plugin persistence               | ✓ `discover()` re-scans + re-spawns all on every launch                                                                      | `plugin_manager.cpp:204-262`                                    |
-| Online catalog default ON                  | ✓ (no phone-home when toggled off)                                                                                           | `plugin_catalog_model.cpp:135,448`                              |
-| Install-from-file                          | ✓ extract→zip-slip-guard→verify→atomic-promote                                                                               | `plugin_catalog_model.cpp:668`, `sdplugin_extractor.cpp:23-149` |
-
-**Genuinely-remaining (→ NEW Phase 27 "Plugin Install/Trust/Persistence Hardening"):**
-
-1. **rediscover-after-install** — `grep -rn rediscover src/app/` returns NOTHING. Installing a plugin from the GUI needs an **app restart** before it spawns. The #1 "installabile" gap.
-1. **GUI unsigned-install-with-consent** — `installFromFile` hard-refuses `Refused` unconditionally (`plugin_catalog_model.cpp:739`); `userConfirmedUnsigned` only gates SelfSigned. Unsigned 3rd-party install works ONLY via the `AJAZZ_ALLOW_UNTRUSTED_PLUGINS` env-var launch-sweep (`plugin_catalog_model.cpp:163`). Needs the verifier to split unsigned (no-sig) from tampered (bad-sig) — CR-01, named in `90d97e2`'s body.
-1. **Trust UX** — only the env var; `LoadedPluginsPage.qml:153-198` shows read-only trust chips, no per-plugin "allow" toggle.
-1. **Persisted per-plugin enable/disable** — `discover()` spawns every `*.sdPlugin/` unconditionally; `m_disabled` is session-only (`plugin_manager.cpp:545-557`). A user-disabled plugin does not stay disabled across restart.
-1. **Concurrency regression guard** — 4-plugin happy path proven, but no test pins "one plugin's crash disables ONLY itself" (the `5725cb0` shared-key bug had exactly that failure mode).
-
-**Out of Phase-27 scope (stays Phase 25 live-debt):** the plugin→device `setImage` round-trip via a bound profile action on the **physical** AKP05E — proven only with MockTransport + loopback (Phase 19); the live witness is blocked on the `0x3004` demo unit's input gap (retail AKP05E / Mirabox N4 / Frida path).
-
-## Operator Next Steps
-
-**Phase 9 PARTIAL-SCOPE COMPLETE (2026-05-15).** Phase 9.x follow-up gates Phase 10:
-
-1. Read `### Pending Todos` above for the 6-step Phase 9.x follow-up checklist.
-1. Install Wireshark + usbmon prereqs (`docs/protocols/CAPTURING.md`).
-1. Produce captures for the 4 connected devices + run `scripts/hex-to-cpparray.py`.
-1. Run the ARCH-06 2-minute physical unplug test.
-1. Re-run `/gsd-plan-phase 9` (or invoke a focused Phase 9.x run) to land CAPTURE-05, CAPTURE-06, and ARCH-04/05/06 finalization.
-1. Once Phase 9.x ships, `/gsd-plan-phase 10` to start AKP05E 0x3004 promotion (canonical device-promotion template; one-line `PacketSize 512 → 1024` fix unblocks 13 sibling SKUs).
+Last session: 2026-06-06
+Stopped at: v2.0 roadmap creation
+Resume: `/gsd:plan-phase 30`
