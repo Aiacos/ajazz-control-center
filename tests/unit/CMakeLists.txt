@@ -610,6 +610,14 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz_unit_tests PRIVATE test_plugin_concurrency.cpp)
 endif()
 
+# Phase 30 Plan 30-01 (HOST-02 Wave-0 scaffold): RED Catch2 cases pinning the pre-registration
+# safety contract. disconnect-before-register and pre-registration-exit cases are EXPECTED to FAIL
+# (RED) at this stage -- they turn GREEN in Plan 30-02 when the sentinel-UUID guard and m_live
+# pre-registration check are wired. plugin_manager.cpp + SdPluginServer are already compiled above.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz_unit_tests PRIVATE test_plugin_host2.cpp)
+endif()
+
 # Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. Hardware-free
 # (AJAZZ_FEATURE_INPUT_SYNTH OFF = default) — no /dev/uinput, no OS permissions needed.
 # test_input_synth.cpp defines a FakeSynth recording subclass and exercises
