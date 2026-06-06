@@ -483,19 +483,19 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Python host IPluginHost2 surface mismatch**
 
    - What we know: `OutOfProcessPluginHost::dispatch()` takes `std::string_view pluginId, actionId, settingsJson`, while `SdPluginServer` routes by `QString pluginUuid` and `QJsonObject` payload.
    - What's unclear: whether the unified `IPluginHost2::dispatch()` should use Qt types (QString, QJsonObject) or STL types (std::string_view). Using Qt types means the Python host wrapper does a conversion; using STL types means the WS path does a conversion.
-   - Recommendation: Use Qt types in `IPluginHost2` (the app-layer interface) and have the Python wrapper convert at the boundary. Keeps the interface consistent with the rest of `src/app/src/`.
+   - **RESOLVED:** Use Qt types (`QString`, `QJsonObject`) in `IPluginHost2` — it is an app-layer (`src/app/src/`) interface, so Qt types keep it consistent with `SdPluginServer`/`PluginManager`. The Python host wrapper converts to/from `std::string_view`/STL at the `OutOfProcessPluginHost` boundary. Aligns with assumption A4 (`UnifiedPluginHost` lives in `src/app/src/`, depends on Qt types) and preserves the COD-031 boundary (`ajazz_core` stays nlohmann-free; the conversion lives in the app layer, not an installed header).
 
 1. **Python host's `loadAll()` and `addSearchPath()` have no `.sdPlugin` equivalent**
 
    - What we know: `OutOfProcessPluginHost` has `loadAll()` / `addSearchPath()` for directory scanning; `PluginManager` has `discover()` + `spawn()` + `rediscover()`.
    - What's unclear: whether `IPluginHost2` should expose `discover()` semantics or `loadAll()` semantics.
-   - Recommendation: Expose `discover() + spawn()` on the unified interface; add a `loadAllPython()` internal call that wraps `OutOfProcessPluginHost::loadAll()` and `addSearchPath()`. The Python path's plugin list folds into `plugins()`.
+   - **RESOLVED:** Expose `discover() + spawn()` on the unified `IPluginHost2` surface. The `UnifiedPluginHost` aggregator (assumption A4) internally calls `OutOfProcessPluginHost::loadAll()` + `addSearchPath()` for the Python path and `PluginManager::discover()`/`spawn()` for the `.sdPlugin` path; both plugin lists fold into a single `plugins()` result and `dispatch()` routes by UUID inside the aggregator (NOT in `Application`). This keeps the single contract honest for all callers (see Plan 03 revision).
 
 ______________________________________________________________________
 
