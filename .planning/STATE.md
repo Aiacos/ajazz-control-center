@@ -2,14 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
-status: planning
-last_updated: '2026-06-06T00:00:00.000Z'
+status: executing
+stopped_at: v2.0 roadmap creation
+last_updated: '2026-06-06T11:10:08.094Z'
 last_activity: 2026-06-06
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -23,14 +24,14 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** v2.0 planning complete — ready to execute Phase 30
+**Current focus:** Phase 30 — plugin-host-modular-foundation
 
 ## Current Position
 
-Phase: 30 — Plugin-Host Modular Foundation (not started)
-Plan: —
-Status: Roadmap created; awaiting Phase 30 plan
-Last activity: 2026-06-06 — v2.0 ROADMAP.md written
+Phase: 30 (plugin-host-modular-foundation) — EXECUTING
+Plan: 2 of 3
+Status: Ready to execute
+Last activity: 2026-06-06
 
 ### Progress bar
 
@@ -75,7 +76,7 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 - **Do NOT modify the mirajazz crate** — sidecar protocol changes go in `streamdock-host/`
 - **COD-031** — `nlohmann::json` PRIVATE to `ajazz_plugins` only; `src/core/include/` must have zero nlohmann hits
-- **IPluginHost unification** — Phase 30 ADR to decide whether the `.sdPlugin` WS path and Python OOP path are unified or kept separate; research verdict is "keep separate in v2.0" but must be documented
+- **IPluginHost2 UNIFY decision** — ADR committed (30-ADR-plugin-host-unification.md); UNIFY overrides keep-separate research verdict (user override); UnifiedPluginHost aggregator owns both PluginManager and OutOfProcessPluginHost; SKU-boundary enforcement code-review-only
 - **profileChanged → populateContextsForActivePage** is the foundational wire fix (Pitfall 3); must land in Phase 32 before any binding work is declared done
 - **QWebEngineScript::DocumentCreation** is the mandatory injection point for the cefQuery polyfill; never defer to runJavaScript
 - **Composition at Application root** — Application owns all services; seams via std::function injection, not raw pointer coupling
@@ -97,8 +98,11 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ### Decisions (v2.0)
 
-Decisions will be logged here as phases are planned and executed, following the PROJECT.md
-Key Decisions table format.
+| Plan  | Decision                                                                                                                                         |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate |
+| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                         |
+| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                       |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -118,12 +122,14 @@ Key Decisions table format.
 
 - **HARDWARE-GATED**: encoder/touch input wire decode (retail AKP05E needed). Does NOT block
   any v2.0 phase — routing pipeline is tested via synthetic `input.*` RPCs.
+
 - **PLATFORM-GATED (Wayland)**: per-app profile switching on Wayland compositors without a
   foreign-toplevel protocol. Phase 34 must document the limitation and show a UI warning chip.
+
 - **Concurrent agent cap**: 2 max in autonomous runs (v1.1 retrospective lesson, CLAUDE.md).
 
 ## Session Continuity
 
-Last session: 2026-06-06
+Last session: 2026-06-06T11:10:08.086Z
 Stopped at: v2.0 roadmap creation
 Resume: `/gsd:plan-phase 30`

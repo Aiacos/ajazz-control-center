@@ -15,9 +15,9 @@ ______________________________________________________________________
 
 ### Modular Plugin-Host Abstraction (HOST)
 
-- [ ] **HOST-01**: A single `IPluginHost` interface unifies the Node, HTML (QWebEngine), native, and Python plugin runtimes behind one spawn / lifecycle / IPC contract; `PluginManager` dispatch is refactored onto it with no behavioural regression vs the current per-runtime paths.
-- [ ] **HOST-02**: Plugin crash isolation is pre-registration-safe — a plugin that crashes mid-handshake (before its contexts register) never crashes the app; the 3-crashes-in-30s disable + notify, restart, and `exitApp` shutdown behaviours are preserved.
-- [ ] **HOST-03**: The plugin layer has zero compile/link coupling to specific device SKUs or to wire/sidecar internals; all device I/O is reached only through `PluginDeviceBridge` → `StreamDockControlService` → the mirajazz sidecar edge.
+- [x] **HOST-01**: A single `IPluginHost` interface unifies the Node, HTML (QWebEngine), native, and Python plugin runtimes behind one spawn / lifecycle / IPC contract; `PluginManager` dispatch is refactored onto it with no behavioural regression vs the current per-runtime paths.
+- [x] **HOST-02**: Plugin crash isolation is pre-registration-safe — a plugin that crashes mid-handshake (before its contexts register) never crashes the app; the 3-crashes-in-30s disable + notify, restart, and `exitApp` shutdown behaviours are preserved.
+- [x] **HOST-03**: The plugin layer has zero compile/link coupling to specific device SKUs or to wire/sidecar internals; all device I/O is reached only through `PluginDeviceBridge` → `StreamDockControlService` → the mirajazz sidecar edge.
 
 ### Binding & Action Model — device-generic (BIND)
 
@@ -99,39 +99,39 @@ ______________________________________________________________________
 
 ## Traceability
 
-| Requirement | Phase    | Status  |
-| ----------- | -------- | ------- |
-| HOST-01     | Phase 30 | Pending |
-| HOST-02     | Phase 30 | Pending |
-| HOST-03     | Phase 30 | Pending |
-| BIND-01     | Phase 31 | Pending |
-| BIND-02     | Phase 31 | Pending |
-| BIND-03     | Phase 32 | Pending |
-| BIND-04     | Phase 32 | Pending |
-| BIND-05     | Phase 32 | Pending |
-| BIND-06     | Phase 32 | Pending |
-| BIND-07     | Phase 32 | Pending |
-| PI-01       | Phase 33 | Pending |
-| PI-02       | Phase 33 | Pending |
-| PI-03       | Phase 33 | Pending |
-| PI-04       | Phase 33 | Pending |
-| EVENT-01    | Phase 34 | Pending |
-| EVENT-02    | Phase 34 | Pending |
-| EVENT-03    | Phase 34 | Pending |
-| EVENT-04    | Phase 34 | Pending |
-| APROF-01    | Phase 34 | Pending |
-| APROF-02    | Phase 34 | Pending |
-| APROF-03    | Phase 34 | Pending |
-| APROF-04    | Phase 34 | Pending |
-| WINPLG-01   | Phase 35 | Pending |
-| WINPLG-02   | Phase 35 | Pending |
-| WINPLG-03   | Phase 35 | Pending |
-| PLGSEC-01   | Phase 35 | Pending |
-| PLGSEC-02   | Phase 35 | Pending |
-| PLGSEC-03   | Phase 35 | Pending |
-| EDIT-01     | Phase 32 | Pending |
-| VERIF-01    | Phase 35 | Pending |
-| VERIF-02    | Phase 35 | Pending |
+| Requirement | Phase    | Status   |
+| ----------- | -------- | -------- |
+| HOST-01     | Phase 30 | Complete |
+| HOST-02     | Phase 30 | Complete |
+| HOST-03     | Phase 30 | Complete |
+| BIND-01     | Phase 31 | Pending  |
+| BIND-02     | Phase 31 | Pending  |
+| BIND-03     | Phase 32 | Pending  |
+| BIND-04     | Phase 32 | Pending  |
+| BIND-05     | Phase 32 | Pending  |
+| BIND-06     | Phase 32 | Pending  |
+| BIND-07     | Phase 32 | Pending  |
+| PI-01       | Phase 33 | Pending  |
+| PI-02       | Phase 33 | Pending  |
+| PI-03       | Phase 33 | Pending  |
+| PI-04       | Phase 33 | Pending  |
+| EVENT-01    | Phase 34 | Pending  |
+| EVENT-02    | Phase 34 | Pending  |
+| EVENT-03    | Phase 34 | Pending  |
+| EVENT-04    | Phase 34 | Pending  |
+| APROF-01    | Phase 34 | Pending  |
+| APROF-02    | Phase 34 | Pending  |
+| APROF-03    | Phase 34 | Pending  |
+| APROF-04    | Phase 34 | Pending  |
+| WINPLG-01   | Phase 35 | Pending  |
+| WINPLG-02   | Phase 35 | Pending  |
+| WINPLG-03   | Phase 35 | Pending  |
+| PLGSEC-01   | Phase 35 | Pending  |
+| PLGSEC-02   | Phase 35 | Pending  |
+| PLGSEC-03   | Phase 35 | Pending  |
+| EDIT-01     | Phase 32 | Pending  |
+| VERIF-01    | Phase 35 | Pending  |
+| VERIF-02    | Phase 35 | Pending  |
 
 ______________________________________________________________________
 
