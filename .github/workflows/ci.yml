@@ -61,6 +61,27 @@ jobs:
           fi
           echo "hid_open invariant OK — only hid_transport.cpp opens HID handles."
 
+      # ---- Phase 30 HOST-03 invariants: loopback-only bind + SIGPIPE handler
+      # Runs only on Linux (source tree is identical across runners — one check
+      # is enough) and BEFORE any Qt install / build step for fast failure.
+      - name: Enforce loopback-only + SIGPIPE invariants (Phase 30)
+        if: runner.os == 'Linux'
+        run: |
+          # QHostAddress::Any must appear only in comments, never in live code.
+          # The existing comment hits in sd_plugin_server.{cpp,hpp} document the
+          # security delta from the vendor bind — they are excluded by the filter.
+          if grep -rn 'QHostAddress::Any' src/ | grep -vP ':[0-9]+:\s*(//|[*])'; then
+            echo "::error::QHostAddress::Any found in non-comment source — loopback-only violated."
+            exit 1
+          fi
+          # SIGPIPE handler must be present in main.cpp so a broken plugin IPC
+          # pipe cannot kill the host process.
+          if ! grep -n 'SIGPIPE' src/app/src/main.cpp | grep -q 'SIG_IGN'; then
+            echo "::error::SIGPIPE SIG_IGN handler missing from main.cpp."
+            exit 1
+          fi
+          echo "Loopback-only + SIGPIPE invariants OK."
+
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
