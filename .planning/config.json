@@ -1,7 +1,8 @@
 {
   "workflow": {
     "_auto_chain_active": false,
-    "nyquist_validation": true
+    "nyquist_validation": true,
+    "use_worktrees": false
   },
   "model_profile": "quality",
   "model_overrides": {
