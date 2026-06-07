@@ -595,6 +595,7 @@ public:
 
     /// Skip a complete JSON value (string, number, array, object, true, false, null).
     void skipValue() {
+        DepthGuard guard{*this}; // CR-01: bound nested object/array descent.
         char const c = peek();
         if (c == '"') {
             (void)readString();
@@ -649,9 +650,38 @@ public:
         throw std::runtime_error(err.str());
     }
 
+    /// Maximum recursion depth for nested values. Deep enough for any
+    /// legitimate Multi Action `children` nesting, shallow enough that the C++
+    /// call stack can never overflow before the cap fires (CR-01). Both
+    /// recursion sites -- readActionInstance's children loop and skipValue's
+    /// nested object/array descent -- are bounded by this via @ref DepthGuard.
+    static constexpr int kMaxDepth = 64;
+
+    /// RAII recursion-depth tracker. Construct one at the top of every
+    /// recursive parse entry point; it increments the reader's depth and
+    /// fail()s past kMaxDepth (turning an unbounded stack-overflow SIGSEGV into
+    /// the parser's usual loud std::runtime_error), then decrements on scope
+    /// exit. Note: fail() throws, so the destructor of a guard that tripped the
+    /// cap never runs -- depth_ is left as-is, which is harmless because the
+    /// throw unwinds the entire parse.
+    struct DepthGuard {
+        JsonReader& r;
+        explicit DepthGuard(JsonReader& rr) : r(rr) {
+            if (++r.depth_ > kMaxDepth) {
+                r.fail("maximum nesting depth exceeded");
+            }
+        }
+        ~DepthGuard() { --r.depth_; }
+        DepthGuard(DepthGuard const&) = delete;
+        DepthGuard& operator=(DepthGuard const&) = delete;
+        DepthGuard(DepthGuard&&) = delete;
+        DepthGuard& operator=(DepthGuard&&) = delete;
+    };
+
 private:
     std::string_view src_;
     std::size_t pos_{0};
+    int depth_{0};
 };
 
 ActionKind actionKindFromString(std::string_view s) noexcept {
@@ -783,6 +813,7 @@ std::vector<Action> readActionArray(JsonReader& r) {
 /// After parsing, `currentState` is defensively clamped to 0 when out of range
 /// so a stale/hostile index never indexes out of bounds (T-31-01).
 [[nodiscard]] ActionInstance readActionInstance(JsonReader& r) {
+    JsonReader::DepthGuard guard{r}; // CR-01: bound recursive children nesting.
     ActionInstance inst{};
     r.expect('{');
     if (!r.tryConsume('}')) {
