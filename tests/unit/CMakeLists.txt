@@ -182,6 +182,10 @@ add_executable(
     # onPress actionList, and 2-action round-trip through save/load.
     # profile_controller.cpp is already in the binary via the 14-02 entry above.
     test_profile_multiaction.cpp
+    # Phase 31 (BIND-01/BIND-02): ActionInstance / ActionState core model +
+    # Profile schema v2 round-trip + v1->v2 migration tests (pure-core, no
+    # Qt/event loop). Runnable via ctest --preset linux-release -R action_instance.
+    test_action_instance.cpp
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
