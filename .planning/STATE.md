@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: v2.0 roadmap creation
-last_updated: '2026-06-06T11:25:49.718Z'
-last_activity: 2026-06-06
+stopped_at: Completed 30-02-PLAN.md (HOST-02 sentinel-UUID + pre-reg exit guard; 696/696 tests green)
+last_updated: '2026-06-07T22:43:04.327Z'
+last_activity: 2026-06-07 -- Phase 31 planning complete
 progress:
   total_phases: 6
-  completed_phases: 0
-  total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_phases: 1
+  total_plans: 5
+  completed_plans: 3
+  percent: 17
 ---
 
 # Project State
@@ -30,9 +30,9 @@ silently leaking host state into plugin children.
 
 Phase: 31 (ActionInstance Core Model + Profile Schema v2) — starting
 Plan: not started
-Status: EXECUTING — autonomous run resumed 2026-06-07 21:15 Europe/Rome; model_profile=quality + all sub-agents overridden to Opus (no Sonnet-quota exposure)
+Status: Ready to execute
 Next: Phase 31 → 32 → 33 → 34 → 35
-Last activity: 2026-06-07
+Last activity: 2026-06-07 -- Phase 31 planning complete
 
 ### Progress bar
 
@@ -52,6 +52,7 @@ Phase 35 ....
   (~18:00 Europe/Rome) and the autonomous run now sets `model_profile=quality` with every
   Sonnet-default sub-agent overridden to Opus in `.planning/config.json`, so there is no
   Sonnet-quota exposure across Phases 31–35.
+
 - **Phase 30 advisory follow-ups (non-blocking):** (1) live debug-channel merged-inventory check of
   the unified host (`.sdPlugin` + Python via `plugin.list`) deferred during close-out — see
   30-VERIFICATION.md "Human Verification"; (2) Phase 30 code-review gate (gsd-code-review) was NOT

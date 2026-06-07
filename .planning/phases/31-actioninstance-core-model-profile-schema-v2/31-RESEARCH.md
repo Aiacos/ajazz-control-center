@@ -385,18 +385,20 @@ TEST_CASE("ActionInstance round-trips 3-state instance via Binding", "[action_in
 
 **Everything else is VERIFIED against the codebase or CITED to the StreamDeck SDK docs.**
 
-## Open Questions
+## Open Questions (RESOLVED)
 
 1. **Does `ActionInstance` need the action UUID (`id`) in Phase 31, or is it model-visuals-only?**
 
    - What we know: CONTEXT lists the model as `states[]` / `currentState` / `settings` / `children` — it does NOT explicitly list an action id. StreamDeck/OpenDeck instances always carry the action UUID; Phase 32 dispatch (Multi/Toggle handlers) will need it.
    - What's unclear: whether to add `actionUuid` now (forward-looking) or defer to Phase 32.
    - Recommendation: add an optional `"id"` field now (cheap, forward-compatible, reader skips it if absent). Flag as A1 for planner confirmation; either choice is non-breaking because the reader skips unknown keys.
+   - RESOLVED: add optional `std::string id{}` to ActionInstance now (StreamDeck instance carries it; reader skips when absent).
 
 1. **`ActionState` as wrapper-struct vs typedef of `KeyState`.**
 
    - What we know: CONTEXT mandates full KeyState parity and explicitly says "reuse `KeyState`".
    - Recommendation: a thin `struct ActionState { KeyState visual; }` wrapper (forward-compatible seam at zero wire cost) — but a bare `using ActionState = KeyState;` is equally CONTEXT-compliant. Executor's discretion (CONTEXT grants this).
+   - RESOLVED: ActionState is a thin `struct ActionState { KeyState visual; }` wrapper.
 
 ## Environment Availability
 

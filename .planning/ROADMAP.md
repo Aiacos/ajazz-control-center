@@ -63,7 +63,12 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 
 Plans:
 
+**Wave 1**
+
 - [ ] 31-01-PLAN.md — ActionInstance/ActionState core header + hand-rolled serializer + Binding/EncoderBinding optional instance + schema doc (BIND-01)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 31-02-PLAN.md — Catch2 round-trip (0/1/3-state, 2-children) + v1->v2 migration + nullopt + clamp tests; ctest -R action_instance (BIND-02)
 
 ### Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor
