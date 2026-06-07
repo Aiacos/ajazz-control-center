@@ -65,7 +65,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 31-01-PLAN.md — ActionInstance/ActionState core header + hand-rolled serializer + Binding/EncoderBinding optional instance + schema doc (BIND-01)
+- [x] 31-01-PLAN.md — ActionInstance/ActionState core header + hand-rolled serializer + Binding/EncoderBinding optional instance + schema doc (BIND-01)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -135,7 +135,7 @@ Plans:
 | Phase                                                                    | Plans Complete | Status      | Completed  |
 | ------------------------------------------------------------------------ | -------------- | ----------- | ---------- |
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
-| 31. ActionInstance Core Model + Profile Schema v2                        | 0/TBD          | Not started | -          |
+| 31. ActionInstance Core Model + Profile Schema v2                        | 1/2            | In Progress |            |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -          |
 | 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |

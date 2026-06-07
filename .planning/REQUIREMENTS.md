@@ -21,7 +21,7 @@ ______________________________________________________________________
 
 ### Binding & Action Model — device-generic (BIND)
 
-- [ ] **BIND-01**: An `ActionInstance` / `ActionState` core model (`states[]`, `currentState`, `settings`, `children`) is added under `src/core/` with hand-rolled JSON serialization (COD-031: no `nlohmann` in `ajazz_core` or any installed header); `Binding` carries an optional instance.
+- [x] **BIND-01**: An `ActionInstance` / `ActionState` core model (`states[]`, `currentState`, `settings`, `children`) is added under `src/core/` with hand-rolled JSON serialization (COD-031: no `nlohmann` in `ajazz_core` or any installed header); `Binding` carries an optional instance.
 - [ ] **BIND-02**: The profile schema migrates v1→v2 (single `state` → `states[]`) with a lossless, backward-compatible reader; existing user profiles load unchanged; round-trip unit tests cover 0-state, 1-state, 3-state, and 2-children variants.
 - [ ] **BIND-03**: A drag-to-bind commit fires the plugin `willAppear` immediately — the `profileChanged` → `populateContextsForActivePage` wiring gap is fixed so binding no longer requires a device reconnect to activate.
 - [ ] **BIND-04**: A user can assign a **Multi Action**: its child instances run sequentially (with inter-step delay) on a single key/dial press, via a built-in `opendeck.multiaction` handler.
@@ -104,7 +104,7 @@ ______________________________________________________________________
 | HOST-01     | Phase 30 | Complete |
 | HOST-02     | Phase 30 | Complete |
 | HOST-03     | Phase 30 | Complete |
-| BIND-01     | Phase 31 | Pending  |
+| BIND-01     | Phase 31 | Complete |
 | BIND-02     | Phase 31 | Pending  |
 | BIND-03     | Phase 32 | Pending  |
 | BIND-04     | Phase 32 | Pending  |
