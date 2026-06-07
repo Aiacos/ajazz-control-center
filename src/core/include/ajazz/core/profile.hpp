@@ -21,6 +21,11 @@
 #pragma once
 
 #include "ajazz/core/capabilities.hpp"
+// action_instance.hpp owns KeyState + ActionInstance/ActionState and depends
+// only on capabilities.hpp. Including it here (one-directional) gives this
+// header KeyState for the legacy Binding::state field and ActionInstance for
+// the additive optional<ActionInstance> instance field, with no include cycle.
+#include "ajazz/core/action_instance.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -72,25 +77,9 @@ struct Action {
     std::uint32_t delayMs{0};            ///< Inter-step delay (Sleep + post-step pause).
 };
 
-/**
- * @brief Visual appearance of a key in the profile editor and on the device.
- *
- * All fields are optional; unset fields fall back to the device default
- * (e.g., blank black key with no overlay).
- */
-struct KeyState {
-    std::optional<std::string> imagePath; ///< Absolute path or Qt resource URL for the key icon.
-    std::optional<std::string> text;      ///< Overlay text rendered on top of the image.
-    std::optional<Rgb> background;        ///< Solid background fill color.
-    std::optional<Rgb> foreground;        ///< Text and icon tint color.
-    std::uint8_t fontSize{14};            ///< Overlay text size in points.
-};
-
-// ActionInstance reuses KeyState (defined above) as its per-state visual
-// payload, so this include MUST follow the complete KeyState definition.
-// action_instance.hpp includes this header in turn; the `#pragma once` guard
-// plus this ordering breaks the two-way include cleanly.
-#include "ajazz/core/action_instance.hpp"
+// KeyState is now defined in action_instance.hpp (included above) so that both
+// the legacy Binding::state field and ActionState::visual share one definition
+// without a circular include.
 
 /**
  * @brief Full mapping of a single physical control (key, encoder, button).

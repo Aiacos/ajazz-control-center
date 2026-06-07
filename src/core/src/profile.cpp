@@ -187,6 +187,11 @@ void writeKeyState(std::ostringstream& out, KeyState const& s) {
     out << "}";
 }
 
+// Forward declaration: writeBinding / writeEncoderBinding emit an optional
+// instance via writeActionInstance, which is defined later (after the KeyState
+// helpers) to sit next to its readActionInstance counterpart.
+void writeActionInstance(std::ostringstream& out, ActionInstance const& inst);
+
 void writeBinding(std::ostringstream& out, Binding const& b) {
     out << "{";
     writeChain(out, "onPress", b.onPress);
@@ -197,6 +202,10 @@ void writeBinding(std::ostringstream& out, Binding const& b) {
     if (!keyStateIsDefault(b.state)) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
+    }
+    if (b.instance) {
+        out << ",\"instance\":";
+        writeActionInstance(out, *b.instance);
     }
     out << "}";
 }
@@ -213,6 +222,10 @@ void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
     }
+    if (b.instance) {
+        out << ",\"instance\":";
+        writeActionInstance(out, *b.instance);
+    }
     out << "}";
 }
 
@@ -225,6 +238,68 @@ void writeTouchZoneBinding(std::ostringstream& out, TouchZoneBinding const& b) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
     }
+    out << "}";
+}
+
+/// Serialise a single ActionState (Phase 31, BIND-01). A states[] element is
+/// ALWAYS emitted as a non-empty $defs.KeyState object (writeKeyState always
+/// emits fontSize), which is correct for an array element that must be present
+/// even when visually blank.
+void writeActionState(std::ostringstream& out, ActionState const& s) {
+    writeKeyState(out, s.visual);
+}
+
+/// Serialise an ActionInstance (Phase 31, BIND-01). The writer ALWAYS emits
+/// the `states` array form (never the legacy singular `state` — only the
+/// reader understands that, Pitfall 2). `id` and `settings` are emitted only
+/// when non-empty; `children` recurses.
+void writeActionInstance(std::ostringstream& out, ActionInstance const& inst) {
+    out << "{";
+    bool first = true;
+    auto const sep = [&] {
+        if (!first) {
+            out << ",";
+        }
+        first = false;
+    };
+    if (!inst.id.empty()) {
+        sep();
+        out << "\"id\":";
+        escape(out, inst.id);
+    }
+    sep();
+    out << "\"states\":[";
+    {
+        bool firstState = true;
+        for (auto const& st : inst.states) {
+            if (!firstState) {
+                out << ",";
+            }
+            writeActionState(out, st);
+            firstState = false;
+        }
+    }
+    out << "]";
+    sep();
+    out << "\"currentState\":" << inst.currentState;
+    if (!inst.settings.empty()) {
+        sep();
+        out << "\"settings\":";
+        escape(out, inst.settings);
+    }
+    sep();
+    out << "\"children\":[";
+    {
+        bool firstChild = true;
+        for (auto const& child : inst.children) {
+            if (!firstChild) {
+                out << ",";
+            }
+            writeActionInstance(out, child); // RECURSIVE (Multi Action nesting).
+            firstChild = false;
+        }
+    }
+    out << "]";
     out << "}";
 }
 
@@ -694,6 +769,77 @@ std::vector<Action> readActionArray(JsonReader& r) {
     return s;
 }
 
+/// Parse a single ActionState (Phase 31, BIND-01) — delegates to readKeyState.
+[[nodiscard]] ActionState readActionState(JsonReader& r) {
+    return ActionState{readKeyState(r)};
+}
+
+/// Parse an ActionInstance object (Phase 31, BIND-01/BIND-02).
+///
+/// Dispatches purely on key PRESENCE (never on a `_schemaVersion` field —
+/// Pitfall 1 / the CR-01/WR-06 anti-pattern). The reader accepts BOTH the new
+/// `states` array AND a legacy singular `state` object, folding the latter into
+/// a one-element vector (lazy v1->v2 migration, BIND-02). `children` recurses.
+/// After parsing, `currentState` is defensively clamped to 0 when out of range
+/// so a stale/hostile index never indexes out of bounds (T-31-01).
+[[nodiscard]] ActionInstance readActionInstance(JsonReader& r) {
+    ActionInstance inst{};
+    r.expect('{');
+    if (!r.tryConsume('}')) {
+        while (true) {
+            std::string const key = r.readString();
+            r.expect(':');
+            if (key == "states") {
+                r.expect('[');
+                if (!r.tryConsume(']')) {
+                    while (true) {
+                        inst.states.push_back(readActionState(r));
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect(']');
+                        break;
+                    }
+                }
+            } else if (key == "state") {
+                // LAZY v1->v2 FOLD: a legacy singular state becomes states[one].
+                inst.states.clear();
+                inst.states.push_back(readActionState(r));
+            } else if (key == "currentState") {
+                inst.currentState = r.readUInt();
+            } else if (key == "settings") {
+                inst.settings = r.readString();
+            } else if (key == "children") {
+                r.expect('[');
+                if (!r.tryConsume(']')) {
+                    while (true) {
+                        inst.children.push_back(readActionInstance(r)); // RECURSIVE
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect(']');
+                        break;
+                    }
+                }
+            } else if (key == "id" || key == "uuid") {
+                inst.id = r.readString();
+            } else {
+                r.skipValue(); // forward-compat: skip unknown keys.
+            }
+            if (r.tryConsume(',')) {
+                continue;
+            }
+            r.expect('}');
+            break;
+        }
+    }
+    // Defensive clamp (CONTEXT lossless-load rule): never reject, never index OOB.
+    if (inst.states.empty() || inst.currentState >= inst.states.size()) {
+        inst.currentState = 0;
+    }
+    return inst;
+}
+
 Binding readBinding(JsonReader& r) {
     Binding b{};
     r.expect('{');
@@ -709,6 +855,8 @@ Binding readBinding(JsonReader& r) {
                 b.onLongPress = readActionArray(r);
             } else if (key == "state") {
                 b.state = readKeyState(r);
+            } else if (key == "instance") {
+                b.instance = readActionInstance(r);
             } else {
                 r.skipValue();
             }
@@ -737,6 +885,8 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
                 eb.onPress = readActionArray(r);
             } else if (key == "state") {
                 eb.state = readKeyState(r);
+            } else if (key == "instance") {
+                eb.instance = readActionInstance(r);
             } else {
                 r.skipValue();
             }

@@ -13,19 +13,21 @@
  *
  * This header is an installed PUBLIC core header. Per the COD-031 boundary it
  * is intentionally nlohmann-free and Qt-free: only the C++ standard library
- * and the existing @ref ajazz::core::KeyState (from profile.hpp) are used. All
- * JSON (de)serialisation lives hand-rolled in profile.cpp's anonymous
- * namespace, not here.
+ * and @ref ajazz::core::Rgb (from capabilities.hpp) are used. All JSON
+ * (de)serialisation lives hand-rolled in profile.cpp's anonymous namespace,
+ * not here.
+ *
+ * @note @ref KeyState lives here (rather than in profile.hpp) so that this
+ *       header depends only on capabilities.hpp. profile.hpp includes this
+ *       header one-directionally and reuses KeyState; that ordering avoids the
+ *       circular include that a two-way profile.hpp <-> action_instance.hpp
+ *       dependency would create.
  *
  * @see ajazz::core::Binding, ajazz::core::EncoderBinding, profileToJson
  */
 #pragma once
 
-// KeyState is the per-state visual payload reused below. profile.hpp uses
-// `#pragma once`; it must be complete (KeyState defined) before ActionState
-// references it. profile.hpp in turn includes this header AFTER its KeyState
-// definition, so the two-way include resolves without a cycle.
-#include "ajazz/core/profile.hpp"
+#include "ajazz/core/capabilities.hpp"
 
 #include <cstdint>
 #include <optional>
@@ -33,6 +35,21 @@
 #include <vector>
 
 namespace ajazz::core {
+
+/**
+ * @brief Visual appearance of a key in the profile editor and on the device.
+ *
+ * All fields are optional; unset fields fall back to the device default
+ * (e.g., blank black key with no overlay). Reused both as the legacy
+ * @ref Binding::state and as each @ref ActionState::visual.
+ */
+struct KeyState {
+    std::optional<std::string> imagePath; ///< Absolute path or Qt resource URL for the key icon.
+    std::optional<std::string> text;      ///< Overlay text rendered on top of the image.
+    std::optional<Rgb> background;        ///< Solid background fill color.
+    std::optional<Rgb> foreground;        ///< Text and icon tint color.
+    std::uint8_t fontSize{14};            ///< Overlay text size in points.
+};
 
 /**
  * @brief A single visual state of an @ref ActionInstance.
