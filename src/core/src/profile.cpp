@@ -837,12 +837,23 @@ std::vector<Action> readActionArray(JsonReader& r) {
 [[nodiscard]] ActionInstance readActionInstance(JsonReader& r) {
     JsonReader::DepthGuard guard{r}; // CR-01: bound recursive children nesting.
     ActionInstance inst{};
+    // Precedence (WR-02): the v2 `states` array ALWAYS wins when its key is
+    // present, even if empty; the legacy singular `state` is folded into
+    // states[] ONLY when no `states` key was seen. Tracking PRESENCE (not
+    // emptiness) makes the fold order-independent and lossless -- a later
+    // `state` can never wipe an already-parsed (even empty) states[], and a
+    // later `states` always supersedes a previously folded legacy `state`.
+    bool sawStatesKey = false;
     r.expect('{');
     if (!r.tryConsume('}')) {
         while (true) {
             std::string const key = r.readString();
             r.expect(':');
             if (key == "states") {
+                // v2 wins: drop any legacy `state` already folded in, then take
+                // the array verbatim (idempotent if `states` somehow repeats).
+                inst.states.clear();
+                sawStatesKey = true;
                 r.expect('[');
                 if (!r.tryConsume(']')) {
                     while (true) {
@@ -855,9 +866,16 @@ std::vector<Action> readActionArray(JsonReader& r) {
                     }
                 }
             } else if (key == "state") {
-                // LAZY v1->v2 FOLD: a legacy singular state becomes states[one].
-                inst.states.clear();
-                inst.states.push_back(readActionState(r));
+                // LAZY v1->v2 FOLD: a legacy singular state becomes states[one]
+                // -- but ONLY if no `states` array was seen. If states[] is
+                // present (v2 wins), discard the legacy form without dropping
+                // already-parsed data.
+                if (!sawStatesKey) {
+                    inst.states.clear();
+                    inst.states.push_back(readActionState(r));
+                } else {
+                    (void)readActionState(r); // states[] wins; discard legacy.
+                }
             } else if (key == "currentState") {
                 inst.currentState = r.readUInt();
             } else if (key == "settings") {
