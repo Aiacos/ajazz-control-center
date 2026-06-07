@@ -28,11 +28,11 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 31 (ActionInstance Core Model + Profile Schema v2) — COMPLETE (both plans landed)
+Phase: 31 (ActionInstance Core Model + Profile Schema v2) — COMPLETE + VERIFIED (passed, 6/6 must-haves)
 Plan: 31-01 complete (BIND-01); 31-02 complete (BIND-02 round-trip + migration tests)
-Status: Executing
+Status: Executing — autonomous run continuing to Phase 32 (713/713 ctest green; code review CR-01 fixed)
 Next: Phase 32 → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 31 Plan 02 (ActionInstance round-trip + migration verification) complete
+Last activity: 2026-06-08 -- Phase 31 VERIFIED passed; code-review CR-01 (reader recursion DoS) + WR-01/02/04 fixed
 
 ### Progress bar
 
@@ -111,17 +111,18 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ### Decisions (v2.0)
 
-| Plan  | Decision                                                                                                                                                                                                            |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate                                                                    |
-| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                                                                            |
-| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                                                                                          |
-| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed                                                             |
-| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                                                                                   |
-| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle                                                                |
-| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str                                                             |
-| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped                                                            |
-| 31-02 | BIND-02 verified by a 7-case [action_instance] suite (0/1/3-state + 2-children round-trip, v1->v2 fold, no-instance -> nullopt on Binding+EncoderBinding, currentState clamp); -R action_instance 7/7, full 708/708 |
+| Plan  | Decision                                                                                                                                                                                                                                                               |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate                                                                                                                       |
+| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                                                                                                                               |
+| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                                                                                                                                             |
+| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed                                                                                                                |
+| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                                                                                                                                      |
+| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle                                                                                                                   |
+| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str                                                                                                                |
+| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped                                                                                                               |
+| 31-02 | BIND-02 verified by a 7-case [action_instance] suite (0/1/3-state + 2-children round-trip, v1->v2 fold, no-instance -> nullopt on Binding+EncoderBinding, currentState clamp); -R action_instance 7/7, full 708/708                                                    |
+| 31-CR | Code-review fixes: JsonReader DepthGuard kMaxDepth=64 on readActionInstance children + skipValue (CR-01 reader-recursion DoS); escape() emits \\u00XX for ctrl chars (WR-01); deterministic state/states fold (WR-02); +5 tests -> action_instance 12/12, full 713/713 |
 
 ### Pending Todos (pre-Phase 30)
 
