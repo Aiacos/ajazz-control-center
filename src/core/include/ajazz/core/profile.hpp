@@ -86,6 +86,12 @@ struct KeyState {
     std::uint8_t fontSize{14};            ///< Overlay text size in points.
 };
 
+// ActionInstance reuses KeyState (defined above) as its per-state visual
+// payload, so this include MUST follow the complete KeyState definition.
+// action_instance.hpp includes this header in turn; the `#pragma once` guard
+// plus this ordering breaks the two-way include cleanly.
+#include "ajazz/core/action_instance.hpp"
+
 /**
  * @brief Full mapping of a single physical control (key, encoder, button).
  *
@@ -102,6 +108,10 @@ struct Binding {
     std::vector<Action> onRelease;   ///< Actions fired when the control is released.
     std::vector<Action> onLongPress; ///< Actions fired after a long-press threshold.
     KeyState state;                  ///< Visual appearance for this control slot.
+    /// Additive OpenDeck-shaped action instance (per-state visuals + settings +
+    /// Multi Action children). std::nullopt when the profile predates v2 /
+    /// carries no "instance" key. Coexists with the legacy chains and `state`.
+    std::optional<ActionInstance> instance;
 };
 
 /**
@@ -115,6 +125,10 @@ struct EncoderBinding {
     std::vector<Action> onCcw;   ///< Chain fired on a counter-clockwise tick.
     std::vector<Action> onPress; ///< Chain fired on a knob press.
     KeyState state;              ///< Optional LCD label for AKP05's encoder strip.
+    /// Additive OpenDeck-shaped action instance (per-state visuals + settings +
+    /// Multi Action children). std::nullopt when the profile predates v2 /
+    /// carries no "instance" key. Coexists with the legacy chains and `state`.
+    std::optional<ActionInstance> instance;
 };
 
 /**
