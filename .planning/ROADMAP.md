@@ -59,7 +59,12 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 1. Catch2 round-trip tests pass for 0-state, 1-state, 3-state, and 2-children `ActionInstance` variants — verified by `ctest --preset linux-release -R action_instance`
 1. An existing v1.3 profile file (with the singular `state:` key) loads without error and round-trips correctly as a `states:` array of one — verified by a dedicated Catch2 migration test
 1. `Binding` and `EncoderBinding` in `profile.hpp` carry `std::optional<ActionInstance> instance`; profiles without an `"instance"` key parse cleanly with `instance = std::nullopt`
-   **Plans**: TBD
+   **Plans**: 2 plans
+
+Plans:
+
+- [ ] 31-01-PLAN.md — ActionInstance/ActionState core header + hand-rolled serializer + Binding/EncoderBinding optional instance + schema doc (BIND-01)
+- [ ] 31-02-PLAN.md — Catch2 round-trip (0/1/3-state, 2-children) + v1->v2 migration + nullopt + clamp tests; ctest -R action_instance (BIND-02)
 
 ### Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor
 
