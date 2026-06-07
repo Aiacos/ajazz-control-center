@@ -21,7 +21,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 ## Phases
 
 - [x] **Phase 30: Plugin-Host Modular Foundation** - Ratify the host-abstraction ADR; close the mid-handshake crash gap; enforce device-coupling decoupling; establish the modularity contract all later phases build on (completed 2026-06-06)
-- [ ] **Phase 31: ActionInstance Core Model + Profile Schema v2** - Add `ActionInstance`/`ActionState` to `src/core/` with hand-rolled serialization; v1→v2 profile schema migration; COD-031 preserved throughout
+- [x] **Phase 31: ActionInstance Core Model + Profile Schema v2** - Add `ActionInstance`/`ActionState` to `src/core/` with hand-rolled serialization; v1→v2 profile schema migration; COD-031 preserved throughout (completed 2026-06-07)
 - [ ] **Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor** - Fix `profileChanged`→`populateContextsForActivePage` wire; implement Multi Action and Toggle Action dispatch; extend setState rendering; device-view overflow scroll for large SKUs
 - [ ] **Phase 33: Property Inspector End-to-End** - Complete PI HTML rendering (cefQuery polyfill, sdpi.css, $SD WebChannel bridge, per-plugin profile isolation); settings round-trip; PI lifecycle events
 - [ ] **Phase 34: Per-App Profiles + Event-Parity Audit** - Implement `ApplicationWatcher` (X11/Wayland/Win32/macOS); profile auto-switch on foreground-app change; full event-parity coverage table; fix all non-hardware-gated event gaps
@@ -69,7 +69,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 31-02-PLAN.md — Catch2 round-trip (0/1/3-state, 2-children) + v1->v2 migration + nullopt + clamp tests; ctest -R action_instance (BIND-02)
+- [x] 31-02-PLAN.md — Catch2 round-trip (0/1/3-state, 2-children) + v1->v2 migration + nullopt + clamp tests; ctest -R action_instance (BIND-02)
 
 ### Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor
 
@@ -135,7 +135,7 @@ Plans:
 | Phase                                                                    | Plans Complete | Status      | Completed  |
 | ------------------------------------------------------------------------ | -------------- | ----------- | ---------- |
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
-| 31. ActionInstance Core Model + Profile Schema v2                        | 1/2            | In Progress |            |
+| 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -          |
 | 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |

@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 31-01-PLAN.md (BIND-01 ActionInstance core model + serializer + schema v2; ajazz_core green, 34/34 profile tests pass)
-last_updated: '2026-06-08T22:51:01Z'
-last_activity: 2026-06-08 -- Phase 31 Plan 01 (ActionInstance core model) complete
+stopped_at: Completed 31-02-PLAN.md (BIND-02 ActionInstance round-trip + migration tests; ctest -R action_instance 7/7, full suite 708/708)
+last_updated: '2026-06-08T23:30:00.000Z'
+last_activity: 2026-06-08 -- Phase 31 Plan 02 (ActionInstance round-trip + migration verification) complete; Phase 31 DONE
 progress:
   total_phases: 6
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 6
-  completed_plans: 5
-  percent: 17
+  completed_plans: 6
+  percent: 33
 ---
 
 # Project State
@@ -28,18 +28,18 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 31 (ActionInstance Core Model + Profile Schema v2) — in progress
-Plan: 31-01 complete (BIND-01); 31-02 next (round-trip + migration tests)
+Phase: 31 (ActionInstance Core Model + Profile Schema v2) — COMPLETE (both plans landed)
+Plan: 31-01 complete (BIND-01); 31-02 complete (BIND-02 round-trip + migration tests)
 Status: Executing
-Next: Phase 31 (Plan 02) → 32 → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 31 Plan 01 (ActionInstance core model) complete
+Next: Phase 32 → 33 → 34 → 35
+Last activity: 2026-06-08 -- Phase 31 Plan 02 (ActionInstance round-trip + migration verification) complete
 
 ### Progress bar
 
 ```
-v2.0 [█████                         ] 1/6 phases (17%)
+v2.0 [██████████                    ] 2/6 phases (33%)
 Phase 30 DONE
-Phase 31 ##.. (Plan 01 of 2 done)
+Phase 31 DONE (Plan 01 + 02)
 Phase 32 ....
 Phase 33 ....
 Phase 34 ....
@@ -111,16 +111,17 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ### Decisions (v2.0)
 
-| Plan  | Decision                                                                                                                                                 |
-| ----- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate         |
-| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                 |
-| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                               |
-| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed  |
-| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                        |
-| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle     |
-| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str  |
-| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped |
+| Plan  | Decision                                                                                                                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate                                                                    |
+| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                                                                            |
+| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                                                                                          |
+| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed                                                             |
+| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                                                                                   |
+| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle                                                                |
+| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str                                                             |
+| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped                                                            |
+| 31-02 | BIND-02 verified by a 7-case [action_instance] suite (0/1/3-state + 2-children round-trip, v1->v2 fold, no-instance -> nullopt on Binding+EncoderBinding, currentState clamp); -R action_instance 7/7, full 708/708 |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -148,6 +149,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08T22:51:01Z
-Stopped at: Completed 31-01-PLAN.md (BIND-01 ActionInstance core model + serializer + schema v2)
-Resume: `/gsd:execute-phase 31` (Plan 02 of 2 remaining — round-trip + migration tests)
+Last session: 2026-06-08T23:30:00Z
+Stopped at: Completed 31-02-PLAN.md (BIND-02 ActionInstance round-trip + migration tests; Phase 31 DONE)
+Resume: `/gsd:execute-phase 32` (Phase 31 complete — both plans landed; next is Multi/Toggle dispatch + wire + editor)
