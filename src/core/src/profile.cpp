@@ -18,6 +18,7 @@
 #include "ajazz/core/profile.hpp"
 
 #include <cstdint>
+#include <cstdio>
 #include <limits>
 #include <sstream>
 #include <stdexcept>
@@ -42,8 +43,12 @@ void writeRgb(std::ostringstream& out, Rgb const& c) {
 /**
  * @brief Write a JSON-escaped quoted string.
  *
- * Handles the minimal set of escape sequences required by RFC 8259:
- * double-quote, backslash, newline, carriage-return, and horizontal tab.
+ * Handles the escape sequences required by RFC 8259: double-quote, backslash,
+ * the named controls (\b \f \n \r \t), and \u00XX for every remaining control
+ * character in U+0000..U+001F. Without the \u00XX fallback, raw control bytes
+ * (NUL, 0x01..0x1F) would be emitted verbatim, producing invalid JSON that any
+ * strict reader (or a NUL-truncating C-string consumer) would reject or mangle
+ * (WR-01).
  *
  * @param out Destination stream.
  * @param s   Input string; must be ASCII or UTF-8.
@@ -58,6 +63,12 @@ void escape(std::ostringstream& out, std::string_view s) {
         case '\\':
             out << "\\\\";
             break;
+        case '\b':
+            out << "\\b";
+            break;
+        case '\f':
+            out << "\\f";
+            break;
         case '\n':
             out << "\\n";
             break;
@@ -68,7 +79,18 @@ void escape(std::ostringstream& out, std::string_view s) {
             out << "\\t";
             break;
         default:
-            out << ch;
+            // char may be signed; test the unsigned value so 0x80..0xFF UTF-8
+            // continuation bytes are NOT mistaken for control characters.
+            if (static_cast<unsigned char>(ch) < 0x20U) {
+                char buf[7];
+                std::snprintf(buf,
+                              sizeof buf,
+                              "\\u%04x",
+                              static_cast<unsigned>(static_cast<unsigned char>(ch)));
+                out << buf;
+            } else {
+                out << ch;
+            }
             break;
         }
     }
