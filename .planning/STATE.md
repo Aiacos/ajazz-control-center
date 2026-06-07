@@ -24,16 +24,15 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** Phase 30 COMPLETE — autonomous run PAUSED before Phase 31 (Sonnet quota exhausted)
+**Current focus:** Phase 30 COMPLETE — autonomous run RESUMED at Phase 31 (2026-06-07, Opus-everywhere)
 
 ## Current Position
 
-Phase: 30 (plugin-host-modular-foundation) — COMPLETE ✓ (VERIFICATION: passed, 701/701 tests, HOST-01/02/03)
-Plan: 3 of 3 complete
-Status: PAUSED — autonomous run stopped after Phase 30; awaiting Sonnet quota reset (Jun 7 ~18:00 Europe/Rome)
-Next: Phase 31 (ActionInstance Core Model + Profile Schema v2) — not started
-Resume with: `/gsd-autonomous --from 31`
-Last activity: 2026-06-06
+Phase: 31 (ActionInstance Core Model + Profile Schema v2) — starting
+Plan: not started
+Status: EXECUTING — autonomous run resumed 2026-06-07 21:15 Europe/Rome; model_profile=quality + all sub-agents overridden to Opus (no Sonnet-quota exposure)
+Next: Phase 31 → 32 → 33 → 34 → 35
+Last activity: 2026-06-07
 
 ### Progress bar
 
@@ -49,11 +48,10 @@ Phase 35 ....
 
 ## Blockers / Concerns
 
-- **Autonomous run paused (2026-06-06):** Sonnet daily quota exhausted mid-Phase-30 (the 30-03
-  executor was rate-limited after committing all task work; orchestrator closed it out + verified
-  on Opus). GSD researcher/checker/executor/verifier default to Sonnet, so Phases 31–35 wait for
-  the reset (Jun 7 ~18:00 Europe/Rome). Resume: `/gsd-autonomous --from 31`. Alternatively re-run
-  with Opus-override or inline-Opus if continuing before reset.
+- **RESOLVED (2026-06-07):** The 2026-06-06 Sonnet-quota pause is cleared — quota window reset
+  (~18:00 Europe/Rome) and the autonomous run now sets `model_profile=quality` with every
+  Sonnet-default sub-agent overridden to Opus in `.planning/config.json`, so there is no
+  Sonnet-quota exposure across Phases 31–35.
 - **Phase 30 advisory follow-ups (non-blocking):** (1) live debug-channel merged-inventory check of
   the unified host (`.sdPlugin` + Python via `plugin.list`) deferred during close-out — see
   30-VERIFICATION.md "Human Verification"; (2) Phase 30 code-review gate (gsd-code-review) was NOT
