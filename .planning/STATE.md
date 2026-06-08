@@ -28,6 +28,8 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
+Phase: 34 (Per-App Profiles + Event-Parity Audit) — DISCUSSED (34-CONTEXT.md committed a8cc4c0); PAUSED before research/plan (context-budget pause, 2026-06-08). Resume: `/gsd-autonomous --from 34` (has_context=true → skips discuss, goes to research→plan→execute). Phase 34 is the largest remaining: 8 reqs (APROF-01..04 greenfield window-watcher + EVENT-01..04 parity audit); Wayland live-verifiable on niri; Win/macOS compile-guarded.
+
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
 Plan: all 3 (01 PI-04 events; 02 PI-02 objectNames+affordance; 03 = deferred human-verify checkpoint). LIVE-CONFIRMED: criterion 2 simulatePiSettings→didReceiveSettings + full setSettings round-trip; PI-02 objectNames addressable. CR WR-01 (spurious didDisappear+didAppear on identical reload) FIXED (13f085b).
 Status: Continuing autonomous run to Phase 34. Deferred PI human-verify in 33-HUMAN-UAT.md (com.test.demo→pi/index.html walk-through).
