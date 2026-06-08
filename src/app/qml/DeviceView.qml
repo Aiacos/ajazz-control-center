@@ -298,6 +298,13 @@ Item {
                 id: chassisScope
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                // The device canvas is the PRIMARY editing surface; the docked
+                // Inspector below (preferredHeight 320 / min 200) must not starve
+                // it. Without a minimum, a short window squeezes the fillHeight
+                // canvas to ~0 and the ScrollView's clip:true then hides it
+                // entirely (EDIT-01 live-verification finding 2026-06-08). Guarantee
+                // enough room for the device frame's key grid + dial/zone lanes.
+                Layout.minimumHeight: 280
 
             Accessible.role: Accessible.Table
             Accessible.name: root.codename !== ""
@@ -372,15 +379,18 @@ Item {
 
                 DeviceCanvas {
                     id: deviceCanvas
+                    objectName: "deviceCanvas"
                     width: deviceCanvasScroll.availableWidth
-                    // Height is the larger of the canvas's natural content height
-                    // (its device frame, via implicitHeight) and the viewport:
-                    // when the frame is shorter than the viewport the canvas
-                    // fills the viewport and centers the frame (no scroll); when
-                    // it is taller, the extra height makes the vertical scrollbar
-                    // engage (AsNeeded). Width is constrained to availableWidth so
-                    // no horizontal scrollbar is ever produced.
-                    height: Math.max(implicitHeight, deviceCanvasScroll.availableHeight)
+                    // Natural content height ONLY (the device frame's implicitHeight).
+                    // Binding height to deviceCanvasScroll.availableHeight created a
+                    // viewport<->content feedback path that collapsed the ScrollView
+                    // (availableHeight resolved to 0 -> chassis height -24 -> canvas
+                    // invisible in the real app; the offscreen explicitly-sized unit
+                    // tests masked it). The ScrollView derives contentHeight from this
+                    // and scrolls (AsNeeded) when the frame is taller than the viewport.
+                    // Width is constrained to availableWidth so no horizontal scrollbar
+                    // is ever produced (vertical-only).
+                    height: implicitHeight
 
                     keyRows:        root.keyRowsResolved
                     keyColumns:     root._keyColumnsResolved
