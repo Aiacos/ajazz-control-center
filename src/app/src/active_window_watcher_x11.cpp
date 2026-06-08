@@ -31,6 +31,7 @@
 #include <QSocketNotifier>
 #include <QString>
 
+#include <cstddef>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -239,7 +240,14 @@ private:
                                &bytesAfter,
                                &prop) == Success &&
             prop != nullptr) {
-            title = reinterpret_cast<char const*>(prop);
+            // WR-05: bound the read by the returned item count rather than
+            // treating the buffer as a NUL-terminated C string. UTF8_STRING is
+            // not guaranteed NUL-terminated by the protocol (Xlib appends one
+            // convenience zero, but an EMBEDDED NUL would otherwise truncate the
+            // title); nItems is the byte count for an 8-bit-format property.
+            // Title is diagnostic-only, so the 4 KB request cap (long_length
+            // 1024 * 32-bit) is acceptable; we just read it length-bounded.
+            title.assign(reinterpret_cast<char const*>(prop), static_cast<std::size_t>(nItems));
             XFree(prop);
         }
         if (title.empty()) {
