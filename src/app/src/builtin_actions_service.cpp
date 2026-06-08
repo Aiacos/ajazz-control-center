@@ -470,6 +470,22 @@ void BuiltinActionsService::populate() {
                                   }
                               });
 
+    // toggleaction (BIND-05/07): the canonical OpenDeck-shaped Toggle Action. Like
+    // Multi Action, its STATE work cannot live in a BuiltinHandler -- cycling
+    // currentState needs the firing Binding's identity + a mutable Profile, which
+    // BuiltinHandler(string_view) cannot see (RESEARCH Finding 3). So this registry
+    // entry is CLASSIFICATION ONLY: it makes handles(kToggleActionId) return true
+    // (and uses the kBuiltinPrefix form -- the OpenDeck "opendeck.toggleaction" id
+    // would fail handles() and never fire). The actual cycle + per-state render +
+    // state-change willAppear resolve at StreamDockInputService::dispatch
+    // (dispatchToggle), where the binding + index are in scope. The handler body is
+    // intentionally inert (no chain to run for a pure state toggle).
+    m_registry.registerAction(std::string{core::BuiltinActionRegistry::kToggleActionId},
+                              [](std::string_view /*settingsJson*/) {
+                                  // Classification-only: state mutation happens at the
+                                  // input-service seam (dispatchToggle), not here.
+                              });
+
     // multiactions.LunBo: per-key carousel. Each press advances the key's cursor by one,
     // cycling through the "actions" array. The cursor is keyed by a stable binding id
     // (T-21-lunbo; Pitfall 6 — per-key, not global). Reset on profile change.

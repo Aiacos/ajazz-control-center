@@ -206,6 +206,45 @@ public:
      */
     void injectSyntheticEvent(core::DeviceEvent const& ev) { dispatch(ev); }
 
+    /// Hook that cycles a binding's `instance.currentState` (mod N) and persists.
+    /// Application wires this to `ProfileController::cycleInstanceState` (the only
+    /// owner of a mutable Profile). @p controller is "Keypad" or "Encoder";
+    /// @p index is the 0-based control index. See @ref setToggleCycleHook.
+    using ToggleCycleHook = std::function<void(QString const& controller, int index)>;
+
+    /// Hook that renders `instance.states[currentState]` on the control and emits
+    /// the state-change willAppear. Application wires this to the PluginDeviceBridge
+    /// (which owns the control service + context registry). @p instance carries the
+    /// ALREADY-CYCLED currentState (the cycle hook ran first). See @ref
+    /// setToggleRenderHook.
+    using ToggleRenderHook =
+        std::function<void(QString const& controller, int index, core::ActionInstance const& inst)>;
+
+    /**
+     * @brief Inject the Toggle Action currentState-cycle hook (BIND-05/07).
+     *
+     * Called at the dispatch seam when a firing Binding/EncoderBinding's instance
+     * is a Toggle Action (id == BuiltinActionRegistry::kToggleActionId). The hook
+     * mutates `instance.currentState = (currentState + 1) % states.size()` on the
+     * mutable Profile and persists it. The mutation MUST be observable through the
+     * ProfileAccessor so the render hook (run next) reads the new state.
+     *
+     * @param hook  Cycle callback (controller, index). No-op if unset.
+     */
+    void setToggleCycleHook(ToggleCycleHook hook) { m_toggleCycleHook = std::move(hook); }
+
+    /**
+     * @brief Inject the Toggle Action per-state render hook (BIND-07).
+     *
+     * Called immediately after the cycle hook: it paints `states[currentState]`
+     * on the device (reusing the existing setState repaint path) and emits the
+     * state-change willAppear for the bound context. Passed the post-cycle
+     * ActionInstance (read back from the ProfileAccessor).
+     *
+     * @param hook  Render callback (controller, index, instance). No-op if unset.
+     */
+    void setToggleRenderHook(ToggleRenderHook hook) { m_toggleRenderHook = std::move(hook); }
+
 Q_SIGNALS:
     /**
      * @brief Emitted when a touch swipe is detected.
@@ -252,6 +291,14 @@ private:
     /// Main dispatch function; called from the onEvent callback.
     void dispatch(core::DeviceEvent const& ev);
 
+    /// Handle a Toggle Action press (BIND-05/07): cycle currentState mod N via the
+    /// cycle hook, re-read the binding's instance through the ProfileAccessor (so
+    /// the render reflects the NEW state), then drive the per-state render +
+    /// state-change willAppear via the render hook. @p controller is "Keypad" or
+    /// "Encoder"; @p index is the 0-based control index. Safe no-op if the hooks
+    /// are unset or the post-cycle instance has no states.
+    void dispatchToggle(QString const& controller, std::uint16_t index);
+
     /// Accumulate a rotation delta and arm the 16 ms coalescer timer.
     void onEncoderTurned(std::uint16_t encIndex, std::int32_t delta);
 
@@ -264,6 +311,13 @@ private:
 
     ProfileAccessor m_profileAccessor;
     std::unique_ptr<core::ActionEngine> m_engine;
+
+    /// Toggle Action seam hooks (BIND-05/07). Both are optional; when either is
+    /// unset the toggle path degrades to a no-op (a toggle binding then behaves
+    /// like a plain press). Wired by Application to ProfileController +
+    /// PluginDeviceBridge; tests inject recording lambdas.
+    ToggleCycleHook m_toggleCycleHook;
+    ToggleRenderHook m_toggleRenderHook;
 
     /// Codename of the currently active device (set by setActiveDevice via Application).
     /// Passed in the deviceEvent signal so PluginDeviceBridge can look up the context.

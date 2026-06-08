@@ -519,6 +519,37 @@ public slots:
      */
     [[nodiscard]] QString activeDeviceId() const noexcept { return m_activeDeviceId; }
 
+    /**
+     * @brief Render a Toggle Action's current state + emit a state-change willAppear.
+     *
+     * BIND-07 render hook. Wired (in application.cpp) into
+     * StreamDockInputService::setToggleRenderHook so a built-in Toggle press, after
+     * cycling its `currentState` in the profile, repaints the control with
+     * `instance.states[currentState].visual` (imagePath/title) and notifies any
+     * plugin that owns the context with a fresh willAppear carrying the new state.
+     *
+     * Render path reuse: paints via StreamDockControlService::assignKeyImage
+     * (Keypad) / assignEncoderImage (Encoder) -- the SAME repaint mechanism the
+     * plugin-driven setState handler uses (plugin_device_bridge.cpp setState path);
+     * no new render mechanism is introduced.
+     *
+     * willAppear: if a context is registered at the control's coordinates AND a
+     * plugin owns it, the registry stateIndex is advanced (ContextRegistry::setState)
+     * and a willAppear is re-sent for that one context with the new state. The
+     * cross-plugin ownership guard is preserved (a built-in toggle never drives a
+     * context owned by a different plugin). For a PURE built-in toggle (no owning
+     * plugin) there is no plugin to notify, so willAppear emission is a clean no-op
+     * and only the repaint runs.
+     *
+     * @param controller "Keypad" or "Encoder" (touch zones register under "Encoder").
+     * @param index      0-based control index (key index or encoder/zone index).
+     * @param instance   The ALREADY-CYCLED ActionInstance (currentState is the new
+     *                   index; states[currentState] is the visual to render).
+     */
+    void renderToggleState(QString const& controller,
+                           int index,
+                           ajazz::core::ActionInstance const& instance);
+
 signals:
     /// Emitted when a plugin sends sendToPropertyInspector — the host relays it to
     /// the open Property Inspector for that context. Application wires this to the

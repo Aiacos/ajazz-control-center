@@ -66,6 +66,17 @@ inline constexpr std::uint16_t kTouchStripRangeX = 256;
     return instance.has_value() && instance->id == core::BuiltinActionRegistry::kMultiActionId;
 }
 
+/// A firing binding is a Toggle Action when it carries an @ref ActionInstance
+/// whose id is the canonical built-in Toggle Action id (BIND-05/07). Id-match
+/// (over a bare "states.size() > 1" heuristic) keeps the classification in
+/// lock-step with the registry: a Toggle is identified by its action UUID, not
+/// merely by having more than one state. Uses the REAL dispatch id
+/// (com.hotspot.streamdock.toggleaction); no SKU / codename is consulted
+/// (BIND-06 invariant).
+[[nodiscard]] bool isToggleAction(std::optional<core::ActionInstance> const& instance) {
+    return instance.has_value() && instance->id == core::BuiltinActionRegistry::kToggleActionId;
+}
+
 /// Run a press binding: if it is a Multi Action, flatten its children into the
 /// existing ActionChain (instanceChildrenToChain) and walk them through the
 /// shared ActionEngine (which already defers each child's delayMs -- no new
@@ -237,9 +248,17 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
     // ---- Key events (INPUT-03) -------------------------------------------
     case core::DeviceEvent::Kind::KeyPressed:
         if (auto it = prof.keys.find(ev.index); it != prof.keys.end()) {
-            // BIND-04/05: a Multi Action instance runs its children sequentially
-            // via the shared engine; otherwise the legacy onPress chain fires.
-            runPressBinding(*m_engine, it->second, it->second.onPress);
+            if (isToggleAction(it->second.instance)) {
+                // BIND-05/07: a Toggle Action cycles currentState + renders the
+                // new state + emits a state-change willAppear (it does NOT run an
+                // action chain). Resolved here where the binding identity + index
+                // are in scope (the BuiltinHandler cannot see them -- Finding 3).
+                dispatchToggle(QStringLiteral("Keypad"), ev.index);
+            } else {
+                // BIND-04/05: a Multi Action instance runs its children sequentially
+                // via the shared engine; otherwise the legacy onPress chain fires.
+                runPressBinding(*m_engine, it->second, it->second.onPress);
+            }
         }
         break;
 
@@ -261,8 +280,14 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
         // separately (handled in EncoderReleased case below), but since
         // EncoderBinding has no onRelease field yet the extra event is harmless.
         if (auto it = prof.encoders.find(ev.index); it != prof.encoders.end()) {
-            // BIND-04/05: an encoder-press Multi Action runs its children too.
-            runPressBinding(*m_engine, it->second, it->second.onPress);
+            if (isToggleAction(it->second.instance)) {
+                // BIND-05/07: an encoder-press Toggle cycles + renders via the
+                // same seam as a key Toggle (no action chain).
+                dispatchToggle(QStringLiteral("Encoder"), ev.index);
+            } else {
+                // BIND-04/05: an encoder-press Multi Action runs its children too.
+                runPressBinding(*m_engine, it->second, it->second.onPress);
+            }
         }
         synthesiseEncoderRelease(ev.index);
         break;
@@ -313,8 +338,14 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
             // INPUT-05a: tap -> provisional zone (from the down X) -> encoders[zone].onPress
             auto const zone = zoneForX(m_touchDownX);
             if (auto it = prof.encoders.find(zone); it != prof.encoders.end()) {
-                // BIND-04/05: a tapped zone bound to a Multi Action runs its children.
-                runPressBinding(*m_engine, it->second, it->second.onPress);
+                if (isToggleAction(it->second.instance)) {
+                    // BIND-05/07: a tapped zone bound to a Toggle cycles + renders
+                    // (touch zones register under the "Encoder" controller).
+                    dispatchToggle(QStringLiteral("Encoder"), zone);
+                } else {
+                    // BIND-04/05: a tapped zone bound to a Multi Action runs its children.
+                    runPressBinding(*m_engine, it->second, it->second.onPress);
+                }
             }
         }
         break;
@@ -385,6 +416,48 @@ void StreamDockInputService::synthesiseEncoderRelease(std::uint16_t encIndex) {
     emit encoderReleaseSynthesised(encIndex);
     // Note: EncoderBinding has no onRelease field as of profile.hpp:113-118.
     // If a Phase-16 onRelease is added, run it here.
+}
+
+// ---------------------------------------------------------------------------
+// dispatchToggle — Toggle Action: cycle currentState, render, willAppear (BIND-07)
+// ---------------------------------------------------------------------------
+
+void StreamDockInputService::dispatchToggle(QString const& controller, std::uint16_t index) {
+    // 1. Cycle currentState = (currentState + 1) % states.size() (mutate + persist).
+    //    The cycle hook owns the mutable Profile (ProfileController) -- the input
+    //    service only knows the binding through the const ProfileAccessor and so
+    //    cannot mutate it directly. A states.size() <= 1 guard lives inside the
+    //    mutator (single-state / no-instance bindings are a clean no-op).
+    if (m_toggleCycleHook) {
+        m_toggleCycleHook(controller, static_cast<int>(index));
+    }
+
+    // 2. Re-read the binding's instance through the ProfileAccessor so the render
+    //    sees the NEW currentState the cycle hook just wrote. Sourcing from the
+    //    live profile (not a pre-cycle copy) is what makes the render reflect the
+    //    advance + wrap.
+    if (!m_toggleRenderHook || !m_profileAccessor) {
+        return;
+    }
+    auto const& prof = m_profileAccessor();
+    core::ActionInstance const* inst = nullptr;
+    if (controller == QStringLiteral("Keypad")) {
+        if (auto it = prof.keys.find(index); it != prof.keys.end() && it->second.instance) {
+            inst = &*it->second.instance;
+        }
+    } else if (controller == QStringLiteral("Encoder")) {
+        if (auto it = prof.encoders.find(index); it != prof.encoders.end() && it->second.instance) {
+            inst = &*it->second.instance;
+        }
+    }
+    if (inst == nullptr || inst->states.empty()) {
+        return; // nothing to render
+    }
+
+    // 3. Render states[currentState] + emit the state-change willAppear (the hook
+    //    reuses the existing setState repaint path + the willAppear envelope; the
+    //    cross-plugin ownership guard lives inside the bridge -- BIND-06).
+    m_toggleRenderHook(controller, static_cast<int>(index), *inst);
 }
 
 } // namespace ajazz::app

@@ -497,6 +497,20 @@ Application::Application(QObject* parent)
                      m_streamDockControl.get(),
                      &StreamDockControlService::navigatePage);
 
+    // Phase 32-03 (BIND-05/07): Toggle Action cycle hook. A built-in Toggle press
+    // resolves at StreamDockInputService::dispatch (dispatchToggle); the state
+    // mutation needs the mutable Profile, owned only by ProfileController. Wire the
+    // cycle hook to cycleInstanceState so the press advances currentState (mod N)
+    // and persists it. The render hook (states[currentState] + state-change
+    // willAppear) is wired below in the WEBSOCKETS block, where the bridge lives.
+    //
+    // Pitfall 3 / IN-02: this is NOT a profileChanged slot -- it is a direct hook
+    // invoked synchronously from the toggle dispatch path, so it does not perturb
+    // the repaint-before-context-registration connection ordering at lines 456-487.
+    m_streamDockInput->setToggleCycleHook([this](QString const& controller, int index) {
+        m_profileController->cycleInstanceState(controller, index);
+    });
+
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     // Phase 19-03 (PLUGIN-10): outbound device -> plugin event routing.
     //
@@ -555,6 +569,17 @@ Application::Application(QObject* parent)
                      &StreamDockInputService::deviceEvent,
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onDeviceEvent);
+
+    // 2a. Phase 32-03 (BIND-07): Toggle Action render hook. After the cycle hook
+    //     advances currentState (wired above), the input service calls this hook to
+    //     repaint states[currentState] on the control (reusing the bridge's existing
+    //     assignKeyImage/assignEncoderImage setState path) and to emit a state-change
+    //     willAppear for any plugin that owns the context. Direct hook (not a
+    //     profileChanged slot) so the Pitfall-3 connection ordering is untouched.
+    m_streamDockInput->setToggleRenderHook(
+        [this](QString const& controller, int index, core::ActionInstance const& inst) {
+            m_pluginBridge->renderToggleState(controller, index, inst);
+        });
 
     // 3. Plugin lifecycle: pluginRegistered / pluginDisconnected -> bridge lifecycle.
     //    Populates contexts + willAppear on registration; retires on disconnect.

@@ -54,6 +54,7 @@
 #include <QRect>
 #include <QSet>
 #include <QTimer>
+#include <QUrl>
 
 #include <algorithm>
 
@@ -1006,6 +1007,97 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
 // ---------------------------------------------------------------------------
 // Phase 19-03: Lifecycle helpers
 // ---------------------------------------------------------------------------
+
+void PluginDeviceBridge::renderToggleState(QString const& controller,
+                                           int index,
+                                           ajazz::core::ActionInstance const& instance) {
+    // BIND-07 render hook. Two effects, both reusing existing machinery:
+    //   (1) repaint the control with states[currentState].visual (the SAME
+    //       assignKeyImage / assignEncoderImage path the plugin setState handler
+    //       uses -- no new render mechanism);
+    //   (2) if a plugin owns the context at this coordinate, advance the registry
+    //       stateIndex and re-send a state-change willAppear for that one context
+    //       (cross-plugin ownership guard preserved). A pure built-in toggle has
+    //       no owning plugin -> willAppear is a clean no-op.
+    if (instance.states.empty()) {
+        return;
+    }
+    auto const stateIdx = instance.currentState < instance.states.size()
+                              ? instance.currentState
+                              : 0u; // defensive clamp (model also clamps on read)
+    auto const& visual = instance.states[stateIdx].visual;
+
+    constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5 (matches setState path)
+
+    // --- (1) Repaint -------------------------------------------------------
+    // Source the image from the per-state imagePath (URL/path -> filesystem via
+    // the same QUrl::toLocalFile boundary as StreamDockControlService).
+    if (m_control != nullptr) {
+        QImage img;
+        if (visual.imagePath && !visual.imagePath->empty()) {
+            QString const s = QString::fromStdString(*visual.imagePath);
+            QString const local = s.startsWith(QStringLiteral("file:")) ? QUrl(s).toLocalFile() : s;
+            img = QImage(local);
+            if (img.isNull()) {
+                AJAZZ_LOG_WARN("plugin-bridge",
+                               "renderToggleState: state image failed to load: {}",
+                               local.toStdString());
+            }
+        }
+        // Composite the per-state title over the (possibly null) base; compositeTitle
+        // degrades to a neutral fill when the base is null, and skips text in a
+        // headless app (no font backend) so it stays crash-safe.
+        QString const title = visual.text ? QString::fromStdString(*visual.text) : QString{};
+        QImage const composited = compositeTitle(img, title);
+
+        try {
+            if (controller == QStringLiteral("Keypad")) {
+                std::uint8_t const keyIndex =
+                    static_cast<std::uint8_t>(index + 1); // 0-based -> 1-based device index
+                m_control->assignKeyImage(keyIndex, composited);
+                reapplyTitle(keyIndex);
+            } else if (controller == QStringLiteral("Encoder")) {
+                // assignEncoderImage uses the 0-based encoder index directly.
+                m_control->assignEncoderImage(static_cast<std::uint8_t>(index), composited);
+            }
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "renderToggleState: assign image threw for {} {}: {}",
+                           controller.toStdString(),
+                           index,
+                           e.what());
+        }
+    }
+
+    // --- (2) state-change willAppear (only if a plugin owns this context) ---
+    if (m_server == nullptr || m_activeDeviceId.isEmpty()) {
+        return;
+    }
+    // Resolve the registered context at this control coordinate. Keypad maps the
+    // 0-based key index to {row,column}; Encoder/touch-zone uses row=0,col=index.
+    std::optional<ActionContext> ctxOpt;
+    if (controller == QStringLiteral("Keypad")) {
+        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(index + 1), kDefaultKeyCols);
+        ctxOpt = m_registry.byCoord(m_activeDeviceId, controller, gc.row, gc.column);
+    } else if (controller == QStringLiteral("Encoder")) {
+        ctxOpt = m_registry.byCoord(m_activeDeviceId, controller, 0, index);
+    }
+    if (!ctxOpt.has_value()) {
+        return; // pure built-in toggle: no plugin context to notify -> no-op
+    }
+    ActionContext ctx = *ctxOpt;
+    // T-32-07: never drive a context owned by a different plugin. resolveOwner is
+    // the same owner the willAppear is addressed to; the registered ctx.pluginUuid
+    // is authoritative -- only notify the owning plugin.
+    if (ctx.pluginUuid.isEmpty()) {
+        return;
+    }
+    QString const ctxId = ContextRegistry::deriveContextId(ctx);
+    m_registry.setState(ctxId, static_cast<int>(stateIdx));
+    ctx.stateIndex = static_cast<int>(stateIdx);
+    m_server->sendEvent(ctx.pluginUuid,
+                        eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
+}
 
 void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                        QString const& pluginUuid) {
