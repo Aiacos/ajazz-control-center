@@ -70,6 +70,19 @@ Item {
         ? keyRows
         : Math.max(1, Math.ceil(keyCount / Math.max(1, gridColumns > 0 ? gridColumns : 5)))
 
+    // ---- Overflow predicate (EDIT-01, 32-UI-SPEC) ---------------------------
+    // The grid is "overflowing" (vertical scroll becomes reachable) when the
+    // device geometry exceeds OpenDeck's overflow rule: more than 8 key columns
+    // OR more than 4 rows, where the row count includes the encoder lane row and
+    // the touch-zone lane row (not just key rows). This is the spec-level
+    // acceptance predicate; whether the scrollbar actually paints is ultimately
+    // driven by content-height-vs-viewport (ScrollBar.AsNeeded).
+    readonly property bool _gridOverflows:
+        (_keyColumnsResolved > 8)
+        || ((keyRowsResolved
+             + (encoderCount > 0 ? 1 : 0)
+             + (touchZoneCount > 0 ? 1 : 0)) > 4)
+
     // ---- Observability accessors for tests (Phase 26 Plan 26-05, REQ-26-B) -
     // Pure read-only mirrors of the Repeater counts exposed for offscreen QML
     // tests (test_device_view_geometry.qml).  No behaviour change at runtime.
@@ -334,11 +347,40 @@ Item {
                 // available; the editor is NEVER broken (renders from descriptor
                 // geometry alone). All cell intent is forwarded to the same
                 // ProfileController + selection wiring as before.
-                DeviceCanvas {
-                    id: deviceCanvas
+                // ---- EDIT-01: vertical-only scroll wrapper -----------------
+                // Wrap the device grid in a width-constrained vertical ScrollView
+                // so oversized SKU grids (>8 cols OR >4 rows incl. encoder+touch
+                // lanes) scroll instead of clipping/overflowing (32-UI-SPEC).
+                // The ScrollView takes over the canvas's former anchors.fill +
+                // Theme.spacingMd margins. trashBtn + EmptyState + chassisPhoto
+                // stay pinned chassisArea siblings (NOT inside the scroll). The
+                // content width is constrained to availableWidth so no phantom
+                // horizontal scrollbar is ever produced (vertical only). Both the
+                // ScrollView and its contentItem Flickable are debug-addressable
+                // (objectName) so qml.get can read scroll-position properties
+                // (CLAUDE.md every-control-debug-addressable rule).
+                ScrollView {
+                    id: deviceCanvasScroll
+                    objectName: "deviceCanvasScroll"
                     anchors.fill: parent
                     anchors.margins: Theme.spacingMd
+                    clip: true
                     visible: !chassisPhoto.visible
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                    ScrollBar.vertical.policy: ScrollBar.AsNeeded
+                    contentItem.objectName: "deviceCanvasFlick"
+
+                DeviceCanvas {
+                    id: deviceCanvas
+                    width: deviceCanvasScroll.availableWidth
+                    // Height is the larger of the canvas's natural content height
+                    // (its device frame, via implicitHeight) and the viewport:
+                    // when the frame is shorter than the viewport the canvas
+                    // fills the viewport and centers the frame (no scroll); when
+                    // it is taller, the extra height makes the vertical scrollbar
+                    // engage (AsNeeded). Width is constrained to availableWidth so
+                    // no horizontal scrollbar is ever produced.
+                    height: Math.max(implicitHeight, deviceCanvasScroll.availableHeight)
 
                     keyRows:        root.keyRowsResolved
                     keyColumns:     root._keyColumnsResolved
@@ -421,6 +463,7 @@ Item {
                         ProfileController.swapTouchZoneBindings(src, dst);
                     }
                 }
+                } // ScrollView#deviceCanvasScroll
 
                 // ---- Trash zone (top-right of chassis, D-09) ---------------
                 RoundButton {

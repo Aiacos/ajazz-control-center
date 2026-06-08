@@ -63,6 +63,19 @@ Item {
             ? keyColumns * _keyCell + (keyColumns - 1) * _gap
             : _keyCell
 
+    // Natural content HEIGHT of the schematic (the device frame). Exposed as the
+    // canvas implicitHeight so a wrapping vertical ScrollView (EDIT-01) uses it as
+    // the scrollable content extent. When the available area is taller than the
+    // frame, the frame stays centered (anchors.centerIn).
+    //
+    // implicitWidth deliberately tracks the canvas's own width (set by the parent
+    // ScrollView to availableWidth), NOT frame.width: a ScrollView sizes its
+    // content from the contentItem's implicit size, so reporting frame.width here
+    // would make the ScrollView's contentWidth exceed the viewport and produce a
+    // horizontal scrollbar. Tracking width keeps the content vertical-only.
+    implicitWidth:  width
+    implicitHeight: frame.height
+
     // Device frame: sized to its content, centered in the available chassis area.
     Rectangle {
         id: frame
