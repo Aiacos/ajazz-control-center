@@ -83,8 +83,24 @@ Plans:
 1. A Toggle Action binding: repeated synthetic `input.key` presses cycle `currentState`; each cycle triggers a `setState`-driven key image update confirmed by `scripts/ajazz-debug screenshot` showing the key face changes between presses
 1. `scripts/ajazz-debug input.encoder` and `input.touch` route to their registered plugin contexts without a reconnect — binding works across key / encoder-dial / touch-zone on all sidecar-backed SKUs (AKP03/AKP05-N4/AKP153); no SKU-specific dispatch code
 1. The device editor for a SKU grid exceeding 8 columns or 4 rows renders a scrollable view; `scripts/ajazz-debug qml.get` on the scroll container's `objectName` returns scroll-position properties
-   **Plans**: TBD
+   **Plans**: 5 plans
    **UI hint**: yes
+
+Plans:
+
+**Wave 1** *(parallel-eligible; serialized this run under use_worktrees=false)*
+
+- [ ] 32-01-PLAN.md — ActionInstance.delayMs additive field + serializer + instanceChildrenToChain core adapter (BIND-04/05 foundation)
+- [ ] 32-04-PLAN.md — BIND-03/06 verify + regression tests (envelope.action, stored-owner, per-controller-type routing) + live willAppear/no-reconnect check
+- [ ] 32-05-PLAN.md — EDIT-01 ScrollView#deviceCanvasScroll wrap of DeviceCanvas + over/under-threshold QML smoke + live qml.get
+
+**Wave 2** *(blocked on 32-01)*
+
+- [ ] 32-02-PLAN.md — Multi Action dispatch at the input-service seam (children->chain->engine.run) + com.hotspot.streamdock.multiaction registration (BIND-04/05)
+
+**Wave 3** *(blocked on 32-01, 32-02)*
+
+- [ ] 32-03-PLAN.md — Toggle Action: ProfileController cycle mutator (persisted) + dispatch seam + per-state render + state-change willAppear (BIND-05/07)
 
 ### Phase 33: Property Inspector End-to-End
 
