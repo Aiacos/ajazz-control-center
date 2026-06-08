@@ -13,6 +13,8 @@
     "gsd-integration-checker": "opus",
     "gsd-nyquist-auditor": "opus",
     "gsd-pattern-mapper": "opus",
-    "gsd-code-reviewer": "opus"
+    "gsd-code-reviewer": "opus",
+    "gsd-ui-checker": "opus",
+    "gsd-ui-auditor": "opus"
   }
 }
