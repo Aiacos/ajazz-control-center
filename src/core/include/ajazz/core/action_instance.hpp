@@ -96,6 +96,13 @@ struct ActionInstance {
     /// Recursive: std::vector of an incomplete self-type is legal (C++17+),
     /// so no unique_ptr indirection is needed.
     std::vector<ActionInstance> children{};
+
+    /// Post-step delay in milliseconds. Wire key "delayMs". Additive, optional
+    /// field mirroring @ref Action::delayMs: the Multi Action children ->
+    /// ActionChain adapter copies each child's delayMs onto its generated Action
+    /// step so @ref ActionEngine defers it between siblings. The reader tolerates
+    /// absence (defaults to 0); the writer omits it when zero for wire economy.
+    std::uint32_t delayMs{0};
 };
 
 } // namespace ajazz::core

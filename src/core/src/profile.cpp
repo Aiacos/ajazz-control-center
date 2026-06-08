@@ -304,6 +304,13 @@ void writeActionInstance(std::ostringstream& out, ActionInstance const& inst) {
     out << "]";
     sep();
     out << "\"currentState\":" << inst.currentState;
+    // delayMs is additive (Phase 32, BIND-04): omit when zero for wire economy.
+    // The reader tolerates absence and defaults to 0, so an omitted key is the
+    // canonical "no delay" form -- keeping legacy v2 files byte-stable.
+    if (inst.delayMs != 0) {
+        sep();
+        out << "\"delayMs\":" << inst.delayMs;
+    }
     if (!inst.settings.empty()) {
         sep();
         out << "\"settings\":";
@@ -878,6 +885,10 @@ std::vector<Action> readActionArray(JsonReader& r) {
                 }
             } else if (key == "currentState") {
                 inst.currentState = r.readUInt();
+            } else if (key == "delayMs") {
+                // Additive (Phase 32, BIND-04): same uint idiom as currentState.
+                // Absent -> stays at the struct default 0 (reader-tolerant).
+                inst.delayMs = r.readUInt();
             } else if (key == "settings") {
                 inst.settings = r.readString();
             } else if (key == "children") {
