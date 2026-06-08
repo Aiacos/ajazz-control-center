@@ -371,6 +371,27 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"appId", appId}, {"title", title}};
     });
 
+    // ---- Foreground-capability override (Phase 34-05 APROF-03) ----------
+    // Forces the foreground-window CAPABILITY state on ProfileController so the
+    // Wayland/GNOME capability-warning chip (SettingsPage.qml,
+    // waylandCapabilityWarningChip, visible-on-ABSENT) can be live-verified on
+    // either path WITHOUT a degraded desktop. On a wlr Wayland host the watcher
+    // reports capability=true so the chip is hidden by default; setting
+    // {"available": false} exercises the graceful-degradation path (chip visible
+    // + non-empty warningText). VERIF-01: the chip MUST be drivable from the
+    // debug channel — the singleton is not findByName-addressable, so this RPC
+    // reaches it through the same app.profileController() seam profile.* uses.
+    server.registerMethod("window.setCapability", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        bool const available = params.value(QStringLiteral("available")).toBool(true);
+        pc->setForegroundCapabilityAvailable(available);
+        return QJsonObject{{"available", available}};
+    });
+
     // ---- Profile control (ProfileController) ---------------------------
     server.registerMethod("profile.list", [&app](QJsonObject const&, QString& err) {
         auto* pc = app.profileController();
