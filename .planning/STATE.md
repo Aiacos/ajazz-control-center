@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
-status: executing
+status: verifying
 stopped_at: Completed 35-01-PLAN.md (WINPLG-01/02 classifier + native-run gate + ADR; 798/798 green).
-last_updated: '2026-06-08T19:42:40.649Z'
+last_updated: '2026-06-08T20:00:53.605Z'
 last_activity: 2026-06-08
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 21
-  completed_plans: 20
-  percent: 83
+  completed_plans: 21
+  percent: 100
 ---
 
 # Project State
@@ -34,7 +34,7 @@ Phase: 34 (per-app-profiles-event-parity-audit) — COMPLETE + VERIFIED (human_n
 
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
 Plan: 3 of 3
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Next: Plan 35-02 (status chip on LoadedPluginsModel/LoadedPluginsPage consuming PluginInfo.winClass, objectName-addressed per VERIF-01) + 35-03 (PLGSEC verify-locks + VERIF audit doc).
 Last activity: 2026-06-08
 Tests: 798/798 ctest green (linux-release, incl 17 qml).
@@ -139,6 +139,7 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 | 34-05           | APROF-03 UI: assign-profile surface writes Profile::applicationHints (schema-correct wire key) via by-id ProfileController Q_INVOKABLEs addAppProfileMapping/removeAppProfileMapping (V5 256-char bound + case-insensitive dup guard; active = in-memory+saveActiveProfile, non-active = read/mutate/write-back via library index). Wayland/GNOME capability-warning chip is AMBER (Theme.chip\*Warning), visible-on-ABSENT, driven by a ProfileController foregroundCapabilityAvailable NOTIFY property Application injects from IActiveWindowWatcher::capabilityAvailable(). Added window.setCapability debug RPC (singleton not findByName-addressable) to live-verify the chip. HEADLESS-verified: chip both ways + non-empty warningText, add/remove wrote+persisted hints, screenshot read. INTERACTIVE auto-switch gate is HUMAN-UAT — window.setForeground synthetic injection only works on the recording stub, NOT this full build's real watcher backend |
 | Phase 35 P35-01 | 35min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 | Phase 35 P02    | 18min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| Phase 35 P35-03 | 50min                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -166,6 +167,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08T19:42:16.366Z
+Last session: 2026-06-08T20:00:43.656Z
 Stopped at: Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)
 Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)

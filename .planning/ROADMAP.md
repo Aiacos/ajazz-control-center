@@ -25,7 +25,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 - [ ] **Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor** - Fix `profileChanged`→`populateContextsForActivePage` wire; implement Multi Action and Toggle Action dispatch; extend setState rendering; device-view overflow scroll for large SKUs
 - [ ] **Phase 33: Property Inspector End-to-End** - Complete PI HTML rendering (cefQuery polyfill, sdpi.css, $SD WebChannel bridge, per-plugin profile isolation); settings round-trip; PI lifecycle events
 - [x] **Phase 34: Per-App Profiles + Event-Parity Audit** - Implement `ApplicationWatcher` (X11/Wayland/Win32/macOS); profile auto-switch on foreground-app change; full event-parity coverage table; fix all non-hardware-gated event gaps (completed 2026-06-08)
-- [ ] **Phase 35: Windows Plugin Support + Security Hardening + Milestone Verification** - Wine detection and native-first plugin classification; tampered-vs-unsigned verifier split; persisted unsigned consent; CI security gates; full modularity audit closing VERIF-01/02
+- [x] **Phase 35: Windows Plugin Support + Security Hardening + Milestone Verification** - Wine detection and native-first plugin classification; tampered-vs-unsigned verifier split; persisted unsigned consent; CI security gates; full modularity audit closing VERIF-01/02 (completed 2026-06-08)
 
 ## Phase Details
 
@@ -189,7 +189,7 @@ Plans:
 
 **Wave 2** *(blocked on 35-01 — consumes PluginInfo.winClass)*
 
-- [ ] 35-03-PLAN.md — WINPLG-03 (chip-only) status chip + VERIF-01 objectNames on LoadedPluginsPage + platformStatus model role + consolidated live debug-channel phase gate
+- [x] 35-03-PLAN.md — WINPLG-03 (chip-only) status chip + VERIF-01 objectNames on LoadedPluginsPage + platformStatus model role + consolidated live debug-channel phase gate
 
 ## Progress
 
@@ -200,4 +200,4 @@ Plans:
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 5/5            | Complete    | 2026-06-08 |
-| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 2/3            | In Progress |            |
+| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 3/3            | Complete    | 2026-06-08 |

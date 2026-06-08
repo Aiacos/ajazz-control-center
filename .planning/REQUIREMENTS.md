@@ -54,7 +54,7 @@ ______________________________________________________________________
 
 - [x] **WINPLG-01**: A feasibility spike classifies win-only `.sdPlugin` plugins into **WS-only-IPC** (runnable natively cross-platform) vs **vendor-DLL** (needs Wine); the decision and detection heuristic are documented (ADR-style).
 - [x] **WINPLG-02**: WS-only win-only plugins run **natively** on Linux/macOS via the existing host (manifest OS-filter + a `supportsCurrentPlatform()` helper) — **no Wine**.
-- [ ] **WINPLG-03**: Vendor-DLL win-only plugins run via **detected system Wine** (`QStandardPaths::findExecutable("wine")`) with per-plugin `WINEPREFIX` isolation; a "requires Wine" / "unsupported on this OS" status chip shows when Wine is absent; Wine is never bundled.
+- [x] **WINPLG-03**: Vendor-DLL win-only plugins run via **detected system Wine** (`QStandardPaths::findExecutable("wine")`) with per-plugin `WINEPREFIX` isolation; a "requires Wine" / "unsupported on this OS" status chip shows when Wine is absent; Wine is never bundled.
 
 ### Plugin Security Hardening (PLGSEC)
 
@@ -68,7 +68,7 @@ ______________________________________________________________________
 
 ### Verification & Modularity gate (VERIF)
 
-- [ ] **VERIF-01**: Every new interactive control added in v2.0 is debug-addressable (has an `objectName`) and every phase closes with a live debug-control-channel drive + `screenshot` confirming real behaviour — not just `ctest` green (the v1.3 "checked but not working" lesson).
+- [x] **VERIF-01**: Every new interactive control added in v2.0 is debug-addressable (has an `objectName`) and every phase closes with a live debug-control-channel drive + `screenshot` confirming real behaviour — not just `ctest` green (the v1.3 "checked but not working" lesson).
 - [x] **VERIF-02**: The `mirajazz` crate is never modified; sidecar changes (if any) live only in `streamdock-host/`; the removed C++ AKP wire backends are not reintroduced. Verified by review at milestone close.
 
 ______________________________________________________________________
@@ -125,12 +125,12 @@ ______________________________________________________________________
 | APROF-04    | Phase 34 | Complete |
 | WINPLG-01   | Phase 35 | Complete |
 | WINPLG-02   | Phase 35 | Complete |
-| WINPLG-03   | Phase 35 | Pending  |
+| WINPLG-03   | Phase 35 | Complete |
 | PLGSEC-01   | Phase 35 | Complete |
 | PLGSEC-02   | Phase 35 | Complete |
 | PLGSEC-03   | Phase 35 | Complete |
 | EDIT-01     | Phase 32 | Complete |
-| VERIF-01    | Phase 35 | Pending  |
+| VERIF-01    | Phase 35 | Complete |
 | VERIF-02    | Phase 35 | Complete |
 
 ______________________________________________________________________
