@@ -12,6 +12,7 @@
 #pragma once
 
 #include "ajazz/core/action_engine.hpp"
+#include "ajazz/core/active_window_watcher.hpp"
 #include "ajazz/core/device_registry.hpp"
 #include "app_update_service.hpp"
 #include "autostart_service.hpp"
@@ -145,6 +146,14 @@ public:
     [[nodiscard]] BuiltinActionsService* builtinActions() const noexcept {
         return m_builtinActions.get();
     }
+    /// Foreground-window watcher (Phase 34 APROF-01). Non-owning; valid for the
+    /// Application lifetime. The debug channel's window.setForeground RPC reaches
+    /// it (dynamic_cast to StubActiveWindowWatcher for the injectForeground seam).
+    /// Currently the recording stub (real backends + auto-switch wire land in
+    /// Plans 03/04); may be the platform backend once those land.
+    [[nodiscard]] core::IActiveWindowWatcher* activeWindowWatcher() const noexcept {
+        return m_activeWindowWatcher.get();
+    }
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
     /// Live .sdPlugin discover/spawn manager (debug channel: plugin.rediscover).
@@ -276,6 +285,11 @@ private:
                           ///< dispatch; non-builtin UUIDs forward to the Phase-19 path).
                           ///< Declared after m_streamDockInput to keep the init list in
                           ///< member-declaration order (-Wreorder).
+    std::unique_ptr<core::IActiveWindowWatcher>
+        m_activeWindowWatcher; ///< Phase 34 (APROF-01): foreground-window watcher.
+                               ///< makeDefaultActiveWindowWatcher() — currently the recording
+                               ///< stub (real backends + auto-switch wire land in Plans 03/04).
+                               ///< The window.setForeground debug RPC injects through it.
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     std::unique_ptr<SdPluginServer>
         m_pluginServer; ///< Phase 17: Elgato-compatible WebSocket plugin server (loopback-only).

@@ -200,6 +200,18 @@ add_executable(
     # ctest --preset linux-release -R multiaction. The adapter TU is compiled
     # into ajazz_core (linked below), so no extra source entry is needed.
     test_multiaction_dispatch.cpp
+    # Phase 34 Plan 01 (APROF-01/02/04 Wave 0): IActiveWindowWatcher factory +
+    # recording-stub + injectForeground seam tests. active_window_watcher_test.cpp
+    # is GREEN against the stub (makeDefaultActiveWindowWatcher() is provided by
+    # ajazz::core, already linked — mirror of test_input_synth.cpp: include header
+    # + link core, no extra stub re-link). app_profile_switch_test.cpp (APROF-02)
+    # and app_lifecycle_events_test.cpp (APROF-04) are RED scaffolds tagged
+    # [!shouldfail] — they compile + register + run, visibly pending until Plan 04
+    # wires the matcher + lifecycle fan-out. Run: ctest -R active_window (green) and
+    # ctest -R 'app_profile_switch|app_lifecycle_events' (registered + expected-fail).
+    test_active_window_watcher.cpp
+    test_app_profile_switch.cpp
+    test_app_lifecycle_events.cpp
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)

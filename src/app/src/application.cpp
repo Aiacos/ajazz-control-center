@@ -412,6 +412,13 @@ Application::Application(QObject* parent)
           // has shipped; the no-op is correct behaviour, not a future TODO.
           [](std::string_view /*id*/, std::string_view /*settingsJson*/) {},
           this)),
+      // Phase 34 (APROF-01): foreground-window watcher. makeDefaultActiveWindowWatcher()
+      // returns the recording stub by default (the real per-OS backends + auto-switch
+      // wire land in Plans 03/04). Declared after m_builtinActions to keep the init list
+      // in member-declaration order (-Wreorder). The window.setForeground debug RPC
+      // injects synthetic foreground changes through it (the StubActiveWindowWatcher
+      // injectForeground seam).
+      m_activeWindowWatcher(core::makeDefaultActiveWindowWatcher()),
 #ifdef AJAZZ_HAVE_WEBSOCKETS
       // Phase 17 / Phase 19-02: SdPluginServer — Elgato-compatible WebSocket plugin
       // server (loopback-only). Constructed after m_streamDockInput to keep the init

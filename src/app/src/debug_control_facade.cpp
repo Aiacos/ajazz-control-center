@@ -5,6 +5,7 @@
  */
 #include "debug_control_facade.hpp"
 
+#include "ajazz/core/active_window_watcher.hpp"
 #include "ajazz/core/device_registry.hpp"
 #include "ajazz/core/log_sinks.hpp"
 #include "ajazz/core/logger.hpp"
@@ -343,6 +344,31 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         dbg->simulateTouch(params.value("x").toInt(), params.value("phase").toInt());
         return QJsonObject{{"x", params.value("x").toInt()},
                            {"phase", params.value("phase").toInt()}};
+    });
+
+    // ---- Foreground-window injection (Phase 34 APROF-01) ----------------
+    // Injects a synthetic foreground-app change through the IActiveWindowWatcher
+    // seam (StubActiveWindowWatcher::injectForeground), mirroring the input.*
+    // synthetic RPCs above. Backs the APROF live verification (focus app A then
+    // B without real focus changes) and the < 500 ms switch-latency check.
+    server.registerMethod("window.setForeground", [&app](QJsonObject const& params, QString& err) {
+        auto* watcher = app.activeWindowWatcher();
+        if (watcher == nullptr) {
+            err = QStringLiteral("active window watcher unavailable");
+            return QJsonObject{};
+        }
+        // The injectForeground seam lives on the concrete stub. In Wave 0 the
+        // default watcher IS the stub; once the live backend lands (Plan 03) the
+        // same seam is exposed for the synthetic-injection path.
+        auto* stub = dynamic_cast<core::StubActiveWindowWatcher*>(watcher);
+        if (stub == nullptr) {
+            err = QStringLiteral("active window watcher does not support synthetic injection");
+            return QJsonObject{};
+        }
+        QString const appId = params.value(QStringLiteral("appId")).toString();
+        QString const title = params.value(QStringLiteral("title")).toString();
+        stub->injectForeground(core::ActiveWindowInfo{appId.toStdString(), title.toStdString()});
+        return QJsonObject{{"appId", appId}, {"title", title}};
     });
 
     // ---- Profile control (ProfileController) ---------------------------
