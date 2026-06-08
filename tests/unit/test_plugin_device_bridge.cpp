@@ -50,7 +50,10 @@
 #include <QStandardPaths>
 #include <QString>
 
+#include <cstdint>
+
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 using ajazz::app::ActionContext;
 using ajazz::app::ContextRegistry;
@@ -1804,6 +1807,261 @@ TEST_CASE("PluginDeviceBridgeE2E GAP-28B injectSyntheticEvent delivers keyDown v
 
     auto const names = receivedEventNames(msgSpy);
     CHECK(names.contains(QStringLiteral("keyDown")));
+}
+
+// ==========================================================================
+// Phase 32-04 regression tests (BIND-03 + BIND-06)
+//
+// These cases PIN the already-shipped binding-layer behavior so a future
+// ad-hoc commit on this heavily-churned branch cannot silently regress it.
+// They assert against the production code AS-IS; they do NOT drive any new
+// production behavior.
+//
+//   BIND-03 (RESEARCH Finding 1): the willAppear/keyDown envelope carries the
+//   top-level "action" field (plugin_device_bridge.cpp:337, commit ddabc16);
+//   owner-match uses the stored-owner resolver first, NOT a dotted prefix of
+//   the plugin UUID (resolveOwner, :851-863, commit 519ecd0).
+//
+//   BIND-06 (RESEARCH Finding 4): onDeviceEvent dispatch switches on control
+//   TYPE (Keypad / Encoder / touch-zone-as-Encoder) with zero SKU/codename
+//   branching (:865-1004). The parametrized case below exercises all three
+//   controller types through the SAME onDeviceEvent path.
+// ==========================================================================
+
+// ---------------------------------------------------------------------------
+// BIND-03: outbound envelope carries top-level "action" for every controller
+// type (key, encoder, touch-zone). Locks the eventEnvelope :337 action field.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridge BIND-03 outbound envelope carries top-level action field "
+          "for key encoder and touch contexts",
+          "[plugin-device-bridge][e2e][outbound][BIND-03][regression]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Pre-register one context per controller type, all owned by com.test.plug.
+    auto regCtx =
+        [&bridge](QString const& controller, int row, int col, QString const& actionUuid) {
+            ajazz::app::ActionContext ctx;
+            ctx.deviceId = QStringLiteral("akp05e");
+            ctx.pageId = QStringLiteral("root");
+            ctx.row = row;
+            ctx.column = col;
+            ctx.controller = controller;
+            ctx.actionUUID = actionUuid;
+            ctx.pluginUuid = QStringLiteral("com.test.plug");
+            [[maybe_unused]] auto const cid = bridge->registry().registerContext(ctx);
+        };
+    // Key 3 (1-based) -> {row:0, col:2}.
+    regCtx(QStringLiteral("Keypad"), 0, 2, QStringLiteral("com.test.plug.key.action"));
+    // Encoder 0.
+    regCtx(QStringLiteral("Encoder"), 0, 0, QStringLiteral("com.test.plug.enc.action"));
+    // Touch zone 1 is registered as an Encoder context at (row:0, col:1) -- the
+    // locked touch-zone convention, NOT SKU code.
+    regCtx(QStringLiteral("Encoder"), 0, 1, QStringLiteral("com.test.plug.tz.action"));
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // (a) keyDown carries action == the key context's actionUUID.
+    {
+        ajazz::core::DeviceEvent ev;
+        ev.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+        ev.index = 3; // 1-based key 3 -> {row:0, col:2}
+        ev.value = 0;
+        bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+        pump19(400);
+        auto const event = firstEventForEvent(msgSpy, QStringLiteral("keyDown"));
+        REQUIRE_FALSE(event.isEmpty());
+        CHECK(event.value(QStringLiteral("action")).toString() ==
+              QStringLiteral("com.test.plug.key.action"));
+        CHECK_FALSE(event.value(QStringLiteral("action")).toString().isEmpty());
+        msgSpy.clear();
+    }
+
+    // (b) dialRotate carries action == the encoder context's actionUUID.
+    {
+        ajazz::core::DeviceEvent ev;
+        ev.kind = ajazz::core::DeviceEvent::Kind::EncoderTurned;
+        ev.index = 0;
+        ev.value = 1;
+        bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+        pump19(400);
+        auto const event = firstEventForEvent(msgSpy, QStringLiteral("dialRotate"));
+        REQUIRE_FALSE(event.isEmpty());
+        CHECK(event.value(QStringLiteral("action")).toString() ==
+              QStringLiteral("com.test.plug.enc.action"));
+        msgSpy.clear();
+    }
+
+    // (c) touchTap carries action == the touch-zone context's actionUUID.
+    {
+        ajazz::core::DeviceEvent ev;
+        ev.kind = ajazz::core::DeviceEvent::Kind::TouchUp;
+        ev.index = 0;
+        // X chosen so (x*4)/256 == zone 1 (x in [64,127]).
+        ev.value = 80;
+        bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+        pump19(400);
+        auto const event = firstEventForEvent(msgSpy, QStringLiteral("touchTap"));
+        REQUIRE_FALSE(event.isEmpty());
+        CHECK(event.value(QStringLiteral("action")).toString() ==
+              QStringLiteral("com.test.plug.tz.action"));
+    }
+}
+
+// ---------------------------------------------------------------------------
+// BIND-03: owner resolution goes through the stored-owner resolver, NOT a
+// dotted prefix of the plugin UUID. A bound action whose UUID is not a dotted
+// child of the plugin UUID must still resolve to its owner via resolveOwner
+// (guards the Hypothesis-B regression -- silent no-willAppear).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridge BIND-03 stored-owner resolver resolves a non-dotted-prefix "
+          "action to its owner plugin",
+          "[plugin-device-bridge][e2e][lifecycle][BIND-03][owner][regression]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Bind key 1 to an action whose UUID is deliberately NOT a dotted child of
+    // the plugin UUID. The legacy ownerForActionUuid dotted-prefix match would
+    // return empty for this pair and drop willAppear silently.
+    ajazz::core::Profile prof;
+    prof.id = "bind03-owner";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "weather.current"; // not a dotted child of com.test.plug
+    binding.onPress.push_back(act);
+    prof.keys[0] = std::move(binding); // key 1 -> {row:0, col:0}
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Sanity: the legacy dotted-prefix resolver does NOT resolve this pair.
+    {
+        QSet<QString> const registered = {QStringLiteral("com.test.plug")};
+        CHECK(ownerForActionUuid(QStringLiteral("weather.current"), registered).isEmpty());
+    }
+
+    // The injected stored-owner resolver (PluginManager::ownerForAction in
+    // production) DOES resolve it -- this is the production path resolveOwner
+    // consults first.
+    bridge->setActionOwnerResolver([](QString const& actionUuid) -> QString {
+        return actionUuid == QStringLiteral("weather.current") ? QStringLiteral("com.test.plug")
+                                                               : QString{};
+    });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(400);
+
+    // willAppear must have been delivered, carrying the bound action UUID, even
+    // though it is not a dotted prefix of the plugin UUID.
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("willAppear")));
+    auto const event = firstEventForEvent(msgSpy, QStringLiteral("willAppear"));
+    REQUIRE_FALSE(event.isEmpty());
+    CHECK(event.value(QStringLiteral("action")).toString() == QStringLiteral("weather.current"));
+}
+
+// ---------------------------------------------------------------------------
+// BIND-06: ONE generic dispatch path keyed on control TYPE, no SKU branch.
+// Parametrized across the three controller types (Keypad key, Encoder dial,
+// Encoder/row0 touch-zone): each synthetic DeviceEvent resolves THAT context
+// through the SAME onDeviceEvent and emits the right outbound event to the
+// right plugin uuid, with no device codename in the dispatch path.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridge BIND-06 onDeviceEvent routes Keypad Encoder and touch-zone "
+          "generically by control type with no SKU branch",
+          "[plugin-device-bridge][e2e][outbound][BIND-06][regression]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    auto regCtx =
+        [&bridge](QString const& controller, int row, int col, QString const& actionUuid) {
+            ajazz::app::ActionContext ctx;
+            ctx.deviceId = QStringLiteral("akp05e");
+            ctx.pageId = QStringLiteral("root");
+            ctx.row = row;
+            ctx.column = col;
+            ctx.controller = controller;
+            ctx.actionUUID = actionUuid;
+            ctx.pluginUuid = QStringLiteral("com.test.plug");
+            [[maybe_unused]] auto const cid = bridge->registry().registerContext(ctx);
+        };
+    regCtx(QStringLiteral("Keypad"), 0, 2, QStringLiteral("com.test.plug.key.action"));
+    regCtx(QStringLiteral("Encoder"), 0, 0, QStringLiteral("com.test.plug.enc.action"));
+    regCtx(QStringLiteral("Encoder"), 0, 1, QStringLiteral("com.test.plug.tz.action"));
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    // Parametrize over controller type: {event kind, outbound event name,
+    // expected action uuid, the synthetic DeviceEvent fields}.
+    struct Case {
+        char const* label;
+        ajazz::core::DeviceEvent::Kind kind;
+        std::uint16_t index;
+        std::int32_t value;
+        QString outboundEvent;
+        QString expectedAction;
+    };
+    auto const c = GENERATE_REF(Case{"Keypad key",
+                                     ajazz::core::DeviceEvent::Kind::KeyPressed,
+                                     std::uint16_t{3},
+                                     std::int32_t{0},
+                                     QStringLiteral("keyDown"),
+                                     QStringLiteral("com.test.plug.key.action")},
+                                Case{"Encoder dial",
+                                     ajazz::core::DeviceEvent::Kind::EncoderTurned,
+                                     std::uint16_t{0},
+                                     std::int32_t{1},
+                                     QStringLiteral("dialRotate"),
+                                     QStringLiteral("com.test.plug.enc.action")},
+                                Case{"touch-zone",
+                                     ajazz::core::DeviceEvent::Kind::TouchUp,
+                                     std::uint16_t{0},
+                                     std::int32_t{80},
+                                     QStringLiteral("touchTap"),
+                                     QStringLiteral("com.test.plug.tz.action")});
+
+    INFO("controller type: " << c.label);
+    msgSpy.clear();
+
+    ajazz::core::DeviceEvent ev;
+    ev.kind = c.kind;
+    ev.index = c.index;
+    ev.value = c.value;
+    // The deviceId is passed but the dispatch keys on ev.kind + controller string,
+    // never on the codename string -- proven by the same path resolving all three.
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), ev);
+    pump19(400);
+
+    auto const event = firstEventForEvent(msgSpy, c.outboundEvent);
+    REQUIRE_FALSE(event.isEmpty());
+    CHECK(event.value(QStringLiteral("device")).toString() == QStringLiteral("akp05e"));
+    CHECK(event.value(QStringLiteral("action")).toString() == c.expectedAction);
 }
 
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)
