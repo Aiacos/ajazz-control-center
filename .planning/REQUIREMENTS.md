@@ -38,10 +38,10 @@ ______________________________________________________________________
 
 ### Event Parity (EVENT)
 
-- [ ] **EVENT-01**: An event-parity **coverage table** (our `SdPluginServer`/`PluginDeviceBridge` vs OpenDeck `events/inbound`+`outbound` and the Elgato SDK) is produced and kept current as a verification deliverable, marking each event supported / partial / missing / hardware-gated.
-- [ ] **EVENT-02**: The `willAppear` payload carries all required fields (`action`, normalized `controller`, `coordinates`, `state`, `isInMultiAction`), asserted by a unit test, so plugin handlers never silently mismatch.
+- [x] **EVENT-01**: An event-parity **coverage table** (our `SdPluginServer`/`PluginDeviceBridge` vs OpenDeck `events/inbound`+`outbound` and the Elgato SDK) is produced and kept current as a verification deliverable, marking each event supported / partial / missing / hardware-gated.
+- [x] **EVENT-02**: The `willAppear` payload carries all required fields (`action`, normalized `controller`, `coordinates`, `state`, `isInMultiAction`), asserted by a unit test, so plugin handlers never silently mismatch.
 - [ ] **EVENT-03**: `systemDidWakeUp` and the `switchToProfile` host-command dispatch are implemented and unit-tested.
-- [ ] **EVENT-04**: Controller-token normalization (`Knob` ↔ `Encoder`, etc.) is audited so no encoder/touch event is silently dropped.
+- [x] **EVENT-04**: Controller-token normalization (`Knob` ↔ `Encoder`, etc.) is audited so no encoder/touch event is silently dropped.
 
 ### Per-App Profiles (APROF)
 
@@ -115,10 +115,10 @@ ______________________________________________________________________
 | PI-02       | Phase 33 | Complete |
 | PI-03       | Phase 33 | Partial  |
 | PI-04       | Phase 33 | Complete |
-| EVENT-01    | Phase 34 | Pending  |
-| EVENT-02    | Phase 34 | Pending  |
+| EVENT-01    | Phase 34 | Complete |
+| EVENT-02    | Phase 34 | Complete |
 | EVENT-03    | Phase 34 | Pending  |
-| EVENT-04    | Phase 34 | Pending  |
+| EVENT-04    | Phase 34 | Complete |
 | APROF-01    | Phase 34 | Complete |
 | APROF-02    | Phase 34 | Pending  |
 | APROF-03    | Phase 34 | Pending  |
