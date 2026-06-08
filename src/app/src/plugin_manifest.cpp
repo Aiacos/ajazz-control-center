@@ -20,6 +20,11 @@
  */
 #include "plugin_manifest.hpp"
 
+#include <QByteArray>
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -373,6 +378,121 @@ QString currentPlatformString() {
 #else
     return QStringLiteral("linux");
 #endif
+}
+
+// ---------------------------------------------------------------------------
+// classifyWindowsPlugin (WINPLG-01)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// True when @p manifest's OS array contains an explicit "windows" entry.
+[[nodiscard]] bool isWindowsOnly(PluginManifest const& manifest) {
+    for (auto const& osReq : manifest.os) {
+        if (osReq.platform == QStringLiteral("windows")) {
+            return true;
+        }
+    }
+    return false;
+}
+
+/// The effective Windows code path: CodePathWin override if present, else CodePath.
+[[nodiscard]] QString effectiveWinCodePath(PluginManifest const& manifest) {
+    return manifest.codePathWin.isEmpty() ? manifest.codePath : manifest.codePathWin;
+}
+
+/// True when @p path ends (case-insensitive) in a native-binary suffix (.exe/.dll).
+[[nodiscard]] bool hasNativeBinarySuffix(QString const& path) {
+    return path.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive) ||
+           path.endsWith(QStringLiteral(".dll"), Qt::CaseInsensitive);
+}
+
+/// Bounded corroborator scan: returns true if any regular file directly under
+/// @p bundleDir begins with the DOS/PE magic bytes "MZ" (0x4D 0x5A).
+///
+/// Security (T-35-01-01/02): reads ONLY the first 2 bytes of each file, never parses
+/// a full PE header, never executes anything, and caps the number of files examined.
+/// The bundle is already extracted + zip-slip-guarded upstream, so there is no archive
+/// recursion to bound — only a per-directory file-count cap against a DoS bundle.
+[[nodiscard]] bool bundleHasPeMagic(QString const& bundleDir) {
+    if (bundleDir.isEmpty()) {
+        return false;
+    }
+    QDir const dir(bundleDir);
+    if (!dir.exists()) {
+        return false;
+    }
+
+    constexpr int kMaxFilesScanned = 4096; // file-count cap (T-35-01-02 DoS bound)
+    int scanned = 0;
+
+    QDirIterator it(bundleDir, QDir::Files | QDir::NoSymLinks, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        QString const filePath = it.next();
+        if (++scanned > kMaxFilesScanned) {
+            break;
+        }
+
+        QFile f(filePath);
+        if (!f.open(QIODevice::ReadOnly)) {
+            continue;
+        }
+        // Read ONLY the 2 magic bytes — never the full file (bounded read discipline).
+        QByteArray const head = f.read(2);
+        f.close();
+        if (head.size() == 2 && static_cast<unsigned char>(head[0]) == 0x4D &&
+            static_cast<unsigned char>(head[1]) == 0x5A) {
+            return true; // "MZ"
+        }
+    }
+    return false;
+}
+
+} // anonymous namespace
+
+WinPluginClass classifyWindowsPlugin(PluginManifest const& m, QString const& bundleDir) {
+    // (1) Not a Windows-only plugin -> not our concern.
+    if (!isWindowsOnly(m)) {
+        return WinPluginClass::NotWindowsOnly;
+    }
+
+    // (2) Primary signal: effective code-path suffix.
+    if (hasNativeBinarySuffix(effectiveWinCodePath(m))) {
+        return WinPluginClass::VendorDll;
+    }
+
+    // (3) Corroborator: a PE/DOS-magic file in the bundle reclassifies a mislabeled
+    //     manifest (declares .js but ships a .dll) to VendorDll (T-35-01-04).
+    if (bundleHasPeMagic(bundleDir)) {
+        return WinPluginClass::VendorDll;
+    }
+
+    // (4) Win-only, no native binary -> WS-only-IPC (runs natively, no Wine).
+    return WinPluginClass::WsOnlyIpc;
+}
+
+// ---------------------------------------------------------------------------
+// supportsCurrentPlatform (WINPLG-02)
+// ---------------------------------------------------------------------------
+
+bool supportsCurrentPlatform(PluginManifest const& m, QString const& platform, WinPluginClass cls) {
+    (void)m; // reserved for future Wine-prefix wiring (WINPLG-03)
+    switch (cls) {
+    case WinPluginClass::WsOnlyIpc:
+        // A WS/IPC win-only plugin runs natively on every platform — no Wine.
+        return true;
+    case WinPluginClass::VendorDll: {
+        // WINPLG-03 DEFERRAL: Wine launch is not built this phase, so wineDetected is
+        // treated as false. A vendor-DLL plugin is accepted ONLY when running on Windows;
+        // off Windows it surfaces as a "Requires Wine" chip and is NOT accepted to run.
+        constexpr bool wineDetected = false; // <-- WINPLG-03 deferral point
+        return (platform == QStringLiteral("windows")) || wineDetected;
+    }
+    case WinPluginClass::NotWindowsOnly:
+        // Not a win-only plugin; the caller uses manifestRunnableHere() instead.
+        return false;
+    }
+    return false; // unreachable; keeps non-exhaustive-switch warnings quiet
 }
 
 } // namespace ajazz::app

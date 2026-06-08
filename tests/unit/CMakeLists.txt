@@ -517,6 +517,11 @@ set_source_files_properties(
                                         "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
 )
 
+# Phase 35 Plan 35-01 (WINPLG-01/02): classifyWindowsPlugin + supportsCurrentPlatform. Reuses
+# plugin_manifest.cpp (linked once above in the test_plugin_manifest block — do NOT re-add the
+# source or ODR-duplicate symbols). Pure Qt-Core-only (QFile/QDir/QTemporaryDir).
+target_sources(ajazz_unit_tests PRIVATE test_win_plugin_classification.cpp)
+
 # Phase 18 Plan 18-02 (PLUGIN-08): NodeRunner argv builder + injectable node detection. Links
 # node_runner.cpp directly (pure Qt-Core-only; no process launched at unit time). All cases inject a
 # fake NodeProbe — no live node is required or started.

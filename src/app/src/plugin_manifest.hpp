@@ -196,4 +196,70 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
  */
 [[nodiscard]] QString currentPlatformString();
 
+/**
+ * @brief Coarse Windows-plugin classification verdict (WINPLG-01).
+ *
+ * Produced by @ref classifyWindowsPlugin from a parsed manifest + its on-disk
+ * bundle. Drives the native-run gate (@ref supportsCurrentPlatform) and the UI
+ * status chip. The verdict is cached at scan time onto the runtime-populated
+ * carrier (PluginManifest is classified once in discover(); see the runtime
+ * @c PluginManifest::winClass note) — it MUST NOT be recomputed lazily at
+ * launch (locked CONTEXT decision: classify at install/scan, cache).
+ *
+ * Mapping to the plugins-tier int cache (PluginInfo::winClass), kept explicit so
+ * the UI model can mirror it without a cross-tier enum dependency:
+ *   NotWindowsOnly = 0, WsOnlyIpc = 1, VendorDll = 2.
+ */
+enum class WinPluginClass : int {
+    NotWindowsOnly = 0, ///< OS array absent or has no "windows" entry — not a win-only plugin.
+    WsOnlyIpc =
+        1, ///< Win-only WebSocket/IPC plugin (.js/.html/.cjs, no PE binary) — runs natively.
+    VendorDll =
+        2, ///< Win-only vendor-DLL/.exe plugin (PE binary present) — needs Windows (Wine deferred).
+};
+
+/**
+ * @brief Classify a Windows plugin as WS-only-IPC vs vendor-DLL (WINPLG-01).
+ *
+ * Pure, never throws. Heuristic (locked CONTEXT decision):
+ *
+ *   1. If the OS array is empty OR contains no "windows" entry -> NotWindowsOnly.
+ *   2. Primary signal: the effective code path (codePathWin if non-empty, else
+ *      codePath) ending (case-insensitive) in ".exe"/".dll" -> VendorDll.
+ *   3. Corroborator: scan @p bundleDir for a file beginning with the PE/DOS magic
+ *      bytes "MZ" (0x4D 0x5A). Any such file -> VendorDll (overrides a mislabeled
+ *      manifest that declares e.g. ".js" but ships a .dll). The scan reads ONLY the
+ *      first 2 bytes of each file and is bounded by a file-count cap — magic bytes
+ *      only, NO full PE parse and NEVER any execution (T-35-01-01/02).
+ *   4. Otherwise (win-only, suffix .js/.html/.cjs, no PE) -> WsOnlyIpc.
+ *
+ * @param m         Parsed manifest to classify.
+ * @param bundleDir Absolute path of the extracted .sdPlugin bundle dir. May be empty
+ *                  or non-existent — the suffix signal alone still classifies; no crash.
+ * @return          The WinPluginClass verdict.
+ */
+[[nodiscard]] WinPluginClass classifyWindowsPlugin(PluginManifest const& m,
+                                                   QString const& bundleDir);
+
+/**
+ * @brief Decide whether a classified plugin may run natively on @p platform (WINPLG-02).
+ *
+ * Pure, never throws. Complements @ref manifestRunnableHere: the caller accepts a
+ * plugin when manifestRunnableHere() OR supportsCurrentPlatform() is true.
+ *
+ *   - WsOnlyIpc    -> true on every platform (a WS/IPC win-only plugin runs natively
+ *                     on Linux/macOS without Wine — the locked native-run decision).
+ *   - VendorDll    -> true only when @p platform == "windows". Wine detection is
+ *                     DEFERRED (WINPLG-03 launch) — treated as false this phase, so a
+ *                     vendor-DLL plugin surfaces as a chip and is NOT accepted off Windows.
+ *   - NotWindowsOnly -> false (the caller falls back to manifestRunnableHere).
+ *
+ * @param m        Parsed manifest (unused today; kept for symmetry + future Wine wiring).
+ * @param platform Current platform string: "linux" | "mac" | "windows".
+ * @param cls      The classification verdict from classifyWindowsPlugin().
+ * @return         @c true if the plugin may run natively on @p platform.
+ */
+[[nodiscard]] bool
+supportsCurrentPlatform(PluginManifest const& m, QString const& platform, WinPluginClass cls);
+
 } // namespace ajazz::app
