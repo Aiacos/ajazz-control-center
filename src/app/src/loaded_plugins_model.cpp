@@ -85,6 +85,8 @@ QVariant LoadedPluginsModel::data(QModelIndex const& index, int role) const {
         return QString::fromStdString(info.publisher);
     case TrustLevelRole:
         return trustLevelOf(info);
+    case PlatformStatusRole:
+        return platformStatusOf(info);
     default:
         return {};
     }
@@ -100,6 +102,7 @@ QHash<int, QByteArray> LoadedPluginsModel::roleNames() const {
         {SignedRole, "isSigned"},
         {PublisherRole, "publisher"},
         {TrustLevelRole, "trustLevel"},
+        {PlatformStatusRole, "platformStatus"},
     };
 }
 
@@ -143,6 +146,28 @@ QString LoadedPluginsModel::trustLevelOf(plugins::PluginInfo const& info) {
         return QStringLiteral("self-signed");
     }
     return QStringLiteral("trusted");
+}
+
+QString LoadedPluginsModel::platformStatusOf(plugins::PluginInfo const& info) {
+    // WINPLG-03 (chip-only this phase). Mirror PluginInfo.winClass (the plain-int
+    // verdict stamped at scan time by WINPLG-01/02; mapping documented on the
+    // field): 0=NotWindowsOnly, 1=WsOnlyIpc, 2=VendorDll.
+    //
+    // DEFERRED: a real Wine launcher (WINPLG-03 launch) is out of scope this
+    // phase. `wineAvailable` is therefore hard-false here. The wine-vs-unsupported
+    // branch is kept EXPLICIT so a future hardware-gated phase flips this one
+    // input rather than reshaping the derive (and the unit test pins the shape).
+    constexpr bool kWineAvailable = false; // WINPLG-03 launch deferred — never bundle Wine.
+
+    switch (info.winClass) {
+    case 1: // WsOnlyIpc — runs natively on every platform (no Wine needed).
+        return QStringLiteral("native");
+    case 2: // VendorDll — needs Windows, or Wine (deferred).
+        return kWineAvailable ? QStringLiteral("wine") : QStringLiteral("unsupported");
+    case 0: // NotWindowsOnly — not a Windows-only plugin; no classification chip.
+    default:
+        return {};
+    }
 }
 
 } // namespace ajazz::app

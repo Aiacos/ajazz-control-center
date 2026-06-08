@@ -89,6 +89,7 @@ public:
         SignedRole,                ///< Bool — manifest signature verified.
         PublisherRole,             ///< Trust roots match name, "self-signed", or empty.
         TrustLevelRole,            ///< Derived enum string (see class doc).
+        PlatformStatusRole, ///< Derived WINPLG classification string (see @ref platformStatusOf).
     };
 
     // No default on `parent`: see BrandingService — a default-constructible
@@ -150,6 +151,21 @@ private:
     /// only sees the resulting string. Static so unit tests can call
     /// it without constructing a model instance.
     [[nodiscard]] static QString trustLevelOf(plugins::PluginInfo const& info);
+
+    /// Mirror @ref ajazz::plugins::PluginInfo::winClass (0/1/2, stamped at
+    /// scan time by WINPLG-01/02) into the chip's classification string:
+    ///   - @c "native"      — WsOnlyIpc (1): runs without Wine on any OS.
+    ///   - @c "wine"        — VendorDll (2) when a Wine launcher is available
+    ///                        (DEFERRED — the @c wineAvailable input is
+    ///                        hard-false this phase; the branch is retained so
+    ///                        a future WINPLG-03 launch phase flips one input,
+    ///                        not the derive shape).
+    ///   - @c "unsupported" — VendorDll (2) with no Wine (the case this phase).
+    ///   - @c ""            — NotWindowsOnly (0): no Windows chip (hidden).
+    /// Static + private (same rationale as @ref trustLevelOf): the rule is
+    /// fixed by the @ref PluginInfo contract and the QML side only sees the
+    /// resulting string.
+    [[nodiscard]] static QString platformStatusOf(plugins::PluginInfo const& info);
 
     std::vector<plugins::PluginInfo> m_plugins;
     /// Non-owning pointer to the plugin host. The host is owned by

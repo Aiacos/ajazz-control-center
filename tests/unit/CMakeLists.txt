@@ -522,6 +522,16 @@ set_source_files_properties(
 # source or ODR-duplicate symbols). Pure Qt-Core-only (QFile/QDir/QTemporaryDir).
 target_sources(ajazz_unit_tests PRIVATE test_win_plugin_classification.cpp)
 
+# Phase 35 Plan 35-03 (WINPLG-03/VERIF-01): LoadedPluginsModel platformStatus derive (from
+# PluginInfo.winClass stamped by Plan 01). Links loaded_plugins_model.cpp directly — it is a
+# Q_OBJECT/QML_SINGLETON QAbstractListModel, so AUTOMOC (set ON above) + Qt6::Qml (already linked)
+# cover the moc + QtQmlIntegration deps. The derive is a private static, so the test exercises it
+# through the public PlatformStatusRole via data().
+target_sources(
+    ajazz_unit_tests PRIVATE test_loaded_plugins_model.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/loaded_plugins_model.cpp
+)
+
 # Phase 18 Plan 18-02 (PLUGIN-08): NodeRunner argv builder + injectable node detection. Links
 # node_runner.cpp directly (pure Qt-Core-only; no process launched at unit time). All cases inject a
 # fake NodeProbe — no live node is required or started.
