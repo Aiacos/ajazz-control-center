@@ -180,6 +180,9 @@ target_link_libraries(
             Qt6::Qml
             Qt6::Quick
             Qt6::QuickControls2
+            # QTest::qWait drives the offscreen event loop so DeviceView layout / Repeater delegates
+            # / Flickable geometry settle for EDIT-01 scroll tests.
+            Qt6::Test
             Qt6::Svg
             # TrayController (an Application member) uses QSystemTrayIcon / QMenu.
             Qt6::Widgets

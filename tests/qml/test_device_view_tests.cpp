@@ -27,7 +27,11 @@
 #include <QObject>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
+#include <QQuickItem>
+#include <QQuickWindow>
+#include <QSet>
 #include <QString>
+#include <QTest>
 #include <QVariant>
 #include <QVariantMap>
 
@@ -47,6 +51,9 @@ QmlWorld& world();
 // Helpers
 // ---------------------------------------------------------------------------
 namespace {
+
+// Forward declaration: defined below; used by createDeviceViewWindow to settle layout.
+QObject* findByName(QObject* root, QString const& name);
 
 // Load DeviceView from the AjazzControlCenter module with explicit geometry.
 // Returns the created QObject* (caller must delete), or nullptr on failure.
@@ -73,12 +80,132 @@ QObject* createDeviceView(int keyCount,
     return component.createWithInitialProperties(props);
 }
 
+// EDIT-01 variant: load DeviceView into a real offscreen QQuickWindow and pump
+// the event loop so anchors, Repeater delegates, and Flickable geometry settle.
+// A bare QQmlComponent::create() never runs a layout pass, so geometry-dependent
+// assertions (contentHeight, delegate instantiation) require a hosted, shown
+// window. Returns the WINDOW (owns the DeviceView via contentItem); the caller
+// deletes the window. The DeviceView is reachable via findDeviceView(window).
+QQuickWindow* createDeviceViewWindow(int keyCount,
+                                     int keyRows,
+                                     int gridColumns,
+                                     int encoderCount,
+                                     int touchZoneCount,
+                                     QString const& codename,
+                                     int width,
+                                     int height) {
+    QQmlComponent component(world().engine);
+    component.loadFromModule(QStringLiteral("AjazzControlCenter"), QStringLiteral("DeviceView"));
+    if (!component.isReady()) {
+        return nullptr;
+    }
+    QVariantMap props;
+    props[QStringLiteral("keyCount")] = keyCount;
+    props[QStringLiteral("keyRows")] = keyRows;
+    props[QStringLiteral("gridColumns")] = gridColumns;
+    props[QStringLiteral("encoderCount")] = encoderCount;
+    props[QStringLiteral("touchZoneCount")] = touchZoneCount;
+    props[QStringLiteral("codename")] = codename;
+    QObject* obj = component.createWithInitialProperties(props);
+    auto* item = qobject_cast<QQuickItem*>(obj);
+    if (item == nullptr) {
+        delete obj;
+        return nullptr;
+    }
+    auto* window = new QQuickWindow();
+    window->resize(width, height);
+    item->setParentItem(window->contentItem());
+    // Fill the window so anchors.fill chains (chassisArea -> ScrollView) resolve.
+    item->setWidth(width);
+    item->setHeight(height);
+    window->show();
+    // Pump events so polish/Repeater/Flickable geometry settle (offscreen: no
+    // real exposure, but qWait drains the layout queue).
+    QTest::qWait(50);
+    return window;
+}
+
+// Find the DeviceView item hosted in a createDeviceViewWindow() window.
+QQuickItem* findDeviceView(QQuickWindow* window) {
+    if (window == nullptr || window->contentItem() == nullptr)
+        return nullptr;
+    QList<QQuickItem*> kids = window->contentItem()->childItems();
+    return kids.isEmpty() ? nullptr : kids.first();
+}
+
 // Read an int Q_PROPERTY from a QObject by name.  Returns -1 if missing.
 int intProp(QObject* obj, char const* name) {
     if (obj == nullptr)
         return -1;
     QVariant v = obj->property(name);
     return v.isValid() ? v.toInt() : -1;
+}
+
+// Read a bool Q_PROPERTY from a QObject by name.  Returns false if missing.
+bool boolProp(QObject* obj, char const* name) {
+    if (obj == nullptr)
+        return false;
+    QVariant v = obj->property(name);
+    return v.isValid() && v.toBool();
+}
+
+// Read a qreal Q_PROPERTY from a QObject by name.  Returns -1.0 if missing.
+qreal realProp(QObject* obj, char const* name) {
+    if (obj == nullptr)
+        return -1.0;
+    QVariant v = obj->property(name);
+    return v.isValid() ? v.toReal() : -1.0;
+}
+
+// Recursively find a descendant QObject by objectName (covers QQuickItem's
+// contentItem subtree too -- ScrollView parents its content under contentItem).
+QObject* findByName(QObject* root, QString const& name) {
+    if (root == nullptr)
+        return nullptr;
+    if (root->objectName() == name)
+        return root;
+    for (QObject* child : root->children()) {
+        if (QObject* hit = findByName(child, name))
+            return hit;
+    }
+    if (auto* item = qobject_cast<QQuickItem*>(root)) {
+        QQuickItem* content = item->property("contentItem").value<QQuickItem*>();
+        if (content != nullptr && content != item) {
+            if (QObject* hit = findByName(content, name))
+                return hit;
+        }
+    }
+    return nullptr;
+}
+
+// Count descendants whose dynamic metaobject class name starts with `prefix`
+// (Qt mangles QML types to "<Type>_QMLTYPE_NN"). Walks BOTH the QObject child
+// tree AND the visual childItems()/contentItem tree, because Repeater delegates
+// (KeyCell, EncoderDial) are reparented as visual childItems of the lane Item,
+// NOT as QObject children of it. A visited set prevents double-counting nodes
+// reachable through both edges.
+void collectByTypePrefix(QObject* root, QString const& prefix, QSet<QObject*>& seen, int& n) {
+    if (root == nullptr || seen.contains(root))
+        return;
+    seen.insert(root);
+    if (QString::fromUtf8(root->metaObject()->className()).startsWith(prefix))
+        ++n;
+    for (QObject* child : root->children())
+        collectByTypePrefix(child, prefix, seen, n);
+    if (auto* item = qobject_cast<QQuickItem*>(root)) {
+        QQuickItem* content = item->property("contentItem").value<QQuickItem*>();
+        if (content != nullptr && content != item)
+            collectByTypePrefix(content, prefix, seen, n);
+        for (QQuickItem* vi : item->childItems())
+            collectByTypePrefix(vi, prefix, seen, n);
+    }
+}
+
+int countByTypePrefix(QObject* root, QString const& prefix) {
+    QSet<QObject*> seen;
+    int n = 0;
+    collectByTypePrefix(root, prefix, seen, n);
+    return n;
 }
 
 // Retrieve the ProfileController QML singleton from the shared engine.
@@ -210,4 +337,129 @@ TEST_CASE("DeviceViewDragDrop::test_cross_controller_drop_is_rejected",
     // Cross-controller drop: commitKeyBinding must NOT have been called.
     CHECK(fired == 0);
     QObject::disconnect(conn);
+}
+
+// ===========================================================================
+// DeviceViewScroll (EDIT-01, Phase 32 Plan 32-05)
+//
+// The device grid (DeviceCanvas) is wrapped in a vertical-only
+// ScrollView#deviceCanvasScroll inside chassisArea. These cases assert the
+// 32-UI-SPEC frontend contract: over/under-threshold overflow, addressable
+// scroll container + flickable, no horizontal scroll, trash pinned outside the
+// scroll, and the three controller delegates staying distinct.
+//
+// ASCII-only test names (CLAUDE.md).
+// ===========================================================================
+
+TEST_CASE("DeviceViewScroll::test_scroll_container_is_addressable", "[qml][device_view][scroll]") {
+    QQuickWindow* win = createDeviceViewWindow(10, 2, 5, 4, 4, QStringLiteral("akp05e"), 800, 480);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    CHECK(findByName(dv, QStringLiteral("deviceCanvasScroll")) != nullptr);
+    CHECK(findByName(dv, QStringLiteral("deviceCanvasFlick")) != nullptr);
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_over_threshold_grid_overflows", "[qml][device_view][scroll]") {
+    // 9 columns (> 8) OR rows+encoder+touch > 4 => _gridOverflows must be true.
+    QQuickWindow* win =
+        createDeviceViewWindow(45, 5, 9, 4, 4, QStringLiteral("overflow"), 360, 240);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    CHECK(boolProp(dv, "_gridOverflows"));
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_over_threshold_is_scrollable", "[qml][device_view][scroll]") {
+    // With a small viewport, the over-threshold content exceeds the viewport so
+    // the flickable's contentHeight is taller than its height (=> scrollable).
+    QQuickWindow* win =
+        createDeviceViewWindow(45, 5, 9, 4, 4, QStringLiteral("overflow"), 360, 240);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    QObject* fl = findByName(dv, QStringLiteral("deviceCanvasFlick"));
+    REQUIRE(fl != nullptr);
+    qreal contentH = realProp(fl, "contentHeight");
+    qreal viewH = realProp(fl, "height");
+    CHECK(contentH > 0.0);
+    CHECK(contentH > viewH); // content taller than viewport => vertical scroll engages
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_under_threshold_does_not_overflow",
+          "[qml][device_view][scroll]") {
+    // A 3x3 grid with no encoders/zones is at/under threshold.
+    QQuickWindow* win = createDeviceViewWindow(9, 3, 3, 0, 0, QStringLiteral("compact"), 800, 1000);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    CHECK_FALSE(boolProp(dv, "_gridOverflows"));
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_under_threshold_is_not_scrollable",
+          "[qml][device_view][scroll]") {
+    // The small grid fits a large viewport: contentHeight must NOT exceed the
+    // viewport height (frame stays centered, no vertical scroll).
+    QQuickWindow* win = createDeviceViewWindow(9, 3, 3, 0, 0, QStringLiteral("compact"), 800, 1000);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    QObject* fl = findByName(dv, QStringLiteral("deviceCanvasFlick"));
+    REQUIRE(fl != nullptr);
+    qreal contentH = realProp(fl, "contentHeight");
+    qreal viewH = realProp(fl, "height");
+    CHECK(contentH > 0.0);
+    CHECK(contentH <= viewH + 0.5); // fits viewport => not scrollable
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_no_horizontal_scroll_ever", "[qml][device_view][scroll]") {
+    // Vertical-only contract: even on the over-threshold SKU the content width is
+    // bounded to the viewport so the flickable is never horizontally scrollable.
+    QQuickWindow* win =
+        createDeviceViewWindow(45, 5, 9, 4, 4, QStringLiteral("overflow"), 360, 240);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    QObject* fl = findByName(dv, QStringLiteral("deviceCanvasFlick"));
+    REQUIRE(fl != nullptr);
+    qreal contentW = realProp(fl, "contentWidth");
+    qreal viewW = realProp(fl, "width");
+    CHECK(contentW > 0.0);
+    CHECK(contentW <= viewW + 0.5); // content never wider than viewport
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_trash_button_is_pinned_outside_scroll",
+          "[qml][device_view][scroll]") {
+    QQuickWindow* win =
+        createDeviceViewWindow(45, 5, 9, 4, 4, QStringLiteral("overflow"), 360, 240);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    QObject* sv = findByName(dv, QStringLiteral("deviceCanvasScroll"));
+    REQUIRE(sv != nullptr);
+    // trashBtn (a RoundButton) must NOT live inside the ScrollView subtree; it is
+    // a pinned chassisArea sibling. Counting RoundButton under the ScrollView only.
+    CHECK(countByTypePrefix(sv, QStringLiteral("RoundButton")) == 0);
+    // ...but the DeviceView overall does contain the trash RoundButton.
+    CHECK(countByTypePrefix(dv, QStringLiteral("RoundButton")) >= 1);
+    delete win;
+}
+
+TEST_CASE("DeviceViewScroll::test_delegates_remain_distinct", "[qml][device_view][scroll]") {
+    // On an all-three-controller SKU the key/encoder/touch delegates stay distinct.
+    QQuickWindow* win =
+        createDeviceViewWindow(45, 5, 9, 4, 4, QStringLiteral("overflow"), 360, 240);
+    REQUIRE(win != nullptr);
+    QQuickItem* dv = findDeviceView(win);
+    REQUIRE(dv != nullptr);
+    CHECK(countByTypePrefix(dv, QStringLiteral("KeyCell")) > 0);
+    CHECK(countByTypePrefix(dv, QStringLiteral("EncoderDial")) > 0);
+    CHECK(countByTypePrefix(dv, QStringLiteral("TouchStripLane")) > 0);
+    delete win;
 }
