@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 34-05-PLAN.md (APROF-03 UI + chip; headless live-verified).
-last_updated: '2026-06-08T15:47:02.179Z'
+stopped_at: Phase 34 COMPLETE + VERIFIED (human_needed deferred); code review BLOCKER CR-01 + 5 warnings fixed; 785/785. Phase 35 next.
+last_updated: '2026-06-08T18:25:00.000Z'
 last_activity: 2026-06-08
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 19
   completed_plans: 19
-  percent: 79
+  percent: 83
 ---
 
 # Project State
@@ -24,11 +24,13 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** Phase 34 — per-app-profiles-event-parity-audit
+**Current focus:** Phase 35 — Windows Plugin Support + Security Hardening + Milestone Verification (FINAL v2.0 phase)
 
 ## Current Position
 
-Phase: 34 (per-app-profiles-event-parity-audit) — ALL 5 PLANS DONE; consolidated interactive live gate + phase-verify remain
+Phase: 35 (Windows Plugin Support + Security Hardening + Milestone Verification) — NEXT (not started; has_context=false → discuss→plan→execute). FINAL v2.0 phase. WINPLG-01 needs a feasibility spike at start (JS-bundled vs pure Win32 PE) before implementing any native-exe path.
+
+Phase: 34 (per-app-profiles-event-parity-audit) — COMPLETE + VERIFIED (human_needed; 7 live/hardware items deferred to 34-HUMAN-UAT.md). 5/5 must-haves (automated). All 8 reqs (APROF-01..04, EVENT-01..04) code-verified. Code review found + fixed a real BLOCKER (CR-01: X11 missing XSetErrorHandler → BadWindow exit) + 5 warnings (WR-01 manual-selection clobber, WR-02 ApplicationsToMonitor filter, WR-03/04/05). 785/785 ctest. User chose Continue-to-35 (live niri walk deferred).
 
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
 Plan: 5 of 5 DONE (34-01 APROF foundation + 34-02 EVENT audit + 34-03 watcher backends + 34-04 auto-switch + EVENT-03 dispatch + 34-05 APROF-03 UI/chip). EVENT-01/02/03/04 complete; APROF-01/02/03/04 complete (interface Plan 01; 4 backends + factory + debounce Plan 03, Wayland live-bound on niri; auto-switch matcher + idempotent guard + lifecycle fan-out + switchToProfile/systemDidWakeUp dispatch Plan 04; assign-profile UI + amber capability-warning chip Plan 05, headless live-verified via debug channel).
@@ -41,13 +43,13 @@ Stopped at: Completed 34-05-PLAN.md (APROF-03 UI + chip; headless live-verified)
 ### Progress bar
 
 ```
-v2.0 [█████████████████████████     ] 4/6 phases (Phase 34 code-complete, gate pending)
+v2.0 [██████████████████████████    ] 5/6 phases (Phase 34 VERIFIED human_needed; Phase 35 next)
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
 Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
 Phase 33 DONE (3 plans; PI-01/02/04; PI-03 relay live-confirmed; CR WR-01 fixed; render/lifecycle-on-open + criterion-5 deferred to HUMAN-UAT)
-Phase 34 CODE-COMPLETE (5/5 plans: 34-01 APROF foundation [APROF-01 iface]; 34-02 EVENT audit [EVENT-01/02/04]; 34-03 watcher backends [APROF-01: wayland/x11/win/mac + runtime factory + debounce, Wayland live-bound on niri]; 34-04 auto-switch + EVENT-03 [APROF-02 hint-match+idempotent / APROF-04 lifecycle fan-out registered-only / EVENT-03 switchToProfile+systemDidWakeUp dispatch, +11 tests]; 34-05 APROF-03 [assign-profile UI + amber capability-warning chip, headless live-verified]); consolidated INTERACTIVE live gate + phase-verify remain (logind wake-source still deferred)
-Phase 35 ....
+Phase 34 DONE + VERIFIED (5/5 plans; APROF-01..04 + EVENT-01..04; CR-01 BLOCKER + 5 warnings fixed; 785/785; 7 live/hardware items in 34-HUMAN-UAT.md; logind wake-source deferred)
+Phase 35 .... (NEXT — Windows plugins + security hardening + milestone verification; FINAL)
 ```
 
 ## Blockers / Concerns
