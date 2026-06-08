@@ -355,6 +355,16 @@ bool manifestRunnableHere(PluginManifest const& manifest,
     }
 
     // --- Software.MinimumVersion gate ---
+    // Factored into manifestVersionGatePasses so the WINPLG-02 native-run path
+    // can apply the SAME floor without re-running the OS gate (WR-01).
+    return manifestVersionGatePasses(manifest, appVer);
+}
+
+// ---------------------------------------------------------------------------
+// manifestVersionGatePasses
+// ---------------------------------------------------------------------------
+
+bool manifestVersionGatePasses(PluginManifest const& manifest, QString const& appVer) {
     // Uses QVersionNumber so "2.10" > "2.9" is handled correctly (string compare fails).
     if (!manifest.softwareMinimumVersion.isEmpty()) {
         QVersionNumber const required = QVersionNumber::fromString(manifest.softwareMinimumVersion);
@@ -362,7 +372,6 @@ bool manifestRunnableHere(PluginManifest const& manifest,
         if (running < required)
             return false;
     }
-
     return true;
 }
 

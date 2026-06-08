@@ -191,3 +191,60 @@ TEST_CASE("WinPluginClassification supportsCurrentPlatform NotWindowsOnly is fal
     CHECK(supportsCurrentPlatform(m, QStringLiteral("windows"), WinPluginClass::NotWindowsOnly) ==
           false);
 }
+
+// ---------------------------------------------------------------------------
+// manifestVersionGatePasses (WR-01) — the MinimumVersion floor applies to the
+// win-native run path too, so a win-only WS/IPC plugin is NOT exempt from
+// version gating just by being cross-platform-runnable.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("WinPluginClassification version gate passes when no minimum declared",
+          "[win-plugin-classification]") {
+    PluginManifest const m = makeWinManifest(QStringLiteral("plugin.js"));
+    // No softwareMinimumVersion -> floor is satisfied vacuously.
+    CHECK(manifestVersionGatePasses(m, QStringLiteral("6.9")) == true);
+}
+
+TEST_CASE("WinPluginClassification version gate passes when running meets minimum",
+          "[win-plugin-classification]") {
+    PluginManifest m = makeWinManifest(QStringLiteral("plugin.js"));
+    m.softwareMinimumVersion = QStringLiteral("6.0");
+    CHECK(manifestVersionGatePasses(m, QStringLiteral("6.9")) == true);
+    // Equal versions also pass (>= floor).
+    m.softwareMinimumVersion = QStringLiteral("6.9");
+    CHECK(manifestVersionGatePasses(m, QStringLiteral("6.9")) == true);
+}
+
+TEST_CASE("WinPluginClassification version gate fails when minimum exceeds running",
+          "[win-plugin-classification]") {
+    PluginManifest m = makeWinManifest(QStringLiteral("plugin.js"));
+    // QVersionNumber so 6.10 > 6.9 numerically (string compare would mis-order).
+    m.softwareMinimumVersion = QStringLiteral("6.10");
+    CHECK(manifestVersionGatePasses(m, QStringLiteral("6.9")) == false);
+    m.softwareMinimumVersion = QStringLiteral("7.0");
+    CHECK(manifestVersionGatePasses(m, QStringLiteral("6.9")) == false);
+}
+
+TEST_CASE("WinPluginClassification win-native acceptance still honours version floor (WR-01)",
+          "[win-plugin-classification]") {
+    // A win-only WS/IPC plugin runs natively on Linux (supportsCurrentPlatform == true),
+    // but a Software.MinimumVersion above the emulated SD version must still gate it.
+    PluginManifest m = makeWinManifest(QStringLiteral("plugin.js"));
+    m.softwareMinimumVersion = QStringLiteral("7.0"); // > emulated 6.9
+    QString const platform = QStringLiteral("linux");
+    QString const emulated = QStringLiteral("6.9");
+
+    bool const winNativeRunnable =
+        supportsCurrentPlatform(m, platform, WinPluginClass::WsOnlyIpc) &&
+        manifestVersionGatePasses(m, emulated);
+    // supportsCurrentPlatform alone would accept it; the version floor must veto.
+    CHECK(supportsCurrentPlatform(m, platform, WinPluginClass::WsOnlyIpc) == true);
+    CHECK(winNativeRunnable == false);
+
+    // A satisfied floor lets the native-run path through.
+    m.softwareMinimumVersion = QStringLiteral("6.0");
+    bool const winNativeRunnableOk =
+        supportsCurrentPlatform(m, platform, WinPluginClass::WsOnlyIpc) &&
+        manifestVersionGatePasses(m, emulated);
+    CHECK(winNativeRunnableOk == true);
+}

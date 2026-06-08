@@ -219,6 +219,25 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
                                         QString const& appVer);
 
 /**
+ * @brief Check ONLY the @c Software.MinimumVersion floor (no OS gate).
+ *
+ * Returns @c false when @c manifest.softwareMinimumVersion is non-empty and
+ * QVersionNumber(@p appVer) < QVersionNumber(softwareMinimumVersion); @c true
+ * otherwise (including when no minimum is declared).
+ *
+ * This factors out gate (2) of @ref manifestRunnableHere so the WINPLG-02
+ * native-run override (which deliberately bypasses the OS gate for win-only
+ * WS/IPC plugins) can still honour the version floor — a cross-platform-runnable
+ * plugin is NOT exempt from version gating (WR-01). Plain (non-win) plugins keep
+ * going through @ref manifestRunnableHere, which applies both gates.
+ *
+ * @param manifest  Parsed manifest to evaluate.
+ * @param appVer    Running (emulated Stream Deck) version string.
+ * @return          @c true if the version floor is satisfied (or absent).
+ */
+[[nodiscard]] bool manifestVersionGatePasses(PluginManifest const& manifest, QString const& appVer);
+
+/**
  * @brief Return the compile-time platform string for the current build target.
  *
  * Maps Q_OS_MACOS -> "mac", Q_OS_WIN -> "windows", anything else -> "linux".

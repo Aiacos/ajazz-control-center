@@ -294,10 +294,19 @@ std::vector<PluginManifest> PluginManager::discover() {
         // accept when EITHER the base gate passes OR supportsCurrentPlatform() says the
         // classified plugin runs natively. The strict reject for VendorDll is preserved:
         // supportsCurrentPlatform returns false for VendorDll off Windows (Wine deferred).
-        bool const baseRunnable = manifestRunnableHere(
-            *opt, currentPlatformString(), QString::fromLatin1(kEmulatedSdVersion));
+        //
+        // WR-01: the native-run override bypasses ONLY the OS gate — NOT the
+        // Software.MinimumVersion floor. Being cross-platform-runnable does not exempt a
+        // plugin from version gating, so a win-only WS plugin whose Software.MinimumVersion
+        // exceeds the emulated Stream Deck version must still be rejected, exactly like a
+        // plain plugin. Gate the native acceptance on manifestVersionGatePasses() so the OR
+        // cannot short-circuit past the floor.
+        QString const emulatedVer = QString::fromLatin1(kEmulatedSdVersion);
+        bool const baseRunnable =
+            manifestRunnableHere(*opt, currentPlatformString(), emulatedVer);
+        bool const versionOk = manifestVersionGatePasses(*opt, emulatedVer);
         bool const winNativeRunnable =
-            supportsCurrentPlatform(*opt, currentPlatformString(), opt->winClass);
+            supportsCurrentPlatform(*opt, currentPlatformString(), opt->winClass) && versionOk;
         if (!baseRunnable && !winNativeRunnable) {
             qWarning("PluginManager: skipping %s (not runnable on this platform/version)",
                      qPrintable(opt->name));
