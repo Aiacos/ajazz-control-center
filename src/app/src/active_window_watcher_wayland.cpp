@@ -137,8 +137,17 @@ public:
         if (focused == nullptr) {
             return;
         }
-        debounce_->submit(
-            ActiveWindowInfo{focused->appId().toStdString(), focused->title().toStdString()});
+        // WR-03: mirror the X11 backend's empty-app_id guard so behaviour is
+        // uniform across the Linux backends. Some toplevels (splash surfaces,
+        // certain Electron/Java windows) are activated before they set app_id;
+        // an empty token has no usable identity, so skip and keep the current
+        // foreground (Pitfall 4) rather than feed "" into the auto-switch and
+        // the launch/terminate fan-out.
+        QString const appId = focused->appId();
+        if (appId.isEmpty()) {
+            return;
+        }
+        debounce_->submit(ActiveWindowInfo{appId.toStdString(), focused->title().toStdString()});
     }
 
     void disposeHandle(::zwlr_foreign_toplevel_handle_v1* object) {
