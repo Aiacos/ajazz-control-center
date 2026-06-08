@@ -5,7 +5,10 @@
  *
  * GREEN as of Plan 04: the foreground appId -> Profile::applicationHints match
  * (case-insensitive) -> resolve that profile; no match -> the device's default
- * profile; identical re-switch -> idempotent no-op. The matcher lives in
+ * profile WHEN allowDefaultFallback (the locked 34-CONTEXT default); the
+ * focus-driven auto-switch caller passes allowDefaultFallback=false so an
+ * unmapped app is a no-op and a manual selection is preserved (CR WR-01).
+ * Identical re-switch -> idempotent no-op. The matcher lives in
  * ProfileController::resolveProfileForApp + the pure free helper
  * appIdMatchesHints; the idempotent guard is the same comparison Application
  * applies before loadProfileById (resolved == activeProfileId -> skip).
@@ -101,6 +104,45 @@ TEST_CASE("app_profile_switch no applicationHints match falls back to the defaul
     QString const resolved =
         ctrl.resolveProfileForApp(QStringLiteral("unknown-app-with-no-hint"), dev);
     CHECK(resolved == alpha);
+
+    ctrl.deleteProfile(alpha);
+    ctrl.deleteProfile(zeta);
+}
+
+// ---- WR-01: auto-switch path (no fallback) preserves manual selection -----
+
+TEST_CASE("app_profile_switch no match with allowDefaultFallback=false is a no-op",
+          "[app_profile_switch]") {
+    ajazz::tests::qtApp();
+    ProfileController ctrl(nullptr);
+
+    // The focus-driven auto-switch caller passes allowDefaultFallback=false so an
+    // unmapped foreground change does NOT clobber a manual selection: it resolves
+    // to "" and the Application idempotent guard no-ops, leaving the active
+    // profile untouched (CR WR-01 / SettingsPage copy contract).
+    QString const dev = QStringLiteral("test-aprof-nofallback");
+    QString const alpha =
+        makeProfileWithHints(ctrl, QStringLiteral("Alpha"), dev, {QStringLiteral("term")});
+    QString const zeta =
+        makeProfileWithHints(ctrl, QStringLiteral("Zeta"), dev, {QStringLiteral("mail")});
+
+    // Manually select Zeta (NOT the device default Alpha).
+    ctrl.loadProfileById(zeta);
+    REQUIRE(ctrl.activeProfileId() == zeta);
+
+    // An unmapped app with fallback disabled resolves to "" (no switch), so the
+    // manual Zeta selection survives.
+    QString const resolved = ctrl.resolveProfileForApp(
+        QStringLiteral("unknown-app-with-no-hint"), dev, /*allowDefaultFallback=*/false);
+    CHECK(resolved.isEmpty());
+
+    // A mapped app still resolves even with fallback disabled.
+    CHECK(ctrl.resolveProfileForApp(QStringLiteral("term"), dev, false) == alpha);
+
+    // With fallback enabled (the locked default) the same unmapped app still
+    // resolves to the device default, proving the contract is retained.
+    CHECK(ctrl.resolveProfileForApp(QStringLiteral("unknown-app-with-no-hint"), dev, true) ==
+          alpha);
 
     ctrl.deleteProfile(alpha);
     ctrl.deleteProfile(zeta);

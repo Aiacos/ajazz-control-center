@@ -307,7 +307,8 @@ Page {
                             && appProfilesColumn.mappings.length === 0
                         title: qsTr("No app mappings yet")
                         body: qsTr("Add a mapping to switch profiles automatically when an application "
-                            + "takes focus. Without a mapping, your default profile stays active.")
+                            + "takes focus. Focusing an unmapped application leaves your current "
+                            + "profile active.")
                     }
 
                     // Existing mapping rows.
@@ -347,8 +348,8 @@ Page {
                                 Accessible.role: Accessible.Button
                                 Accessible.name: qsTr("Remove mapping for %1").arg(mappingRow.modelData.appName)
                                 ToolTip.visible: hovered
-                                ToolTip.text: qsTr("Remove this app mapping? The application will fall back "
-                                    + "to the default profile.")
+                                ToolTip.text: qsTr("Remove this app mapping? Focusing this application "
+                                    + "will no longer switch profiles; your current profile stays active.")
                                 onClicked: {
                                     ProfileController.removeAppProfileMapping(
                                         mappingRow.modelData.profileId, mappingRow.modelData.appName);

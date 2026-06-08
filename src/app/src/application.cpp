@@ -1191,8 +1191,14 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
             // the device codename; empty until a device connects).
             QString const deviceCodename =
                 m_pluginBridge ? m_pluginBridge->activeDeviceId() : QString{};
-            QString const resolved =
-                m_profileController->resolveProfileForApp(appId, deviceCodename);
+            // WR-01: allowDefaultFallback=false on the focus-driven auto-switch
+            // path. An unmapped foreground app resolves to "" (no-op) instead of
+            // force-switching to the device default, so a manual profile choice
+            // survives a focus change to an unmapped app. The LOCKED default-
+            // profile fallback (34-CONTEXT) is preserved as the resolver's
+            // opt-in default for callers that want device-default semantics.
+            QString const resolved = m_profileController->resolveProfileForApp(
+                appId, deviceCodename, /*allowDefaultFallback=*/false);
 
             // Idempotent guard (T-34-04-01): no-op when there is nothing to switch
             // to or the resolved profile is already active. loadProfileById would
@@ -1243,11 +1249,14 @@ void Application::dispatchSystemWake() {
 
 void Application::dispatchApplicationLaunch(QString const& appId) {
     // APROF-04: applicationDidLaunch to REGISTERED plugins only (V4 /
-    // T-34-04-02 — never broadcast); length-bounded payload (V5).
+    // T-34-04-02 — never broadcast); length-bounded payload (V5). WR-02: gate the
+    // per-plugin fan-out on each plugin's manifest ApplicationsToMonitor list so a
+    // plugin that monitors only "obs" is not spammed with every focus change.
     if (m_pluginBridge == nullptr) {
         return;
     }
-    dispatchApplicationLaunchTo(m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId);
+    dispatchApplicationLaunchTo(
+        m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId, appMonitorFilter());
 }
 
 void Application::dispatchApplicationTerminate(QString const& appId) {
@@ -1255,7 +1264,21 @@ void Application::dispatchApplicationTerminate(QString const& appId) {
         return;
     }
     dispatchApplicationTerminateTo(
-        m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId);
+        m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId, appMonitorFilter());
+}
+
+ajazz::app::PluginAppMonitorFilter Application::appMonitorFilter() const {
+    // WR-02: a plugin receives applicationDidLaunch/Terminate only when its
+    // ApplicationsToMonitor list covers the app (empty list = monitor all). When
+    // there is no PluginManager (e.g. WS-disabled builds reach here only via the
+    // guarded callers), fall back to an empty filter (deliver to all registered).
+    if (m_pluginManager == nullptr) {
+        return {};
+    }
+    PluginManager* mgr = m_pluginManager.get();
+    return [mgr](QString const& uuid, QString const& appId) {
+        return mgr->monitorsApplication(uuid, appId);
+    };
 }
 #endif // AJAZZ_HAVE_WEBSOCKETS
 

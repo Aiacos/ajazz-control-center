@@ -331,7 +331,8 @@ QString resolveSwitchToProfileToken(ProfileController const& ctrl,
 }
 
 QString ProfileController::resolveProfileForApp(QString const& appId,
-                                                QString const& deviceCodename) const {
+                                                QString const& deviceCodename,
+                                                bool allowDefaultFallback) const {
     // Read directly off disk: m_library is a lightweight {id,name,device,path}
     // index that does NOT carry applicationHints, so each candidate profile is
     // read to inspect its hints. resolveProfileForApp is invoked on a debounced
@@ -380,7 +381,18 @@ QString ProfileController::resolveProfileForApp(QString const& appId,
         }
     }
 
-    // No hint matched: fall back to the device default, or the active profile.
+    // No hint matched. WR-01: the focus-driven auto-switch caller passes
+    // allowDefaultFallback=false, so an unmapped foreground change resolves to
+    // "" -> the Application idempotent guard no-ops -> the user's current
+    // (possibly manually-chosen) profile is preserved. This is what the
+    // SettingsPage copy promises ("Without a mapping, your active profile stays
+    // put"). The LOCKED 34-CONTEXT default-profile fallback is retained for
+    // callers that opt in (allowDefaultFallback=true, e.g. device-connect
+    // semantics): they still get the device default (first by name), else the
+    // active profile.
+    if (!allowDefaultFallback) {
+        return {};
+    }
     if (!fallbackId.isEmpty()) {
         return fallbackId;
     }

@@ -240,9 +240,20 @@ public:
     ///
     /// @param appId          Foreground application identity token.
     /// @param deviceCodename Device scope; empty considers every profile.
-    /// @return The profile id to activate, or "" when no profile is applicable.
+    /// @param allowDefaultFallback When true (default), a non-matching app falls
+    ///        back to the device-default profile (first by name) per the LOCKED
+    ///        34-CONTEXT decision ("a default-profile fallback applies when no
+    ///        hint matches"). The focus-driven AUTO-SWITCH path passes FALSE so
+    ///        an unmapped foreground change is a no-op and does NOT clobber a
+    ///        manual selection (CR WR-01): without a mapping the active profile
+    ///        stays put, which is what the SettingsPage copy promises. Callers
+    ///        that want device-default semantics (e.g. device connect) leave it
+    ///        true.
+    /// @return The profile id to activate, or "" when no profile is applicable
+    ///         (always "" on no match when @p allowDefaultFallback is false).
     [[nodiscard]] Q_INVOKABLE QString resolveProfileForApp(QString const& appId,
-                                                           QString const& deviceCodename) const;
+                                                           QString const& deviceCodename,
+                                                           bool allowDefaultFallback = true) const;
 
     /// Read the active profile's application hints (one token per entry).
     [[nodiscard]] Q_INVOKABLE QStringList applicationHints() const;
