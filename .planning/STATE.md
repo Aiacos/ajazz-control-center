@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: 'Completed 34-02-PLAN.md (EVENT audit track: docs/plugin-event-parity.md EVENT-01 coverage table -- every OpenDeck inbound+outbound + Elgato SDK event classified supported/partial/missing/hardware-gated with per-supported-event test ref + file:symbol, Knob->Encoder mapping recorded; willappear_payload EVENT-02 -- willAppear envelope+payload completeness asserted against the REAL bridge instancePayload/eventEnvelope via the loopback-WS e2e seam, controller normalized never Knob; controller_token EVENT-04 -- affordanceMask maps Knob==Encoder + dialRotate carries Encoder + grep gate clean. 764/764 ctest green incl 17 qml. EVENT-01/02/04 marked complete; EVENT-03 + APROF backends remain in Plans 03/04)'
-last_updated: '2026-06-08T14:17:53.530Z'
+stopped_at: "Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)"
+last_updated: '2026-06-08T14:40:09.251Z'
 last_activity: 2026-06-08
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 18
-  completed_plans: 15
+  completed_plans: 17
   percent: 67
 ---
 
@@ -31,11 +31,12 @@ silently leaking host state into plugin children.
 Phase: 34 (per-app-profiles-event-parity-audit) — EXECUTING
 
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
-Plan: 2 of 5 DONE (34-01 APROF foundation + 34-02 EVENT audit). EVENT-01/02/04 complete; APROF-01 complete (Plan 01).
-Status: Ready to execute Plan 03 (per-OS watcher backends) / Plan 04 (auto-switch matcher + lifecycle fan-out + EVENT-03 switchToProfile/systemDidWakeUp dispatch).
-Next: Phase 34 Plans 03/04, then 35.
+Plan: 3 of 5 DONE (34-01 APROF foundation + 34-02 EVENT audit + 34-03 watcher backends). EVENT-01/02/04 complete; APROF-01 complete (interface Plan 01, the 4 backends + runtime factory + debounce Plan 03; Wayland live-bound on niri active=true).
+Status: Ready to execute Plan 04 (auto-switch matcher + lifecycle fan-out + EVENT-03 switchToProfile/systemDidWakeUp dispatch) then Plan 05 (APROF-03 UI + consolidated live gate).
+Next: Phase 34 Plans 04/05, then 35.
 Last activity: 2026-06-08
-Tests: 764/764 ctest green (linux-release, incl 17 qml).
+Tests: 768/768 ctest green (linux-release, incl 17 qml).
+Stopped at: Completed 34-03-PLAN.md.
 
 ### Progress bar
 
@@ -45,7 +46,7 @@ Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
 Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
 Phase 33 DONE (3 plans; PI-01/02/04; PI-03 relay live-confirmed; CR WR-01 fixed; render/lifecycle-on-open + criterion-5 deferred to HUMAN-UAT)
-Phase 34 IN PROGRESS (2/5 plans: 34-01 APROF foundation [APROF-01]; 34-02 EVENT audit [EVENT-01/02/04]); Plans 03/04 remain (per-OS watcher backends, auto-switch + EVENT-03)
+Phase 34 IN PROGRESS (3/5 plans: 34-01 APROF foundation [APROF-01 iface]; 34-02 EVENT audit [EVENT-01/02/04]; 34-03 watcher backends [APROF-01: wayland/x11/win/mac + runtime factory + debounce, Wayland live-bound on niri]); Plans 04/05 remain (auto-switch + EVENT-03; APROF-03 UI + live gate)
 Phase 35 ....
 ```
 

@@ -155,7 +155,7 @@ Plans:
 **Wave 2** *(blocked on 34-01; \<=2 concurrent)*
 
 - [x] 34-02-PLAN.md — EVENT audit: docs/plugin-event-parity.md coverage table + willAppear payload completeness test + Knob->Encoder controller-token audit (EVENT-01/02/04)
-- [ ] 34-03-PLAN.md — APROF-01 backends: Wayland(wlr)/X11/Win/macOS watcher impls + runtime factory + debounce; live niri Wayland verify (APROF-01)
+- [x] 34-03-PLAN.md — APROF-01 backends: Wayland(wlr)/X11/Win/macOS watcher impls + runtime factory + debounce; live niri Wayland verify (APROF-01)
 
 **Wave 3** *(blocked on 34-02, 34-03)*
 
@@ -187,5 +187,5 @@ Plans:
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
-| 34. Per-App Profiles + Event-Parity Audit                                | 2/5            | In Progress |            |
+| 34. Per-App Profiles + Event-Parity Audit                                | 3/5            | In Progress |            |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
