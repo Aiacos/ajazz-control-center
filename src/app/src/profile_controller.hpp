@@ -29,6 +29,19 @@ class QDir;
 namespace ajazz::app {
 
 /**
+ * @brief Pure case-insensitive match of a foreground app id against a profile's
+ *        application hints (Phase 34-04 APROF-02).
+ *
+ * Returns true when @p appId equals any entry of @p hints ignoring ASCII case.
+ * Empty @p appId or empty @p hints never match. This is the kernel of
+ * ProfileController::resolveProfileForApp, exposed as a free function so the
+ * matching contract can be unit-tested in isolation (no disk/library state).
+ * The app id is treated purely as a comparison token — never as a path, command
+ * or pattern (T-34-04-03 tampering mitigation).
+ */
+[[nodiscard]] bool appIdMatchesHints(QString const& appId, QStringList const& hints);
+
+/**
  * @class ProfileController
  * @brief QML-accessible controller for profile persistence.
  *
@@ -151,6 +164,53 @@ public:
     /// exist. Called when the selected device changes so the editor always
     /// edits a device-scoped profile.
     Q_INVOKABLE void activateDeviceProfile(QString const& deviceCodename);
+
+    // -------------------------------------------------------------------------
+    // Phase 34-04 (APROF-02): per-app profile auto-switch resolution.
+    //
+    // The foreground-window watcher (active_window_watcher.hpp) reports the
+    // focused application's identity token (app_id / WM_CLASS / image-base /
+    // bundle-id). resolveProfileForApp() maps that token to the profile that
+    // should be active, by matching it case-insensitively against each profile's
+    // Profile::applicationHints, with a default-profile fallback. Application
+    // wires the watcher's onChange callback to this resolver and then to
+    // loadProfileById, behind an idempotent guard (no re-activation when the
+    // resolved profile is already active — CR WR-01 / T-34-04-01 DoS mitigation).
+    // -------------------------------------------------------------------------
+
+    /// Resolve the profile id that should be active for the foreground app
+    /// @p appId on device @p deviceCodename.
+    ///
+    /// Matching is case-insensitive against each candidate profile's
+    /// Profile::applicationHints (Profile::applicationHints, profile.hpp:192).
+    /// Scope: when @p deviceCodename is non-empty, only profiles for that device
+    /// are considered; an empty codename considers every known profile. On no
+    /// hint match the result is the device's DEFAULT profile id (the first known
+    /// profile for the device, sorted by name — mirroring activateDeviceProfile's
+    /// fallback), or the active profile id when none exist. Returns an empty
+    /// string only when there is genuinely no profile to switch to.
+    ///
+    /// Read-only: rescans the on-disk library and reads each candidate profile's
+    /// hints; it does NOT change the active profile (Application does that via
+    /// loadProfileById after the idempotent guard). The token is treated purely
+    /// as a lookup key — never evaluated or shelled out (T-34-04-03).
+    ///
+    /// @param appId          Foreground application identity token.
+    /// @param deviceCodename Device scope; empty considers every profile.
+    /// @return The profile id to activate, or "" when no profile is applicable.
+    [[nodiscard]] Q_INVOKABLE QString resolveProfileForApp(QString const& appId,
+                                                           QString const& deviceCodename) const;
+
+    /// Read the active profile's application hints (one token per entry).
+    [[nodiscard]] Q_INVOKABLE QStringList applicationHints() const;
+
+    /// Replace the active profile's Profile::applicationHints with @p hints
+    /// (empty/whitespace tokens are dropped), persist, and emit profilesChanged()
+    /// so resolveProfileForApp() and the assign-profile UI see the new mapping.
+    /// The APROF-03 assign-profile surface (Plan 05) writes through this; it also
+    /// backs the auto-switch resolver test fixtures. Mirrors the
+    /// commitKeyBinding/commitEncoderBinding writer shape (mutate + emit + save).
+    Q_INVOKABLE void setApplicationHints(QStringList const& hints);
 
     /// Active profile's key bindings as a QVariantList of
     /// {index, iconSource, label, actionKind, actionId} maps (only populated

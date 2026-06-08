@@ -1093,6 +1093,51 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
                      m_profileController.get(),
                      &ProfileController::loadProfileById);
 
+    // Phase 34-04 (APROF-02 / APROF-04): start the foreground-window watcher and
+    // wire its debounced onChange callback to the per-app profile auto-switch.
+    //
+    // The watcher (m_activeWindowWatcher) is the real per-OS backend (Wayland
+    // wlr-foreign-toplevel / X11 EWMH / Win32 / macOS) on a supported desktop, or
+    // the recording stub elsewhere; its onChange already arrives debounced
+    // (ActiveWindowDebouncer, ~180ms trailing-edge). Started here so the Qt event
+    // loop is running (Pitfall 5: never at static-init time).
+    //
+    // onChange flow (APROF-02): resolve the foreground appId against the active
+    // device's profiles via ProfileController::resolveProfileForApp (case-
+    // insensitive applicationHints match + default-profile fallback), then —
+    // behind an IDEMPOTENT GUARD (T-34-04-01 DoS mitigation, CR WR-01 pattern:
+    // skip when the resolved profile is already active so a focus thrash cannot
+    // repaint/switch the device) — activate it via loadProfileById. Activation
+    // drives the EXISTING profileChanged -> populateContextsForActivePage
+    // reconcile (wired above): willDisappear(outgoing)+willAppear(incoming). No
+    // new lifecycle path is introduced here (RESEARCH Pattern 3 — reuse, never
+    // re-implement willAppear/willDisappear).
+    if (m_activeWindowWatcher) {
+        m_activeWindowWatcher->start([this](core::ActiveWindowInfo info) {
+            QString const appId = QString::fromStdString(info.appId);
+
+            // APROF-02 auto-switch. Scope resolution to the active device so we
+            // never switch to another device's profile (m_activeDeviceId carries
+            // the device codename; empty until a device connects).
+            QString const deviceCodename =
+                m_pluginBridge ? m_pluginBridge->activeDeviceId() : QString{};
+            QString const resolved =
+                m_profileController->resolveProfileForApp(appId, deviceCodename);
+
+            // Idempotent guard (T-34-04-01): no-op when there is nothing to switch
+            // to or the resolved profile is already active. loadProfileById would
+            // otherwise re-emit profileChanged and trigger a redundant reconcile.
+            if (resolved.isEmpty() || resolved == m_profileController->activeProfileId()) {
+                return;
+            }
+            AJAZZ_LOG_INFO("app",
+                           "auto-switch: foreground '{}' -> profile '{}'",
+                           appId.toStdString(),
+                           resolved.toStdString());
+            m_profileController->loadProfileById(resolved);
+        });
+    }
+
     // USB hot-plug: callback runs on a background thread; marshal to the GUI
     // thread before touching the QAbstractListModel.
     m_hotplug->setCallback([this](core::HotplugEvent const& ev) { onHotplug(ev); });

@@ -292,6 +292,101 @@ void ProfileController::activateDeviceProfile(QString const& deviceCodename) {
     createProfile(tr("Default"), deviceCodename);
 }
 
+// ---------------------------------------------------------------------------
+// Phase 34-04 (APROF-02): per-app profile auto-switch resolution
+// ---------------------------------------------------------------------------
+
+bool appIdMatchesHints(QString const& appId, QStringList const& hints) {
+    if (appId.isEmpty() || hints.isEmpty()) {
+        return false;
+    }
+    for (QString const& hint : hints) {
+        if (!hint.isEmpty() && hint.compare(appId, Qt::CaseInsensitive) == 0) {
+            return true;
+        }
+    }
+    return false;
+}
+
+QString ProfileController::resolveProfileForApp(QString const& appId,
+                                                QString const& deviceCodename) const {
+    // Read directly off disk: m_library is a lightweight {id,name,device,path}
+    // index that does NOT carry applicationHints, so each candidate profile is
+    // read to inspect its hints. resolveProfileForApp is invoked on a debounced
+    // (~180ms) foreground change, not per frame, so the per-call reads are cheap
+    // relative to the switch they gate. const: never mutates the active profile.
+    QDir const dir(profilesDir());
+    if (!dir.exists()) {
+        return {};
+    }
+    QStringList const files =
+        dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files | QDir::Readable);
+
+    QString fallbackId; // default profile for the device (first by name)
+    QString fallbackName;
+    for (QString const& file : files) {
+        QString const path = dir.filePath(file);
+        ajazz::core::Profile p;
+        try {
+            p = ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+        } catch (std::exception const&) {
+            continue; // skip malformed files (mirrors rescanLibrary)
+        }
+        if (!deviceCodename.isEmpty() &&
+            QString::fromStdString(p.deviceCodename) != deviceCodename) {
+            continue; // out of device scope
+        }
+
+        QString const stem = QFileInfo(file).completeBaseName();
+        QString const id = p.id.empty() ? stem : QString::fromStdString(p.id);
+
+        // Direct applicationHints match wins immediately.
+        QStringList hints;
+        hints.reserve(static_cast<qsizetype>(p.applicationHints.size()));
+        for (auto const& h : p.applicationHints) {
+            hints.append(QString::fromStdString(h));
+        }
+        if (appIdMatchesHints(appId, hints)) {
+            return id;
+        }
+
+        // Track the default (first by name) for the fallback.
+        QString const name = p.name.empty() ? id : QString::fromStdString(p.name);
+        if (fallbackId.isEmpty() || name.localeAwareCompare(fallbackName) < 0) {
+            fallbackId = id;
+            fallbackName = name;
+        }
+    }
+
+    // No hint matched: fall back to the device default, or the active profile.
+    if (!fallbackId.isEmpty()) {
+        return fallbackId;
+    }
+    return QString::fromStdString(m_profile.id);
+}
+
+QStringList ProfileController::applicationHints() const {
+    QStringList out;
+    out.reserve(static_cast<qsizetype>(m_profile.applicationHints.size()));
+    for (auto const& h : m_profile.applicationHints) {
+        out.append(QString::fromStdString(h));
+    }
+    return out;
+}
+
+void ProfileController::setApplicationHints(QStringList const& hints) {
+    m_profile.applicationHints.clear();
+    for (QString const& h : hints) {
+        QString const trimmed = h.trimmed();
+        if (!trimmed.isEmpty()) {
+            m_profile.applicationHints.push_back(trimmed.toStdString());
+        }
+    }
+    saveActiveProfile(); // persist so resolveProfileForApp() reads the new mapping
+    rescanLibrary();
+    emit profilesChanged();
+}
+
 QVariantList ProfileController::activeKeyBindings() const {
     QVariantList out;
     for (auto const& [idx, binding] : m_profile.keys) {
