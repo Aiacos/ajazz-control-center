@@ -186,6 +186,11 @@ add_executable(
     # Profile schema v2 round-trip + v1->v2 migration tests (pure-core, no
     # Qt/event loop). Runnable via ctest --preset linux-release -R action_instance.
     test_action_instance.cpp
+    # Phase 32 (BIND-04/BIND-05): instanceChildrenToChain adapter (children ->
+    # ActionChain) tests -- pure-core, no Qt. Runnable via
+    # ctest --preset linux-release -R multiaction. The adapter TU is compiled
+    # into ajazz_core (linked below), so no extra source entry is needed.
+    test_multiaction_dispatch.cpp
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
