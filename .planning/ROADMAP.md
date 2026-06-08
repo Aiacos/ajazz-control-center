@@ -96,7 +96,7 @@ Plans:
 
 **Wave 2** *(blocked on 32-01)*
 
-- [ ] 32-02-PLAN.md — Multi Action dispatch at the input-service seam (children->chain->engine.run) + com.hotspot.streamdock.multiaction registration (BIND-04/05)
+- [x] 32-02-PLAN.md — Multi Action dispatch at the input-service seam (children->chain->engine.run) + com.hotspot.streamdock.multiaction registration (BIND-04/05)
 
 **Wave 3** *(blocked on 32-01, 32-02)*
 
@@ -152,7 +152,7 @@ Plans:
 | ------------------------------------------------------------------------ | -------------- | ----------- | ---------- |
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
-| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 3/5            | In Progress |            |
+| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 4/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |

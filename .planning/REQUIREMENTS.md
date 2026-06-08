@@ -24,7 +24,7 @@ ______________________________________________________________________
 - [x] **BIND-01**: An `ActionInstance` / `ActionState` core model (`states[]`, `currentState`, `settings`, `children`) is added under `src/core/` with hand-rolled JSON serialization (COD-031: no `nlohmann` in `ajazz_core` or any installed header); `Binding` carries an optional instance.
 - [x] **BIND-02**: The profile schema migrates v1→v2 (single `state` → `states[]`) with a lossless, backward-compatible reader; existing user profiles load unchanged; round-trip unit tests cover 0-state, 1-state, 3-state, and 2-children variants.
 - [x] **BIND-03**: A drag-to-bind commit fires the plugin `willAppear` immediately — the `profileChanged` → `populateContextsForActivePage` wiring gap is fixed so binding no longer requires a device reconnect to activate.
-- [ ] **BIND-04**: A user can assign a **Multi Action**: its child instances run sequentially (with inter-step delay) on a single key/dial press, via a built-in `opendeck.multiaction` handler.
+- [x] **BIND-04**: A user can assign a **Multi Action**: its child instances run sequentially (with inter-step delay) on a single key/dial press, via a built-in `opendeck.multiaction` handler.
 - [ ] **BIND-05**: A user can assign a **Toggle Action**: pressing it cycles `currentState`, renders the new state image, and emits the state-change `willAppear`, via `opendeck.toggleaction`.
 - [x] **BIND-06**: The binding/action layer is device-generic across key / encoder-dial / touch-zone controllers and works on every Stream Dock SKU (AKP03 / AKP05-N4 / AKP153) through the sidecar — no SKU-specific binding code.
 - [ ] **BIND-07**: `setState` renders the correct per-state image/title from `instance.states[idx]`; per-state settings encode and round-trip the state index.
@@ -107,7 +107,7 @@ ______________________________________________________________________
 | BIND-01     | Phase 31 | Complete |
 | BIND-02     | Phase 31 | Complete |
 | BIND-03     | Phase 32 | Complete |
-| BIND-04     | Phase 32 | Pending  |
+| BIND-04     | Phase 32 | Complete |
 | BIND-05     | Phase 32 | Pending  |
 | BIND-06     | Phase 32 | Complete |
 | BIND-07     | Phase 32 | Pending  |
