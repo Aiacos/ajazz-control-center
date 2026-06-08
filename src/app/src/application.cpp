@@ -1097,6 +1097,34 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
             m_pluginManager->spawn(manifest);
         }
 
+        // WINPLG (CR-01): re-point the loaded-plugins model at the MERGED inventory.
+        // The model was first filled (in initPluginHost) from the Python host ONLY,
+        // whose PluginInfo entries always carry winClass==0 (NotWindowsOnly) → the
+        // WINPLG platform-status chip was always hidden. The only producer of a real
+        // winClass is PluginManager (stamped at scan time in discover()), surfaced via
+        // UnifiedPluginHost::plugins() which MERGES the .sdPlugin and Python inventories.
+        //
+        // Re-wiring here is correct + safe (each hazard verified against REVIEW CR-01):
+        //   - setPlugins() does a full beginResetModel/endResetModel REPLACE (not an
+        //     append), so this swaps the Python-only list for the complete merged list
+        //     — no double-population. Python entries remain present because
+        //     UnifiedPluginHost::plugins() appends them.
+        //   - spawn() inserts into PluginManager::m_live synchronously, so
+        //     m_pluginHost2->plugins() already returns the .sdPlugin entries here — no
+        //     need to await async WebSocket registration.
+        //   - setPluginHost() re-points a future QML "Reload" (refresh()) at the merged
+        //     host, which is the correct behaviour for this page.
+        // m_pluginHost2 is always constructed above (independent of AJAZZ_PYTHON_HOST);
+        // the UnifiedPluginHost takes a nullable Python host, so this works whether or
+        // not the Python host is present.
+        if (m_loadedPlugins && m_pluginHost2) {
+            m_loadedPlugins->setPluginHost2(m_pluginHost2.get());
+            m_loadedPlugins->setPlugins(m_pluginHost2->plugins());
+            AJAZZ_LOG_INFO("app",
+                           "loaded-plugins model re-wired to unified host: {} plugin(s)",
+                           m_loadedPlugins->rowCountSimple());
+        }
+
         // Plan 27-02 (PLUGIN-15): trigger a re-scan when a plugin is installed
         // from the GUI so it runs live with NO app restart (D-27-3 idempotency).
         // Guard on ok==true so a failed or refused install does not cause a scan.

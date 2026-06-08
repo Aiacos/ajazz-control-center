@@ -42,6 +42,8 @@ class QQmlEngine;
 
 namespace ajazz::app {
 
+class IPluginHost2;
+
 /**
  * @class LoadedPluginsModel
  * @brief Read-only list of currently-loaded plugins for QML.
@@ -132,11 +134,26 @@ public:
     void setPluginHost(plugins::IPluginHost* host) noexcept;
 
     /**
+     * @brief Wire the unified (app-layer) plugin host for reloads.
+     *
+     * Preferred over @ref setPluginHost: an @ref IPluginHost2 returns the
+     * MERGED .sdPlugin + Python inventory (the only inventory that carries a
+     * real @c winClass for the WINPLG chip), whereas the STL @ref
+     * ajazz::plugins::IPluginHost only sees the Python plugins. When a host2
+     * is wired, @ref refresh re-pulls through it; the legacy @c m_host is used
+     * only as a fallback when no host2 is set (e.g. a non-WebSockets build).
+     * The pointer is non-owning — Application keeps the host alive for the
+     * application's lifetime. Pass @c nullptr to detach.
+     */
+    void setPluginHost2(IPluginHost2* host) noexcept;
+
+    /**
      * @brief Re-pull the plugin inventory from the wired host.
      *
-     * No-op when no host is wired. On IPC failure (host died, child
-     * crashed) the call leaves the model untouched and logs a
-     * warning — the existing rows stay visible so the UI never
+     * No-op when no host is wired. Prefers the unified @ref IPluginHost2
+     * (merged inventory) when set, else falls back to the STL host. On IPC
+     * failure (host died, child crashed) the call leaves the model untouched
+     * and logs a warning — the existing rows stay visible so the UI never
      * "disappears" on a transient error.
      */
     Q_INVOKABLE void refresh();
@@ -174,6 +191,11 @@ private:
     /// @c AJAZZ_PYTHON_HOST the model stays detached and
     /// @ref refresh is a no-op).
     plugins::IPluginHost* m_host{nullptr};
+    /// Non-owning pointer to the unified (app-layer) plugin host. When set,
+    /// @ref refresh prefers this over @ref m_host because @ref IPluginHost2
+    /// returns the merged .sdPlugin + Python inventory (the one carrying a
+    /// real @c winClass for the WINPLG chip). Owned by @c Application.
+    IPluginHost2* m_host2{nullptr};
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.

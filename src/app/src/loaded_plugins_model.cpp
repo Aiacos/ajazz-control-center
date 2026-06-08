@@ -5,6 +5,8 @@
  */
 #include "loaded_plugins_model.hpp"
 
+#include "i_plugin_host2.hpp"
+
 #include <QQmlEngine>
 #include <QtGlobal>
 
@@ -117,15 +119,23 @@ void LoadedPluginsModel::setPluginHost(plugins::IPluginHost* host) noexcept {
     m_host = host;
 }
 
+void LoadedPluginsModel::setPluginHost2(IPluginHost2* host) noexcept {
+    m_host2 = host;
+}
+
 void LoadedPluginsModel::refresh() {
-    if (m_host == nullptr) {
-        return;
-    }
     try {
-        // `IPluginHost::plugins` throws on a dead child / IPC timeout.
-        // Catch and keep the existing rows visible — a transient
-        // failure should not erase the UI; the user can retry.
-        setPlugins(m_host->plugins());
+        // Prefer the unified host (merged .sdPlugin + Python inventory — the
+        // only inventory carrying a real winClass for the WINPLG chip). Fall
+        // back to the STL host when no host2 is wired (e.g. a non-WebSockets
+        // build that only has the Python host). `plugins()` throws on a dead
+        // child / IPC timeout — catch and keep the existing rows visible so a
+        // transient failure does not erase the UI; the user can retry.
+        if (m_host2 != nullptr) {
+            setPlugins(m_host2->plugins());
+        } else if (m_host != nullptr) {
+            setPlugins(m_host->plugins());
+        }
     } catch (std::exception const& e) {
         qWarning("LoadedPluginsModel::refresh: %s", e.what());
     }
