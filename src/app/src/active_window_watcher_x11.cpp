@@ -32,6 +32,7 @@
 #include <QString>
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <utility>
 
@@ -42,6 +43,28 @@
 namespace ajazz::core {
 
 namespace {
+
+/// Non-fatal Xlib error handler (CR-01). The active window can be destroyed by
+/// the WM between the root @c _NET_ACTIVE_WINDOW read and the per-window
+/// @c XGetClassHint / @c XGetWindowProperty / @c XFetchName calls (routine on a
+/// fast app close / alt-F4 / focus-steal). Without a handler, Xlib's DEFAULT
+/// error handler prints to stderr and calls @c exit(), terminating the whole
+/// control-center process — an availability bug reachable by ordinary, untrusted
+/// window churn. Returning 0 here swallows the error (the window vanished; keep
+/// the current foreground, Pitfall 4 analog) and never lets the process die.
+///
+/// X errors are asynchronous, so this may fire on a later call than the one that
+/// triggered it; the effect (ignore + keep going) is correct regardless. This is
+/// the protocol (non-fatal) error handler only; the I/O error handler (a real
+/// connection loss) is left at Xlib's default. The handler is process-global, so
+/// it is installed once on first display open (see installErrorHandlerOnce) and
+/// is deliberately narrow: it logs and ignores, never re-raises.
+int nonFatalXErrorHandler(Display* /*display*/, XErrorEvent* event) {
+    AJAZZ_LOG_WARN("active_window",
+                   "X11 error code {} (non-fatal; active window vanished mid-read)",
+                   event != nullptr ? static_cast<int>(event->error_code) : -1);
+    return 0; // never let Xlib's default handler exit() the process
+}
 
 /// Lowercase an ASCII-ish app id so X11 WM_CLASS matches the Wayland app_id case
 /// contract (the matcher in Plan 04 is case-insensitive).
@@ -71,6 +94,14 @@ public:
                            "X11 backend: XOpenDisplay failed; capabilityAvailable=false");
             return;
         }
+        // CR-01: install the non-fatal protocol error handler BEFORE any
+        // per-window Xlib call so a BadWindow/BadDrawable from a window that
+        // vanished mid-read cannot reach Xlib's default exit() handler. Process-
+        // global, idempotent: installed once on first open. Safe alongside Qt's
+        // xcb plugin (this backend runs only on an X11 session, where Qt uses
+        // its own separate xcb connection, not this raw Xlib display).
+        static std::once_flag errorHandlerOnce;
+        std::call_once(errorHandlerOnce, []() { XSetErrorHandler(&nonFatalXErrorHandler); });
         root_ = DefaultRootWindow(display_);
         atomActiveWindow_ = XInternAtom(display_, "_NET_ACTIVE_WINDOW", False);
         atomNetWmName_ = XInternAtom(display_, "_NET_WM_NAME", False);
