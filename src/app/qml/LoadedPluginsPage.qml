@@ -167,6 +167,11 @@ Page {
                     //   tampered    → danger chip, NO allow action (CR-01)
                     Rectangle {
                         id: trustChip
+                        // VERIF-01: objectName + readable label so scripts/ajazz-debug
+                        // qml.get reaches this pre-existing chip headlessly (it had
+                        // none before — grep -c objectName was 0).
+                        objectName: "trustChip"
+                        property string trustLabel: chipText.text
                         visible: row.trustLevel !== "trusted"
                         Layout.preferredHeight: 24
                         Layout.preferredWidth: chipText.implicitWidth + Theme.spacingMd * 2
@@ -214,6 +219,113 @@ Page {
 
                         MouseArea {
                             id: chipMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                    }
+
+                    // ----- WINPLG-03 platform-status chip (chip-only) ---------
+                    // Surfaces the Windows-plugin classification derived from
+                    //   LoadedPluginsModel.platformStatus (mirror of
+                    //   PluginInfo.winClass, Plan 01). Display-only: it reports the
+                    //   verdict but grants no capability — a misclassified plugin
+                    //   still cannot run a vendor-DLL (supportsCurrentPlatform gates
+                    //   that in Plan 01; there is no in-process PE loader).
+                    //   native      → "Runs natively" (positive/neutral)
+                    //   wine         → "Requires Wine" (amber; launch DEFERRED)
+                    //   unsupported  → "Unsupported on this OS" (error)
+                    //   ""           → chip hidden (not a Windows-only plugin)
+                    Rectangle {
+                        id: platformStatusChip
+                        objectName: "platformStatusChip"
+                        // Readable label (VERIF-01): a headless qml.get on statusLabel
+                        // returns the locked copy without hover.
+                        property string statusLabel: row.platformStatus === "native"
+                            ? qsTr("Runs natively")
+                            : row.platformStatus === "wine"
+                                ? qsTr("Requires Wine")
+                                : row.platformStatus === "unsupported"
+                                    ? qsTr("Unsupported on this OS")
+                                    : ""
+                        visible: row.platformStatus !== ""
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: platformChipText.implicitWidth + Theme.spacingMd * 2
+                        radius: 12
+
+                        // unsupported → error (red); wine → amber warning;
+                        // native → neutral/positive (warning family kept subtle).
+                        color: row.platformStatus === "unsupported"
+                            ? Theme.chipBgError
+                            : Theme.chipBgWarning
+                        border.color: row.platformStatus === "unsupported"
+                            ? Theme.chipBorderError
+                            : Theme.chipBorderWarning
+                        border.width: 1
+
+                        Text {
+                            id: platformChipText
+                            anchors.centerIn: parent
+                            text: platformStatusChip.statusLabel
+                            color: row.platformStatus === "unsupported"
+                                ? Theme.chipFgError
+                                : Theme.chipFgWarning
+                            font.pixelSize: Theme.fontXs
+                            font.weight: Font.DemiBold
+                        }
+
+                        ToolTip.visible: platformChipMouseArea.containsMouse
+                        ToolTip.text: row.platformStatus === "native"
+                            ? qsTr("This plugin uses the WS-only-IPC backend and "
+                                + "runs natively on this OS.")
+                            : row.platformStatus === "wine"
+                                ? qsTr("This plugin ships a Windows vendor DLL; "
+                                    + "running it requires Wine (launch support is "
+                                    + "not yet implemented).")
+                                : qsTr("This plugin ships a Windows vendor DLL and "
+                                    + "cannot run on this OS (no Wine launcher).")
+
+                        MouseArea {
+                            id: platformChipMouseArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                        }
+                    }
+
+                    // ----- Unsigned-consent chip (amber, display-only) --------
+                    // Informational mirror of the unsigned trust state. Consent is
+                    // granted through the existing PluginStore consent flow +
+                    // QSettings (Plan 02), NOT through this chip — the QML harness
+                    // gap means an interactive Switch's toggled() never fires, so
+                    // this is a plain display chip (no Switch/CheckBox).
+                    Rectangle {
+                        id: unsignedConsentChip
+                        objectName: "unsignedConsentChip"
+                        property string consentLabel: qsTr("Unsigned — requires consent")
+                        visible: row.trustLevel === "unsigned"
+                        Layout.preferredHeight: 24
+                        Layout.preferredWidth: consentChipText.implicitWidth + Theme.spacingMd * 2
+                        radius: 12
+
+                        color: Theme.chipBgWarning
+                        border.color: Theme.chipBorderWarning
+                        border.width: 1
+
+                        Text {
+                            id: consentChipText
+                            anchors.centerIn: parent
+                            text: unsignedConsentChip.consentLabel
+                            color: Theme.chipFgWarning
+                            font.pixelSize: Theme.fontXs
+                            font.weight: Font.DemiBold
+                        }
+
+                        ToolTip.visible: consentChipMouseArea.containsMouse
+                        ToolTip.text: qsTr("This plugin is unsigned. It loads only "
+                            + "after you grant consent in the Plugin Store; consent "
+                            + "is remembered across restarts.")
+
+                        MouseArea {
+                            id: consentChipMouseArea
                             anchors.fill: parent
                             hoverEnabled: true
                         }
