@@ -17,6 +17,8 @@
  */
 #include "stream_dock_input_service.hpp"
 
+#include "ajazz/core/action_chain_adapter.hpp"
+#include "ajazz/core/builtin_action_registry.hpp"
 #include "ajazz/core/logger.hpp"
 
 #include <QDesktopServices>
@@ -28,6 +30,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <limits>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 #include <utility>
@@ -47,6 +50,37 @@ namespace {
 /// the touch dispatch path (other families never emit touch events because
 /// hasTouchStrip=false in their descriptors).
 inline constexpr std::uint16_t kTouchStripRangeX = 256;
+
+// ---------------------------------------------------------------------------
+// Multi Action resolution (BIND-04/05)
+// ---------------------------------------------------------------------------
+
+/// A firing binding is a Multi Action when it carries an @ref ActionInstance
+/// whose id is the canonical built-in Multi Action id. Id-match (over a bare
+/// "children non-empty" test) is the OpenDeck-parity classification: a Multi
+/// Action is identified by its action UUID, not merely by having children. This
+/// uses the REAL dispatch id (com.hotspot.streamdock.multiaction) so it stays in
+/// lock-step with BuiltinActionRegistry::handles(); no SKU / codename is
+/// consulted (BIND-06 invariant).
+[[nodiscard]] bool isMultiAction(std::optional<core::ActionInstance> const& instance) {
+    return instance.has_value() && instance->id == core::BuiltinActionRegistry::kMultiActionId;
+}
+
+/// Run a press binding: if it is a Multi Action, flatten its children into the
+/// existing ActionChain (instanceChildrenToChain) and walk them through the
+/// shared ActionEngine (which already defers each child's delayMs -- no new
+/// async runner). Otherwise run the legacy @p legacyChain unchanged so bindings
+/// without a Multi Action instance keep their existing behaviour (no regression).
+template <typename BindingT>
+void runPressBinding(core::ActionEngine& engine,
+                     BindingT const& binding,
+                     core::ActionChain const& legacyChain) {
+    if (isMultiAction(binding.instance)) {
+        engine.run(core::instanceChildrenToChain(*binding.instance));
+        return;
+    }
+    engine.run(legacyChain);
+}
 
 } // namespace
 
@@ -203,7 +237,9 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
     // ---- Key events (INPUT-03) -------------------------------------------
     case core::DeviceEvent::Kind::KeyPressed:
         if (auto it = prof.keys.find(ev.index); it != prof.keys.end()) {
-            m_engine->run(it->second.onPress);
+            // BIND-04/05: a Multi Action instance runs its children sequentially
+            // via the shared engine; otherwise the legacy onPress chain fires.
+            runPressBinding(*m_engine, it->second, it->second.onPress);
         }
         break;
 
@@ -225,7 +261,8 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
         // separately (handled in EncoderReleased case below), but since
         // EncoderBinding has no onRelease field yet the extra event is harmless.
         if (auto it = prof.encoders.find(ev.index); it != prof.encoders.end()) {
-            m_engine->run(it->second.onPress);
+            // BIND-04/05: an encoder-press Multi Action runs its children too.
+            runPressBinding(*m_engine, it->second, it->second.onPress);
         }
         synthesiseEncoderRelease(ev.index);
         break;
@@ -276,7 +313,8 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
             // INPUT-05a: tap -> provisional zone (from the down X) -> encoders[zone].onPress
             auto const zone = zoneForX(m_touchDownX);
             if (auto it = prof.encoders.find(zone); it != prof.encoders.end()) {
-                m_engine->run(it->second.onPress);
+                // BIND-04/05: a tapped zone bound to a Multi Action runs its children.
+                runPressBinding(*m_engine, it->second, it->second.onPress);
             }
         }
         break;

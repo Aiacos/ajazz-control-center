@@ -541,6 +541,46 @@ TEST_CASE("BuiltinActionsService - multiactions runs decoded ActionChain in orde
     REQUIRE(h.engineLog[2] == "plugin:c:{}");
 }
 
+// ---- BIND-04/05: com.hotspot.streamdock.multiaction (Multi Action) ----
+
+/// Classification: the singular Multi Action id (com.hotspot.streamdock.multiaction)
+/// is registered under the kBuiltinPrefix, so handles() returns true. This is the
+/// id the input-service dispatch seam id-matches (RESEARCH A3/Q2 -- the OpenDeck
+/// "opendeck.multiaction" id would fail the prefix check and never fire).
+TEST_CASE("BuiltinActionsService - multiaction built-in is registered (handles true)",
+          "[builtin-actions][multiaction]") {
+    TestHarness h;
+    REQUIRE(h.service->handles("com.hotspot.streamdock.multiaction"));
+    // Cross-check against the canonical constant (no opendeck.* literal).
+    REQUIRE(h.service->handles(std::string{ajazz::core::BuiltinActionRegistry::kMultiActionId}));
+}
+
+/// Flat-JSON fallback: dispatching the multiaction id with settings-embedded
+/// children {"actions":[...]} still runs an ordered chain through the engine
+/// (preserves the legacy flat-array shape; the primary children-driven dispatch
+/// happens at the input-service seam in Task 1).
+TEST_CASE("BuiltinActionsService - multiaction flat-JSON fallback runs chain in order",
+          "[builtin-actions][multiaction]") {
+    TestHarness h;
+
+    QJsonArray actions;
+    for (auto const& id : {QStringLiteral("x"), QStringLiteral("y")}) {
+        QJsonObject action;
+        action[QStringLiteral("kind")] = 0; // Plugin
+        action[QStringLiteral("id")] = id;
+        action[QStringLiteral("settingsJson")] = QStringLiteral("{}");
+        actions.push_back(action);
+    }
+    QJsonObject s;
+    s[QStringLiteral("actions")] = actions;
+
+    h.service->onPluginAction("com.hotspot.streamdock.multiaction", toJson(s));
+
+    REQUIRE(h.engineLog.size() == 2);
+    REQUIRE(h.engineLog[0] == "plugin:x:{}");
+    REQUIRE(h.engineLog[1] == "plugin:y:{}");
+}
+
 // ---- multiactions.LunBo per-key cursor ----
 
 TEST_CASE("BuiltinActionsService - LunBo two distinct keys have independent cursors",

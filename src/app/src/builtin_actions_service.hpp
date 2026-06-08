@@ -174,6 +174,20 @@ public:
      */
     [[nodiscard]] bool captureHotkeysEnabled() const noexcept { return m_captureEnabled; }
 
+    /**
+     * @brief Classification query: is @p id a registered built-in action UUID?
+     *
+     * Delegates to @ref core::BuiltinActionRegistry::handles. True iff @p id
+     * starts with the kBuiltinPrefix AND is registered (e.g.
+     * com.hotspot.streamdock.multiaction after populate()). Exposed so callers
+     * (and tests) can ask whether a UUID is dispatched in-process without
+     * reaching into the private registry.
+     *
+     * @param id  Action UUID from a profile binding.
+     * @return    true when the registry handles it; false otherwise.
+     */
+    [[nodiscard]] bool handles(std::string_view id) const { return m_registry.handles(id); }
+
 private:
     /// Populate the registry with all LOCKED core-set UUIDs.
     void populate();
