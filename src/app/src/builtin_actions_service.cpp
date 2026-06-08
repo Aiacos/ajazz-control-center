@@ -450,6 +450,26 @@ void BuiltinActionsService::populate() {
                                   }
                               });
 
+    // multiaction (singular, BIND-04/05): the canonical OpenDeck-shaped Multi
+    // Action. Its PRIMARY dispatch is children-driven at the input-service seam
+    // (StreamDockInputService::dispatch -> instanceChildrenToChain -> engine.run,
+    // 32-02 Task 1), where the firing Binding.instance is in scope. This registry
+    // entry serves two roles: (a) CLASSIFICATION so handles() returns true for the
+    // id (must use the kBuiltinPrefix form -- the OpenDeck "opendeck.multiaction"
+    // id would fail handles() and never fire, RESEARCH A3/Q2), and (b) a thin
+    // FALLBACK that decodes children embedded in settingsJson {"actions":[...]}
+    // via decodeActionChain for the legacy flat-array shape. The handler cannot
+    // see the binding (BuiltinHandler takes only string_view), so the typed
+    // children path stays at the seam.
+    m_registry.registerAction(std::string{core::BuiltinActionRegistry::kMultiActionId},
+                              [this](std::string_view settingsJson) {
+                                  auto const obj = parseSettings(settingsJson, "multiaction"sv);
+                                  auto const arr = obj.value(QStringLiteral("actions")).toArray();
+                                  if (m_engine) {
+                                      m_engine->run(decodeActionChain(arr));
+                                  }
+                              });
+
     // multiactions.LunBo: per-key carousel. Each press advances the key's cursor by one,
     // cycling through the "actions" array. The cursor is keyed by a stable binding id
     // (T-21-lunbo; Pitfall 6 — per-key, not global). Reset on profile change.
