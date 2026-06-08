@@ -62,6 +62,12 @@ repos:
       - id: clang-format
         types_or: [c++, c]
         args: [-i, --style=file]
+        # Objective-C++ (.mm) backends (e.g. the macOS active-window watcher) are
+        # classified by pre-commit as objective-c++ and fed to clang-format, but
+        # this project's .clang-format has no ObjC language block, so the hook
+        # exits 1 ("Configuration file(s) do(es) not support Objective-C"). Exclude
+        # .mm here; the few .mm TUs we ship are kept hand-formatted to match style.
+        exclude: '\.mm$'
 
   # clang-tidy: static analyser. Runs on `pre-commit run --hook-stage manual`
   # (or `make tidy`) for ad-hoc invocations, AND automatically on `git push`

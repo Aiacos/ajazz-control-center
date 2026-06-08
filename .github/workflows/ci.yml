@@ -91,6 +91,7 @@ jobs:
               libudev-dev libusb-1.0-0-dev libhidapi-dev \
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
+              libwayland-dev wayland-protocols libx11-dev \
               python3-dev python3-pip
 
       - name: Install macOS deps
@@ -112,7 +113,9 @@ jobs:
           # tolerates its absence (find_package(... QUIET) sets
           # AJAZZ_HAVE_WEBSOCKETS=OFF), but for CI we want the .cpp
           # actually compiled so the integration is exercised.
-          modules: qtshadertools qtwebsockets
+          # qtwayland: Qt6::WaylandClient + qtwaylandscanner for the Phase 34
+          # APROF-01 foreground-window watcher (zwlr-foreign-toplevel binding).
+          modules: qtshadertools qtwebsockets qtwayland
 
       # ---- Python ---------------------------------------------------------
       - name: Set up Python
@@ -222,13 +225,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build lcov libudev-dev \
               libusb-1.0-0-dev libhidapi-dev python3-dev \
-              libgl1-mesa-dev libxkbcommon-dev
+              libgl1-mesa-dev libxkbcommon-dev \
+              libwayland-dev wayland-protocols libx11-dev
 
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
           version: 6.8.3
           cache: true
-          modules: qtwebsockets
+          # qtwayland: Qt6::WaylandClient for the Phase 34 APROF-01 watcher.
+          modules: qtwebsockets qtwayland
 
       # Same rationale as the `build` job: the C++ test_manifest_signer.cpp
       # cases exec `python3 sign-plugin-manifest.py` which imports
@@ -354,12 +359,15 @@ jobs:
               libudev-dev libusb-1.0-0-dev libhidapi-dev \
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
+              libwayland-dev wayland-protocols libx11-dev \
               python3-dev python3-pip
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
           version: 6.8.3
           cache: true
-          modules: qtshadertools qtwebsockets
+          # qtwayland: Qt6::WaylandClient + qtwaylandscanner for the Phase 34
+          # APROF-01 foreground-window watcher (zwlr-foreign-toplevel binding).
+          modules: qtshadertools qtwebsockets qtwayland
 
       # Same rationale as the `build` job: ctest runs the manifest verifier
       # tests which exec `python3 sign-plugin-manifest.py`, importing

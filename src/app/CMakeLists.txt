@@ -149,6 +149,17 @@ qt_add_executable(
     # PluginManager + Python OOP path via OutOfProcessPluginHost). Qt->STL conversion lives at the
     # aggregator boundary. COD-031: app-layer, no nlohmann in public surface.
     src/unified_plugin_host.cpp
+    # Phase 34 (APROF-01): per-OS IActiveWindowWatcher backends. Added to the app target source list
+    # UNCONDITIONALLY (mirroring the input_synthesizer split in src/core/CMakeLists.txt) so the
+    # build list is STABLE across platforms; each TU is self-empty unless its platform #if (and
+    # AJAZZ_FEATURE_ACTIVE_WINDOW) is satisfied. They live app-tier (not in ajazz_core) because they
+    # pull Qt6:: WaylandClient / libX11 / AppKit, which must not cross the COD-031 core boundary.
+    # The real backend bodies LAND IN PLAN 03 — these are currently self-#if-guarded placeholder TUs
+    # that keep the build green now and give the source list a stable shape. The .mm Obj-C++ TU is
+    # added in the Darwin branch below (CMake needs OBJCXX enabled for it).
+    src/active_window_watcher_wayland.cpp
+    src/active_window_watcher_x11.cpp
+    src/active_window_watcher_win.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -168,6 +179,55 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz-control-center PRIVATE src/obs_client.cpp)
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+endif()
+
+# ----------------------------------------------------------------------------
+# Phase 34 (APROF-01): per-app-profile foreground-window detection.
+#
+# The Wayland backend binds zwlr_foreign_toplevel_management_unstable_v1 via Qt6::WaylandClient +
+# qtwaylandscanner-generated bases. The X11 backend reads _NET_ACTIVE_WINDOW / _NET_WM_PID /
+# WM_CLASS via libX11. macOS uses AppKit (NSWorkspace, an Obj-C++ .mm TU); Windows uses
+# GetForegroundWindow (user32). The watcher interface + stub are pure-core (COD-031); only these
+# per-OS backends pull Qt/X11/AppKit, so they are app-tier.
+#
+# Qt6::WaylandClient (and qtwaylandscanner) only exists on Linux — the qtwayland module is not built
+# on macOS/Windows, so the find_package + codegen MUST be Linux-gated or Windows/macOS CI breaks at
+# configure. The wayland backend TU is already #if __linux__-gated, and the watcher factory picks
+# wayland-vs-x11 at runtime on Linux only. PRIVATE_CODE keeps the generated QtWayland::zwlr_* bases
+# out of installed headers. Qt6::WaylandClient is provided by the qtwayland module (CI adds it; the
+# org.kde Flatpak runtime ships it).
+# ----------------------------------------------------------------------------
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    find_package(Qt6 REQUIRED COMPONENTS WaylandClient)
+    qt_generate_wayland_protocol_client_sources(
+        ajazz-control-center PRIVATE_CODE FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/wayland/wlr-foreign-toplevel-management-unstable-v1.xml
+    )
+    target_link_libraries(ajazz-control-center PRIVATE Qt6::WaylandClient)
+
+    # qtwaylandscanner-generated glue trips several project-wide -Werror warnings (old-style-cast to
+    # wl_proxy*/void*, sign-conversion, etc. — cmake/Warnings.cmake). This is GENERATED code we do
+    # not own and cannot fix at source, so disable warnings for just that TU with -w (the trailing
+    # flag wins over the earlier -Wall/-Werror from ajazz::warnings). The generated path is
+    # deterministic for PRIVATE_CODE: <build>/qwayland-<basename>.cpp. The rest of the app stays
+    # under strict -Werror.
+    set_source_files_properties(
+        ${CMAKE_CURRENT_BINARY_DIR}/qwayland-wlr-foreign-toplevel-management-unstable-v1.cpp
+        PROPERTIES COMPILE_OPTIONS "-w"
+    )
+
+    # libX11 (Xlib EWMH property reads) for the X11 backend on the same Linux build.
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(X11 REQUIRED IMPORTED_TARGET x11)
+    target_link_libraries(ajazz-control-center PRIVATE PkgConfig::X11)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    enable_language(OBJCXX)
+    target_sources(ajazz-control-center PRIVATE src/active_window_watcher_mac.mm)
+    target_link_libraries(ajazz-control-center PRIVATE "-framework AppKit")
+elseif(WIN32)
+    # GetForegroundWindow / GetWindowThreadProcessId / QueryFullProcessImageNameW live in user32;
+    # MSVC links it by default, explicit for Clang-cl / MinGW.
+    target_link_libraries(ajazz-control-center PRIVATE user32)
 endif()
 
 # Icon lives outside this directory, so give Qt a stable relative resource alias to satisfy

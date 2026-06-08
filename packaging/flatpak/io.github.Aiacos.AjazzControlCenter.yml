@@ -75,6 +75,17 @@ modules:
 
   - name: ajazz-control-center
     buildsystem: cmake-ninja
+    # Phase 34 (APROF-01) build env: the foreground-window watcher links
+    # Qt6::WaylandClient (zwlr-foreign-toplevel binding via qtwaylandscanner)
+    # and libX11 (EWMH _NET_ACTIVE_WINDOW reads) on Linux. Both — plus
+    # qtwaylandscanner, libwayland and the X11 dev headers — are supplied by the
+    # org.kde.Sdk runtime above (the KDE SDK bundles the full qtwayland module
+    # and the X11/Wayland client libraries), so no extra build module is needed;
+    # the CMake `find_package(Qt6 ... WaylandClient)` + `pkg_check_modules(x11)`
+    # resolve against the SDK. The matching runtime sockets are already granted
+    # in finish-args (`--socket=wayland`, `--socket=fallback-x11`). If the
+    # runtime is ever slimmed below the full KDE SDK, add `org.kde.Sdk`'s
+    # qtwayland / libX11 explicitly here.
     # Build in a separate `_flatpak_build/` subdirectory so CMAKE_SOURCE_DIR
     # != CMAKE_BINARY_DIR. Our top-level CMakeLists.txt:21 has a guard
     # `if(${CMAKE_SOURCE_DIR} STREQUAL ${CMAKE_BINARY_DIR})` that fatal-errors

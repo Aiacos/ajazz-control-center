@@ -29,6 +29,13 @@ add_library(
     src/input_synthesizer_linux.cpp
     src/input_synthesizer_win.cpp
     src/input_synthesizer_mac.cpp
+    # Phase 34-01 (APROF-01): IActiveWindowWatcher — always-compiled recording
+    # stub + default factory. Qt-free + nlohmann-free (COD-031), mirroring the
+    # input_synthesizer split. The per-OS watcher backends (wayland/x11/win/mac)
+    # are app-tier TUs (they need Qt6::WaylandClient / libX11 / AppKit) and live
+    # in src/app/CMakeLists.txt, NOT here — only the pure-core stub + factory
+    # belong in ajazz_core.
+    src/active_window_watcher_stub.cpp
     # Phase 21-03: BuiltinActionRegistry — pure-core UUID->handler dispatch table (no Qt, no
     # nlohmann; COD-031). The app tier (BuiltinActionsService) populates it with handlers for the
     # ~24 com.hotspot.streamdock.* built-in UUIDs; the plugin executor short-circuits to it BEFORE
