@@ -52,8 +52,8 @@ ______________________________________________________________________
 
 ### Windows-only Plugin Support — native-first (WINPLG)
 
-- [ ] **WINPLG-01**: A feasibility spike classifies win-only `.sdPlugin` plugins into **WS-only-IPC** (runnable natively cross-platform) vs **vendor-DLL** (needs Wine); the decision and detection heuristic are documented (ADR-style).
-- [ ] **WINPLG-02**: WS-only win-only plugins run **natively** on Linux/macOS via the existing host (manifest OS-filter + a `supportsCurrentPlatform()` helper) — **no Wine**.
+- [x] **WINPLG-01**: A feasibility spike classifies win-only `.sdPlugin` plugins into **WS-only-IPC** (runnable natively cross-platform) vs **vendor-DLL** (needs Wine); the decision and detection heuristic are documented (ADR-style).
+- [x] **WINPLG-02**: WS-only win-only plugins run **natively** on Linux/macOS via the existing host (manifest OS-filter + a `supportsCurrentPlatform()` helper) — **no Wine**.
 - [ ] **WINPLG-03**: Vendor-DLL win-only plugins run via **detected system Wine** (`QStandardPaths::findExecutable("wine")`) with per-plugin `WINEPREFIX` isolation; a "requires Wine" / "unsupported on this OS" status chip shows when Wine is absent; Wine is never bundled.
 
 ### Plugin Security Hardening (PLGSEC)
@@ -123,8 +123,8 @@ ______________________________________________________________________
 | APROF-02    | Phase 34 | Complete |
 | APROF-03    | Phase 34 | Complete |
 | APROF-04    | Phase 34 | Complete |
-| WINPLG-01   | Phase 35 | Pending  |
-| WINPLG-02   | Phase 35 | Pending  |
+| WINPLG-01   | Phase 35 | Complete |
+| WINPLG-02   | Phase 35 | Complete |
 | WINPLG-03   | Phase 35 | Pending  |
 | PLGSEC-01   | Phase 35 | Pending  |
 | PLGSEC-02   | Phase 35 | Pending  |
