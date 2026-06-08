@@ -82,6 +82,18 @@ jobs:
           fi
           echo "Loopback-only + SIGPIPE invariants OK."
 
+      # ---- VERIF-02 milestone modularity gates (v2.0)
+      # Runs only on Linux (source tree is identical across runners) and BEFORE
+      # any Qt install / build step for fast failure. Delegates to the scripted,
+      # comment-aware gates so the local run and CI agree byte-for-byte. This
+      # EXTENDS — does not replace — the Phase-30 QHostAddress::Any/SIGPIPE gate
+      # above (which fails even faster on the security-critical bind). The
+      # script re-checks QHostAddress::Any plus the mirajazz/nlohmann/makeAkp
+      # modularity boundaries.
+      - name: Enforce milestone modularity gates (VERIF-02)
+        if: runner.os == 'Linux'
+        run: bash scripts/verif-milestone-gates.sh
+
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
