@@ -2,15 +2,15 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
-status: verifying
-stopped_at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (mod N, persists) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
-last_updated: '2026-06-08T08:30:00.000Z'
-last_activity: 2026-06-08 -- Phase 32 Plan 03 executed (BIND-05/07 Toggle Action dispatch; scoped 62/62, full 727/727 green)
+status: executing
+stopped_at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (currentState mod N, persists via saveActiveProfile) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
+last_updated: '2026-06-08T09:57:44.498Z'
+last_activity: 2026-06-08 -- Phase 33 planning complete
 progress:
   total_phases: 6
   completed_phases: 3
-  total_plans: 10
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 10
   percent: 50
 ---
 
@@ -30,9 +30,9 @@ silently leaking host state into plugin children.
 
 Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — COMPLETE + VERIFIED (human_needed: 2 live walks deferred)
 Plan: all 5 landed (01 delayMs+adapter; 02 Multi dispatch seam; 03 Toggle cycle/render/persist; 04 BIND-03/06 regression-lock; 05 EDIT-01 ScrollView). 744/744 + 17 qml green.
-Status: Continuing autonomous run to Phase 33. EDIT-01 canvas-collapse regression FOUND LIVE + fixed (34a0b73); qml-test link regression fixed (e35683a); code-review 2 blockers refuted as false positives (32-REVIEW-DISPOSITION.md). 2 live walks (Multi/Toggle authoring) deferred to 32-HUMAN-UAT.md (need a binding-authoring RPC).
+Status: Ready to execute
 Next: Phase 33 (Property Inspector E2E) → 34 → 35. NOTE: Phase 33 has a real PI human-verify checkpoint (user interacts with plugin PI HTML).
-Last activity: 2026-06-08 -- Phase 32 VERIFIED (5/5 must-haves; EDIT-01 live-fixed); BIND-03/04/05/06/07 + EDIT-01 all complete
+Last activity: 2026-06-08 -- Phase 33 planning complete
 
 ### Progress bar
 
