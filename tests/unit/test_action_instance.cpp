@@ -176,6 +176,81 @@ TEST_CASE("action_instance round-trips a 2-children Multi Action instance",
     REQUIRE(j1 == j2);
 }
 
+/// delayMs round-trip (Phase 32, BIND-04): an ActionInstance carrying
+/// delayMs=250 round-trips (write -> read) preserving the value. delayMs is the
+/// additive optional per-step delay mirroring Action::delayMs.
+TEST_CASE("action_instance round-trips a non-zero delayMs", "[action_instance][delay]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "ai-delay";
+    p.name = "AI";
+    p.deviceCodename = "akp05e";
+
+    Binding b{};
+    ActionInstance inst{};
+    inst.id = "com.test.delay";
+    inst.delayMs = 250;
+    b.instance = inst;
+    p.keys[0] = b;
+
+    auto const restored = profileFromJson(profileToJson(p));
+    REQUIRE(restored.keys.at(0).instance.has_value());
+    auto const& ri = *restored.keys.at(0).instance;
+    REQUIRE(ri.delayMs == 250);
+}
+
+/// delayMs reader-tolerance (Phase 32): a legacy instance with NO "delayMs" key
+/// reads back delayMs=0. The field is additive; absence is the default.
+TEST_CASE("action_instance defaults a missing delayMs to zero", "[action_instance][delay]") {
+    using namespace ajazz::core;
+
+    constexpr char const* kNoDelayJson =
+        R"({"id":"nodelay","name":"N","device":"akp05e",)"
+        R"("keys":{"0":{"onPress":[],"onRelease":[],"onLongPress":[],)"
+        R"("instance":{"id":"com.test.nodelay","states":[{"text":"A"}],"currentState":0}}},)"
+        R"("encoders":{}})";
+
+    Profile const p = profileFromJson(kNoDelayJson);
+    REQUIRE(p.keys.at(0).instance.has_value());
+    REQUIRE(p.keys.at(0).instance->delayMs == 0);
+}
+
+/// delayMs survives nested children (Phase 32): a child with delayMs=100
+/// round-trips inside parent.children. This is the per-step delay the Multi
+/// Action adapter copies onto each generated ActionChain step.
+TEST_CASE("action_instance round-trips delayMs inside a nested child", "[action_instance][delay]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "ai-childdelay";
+    p.name = "AI";
+    p.deviceCodename = "akp05e";
+
+    Binding b{};
+    ActionInstance parent{};
+    parent.id = "com.test.multi";
+
+    ActionInstance child{};
+    child.id = "com.test.child";
+    child.delayMs = 100;
+    parent.children.push_back(child);
+    b.instance = parent;
+    p.keys[0] = b;
+
+    auto const restored = profileFromJson(profileToJson(p));
+    REQUIRE(restored.keys.at(0).instance.has_value());
+    auto const& ri = *restored.keys.at(0).instance;
+    REQUIRE(ri.children.size() == 1);
+    REQUIRE(ri.children[0].delayMs == 100);
+
+    // WR-04: byte-stable double-serialise so a missing delayMs emit on the
+    // nested-children path is caught by string equality, not just struct compare.
+    auto const j1 = profileToJson(restored);
+    auto const j2 = profileToJson(profileFromJson(j1));
+    REQUIRE(j1 == j2);
+}
+
 /// v1->v2 migration: a legacy profile whose binding instance carries a singular
 /// "state" object (not "states") folds to a states[] array of one on read, and
 /// re-serialising emits the array form "states":[ ... ].
