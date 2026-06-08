@@ -105,6 +105,12 @@ qt_add_executable(
     # must be compiled into this target too or linking fails with "undefined reference to
     # UnifiedPluginHost::UnifiedPluginHost".
     ${ACC_APP_SOURCE_DIR}/src/unified_plugin_host.cpp
+    # Phase 34 Plan 03 (APROF-01): application.cpp constructs the foreground-window watcher via
+    # app::makeActiveWindowWatcher(); its TU must be compiled here or linking fails with "undefined
+    # reference to makeActiveWindowWatcher". The harness does NOT define AJAZZ_FEATURE_ACTIVE_WINDOW
+    # (and omits the per-OS backend TUs), so the factory's #else branch returns the core recording
+    # stub — exactly the right headless behaviour for the offscreen QML smoke test.
+    ${ACC_APP_SOURCE_DIR}/src/active_window_watcher_factory.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)

@@ -160,6 +160,11 @@ qt_add_executable(
     src/active_window_watcher_wayland.cpp
     src/active_window_watcher_x11.cpp
     src/active_window_watcher_win.cpp
+    # Phase 34 Plan 03 (APROF-01): runtime backend-selection factory. Picks the Wayland vs X11 vs
+    # Win vs macOS backend by session type (XDG_SESSION_TYPE / QGuiApplication::platformName()) at
+    # RUNTIME, falling back to the core recording stub when no native backend binds. App-tier (it
+    # references the per-OS make* symbols + Qt platformName); the core interface stays Qt-free.
+    src/active_window_watcher_factory.cpp
 )
 
 # P3.16: Elgato Stream Deck v6-compatible WebSocket plugin server (loopback-only). Conditional on
@@ -197,6 +202,15 @@ endif()
 # out of installed headers. Qt6::WaylandClient is provided by the qtwayland module (CI adds it; the
 # org.kde Flatpak runtime ships it).
 # ----------------------------------------------------------------------------
+# Phase 34 Plan 03 (APROF-01): activate the per-OS watcher backends. The feature gate is defined on
+# the APP target only (the backends pull Qt6::WaylandClient / libX11 / AppKit / user32, which must
+# not cross the COD-031 ajazz_core boundary). ajazz_core's stub TU is compiled WITHOUT this macro,
+# so makeDefaultActiveWindowWatcher() in core stays self-contained (returns the recording stub) and
+# core unit tests link standalone; the app composes the real backend via
+# app::makeActiveWindowWatcher() which selects wayland-vs-x11 at RUNTIME (XDG_SESSION_TYPE /
+# QGuiApplication::platformName()).
+target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_FEATURE_ACTIVE_WINDOW=1)
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Qt6 REQUIRED COMPONENTS WaylandClient)
     qt_generate_wayland_protocol_client_sources(

@@ -11,6 +11,7 @@
  */
 #include "application.hpp"
 
+#include "active_window_watcher_factory.hpp"
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/hotplug_monitor.hpp"
 #include "ajazz/core/logger.hpp"
@@ -412,13 +413,16 @@ Application::Application(QObject* parent)
           // has shipped; the no-op is correct behaviour, not a future TODO.
           [](std::string_view /*id*/, std::string_view /*settingsJson*/) {},
           this)),
-      // Phase 34 (APROF-01): foreground-window watcher. makeDefaultActiveWindowWatcher()
-      // returns the recording stub by default (the real per-OS backends + auto-switch
-      // wire land in Plans 03/04). Declared after m_builtinActions to keep the init list
-      // in member-declaration order (-Wreorder). The window.setForeground debug RPC
-      // injects synthetic foreground changes through it (the StubActiveWindowWatcher
-      // injectForeground seam).
-      m_activeWindowWatcher(core::makeDefaultActiveWindowWatcher()),
+      // Phase 34 (APROF-01): foreground-window watcher. Plan 03 wired the real per-OS
+      // backends behind app::makeActiveWindowWatcher(), which selects the Wayland (wlr-
+      // foreign-toplevel) vs X11/EWMH backend at RUNTIME by session type on Linux (Win/
+      // macOS compile-guarded), falling back to the recording stub on unsupported desktops
+      // / when the feature gate is off. Constructed here on the GUI thread after the
+      // QGuiApplication exists (Pitfall 5). Declared after m_builtinActions to keep the
+      // init list in member-declaration order (-Wreorder). The window.setForeground debug
+      // RPC injects synthetic foreground changes through the StubActiveWindowWatcher seam
+      // when the stub backend is active.
+      m_activeWindowWatcher(app::makeActiveWindowWatcher()),
 #ifdef AJAZZ_HAVE_WEBSOCKETS
       // Phase 17 / Phase 19-02: SdPluginServer — Elgato-compatible WebSocket plugin
       // server (loopback-only). Constructed after m_streamDockInput to keep the init
