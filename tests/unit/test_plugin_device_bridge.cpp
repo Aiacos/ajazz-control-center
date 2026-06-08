@@ -1285,6 +1285,88 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear sent on plugin registration with bou
     CHECK(payload.contains(QStringLiteral("settings")));
 }
 
+// ---------------------------------------------------------------------------
+// 33-01 PI-04: titleParametersDidChange follows willAppear (same context) with a
+// complete SDK-2 payload. Locks the [ASSUMED] titleParameters shape (research A1/A2).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E titleParametersDidChange follows willAppear with complete "
+          "SDK-2 payload",
+          "[plugin-device-bridge][e2e][lifecycle][PI-04]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Key index 2 (0-based) = device key 3 = {row:0, col:2}, bound to com.test.plug.action1.
+    ajazz::core::Profile prof;
+    prof.id = "test-profile";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.action1";
+    binding.onPress.push_back(act);
+    prof.keys[2] = std::move(binding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(500);
+
+    // (a) Ordering: willAppear MUST precede titleParametersDidChange for the same ctx.
+    auto const names = receivedEventNames(msgSpy);
+    REQUIRE(names.contains(QStringLiteral("willAppear")));
+    REQUIRE(names.contains(QStringLiteral("titleParametersDidChange")));
+    auto const idxWillAppear = names.indexOf(QStringLiteral("willAppear"));
+    auto const idxTitle = names.indexOf(QStringLiteral("titleParametersDidChange"));
+    CHECK(idxWillAppear >= 0);
+    CHECK(idxTitle > idxWillAppear);
+
+    // Same context as the willAppear for this ctx (envelope context sibling matches).
+    auto const willAppearEvent = firstEventForEvent(msgSpy, QStringLiteral("willAppear"));
+    auto const titleEvent = firstEventForEvent(msgSpy, QStringLiteral("titleParametersDidChange"));
+    CHECK(titleEvent.value(QStringLiteral("context")).toString() ==
+          willAppearEvent.value(QStringLiteral("context")).toString());
+    CHECK_FALSE(titleEvent.value(QStringLiteral("context")).toString().isEmpty());
+    CHECK(titleEvent.value(QStringLiteral("action")).toString() ==
+          QStringLiteral("com.test.plug.action1"));
+    CHECK(titleEvent.value(QStringLiteral("device")).toString() == QStringLiteral("akp05e"));
+
+    // (b) Payload completeness: every SDK-2 key present.
+    auto const payload = titleEvent.value(QStringLiteral("payload")).toObject();
+    CHECK(payload.contains(QStringLiteral("settings")));
+    auto const coords = payload.value(QStringLiteral("coordinates")).toObject();
+    CHECK(coords.contains(QStringLiteral("row")));
+    CHECK(coords.contains(QStringLiteral("column")));
+    CHECK(coords.value(QStringLiteral("column")).toInt() == 2);
+    CHECK(payload.value(QStringLiteral("controller")).toString() == QStringLiteral("Keypad"));
+    CHECK(payload.contains(QStringLiteral("state")));
+    CHECK(payload.contains(QStringLiteral("title")));
+
+    auto const tp = payload.value(QStringLiteral("titleParameters")).toObject();
+    CHECK(tp.contains(QStringLiteral("fontFamily")));
+    CHECK(tp.contains(QStringLiteral("fontSize")));
+    CHECK(tp.contains(QStringLiteral("fontStyle")));
+    CHECK(tp.contains(QStringLiteral("fontUnderline")));
+    CHECK(tp.contains(QStringLiteral("showTitle")));
+    CHECK(tp.contains(QStringLiteral("titleAlignment")));
+    CHECK(tp.contains(QStringLiteral("titleColor")));
+    // Locked default values (the [ASSUMED] SDK-2 shape).
+    CHECK(tp.value(QStringLiteral("fontSize")).toInt() == 12);
+    CHECK(tp.value(QStringLiteral("showTitle")).toBool() == true);
+    CHECK(tp.value(QStringLiteral("titleAlignment")).toString() == QStringLiteral("middle"));
+    CHECK(tp.value(QStringLiteral("titleColor")).toString() == QStringLiteral("#ffffff"));
+}
+
 TEST_CASE("PluginDeviceBridgeE2E willAppear sent when action UUID is NOT a dotted prefix of "
           "plugin UUID via stored-owner resolver",
           "[plugin-device-bridge][e2e][lifecycle][owner]") {

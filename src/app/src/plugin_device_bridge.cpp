@@ -327,6 +327,45 @@ QJsonObject instancePayload(ActionContext const& ctx, bool isInMultiAction = fal
     };
 }
 
+/// Build the SDK-2 `titleParametersDidChange` payload (Elgato §titleParametersDidChange):
+/// `{settings, coordinates:{row,column}, controller, state, title, titleParameters}`.
+/// Mirrors instancePayload() for the shared instance keys (settings/coordinates/
+/// controller/state) and ADDS the title surface a plugin renders from at appear time.
+///
+/// `title` is sourced from the binding label on ctx; ActionContext carries no label
+/// today, so it resolves to "" (an empty title is a valid SDK-2 value). The
+/// titleParameters defaults are the SDK-2 shape — [ASSUMED] exact values (research
+/// A1/A2); the Catch2 completeness test LOCKS the chosen shape and the end-of-phase
+/// human-verify confirms the values if a real plugin reads them.
+QJsonObject titlePayload(ActionContext const& ctx) {
+    QJsonObject settings;
+    if (!ctx.settingsJson.isEmpty()) {
+        QJsonParseError perr{};
+        auto const doc = QJsonDocument::fromJson(ctx.settingsJson.toUtf8(), &perr);
+        if (perr.error == QJsonParseError::NoError && doc.isObject()) {
+            settings = doc.object();
+        }
+    }
+    return QJsonObject{
+        {QStringLiteral("settings"), settings},
+        {QStringLiteral("coordinates"),
+         QJsonObject{{QStringLiteral("row"), ctx.row}, {QStringLiteral("column"), ctx.column}}},
+        {QStringLiteral("controller"), ctx.controller},
+        {QStringLiteral("state"), ctx.stateIndex},
+        {QStringLiteral("title"), QString{}},
+        {QStringLiteral("titleParameters"),
+         QJsonObject{
+             {QStringLiteral("fontFamily"), QString{}},
+             {QStringLiteral("fontSize"), 12},
+             {QStringLiteral("fontStyle"), QString{}},
+             {QStringLiteral("fontUnderline"), false},
+             {QStringLiteral("showTitle"), true},
+             {QStringLiteral("titleAlignment"), QStringLiteral("middle")},
+             {QStringLiteral("titleColor"), QStringLiteral("#ffffff")},
+         }},
+    };
+}
+
 /// Build the full Elgato/OpenDeck event envelope with top-level action/context/
 /// device siblings to event (the shape real Elgato SDK plugins parse). The
 /// context id is reconstructed from ctx so a byCoord-resolved context needs no
@@ -1172,6 +1211,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             // {settings, coordinates, controller, state, isInMultiAction}.
             m_server->sendEvent(
                 owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
+            // PI-04: titleParametersDidChange follows willAppear inline for the SAME
+            // ctx so ordering is guaranteed with no extra plumbing (research Pitfall 1).
+            m_server->sendEvent(
+                owner,
+                eventEnvelope(QStringLiteral("titleParametersDidChange"), ctx, titlePayload(ctx)));
         }
     }
 
@@ -1215,6 +1259,10 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
 
             m_server->sendEvent(
                 owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
+            // PI-04: titleParametersDidChange follows willAppear inline (encoder ctx).
+            m_server->sendEvent(
+                owner,
+                eventEnvelope(QStringLiteral("titleParametersDidChange"), ctx, titlePayload(ctx)));
         }
     }
 
@@ -1264,6 +1312,10 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
 
             m_server->sendEvent(
                 owner, eventEnvelope(QStringLiteral("willAppear"), ctx, instancePayload(ctx)));
+            // PI-04: titleParametersDidChange follows willAppear inline (touch-zone ctx).
+            m_server->sendEvent(
+                owner,
+                eventEnvelope(QStringLiteral("titleParametersDidChange"), ctx, titlePayload(ctx)));
         }
     }
 
