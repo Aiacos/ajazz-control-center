@@ -106,6 +106,17 @@ struct PluginManifest {
     bool runAsAdministrator{false}; ///< RunAsAdministrator
     bool isK1Pro{false};            ///< IsK1Pro (top-level; per-action IsK1Pro is in PluginAction)
 
+    // --- Application monitoring (Elgato ApplicationsToMonitor) ---
+    /// ApplicationsToMonitor — the apps this plugin asks to be told about via
+    /// applicationDidLaunch/applicationDidTerminate. Elgato declares this as an
+    /// object keyed by platform ({"mac":[...], "windows":[...]}); we also accept
+    /// a bare array. Tokens are normalized (base name, ".exe"/".app" stripped,
+    /// lowercased) to the same app-identity contract the watcher emits, so a
+    /// focus-derived appId can be matched against this list (WR-02). An EMPTY
+    /// list means "monitor everything" (the focus-based approximation delivers to
+    /// the plugin for every app), preserving backwards-compatible fan-out.
+    QStringList applicationsToMonitor;
+
     // --- Actions ---
     std::vector<PluginAction> actions; ///< Actions array
 
@@ -127,6 +138,13 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
 /// Key=1, Dial=2, TouchZone=4. Empty or absent Controllers list defaults to Key only.
 /// ["Information"]-only returns 0 (non-draggable — no physical drop surface).
 [[nodiscard]] int affordanceMask(QStringList const& controllers) noexcept;
+
+/// Normalize an application token (a foreground appId or an ApplicationsToMonitor
+/// entry) to the watcher's app-identity contract: path base name, trailing
+/// ".exe"/".app" stripped, lowercased. Empty/whitespace input yields "". Used so
+/// a manifest's ApplicationsToMonitor list can be matched against a focus-derived
+/// appId (WR-02).
+[[nodiscard]] QString normalizeApplicationToken(QString const& raw);
 
 /**
  * @brief Parse a manifest.json byte array into a PluginManifest.

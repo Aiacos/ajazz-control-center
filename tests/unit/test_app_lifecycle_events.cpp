@@ -157,6 +157,42 @@ TEST_CASE("app_lifecycle_events not delivered to unregistered plugins", "[app_li
     server.stop();
 }
 
+TEST_CASE("app_lifecycle_events ApplicationsToMonitor filter gates delivery",
+          "[app_lifecycle_events]") {
+    // WR-02: when a per-plugin monitor filter is supplied, a plugin receives the
+    // event ONLY for apps it asked to monitor. Here the filter accepts "obs" and
+    // rejects everything else, so an "obs" launch is delivered and a "firefox"
+    // launch is not.
+    ensureQCoreApp();
+    SdPluginServer server;
+    QWebSocket client;
+    QString const uuid = startServerWithPlugin(server, client);
+
+    auto const onlyObs = [uuid](QString const& pluginUuid, QString const& appId) {
+        return pluginUuid == uuid && appId.compare(QStringLiteral("obs"), Qt::CaseInsensitive) == 0;
+    };
+
+    // A monitored app is delivered.
+    {
+        QSignalSpy eventSpy(&server, &SdPluginServer::eventSent);
+        int const attempted = dispatchApplicationLaunchTo(
+            &server, QSet<QString>{uuid}, QStringLiteral("obs"), onlyObs);
+        CHECK(attempted == 1);
+        REQUIRE(waitForSpy(eventSpy));
+    }
+
+    // A non-monitored app is filtered out (no attempt, no delivery).
+    {
+        QSignalSpy eventSpy(&server, &SdPluginServer::eventSent);
+        int const attempted = dispatchApplicationLaunchTo(
+            &server, QSet<QString>{uuid}, QStringLiteral("firefox"), onlyObs);
+        CHECK(attempted == 0);
+    }
+
+    client.close();
+    server.stop();
+}
+
 TEST_CASE("app_lifecycle_events application payload is length-bounded", "[app_lifecycle_events]") {
     // V5 / T-34-04-05: an over-long application token is truncated before send.
     QString const huge(5000, QChar('a'));

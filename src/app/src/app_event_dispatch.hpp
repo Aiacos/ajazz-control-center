@@ -24,9 +24,18 @@
 #include <QSet>
 #include <QString>
 
+#include <functional>
+
 namespace ajazz::app {
 
 class SdPluginServer;
+
+/// Per-plugin delivery filter for the application launch/terminate fan-out
+/// (WR-02). Given a plugin UUID and the app token, returns true if the event
+/// should reach that plugin (honors the plugin's ApplicationsToMonitor list). A
+/// default-constructed (empty) std::function means "deliver to all registered
+/// plugins" (backwards-compatible).
+using PluginAppMonitorFilter = std::function<bool(QString const& pluginUuid, QString const& appId)>;
 
 /// Length-bound a host-sourced application token before it crosses the WS to a
 /// plugin (V5 / T-34-04-05). Returns @p appId unchanged when within the cap;
@@ -40,14 +49,19 @@ int dispatchSystemWakeTo(SdPluginServer* server, QSet<QString> const& registered
 
 /// Send @c applicationDidLaunch with a length-bounded @c {application:<appId>}
 /// payload to each registered plugin only (V4). No-op when @p server is null or
-/// @p appId is empty. Returns the number of plugins the event was attempted for.
+/// @p appId is empty. When @p filter is set, a plugin is skipped unless
+/// @c filter(uuid, appId) is true (WR-02 ApplicationsToMonitor gating); an empty
+/// @p filter delivers to all registered plugins (backwards-compatible). Returns
+/// the number of plugins the event was actually attempted for.
 int dispatchApplicationLaunchTo(SdPluginServer* server,
                                 QSet<QString> const& registered,
-                                QString const& appId);
+                                QString const& appId,
+                                PluginAppMonitorFilter const& filter = {});
 
 /// applicationDidTerminate counterpart of @ref dispatchApplicationLaunchTo.
 int dispatchApplicationTerminateTo(SdPluginServer* server,
                                    QSet<QString> const& registered,
-                                   QString const& appId);
+                                   QString const& appId,
+                                   PluginAppMonitorFilter const& filter = {});
 
 } // namespace ajazz::app

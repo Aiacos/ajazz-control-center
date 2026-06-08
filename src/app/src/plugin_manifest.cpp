@@ -124,7 +124,45 @@ PluginOsRequirement parseOsEntry(QJsonObject const& obj) {
     return req;
 }
 
+/// Append every string in @p arr to @p out, normalized via normalizeApplicationToken.
+void appendNormalizedTokens(QJsonArray const& arr, QStringList& out) {
+    out.reserve(out.size() + arr.size());
+    for (QJsonValue const& v : arr) {
+        QString const token = normalizeApplicationToken(v.toString());
+        if (!token.isEmpty() && !out.contains(token)) {
+            out.append(token);
+        }
+    }
+}
+
 } // anonymous namespace
+
+// ---------------------------------------------------------------------------
+// normalizeApplicationToken
+// ---------------------------------------------------------------------------
+
+QString normalizeApplicationToken(QString const& raw) {
+    QString token = raw.trimmed();
+    if (token.isEmpty()) {
+        return {};
+    }
+    // Take the path base name (handle both separators; manifests may carry full
+    // paths or reverse-DNS bundle ids — for the latter the base name is the whole
+    // string, which is fine).
+    qsizetype const slash =
+        qMax(token.lastIndexOf(QLatin1Char('/')), token.lastIndexOf(QLatin1Char('\\')));
+    if (slash >= 0) {
+        token = token.mid(slash + 1);
+    }
+    // Strip a trailing .exe (Windows) or .app (macOS bundle) suffix to match the
+    // watcher's image-base app-identity contract.
+    if (token.endsWith(QStringLiteral(".exe"), Qt::CaseInsensitive)) {
+        token.chop(4);
+    } else if (token.endsWith(QStringLiteral(".app"), Qt::CaseInsensitive)) {
+        token.chop(4);
+    }
+    return token.toLower();
+}
 
 // ---------------------------------------------------------------------------
 // affordanceMask
@@ -249,6 +287,24 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     m.actions.reserve(static_cast<std::size_t>(actionsArray.size()));
     for (QJsonValue const& actVal : actionsArray)
         m.actions.push_back(parseAction(actVal.toObject()));
+
+    // ApplicationsToMonitor — optional. Elgato shape is an object keyed by
+    // platform ({"mac":[...],"windows":[...]}); some manifests use a bare array.
+    // Accept both; tokens are normalized to the watcher's app-identity contract
+    // so a focus-derived appId can be matched against the list (WR-02). An absent
+    // or empty list means "monitor everything" downstream.
+    QJsonValue const monitorVal = root.value(QStringLiteral("ApplicationsToMonitor"));
+    if (monitorVal.isArray()) {
+        appendNormalizedTokens(monitorVal.toArray(), m.applicationsToMonitor);
+    } else if (monitorVal.isObject()) {
+        QJsonObject const monitorObj = monitorVal.toObject();
+        for (QString const& key : monitorObj.keys()) {
+            QJsonValue const platformVal = monitorObj.value(key);
+            if (platformVal.isArray()) {
+                appendNormalizedTokens(platformVal.toArray(), m.applicationsToMonitor);
+            }
+        }
+    }
 
     return m;
 }

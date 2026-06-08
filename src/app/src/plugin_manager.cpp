@@ -876,6 +876,28 @@ QString PluginManager::ownerForAction(QString const& actionUuid) const {
     return {};
 }
 
+bool PluginManager::monitorsApplication(QString const& pluginUuid, QString const& appId) const {
+    // WR-02: decide whether a registered plugin asked to be told about @p appId
+    // via its manifest ApplicationsToMonitor list. Resolve the plugin by the SAME
+    // identity registeredPlugins() carries: the -pluginUUID value (PUUID when
+    // present, else the m_live key). An EMPTY ApplicationsToMonitor list means
+    // "monitor everything" (backwards-compatible broadcast to that plugin); a
+    // non-empty list filters delivery to the listed apps only. Unknown plugin ->
+    // false (do not deliver to a plugin we cannot resolve).
+    for (auto const& [key, live] : m_live) {
+        QString const registeredId = live.manifest.puuid.isEmpty() ? key : live.manifest.puuid;
+        if (registeredId != pluginUuid) {
+            continue;
+        }
+        if (live.manifest.applicationsToMonitor.isEmpty()) {
+            return true; // "monitor everything" (focus-based approximation)
+        }
+        QString const normalized = normalizeApplicationToken(appId);
+        return live.manifest.applicationsToMonitor.contains(normalized);
+    }
+    return false;
+}
+
 // ---------------------------------------------------------------------------
 // IPluginHost2 overrides (the .sdPlugin sub-host implementation)
 // ---------------------------------------------------------------------------

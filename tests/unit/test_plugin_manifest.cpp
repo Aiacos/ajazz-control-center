@@ -255,6 +255,58 @@ TEST_CASE("PluginManifestTest returns nullopt on invalid json", "[plugin-manifes
 }
 
 // ---------------------------------------------------------------------------
+// Test: ApplicationsToMonitor parsing + normalization (WR-02)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManifestTest normalizeApplicationToken normalizes tokens", "[plugin-manifest]") {
+    CHECK(normalizeApplicationToken(QStringLiteral("FIREFOX.EXE")) == QStringLiteral("firefox"));
+    CHECK(normalizeApplicationToken(QStringLiteral("/usr/bin/obs")) == QStringLiteral("obs"));
+    CHECK(normalizeApplicationToken(QStringLiteral("C:\\Apps\\Code.exe")) ==
+          QStringLiteral("code"));
+    CHECK(normalizeApplicationToken(QStringLiteral("OBS.app")) == QStringLiteral("obs"));
+    CHECK(normalizeApplicationToken(QStringLiteral("  Firefox  ")) == QStringLiteral("firefox"));
+    CHECK(normalizeApplicationToken(QStringLiteral("")).isEmpty());
+    CHECK(normalizeApplicationToken(QStringLiteral("   ")).isEmpty());
+}
+
+TEST_CASE("PluginManifestTest parses ApplicationsToMonitor object shape", "[plugin-manifest]") {
+    QByteArray const json(R"({
+        "Name":"X","Author":"A","Version":"1.0.0","SDKVersion":1,
+        "OS":[{"Platform":"mac"}],"CodePath":"code.js","Actions":[],
+        "ApplicationsToMonitor":{"mac":["obs"],"windows":["OBS.EXE","Firefox.exe"]}
+    })");
+    auto const m = parsePluginManifest(json);
+    REQUIRE(m.has_value());
+    // Normalized + deduplicated across platform keys.
+    CHECK(m->applicationsToMonitor.contains(QStringLiteral("obs")));
+    CHECK(m->applicationsToMonitor.contains(QStringLiteral("firefox")));
+    CHECK(m->applicationsToMonitor.count(QStringLiteral("obs")) == 1);
+}
+
+TEST_CASE("PluginManifestTest parses ApplicationsToMonitor bare array shape", "[plugin-manifest]") {
+    QByteArray const json(R"({
+        "Name":"X","Author":"A","Version":"1.0.0","SDKVersion":1,
+        "OS":[{"Platform":"mac"}],"CodePath":"code.js","Actions":[],
+        "ApplicationsToMonitor":["Code.exe","obs"]
+    })");
+    auto const m = parsePluginManifest(json);
+    REQUIRE(m.has_value());
+    CHECK(m->applicationsToMonitor.contains(QStringLiteral("code")));
+    CHECK(m->applicationsToMonitor.contains(QStringLiteral("obs")));
+}
+
+TEST_CASE("PluginManifestTest ApplicationsToMonitor absent yields empty list",
+          "[plugin-manifest]") {
+    QByteArray const json(R"({
+        "Name":"X","Author":"A","Version":"1.0.0","SDKVersion":1,
+        "OS":[{"Platform":"mac"}],"CodePath":"code.js","Actions":[]
+    })");
+    auto const m = parsePluginManifest(json);
+    REQUIRE(m.has_value());
+    CHECK(m->applicationsToMonitor.isEmpty()); // empty = "monitor everything" downstream
+}
+
+// ---------------------------------------------------------------------------
 // Test: currentPlatformString returns a non-empty recognised string
 // ---------------------------------------------------------------------------
 

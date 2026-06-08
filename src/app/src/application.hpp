@@ -33,6 +33,7 @@
 #include "stream_dock_input_service.hpp"
 
 #ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "app_event_dispatch.hpp"
 #include "plugin_device_bridge.hpp"
 #include "plugin_manager.hpp"
 #include "sd_plugin_server.hpp"
@@ -203,6 +204,13 @@ public:
     /// Same registered-only + length-bound contract as
     /// @ref dispatchApplicationLaunch.
     void dispatchApplicationTerminate(QString const& appId);
+
+private:
+    /// Build the per-plugin ApplicationsToMonitor delivery filter (WR-02) bound to
+    /// m_pluginManager. Returns an empty filter (deliver to all) when no manager.
+    [[nodiscard]] ajazz::app::PluginAppMonitorFilter appMonitorFilter() const;
+
+public:
 #endif
 
 private:

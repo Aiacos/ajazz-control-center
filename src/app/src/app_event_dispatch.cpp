@@ -37,13 +37,20 @@ namespace {
 int dispatchAppEvent(SdPluginServer* server,
                      QSet<QString> const& registered,
                      QString const& eventName,
-                     QString const& appId) {
+                     QString const& appId,
+                     PluginAppMonitorFilter const& filter) {
     if (server == nullptr || appId.isEmpty()) {
         return 0;
     }
     QString const bounded = boundApplicationToken(appId);
     int attempted = 0;
     for (QString const& uuid : registered) {
+        // WR-02: when a filter is supplied, deliver only to plugins whose
+        // ApplicationsToMonitor list covers this app. An unset filter preserves
+        // the legacy all-registered fan-out.
+        if (filter && !filter(uuid, appId)) {
+            continue;
+        }
         server->sendEvent(uuid, eventName, QJsonObject{{QStringLiteral("application"), bounded}});
         ++attempted;
     }
@@ -54,14 +61,18 @@ int dispatchAppEvent(SdPluginServer* server,
 
 int dispatchApplicationLaunchTo(SdPluginServer* server,
                                 QSet<QString> const& registered,
-                                QString const& appId) {
-    return dispatchAppEvent(server, registered, QStringLiteral("applicationDidLaunch"), appId);
+                                QString const& appId,
+                                PluginAppMonitorFilter const& filter) {
+    return dispatchAppEvent(
+        server, registered, QStringLiteral("applicationDidLaunch"), appId, filter);
 }
 
 int dispatchApplicationTerminateTo(SdPluginServer* server,
                                    QSet<QString> const& registered,
-                                   QString const& appId) {
-    return dispatchAppEvent(server, registered, QStringLiteral("applicationDidTerminate"), appId);
+                                   QString const& appId,
+                                   PluginAppMonitorFilter const& filter) {
+    return dispatchAppEvent(
+        server, registered, QStringLiteral("applicationDidTerminate"), appId, filter);
 }
 
 } // namespace ajazz::app

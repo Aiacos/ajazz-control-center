@@ -374,6 +374,22 @@ public:
      */
     [[nodiscard]] QString ownerForAction(QString const& actionUuid) const;
 
+    /**
+     * @brief Whether a registered plugin asked to be told about @p appId (WR-02).
+     *
+     * Honors each plugin's manifest @c ApplicationsToMonitor list so the host-
+     * level applicationDidLaunch/Terminate fan-out is NOT broadcast to every
+     * registered plugin: an empty list means "monitor everything" (backwards-
+     * compatible), a non-empty list filters delivery to the listed apps only.
+     * @p pluginUuid is matched against the same -pluginUUID identity
+     * registeredPlugins() carries (PUUID, else the .sdPlugin directory key).
+     *
+     * @param pluginUuid  Registered plugin UUID.
+     * @param appId       Foreground app-identity token (normalized internally).
+     * @return            true if the event should be delivered to this plugin.
+     */
+    [[nodiscard]] bool monitorsApplication(QString const& pluginUuid, QString const& appId) const;
+
 signals:
     /**
      * @brief Emitted when a plugin is permanently disabled (3-in-30s crash or node absent).
