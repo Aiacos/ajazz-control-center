@@ -177,7 +177,19 @@ Plans:
 1. `grep -rn "QHostAddress::Any" src/` returns 0 in CI (grep gate active in `.github/workflows/ci.yml`); `scripts/ajazz-debug` confirms the WS server is loopback-only via `state` or `ping` response
 1. A Windows-only `.sdPlugin` installed on Linux shows either a "runs natively" status (WS-IPC-only) or a "requires Wine" chip (PE binary); if Wine is absent, the chip reads "unsupported on this OS" — all chip states are `objectName`-addressed and reachable via `scripts/ajazz-debug qml.get`
 1. Milestone modularity audit (VERIF-01/02): `grep -rn mirajazz src/core/ src/app/src/plugin_manager.cpp src/app/src/plugin_device_bridge.cpp` returns 0; `grep -rn nlohmann src/core/include/` returns 0; `grep -rn "akp05\.cpp\|makeAkp05\|makeAkp03\|makeAkp153" src/` returns 0; every new interactive control added in v2.0 has `objectName:` (verified by a grep scan of new QML files); all phases have a `screenshot` in their VERIFICATION artifact
-   **Plans**: TBD
+   **Plans**: 3 plans
+   **UI hint**: yes
+
+Plans:
+
+**Wave 1** *(parallel-eligible; serialized this run under use_worktrees=false; no file overlap between 35-01 and 35-02)*
+
+- [ ] 35-01-PLAN.md — WINPLG-01/02: classifyWindowsPlugin (CodePath suffix + PE-magic) + supportsCurrentPlatform native-run gate + PluginInfo.winClass + WINPLG-01 ADR
+- [ ] 35-02-PLAN.md — PLGSEC-01/02/03 verify + test-lock + VERIF-02 scripted/CI grep gates + milestone modularity audit doc
+
+**Wave 2** *(blocked on 35-01 — consumes PluginInfo.winClass)*
+
+- [ ] 35-03-PLAN.md — WINPLG-03 (chip-only) status chip + VERIF-01 objectNames on LoadedPluginsPage + platformStatus model role + consolidated live debug-channel phase gate
 
 ## Progress
 
@@ -188,4 +200,4 @@ Plans:
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 5/5            | Complete    | 2026-06-08 |
-| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
+| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/3            | Planned     | -          |
