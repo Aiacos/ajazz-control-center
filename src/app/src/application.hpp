@@ -320,9 +320,16 @@ private:
                           ///< member-declaration order (-Wreorder).
     std::unique_ptr<core::IActiveWindowWatcher>
         m_activeWindowWatcher; ///< Phase 34 (APROF-01): foreground-window watcher.
-                               ///< makeDefaultActiveWindowWatcher() — currently the recording
-                               ///< stub (real backends + auto-switch wire land in Plans 03/04).
+                               ///< makeDefaultActiveWindowWatcher() — the per-OS backend on a
+                               ///< supported desktop, else the recording stub. onChange drives the
+                               ///< APROF-02 auto-switch + APROF-04 lifecycle fan-out (Plan 04).
                                ///< The window.setForeground debug RPC injects through it.
+    /// Phase 34-04 (APROF-04): the app-id of the most recent foreground app, so a
+    /// foreground CHANGE can fan out applicationDidTerminate for the outgoing app
+    /// and applicationDidLaunch for the incoming one. Empty until the first
+    /// foreground event. Best-effort: the watcher reports focus, not process
+    /// lifetime, so terminate is "lost focus" rather than a true process exit.
+    QString m_lastForegroundApp;
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     std::unique_ptr<SdPluginServer>
         m_pluginServer; ///< Phase 17: Elgato-compatible WebSocket plugin server (loopback-only).

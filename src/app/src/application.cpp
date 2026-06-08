@@ -1158,6 +1158,23 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         m_activeWindowWatcher->start([this](core::ActiveWindowInfo info) {
             QString const appId = QString::fromStdString(info.appId);
 
+            // APROF-04 lifecycle fan-out: a foreground CHANGE means the previous
+            // app lost focus (best-effort applicationDidTerminate) and the new app
+            // gained it (applicationDidLaunch). Delivered to REGISTERED plugins
+            // only (V4 / T-34-04-02 — never broadcast) with a length-bounded
+            // payload (V5). Skipped when the app id did not actually change.
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+            if (appId != m_lastForegroundApp) {
+                if (!m_lastForegroundApp.isEmpty()) {
+                    dispatchApplicationTerminate(m_lastForegroundApp);
+                }
+                if (!appId.isEmpty()) {
+                    dispatchApplicationLaunch(appId);
+                }
+                m_lastForegroundApp = appId;
+            }
+#endif
+
             // APROF-02 auto-switch. Scope resolution to the active device so we
             // never switch to another device's profile (m_activeDeviceId carries
             // the device codename; empty until a device connects).
