@@ -28,20 +28,20 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 33 (Property Inspector E2E) — IN PROGRESS. Plan 01 (PI-04 lifecycle events) COMPLETE. Plan 02 (PI-02 thin-UI) COMPLETE: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances (QML-only); PI-01 + PI-02 marked complete; PI-03 partial (real-PI human-verify pending). 728/728 + 17/17 qml green.
-Plan: 33-02 done (1/1 task + verify). Remaining: 33-03 (real-PI human-verify checkpoint: criterion 5 -- $SD.setSettings() round-trip + app restart; plus the consolidated live debug-channel pass for criteria 1/2/3).
-Status: Ready to execute Plan 33-03
-Next: Phase 33 plan 03 → 34 → 35. NOTE: Phase 33 has a real PI human-verify checkpoint (user interacts with plugin PI HTML) at plan 03 / end-of-phase. The live debug-channel pass for 33-02 criteria 1/2/3 (exact ajazz-debug commands in 33-02-SUMMARY) is the orchestrator's consolidated step.
-Last activity: 2026-06-08 -- Phase 33 Plan 02 (PI-02 thin-UI objectNames + open/close affordances) complete
+Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
+Plan: all 3 (01 PI-04 events; 02 PI-02 objectNames+affordance; 03 = deferred human-verify checkpoint). LIVE-CONFIRMED: criterion 2 simulatePiSettings→didReceiveSettings + full setSettings round-trip; PI-02 objectNames addressable. CR WR-01 (spurious didDisappear+didAppear on identical reload) FIXED (13f085b).
+Status: Continuing autonomous run to Phase 34. Deferred PI human-verify in 33-HUMAN-UAT.md (com.test.demo→pi/index.html walk-through).
+Next: Phase 34 (Per-App Profiles + Event-Parity Audit) → 35.
+Last activity: 2026-06-08 -- Phase 33 VERIFIED (PI-04 events + PI-02 affordance; PI-03 relay/persistence live-confirmed; human-verify deferred)
 
 ### Progress bar
 
 ```
-v2.0 [███████████████               ] 3/6 phases (50%)
+v2.0 [████████████████████          ] 4/6 phases (67%)
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
 Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
-Phase 33 IN PROGRESS (Plan 01 done: PI-04 lifecycle events; Plan 02 done: PI-02 thin-UI objectNames + open/close affordances — PI-01+PI-02 complete, PI-03 partial)
+Phase 33 DONE (3 plans; PI-01/02/04; PI-03 relay live-confirmed; CR WR-01 fixed; render/lifecycle-on-open + criterion-5 deferred to HUMAN-UAT)
 Phase 34 ....
 Phase 35 ....
 ```
