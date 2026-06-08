@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: "Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)"
-last_updated: '2026-06-08T14:40:09.251Z'
+stopped_at: Completed 34-04-PLAN.md.
+last_updated: '2026-06-08T15:08:34.968Z'
 last_activity: 2026-06-08
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 18
-  completed_plans: 17
+  completed_plans: 18
   percent: 67
 ---
 
@@ -31,12 +31,12 @@ silently leaking host state into plugin children.
 Phase: 34 (per-app-profiles-event-parity-audit) — EXECUTING
 
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
-Plan: 3 of 5 DONE (34-01 APROF foundation + 34-02 EVENT audit + 34-03 watcher backends). EVENT-01/02/04 complete; APROF-01 complete (interface Plan 01, the 4 backends + runtime factory + debounce Plan 03; Wayland live-bound on niri active=true).
-Status: Ready to execute Plan 04 (auto-switch matcher + lifecycle fan-out + EVENT-03 switchToProfile/systemDidWakeUp dispatch) then Plan 05 (APROF-03 UI + consolidated live gate).
-Next: Phase 34 Plans 04/05, then 35.
+Plan: 5 of 5 DONE (34-01 APROF foundation + 34-02 EVENT audit + 34-03 watcher backends + 34-04 auto-switch + EVENT-03 dispatch). EVENT-01/02/03/04 complete; APROF-01/02/04 complete (interface Plan 01; 4 backends + factory + debounce Plan 03, Wayland live-bound on niri; auto-switch matcher + idempotent guard + lifecycle fan-out + switchToProfile/systemDidWakeUp dispatch Plan 04).
+Status: Ready to execute Plan 05 (APROF-03 UI assign-profile + capability-warning chip + consolidated live gate). systemDidWakeUp real logind D-Bus source DEFERRED (dispatch unit-proven; OS source is the remaining wiring — candidate for 34-05).
+Next: Phase 34 Plan 05, then 35.
 Last activity: 2026-06-08
-Tests: 768/768 ctest green (linux-release, incl 17 qml).
-Stopped at: Completed 34-03-PLAN.md.
+Tests: 779/779 ctest green (linux-release, incl 17 qml).
+Stopped at: Completed 34-04-PLAN.md.
 
 ### Progress bar
 
@@ -46,7 +46,7 @@ Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
 Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
 Phase 33 DONE (3 plans; PI-01/02/04; PI-03 relay live-confirmed; CR WR-01 fixed; render/lifecycle-on-open + criterion-5 deferred to HUMAN-UAT)
-Phase 34 IN PROGRESS (3/5 plans: 34-01 APROF foundation [APROF-01 iface]; 34-02 EVENT audit [EVENT-01/02/04]; 34-03 watcher backends [APROF-01: wayland/x11/win/mac + runtime factory + debounce, Wayland live-bound on niri]); Plans 04/05 remain (auto-switch + EVENT-03; APROF-03 UI + live gate)
+Phase 34 IN PROGRESS (4/5 plans: 34-01 APROF foundation [APROF-01 iface]; 34-02 EVENT audit [EVENT-01/02/04]; 34-03 watcher backends [APROF-01: wayland/x11/win/mac + runtime factory + debounce, Wayland live-bound on niri]; 34-04 auto-switch + EVENT-03 [APROF-02 hint-match+idempotent / APROF-04 lifecycle fan-out registered-only / EVENT-03 switchToProfile+systemDidWakeUp dispatch, +11 tests]); Plan 05 remains (APROF-03 UI + live gate; logind wake-source wiring)
 Phase 35 ....
 ```
 
@@ -131,6 +131,9 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 | 33-02 | PI-02 thin-UI: open/close affordances are plain SecondaryButtons (not Switch -- qml.invoke fires onClicked but cannot reproduce Switch.toggled, CLAUDE.md harness gap); openPiButton reuses maybeLoadInspector() rather than re-resolving PI path/uuid/ctx; NO C++ change (loadInspector/closeInspector already Q_INVOKABLE -- research A4 openForCurrentSelection fallback unnecessary, tightens the GREEN-files guard); PI-03 stays partial until the real-PI human-verify in 33-03 |
 | 34-01 | APROF-01 foundation: IActiveWindowWatcher kept Qt-free in ajazz_core (std::function callback seam, RESEARCH A1); all Wayland/X11/AppKit live in app-tier per-OS TUs so COD-031 holds. StubActiveWindowWatcher is PUBLIC (not anonymous like the input-synth stub) so the debug facade + tests reach injectForeground; window.setForeground RPC dynamic_casts to it                                                                                                                    |
 | 34-01 | Qt6::WaylandClient find_package + qtwaylandscanner codegen + libX11 are Linux-gated (qtwayland is not built on macOS/Windows; REQUIRED would break those configures). Generated qwayland-\*.cpp compiled with -w (trips -Werror old-style-cast/sign-conversion; generated code). RED Wave-0 scaffolds use Catch2 [!shouldfail] (registered + fail-as-expected, pending Plan 04). .mm excluded from clang-format (no ObjC block in .clang-format)                                      |
+| 34-04 | APROF-02 auto-switch REUSES profileChanged->populateContextsForActivePage reconcile behind an idempotent no-op-on-identical guard (CR WR-01 / T-34-04-01 DoS); resolveProfileForApp matches Profile::applicationHints case-insensitively (reads profiles off disk; debounced call) + device-default fallback. No new willAppear/willDisappear path (grep-verified)                                                                                                                    |
+| 34-04 | Host-event fan-out (applicationDidLaunch/Terminate, systemDidWakeUp) factored into app_event_dispatch free fns over SdPluginServer\* + a registered-uuid set so the registered-only(V4)/length-bound(V5)/never-cache-socket(Pitfall 4) contract is UNIT-TESTABLE against a live loopback server (application.cpp is not in the unit target). Application dispatch\* are thin wrappers. switchToProfile token = lookup key only (V5-bound, name-match device-scoped, bad-token reject) |
+| 34-04 | systemDidWakeUp DISPATCH implemented + unit-tested via the injectable Application::dispatchSystemWake synthetic-wake seam; the real Linux logind PrepareForSleep D-Bus source is DEFERRED (dispatch proven; OS source = candidate for 34-05). applicationDidTerminate is best-effort focus-loss (watcher reports focus, not process exit)                                                                                                                                             |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -158,6 +161,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08T14:17:53.521Z
+Last session: 2026-06-08T15:08:34.961Z
 Stopped at: Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)
 Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)

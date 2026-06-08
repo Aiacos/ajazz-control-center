@@ -159,7 +159,7 @@ Plans:
 
 **Wave 3** *(blocked on 34-02, 34-03)*
 
-- [ ] 34-04-PLAN.md — Auto-switch wire (applicationHints match + default fallback + idempotent guard, reuses profileChanged reconcile) + applicationDidLaunch/Terminate fan-out + switchToProfile/systemDidWakeUp dispatch (APROF-02/04, EVENT-03)
+- [x] 34-04-PLAN.md — Auto-switch wire (applicationHints match + default fallback + idempotent guard, reuses profileChanged reconcile) + applicationDidLaunch/Terminate fan-out + switchToProfile/systemDidWakeUp dispatch (APROF-02/04, EVENT-03)
 
 **Wave 4** *(blocked on 34-04)*
 
@@ -187,5 +187,5 @@ Plans:
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
-| 34. Per-App Profiles + Event-Parity Audit                                | 3/5            | In Progress |            |
+| 34. Per-App Profiles + Event-Parity Audit                                | 4/5            | In Progress |            |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |

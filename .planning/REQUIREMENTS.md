@@ -40,15 +40,15 @@ ______________________________________________________________________
 
 - [x] **EVENT-01**: An event-parity **coverage table** (our `SdPluginServer`/`PluginDeviceBridge` vs OpenDeck `events/inbound`+`outbound` and the Elgato SDK) is produced and kept current as a verification deliverable, marking each event supported / partial / missing / hardware-gated.
 - [x] **EVENT-02**: The `willAppear` payload carries all required fields (`action`, normalized `controller`, `coordinates`, `state`, `isInMultiAction`), asserted by a unit test, so plugin handlers never silently mismatch.
-- [ ] **EVENT-03**: `systemDidWakeUp` and the `switchToProfile` host-command dispatch are implemented and unit-tested.
+- [x] **EVENT-03**: `systemDidWakeUp` and the `switchToProfile` host-command dispatch are implemented and unit-tested.
 - [x] **EVENT-04**: Controller-token normalization (`Knob` ↔ `Encoder`, etc.) is audited so no encoder/touch event is silently dropped.
 
 ### Per-App Profiles (APROF)
 
 - [x] **APROF-01**: An `IActiveWindowWatcher` interface with platform-split backends — X11/EWMH, Windows/`GetForegroundWindow`, macOS/`NSWorkspace` (Obj-C++ `.mm`), Wayland/`zwlr-foreign-toplevel` (best-effort) — emits debounced foreground-app changes.
-- [ ] **APROF-02**: The active profile auto-switches based on the foreground app via `Profile::applicationHints`, with a default-profile fallback; each switch drives the bridge context lifecycle (`willDisappear`/`willAppear`).
+- [x] **APROF-02**: The active profile auto-switches based on the foreground app via `Profile::applicationHints`, with a default-profile fallback; each switch drives the bridge context lifecycle (`willDisappear`/`willAppear`).
 - [ ] **APROF-03**: A user can assign profiles to application names in the UI; the Wayland/GNOME limitation (no public foreground API without a shell extension) is surfaced as a capability warning in the UI.
-- [ ] **APROF-04**: `applicationDidLaunch` / `applicationDidTerminate` events are fired from the watcher to plugins that subscribe.
+- [x] **APROF-04**: `applicationDidLaunch` / `applicationDidTerminate` events are fired from the watcher to plugins that subscribe.
 
 ### Windows-only Plugin Support — native-first (WINPLG)
 
@@ -117,12 +117,12 @@ ______________________________________________________________________
 | PI-04       | Phase 33 | Complete |
 | EVENT-01    | Phase 34 | Complete |
 | EVENT-02    | Phase 34 | Complete |
-| EVENT-03    | Phase 34 | Pending  |
+| EVENT-03    | Phase 34 | Complete |
 | EVENT-04    | Phase 34 | Complete |
 | APROF-01    | Phase 34 | Complete |
-| APROF-02    | Phase 34 | Pending  |
+| APROF-02    | Phase 34 | Complete |
 | APROF-03    | Phase 34 | Pending  |
-| APROF-04    | Phase 34 | Pending  |
+| APROF-04    | Phase 34 | Complete |
 | WINPLG-01   | Phase 35 | Pending  |
 | WINPLG-02   | Phase 35 | Pending  |
 | WINPLG-03   | Phase 35 | Pending  |
