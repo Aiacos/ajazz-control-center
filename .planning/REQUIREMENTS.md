@@ -58,9 +58,9 @@ ______________________________________________________________________
 
 ### Plugin Security Hardening (PLGSEC)
 
-- [ ] **PLGSEC-01**: The verify-gate splits **Tampered** vs **Unsigned**; a tampered plugin is refused **even with user consent** (CR-01 invariant); an unsigned plugin requires explicit per-plugin consent.
-- [ ] **PLGSEC-02**: Per-plugin unsigned-consent persists in `QSettings` under a named org/app scope (so it round-trips on the Windows registry backend) and survives the launch-sweep.
-- [ ] **PLGSEC-03**: The plugin WebSocket server stays loopback-only (`grep QHostAddress::Any src/` → 0 hits, CI-gated); the catalog never phones home.
+- [x] **PLGSEC-01**: The verify-gate splits **Tampered** vs **Unsigned**; a tampered plugin is refused **even with user consent** (CR-01 invariant); an unsigned plugin requires explicit per-plugin consent.
+- [x] **PLGSEC-02**: Per-plugin unsigned-consent persists in `QSettings` under a named org/app scope (so it round-trips on the Windows registry backend) and survives the launch-sweep.
+- [x] **PLGSEC-03**: The plugin WebSocket server stays loopback-only (`grep QHostAddress::Any src/` → 0 hits, CI-gated); the catalog never phones home.
 
 ### Device Editor (EDIT)
 
@@ -69,7 +69,7 @@ ______________________________________________________________________
 ### Verification & Modularity gate (VERIF)
 
 - [ ] **VERIF-01**: Every new interactive control added in v2.0 is debug-addressable (has an `objectName`) and every phase closes with a live debug-control-channel drive + `screenshot` confirming real behaviour — not just `ctest` green (the v1.3 "checked but not working" lesson).
-- [ ] **VERIF-02**: The `mirajazz` crate is never modified; sidecar changes (if any) live only in `streamdock-host/`; the removed C++ AKP wire backends are not reintroduced. Verified by review at milestone close.
+- [x] **VERIF-02**: The `mirajazz` crate is never modified; sidecar changes (if any) live only in `streamdock-host/`; the removed C++ AKP wire backends are not reintroduced. Verified by review at milestone close.
 
 ______________________________________________________________________
 
@@ -126,12 +126,12 @@ ______________________________________________________________________
 | WINPLG-01   | Phase 35 | Complete |
 | WINPLG-02   | Phase 35 | Complete |
 | WINPLG-03   | Phase 35 | Pending  |
-| PLGSEC-01   | Phase 35 | Pending  |
-| PLGSEC-02   | Phase 35 | Pending  |
-| PLGSEC-03   | Phase 35 | Pending  |
+| PLGSEC-01   | Phase 35 | Complete |
+| PLGSEC-02   | Phase 35 | Complete |
+| PLGSEC-03   | Phase 35 | Complete |
 | EDIT-01     | Phase 32 | Complete |
 | VERIF-01    | Phase 35 | Pending  |
-| VERIF-02    | Phase 35 | Pending  |
+| VERIF-02    | Phase 35 | Complete |
 
 ______________________________________________________________________
 

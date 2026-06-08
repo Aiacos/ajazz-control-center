@@ -185,7 +185,7 @@ Plans:
 **Wave 1** *(parallel-eligible; serialized this run under use_worktrees=false; no file overlap between 35-01 and 35-02)*
 
 - [x] 35-01-PLAN.md — WINPLG-01/02: classifyWindowsPlugin (CodePath suffix + PE-magic) + supportsCurrentPlatform native-run gate + PluginInfo.winClass + WINPLG-01 ADR
-- [ ] 35-02-PLAN.md — PLGSEC-01/02/03 verify + test-lock + VERIF-02 scripted/CI grep gates + milestone modularity audit doc
+- [x] 35-02-PLAN.md — PLGSEC-01/02/03 verify + test-lock + VERIF-02 scripted/CI grep gates + milestone modularity audit doc
 
 **Wave 2** *(blocked on 35-01 — consumes PluginInfo.winClass)*
 
@@ -200,4 +200,4 @@ Plans:
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 5/5            | Complete    | 2026-06-08 |
-| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 1/3            | In Progress |            |
+| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 2/3            | In Progress |            |
