@@ -69,23 +69,57 @@ line trips; the `// QHostAddress::Any ...` comment does not.)
 
 ______________________________________________________________________
 
-## 2. objectName coverage scan over new v2.0 QML (PROVISIONAL)
+## 2. objectName coverage scan over new v2.0 QML (FINALIZED — Plan 35-03)
 
-> **PROVISIONAL — refreshed by Plan 35-03.** Plan 35-02 (this plan) runs in
-> Wave 1, BEFORE Plan 35-03 adds/finalizes the `LoadedPluginsPage` Windows
-> status chips. The Plan-03 live VERIF-01 gate refreshes this section once those
-> chips land with their `objectName`s. Treat the row counts below as a snapshot.
+> **FINALIZED by Plan 35-03 (2026-06-08).** Plan 35-03 added the
+> `LoadedPluginsPage` Windows status chip (`platformStatusChip`), the
+> unsigned-consent chip (`unsignedConsentChip`), and an `objectName` +
+> readable-label property on the pre-existing `trustChip` (which had none —
+> `grep -c objectName LoadedPluginsPage.qml` was 0 before this plan). All three
+> chips now expose both an `objectName` and a headless-readable label property
+> (`statusLabel` / `consentLabel` / `trustLabel`), mirroring the
+> `SettingsPage.qml waylandCapabilityWarningChip` idiom.
 
 The debug channel addresses controls by `objectName` (`findByName`); an un-named
 interactive control is invisible to `qml.get/set/invoke/click` (CLAUDE.md
 definition-of-done item). This scan reports coverage over the QML surfaces
 touched in v2.0; it reports rather than hard-fails on pre-v2.0 files.
 
-| QML surface                   | Interactive controls                                             | objectName decls                                 | Status (provisional)                                                                               |
-| ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `LoadedPluginsPage.qml`       | trust chip + "Allow this plugin" action (delegate-internal)      | trust-chip ids present (`trustChip`, `chipText`) | `partial` — chip ids exist; the Windows status chip + its `objectName` are finalized by Plan 35-03 |
-| `Inspector.qml`               | 3                                                                | 3                                                | `done` — 1:1 objectName coverage on interactive controls                                           |
-| `components/DeviceCanvas.qml` | 0 (layout/canvas; KeyCells lack objectNames — known harness gap) | 0                                                | `partial` — KeyCell-selection harness gap is tracked (33-HUMAN-UAT.md item 1)                      |
+| QML surface                   | Interactive controls                                             | objectName decls                                             | Status                                                                                                                   |
+| ----------------------------- | ---------------------------------------------------------------- | ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `LoadedPluginsPage.qml`       | 3 delegate-internal display chips (no Switch — harness gap)      | 3 (`trustChip`, `platformStatusChip`, `unsignedConsentChip`) | `done (source)` — 1:1 objectName + readable-label coverage; live-render BLOCKED in this build (see live-gate note below) |
+| `Inspector.qml`               | 3                                                                | 3                                                            | `done` — 1:1 objectName coverage on interactive controls                                                                 |
+| `components/DeviceCanvas.qml` | 0 (layout/canvas; KeyCells lack objectNames — known harness gap) | 0                                                            | `partial` — KeyCell-selection harness gap is tracked (33-HUMAN-UAT.md item 1)                                            |
+
+**Live-gate note (Plan 35-03, HONEST — not a fabricated walk).** The chips are
+correctly authored and `objectName`-addressable in source, and their bindings
+(`row.platformStatus` / `row.trustLevel`) are unit-locked via
+`test_loaded_plugins_model.cpp` (the `platformStatus` derive) and the QML smoke
+build. However, the live `qml.get` of the chips against an isolated offscreen
+instance could **not** be completed this phase, for two independent,
+honestly-recorded reasons (see `35-HUMAN-UAT.md`):
+
+1. **`LoadedPluginsModel` is empty in the shipping build for `.sdPlugin`
+   plugins.** The model is fed ONLY by the Python `OutOfProcessPluginHost`
+   (`application.cpp:956-957`, inside `#ifdef AJAZZ_PYTHON_HOST`). The
+   `UnifiedPluginHost` aggregator (`m_pluginHost2`, `application.cpp:1091`) that
+   merges `.sdPlugin` inventory is constructed but is **never wired to
+   `LoadedPluginsModel`** — so `.sdPlugin` plugins (the only ones carrying a
+   meaningful `winClass`) never reach the model and the `platformStatusChip`
+   never instantiates. This contradicts 35-PATTERNS.md A1's "DECISIVE" claim and
+   is flagged below as an architectural follow-up (the chip is correct; its data
+   source is not wired). No Python OOP plugins were installed in the test session
+   either, so the model row count was 0 and no delegate (hence no chip)
+   instantiated.
+1. **The `loadedPluginsDrawer` (a modal `Drawer`/`Popup`) cannot be opened
+   headlessly.** Opening it requires the `navLoaded` ToolButton's `onClicked` →
+   `loadedPluginsRequested()` path, and the documented CLAUDE.md harness gap is
+   that `qml.invoke clicked` / `qml.invoke open` do not fire for ToolButton /
+   Popup. So even with rows present, the delegate chips are not realized until a
+   real windowed click opens the drawer.
+
+Loopback (PLGSEC-03) and the consent-persistence/tamper-refusal invariants
+(PLGSEC-01/02) WERE confirmed live + test-locked this phase (see §3).
 
 **Known harness gap (carried from Phase 33).** `DeviceCanvas`/KeyCell delegates
 lack per-cell `objectName`s, so a key cannot be selected headlessly via
