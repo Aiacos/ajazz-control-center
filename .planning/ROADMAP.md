@@ -120,7 +120,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 33-01-PLAN.md — PI-04 lifecycle events: titleParametersDidChange after each willAppear (+Catch2 completeness/ordering test) + propertyInspectorDidAppear/DidDisappear via controller signals routed through the Application seam (PI-04)
+- [x] 33-01-PLAN.md — PI-04 lifecycle events: titleParametersDidChange after each willAppear (+Catch2 completeness/ordering test) + propertyInspectorDidAppear/DidDisappear via controller signals routed through the Application seam (PI-04)
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -167,6 +167,6 @@ Plans:
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
-| 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
+| 33. Property Inspector End-to-End                                        | 1/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |

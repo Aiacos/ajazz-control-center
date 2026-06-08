@@ -34,7 +34,7 @@ ______________________________________________________________________
 - [ ] **PI-01**: Real plugin Property Inspector HTML renders in `QWebEngine` + `QQmlWebChannel` with the `$SD` bridge object; the `cefQuery` polyfill is injected at `QWebEngineScript::DocumentCreation`; `sdpi.css` is served from a bundled resource; each plugin UUID gets its own `QQuickWebEngineProfile` (isolation).
 - [ ] **PI-02**: A device-canvas affordance opens the PI for the selected action (`loadInspector` wired from QML; the control carries an `objectName`).
 - [ ] **PI-03**: `sendToPlugin` / `sendToPropertyInspector` relay end-to-end; per-context `getSettings`/`setSettings` and plugin-wide global settings round-trip and survive an app restart; `didReceiveSettings` reaches the plugin. *(Real PI JS `$SD.setSettings()` round-trip requires a human-verify checkpoint — it cannot be driven headlessly.)*
-- [ ] **PI-04**: `propertyInspectorDidAppear` fires on PI open and `propertyInspectorDidDisappear` on close; `titleParametersDidChange` fires after `willAppear`.
+- [x] **PI-04**: `propertyInspectorDidAppear` fires on PI open and `propertyInspectorDidDisappear` on close; `titleParametersDidChange` fires after `willAppear`.
 
 ### Event Parity (EVENT)
 
@@ -114,7 +114,7 @@ ______________________________________________________________________
 | PI-01       | Phase 33 | Pending  |
 | PI-02       | Phase 33 | Pending  |
 | PI-03       | Phase 33 | Pending  |
-| PI-04       | Phase 33 | Pending  |
+| PI-04       | Phase 33 | Complete |
 | EVENT-01    | Phase 34 | Pending  |
 | EVENT-02    | Phase 34 | Pending  |
 | EVENT-03    | Phase 34 | Pending  |

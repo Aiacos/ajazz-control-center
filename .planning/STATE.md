@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (currentState mod N, persists via saveActiveProfile) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
-last_updated: '2026-06-08T09:57:44.498Z'
-last_activity: 2026-06-08 -- Phase 33 planning complete
+stopped_at: "Completed 33-01-PLAN.md (PI-04 lifecycle events: titleParametersDidChange emitted inline after each of the 3 willAppear sends + new PropertyInspectorController inspectorOpened/inspectorClosed signals routed through the Application seam to sendEvent(propertyInspectorDidAppear/DidDisappear), incl. the PI->PI switch teardown disappear edge; Catch2 test locks the SDK-2 title payload shape + willAppear-then-title ordering. No sendEvent allowlist; GREEN PI machinery untouched. Scoped 20/20, full 728/728 green. titleParameters default VALUES are [ASSUMED] -- confirm at end-of-phase human-verify. Live didAppear/didDisappear protocolLog proof is plan 33-02's job.)"
+last_updated: '2026-06-08T10:08:01.937Z'
+last_activity: 2026-06-08 -- Phase 33 Plan 01 (PI-04 lifecycle events) complete
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 13
-  completed_plans: 10
-  percent: 50
+  completed_plans: 12
+  percent: 54
 ---
 
 # Project State
@@ -28,11 +28,11 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — COMPLETE + VERIFIED (human_needed: 2 live walks deferred)
-Plan: all 5 landed (01 delayMs+adapter; 02 Multi dispatch seam; 03 Toggle cycle/render/persist; 04 BIND-03/06 regression-lock; 05 EDIT-01 ScrollView). 744/744 + 17 qml green.
-Status: Ready to execute
-Next: Phase 33 (Property Inspector E2E) → 34 → 35. NOTE: Phase 33 has a real PI human-verify checkpoint (user interacts with plugin PI HTML).
-Last activity: 2026-06-08 -- Phase 33 planning complete
+Phase: 33 (Property Inspector E2E) — IN PROGRESS. Plan 01 (PI-04 lifecycle events) COMPLETE: titleParametersDidChange after each willAppear + propertyInspectorDidAppear/DidDisappear via the Application seam (incl. PI->PI switch teardown), Catch2 title-payload lock; PI-04 requirement marked complete. 728/728 green.
+Plan: 33-01 done (2/2 tasks). Remaining: 33-02 (PI thin-UI affordance + objectNames + live didAppear/didDisappear protocolLog proof), 33-03.
+Status: Ready to execute Plan 33-02
+Next: Phase 33 plans 02/03 → 34 → 35. NOTE: Phase 33 has a real PI human-verify checkpoint (user interacts with plugin PI HTML) deferred to end-of-phase.
+Last activity: 2026-06-08 -- Phase 33 Plan 01 (PI-04 lifecycle events) complete
 
 ### Progress bar
 
@@ -41,7 +41,7 @@ v2.0 [███████████████               ] 3/6 phases (
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
 Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
-Phase 33 ....
+Phase 33 IN PROGRESS (Plan 01 done: PI-04 lifecycle events titleParametersDidChange + propertyInspectorDidAppear/DidDisappear)
 Phase 34 ....
 Phase 35 ....
 ```
@@ -111,18 +111,19 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ### Decisions (v2.0)
 
-| Plan  | Decision                                                                                                                                                                                                                                                               |
-| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate                                                                                                                       |
-| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                                                                                                                               |
-| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                                                                                                                                             |
-| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed                                                                                                                |
-| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                                                                                                                                      |
-| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle                                                                                                                   |
-| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str                                                                                                                |
-| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped                                                                                                               |
-| 31-02 | BIND-02 verified by a 7-case [action_instance] suite (0/1/3-state + 2-children round-trip, v1->v2 fold, no-instance -> nullopt on Binding+EncoderBinding, currentState clamp); -R action_instance 7/7, full 708/708                                                    |
-| 31-CR | Code-review fixes: JsonReader DepthGuard kMaxDepth=64 on readActionInstance children + skipValue (CR-01 reader-recursion DoS); escape() emits \\u00XX for ctrl chars (WR-01); deterministic state/states fold (WR-02); +5 tests -> action_instance 12/12, full 713/713 |
+| Plan  | Decision                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 30-01 | UNIFY IPluginHost2: UnifiedPluginHost aggregator owns both PluginManager (sdPlugin) and OutOfProcessPluginHost (Python); overrides keep-separate                                                                                                                                                                                                                                                                                     |
+| 30-01 | SKU-boundary enforcement (akp05e, akp03, akp153) in plugin dispatch is CODE-REVIEW-ONLY; no CI grep gate                                                                                                                                                                                                                                                                                                                             |
+| 30-01 | QHostAddress::Any + SIGPIPE invariants are permanent CI assertions (Linux-only, fail-fast)                                                                                                                                                                                                                                                                                                                                           |
+| 30-02 | HOST-02: sentinel-UUID on connect (__pending__ prefix) rekeyed at registerPlugin; m_live.find authority for crash-window eligibility in onProcessFailed                                                                                                                                                                                                                                                                              |
+| 30-02 | seedLiveForTest() test seam added to PluginManager; crash-window simulation tests must seed m_live before calling onProcessFailed                                                                                                                                                                                                                                                                                                    |
+| 31-01 | KeyState relocated into action_instance.hpp (depends only on capabilities.hpp); profile.hpp includes it one-directionally to break the include cycle                                                                                                                                                                                                                                                                                 |
+| 31-01 | ActionState is a thin struct wrapping KeyState; ActionInstance carries optional id (wire "id", reader also accepts "uuid"); settings = escaped JSON str                                                                                                                                                                                                                                                                              |
+| 31-01 | Reader folds legacy singular "state" -> states[] of one; writer always emits states[]; gate on key presence, never \_schemaVersion; currentState clamped                                                                                                                                                                                                                                                                             |
+| 31-02 | BIND-02 verified by a 7-case [action_instance] suite (0/1/3-state + 2-children round-trip, v1->v2 fold, no-instance -> nullopt on Binding+EncoderBinding, currentState clamp); -R action_instance 7/7, full 708/708                                                                                                                                                                                                                  |
+| 31-CR | Code-review fixes: JsonReader DepthGuard kMaxDepth=64 on readActionInstance children + skipValue (CR-01 reader-recursion DoS); escape() emits \\u00XX for ctrl chars (WR-01); deterministic state/states fold (WR-02); +5 tests -> action_instance 12/12, full 713/713                                                                                                                                                               |
+| 33-01 | PI-04: titleParametersDidChange emitted INLINE after each willAppear (no separate pass); appear/disappear via new controller inspectorOpened/inspectorClosed signals routed through the Application seam to sendEvent (controller stays free of a raw SdPluginServer\*); PI->PI switch teardown fires disappear; titleParameters default VALUES [ASSUMED] (Catch2 locks shape, human-verify confirms values); no sendEvent allowlist |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -150,6 +151,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08
-Stopped at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (currentState mod N, persists via saveActiveProfile) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
+Last session: 2026-06-08 -- Phase 33 Plan 01 (PI-04 lifecycle events) complete
+Stopped at: Completed 33-01-PLAN.md (PI-04 lifecycle events -- titleParametersDidChange after each willAppear + propertyInspectorDidAppear/DidDisappear via the Application seam incl. PI->PI switch teardown; Catch2 title-payload lock; PI-04 marked complete; scoped 20/20, full 728/728 green; live didAppear/didDisappear protocolLog proof + titleParameters value confirmation deferred to plan 33-02 / end-of-phase human-verify)
 Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)
