@@ -69,11 +69,39 @@ profile switching (Phase 34).
   `scripts/ajazz-debug qml.get` can read scroll position (success criterion 5; every new
   interactive control must be debug-addressable per CLAUDE.md).
 
+### Research-resolved decisions (post-discuss, from 32-RESEARCH.md)
+
+- **BIND-03 & BIND-06 are already implemented — scope = verify-live + regression tests, NOT fix.**
+  Research refuted the two hypothesized willAppear bugs: the envelope already carries the top-level
+  `action` field (`plugin_device_bridge.cpp:337`, commit `ddabc16`); owner-match already uses the
+  stored-owner map via `resolveOwner` (`:851-863`, wired `application.cpp:524-526`, commit
+  `519ecd0`). Dispatch is already device-generic (`onDeviceEvent` switch on control TYPE, no SKU
+  branching). Do NOT rewrite; add the missing live verification + per-controller-type regression
+  tests.
+- **Built-in id namespace:** the registry dispatches the `com.hotspot.streamdock.*` prefix
+  (`builtin_action_registry.cpp:11`), NOT `opendeck.*`. The Multi/Toggle built-in ids MUST match the
+  real dispatch path (use the registry's convention / extend the dispatcher to route them) — the
+  earlier `opendeck.multiaction`/`opendeck.toggleaction` names were placeholders.
+- **Toggle handler location:** Multi/Toggle are classified in builtin_action_registry, but the
+  stateful Toggle work (mutate `currentState`, render `states[currentState]` via setState, emit
+  state-change willAppear) happens at the dispatch seam `StreamDockInputService::dispatch` (~:205-207)
+  where the firing `Binding.instance` + key index are in scope — because `BuiltinHandler = void(string_view settings)` has no binding identity / Profile handle.
+- **Toggle currentState PERSISTS to the profile JSON** (user decision) — mutate the in-memory
+  ActionInstance and save; the Phase 31 model already serializes `currentState`, so the toggle
+  position survives restart.
+- **Multi Action inter-step delay: ADD an optional `delayMs` to `ActionInstance`** (user decision) —
+  additive Phase-31-model extension mirroring `Action::delayMs`; the `children → ActionChain`
+  adapter copies each child's `delayMs` onto the generated Action step. This requires a small
+  additive change to action_instance.hpp (new optional field, serialized, reader-tolerant) + its
+  round-trip test.
+- **New work = the dispatch seam:** build the `ActionInstance.children → ActionChain` adapter (none
+  exists; Phase 31 was model-only) so Multi Action reuses the existing ActionEngine sequential walk.
+
 ### Claude's Discretion
 
-- Exact built-in id strings, internal handler signatures, ScrollView styling, and how children
-  ActionInstances are adapted into the ActionEngine's ActionChain are at the executor's discretion,
-  consistent with existing patterns.
+- Exact built-in id strings (matching the real dispatch prefix), internal handler signatures,
+  ScrollView styling, and the precise `ActionInstance → Action` adapter shape are at the executor's
+  discretion, consistent with existing patterns.
 
 </decisions>
 
