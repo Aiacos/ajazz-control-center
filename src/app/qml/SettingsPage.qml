@@ -169,6 +169,253 @@ Page {
             }
 
             // --------------------------------------------------------------
+            // Per-app profiles (Phase 34-05 / APROF-03)
+            //
+            // Maps an application name to a profile so the active profile
+            // auto-switches when that app takes focus (the watcher backend +
+            // applicationHints matcher land in Plans 03/04). The
+            // capability-warning chip adjacent to the heading is visible ONLY
+            // when the active foreground-window watcher reports no capability
+            // (degraded Wayland/GNOME desktop) -- amber/warning family, never
+            // error red: per-app switching is unavailable but manual switching
+            // still works (graceful degradation, T-34-05-02/03).
+            //
+            // Mapping writes go through ProfileController.addAppProfileMapping /
+            // removeAppProfileMapping (Profile::applicationHints writer); the
+            // app-name token is length-bounded + treated purely as a match key
+            // (T-34-05-01). All controls are objectName-addressable (VERIF-01)
+            // and use Button/SecondaryButton, NOT Switch (qml harness gap).
+            // --------------------------------------------------------------
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spacingMd
+
+                Label {
+                    text: qsTr("Per-app profiles")
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.typeTitleMedium.pixelSize
+                    font.weight: Theme.typeTitleMedium.weight
+                    font.letterSpacing: Theme.typeTitleMedium.letterSpacing
+                    Accessible.role: Accessible.Heading
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // Capability-warning chip (mirrors LoadedPluginsPage trust-chip,
+                // amber/warning family). Visible only when the foreground-window
+                // capability is absent. `warningText` is exposed addressably so a
+                // headless qml.get asserts non-empty detail copy without hover.
+                Rectangle {
+                    id: waylandCapabilityWarningChip
+                    objectName: "waylandCapabilityWarningChip"
+
+                    // Visible-on-ABSENT: no chip = positive signal (capability ok).
+                    visible: !ProfileController.foregroundCapabilityAvailable
+
+                    // Addressable warning detail (success criterion 2): a headless
+                    // qml.get on this chip must return non-empty warningText on the
+                    // capability-absent path.
+                    property string warningText: ProfileController.foregroundCapabilityWarning
+
+                    Layout.preferredHeight: 24
+                    Layout.preferredWidth: capabilityChipText.implicitWidth + Theme.spacingMd * 2
+                    radius: 12 // pill (height/2); the one sanctioned non-token radius
+
+                    color: Theme.chipBgWarning
+                    border.color: Theme.chipBorderWarning
+                    border.width: 1
+
+                    Text {
+                        id: capabilityChipText
+                        anchors.centerIn: parent
+                        text: qsTr("Limited on this desktop")
+                        color: Theme.chipFgWarning
+                        font.pixelSize: Theme.fontXs
+                        font.weight: Font.DemiBold
+                    }
+
+                    ToolTip.visible: capabilityChipMouseArea.containsMouse
+                    ToolTip.text: waylandCapabilityWarningChip.warningText
+
+                    MouseArea {
+                        id: capabilityChipMouseArea
+                        anchors.fill: parent
+                        hoverEnabled: true
+                    }
+                }
+            }
+
+            Frame {
+                Layout.fillWidth: true
+                background: Rectangle {
+                    color: Theme.tile
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+                    radius: Theme.radiusMd
+                }
+
+                ColumnLayout {
+                    id: appProfilesColumn
+                    anchors.fill: parent
+                    spacing: Theme.spacingMd
+
+                    // Backing models, re-queried on profilesChanged.
+                    property var mappings: ProfileController.appProfileMappings()
+                    property var profiles: ProfileController.profilesForDevice("")
+
+                    function refresh() {
+                        appProfilesColumn.mappings = ProfileController.appProfileMappings();
+                        appProfilesColumn.profiles = ProfileController.profilesForDevice("");
+                        // Keep the selector index valid after a refresh.
+                        if (appProfileProfileSelector.currentIndex >= appProfilesColumn.profiles.length)
+                            appProfileProfileSelector.currentIndex = 0;
+                    }
+
+                    Connections {
+                        target: ProfileController
+                        function onProfilesChanged() { appProfilesColumn.refresh(); }
+                        function onProfileChanged() { appProfilesColumn.refresh(); }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Automatically switch the active profile when you focus an application. "
+                            + "Match an application name to a profile below.")
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        font.weight: Theme.typeBodySmall.weight
+                        font.letterSpacing: Theme.typeBodySmall.letterSpacing
+                        wrapMode: Text.WordWrap
+                    }
+
+                    // Error state: nothing to map to.
+                    Label {
+                        objectName: "appProfileNoProfilesLabel"
+                        Layout.fillWidth: true
+                        visible: appProfilesColumn.profiles.length === 0
+                        text: qsTr("No profiles available. Create a profile first, then return here "
+                            + "to map it to an application.")
+                        color: Theme.errorAccent
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        wrapMode: Text.WordWrap
+                    }
+
+                    // Empty state: profiles exist but no mappings yet.
+                    EmptyState {
+                        Layout.fillWidth: true
+                        visible: appProfilesColumn.profiles.length > 0
+                            && appProfilesColumn.mappings.length === 0
+                        title: qsTr("No app mappings yet")
+                        body: qsTr("Add a mapping to switch profiles automatically when an application "
+                            + "takes focus. Without a mapping, your default profile stays active.")
+                    }
+
+                    // Existing mapping rows.
+                    Repeater {
+                        model: appProfilesColumn.mappings
+                        delegate: RowLayout {
+                            id: mappingRow
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Theme.spacingMd
+
+                            Label {
+                                text: mappingRow.modelData.appName
+                                color: Theme.fgPrimary
+                                font.pixelSize: Theme.typeTitleSmall.pixelSize
+                                font.weight: Theme.typeTitleSmall.weight
+                                Layout.preferredWidth: 160
+                                elide: Text.ElideRight
+                            }
+                            Label {
+                                text: qsTr("-> %1").arg(mappingRow.modelData.profileName)
+                                color: Theme.fgMuted
+                                font.pixelSize: Theme.typeBodyMedium.pixelSize
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
+                            }
+                            SecondaryButton {
+                                objectName: "removeAppProfileMappingButton"
+                                text: qsTr("Remove")
+                                // Destructive affordance -- styled error red.
+                                contentItem: Text {
+                                    text: parent.text
+                                    color: Theme.errorAccent
+                                    horizontalAlignment: Text.AlignHCenter
+                                    verticalAlignment: Text.AlignVCenter
+                                }
+                                Accessible.role: Accessible.Button
+                                Accessible.name: qsTr("Remove mapping for %1").arg(mappingRow.modelData.appName)
+                                ToolTip.visible: hovered
+                                ToolTip.text: qsTr("Remove this app mapping? The application will fall back "
+                                    + "to the default profile.")
+                                onClicked: {
+                                    ProfileController.removeAppProfileMapping(
+                                        mappingRow.modelData.profileId, mappingRow.modelData.appName);
+                                }
+                            }
+                        }
+                    }
+
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Theme.borderSubtle
+                        visible: appProfilesColumn.profiles.length > 0
+                    }
+
+                    // Add-mapping row.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        visible: appProfilesColumn.profiles.length > 0
+                        spacing: Theme.spacingMd
+
+                        TextField {
+                            id: appProfileAppNameField
+                            objectName: "appProfileAppNameField"
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Theme.minTouchTarget
+                            placeholderText: qsTr("Application name")
+                            maximumLength: 256 // mirrors ProfileController kMaxAppNameLength (V5)
+                            color: Theme.fgPrimary
+                            Material.accent: Theme.accent
+                            Accessible.role: Accessible.EditableText
+                            Accessible.name: qsTr("Application name to map")
+                        }
+
+                        ComboBox {
+                            id: appProfileProfileSelector
+                            objectName: "appProfileProfileSelector"
+                            Layout.preferredWidth: 200
+                            Layout.preferredHeight: Theme.minTouchTarget
+                            model: appProfilesColumn.profiles
+                            textRole: "name"
+                            valueRole: "id"
+                            Material.accent: Theme.accent
+                            Accessible.role: Accessible.ComboBox
+                            Accessible.name: qsTr("Profile to map to")
+                        }
+
+                        PrimaryButton {
+                            objectName: "addAppProfileMappingButton"
+                            text: qsTr("Add mapping")
+                            enabled: appProfileAppNameField.text.trim() !== ""
+                                && appProfileProfileSelector.currentValue !== undefined
+                            Accessible.role: Accessible.Button
+                            Accessible.name: text
+                            onClicked: {
+                                var ok = ProfileController.addAppProfileMapping(
+                                    appProfileProfileSelector.currentValue,
+                                    appProfileAppNameField.text);
+                                if (ok)
+                                    appProfileAppNameField.clear();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // --------------------------------------------------------------
             // Time sync (Phase 5 Plan 05-06 + 05-07)
             //
             // Auto-sync toggles whether arriving devices that advertise
