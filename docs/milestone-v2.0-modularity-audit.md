@@ -99,18 +99,24 @@ build. However, the live `qml.get` of the chips against an isolated offscreen
 instance could **not** be completed this phase, for two independent,
 honestly-recorded reasons (see `35-HUMAN-UAT.md`):
 
-1. **`LoadedPluginsModel` is empty in the shipping build for `.sdPlugin`
-   plugins.** The model is fed ONLY by the Python `OutOfProcessPluginHost`
-   (`application.cpp:956-957`, inside `#ifdef AJAZZ_PYTHON_HOST`). The
-   `UnifiedPluginHost` aggregator (`m_pluginHost2`, `application.cpp:1091`) that
-   merges `.sdPlugin` inventory is constructed but is **never wired to
-   `LoadedPluginsModel`** — so `.sdPlugin` plugins (the only ones carrying a
-   meaningful `winClass`) never reach the model and the `platformStatusChip`
-   never instantiates. This contradicts 35-PATTERNS.md A1's "DECISIVE" claim and
-   is flagged below as an architectural follow-up (the chip is correct; its data
-   source is not wired). No Python OOP plugins were installed in the test session
-   either, so the model row count was 0 and no delegate (hence no chip)
-   instantiated.
+1. **(RESOLVED in code — live render still pending a GUI walk.)** This audit
+   originally found `LoadedPluginsModel` was fed ONLY by the Python
+   `OutOfProcessPluginHost` (`application.cpp:956-957`), with the
+   `UnifiedPluginHost` aggregator (`m_pluginHost2`) constructed but **never wired
+   to the model** — so `.sdPlugin` plugins (the only ones carrying a meaningful
+   `winClass`) never reached the model and the `platformStatusChip` never
+   instantiated (the code-review CR-01 / Phase-27 no-op-chip class of bug,
+   contradicting 35-PATTERNS.md A1's "DECISIVE" claim). **This was FIXED** in
+   commit `12acd2f`: `application.cpp:1120-1122` now calls
+   `m_loadedPlugins->setPluginHost2(m_pluginHost2.get())` +
+   `setPlugins(m_pluginHost2->plugins())` after the unified host is constructed,
+   and `loaded_plugins_model.cpp:122-137` adds `setPluginHost2`/`m_host2` with
+   `refresh()` preferring the merged inventory. The merged-population path is now
+   unit-covered (WR-02 `FakeMergedHost2` test). The remaining gap is purely the
+   **live chip-render walk** (a real win-only `.sdPlugin` installed → the chip
+   shows the correct label in the running GUI), which the headless harness cannot
+   drive (modal-Drawer gap, below) — tracked in `35-HUMAN-UAT.md`, not an
+   unwired-data-source defect.
 1. **The `loadedPluginsDrawer` (a modal `Drawer`/`Popup`) cannot be opened
    headlessly.** Opening it requires the `navLoaded` ToolButton's `onClicked` →
    `loadedPluginsRequested()` path, and the documented CLAUDE.md harness gap is

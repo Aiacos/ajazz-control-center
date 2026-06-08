@@ -54,7 +54,7 @@ ______________________________________________________________________
 
 - [x] **WINPLG-01**: A feasibility spike classifies win-only `.sdPlugin` plugins into **WS-only-IPC** (runnable natively cross-platform) vs **vendor-DLL** (needs Wine); the decision and detection heuristic are documented (ADR-style).
 - [x] **WINPLG-02**: WS-only win-only plugins run **natively** on Linux/macOS via the existing host (manifest OS-filter + a `supportsCurrentPlatform()` helper) — **no Wine**.
-- [x] **WINPLG-03**: Vendor-DLL win-only plugins run via **detected system Wine** (`QStandardPaths::findExecutable("wine")`) with per-plugin `WINEPREFIX` isolation; a "requires Wine" / "unsupported on this OS" status chip shows when Wine is absent; Wine is never bundled.
+- [~] **WINPLG-03** (PARTIAL — chip-only this milestone; Wine launch deferred): the "requires Wine" / "unsupported on this OS" status chip is implemented + objectName-addressable (chip done). The **Wine run-path** (Vendor-DLL win-only plugins running via **detected system Wine** `QStandardPaths::findExecutable("wine")` with per-plugin `WINEPREFIX` isolation; Wine never bundled) is the documented deferral — see `35-ADR-windows-plugin-classification.md` + `35-CONTEXT.md` (no Wine/Windows hardware to live-test a launch path this milestone).
 
 ### Plugin Security Hardening (PLGSEC)
 
@@ -99,39 +99,39 @@ ______________________________________________________________________
 
 ## Traceability
 
-| Requirement | Phase    | Status   |
-| ----------- | -------- | -------- |
-| HOST-01     | Phase 30 | Complete |
-| HOST-02     | Phase 30 | Complete |
-| HOST-03     | Phase 30 | Complete |
-| BIND-01     | Phase 31 | Complete |
-| BIND-02     | Phase 31 | Complete |
-| BIND-03     | Phase 32 | Complete |
-| BIND-04     | Phase 32 | Complete |
-| BIND-05     | Phase 32 | Complete |
-| BIND-06     | Phase 32 | Complete |
-| BIND-07     | Phase 32 | Complete |
-| PI-01       | Phase 33 | Complete |
-| PI-02       | Phase 33 | Complete |
-| PI-03       | Phase 33 | Partial  |
-| PI-04       | Phase 33 | Complete |
-| EVENT-01    | Phase 34 | Complete |
-| EVENT-02    | Phase 34 | Complete |
-| EVENT-03    | Phase 34 | Complete |
-| EVENT-04    | Phase 34 | Complete |
-| APROF-01    | Phase 34 | Complete |
-| APROF-02    | Phase 34 | Complete |
-| APROF-03    | Phase 34 | Complete |
-| APROF-04    | Phase 34 | Complete |
-| WINPLG-01   | Phase 35 | Complete |
-| WINPLG-02   | Phase 35 | Complete |
-| WINPLG-03   | Phase 35 | Complete |
-| PLGSEC-01   | Phase 35 | Complete |
-| PLGSEC-02   | Phase 35 | Complete |
-| PLGSEC-03   | Phase 35 | Complete |
-| EDIT-01     | Phase 32 | Complete |
-| VERIF-01    | Phase 35 | Complete |
-| VERIF-02    | Phase 35 | Complete |
+| Requirement | Phase    | Status                                    |
+| ----------- | -------- | ----------------------------------------- |
+| HOST-01     | Phase 30 | Complete                                  |
+| HOST-02     | Phase 30 | Complete                                  |
+| HOST-03     | Phase 30 | Complete                                  |
+| BIND-01     | Phase 31 | Complete                                  |
+| BIND-02     | Phase 31 | Complete                                  |
+| BIND-03     | Phase 32 | Complete                                  |
+| BIND-04     | Phase 32 | Complete                                  |
+| BIND-05     | Phase 32 | Complete                                  |
+| BIND-06     | Phase 32 | Complete                                  |
+| BIND-07     | Phase 32 | Complete                                  |
+| PI-01       | Phase 33 | Complete                                  |
+| PI-02       | Phase 33 | Complete                                  |
+| PI-03       | Phase 33 | Partial                                   |
+| PI-04       | Phase 33 | Complete                                  |
+| EVENT-01    | Phase 34 | Complete                                  |
+| EVENT-02    | Phase 34 | Complete                                  |
+| EVENT-03    | Phase 34 | Complete                                  |
+| EVENT-04    | Phase 34 | Complete                                  |
+| APROF-01    | Phase 34 | Complete                                  |
+| APROF-02    | Phase 34 | Complete                                  |
+| APROF-03    | Phase 34 | Complete                                  |
+| APROF-04    | Phase 34 | Complete                                  |
+| WINPLG-01   | Phase 35 | Complete                                  |
+| WINPLG-02   | Phase 35 | Complete                                  |
+| WINPLG-03   | Phase 35 | Partial (chip-only; Wine launch deferred) |
+| PLGSEC-01   | Phase 35 | Complete                                  |
+| PLGSEC-02   | Phase 35 | Complete                                  |
+| PLGSEC-03   | Phase 35 | Complete                                  |
+| EDIT-01     | Phase 32 | Complete                                  |
+| VERIF-01    | Phase 35 | Complete                                  |
+| VERIF-02    | Phase 35 | Complete                                  |
 
 ______________________________________________________________________
 
