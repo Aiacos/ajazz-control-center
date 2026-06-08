@@ -28,19 +28,19 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — IN PROGRESS
-Plan: 32-01 + 32-02 + 32-03 + 32-04 + 32-05 complete (32-01: BIND-04/05 core foundation; 32-02: BIND-04 Multi Action dispatch at the input-service seam; 32-03: BIND-05/07 Toggle Action dispatch (cycle mod N, render, persist); 32-04: BIND-03/06 regression-locked; 32-05: EDIT-01 device-view ScrollView)
-Status: All Phase 32 code/test plans landed; deferred live debug-channel checks pending for 32-02/03/04/05 (see each SUMMARY "Pending live verification")
-Next: Phase 32 phase-verify (consolidated live pass) → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 32 Plan 03 executed (BIND-05/07 Toggle Action dispatch; scoped 62/62, full 727/727 green)
+Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — COMPLETE + VERIFIED (human_needed: 2 live walks deferred)
+Plan: all 5 landed (01 delayMs+adapter; 02 Multi dispatch seam; 03 Toggle cycle/render/persist; 04 BIND-03/06 regression-lock; 05 EDIT-01 ScrollView). 744/744 + 17 qml green.
+Status: Continuing autonomous run to Phase 33. EDIT-01 canvas-collapse regression FOUND LIVE + fixed (34a0b73); qml-test link regression fixed (e35683a); code-review 2 blockers refuted as false positives (32-REVIEW-DISPOSITION.md). 2 live walks (Multi/Toggle authoring) deferred to 32-HUMAN-UAT.md (need a binding-authoring RPC).
+Next: Phase 33 (Property Inspector E2E) → 34 → 35. NOTE: Phase 33 has a real PI human-verify checkpoint (user interacts with plugin PI HTML).
+Last activity: 2026-06-08 -- Phase 32 VERIFIED (5/5 must-haves; EDIT-01 live-fixed); BIND-03/04/05/06/07 + EDIT-01 all complete
 
 ### Progress bar
 
 ```
-v2.0 [██████████                    ] 2/6 phases (33%)
+v2.0 [███████████████               ] 3/6 phases (50%)
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
-Phase 32 IN PROGRESS (Plan 01 DONE: delayMs + adapter; Plan 02 DONE: BIND-04 Multi Action dispatch at the seam; Plan 03 DONE: BIND-05/07 Toggle Action dispatch (cycle mod N, render, persist); Plan 04 DONE: BIND-03/06 regression-locked; Plan 05 DONE: EDIT-01 device-view ScrollView)
+Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
 Phase 33 ....
 Phase 34 ....
 Phase 35 ....
