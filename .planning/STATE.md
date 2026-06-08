@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: verifying
-stopped_at: Completed 32-02-PLAN.md (BIND-04/05 Multi Action dispatch at the input-service seam -- instanceChildrenToChain + ActionEngine::run on KeyPressed/EncoderPressed/touch-tap; com.hotspot.streamdock.multiaction built-in; full 721/721 green; live debug-channel pass pending in SUMMARY)
+stopped_at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (mod N, persists) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
 last_updated: '2026-06-08T08:30:00.000Z'
-last_activity: 2026-06-08 -- Phase 32 Plan 02 executed (BIND-04 Multi Action dispatch; scoped 68/68, full 721/721 green)
+last_activity: 2026-06-08 -- Phase 32 Plan 03 executed (BIND-05/07 Toggle Action dispatch; scoped 62/62, full 727/727 green)
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 10
-  completed_plans: 10
-  percent: 33
+  completed_plans: 11
+  percent: 50
 ---
 
 # Project State
@@ -29,10 +29,10 @@ silently leaking host state into plugin children.
 ## Current Position
 
 Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — IN PROGRESS
-Plan: 32-01 + 32-02 + 32-04 + 32-05 complete (32-01: BIND-04/05 core foundation; 32-02: BIND-04 Multi Action dispatch at the input-service seam; 32-04: BIND-03/06 regression-locked; 32-05: EDIT-01 device-view ScrollView)
-Status: Ready to execute next plan (32-03 Toggle Action dispatch, BIND-05); 32-02/04/05 deferred live debug-channel checks pending (see each SUMMARY "Pending live verification")
-Next: Phase 32 (remaining plan 32-03 Toggle dispatch) → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 32 Plan 02 executed (BIND-04 Multi Action dispatch; scoped 68/68, full 721/721 green)
+Plan: 32-01 + 32-02 + 32-03 + 32-04 + 32-05 complete (32-01: BIND-04/05 core foundation; 32-02: BIND-04 Multi Action dispatch at the input-service seam; 32-03: BIND-05/07 Toggle Action dispatch (cycle mod N, render, persist); 32-04: BIND-03/06 regression-locked; 32-05: EDIT-01 device-view ScrollView)
+Status: All Phase 32 code/test plans landed; deferred live debug-channel checks pending for 32-02/03/04/05 (see each SUMMARY "Pending live verification")
+Next: Phase 32 phase-verify (consolidated live pass) → 33 → 34 → 35
+Last activity: 2026-06-08 -- Phase 32 Plan 03 executed (BIND-05/07 Toggle Action dispatch; scoped 62/62, full 727/727 green)
 
 ### Progress bar
 
@@ -40,7 +40,7 @@ Last activity: 2026-06-08 -- Phase 32 Plan 02 executed (BIND-04 Multi Action dis
 v2.0 [██████████                    ] 2/6 phases (33%)
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
-Phase 32 IN PROGRESS (Plan 01 DONE: delayMs + adapter; Plan 02 DONE: BIND-04 Multi Action dispatch at the seam; Plan 04 DONE: BIND-03/06 regression-locked; Plan 05 DONE: EDIT-01 device-view ScrollView)
+Phase 32 IN PROGRESS (Plan 01 DONE: delayMs + adapter; Plan 02 DONE: BIND-04 Multi Action dispatch at the seam; Plan 03 DONE: BIND-05/07 Toggle Action dispatch (cycle mod N, render, persist); Plan 04 DONE: BIND-03/06 regression-locked; Plan 05 DONE: EDIT-01 device-view ScrollView)
 Phase 33 ....
 Phase 34 ....
 Phase 35 ....
@@ -151,5 +151,5 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 ## Session Continuity
 
 Last session: 2026-06-08
-Stopped at: Completed 32-02-PLAN.md (BIND-04 Multi Action dispatch at the input-service seam -- instanceChildrenToChain + ActionEngine::run on KeyPressed/EncoderPressed/touch-tap; com.hotspot.streamdock.multiaction built-in registered; scoped 68/68, full 721/721 green; live debug-channel pass pending in SUMMARY)
-Resume: `/gsd:execute-phase 32` (Plans 01/02/04/05 landed; remaining 32-03 Toggle Action dispatch (BIND-05) reuses ActionInstance.currentState + the wire fix)
+Stopped at: Completed 32-03-PLAN.md (BIND-05/07 Toggle Action dispatch at the input-service seam -- cycleInstanceState mutator (currentState mod N, persists via saveActiveProfile) + dispatchToggle + PluginDeviceBridge::renderToggleState reusing the setState repaint path + state-change willAppear; com.hotspot.streamdock.toggleaction classification registered; scoped 62/62, full 727/727 green; live debug-channel pass pending in SUMMARY)
+Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)
