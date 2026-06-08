@@ -90,7 +90,7 @@ Plans:
 
 **Wave 1** *(parallel-eligible; serialized this run under use_worktrees=false)*
 
-- [ ] 32-01-PLAN.md — ActionInstance.delayMs additive field + serializer + instanceChildrenToChain core adapter (BIND-04/05 foundation)
+- [x] 32-01-PLAN.md — ActionInstance.delayMs additive field + serializer + instanceChildrenToChain core adapter (BIND-04/05 foundation) ✅ 2026-06-08
 - [ ] 32-04-PLAN.md — BIND-03/06 verify + regression tests (envelope.action, stored-owner, per-controller-type routing) + live willAppear/no-reconnect check
 - [ ] 32-05-PLAN.md — EDIT-01 ScrollView#deviceCanvasScroll wrap of DeviceCanvas + over/under-threshold QML smoke + live qml.get
 
