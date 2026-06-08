@@ -341,6 +341,33 @@ public:
      */
     Q_INVOKABLE void removeKeyActionAt(int keyIndex, int pos);
 
+    // -------------------------------------------------------------------------
+    // Phase 32-03 (BIND-05/07): Toggle Action currentState cycle.
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Advance a binding's `instance.currentState` one step (mod N) and persist.
+     *
+     * Toggle Action semantics (BIND-05/07): pressing a Toggle cycles its
+     * @ref ajazz::core::ActionInstance::currentState through ALL
+     * @ref ajazz::core::ActionInstance::states (N > 2 supported):
+     * `currentState = (currentState + 1) % states.size()`. The new index is
+     * PERSISTED to the profile JSON (Q1 user decision) so it survives a restart,
+     * via the SAME save path commitKeyBinding's callers use (saveActiveProfile()),
+     * and @ref profileChanged is emitted so the repaint/context reconcile fires.
+     *
+     * Safe no-op (currentState unchanged) when:
+     *   - the addressed binding has no @ref ajazz::core::Binding::instance, OR
+     *   - the instance carries fewer than two states (a single-state or empty
+     *     instance has nothing to cycle).
+     *
+     * @param controller "Keypad" for a key binding, "Encoder" for an encoder
+     *                   binding (case-insensitive). Any other value is a no-op.
+     * @param index      0-based control index (key index or encoder index).
+     * @invokable Callable from QML as ProfileController.cycleInstanceState(...).
+     */
+    Q_INVOKABLE void cycleInstanceState(QString const& controller, int index);
+
     /**
      * @brief Atomically swap two encoder bindings.
      *

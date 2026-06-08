@@ -72,6 +72,20 @@ public:
     /// without a hard-coded string literal.
     static constexpr std::string_view kMultiActionId = "com.hotspot.streamdock.multiaction";
 
+    /// The canonical built-in UUID for a Toggle Action (an action whose
+    /// `ActionInstance.states` cycle one step per press: currentState =
+    /// (currentState + 1) mod N, rendering states[currentState] and emitting a
+    /// state-change willAppear, BIND-05/07). MUST start with @ref kBuiltinPrefix.
+    /// This is the REAL dispatch prefix (the OpenDeck "opendeck.toggleaction" id
+    /// would fail the prefix check and never fire). Exposed so the input-service
+    /// dispatch seam can id-match a firing binding's instance without a hard-coded
+    /// string literal; the toggle's STATE MUTATION cannot live in a
+    /// @ref BuiltinHandler (which has no binding identity / no Profile handle), so
+    /// this id is used for CLASSIFICATION only -- the cycle + render + willAppear
+    /// resolve at StreamDockInputService::dispatch where the firing Binding is in
+    /// scope (RESEARCH Finding 3).
+    static constexpr std::string_view kToggleActionId = "com.hotspot.streamdock.toggleaction";
+
     /**
      * @brief Register a handler for a built-in UUID.
      *

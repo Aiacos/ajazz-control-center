@@ -117,6 +117,15 @@ add_executable(
     # the transport (held-handle invariant).
     test_stream_dock_input_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_input_service.cpp
+    # Phase 32 Plan 32-03 (BIND-05/07): Toggle Action dispatch. Proves the
+    # ProfileController::cycleInstanceState mutator advances instance.currentState
+    # mod N (0->1->2->0 for N=3), is a safe no-op for single-state / no-instance
+    # bindings, and persists the new index across a fresh-controller reload; plus
+    # the StreamDockInputService toggle seam (cycle hook + render hook fire per
+    # press with the NEW states[currentState] visual + a state-change willAppear,
+    # and a Multi Action does NOT trigger the toggle path). profile_controller.cpp
+    # + stream_dock_input_service.cpp are already in this target.
+    test_toggle_dispatch.cpp
     # Phase 24 Plan 24-02 (DEVICES-10): per-family MockTransport byte tests proving the SAME
     # capability-generic StreamDockControlService + StreamDockInputService drive AKP03 (6 keys +
     # 3 encoders), AKP153 (15 keys), and AKP815 (15 keys). Asserts per-family image header

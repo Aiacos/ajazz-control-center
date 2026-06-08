@@ -662,6 +662,60 @@ void ProfileController::removeKeyActionAt(int keyIndex, int pos) {
     emit profileChanged();
 }
 
+void ProfileController::cycleInstanceState(QString const& controller, int index) {
+    // BIND-05/07: advance a Toggle Action binding's instance.currentState one step
+    // (mod N over ALL states, N > 2 supported), PERSIST it (Q1 user decision: the
+    // new state survives a restart), and emit profileChanged() so the repaint /
+    // context reconcile fires. The render of states[currentState] + the
+    // state-change willAppear are driven by the input-service render hook
+    // (StreamDockInputService::dispatchToggle) -- this mutator owns ONLY the state
+    // mutation + persistence (RESEARCH Finding 3).
+    if (index < 0 || index > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "cycleInstanceState: index {} out of valid range [0, 65534], ignoring",
+                       index);
+        return;
+    }
+    auto const idx = static_cast<std::uint16_t>(index);
+
+    // Resolve the binding's instance for the addressed controller. "Keypad" ->
+    // keys, "Encoder" -> encoders (touch-zone bindings register under "Encoder"
+    // in the bridge, so they share this path). Case-insensitive compare so the
+    // wire controller strings ("Keypad"/"Encoder") match regardless of source.
+    std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
+    if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
+        if (auto it = m_profile.keys.find(idx); it != m_profile.keys.end()) {
+            instanceSlot = &it->second.instance;
+        }
+    } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
+        if (auto it = m_profile.encoders.find(idx); it != m_profile.encoders.end()) {
+            instanceSlot = &it->second.instance;
+        }
+    } else {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "cycleInstanceState: unknown controller '{}', ignoring",
+                       controller.toStdString());
+        return;
+    }
+
+    // No binding, no instance, or fewer than two states -> clean no-op (do NOT
+    // create an instance; currentState stays put). T-32-08: the modulo guarantees
+    // currentState stays in [0, states.size()).
+    if (instanceSlot == nullptr || !instanceSlot->has_value()) {
+        return;
+    }
+    auto& inst = **instanceSlot;
+    if (inst.states.size() <= 1) {
+        return;
+    }
+    inst.currentState = (inst.currentState + 1u) % static_cast<std::uint32_t>(inst.states.size());
+
+    // Persist (Q1): route through the same save path commitKeyBinding's callers
+    // use so the advance survives a restart, then notify observers.
+    saveActiveProfile();
+    emit profileChanged();
+}
+
 void ProfileController::swapEncoderBindings(int srcIndex, int dstIndex) {
     // Fixes UI-REVIEW.md Phase 26 encoder-swap data-loss bug.
     // Validate both indices.
