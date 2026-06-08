@@ -58,6 +58,9 @@ import AjazzControlCenter
 
 Item {
     id: root
+    // Debug-channel addressability (PI-02): screenshot + qml.get target this
+    // container via findByName to confirm the rendered PI HTML is not blank.
+    objectName: "piWebView"
 
     WebEngineView {
         id: webView

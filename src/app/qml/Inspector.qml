@@ -189,6 +189,36 @@ Rectangle {
                                           : qsTr("No selection")
         }
 
+        // Explicit Property-Inspector open/close affordances (PI-02) ----------
+        // The HTML PI already auto-opens on selection via maybeLoadInspector();
+        // these are the discrete, debug-addressable controls the headless
+        // success criteria require. Both are plain Buttons (SecondaryButton) so
+        // scripts/ajazz-debug `qml.invoke` fires their onClicked — a Switch's
+        // toggled() side-effect cannot be reproduced by the harness (CLAUDE.md).
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSm
+            visible: root.hasSelection
+
+            SecondaryButton {
+                objectName: "openPiButton"
+                Layout.fillWidth: true
+                text: qsTr("Open inspector")
+                // Resolve the PI path + plugin uuid + wire context for the
+                // current selection and call loadInspector (reuses the same
+                // path the selection auto-trigger uses).
+                onClicked: root.maybeLoadInspector()
+            }
+
+            SecondaryButton {
+                objectName: "closePiButton"
+                Layout.fillWidth: true
+                text: qsTr("Close inspector")
+                enabled: PropertyInspectorController.hasHtmlInspector
+                onClicked: PropertyInspectorController.closeInspector()
+            }
+        }
+
         // Empty-state path ----------------------------------------------------
         EmptyState {
             visible: !root.hasSelection
@@ -205,6 +235,9 @@ Rectangle {
         // The native form below is hidden while the HTML PI is active.
         Loader {
             id: htmlPiLoader
+            // Debug-channel addressability (PI-02): qml.get confirms
+            // active/visible to verify the PI panel was shown.
+            objectName: "piPanelLoader"
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: root.hasSelection
