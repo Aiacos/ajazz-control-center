@@ -143,8 +143,27 @@ Plans:
 1. The event-parity coverage table committed to `docs/plugin-event-parity.md` lists every event in OpenDeck `events/outbound` as supported / partial / missing / hardware-gated, with a test reference for each supported event
 1. A `willAppear` payload captured from `plugin.protocolLog` contains `"action"`, `"context"`, `"device"`, `"event"`, and `"payload"` with `"row"`, `"column"`, `"controller"`, `"state"`, `"isInMultiAction"` — asserted by a Catch2 unit test; controller token normalization is audited so no encoder/touch event is silently dropped
 1. `systemDidWakeUp` and `switchToProfile` host-command dispatch appear in `plugin.protocolLog` when triggered; `applicationDidLaunch`/`applicationDidTerminate` fire from the watcher — all exercised by unit tests
-   **Plans**: TBD
+   **Plans**: 5 plans
    **UI hint**: yes
+
+Plans:
+
+**Wave 1**
+
+- [ ] 34-01-PLAN.md — Build-env + Wave-0 scaffold: vendored wlr XML, CMake codegen/link (Qt6::WaylandClient + libX11) + CI/Flatpak deps, Qt-free IActiveWindowWatcher interface + recording stub + factory, window.setForeground debug RPC, RED test scaffolds (APROF-01)
+
+**Wave 2** *(blocked on 34-01; \<=2 concurrent)*
+
+- [ ] 34-02-PLAN.md — EVENT audit: docs/plugin-event-parity.md coverage table + willAppear payload completeness test + Knob->Encoder controller-token audit (EVENT-01/02/04)
+- [ ] 34-03-PLAN.md — APROF-01 backends: Wayland(wlr)/X11/Win/macOS watcher impls + runtime factory + debounce; live niri Wayland verify (APROF-01)
+
+**Wave 3** *(blocked on 34-02, 34-03)*
+
+- [ ] 34-04-PLAN.md — Auto-switch wire (applicationHints match + default fallback + idempotent guard, reuses profileChanged reconcile) + applicationDidLaunch/Terminate fan-out + switchToProfile/systemDidWakeUp dispatch (APROF-02/04, EVENT-03)
+
+**Wave 4** *(blocked on 34-04)*
+
+- [ ] 34-05-PLAN.md — APROF-03 UI: Per-app profiles assign surface + capability-warning chip in SettingsPage + applicationHints writer; consolidated live debug-channel phase gate (APROF-03)
 
 ### Phase 35: Windows Plugin Support + Security Hardening + Milestone Verification
 
@@ -168,5 +187,5 @@ Plans:
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
-| 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
+| 34. Per-App Profiles + Event-Parity Audit                                | 0/5            | Planned     | -          |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
