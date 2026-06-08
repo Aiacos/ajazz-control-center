@@ -75,6 +75,7 @@ public:
     void start(std::function<void(ActiveWindowInfo)> onChange) override {
         debounce_->setCallback(std::move(onChange));
         lastHwnd_ = nullptr;
+        lastAppId_.clear();
         timer_.start();
         poll(); // seed immediately
     }
@@ -90,7 +91,17 @@ public:
 private:
     void poll() {
         HWND const hwnd = GetForegroundWindow();
-        if (hwnd == nullptr || hwnd == lastHwnd_) {
+        if (hwnd == nullptr) {
+            return;
+        }
+        // WR-04: the HWND check is only a cheap fast-path, NOT the identity.
+        // HWND values are recycled by Windows after a window is destroyed, so a
+        // different application can be assigned a previously-seen HWND. Deduping
+        // solely on HWND would (a) suppress a genuine foreground change to a
+        // process that inherited the old HWND, and (b) never collapse two windows
+        // of the same app. The real identity contract is the resolved appId, so
+        // the authoritative dedup happens against lastAppId_ below.
+        if (hwnd == lastHwnd_) {
             return;
         }
         lastHwnd_ = hwnd;
@@ -114,6 +125,13 @@ private:
         if (appId.empty()) {
             return;
         }
+        // WR-04: dedup on the RESOLVED appId (the identity contract). A recycled
+        // HWND that maps to the same app is suppressed here; a change to a new
+        // app with a recycled HWND is correctly NOT suppressed.
+        if (appId == lastAppId_) {
+            return;
+        }
+        lastAppId_ = appId;
 
         wchar_t titleBuf[512] = {0};
         int const titleLen = GetWindowTextW(hwnd, titleBuf, 512);
@@ -127,6 +145,7 @@ private:
     std::unique_ptr<ActiveWindowDebouncer> debounce_;
     QTimer timer_;
     HWND lastHwnd_{nullptr};
+    std::string lastAppId_; ///< WR-04: identity dedup key (resolved image base).
 };
 
 } // namespace
