@@ -64,7 +64,7 @@ ______________________________________________________________________
 
 ### Device Editor (EDIT)
 
-- [ ] **EDIT-01**: The device-view editor scrolls for SKUs whose grid exceeds 8 columns or 4 rows (counting the encoder row and touch-zone row), matching OpenDeck's overflow rules; key vs encoder vs touch-zone controllers stay visually and functionally distinct.
+- [x] **EDIT-01**: The device-view editor scrolls for SKUs whose grid exceeds 8 columns or 4 rows (counting the encoder row and touch-zone row), matching OpenDeck's overflow rules; key vs encoder vs touch-zone controllers stay visually and functionally distinct.
 
 ### Verification & Modularity gate (VERIF)
 
@@ -129,7 +129,7 @@ ______________________________________________________________________
 | PLGSEC-01   | Phase 35 | Pending  |
 | PLGSEC-02   | Phase 35 | Pending  |
 | PLGSEC-03   | Phase 35 | Pending  |
-| EDIT-01     | Phase 32 | Pending  |
+| EDIT-01     | Phase 32 | Complete |
 | VERIF-01    | Phase 35 | Pending  |
 | VERIF-02    | Phase 35 | Pending  |
 
