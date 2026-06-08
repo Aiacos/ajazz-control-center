@@ -237,6 +237,14 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     // are parented to the controller / channel so deleteLater() cascades
     // safely.
     if (auto* prev = webEngine_->activeChannel) {
+        // PI-04: a direct PI->PI switch tears down the previous channel WITHOUT
+        // calling closeInspector, so the outgoing PI would never receive
+        // propertyInspectorDidDisappear. Emit it here from the captured prior
+        // identity before nulling so switching between two PIs fires disappear
+        // for the first (research Pitfall 2 / Gap 1c edge case).
+        if (!activePluginUuid_.isEmpty()) {
+            emit inspectorClosed(activePluginUuid_, activeActionUuid_, activeContextUuid_);
+        }
         webEngine_->activeChannel = nullptr;
         webEngine_->activeBridge = nullptr;
         prev->deleteLater();
@@ -268,6 +276,15 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     // per the 20-03 STOP gate (17-02-SUMMARY.md exists but the bridge<->server
     // connection wiring is done at Application construction, not here).
     bridge->getSettings();
+
+    // PI-04: record the live inspector identity and announce the open. The
+    // Application seam routes this to SdPluginServer::sendEvent(
+    // propertyInspectorDidAppear). Captured here so the matching disappear can
+    // carry the correct identity even after the bridge is torn down.
+    activePluginUuid_ = pluginUuid;
+    activeActionUuid_ = actionUuid;
+    activeContextUuid_ = contextUuid;
+    emit inspectorOpened(pluginUuid, actionUuid, contextUuid);
 #else
     // No WebEngine — keep the M1 stub semantics: log + ensure we report
     // no active HTML inspector so QML stays on the native renderer.
@@ -286,6 +303,15 @@ void PropertyInspectorController::closeInspector() {
 #ifdef AJAZZ_HAVE_WEBENGINE
     if (webEngine_ && webEngine_->activeChannel != nullptr) {
         auto* channel = webEngine_->activeChannel;
+        // PI-04: announce the close while the plugin/context identity is still
+        // known (before teardown), so the owning plugin receives
+        // propertyInspectorDidDisappear via the Application seam.
+        if (!activePluginUuid_.isEmpty()) {
+            emit inspectorClosed(activePluginUuid_, activeActionUuid_, activeContextUuid_);
+        }
+        activePluginUuid_.clear();
+        activeActionUuid_.clear();
+        activeContextUuid_.clear();
         webEngine_->activeProfile = nullptr;
         webEngine_->activeChannel = nullptr;
         webEngine_->activeBridge = nullptr;

@@ -726,6 +726,38 @@ Application::Application(QObject* parent)
                     });
             }
         });
+
+    // PI-04 lifecycle events: route the controller's inspectorOpened /
+    // inspectorClosed signals to the owning plugin as propertyInspectorDidAppear
+    // / propertyInspectorDidDisappear. Mirrors the activeBridgeChanged seam above:
+    // the controller stays free of a raw SdPluginServer* (preserving the audited
+    // indirection), and Application — which owns m_pluginServer — performs the
+    // sendEvent. sendEvent has no event-name allowlist, so the new names ship on
+    // the wire unchanged. SDK-2 envelope is {action, context}.
+    QObject::connect(m_propertyInspector.get(),
+                     &PropertyInspectorController::inspectorOpened,
+                     this,
+                     [this](QString uuid, QString action, QString ctx) {
+                         if (m_pluginServer) {
+                             m_pluginServer->sendEvent(
+                                 uuid,
+                                 QStringLiteral("propertyInspectorDidAppear"),
+                                 QJsonObject{{QStringLiteral("action"), action},
+                                             {QStringLiteral("context"), ctx}});
+                         }
+                     });
+    QObject::connect(m_propertyInspector.get(),
+                     &PropertyInspectorController::inspectorClosed,
+                     this,
+                     [this](QString uuid, QString action, QString ctx) {
+                         if (m_pluginServer) {
+                             m_pluginServer->sendEvent(
+                                 uuid,
+                                 QStringLiteral("propertyInspectorDidDisappear"),
+                                 QJsonObject{{QStringLiteral("action"), action},
+                                             {QStringLiteral("context"), ctx}});
+                         }
+                     });
 #endif // AJAZZ_HAVE_WEBENGINE
 #endif // AJAZZ_HAVE_WEBSOCKETS
 }

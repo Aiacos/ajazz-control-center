@@ -197,9 +197,32 @@ signals:
     ///          unconditionally from Application (no emission = no call).
     void activeBridgeChanged(ajazz::app::PIBridge* bridge);
 
+    /// PI-04: emitted when a PI page opens (loadInspector completes and the
+    /// new bridge is live). Application routes this to
+    /// SdPluginServer::sendEvent(propertyInspectorDidAppear) so the owning
+    /// plugin learns its PI is visible. Routed through Application (not a raw
+    /// SdPluginServer* here) to preserve the audited indirection that the
+    /// toPluginRequested / activeBridgeChanged seams already use.
+    void inspectorOpened(QString pluginUuid, QString actionUuid, QString contextUuid);
+
+    /// PI-04: emitted when a PI page closes (closeInspector) AND on the
+    /// PI->PI switch edge (loadInspector tears down the previous channel to
+    /// load a new one). Application routes this to
+    /// SdPluginServer::sendEvent(propertyInspectorDidDisappear).
+    void inspectorClosed(QString pluginUuid, QString actionUuid, QString contextUuid);
+
 private:
     bool hasHtmlInspector_ = false;
     QUrl activeUrl_;
+
+    /// PI-04: identity of the currently-loaded inspector, captured at
+    /// loadInspector time so the disappear event can be emitted with the
+    /// correct plugin/action/context on the PI->PI switch teardown (where the
+    /// outgoing bridge is already gone) and on closeInspector. Set in both
+    /// WebEngine and stub builds; used only by the appear/disappear emits.
+    QString activePluginUuid_;
+    QString activeActionUuid_;
+    QString activeContextUuid_;
 
     /// PIMPL holding the WebEngineProfile + WebChannel. Defined only
     /// when AJAZZ_HAVE_WEBENGINE is set; when absent the unique_ptr is
