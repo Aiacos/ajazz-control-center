@@ -24,6 +24,27 @@
 
 namespace ajazz::app {
 
+/**
+ * @brief Coarse Windows-plugin classification verdict (WINPLG-01).
+ *
+ * Defined here (above PluginManifest) so the struct can carry a cached
+ * @c winClass member with an in-class initializer. Produced by
+ * @ref classifyWindowsPlugin from a parsed manifest + its on-disk bundle; drives
+ * the native-run gate (@ref supportsCurrentPlatform) and the UI status chip.
+ * The verdict is cached at scan time (PluginManager::discover()) — it MUST NOT be
+ * recomputed lazily at launch (locked CONTEXT decision: classify at install/scan).
+ *
+ * Mapping to the plugins-tier int cache (PluginInfo::winClass), kept explicit so
+ * the UI model can mirror it without a cross-tier enum dependency:
+ *   NotWindowsOnly = 0, WsOnlyIpc = 1, VendorDll = 2.
+ */
+enum class WinPluginClass : int {
+    NotWindowsOnly = 0, ///< OS array absent or has no "windows" entry — not a win-only plugin.
+    WsOnlyIpc = 1, ///< Win-only WebSocket/IPC plugin (.js/.html/.cjs, no PE) — runs natively.
+    VendorDll =
+        2, ///< Win-only vendor-DLL/.exe plugin (PE present) — needs Windows (Wine deferred).
+};
+
 /// A single image-state entry for an action key (per akp_plugin_sdk.md §2 States[i]).
 struct PluginActionState {
     QString image;          ///< States[i].Image
@@ -127,6 +148,15 @@ struct PluginManifest {
     /// the child process working directory so a relative CodePath resolves and
     /// the plugin's own relative resource paths work.
     QString sourceDir;
+
+    /// Cached Windows-plugin classification verdict (WINPLG-01/02). Stamped by
+    /// PluginManager::discover() at scan time — when @c sourceDir (the bundle
+    /// dir) is still available for the bounded PE-magic scan — and carried
+    /// through spawn() into the live inventory so PluginManager::plugins() can
+    /// hand it to the UI model without re-scanning. Defaults to NotWindowsOnly
+    /// for byte-buffer-parsed manifests (unit tests) that never went through
+    /// discover(). NOT read from JSON.
+    WinPluginClass winClass{WinPluginClass::NotWindowsOnly};
 };
 
 /// Bitmask of drop-target affordances derived from a Controllers QStringList.
@@ -195,28 +225,6 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
  * This is the value callers should pass to manifestRunnableHere() for the real host.
  */
 [[nodiscard]] QString currentPlatformString();
-
-/**
- * @brief Coarse Windows-plugin classification verdict (WINPLG-01).
- *
- * Produced by @ref classifyWindowsPlugin from a parsed manifest + its on-disk
- * bundle. Drives the native-run gate (@ref supportsCurrentPlatform) and the UI
- * status chip. The verdict is cached at scan time onto the runtime-populated
- * carrier (PluginManifest is classified once in discover(); see the runtime
- * @c PluginManifest::winClass note) — it MUST NOT be recomputed lazily at
- * launch (locked CONTEXT decision: classify at install/scan, cache).
- *
- * Mapping to the plugins-tier int cache (PluginInfo::winClass), kept explicit so
- * the UI model can mirror it without a cross-tier enum dependency:
- *   NotWindowsOnly = 0, WsOnlyIpc = 1, VendorDll = 2.
- */
-enum class WinPluginClass : int {
-    NotWindowsOnly = 0, ///< OS array absent or has no "windows" entry — not a win-only plugin.
-    WsOnlyIpc =
-        1, ///< Win-only WebSocket/IPC plugin (.js/.html/.cjs, no PE binary) — runs natively.
-    VendorDll =
-        2, ///< Win-only vendor-DLL/.exe plugin (PE binary present) — needs Windows (Wine deferred).
-};
 
 /**
  * @brief Classify a Windows plugin as WS-only-IPC vs vendor-DLL (WINPLG-01).

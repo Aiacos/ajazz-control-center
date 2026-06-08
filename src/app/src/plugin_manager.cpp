@@ -272,19 +272,38 @@ std::vector<PluginManifest> PluginManager::discover() {
             continue;
         }
 
-        // Step 4: apply runnability gate. Pass the emulated Stream Deck version
+        // Record the source directory so spawn() can run the child with the
+        // plugin dir as its working directory (relative CodePath + resources),
+        // and so the bundle dir is available for the WINPLG-01 PE-magic scan.
+        opt->sourceDir = m_pluginsDir + QLatin1Char('/') + entry;
+
+        // WINPLG-01: classify Windows plugins at SCAN time (locked CONTEXT decision —
+        // NOT lazily at launch). The bundle dir (opt->sourceDir) exists here, so the
+        // bounded PE-magic corroborator can run. Cache the verdict on the manifest so
+        // it flows through spawn() into the live inventory and reaches plugins() / the
+        // UI model WITHOUT a re-scan (PluginInfo carries no bundle path).
+        opt->winClass = classifyWindowsPlugin(*opt, opt->sourceDir);
+
+        // Step 4: apply the runnability gate. Pass the emulated Stream Deck version
         // (not our app version) so a plugin's Software.MinimumVersion (an Elgato
         // SD-app requirement) is compared against the right axis.
-        if (!manifestRunnableHere(
-                *opt, currentPlatformString(), QString::fromLatin1(kEmulatedSdVersion))) {
+        //
+        // WINPLG-02 native-run override: a WS-only-IPC win-only plugin (os=["windows"],
+        // no PE binary) runs natively on Linux/macOS even though manifestRunnableHere
+        // would otherwise strict-reject a non-matching explicit-windows OS array. We
+        // accept when EITHER the base gate passes OR supportsCurrentPlatform() says the
+        // classified plugin runs natively. The strict reject for VendorDll is preserved:
+        // supportsCurrentPlatform returns false for VendorDll off Windows (Wine deferred).
+        bool const baseRunnable = manifestRunnableHere(
+            *opt, currentPlatformString(), QString::fromLatin1(kEmulatedSdVersion));
+        bool const winNativeRunnable =
+            supportsCurrentPlatform(*opt, currentPlatformString(), opt->winClass);
+        if (!baseRunnable && !winNativeRunnable) {
             qWarning("PluginManager: skipping %s (not runnable on this platform/version)",
                      qPrintable(opt->name));
             continue;
         }
 
-        // Record the source directory so spawn() can run the child with the
-        // plugin dir as its working directory (relative CodePath + resources).
-        opt->sourceDir = m_pluginsDir + QLatin1Char('/') + entry;
         runnable.push_back(std::move(*opt));
     }
 
@@ -940,6 +959,10 @@ std::vector<plugins::PluginInfo> PluginManager::plugins() {
         for (auto const& action : livePlugin.manifest.actions) {
             info.actionIds.push_back(action.uuid.toStdString());
         }
+        // WINPLG-01/02: hand the scan-time classification verdict to the UI model
+        // (LoadedPluginsModel, Plan 02) without re-scanning. The plugins-tier int
+        // mapping mirrors ajazz::app::WinPluginClass (0/1/2) — see PluginInfo::winClass.
+        info.winClass = static_cast<int>(livePlugin.manifest.winClass);
         result.push_back(std::move(info));
     }
     return result;
