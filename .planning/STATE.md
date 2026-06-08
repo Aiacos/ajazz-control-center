@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++; PI-01+PI-02 marked complete, PI-03 stays partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass is the orchestrator's consolidated step -- exact ajazz-debug commands in 33-02-SUMMARY "Pending live verification")
-last_updated: "2026-06-08T11:00:00.000Z"
-last_activity: 2026-06-08 -- Phase 33 Plan 02 (PI-02 thin-UI objectNames + open/close affordances) complete
+stopped_at: "Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)"
+last_updated: '2026-06-08T14:02:56.103Z'
+last_activity: 2026-06-08
 progress:
   total_phases: 6
-  completed_phases: 3
-  total_plans: 13
-  completed_plans: 12
-  percent: 50
+  completed_phases: 4
+  total_plans: 18
+  completed_plans: 14
+  percent: 67
 ---
 
 # Project State
@@ -24,17 +24,17 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** Phase 30 COMPLETE — autonomous run RESUMED at Phase 31 (2026-06-07, Opus-everywhere)
+**Current focus:** Phase 34 — per-app-profiles-event-parity-audit
 
 ## Current Position
 
-Phase: 34 (Per-App Profiles + Event-Parity Audit) — DISCUSSED (34-CONTEXT.md committed a8cc4c0); PAUSED before research/plan (context-budget pause, 2026-06-08). Resume: `/gsd-autonomous --from 34` (has_context=true → skips discuss, goes to research→plan→execute). Phase 34 is the largest remaining: 8 reqs (APROF-01..04 greenfield window-watcher + EVENT-01..04 parity audit); Wayland live-verifiable on niri; Win/macOS compile-guarded.
+Phase: 34 (per-app-profiles-event-parity-audit) — EXECUTING
 
 Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
-Plan: all 3 (01 PI-04 events; 02 PI-02 objectNames+affordance; 03 = deferred human-verify checkpoint). LIVE-CONFIRMED: criterion 2 simulatePiSettings→didReceiveSettings + full setSettings round-trip; PI-02 objectNames addressable. CR WR-01 (spurious didDisappear+didAppear on identical reload) FIXED (13f085b).
-Status: Continuing autonomous run to Phase 34. Deferred PI human-verify in 33-HUMAN-UAT.md (com.test.demo→pi/index.html walk-through).
+Plan: 2 of 5
+Status: Ready to execute
 Next: Phase 34 (Per-App Profiles + Event-Parity Audit) → 35.
-Last activity: 2026-06-08 -- Phase 33 VERIFIED (PI-04 events + PI-02 affordance; PI-03 relay/persistence live-confirmed; human-verify deferred)
+Last activity: 2026-06-08
 
 ### Progress bar
 
@@ -127,6 +127,8 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 | 31-CR | Code-review fixes: JsonReader DepthGuard kMaxDepth=64 on readActionInstance children + skipValue (CR-01 reader-recursion DoS); escape() emits \\u00XX for ctrl chars (WR-01); deterministic state/states fold (WR-02); +5 tests -> action_instance 12/12, full 713/713                                                                                                                                                                                                                |
 | 33-01 | PI-04: titleParametersDidChange emitted INLINE after each willAppear (no separate pass); appear/disappear via new controller inspectorOpened/inspectorClosed signals routed through the Application seam to sendEvent (controller stays free of a raw SdPluginServer\*); PI->PI switch teardown fires disappear; titleParameters default VALUES [ASSUMED] (Catch2 locks shape, human-verify confirms values); no sendEvent allowlist                                                  |
 | 33-02 | PI-02 thin-UI: open/close affordances are plain SecondaryButtons (not Switch -- qml.invoke fires onClicked but cannot reproduce Switch.toggled, CLAUDE.md harness gap); openPiButton reuses maybeLoadInspector() rather than re-resolving PI path/uuid/ctx; NO C++ change (loadInspector/closeInspector already Q_INVOKABLE -- research A4 openForCurrentSelection fallback unnecessary, tightens the GREEN-files guard); PI-03 stays partial until the real-PI human-verify in 33-03 |
+| 34-01 | APROF-01 foundation: IActiveWindowWatcher kept Qt-free in ajazz_core (std::function callback seam, RESEARCH A1); all Wayland/X11/AppKit live in app-tier per-OS TUs so COD-031 holds. StubActiveWindowWatcher is PUBLIC (not anonymous like the input-synth stub) so the debug facade + tests reach injectForeground; window.setForeground RPC dynamic_casts to it                                                                                                                    |
+| 34-01 | Qt6::WaylandClient find_package + qtwaylandscanner codegen + libX11 are Linux-gated (qtwayland is not built on macOS/Windows; REQUIRED would break those configures). Generated qwayland-\*.cpp compiled with -w (trips -Werror old-style-cast/sign-conversion; generated code). RED Wave-0 scaffolds use Catch2 [!shouldfail] (registered + fail-as-expected, pending Plan 04). .mm excluded from clang-format (no ObjC block in .clang-format)                                      |
 
 ### Pending Todos (pre-Phase 30)
 
@@ -154,6 +156,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08 -- Phase 33 Plan 02 (PI-02 thin-UI objectNames + open/close affordances) complete
+Last session: 2026-06-08T14:02:56.096Z
 Stopped at: Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)
 Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)

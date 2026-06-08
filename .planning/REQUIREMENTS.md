@@ -45,7 +45,7 @@ ______________________________________________________________________
 
 ### Per-App Profiles (APROF)
 
-- [ ] **APROF-01**: An `IActiveWindowWatcher` interface with platform-split backends — X11/EWMH, Windows/`GetForegroundWindow`, macOS/`NSWorkspace` (Obj-C++ `.mm`), Wayland/`zwlr-foreign-toplevel` (best-effort) — emits debounced foreground-app changes.
+- [x] **APROF-01**: An `IActiveWindowWatcher` interface with platform-split backends — X11/EWMH, Windows/`GetForegroundWindow`, macOS/`NSWorkspace` (Obj-C++ `.mm`), Wayland/`zwlr-foreign-toplevel` (best-effort) — emits debounced foreground-app changes.
 - [ ] **APROF-02**: The active profile auto-switches based on the foreground app via `Profile::applicationHints`, with a default-profile fallback; each switch drives the bridge context lifecycle (`willDisappear`/`willAppear`).
 - [ ] **APROF-03**: A user can assign profiles to application names in the UI; the Wayland/GNOME limitation (no public foreground API without a shell extension) is surfaced as a capability warning in the UI.
 - [ ] **APROF-04**: `applicationDidLaunch` / `applicationDidTerminate` events are fired from the watcher to plugins that subscribe.
@@ -119,7 +119,7 @@ ______________________________________________________________________
 | EVENT-02    | Phase 34 | Pending  |
 | EVENT-03    | Phase 34 | Pending  |
 | EVENT-04    | Phase 34 | Pending  |
-| APROF-01    | Phase 34 | Pending  |
+| APROF-01    | Phase 34 | Complete |
 | APROF-02    | Phase 34 | Pending  |
 | APROF-03    | Phase 34 | Pending  |
 | APROF-04    | Phase 34 | Pending  |

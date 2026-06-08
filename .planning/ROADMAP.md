@@ -150,7 +150,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 34-01-PLAN.md — Build-env + Wave-0 scaffold: vendored wlr XML, CMake codegen/link (Qt6::WaylandClient + libX11) + CI/Flatpak deps, Qt-free IActiveWindowWatcher interface + recording stub + factory, window.setForeground debug RPC, RED test scaffolds (APROF-01)
+- [x] 34-01-PLAN.md — Build-env + Wave-0 scaffold: vendored wlr XML, CMake codegen/link (Qt6::WaylandClient + libX11) + CI/Flatpak deps, Qt-free IActiveWindowWatcher interface + recording stub + factory, window.setForeground debug RPC, RED test scaffolds (APROF-01)
 
 **Wave 2** *(blocked on 34-01; \<=2 concurrent)*
 
@@ -187,5 +187,5 @@ Plans:
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
-| 34. Per-App Profiles + Event-Parity Audit                                | 0/5            | Planned     | -          |
+| 34. Per-App Profiles + Event-Parity Audit                                | 1/5            | In Progress |            |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
