@@ -124,7 +124,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 33-02-PLAN.md — PI-02 thin-UI: openPiButton/closePiButton + piPanelLoader/piWebView objectNames; PI-01/PI-03 verify-only live debug-channel pass, criteria 1/2/3 (PI-01/PI-02/PI-03)
+- [x] 33-02-PLAN.md — PI-02 thin-UI: openPiButton/closePiButton + piPanelLoader/piWebView objectNames; PI-01/PI-03 verify-only live debug-channel pass, criteria 1/2/3 (PI-01/PI-02/PI-03)
 
 **Wave 3** *(deferred human-verify; blocked on Wave 2)*
 
@@ -167,6 +167,6 @@ Plans:
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
-| 33. Property Inspector End-to-End                                        | 1/3            | In Progress |            |
+| 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
