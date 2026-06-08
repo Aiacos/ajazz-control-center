@@ -21,7 +21,11 @@
  *
  * Tags: [active_window] — select with: ctest --preset linux-release -R active_window
  */
+#include "active_window_debounce.hpp"
 #include "ajazz/core/active_window_watcher.hpp"
+#include "qt_app_fixture.hpp"
+
+#include <QTest>
 
 #include <string>
 #include <vector>
@@ -149,4 +153,82 @@ TEST_CASE("active_window_debounce rapid injects each deliver the final appId",
     REQUIRE(fires == 3);
     REQUIRE(last.appId == "settled");
     REQUIRE(last.title == "Settled Window");
+}
+
+// ---------------------------------------------------------------------------
+// Real backend debounce contract (Plan 03): the shared ActiveWindowDebouncer is
+// the QTimer trailing-edge coalescer every native backend (Wayland/X11/Win/macOS)
+// feeds. These cases drive it directly (no real OS focus event) and pin the
+// coalescing + idempotent-switch behaviour the live backends rely on. Driven via
+// QTest::qWait on the unit suite's Qt event loop (same idiom as the
+// HotplugDebouncer harness).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("active_window_debounce coalesces a rapid burst to one trailing emit",
+          "[active_window][active_window_debounce]") {
+    ajazz::tests::qtApp(); // ensure a QCoreApplication for QTimer/qWait
+    ActiveWindowDebouncer debounce;
+    std::vector<std::string> fired;
+    debounce.setCallback([&fired](ActiveWindowInfo info) { fired.push_back(info.appId); });
+
+    // Burst within the debounce window: alt-tab thrash a -> b -> c.
+    debounce.submit(ActiveWindowInfo{"a", ""});
+    debounce.submit(ActiveWindowInfo{"b", ""});
+    debounce.submit(ActiveWindowInfo{"c", "Settled"});
+
+    // Nothing fires before the window elapses.
+    QTest::qWait(kActiveWindowDebounceMs / 2);
+    REQUIRE(fired.empty());
+
+    // After the trailing edge, exactly ONE emit carrying the LAST (settled) app.
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+    REQUIRE(fired.size() == 1);
+    REQUIRE(fired[0] == "c");
+}
+
+TEST_CASE("active_window_debounce distinct settled apps each fire once",
+          "[active_window][active_window_debounce]") {
+    ajazz::tests::qtApp(); // ensure a QCoreApplication for QTimer/qWait
+    ActiveWindowDebouncer debounce;
+    std::vector<std::string> fired;
+    debounce.setCallback([&fired](ActiveWindowInfo info) { fired.push_back(info.appId); });
+
+    debounce.submit(ActiveWindowInfo{"firefox", ""});
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+    debounce.submit(ActiveWindowInfo{"code", ""});
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+
+    REQUIRE(fired.size() == 2);
+    REQUIRE(fired[0] == "firefox");
+    REQUIRE(fired[1] == "code");
+}
+
+TEST_CASE("active_window_debounce drops a redundant emit for the already-active app",
+          "[active_window][active_window_debounce]") {
+    ajazz::tests::qtApp(); // ensure a QCoreApplication for QTimer/qWait
+    // Idempotent-switch guard (CR WR-01 / T-34-03-01): submitting the same app id
+    // that was last delivered must NOT re-fire the callback (no redundant switch).
+    ActiveWindowDebouncer debounce;
+    int fires = 0;
+    debounce.setCallback([&fires](ActiveWindowInfo) { ++fires; });
+
+    debounce.submit(ActiveWindowInfo{"firefox", ""});
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+    REQUIRE(fires == 1);
+
+    debounce.submit(ActiveWindowInfo{"firefox", "different title same app"});
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+    REQUIRE(fires == 1); // coalesced + identical app id -> no re-emit
+}
+
+TEST_CASE("active_window_debounce after a null callback no emit occurs",
+          "[active_window][active_window_debounce]") {
+    ajazz::tests::qtApp(); // ensure a QCoreApplication for QTimer/qWait
+    ActiveWindowDebouncer debounce;
+    int fires = 0;
+    debounce.setCallback([&fires](ActiveWindowInfo) { ++fires; });
+    debounce.setCallback(nullptr); // stop() clears the callback
+    debounce.submit(ActiveWindowInfo{"a", ""});
+    QTest::qWait(kActiveWindowDebounceMs + 100);
+    REQUIRE(fires == 0);
 }

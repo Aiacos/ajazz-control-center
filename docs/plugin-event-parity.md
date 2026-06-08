@@ -123,3 +123,32 @@ literal under `src/app/src/*.cpp` is the manifest acceptance line. See **EVENT-0
   are registered in Plan 01 (`tests/unit/test_app_lifecycle_events.cpp`); they turn
   GREEN in Plan 04. Outbound `sendEvent` has no event-name allowlist
   (`kRoutedActions` gates inbound only), so these are additive on the wire.
+
+## ACTIVE-WINDOW-IDENTITY — foreground app-id normalization contract (APROF-01)
+
+The per-app profile auto-switch (Plan 04) matches the foreground application
+against `Profile::applicationHints`. The four `IActiveWindowWatcher` backends each
+emit `ActiveWindowInfo.appId` as a **single normalized match token**, defined here
+so a hint set on one desktop matches on another (34-RESEARCH Pitfall 2). Matching
+is **case-insensitive**; every backend lowercases its token at the source.
+
+| Platform      | Source signal                                                        | `appId` token                                                        | Normalization                                                                  |
+| ------------- | -------------------------------------------------------------------- | -------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| Wayland (wlr) | `zwlr_foreign_toplevel_handle_v1.app_id` of the `activated` toplevel | app_id (e.g. `firefox`)                                              | as-reported (already app-id form); compositor string is untrusted (T-34-03-03) |
+| X11/EWMH      | `WM_CLASS` instance of `_NET_ACTIVE_WINDOW`                          | instance/class (e.g. `firefox`)                                      | lowercased ASCII                                                               |
+| Windows       | `QueryFullProcessImageNameW` of `GetForegroundWindow`'s process      | image base name minus `.exe` (e.g. `FIREFOX.EXE` -> `firefox`)       | base name, strip `.exe`, lowercase                                             |
+| macOS         | `NSWorkspace.frontmostApplication`                                   | `bundleIdentifier` (e.g. `org.mozilla.firefox`), else localized name | lowercased                                                                     |
+
+Notes:
+
+- The macOS token (reverse-DNS bundle id) differs in **shape** from the Wayland/X11
+  app_id; a hint authored on Linux will not auto-match on macOS and vice-versa. This
+  is acceptable for v2.0 (hints are per-install); a future cross-platform alias map
+  is out of scope (deferred).
+- The token is consumed strictly as a match string (Plan 04) — never eval'd, exec'd,
+  or shelled out (threat T-34-03-03; no `xdotool`/`swaymsg`/`wmctrl` subprocess).
+- `capabilityAvailable()` is the runtime degradation signal (APROF-03): Wayland maps
+  it to `QWaylandClientExtension::isActive()`; X11 to a successful display open;
+  Win/macOS are always available. When `false`, the watcher emits no automatic
+  changes and the UI shows the capability-warning chip (Plan 05) — manual switching
+  still works (fail safe, never fail open).

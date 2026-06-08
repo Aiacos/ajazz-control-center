@@ -346,6 +346,15 @@ add_executable(
 target_sources(ajazz_unit_tests PRIVATE test_out_of_process_plugin_host.cpp)
 target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
 
+# Phase 34 Plan 03 (APROF-01): the active-window debounce test (test_active_window_watcher.cpp)
+# includes the app-tier header-only ActiveWindowDebouncer (src/app/src/active_window_debounce.hpp),
+# which is gated by AJAZZ_FEATURE_ACTIVE_WINDOW and uses QTimer. Add the app src dir to the include
+# path and define the feature so the header is non-empty here. This pulls in only the QTimer-based
+# debouncer (no native backend TU, no Wayland/X11 link) — the unit suite verifies the coalescing
+# contract the live backends layer on top of, driven via QSignalSpy::wait / QTest::qWait.
+target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src)
+target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_FEATURE_ACTIVE_WINDOW=1)
+
 if(WIN32)
     # SEC-003 follow-up #51: Ed25519 manifest verifier — Win32 backend uses `_wspawnvp`. The test
     # exercises the same canonical-form contract on Windows so any drift between the two backends
