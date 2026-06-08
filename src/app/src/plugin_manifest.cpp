@@ -416,8 +416,11 @@ namespace {
            path.endsWith(QStringLiteral(".dll"), Qt::CaseInsensitive);
 }
 
-/// Bounded corroborator scan: returns true if any regular file directly under
-/// @p bundleDir begins with the DOS/PE magic bytes "MZ" (0x4D 0x5A).
+/// Bounded corroborator scan: returns true if any regular file in the bundle
+/// tree (recursive, bounded by @c kMaxFilesScanned) begins with the DOS/PE
+/// magic bytes "MZ" (0x4D 0x5A). The scan recurses subdirectories on purpose —
+/// a vendor DLL may live in a `bin/` subdir — and the file-count cap applies
+/// across the whole tree.
 ///
 /// Security (T-35-01-01/02): reads ONLY the first 2 bytes of each file, never parses
 /// a full PE header, never executes anything, and caps the number of files examined.

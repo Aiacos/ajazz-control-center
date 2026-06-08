@@ -15,7 +15,8 @@
 //
 // Roles consumed (from LoadedPluginsModel):
 //   pluginId, name, version, authors, permissions (QStringList),
-//   isSigned (bool), publisher (QString), trustLevel (QString).
+//   isSigned (bool), publisher (QString), trustLevel (QString),
+//   platformStatus (QString — WINPLG chip: "native"/"wine"/"unsupported"/"").
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
