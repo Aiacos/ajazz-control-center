@@ -520,6 +520,21 @@ public slots:
     [[nodiscard]] QString activeDeviceId() const noexcept { return m_activeDeviceId; }
 
     /**
+     * @brief The set of currently-registered plugin UUIDs.
+     *
+     * Phase 34-04 (APROF-04 / EVENT-03): host-level outbound events
+     * (applicationDidLaunch/Terminate, systemDidWakeUp) are delivered ONLY to
+     * registered plugins (V4 access control / T-34-04-02 information-disclosure
+     * mitigation — never broadcast). Application owns m_pluginServer and performs
+     * the sendEvent fan-out, but the registered-plugin authority lives in the
+     * bridge (it tracks register/disconnect). Exposing the set here keeps the
+     * fan-out at the Application composition seam without the bridge gaining a new
+     * responsibility. The same m_registeredPlugins set drives deviceDidConnect/
+     * Disconnect fan-out (onDeviceConnected/onDeviceDisconnected).
+     */
+    [[nodiscard]] QSet<QString> registeredPlugins() const { return m_registeredPlugins; }
+
+    /**
      * @brief Render a Toggle Action's current state + emit a state-change willAppear.
      *
      * BIND-07 render hook. Wired (in application.cpp) into

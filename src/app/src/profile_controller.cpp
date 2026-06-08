@@ -308,6 +308,28 @@ bool appIdMatchesHints(QString const& appId, QStringList const& hints) {
     return false;
 }
 
+QString resolveSwitchToProfileToken(ProfileController const& ctrl,
+                                    QString const& profileToken,
+                                    QString const& deviceToken) {
+    if (profileToken.trimmed().isEmpty()) {
+        return {};
+    }
+    // Exact profile-id match wins.
+    if (ctrl.knownProfileIds().contains(profileToken)) {
+        return profileToken;
+    }
+    // Fall back to a name-or-id match scoped to the device.
+    QVariantList const candidates = ctrl.profilesForDevice(deviceToken);
+    for (auto const& v : candidates) {
+        auto const m = v.toMap();
+        if (m.value(QStringLiteral("name")).toString() == profileToken ||
+            m.value(QStringLiteral("id")).toString() == profileToken) {
+            return m.value(QStringLiteral("id")).toString();
+        }
+    }
+    return {};
+}
+
 QString ProfileController::resolveProfileForApp(QString const& appId,
                                                 QString const& deviceCodename) const {
     // Read directly off disk: m_library is a lightweight {id,name,device,path}

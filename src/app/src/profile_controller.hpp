@@ -41,6 +41,29 @@ namespace ajazz::app {
  */
 [[nodiscard]] bool appIdMatchesHints(QString const& appId, QStringList const& hints);
 
+class ProfileController; // fwd for the switchToProfile token resolver
+
+/**
+ * @brief Resolve an inbound switchToProfile token to a known profile id
+ *        (EVENT-03, Phase 34-04).
+ *
+ * The token arriving from a plugin over the WS is UNTRUSTED (T-34-04-03): this
+ * treats it purely as a lookup key (never evaluated). Resolution order: an exact
+ * profile-id match against @p ctrl.knownProfileIds() wins; otherwise a name-or-id
+ * match scoped to @p deviceToken via @p ctrl.profilesForDevice(). Returns the
+ * resolved profile id, or an empty string when the token (after V5 length-bound
+ * + trim by the caller) matches no known profile — the caller then rejects the
+ * request without activating anything. Read-only with respect to @p ctrl.
+ *
+ * @param ctrl         Profile controller providing the known-profile index.
+ * @param profileToken Caller-bounded/trimmed token (id or user-visible name).
+ * @param deviceToken  Optional device scope for the name fallback.
+ * @return Resolved profile id, or "" when unresolvable.
+ */
+[[nodiscard]] QString resolveSwitchToProfileToken(ProfileController const& ctrl,
+                                                  QString const& profileToken,
+                                                  QString const& deviceToken);
+
 /**
  * @class ProfileController
  * @brief QML-accessible controller for profile persistence.

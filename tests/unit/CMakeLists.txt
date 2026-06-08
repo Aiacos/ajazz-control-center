@@ -211,7 +211,14 @@ add_executable(
     # ctest -R 'app_profile_switch|app_lifecycle_events' (registered + expected-fail).
     test_active_window_watcher.cpp
     test_app_profile_switch.cpp
-    test_app_lifecycle_events.cpp
+    # Phase 34 Plan 34-04 (EVENT-03): switchToProfile inbound token resolution
+    # (resolveSwitchToProfileToken — exact id / name-scoped / bad-token reject).
+    # ProfileController is already compiled in this target (14-02 entry).
+    test_switch_to_profile.cpp
+    # NOTE: test_app_lifecycle_events.cpp (APROF-04) + test_system_did_wake.cpp
+    # (EVENT-03) exercise the live registered-only fan-out and so need
+    # SdPluginServer + app_event_dispatch + WebSockets — registered in the
+    # AJAZZ_HAVE_WEBSOCKETS-gated block below, not here.
     test_event_bus.cpp
     test_action_engine.cpp
     # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
@@ -697,6 +704,16 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # (plugin_manifest.cpp is already linked unconditionally below in the test_plugin_manifest block
     # -- do NOT re-add it).
     target_sources(ajazz_unit_tests PRIVATE controller_token_test.cpp)
+
+    # Phase 34 Plan 34-04 (APROF-04 / EVENT-03): host-level outbound event fan-out.
+    # app_event_dispatch.cpp (registered-only delivery + length-bounded payload) drives the live
+    # SdPluginServer; test_system_did_wake + test_app_lifecycle_events register a loopback plugin
+    # (same e2e seam as test_plugin_device_bridge) and assert registered-only delivery via the
+    # eventSent signal.
+    target_sources(
+        ajazz_unit_tests PRIVATE test_system_did_wake.cpp test_app_lifecycle_events.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/app_event_dispatch.cpp
+    )
 endif()
 
 # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient obs-websocket v5 auth handshake tests. Hardware-free:

@@ -172,6 +172,11 @@ qt_add_executable(
 # functionality is disabled at runtime.
 if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(ajazz-control-center PRIVATE src/sd_plugin_server.cpp)
+    # Phase 34 Plan 34-04 (APROF-04 / EVENT-03): host-level outbound plugin-event fan-out helpers
+    # (applicationDidLaunch/Terminate, systemDidWakeUp). Registered- only delivery (V4) +
+    # length-bounded payload (V5); factored as free functions so the delivery contract is
+    # unit-testable against a live SdPluginServer.
+    target_sources(ajazz-control-center PRIVATE src/app_event_dispatch.cpp)
     # Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge — bridge QObject shell + ContextRegistry +
     # pure helpers (decodeDataUriImage, coordsForKeyIndex, keyIndexForCoords, ownerForActionUuid).
     # Gated on WebSockets because it will compose SdPluginServer (Phase 17) in 19-02/19-03. Pure

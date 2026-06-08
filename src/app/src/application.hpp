@@ -172,6 +172,39 @@ public:
         return m_pluginCatalog.get();
     }
 
+public:
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    /**
+     * @brief Fan out @c systemDidWakeUp to every registered plugin (EVENT-03).
+     *
+     * The OS wake source (Linux logind @c PrepareForSleep, or a synthetic wake
+     * in tests / the debug channel) calls this; it iterates the bridge's
+     * registered-plugin set and emits @c sendEvent(uuid, "systemDidWakeUp", {})
+     * for each — never caching the socket (Pitfall 4 / re-resolved per call) and
+     * never broadcasting beyond registered plugins (V4). No-op when the server or
+     * bridge is unavailable. Exposed publicly as the injectable wake seam so the
+     * dispatch path is unit-testable without a real power event.
+     */
+    void dispatchSystemWake();
+
+    /**
+     * @brief Fan out @c applicationDidLaunch to registered plugins (APROF-04).
+     *
+     * Called from the foreground-watcher onChange when a new foreground app is
+     * seen. Delivers @c applicationDidLaunch with a length-bounded
+     * @c {application} payload (V5 — mirrors the logMessage 2048 cap) to every
+     * registered plugin only (V4 / T-34-04-02 — never broadcast). Empty @p appId
+     * or no registered plugins is a no-op. The terminate half is
+     * @ref dispatchApplicationTerminate.
+     */
+    void dispatchApplicationLaunch(QString const& appId);
+
+    /// Fan out @c applicationDidTerminate to registered plugins (APROF-04).
+    /// Same registered-only + length-bound contract as
+    /// @ref dispatchApplicationLaunch.
+    void dispatchApplicationTerminate(QString const& appId);
+#endif
+
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
     void onHotplug(core::HotplugEvent const& ev);

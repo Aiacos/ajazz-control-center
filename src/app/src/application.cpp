@@ -12,6 +12,9 @@
 #include "application.hpp"
 
 #include "active_window_watcher_factory.hpp"
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "app_event_dispatch.hpp"
+#endif
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/hotplug_monitor.hpp"
 #include "ajazz/core/logger.hpp"
@@ -36,6 +39,7 @@
 #include <QProcess>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QSet>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTimer>
@@ -615,9 +619,47 @@ Application::Application(QObject* parent)
         m_pluginServer.get(),
         &SdPluginServer::actionReceived,
         this,
-        [](QString const& pluginUuid, QJsonObject const& action) {
+        [this](QString const& pluginUuid, QJsonObject const& action) {
             QString const event = action.value(QStringLiteral("event")).toString();
             QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+            if (event == QStringLiteral("switchToProfile")) {
+                // EVENT-03: inbound host command — a plugin asks the host to
+                // activate a profile. The payload "profile" token is UNTRUSTED
+                // (T-34-04-03 tampering): treat it purely as a lookup key, never
+                // evaluated/shelled, and V5-bound its length before use so a
+                // hostile plugin cannot smuggle a huge or malformed token. The
+                // optional "device" scopes resolution to that device's profiles.
+                constexpr int kMaxTokenChars = 256; // V5 payload bound
+                QString const profileToken =
+                    payload.value(QStringLiteral("profile")).toString().left(kMaxTokenChars);
+                QString const deviceToken =
+                    payload.value(QStringLiteral("device")).toString().left(kMaxTokenChars);
+                if (profileToken.trimmed().isEmpty()) {
+                    AJAZZ_LOG_WARN("plugin",
+                                   "switchToProfile: rejected empty/blank profile token from "
+                                   "plugin {}",
+                                   pluginUuid.toStdString());
+                    return; // reject: no crash, no activation
+                }
+                // Resolve the token to a known profile id (exact id, then name
+                // scoped to the device — RESEARCH Open Q3). Unresolvable -> reject.
+                QString const resolvedId =
+                    resolveSwitchToProfileToken(*m_profileController, profileToken, deviceToken);
+                if (resolvedId.isEmpty()) {
+                    AJAZZ_LOG_WARN("plugin",
+                                   "switchToProfile: token '{}' from plugin {} matched no known "
+                                   "profile — ignored",
+                                   profileToken.toStdString(),
+                                   pluginUuid.toStdString());
+                    return; // bad token: no crash, no activation
+                }
+                AJAZZ_LOG_INFO("plugin",
+                               "switchToProfile: plugin {} -> profile '{}'",
+                               pluginUuid.toStdString(),
+                               resolvedId.toStdString());
+                m_profileController->loadProfileById(resolvedId);
+                return;
+            }
             if (event == QStringLiteral("openUrl")) {
                 QString const url = payload.value(QStringLiteral("url")).toString();
                 QUrl const qurl(url);
@@ -1160,6 +1202,34 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         }
     }
 }
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+void Application::dispatchSystemWake() {
+    // EVENT-03: synthetic/OS wake -> systemDidWakeUp to registered plugins only.
+    // Delegates to the unit-tested fan-out helper (registered-only, V4).
+    if (m_pluginBridge == nullptr) {
+        return;
+    }
+    dispatchSystemWakeTo(m_pluginServer.get(), m_pluginBridge->registeredPlugins());
+}
+
+void Application::dispatchApplicationLaunch(QString const& appId) {
+    // APROF-04: applicationDidLaunch to REGISTERED plugins only (V4 /
+    // T-34-04-02 — never broadcast); length-bounded payload (V5).
+    if (m_pluginBridge == nullptr) {
+        return;
+    }
+    dispatchApplicationLaunchTo(m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId);
+}
+
+void Application::dispatchApplicationTerminate(QString const& appId) {
+    if (m_pluginBridge == nullptr) {
+        return;
+    }
+    dispatchApplicationTerminateTo(
+        m_pluginServer.get(), m_pluginBridge->registeredPlugins(), appId);
+}
+#endif // AJAZZ_HAVE_WEBSOCKETS
 
 void Application::onHotplug(core::HotplugEvent const& ev) {
     AJAZZ_LOG_INFO("app",
