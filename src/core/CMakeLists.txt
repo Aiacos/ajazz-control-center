@@ -7,6 +7,10 @@ add_library(
     src/profile_io.cpp
     src/profile_bundle.cpp
     src/action_engine.cpp
+    # Phase 32 (BIND-04/BIND-05): instanceChildrenToChain -- the Multi Action
+    # dispatch seam converting ActionInstance.children into the flat ActionChain
+    # the ActionEngine already walks. Pure-core (no Qt, no nlohmann; COD-031).
+    src/action_chain_adapter.cpp
     src/executor.cpp
     src/macro_recorder.cpp
     src/notification_service.cpp
