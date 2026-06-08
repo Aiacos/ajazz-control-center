@@ -114,8 +114,22 @@ Plans:
 1. `propertyInspectorDidAppear` is logged in `plugin.protocolLog` when the PI panel opens; `propertyInspectorDidDisappear` when it closes — both driven via the PI panel's `objectName`-addressed controls
 1. `titleParametersDidChange` appears in `plugin.protocolLog` immediately after `willAppear` is registered for a context — verified by a Catch2 unit test asserting payload completeness
 1. **HUMAN-VERIFY CHECKPOINT (cannot be headless)**: real PI JS `$SD.setSettings({...})` call from a live plugin causes `didReceiveSettings` to reach the plugin and the setting survives an app restart — requires a human to open the PI panel and interact with it
-   **Plans**: TBD
-   **UI hint**: yes
+   **Plans**: 3 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 33-01-PLAN.md — PI-04 lifecycle events: titleParametersDidChange after each willAppear (+Catch2 completeness/ordering test) + propertyInspectorDidAppear/DidDisappear via controller signals routed through the Application seam (PI-04)
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 33-02-PLAN.md — PI-02 thin-UI: openPiButton/closePiButton + piPanelLoader/piWebView objectNames; PI-01/PI-03 verify-only live debug-channel pass, criteria 1/2/3 (PI-01/PI-02/PI-03)
+
+**Wave 3** *(deferred human-verify; blocked on Wave 2)*
+
+- [ ] 33-03-PLAN.md — DEFERRED human-verify (criterion 5): real PI JS $SD.setSettings() round-trip + restart survival (PI-03)
+  **UI hint**: yes
 
 ### Phase 34: Per-App Profiles + Event-Parity Audit
 
