@@ -91,7 +91,7 @@ Plans:
 **Wave 1** *(parallel-eligible; serialized this run under use_worktrees=false)*
 
 - [x] 32-01-PLAN.md — ActionInstance.delayMs additive field + serializer + instanceChildrenToChain core adapter (BIND-04/05 foundation) ✅ 2026-06-08
-- [ ] 32-04-PLAN.md — BIND-03/06 verify + regression tests (envelope.action, stored-owner, per-controller-type routing) + live willAppear/no-reconnect check
+- [x] 32-04-PLAN.md — BIND-03/06 verify + regression tests (envelope.action, stored-owner, per-controller-type routing) + live willAppear/no-reconnect check
 - [ ] 32-05-PLAN.md — EDIT-01 ScrollView#deviceCanvasScroll wrap of DeviceCanvas + over/under-threshold QML smoke + live qml.get
 
 **Wave 2** *(blocked on 32-01)*
@@ -152,7 +152,7 @@ Plans:
 | ------------------------------------------------------------------------ | -------------- | ----------- | ---------- |
 | 30. Plugin-Host Modular Foundation                                       | 3/3            | Complete    | 2026-06-06 |
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
-| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 0/TBD          | Not started | -          |
+| 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 2/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 0/TBD          | Not started | -          |
 | 34. Per-App Profiles + Event-Parity Audit                                | 0/TBD          | Not started | -          |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |

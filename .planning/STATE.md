@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 32-01-PLAN.md (BIND-04/BIND-05 core foundation -- ActionInstance.delayMs + instanceChildrenToChain adapter)
-last_updated: '2026-06-08T07:10:00.000Z'
-last_activity: 2026-06-08 -- Phase 32 Plan 01 executed (Multi Action core foundation)
+stopped_at: Completed 32-04-PLAN.md (BIND-03 + BIND-06 verify + regression-locked; 715/715 green, no production diff)
+last_updated: '2026-06-08T06:54:43.350Z'
+last_activity: 2026-06-08 -- Phase 32 Plan 04 executed (BIND-03/BIND-06 regression tests; 715/715 green)
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 10
-  completed_plans: 7
-  percent: 37
+  completed_plans: 8
+  percent: 33
 ---
 
 # Project State
@@ -29,10 +29,10 @@ silently leaking host state into plugin children.
 ## Current Position
 
 Phase: 32 (Binding Layer Fix + Multi/Toggle Action + Device Editor) — IN PROGRESS
-Plan: 32-01 complete (BIND-04/BIND-05 core foundation: ActionInstance.delayMs + instanceChildrenToChain adapter)
-Status: Ready to execute next plan (32-02 Multi/Toggle dispatch)
-Next: Phase 32 (remaining plans) → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 32 Plan 01 executed (Multi Action core foundation, 712/712 green)
+Plan: 32-01 + 32-04 complete (32-01: BIND-04/05 core foundation; 32-04: BIND-03/06 regression-locked, no production diff)
+Status: Ready to execute next plan (32-02 Multi/Toggle dispatch); 32-04 deferred live debug-channel check pending (see 32-04-SUMMARY "Pending live verification")
+Next: Phase 32 (remaining plans 32-02/03/05) → 33 → 34 → 35
+Last activity: 2026-06-08 -- Phase 32 Plan 04 executed (BIND-03/BIND-06 regression tests, 715/715 green)
 
 ### Progress bar
 
@@ -40,7 +40,7 @@ Last activity: 2026-06-08 -- Phase 32 Plan 01 executed (Multi Action core founda
 v2.0 [██████████                    ] 2/6 phases (33%)
 Phase 30 DONE
 Phase 31 DONE (Plan 01 + 02)
-Phase 32 IN PROGRESS (Plan 01 DONE: delayMs + children->ActionChain adapter)
+Phase 32 IN PROGRESS (Plan 01 DONE: delayMs + adapter; Plan 04 DONE: BIND-03/06 regression-locked)
 Phase 33 ....
 Phase 34 ....
 Phase 35 ....
@@ -150,6 +150,6 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 
 ## Session Continuity
 
-Last session: 2026-06-08T07:10:00Z
+Last session: 2026-06-08T06:54:43.343Z
 Stopped at: Completed 32-01-PLAN.md (BIND-04/BIND-05 core foundation -- ActionInstance.delayMs + instanceChildrenToChain adapter; 712/712 green)
 Resume: `/gsd:execute-phase 32` (Plan 01 landed; next is the Wave-2 Multi/Toggle dispatch handler that reuses instanceChildrenToChain + the wire fix + editor scroll)
