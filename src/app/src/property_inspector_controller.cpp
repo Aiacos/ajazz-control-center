@@ -182,6 +182,19 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
         return; // Defensive — should never happen post-construction.
     }
 
+    // PI-04 (CR WR-01): identical-reload guard. A single key selection drives
+    // maybeLoadInspector() from THREE QML handlers (onBindingChanged /
+    // onKeyIndexChanged / onEncoderIndexChanged), so loadInspector can be
+    // re-entered for the SAME plugin/action/context/url that is already live.
+    // Without this guard the unconditional teardown below would emit a spurious
+    // propertyInspectorDidDisappear + DidAppear pair to the plugin for an
+    // inspector that never actually went away. No-op when nothing changed.
+    if (webEngine_->activeChannel != nullptr && pluginUuid == activePluginUuid_ &&
+        actionUuid == activeActionUuid_ && contextUuid == activeContextUuid_ &&
+        activeUrl_ == QUrl::fromLocalFile(htmlAbsPath)) {
+        return;
+    }
+
     // Resolve or lazily create the per-plugin profile. Using the plugin
     // UUID as the storage key isolates each plugin's cookies / cache /
     // localStorage and lets the host wipe them when the plugin uninstalls.
