@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Completed 31-02-PLAN.md (BIND-02 ActionInstance round-trip + migration tests; ctest -R action_instance 7/7, full suite 708/708)
-last_updated: '2026-06-08T23:30:00.000Z'
-last_activity: 2026-06-08 -- Phase 31 Plan 02 (ActionInstance round-trip + migration verification) complete; Phase 31 DONE
+stopped_at: Completed 31-02-PLAN.md (BIND-02 ActionInstance round-trip + migration tests; Phase 31 DONE)
+last_updated: '2026-06-08T06:31:33.252Z'
+last_activity: 2026-06-08 -- Phase 32 planning complete
 progress:
   total_phases: 6
   completed_phases: 2
-  total_plans: 6
-  completed_plans: 6
+  total_plans: 10
+  completed_plans: 5
   percent: 33
 ---
 
@@ -30,9 +30,9 @@ silently leaking host state into plugin children.
 
 Phase: 31 (ActionInstance Core Model + Profile Schema v2) — COMPLETE + VERIFIED (passed, 6/6 must-haves)
 Plan: 31-01 complete (BIND-01); 31-02 complete (BIND-02 round-trip + migration tests)
-Status: Executing — autonomous run continuing to Phase 32 (713/713 ctest green; code review CR-01 fixed)
+Status: Ready to execute
 Next: Phase 32 → 33 → 34 → 35
-Last activity: 2026-06-08 -- Phase 31 VERIFIED passed; code-review CR-01 (reader recursion DoS) + WR-01/02/04 fixed
+Last activity: 2026-06-08 -- Phase 32 planning complete
 
 ### Progress bar
 

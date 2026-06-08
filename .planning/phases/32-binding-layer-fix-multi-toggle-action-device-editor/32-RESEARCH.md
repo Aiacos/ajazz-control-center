@@ -584,9 +584,16 @@ codepage and the filter stops matching.
 | A3  | The built-in id strings should use the `com.hotspot.streamdock.` prefix (registry's `kBuiltinPrefix` guard) rather than literal `opendeck.*` | Findings 2/3    | CONTEXT.md says `opendeck.multiaction`/`opendeck.toggleaction`; the registry `handles()` only matches the `com.hotspot.streamdock.` prefix (`builtin_action_registry.cpp:11`). If the literal `opendeck.*` ids are used, `handles()` returns false and dispatch never fires. **Reconcile the id namespace with the user (this is a real conflict).** |
 | A4  | `security_enforcement` is enabled (config key not found this session)                                                                        | Security Domain | If disabled, the Security section is informational only.                                                                                                                                                                                                                                                                                             |
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Toggle state persistence (Q1):** Should a toggle's `currentState` persist across app restarts
+> All four resolved post-discuss and locked in 32-CONTEXT.md "Research-resolved decisions":
+> Q1 = **PERSIST** to profile JSON (user decision); Q2 = `com.hotspot.streamdock.*` prefix;
+> Q3 = **add optional `delayMs` to ActionInstance** (user decision); Q4 = Toggle stateful mutation
+> at the `StreamDockInputService::dispatch` seam (registry handler is opaque).
+> Also: **BIND-05 is the Toggle Action requirement** (REQUIREMENTS.md:28) — the row at line 55
+> labelling it "Multi family" is loose; BIND-05's Toggle semantics are delivered by plan 32-03.
+
+1. **Toggle state persistence (Q1) — RESOLVED: persist to profile JSON.** Should a toggle's `currentState` persist across app restarts
    (write back to profile JSON) or reset on profile reload (Elgato parity)?
 
    - What we know: `currentState` round-trips through `profileToJson`/`profileFromJson`.
