@@ -58,15 +58,38 @@ result: [pending — live UI]
 
 ## Blockers (honest, recorded — not fabricated)
 
-1. **`LoadedPluginsModel` is not wired to `.sdPlugin` plugins in the shipping
-   build.** The model is fed only by the Python `OutOfProcessPluginHost`
-   (`application.cpp:956-957`); the `UnifiedPluginHost` aggregator
-   (`application.cpp:1091`) that merges `.sdPlugin` inventory is built but never
-   set on the model. So the `platformStatusChip` never instantiates for the only
-   plugins that carry a meaningful `winClass`. This contradicts 35-PATTERNS.md
-   A1's "DECISIVE" claim. Surfaced as an architectural follow-up in the SUMMARY
-   (Rule 4 — NOT silently patched this phase). Closing item 1 above first
-   requires wiring `m_pluginHost2` → `LoadedPluginsModel::setPluginHost/setPlugins`.
+1. **[RESOLVED — code-review fix CR-01]** `LoadedPluginsModel` is now wired to
+   the merged `.sdPlugin` + Python inventory in the shipping build. After the
+   `.sdPlugin` discover+spawn loop and `m_pluginHost2` construction
+   (`application.cpp` `startBackgroundServices`), the model is re-pointed at the
+   unified host via `LoadedPluginsModel::setPluginHost2(m_pluginHost2.get())` +
+   `setPlugins(m_pluginHost2->plugins())` — `setPlugins()` does a full reset
+   (REPLACE, not append), so the Python-only list is swapped for the merged list
+   with no duplication, and the Python entries remain present. The
+   `platformStatusChip` now instantiates for win-only `.sdPlugin` rows (the only
+   ones carrying a meaningful `winClass`). The production population path is
+   unit-covered by `LoadedPluginsModel refresh from unified host surfaces win
+   platformStatus (WR-02)` in `test_loaded_plugins_model.cpp`. The deferred LIVE
+   render walk (item 1 above) is now unblocked at the wiring level and only
+   awaits a windowed GUI session.
+1. **The Loaded-plugins drawer cannot be opened headlessly.** It is a modal
+   `Drawer`/`Popup` opened via the `navLoaded` ToolButton's `onClicked` →
+   `loadedPluginsRequested()`; the documented CLAUDE.md harness gap is that
+   `qml.invoke clicked` / `qml.invoke open` do not fire for ToolButton/Popup. A
+   real windowed click is required to realize the delegate chips.
+
+## WR-02 live-walk requirement (code-review follow-up)
+
+The unit test now exercises the real production population path (an
+`IPluginHost2`-shaped merged vector fed through `setPluginHost2`+`refresh`,
+asserting a win-only row surfaces a non-empty `platformStatus` and the Python
+row stays present). Per CLAUDE.md "Debug-channel verification — MANDATORY", the
+DEFINITIVE end-to-end confirmation is still a live walk in a windowed session:
+install a real win-only `.sdPlugin` (os=[windows], CodePath `.js`), open the
+Loaded-plugins drawer, and `scripts/ajazz-debug qml.get` on
+`platformStatusChip.statusLabel` — expect the non-empty "native" copy (not blank).
+This is the same deferred VERIF-01 walk in item 1 above; the CR-01 wiring fix is
+the prerequisite that makes it observable, and it is now in place.
 1. **The Loaded-plugins drawer cannot be opened headlessly.** It is a modal
    `Drawer`/`Popup` opened via the `navLoaded` ToolButton's `onClicked` →
    `loadedPluginsRequested()`; the documented CLAUDE.md harness gap is that
