@@ -3,8 +3,8 @@ gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: executing
-stopped_at: Phase 34 COMPLETE + VERIFIED (human_needed deferred); code review BLOCKER CR-01 + 5 warnings fixed; 785/785. Phase 35 next.
-last_updated: '2026-06-08T18:25:00.000Z'
+stopped_at: Phase 35 smart-discuss DONE (35-CONTEXT.md committed b1f7b82); PAUSED before research (context-budget pause, same pattern as the pre-Phase-34 pause). Resume /gsd-autonomous --from 35 (has_context=true -> skips discuss -> research->plan->execute->review->verify, then milestone lifecycle audit->complete->cleanup).
+last_updated: '2026-06-08T18:40:00.000Z'
 last_activity: 2026-06-08
 progress:
   total_phases: 6
@@ -28,7 +28,7 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 35 (Windows Plugin Support + Security Hardening + Milestone Verification) — NEXT (not started; has_context=false → discuss→plan→execute). FINAL v2.0 phase. WINPLG-01 needs a feasibility spike at start (JS-bundled vs pure Win32 PE) before implementing any native-exe path.
+Phase: 35 (Windows Plugin Support + Security Hardening + Milestone Verification) — DISCUSSED (35-CONTEXT.md committed b1f7b82); PAUSED before research (context-budget). FINAL v2.0 phase. Resume: `/gsd-autonomous --from 35` (has_context=true → skips discuss → research→plan→execute→review→verify, then milestone lifecycle). Key locked decisions: WINPLG classification = manifest CodePath + PE-magic scan, WS-only runs native; **WINPLG-03 Wine = CHIP-ONLY STUB this phase, launch DEFERRED** (no Wine/Windows hardware); PLGSEC = Tampered(hard-refuse-even-with-consent)/Unsigned split + QSettings consent + QHostAddress::Any CI grep gate; VERIF = scripted grep gates + audit doc + honest screenshot/HUMAN-UAT reconciliation (never fabricate).
 
 Phase: 34 (per-app-profiles-event-parity-audit) — COMPLETE + VERIFIED (human_needed; 7 live/hardware items deferred to 34-HUMAN-UAT.md). 5/5 must-haves (automated). All 8 reqs (APROF-01..04, EVENT-01..04) code-verified. Code review found + fixed a real BLOCKER (CR-01: X11 missing XSetErrorHandler → BadWindow exit) + 5 warnings (WR-01 manual-selection clobber, WR-02 ApplicationsToMonitor filter, WR-03/04/05). 785/785 ctest. User chose Continue-to-35 (live niri walk deferred).
 
