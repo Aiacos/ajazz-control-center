@@ -101,6 +101,10 @@ qt_add_executable(
     # with "undefined reference to makeSidecarStreamDock".
     ${ACC_APP_SOURCE_DIR}/src/sidecar_protocol.cpp
     ${ACC_APP_SOURCE_DIR}/src/sidecar_stream_dock_device.cpp
+    # Phase 30 added UnifiedPluginHost and made application.cpp construct it unconditionally; its TU
+    # must be compiled into this target too or linking fails with "undefined reference to
+    # UnifiedPluginHost::UnifiedPluginHost".
+    ${ACC_APP_SOURCE_DIR}/src/unified_plugin_host.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)
