@@ -682,6 +682,12 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # envelope captured off a loopback WebSocket client (the e2e seam already used by
     # test_plugin_device_bridge.cpp), so it shares the WebSockets + bridge link above.
     target_sources(ajazz_unit_tests PRIVATE willappear_payload_test.cpp)
+
+    # Phase 34 Plan 34-02 (EVENT-04): Knob->Encoder controller-token normalization audit. Uses the
+    # same loopback bridge e2e seam for the encoder-emission assertion plus affordanceMask()
+    # (plugin_manifest.cpp is already linked unconditionally below in the test_plugin_manifest block
+    # -- do NOT re-add it).
+    target_sources(ajazz_unit_tests PRIVATE controller_token_test.cpp)
 endif()
 
 # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient obs-websocket v5 auth handshake tests. Hardware-free:
