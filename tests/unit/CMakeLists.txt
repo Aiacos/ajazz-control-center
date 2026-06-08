@@ -677,6 +677,11 @@ if(AJAZZ_HAVE_WEBSOCKETS)
                 # linker errors. The websocket-conditional block only adds plugin_device_bridge.cpp.
     )
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+
+    # Phase 34 Plan 34-02 (EVENT-02): willAppear payload completeness. Asserts the REAL bridge
+    # envelope captured off a loopback WebSocket client (the e2e seam already used by
+    # test_plugin_device_bridge.cpp), so it shares the WebSockets + bridge link above.
+    target_sources(ajazz_unit_tests PRIVATE willappear_payload_test.cpp)
 endif()
 
 # Phase 21 Plan 21-02 (PLUGIN-12): ObsClient obs-websocket v5 auth handshake tests. Hardware-free:
