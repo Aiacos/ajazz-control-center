@@ -1155,6 +1155,17 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     // new lifecycle path is introduced here (RESEARCH Pattern 3 — reuse, never
     // re-implement willAppear/willDisappear).
     if (m_activeWindowWatcher) {
+        // APROF-03: surface the active backend's foreground capability to QML so
+        // the Wayland/GNOME capability-warning chip (SettingsPage.qml) shows when
+        // the desktop has no foreground-window API. Injected through the
+        // ProfileController seam (no raw watcher pointer in QML). The Wayland
+        // backend may bind its global slightly after start(); the value here is
+        // the post-start capability, and the debug channel can force the absent
+        // path via setForegroundCapabilityAvailable() for headless verification.
+        if (m_profileController) {
+            m_profileController->setForegroundCapabilityAvailable(
+                m_activeWindowWatcher->capabilityAvailable());
+        }
         m_activeWindowWatcher->start([this](core::ActiveWindowInfo info) {
             QString const appId = QString::fromStdString(info.appId);
 

@@ -409,6 +409,185 @@ void ProfileController::setApplicationHints(QStringList const& hints) {
     emit profilesChanged();
 }
 
+bool ProfileController::addAppProfileMapping(QString const& profileId, QString const& appName) {
+    // V5 / T-34-05-01: the app name is UNTRUSTED user input. Trim + length-bound
+    // and treat strictly as a comparison token (never a path/command/pattern).
+    QString const token = appName.trimmed();
+    if (token.isEmpty() || token.size() > kMaxAppNameLength) {
+        AJAZZ_LOG_WARN("profile",
+                       "addAppProfileMapping: rejected app-name (empty or > {} chars)",
+                       kMaxAppNameLength);
+        return false;
+    }
+    if (profileId.isEmpty()) {
+        return false;
+    }
+
+    auto const alreadyHasToken = [&token](std::vector<std::string> const& hints) {
+        return std::any_of(hints.begin(), hints.end(), [&token](std::string const& h) {
+            return QString::fromStdString(h).compare(token, Qt::CaseInsensitive) == 0;
+        });
+    };
+
+    // Active profile: mutate in place + persist via the same path the active
+    // writers use (saveActiveProfile), so the in-memory copy stays authoritative.
+    if (QString::fromStdString(m_profile.id) == profileId) {
+        if (alreadyHasToken(m_profile.applicationHints)) {
+            return false; // case-insensitive duplicate — no-op
+        }
+        m_profile.applicationHints.push_back(token.toStdString());
+        saveActiveProfile();
+        rescanLibrary();
+        emit profilesChanged();
+        return true;
+    }
+
+    // Non-active profile: read off disk via the library index, mutate, write back.
+    auto const it = m_library.constFind(profileId);
+    if (it == m_library.constEnd()) {
+        AJAZZ_LOG_WARN("profile", "addAppProfileMapping: unknown profile id");
+        return false;
+    }
+    QString const path = it->path;
+    try {
+        ajazz::core::Profile p =
+            ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+        if (alreadyHasToken(p.applicationHints)) {
+            return false;
+        }
+        p.applicationHints.push_back(token.toStdString());
+        ajazz::core::writeProfileToDisk(std::filesystem::path{path.toStdString()}, p);
+    } catch (std::exception const& ex) {
+        AJAZZ_LOG_WARN("profile", "addAppProfileMapping: I/O error: {}", ex.what());
+        return false;
+    }
+    rescanLibrary();
+    emit profilesChanged();
+    return true;
+}
+
+bool ProfileController::removeAppProfileMapping(QString const& profileId, QString const& appName) {
+    QString const token = appName.trimmed();
+    if (token.isEmpty() || profileId.isEmpty()) {
+        return false;
+    }
+
+    auto const eraseToken = [&token](std::vector<std::string>& hints) -> bool {
+        auto const newEnd =
+            std::remove_if(hints.begin(), hints.end(), [&token](std::string const& h) {
+                return QString::fromStdString(h).compare(token, Qt::CaseInsensitive) == 0;
+            });
+        if (newEnd == hints.end()) {
+            return false; // nothing matched
+        }
+        hints.erase(newEnd, hints.end());
+        return true;
+    };
+
+    if (QString::fromStdString(m_profile.id) == profileId) {
+        if (!eraseToken(m_profile.applicationHints)) {
+            return false;
+        }
+        saveActiveProfile();
+        rescanLibrary();
+        emit profilesChanged();
+        return true;
+    }
+
+    auto const it = m_library.constFind(profileId);
+    if (it == m_library.constEnd()) {
+        return false;
+    }
+    QString const path = it->path;
+    try {
+        ajazz::core::Profile p =
+            ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+        if (!eraseToken(p.applicationHints)) {
+            return false;
+        }
+        ajazz::core::writeProfileToDisk(std::filesystem::path{path.toStdString()}, p);
+    } catch (std::exception const& ex) {
+        AJAZZ_LOG_WARN("profile", "removeAppProfileMapping: I/O error: {}", ex.what());
+        return false;
+    }
+    rescanLibrary();
+    emit profilesChanged();
+    return true;
+}
+
+QVariantList ProfileController::appProfileMappings() const {
+    // One row per (profile, hint) pair across every known profile, read off disk
+    // (the m_library index does not carry applicationHints). Sorted by profile
+    // name then app name for a stable list in SettingsPage.qml.
+    QVariantList out;
+    QDir const dir(profilesDir());
+    if (!dir.exists()) {
+        return out;
+    }
+    QStringList const files =
+        dir.entryList(QStringList{QStringLiteral("*.json")}, QDir::Files | QDir::Readable);
+    for (QString const& file : files) {
+        QString const path = dir.filePath(file);
+        ajazz::core::Profile p;
+        try {
+            p = ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+        } catch (std::exception const&) {
+            continue;
+        }
+        QString const stem = QFileInfo(file).completeBaseName();
+        QString const id = p.id.empty() ? stem : QString::fromStdString(p.id);
+        QString const name = p.name.empty() ? id : QString::fromStdString(p.name);
+        for (auto const& h : p.applicationHints) {
+            QVariantMap m;
+            m.insert(QStringLiteral("profileId"), id);
+            m.insert(QStringLiteral("profileName"), name);
+            m.insert(QStringLiteral("deviceCodename"), QString::fromStdString(p.deviceCodename));
+            m.insert(QStringLiteral("appName"), QString::fromStdString(h));
+            out.append(m);
+        }
+    }
+    std::sort(out.begin(), out.end(), [](QVariant const& a, QVariant const& b) {
+        QVariantMap const ma = a.toMap();
+        QVariantMap const mb = b.toMap();
+        int const byName =
+            ma.value(QStringLiteral("profileName"))
+                .toString()
+                .localeAwareCompare(mb.value(QStringLiteral("profileName")).toString());
+        if (byName != 0) {
+            return byName < 0;
+        }
+        return ma.value(QStringLiteral("appName"))
+                   .toString()
+                   .localeAwareCompare(mb.value(QStringLiteral("appName")).toString()) < 0;
+    });
+    return out;
+}
+
+bool ProfileController::foregroundCapabilityAvailable() const noexcept {
+    return m_foregroundCapabilityAvailable;
+}
+
+void ProfileController::setForegroundCapabilityAvailable(bool available) {
+    if (m_foregroundCapabilityAvailable == available) {
+        return;
+    }
+    m_foregroundCapabilityAvailable = available;
+    AJAZZ_LOG_INFO("profile",
+                   "foreground capability {} (APROF-03 chip {})",
+                   available ? "available" : "ABSENT",
+                   available ? "hidden" : "VISIBLE");
+    emit foregroundCapabilityChanged();
+}
+
+QString ProfileController::foregroundCapabilityWarning() const {
+    // UI-SPEC capability-warning detail copy (ASCII-only; the chip tooltip + a
+    // headless qml.get assert this is non-empty on the capability-absent path).
+    return tr("Your desktop environment does not expose a foreground-window API, "
+              "so per-app profile switching is unavailable here. Profiles can still "
+              "be switched manually. (Wayland compositors without "
+              "zwlr-foreign-toplevel, e.g. GNOME or KDE, are affected.)");
+}
+
 QVariantList ProfileController::activeKeyBindings() const {
     QVariantList out;
     for (auto const& [idx, binding] : m_profile.keys) {

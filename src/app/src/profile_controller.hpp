@@ -79,6 +79,26 @@ class ProfileController : public QObject {
     Q_OBJECT
     QML_NAMED_ELEMENT(ProfileController)
     QML_SINGLETON
+
+    // -------------------------------------------------------------------------
+    // Phase 34-05 (APROF-03): foreground-capability surface for the
+    // Wayland/GNOME capability-warning chip in SettingsPage.qml.
+    //
+    // The active IActiveWindowWatcher backend reports capabilityAvailable():
+    // true on a wlr-foreign-toplevel Wayland compositor / X11 / Win / macOS,
+    // false on a degraded desktop (GNOME/KDE without the foreign-toplevel
+    // global). Application injects that capability into the controller via
+    // setForegroundCapabilityAvailable() so the QML chip + the live debug
+    // channel (qml.get) can read it WITHOUT a raw watcher pointer in QML.
+    //
+    // The chip is visible-on-ABSENT (degradation), so foregroundCapabilityWarning
+    // carries the non-empty UI-SPEC detail copy the chip's tooltip + a headless
+    // qml.get assert against (success criterion 2). NOTIFY so the chip binding
+    // re-evaluates when Application updates the capability after the watcher binds.
+    // -------------------------------------------------------------------------
+    Q_PROPERTY(bool foregroundCapabilityAvailable READ foregroundCapabilityAvailable WRITE
+                   setForegroundCapabilityAvailable NOTIFY foregroundCapabilityChanged)
+    Q_PROPERTY(QString foregroundCapabilityWarning READ foregroundCapabilityWarning CONSTANT)
 public:
     /// QML singleton factory — see BrandingService::create for the pattern.
     static ProfileController* create(QQmlEngine* qml, QJSEngine* js);
@@ -234,6 +254,66 @@ public:
     /// backs the auto-switch resolver test fixtures. Mirrors the
     /// commitKeyBinding/commitEncoderBinding writer shape (mutate + emit + save).
     Q_INVOKABLE void setApplicationHints(QStringList const& hints);
+
+    // -------------------------------------------------------------------------
+    // Phase 34-05 (APROF-03): per-app mapping writer + remover for the
+    // assign-profile UI. These target a SPECIFIC profile by id (not just the
+    // active profile like setApplicationHints) so the SettingsPage surface can
+    // map an application name to any of the device's profiles without first
+    // having to activate it. Mirrors the commitKeyBinding/commitEncoderBinding
+    // writer shape: mutate the addressed profile -> persist -> emit
+    // profilesChanged(). The app name is bounded + treated purely as a match
+    // token (V5 / T-34-05-01 — never evaluated or shelled out).
+    // -------------------------------------------------------------------------
+
+    /// Maximum accepted length of a user-entered application-name match token
+    /// (V5 input bound, T-34-05-01). Longer input is rejected as a no-op.
+    static constexpr int kMaxAppNameLength = 256;
+
+    /// Add @p appName to @p profileId's Profile::applicationHints and persist.
+    ///
+    /// The app name is trimmed and length-bounded to kMaxAppNameLength (V5);
+    /// an empty/whitespace/over-long name, or an unknown @p profileId, is a
+    /// rejected no-op (logged, never crashes). A case-insensitive duplicate
+    /// already present on the target profile is also a no-op. When @p profileId
+    /// is the active profile the in-memory copy is updated in place; otherwise
+    /// the profile is read from disk, mutated and written back. Emits
+    /// profilesChanged() on a successful add so resolveProfileForApp() and the
+    /// assign-profile UI observe the new mapping.
+    ///
+    /// @param profileId Target profile's stable id.
+    /// @param appName   Foreground application-name match token (user input).
+    /// @return true when a mapping was added; false on any rejected no-op.
+    Q_INVOKABLE bool addAppProfileMapping(QString const& profileId, QString const& appName);
+
+    /// Remove @p appName (case-insensitive) from @p profileId's application
+    /// hints and persist. Unknown profile, empty name, or a name not present is
+    /// a no-op (returns false). Emits profilesChanged() when a mapping was
+    /// actually removed.
+    Q_INVOKABLE bool removeAppProfileMapping(QString const& profileId, QString const& appName);
+
+    /// All current app->profile mappings across every known profile, as a
+    /// QVariantList of {profileId, profileName, deviceCodename, appName} maps,
+    /// one entry per (profile, hint) pair, sorted by profile name then app name.
+    /// Drives the assign-profile mapping list in SettingsPage.qml. Read-only:
+    /// rescans the on-disk library and reads each profile's hints.
+    [[nodiscard]] Q_INVOKABLE QVariantList appProfileMappings() const;
+
+    /// Whether the active foreground-window watcher exposes a foreground API
+    /// (drives the visible-on-absent capability-warning chip). Defaults true;
+    /// Application lowers it when the watcher reports a degraded desktop.
+    [[nodiscard]] bool foregroundCapabilityAvailable() const noexcept;
+
+    /// Inject the watcher's capability into the controller (Application seam).
+    /// Emits foregroundCapabilityChanged() when the value actually changes so
+    /// the chip binding re-evaluates. Also Q_INVOKABLE so the live debug
+    /// channel can force the capability-absent path for headless verification.
+    Q_INVOKABLE void setForegroundCapabilityAvailable(bool available);
+
+    /// Non-empty human-readable detail for the capability-warning chip
+    /// (UI-SPEC copy). Exposed so the chip tooltip + a headless qml.get can
+    /// read the warning text without hover (success criterion 2).
+    [[nodiscard]] QString foregroundCapabilityWarning() const;
 
     /// Active profile's key bindings as a QVariantList of
     /// {index, iconSource, label, actionKind, actionId} maps (only populated
@@ -598,6 +678,16 @@ signals:
      */
     void profilesChanged();
 
+    /**
+     * @signal foregroundCapabilityChanged
+     * @brief Emitted when the foreground-window capability flips (Phase 34-05).
+     *
+     * Drives the visibility binding of the Wayland/GNOME capability-warning
+     * chip in SettingsPage.qml so it appears/disappears as Application injects
+     * the active watcher's capabilityAvailable() state.
+     */
+    void foregroundCapabilityChanged();
+
 private:
     /// One indexed profile on disk. `id` is the profile's stable id (or the
     /// sanitized filename stem for legacy files with an empty id).
@@ -618,6 +708,11 @@ private:
     ajazz::core::Profile m_profile{};
     QString m_path;
     QHash<QString, ProfileMeta> m_library; ///< id -> on-disk profile metadata.
+
+    /// Phase 34-05 (APROF-03): foreground-window capability injected by
+    /// Application from the active IActiveWindowWatcher. Defaults true so the
+    /// warning chip is hidden until a degraded desktop is detected (fail safe).
+    bool m_foregroundCapabilityAvailable{true};
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.
