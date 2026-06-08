@@ -18,6 +18,8 @@
  * Test name convention: ASCII-only titles; tag [stream-dock-input].
  */
 #include "ajazz/core/action_engine.hpp"
+#include "ajazz/core/action_instance.hpp"
+#include "ajazz/core/builtin_action_registry.hpp"
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
 #include "fixtures/fake_stream_dock_device.hpp"
@@ -355,4 +357,144 @@ TEST_CASE("IN-01: setActiveDevice(nullptr) stops dispatch; the input service doe
         CHECK(fake->closeCount == 0);
         CHECK(fake->isOpen());
     }
+}
+
+// ---------------------------------------------------------------------------
+// BIND-04/05: Multi Action dispatch at the input-service seam.
+//
+// A key/dial bound to a Multi Action instance runs its instance.children
+// sequentially on a single press, reusing the existing ActionEngine chain walk
+// (via instanceChildrenToChain). Per-child delayMs is honored (deferred by the
+// engine's executor, recorded via the sleep spy). A binding with no instance
+// still runs its legacy onPress chain unchanged (no regression).
+// ---------------------------------------------------------------------------
+
+namespace {
+
+/// Build a Multi Action ActionInstance with the canonical built-in id and the
+/// given child ids (each child a Plugin-kind step). delayForSecond places a
+/// delayMs on the second child when > 0.
+core::ActionInstance makeMultiAction(std::vector<std::string> const& childIds,
+                                     std::uint32_t delayForSecond = 0) {
+    core::ActionInstance multi{};
+    multi.id = std::string{core::BuiltinActionRegistry::kMultiActionId};
+    for (std::size_t i = 0; i < childIds.size(); ++i) {
+        core::ActionInstance child{};
+        child.id = childIds[i];
+        if (i == 1 && delayForSecond > 0) {
+            child.delayMs = delayForSecond;
+        }
+        multi.children.push_back(child);
+    }
+    return multi;
+}
+
+} // namespace
+
+TEST_CASE("BIND-04: key bound to a Multi Action runs its children in order",
+          "[stream-dock-input][multiaction]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    std::vector<std::string> fired;
+    ActionExecutors spies;
+    spies.plugin = [&](std::string_view id, std::string_view) { fired.emplace_back(id); };
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.keys[2].instance = makeMultiAction({"A", "B", "C"});
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
+
+    REQUIRE(fired.size() == 3);
+    REQUIRE(fired[0] == "A");
+    REQUIRE(fired[1] == "B");
+    REQUIRE(fired[2] == "C");
+}
+
+TEST_CASE("BIND-05: Multi Action child delayMs is honored (deferred, not dropped)",
+          "[stream-dock-input][multiaction]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    std::vector<std::string> fired;
+    std::vector<std::chrono::milliseconds> sleeps;
+    ActionExecutors spies;
+    spies.plugin = [&](std::string_view id, std::string_view) { fired.emplace_back(id); };
+    spies.sleep = [&](std::chrono::milliseconds d) { sleeps.push_back(d); };
+    // Default (blocking) executor runs the deferred continuation synchronously,
+    // so both children still fire in order within this call.
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.keys[4].instance = makeMultiAction({"first", "second"}, /*delayForSecond=*/250);
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 4, 1));
+
+    REQUIRE(fired.size() == 2);
+    REQUIRE(fired[0] == "first");
+    REQUIRE(fired[1] == "second");
+    // The 250 ms inter-step delay (carried on the second child) was deferred via
+    // the engine's executor -- the sleep spy records exactly one 250 ms wait,
+    // placed after the first child and before the second.
+    REQUIRE(sleeps.size() == 1);
+    REQUIRE(sleeps[0] == std::chrono::milliseconds{250});
+}
+
+TEST_CASE("BIND-04: encoder press bound to a Multi Action runs its children in order",
+          "[stream-dock-input][multiaction]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    std::vector<std::string> fired;
+    ActionExecutors spies;
+    spies.plugin = [&](std::string_view id, std::string_view) { fired.emplace_back(id); };
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.encoders[0].instance = makeMultiAction({"X", "Y"});
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    fake->injectEvent(ev(DeviceEvent::Kind::EncoderPressed, 0, 1));
+
+    REQUIRE(fired.size() == 2);
+    REQUIRE(fired[0] == "X");
+    REQUIRE(fired[1] == "Y");
+}
+
+TEST_CASE("BIND-04: a key with NO instance still runs its legacy onPress chain",
+          "[stream-dock-input][multiaction]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    int keyPressCount = 0;
+    int pluginCount = 0;
+    ActionExecutors spies;
+    spies.keyPress = [&](std::string_view) { ++keyPressCount; };
+    spies.plugin = [&](std::string_view, std::string_view) { ++pluginCount; };
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    // No instance -- pure legacy binding.
+    prof.keys[5].onPress = {Action{.kind = ActionKind::KeyPress}};
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 5, 1));
+
+    REQUIRE(keyPressCount == 1); // legacy onPress fired
+    REQUIRE(pluginCount == 0);   // no Multi Action children
 }

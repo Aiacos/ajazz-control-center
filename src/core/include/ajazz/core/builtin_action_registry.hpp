@@ -63,6 +63,15 @@ public:
     /// without introducing a hard-coded string literal.
     static constexpr std::string_view kBuiltinPrefix = "com.hotspot.streamdock.";
 
+    /// The canonical built-in UUID for a Multi Action (an action whose
+    /// `ActionInstance.children` run sequentially on a single press, BIND-04/05).
+    /// MUST start with @ref kBuiltinPrefix so @ref handles can return @c true.
+    /// This is the REAL dispatch prefix (the OpenDeck "opendeck.multiaction" id
+    /// would fail the prefix check and never fire — RESEARCH A3/Q2). Exposed so
+    /// the input-service dispatch seam can id-match a firing binding's instance
+    /// without a hard-coded string literal.
+    static constexpr std::string_view kMultiActionId = "com.hotspot.streamdock.multiaction";
+
     /**
      * @brief Register a handler for a built-in UUID.
      *
