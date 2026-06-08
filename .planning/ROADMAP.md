@@ -24,7 +24,7 @@ Phases are numbered 30–35, continuing from the v1.3 sequence (Phases 14–29).
 - [x] **Phase 31: ActionInstance Core Model + Profile Schema v2** - Add `ActionInstance`/`ActionState` to `src/core/` with hand-rolled serialization; v1→v2 profile schema migration; COD-031 preserved throughout (completed 2026-06-07)
 - [ ] **Phase 32: Binding Layer Fix + Multi/Toggle Action + Device Editor** - Fix `profileChanged`→`populateContextsForActivePage` wire; implement Multi Action and Toggle Action dispatch; extend setState rendering; device-view overflow scroll for large SKUs
 - [ ] **Phase 33: Property Inspector End-to-End** - Complete PI HTML rendering (cefQuery polyfill, sdpi.css, $SD WebChannel bridge, per-plugin profile isolation); settings round-trip; PI lifecycle events
-- [ ] **Phase 34: Per-App Profiles + Event-Parity Audit** - Implement `ApplicationWatcher` (X11/Wayland/Win32/macOS); profile auto-switch on foreground-app change; full event-parity coverage table; fix all non-hardware-gated event gaps
+- [x] **Phase 34: Per-App Profiles + Event-Parity Audit** - Implement `ApplicationWatcher` (X11/Wayland/Win32/macOS); profile auto-switch on foreground-app change; full event-parity coverage table; fix all non-hardware-gated event gaps (completed 2026-06-08)
 - [ ] **Phase 35: Windows Plugin Support + Security Hardening + Milestone Verification** - Wine detection and native-first plugin classification; tampered-vs-unsigned verifier split; persisted unsigned consent; CI security gates; full modularity audit closing VERIF-01/02
 
 ## Phase Details
@@ -163,7 +163,7 @@ Plans:
 
 **Wave 4** *(blocked on 34-04)*
 
-- [ ] 34-05-PLAN.md — APROF-03 UI: Per-app profiles assign surface + capability-warning chip in SettingsPage + applicationHints writer; consolidated live debug-channel phase gate (APROF-03)
+- [x] 34-05-PLAN.md — APROF-03 UI: Per-app profiles assign surface + capability-warning chip in SettingsPage + applicationHints writer; consolidated live debug-channel phase gate (APROF-03)
 
 ### Phase 35: Windows Plugin Support + Security Hardening + Milestone Verification
 
@@ -187,5 +187,5 @@ Plans:
 | 31. ActionInstance Core Model + Profile Schema v2                        | 2/2            | Complete    | 2026-06-07 |
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
-| 34. Per-App Profiles + Event-Parity Audit                                | 4/5            | In Progress |            |
+| 34. Per-App Profiles + Event-Parity Audit                                | 5/5            | Complete    | 2026-06-08 |
 | 35. Windows Plugin Support + Security Hardening + Milestone Verification | 0/TBD          | Not started | -          |
