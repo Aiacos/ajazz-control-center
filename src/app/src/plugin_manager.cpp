@@ -43,6 +43,13 @@
 
 #include <utility>
 
+#if defined(Q_OS_LINUX)
+#include <csignal>
+
+#include <sys/prctl.h>
+#include <unistd.h>
+#endif
+
 #if defined(AJAZZ_HAVE_WEBSOCKETS)
 #include "sd_plugin_server.hpp"
 #endif
@@ -302,8 +309,7 @@ std::vector<PluginManifest> PluginManager::discover() {
         // plain plugin. Gate the native acceptance on manifestVersionGatePasses() so the OR
         // cannot short-circuit past the floor.
         QString const emulatedVer = QString::fromLatin1(kEmulatedSdVersion);
-        bool const baseRunnable =
-            manifestRunnableHere(*opt, currentPlatformString(), emulatedVer);
+        bool const baseRunnable = manifestRunnableHere(*opt, currentPlatformString(), emulatedVer);
         bool const versionOk = manifestVersionGatePasses(*opt, emulatedVer);
         bool const winNativeRunnable =
             supportsCurrentPlatform(*opt, currentPlatformString(), opt->winClass) && versionOk;
@@ -322,6 +328,35 @@ std::vector<PluginManifest> PluginManager::discover() {
 // ---------------------------------------------------------------------------
 // spawn()
 // ---------------------------------------------------------------------------
+
+namespace {
+
+/// Tie a plugin child's lifetime to the host process (Linux only).
+///
+/// The graceful shutdown protocol (exitApp -> terminate(1s) -> kill) lives in
+/// the PluginManager destructor, so it never runs when the app dies uncleanly
+/// (SIGTERM/SIGKILL, crash): Qt installs no signal handlers, destructors are
+/// skipped, and every plugin child is orphaned. Observed live 2026-06-09: 11
+/// stale `node code/index.js` processes accumulated across killed sessions.
+/// PR_SET_PDEATHSIG delivers SIGTERM to the child the moment the parent dies,
+/// regardless of how it died. The getppid() check closes the classic race
+/// where the parent dies between fork() and prctl() (the child would be
+/// re-parented already and the death signal would never fire).
+void tieChildToParentLifetime(QProcess& proc) {
+#if defined(Q_OS_LINUX)
+    pid_t const parentPid = getpid();
+    proc.setChildProcessModifier([parentPid]() {
+        ::prctl(PR_SET_PDEATHSIG, SIGTERM);
+        if (::getppid() != parentPid) {
+            ::_exit(0); // parent already gone — don't outlive it
+        }
+    });
+#else
+    Q_UNUSED(proc);
+#endif
+}
+
+} // namespace
 
 void PluginManager::spawn(PluginManifest const& manifest) {
     // D-27-4 user-disable skip (T-27-DISABLE-BYPASS): compute the pluginId key first
@@ -432,6 +467,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
+        tieChildToParentLifetime(*rawProc);
 
         // Run with the plugin dir as CWD so a relative CodePath (e.g.
         // "plugin.cjs") and the plugin's own relative resource paths resolve.
@@ -553,6 +589,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
 #endif
         auto proc = std::make_unique<QProcess>();
         QProcess* rawProc = proc.get();
+        tieChildToParentLifetime(*rawProc);
 
         // Run with the plugin dir as CWD so a relative CodePath (e.g.
         // "plugin.cjs") and the plugin's own relative resource paths resolve.
