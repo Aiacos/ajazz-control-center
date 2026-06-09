@@ -150,6 +150,18 @@ Item {
                                         actionId: b.actionId ? b.actionId : "" });
             }
         }
+        // Re-point cells with a cached live-render frame back at the livekey
+        // provider. The rebuild above wiped iconSource; a continuously-rendering
+        // plugin (System Monitor) re-asserts within a tick via keyImageAssigned,
+        // but a ONE-SHOT render (the manifest default image painted at mount,
+        // e.g. Weather's icon) stayed on the device while vanishing from the
+        // canvas. The store still holds the frame — restore the URL.
+        for (var k = 0; k < bindings.count; ++k) {
+            var rev = StreamDockControlService.liveKeyRevision(k);
+            if (rev >= 0 && !bindings.get(k).iconSource) {
+                bindings.setProperty(k, "iconSource", "image://livekey/" + k + "?r=" + rev);
+            }
+        }
     }
 
     Connections {

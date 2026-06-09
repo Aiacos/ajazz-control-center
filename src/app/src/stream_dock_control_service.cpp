@@ -251,6 +251,13 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex,
     }
 }
 
+qint64 StreamDockControlService::liveKeyRevision(int keyIndex0) const {
+    if (!m_liveKeyImages || keyIndex0 < 0 || !m_liveKeyImages->has(keyIndex0)) {
+        return -1;
+    }
+    return m_keyImageRevision;
+}
+
 void StreamDockControlService::clearKeyImage(std::uint8_t keyIndex) {
     // Blank the key on the device LCD so a moved/removed action's render does not
     // linger. A black frame at the device key resolution is the "off" state.

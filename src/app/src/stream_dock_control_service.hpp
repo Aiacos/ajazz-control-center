@@ -418,6 +418,22 @@ public:
      */
     Q_INVOKABLE void clearAll(QString const& codename);
 
+    /**
+     * @brief Cache-bust revision for a key's live-rendered frame, or -1 if none.
+     *
+     * The editor's profile sync (_syncFromProfile) rebuilds the binding model on
+     * every profileChanged, wiping iconSource. A plugin that renders continuously
+     * (System Monitor) re-asserts its frame within a tick, but a one-shot render
+     * (the mount-time manifest default image, e.g. Weather's icon) was lost from
+     * the CANVAS even though the frame still lives in the LiveKeyImageStore and
+     * on the physical device. QML calls this after a rebuild to re-point cells
+     * with a cached frame back at image://livekey/<idx>?r=<revision>.
+     *
+     * @param keyIndex0 0-based key index (canvas/model convention).
+     * @return Current revision counter when a frame exists for the key; -1 if not.
+     */
+    [[nodiscard]] Q_INVOKABLE qint64 liveKeyRevision(int keyIndex0) const;
+
 signals:
     /**
      * @brief Emitted after navigatePage() successfully advances to a new page.

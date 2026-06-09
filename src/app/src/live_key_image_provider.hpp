@@ -48,6 +48,14 @@ public:
         return it != m_images.end() ? it->second : QImage{};
     }
 
+    /// Whether a live frame is cached for @p keyIndex. Lets the editor model
+    /// re-point a cell at image://livekey after a profile-driven rebuild wiped
+    /// its iconSource (the frame itself survives in this store).
+    [[nodiscard]] bool has(int keyIndex) const {
+        QMutexLocker lock(&m_mutex);
+        return m_images.find(keyIndex) != m_images.end();
+    }
+
     /// Drop the cached frame for a key (e.g. when an action is moved away). The
     /// editor cell stops pointing at image://livekey for this key, so it reverts
     /// to the empty-tile look instead of showing a stale render.
