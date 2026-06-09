@@ -715,6 +715,31 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             return QJsonObject{{"installed", installed}, {"confirm", confirm}, {"path", path}};
         });
 
+    // plugin.installFromCatalog {uuid} -> {started} — drives the catalogue tile
+    // install (PluginCatalogModel::install) from the shell, completing the
+    // debug-channel coverage of the PluginStore page (the tiles carry no
+    // objectName, so qml.click cannot reach them). The download is async:
+    // install() returns once the HTTPS GET is dispatched; completion lands via
+    // installFinished (already wired to PluginManager::rediscover()), so poll
+    // plugin.list / plugin.installedActions afterwards. For catalogue rows with
+    // no direct downloadUrl (e.g. OpenDeck), this opens the upstream page in
+    // the browser — same behaviour as the GUI tile.
+    server.registerMethod("plugin.installFromCatalog",
+                          [&app](QJsonObject const& params, QString& err) {
+                              auto* cat = app.pluginCatalog();
+                              if (cat == nullptr) {
+                                  err = QStringLiteral("plugin catalog unavailable");
+                                  return QJsonObject{};
+                              }
+                              QString const uuid = params.value("uuid").toString();
+                              if (uuid.isEmpty()) {
+                                  err = QStringLiteral("require 'uuid'");
+                                  return QJsonObject{};
+                              }
+                              bool const started = cat->install(uuid);
+                              return QJsonObject{{"started", started}, {"uuid", uuid}};
+                          });
+
     // plugin.rediscover {} -> {rediscovered, connectedCount} — idempotent
     // re-scan that spawns only newly-installed .sdPlugin plugins with no app
     // restart. connectedCount is sampled immediately; the WS register handshake
