@@ -200,4 +200,4 @@ Plans:
 | 32. Binding Layer Fix + Multi/Toggle Action + Device Editor              | 5/5            | In Progress |            |
 | 33. Property Inspector End-to-End                                        | 2/3            | In Progress |            |
 | 34. Per-App Profiles + Event-Parity Audit                                | 5/5            | Complete    | 2026-06-08 |
-| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 3/3            | Complete    | 2026-06-08 |
+| 35. Windows Plugin Support + Security Hardening + Milestone Verification | 3/3            | Complete    | 2026-06-09 |

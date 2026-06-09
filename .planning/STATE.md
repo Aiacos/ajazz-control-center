@@ -24,11 +24,13 @@ See: `.planning/PROJECT.md` (updated 2026-06-06)
 system — never lying about what a device can do, never crashing when a device is yanked, never
 silently leaking host state into plugin children.
 
-**Current focus:** Phase 35 — windows-plugin-support-security-hardening-milestone-verifica
+**Current focus:** v2.0 MILESTONE LIFECYCLE — all 6 phases complete; running audit → complete → cleanup
 
 ## Current Position
 
-Phase: 35 (windows-plugin-support-security-hardening-milestone-verifica) — EXECUTING
+Phase: 35 (windows-plugin-support-security-hardening-milestone-verifica) — COMPLETE + VERIFIED (human_needed; 8/8 automated must-haves; WINPLG-03 partial chip-only per locked CONTEXT). Code review found+fixed a real Critical (CR-01 no-op chip wiring: LoadedPluginsModel was fed only by the Python host, not the UnifiedPluginHost merged inventory; fixed 12acd2f) + WR-01 (MinimumVersion floor) + WR-02 (production-path test). 807/807. 4 live/hardware items in 35-HUMAN-UAT.md. User chose Proceed-to-milestone-lifecycle.
+
+ALL 6 v2.0 PHASES COMPLETE (30-35). Running milestone lifecycle: audit -> complete -> cleanup.
 
 Phase: 34 (per-app-profiles-event-parity-audit) — COMPLETE + VERIFIED (human_needed; 7 live/hardware items deferred to 34-HUMAN-UAT.md). 5/5 must-haves (automated). All 8 reqs (APROF-01..04, EVENT-01..04) code-verified. Code review found + fixed a real BLOCKER (CR-01: X11 missing XSetErrorHandler → BadWindow exit) + 5 warnings (WR-01 manual-selection clobber, WR-02 ApplicationsToMonitor filter, WR-03/04/05). 785/785 ctest. User chose Continue-to-35 (live niri walk deferred).
 
