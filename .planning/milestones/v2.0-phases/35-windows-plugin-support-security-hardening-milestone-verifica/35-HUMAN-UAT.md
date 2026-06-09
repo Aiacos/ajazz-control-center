@@ -68,8 +68,7 @@ result: [pending — live UI]
    with no duplication, and the Python entries remain present. The
    `platformStatusChip` now instantiates for win-only `.sdPlugin` rows (the only
    ones carrying a meaningful `winClass`). The production population path is
-   unit-covered by `LoadedPluginsModel refresh from unified host surfaces win
-   platformStatus (WR-02)` in `test_loaded_plugins_model.cpp`. The deferred LIVE
+   unit-covered by `LoadedPluginsModel refresh from unified host surfaces win platformStatus (WR-02)` in `test_loaded_plugins_model.cpp`. The deferred LIVE
    render walk (item 1 above) is now unblocked at the wiring level and only
    awaits a windowed GUI session.
 1. **The Loaded-plugins drawer cannot be opened headlessly.** It is a modal
@@ -90,6 +89,7 @@ Loaded-plugins drawer, and `scripts/ajazz-debug qml.get` on
 `platformStatusChip.statusLabel` — expect the non-empty "native" copy (not blank).
 This is the same deferred VERIF-01 walk in item 1 above; the CR-01 wiring fix is
 the prerequisite that makes it observable, and it is now in place.
+
 1. **The Loaded-plugins drawer cannot be opened headlessly.** It is a modal
    `Drawer`/`Popup` opened via the `navLoaded` ToolButton's `onClicked` →
    `loadedPluginsRequested()`; the documented CLAUDE.md harness gap is that
