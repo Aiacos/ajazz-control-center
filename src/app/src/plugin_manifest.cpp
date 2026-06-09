@@ -293,6 +293,20 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     for (QJsonValue const& actVal : actionsArray)
         m.actions.push_back(parseAction(actVal.toObject()));
 
+    // Manifest-level PropertyInspectorPath (Elgato SDK): the DEFAULT Property
+    // Inspector for every action; a per-action PropertyInspectorPath overrides
+    // it. Backfill actions that declare none so plugin-wide PIs (e.g.
+    // com.jk.weather: "PropertyInspectorPath": "pi/main_pi.html" with a single
+    // PI-less action) surface a configurator instead of silently losing it.
+    QString const defaultPi = root.value(QStringLiteral("PropertyInspectorPath")).toString();
+    if (!defaultPi.isEmpty()) {
+        for (PluginAction& action : m.actions) {
+            if (action.propertyInspectorPath.isEmpty()) {
+                action.propertyInspectorPath = defaultPi;
+            }
+        }
+    }
+
     // ApplicationsToMonitor — optional. Elgato shape is an object keyed by
     // platform ({"mac":[...],"windows":[...]}); some manifests use a bare array.
     // Accept both; tokens are normalized to the watcher's app-identity contract
@@ -505,6 +519,33 @@ bool supportsCurrentPlatform(PluginManifest const& m, QString const& platform, W
         return false;
     }
     return false; // unreachable; keeps non-exhaustive-switch warnings quiet
+}
+
+// ---------------------------------------------------------------------------
+// emulatedStreamDeckVersion
+// ---------------------------------------------------------------------------
+
+QString emulatedStreamDeckVersion() {
+    // Single authority — see the header doc. Bump here when the emulated SD
+    // API surface grows; every Software.MinimumVersion gate follows.
+    return QStringLiteral("6.9");
+}
+
+// ---------------------------------------------------------------------------
+// resolveEffectiveCodePath
+// ---------------------------------------------------------------------------
+
+QString resolveEffectiveCodePath(PluginManifest const& manifest) {
+#if defined(Q_OS_WIN)
+    if (!manifest.codePathWin.isEmpty()) {
+        return manifest.codePathWin;
+    }
+#elif defined(Q_OS_MACOS)
+    if (!manifest.codePathMac.isEmpty()) {
+        return manifest.codePathMac;
+    }
+#endif
+    return manifest.codePath;
 }
 
 } // namespace ajazz::app

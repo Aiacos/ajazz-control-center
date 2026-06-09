@@ -289,4 +289,37 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
 [[nodiscard]] bool
 supportsCurrentPlatform(PluginManifest const& m, QString const& platform, WinPluginClass cls);
 
+/**
+ * @brief The EMULATED Stream Deck app version advertised to plugins.
+ *
+ * Single authority for the value previously duplicated as plugin_manager.cpp's
+ * kEmulatedSdVersion. A manifest's Software.MinimumVersion refers to the Elgato
+ * Stream Deck app (e.g. "4.1", "6.5"), NOT to this app's own version, so gating
+ * against QCoreApplication::applicationVersion() (0.1.x) would refuse every real
+ * plugin. We emulate the SD v6 plugin API surface; advertise a generous v6
+ * version so v4/v5/v6 plugins pass. This is the version EVERY
+ * Software.MinimumVersion gate must compare against — spawn-time discovery AND
+ * the installedActions picker (they diverged once: the picker used the real app
+ * version and hid actions of plugins that were happily running, 2026-06-09).
+ *
+ * @return The emulated Stream Deck version string (e.g. "6.9").
+ */
+[[nodiscard]] QString emulatedStreamDeckVersion();
+
+/**
+ * @brief Resolve the platform-appropriate CodePath from a manifest.
+ *
+ * Same resolution PluginManager::spawn() applies (codePathWin on Windows,
+ * codePathMac on macOS, generic codePath otherwise/fallback). An EMPTY result
+ * means the spawn step can never launch this plugin on the current platform —
+ * per the LOCKED Linux OS-accept policy, CodePath existence is "the real gate"
+ * after the best-effort OS gate. Exposed here so non-spawn callers (e.g. the
+ * installedActions picker) can mirror that gate instead of listing bindable
+ * actions for a plugin that can never run.
+ *
+ * @param manifest Parsed manifest.
+ * @return The effective code path for this build's platform; may be empty.
+ */
+[[nodiscard]] QString resolveEffectiveCodePath(PluginManifest const& manifest);
+
 } // namespace ajazz::app

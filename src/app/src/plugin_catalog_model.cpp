@@ -364,7 +364,13 @@ QVariantList PluginCatalogModel::installedActions() const {
     // Same install layout the verify-gate sweep and Phase-18 discovery use:
     // <pluginsDir>/<name>.sdPlugin/manifest.json.
     QString const platform = currentPlatformString();
-    QString const appVer = QCoreApplication::applicationVersion();
+    // GAP-2026-06-09: this gate MUST use the EMULATED Stream Deck version, not
+    // QCoreApplication::applicationVersion(). Software.MinimumVersion refers to
+    // the Elgato app; comparing against our own 0.1.x hid the actions of
+    // plugins the PluginManager (which already used the emulated version) was
+    // happily running — observed live with com.jk.weather (MinimumVersion 4.1):
+    // registered over the WebSocket yet invisible in the action picker.
+    QString const appVer = emulatedStreamDeckVersion();
     QStringList const entries =
         dir.entryList(QStringList{QStringLiteral("*.sdPlugin")}, QDir::Dirs | QDir::NoDotAndDotDot);
 
@@ -390,6 +396,20 @@ QVariantList PluginCatalogModel::installedActions() const {
                            platform.toStdString(),
                            appVer.toStdString());
             continue; // not for this OS / below software minimum version
+        }
+        // Mirror the spawn step's "real gate" (LOCKED Linux OS-accept policy):
+        // the OS gate above is best-effort, but a plugin with NO code path for
+        // this platform (e.g. a Windows-native bundle shipping only CodePathWin)
+        // can never be launched here — listing its actions would produce
+        // bindable-but-dead keys. Same resolution PluginManager::spawn applies.
+        if (resolveEffectiveCodePath(*parsed).isEmpty()) {
+            ++osVersionSkipCount;
+            AJAZZ_LOG_INFO("plugin-catalog",
+                           "installedActions: skipped plugin '{}' (no code path for {} — "
+                           "cannot run on this platform)",
+                           parsed->name.toStdString(),
+                           platform.toStdString());
+            continue; // nothing the spawn step could ever launch here
         }
 
         for (PluginAction const& action : parsed->actions) {

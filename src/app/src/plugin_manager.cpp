@@ -76,14 +76,10 @@ static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0),
 
 namespace ajazz::app {
 
-// Emulated Stream Deck app version advertised to plugins and used for the
-// Software.MinimumVersion runnability gate. A manifest's MinimumVersion refers
-// to the Elgato Stream Deck app (e.g. "4.1", "6.5"), NOT to this app's version,
-// so gating against our own 0.1.0 would refuse every real plugin. We emulate
-// the SD v6 plugin API surface; advertise a generous v6 version so v4/v5/v6
-// plugins pass. (A plugin requiring a strictly newer SD than this is genuinely
-// out of scope and correctly skipped.)
-static constexpr char kEmulatedSdVersion[] = "6.9";
+// The emulated Stream Deck app version moved to plugin_manifest.cpp
+// (emulatedStreamDeckVersion()) so the spawn gate and the installedActions
+// picker share ONE authority — they diverged once (picker used the real app
+// version 0.1.x and hid actions of plugins that were happily running).
 
 // ---------------------------------------------------------------------------
 // isSafeUuidComponent — reuse from pi_bridge.cpp:66 (T-18-PATHTRAV mitigation).
@@ -202,16 +198,9 @@ PluginManager::~PluginManager() {
 // ---------------------------------------------------------------------------
 
 QString PluginManager::resolveCodePath(PluginManifest const& manifest) {
-#if defined(Q_OS_WIN)
-    if (!manifest.codePathWin.isEmpty()) {
-        return manifest.codePathWin;
-    }
-#elif defined(Q_OS_MACOS)
-    if (!manifest.codePathMac.isEmpty()) {
-        return manifest.codePathMac;
-    }
-#endif
-    return manifest.codePath;
+    // Delegates to the shared resolver in plugin_manifest.cpp so non-spawn
+    // callers (installedActions picker) apply the IDENTICAL platform rule.
+    return resolveEffectiveCodePath(manifest);
 }
 
 QString PluginManager::buildInfoJson() {
@@ -221,9 +210,9 @@ QString PluginManager::buildInfoJson() {
     //         this minimal form is sufficient for the plugin host to identify itself.
     // The advertised version is the EMULATED Stream Deck app version (not our own
     // app version): plugins compare against the Stream Deck app, so reporting our
-    // 0.1.0 would make version-gated plugins refuse to run. See kEmulatedSdVersion.
+    // 0.1.0 would make version-gated plugins refuse to run. See emulatedStreamDeckVersion().
     QJsonObject app;
-    app[QStringLiteral("version")] = QString::fromLatin1(kEmulatedSdVersion);
+    app[QStringLiteral("version")] = emulatedStreamDeckVersion();
     app[QStringLiteral("platform")] = currentPlatformString();
 
     QJsonObject envelope;
@@ -308,7 +297,7 @@ std::vector<PluginManifest> PluginManager::discover() {
         // exceeds the emulated Stream Deck version must still be rejected, exactly like a
         // plain plugin. Gate the native acceptance on manifestVersionGatePasses() so the OR
         // cannot short-circuit past the floor.
-        QString const emulatedVer = QString::fromLatin1(kEmulatedSdVersion);
+        QString const emulatedVer = emulatedStreamDeckVersion();
         bool const baseRunnable = manifestRunnableHere(*opt, currentPlatformString(), emulatedVer);
         bool const versionOk = manifestVersionGatePasses(*opt, emulatedVer);
         bool const winNativeRunnable =
