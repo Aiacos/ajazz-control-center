@@ -1146,6 +1146,15 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
                          [this](QString const& /*uuid*/, bool ok, QString const& /*error*/) {
                              if (ok) {
                                  m_pluginManager->rediscover();
+                                 // Refresh the loaded-plugins model so a freshly
+                                 // installed .sdPlugin (and its trust/platform
+                                 // chips) appears WITHOUT an app restart.
+                                 // rediscover() spawns synchronously into m_live,
+                                 // so the merged m_pluginHost2->plugins() already
+                                 // includes the new entry here (audit WARNING-2).
+                                 if (m_loadedPlugins) {
+                                     m_loadedPlugins->refresh();
+                                 }
                              }
                          });
     }

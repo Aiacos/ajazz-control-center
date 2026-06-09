@@ -71,9 +71,10 @@ Page {
 
         // NOTE: the .sdPlugin trust controls (the "Allow unsigned plugins"
         // toggle + per-plugin unsigned consent) live in PluginStore.qml, NOT
-        // here. This page (LoadedPluginsPage) is driven by LoadedPluginsModel
-        // ← the Python OOP host (SEC-003); its rows are Python plugins, whose
-        // trust uses the SEC-003 trust-roots mechanism, not PluginCatalog.
+        // here. This page (LoadedPluginsPage) is driven by LoadedPluginsModel,
+        // which (since the Phase-35 CR-01 fix, application.cpp:1120-1122) is fed
+        // by the MERGED UnifiedPluginHost inventory — both .sdPlugin AND Python
+        // plugins; .sdPlugin rows now carry the WINPLG platformStatus chip.
         // Phase 27 originally placed the .sdPlugin trust UX here by mistake
         // (PluginCatalog.allowPlugin no-ops on a Python plugin id); moved to
         // PluginStore where .sdPlugin plugins are actually installed.
