@@ -669,29 +669,17 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         // Auto-render the manifest's declared image for the new state (Keypad
         // only for now), so a multi-state action changes its key image without
         // having to push its own setImage. Graceful no-op if no resolver is set
-        // or the action declares no image for this state.
-        if (ok && m_stateImageResolver && ctx.controller == QStringLiteral("Keypad")) {
-            QString const imgPath = m_stateImageResolver(ctx.actionUUID, newState);
-            if (!imgPath.isEmpty()) {
-                QImage const stateImg(imgPath);
-                if (!stateImg.isNull()) {
-                    std::uint8_t const keyIndex =
-                        keyIndexForCoords(ctx.row, ctx.column, kDefaultKeyCols);
-                    try {
-                        m_control->assignKeyImage(keyIndex, stateImg);
-                    } catch (std::exception const& e) {
-                        AJAZZ_LOG_WARN("plugin-bridge",
-                                       "setState: assignKeyImage threw for key {}: {}",
-                                       static_cast<int>(keyIndex),
-                                       e.what());
-                    }
-                    reapplyTitle(keyIndex); // keep the title over the new state image
-                } else {
-                    AJAZZ_LOG_WARN("plugin-bridge",
-                                   "setState: state image failed to load: {}",
-                                   imgPath.toStdString());
-                }
-            }
+        // or the action declares no image for this state. A follow-up
+        // titleParametersDidChange carries the new state (OpenDeck sends one
+        // after every state change — states.rs:38).
+        if (ok) {
+            ActionContext painted = ctx;
+            painted.stateIndex = newState;
+            paintDeclaredStateImage(painted, kDefaultKeyCols);
+            m_server->sendEvent(painted.pluginUuid,
+                                eventEnvelope(QStringLiteral("titleParametersDidChange"),
+                                              painted,
+                                              titlePayload(painted)));
         }
     } else if (event == QStringLiteral("showAlert") || event == QStringLiteral("showOk")) {
         // Transient feedback flash (Elgato): paint a warning/ok glyph, then
@@ -888,6 +876,49 @@ void PluginDeviceBridge::setActionOwnerResolver(std::function<QString(QString co
     m_actionOwnerResolver = std::move(resolver);
 }
 
+void PluginDeviceBridge::setActionStateMetaResolver(
+    std::function<std::pair<int, bool>(QString const&)> resolver) {
+    m_actionStateMetaResolver = std::move(resolver);
+}
+
+void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::uint8_t keyCols) {
+    if (!m_stateImageResolver || m_control == nullptr ||
+        ctx.controller != QStringLiteral("Keypad")) {
+        return;
+    }
+    QString const imgPath = m_stateImageResolver(ctx.actionUUID, ctx.stateIndex);
+    if (imgPath.isEmpty()) {
+        AJAZZ_LOG_DEBUG("plugin-bridge",
+                        "paintDeclaredStateImage: no declared image for action '{}' state {}",
+                        ctx.actionUUID.toStdString(),
+                        ctx.stateIndex);
+        return;
+    }
+    AJAZZ_LOG_INFO("plugin-bridge",
+                   "paintDeclaredStateImage: painting '{}' for action '{}' state {}",
+                   imgPath.toStdString(),
+                   ctx.actionUUID.toStdString(),
+                   ctx.stateIndex);
+    QImage const stateImg(imgPath);
+    if (stateImg.isNull()) {
+        AJAZZ_LOG_WARN("plugin-bridge",
+                       "paintDeclaredStateImage: image failed to load: {}",
+                       imgPath.toStdString());
+        return;
+    }
+    std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
+    try {
+        m_control->assignKeyImage(keyIndex, stateImg);
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("plugin-bridge",
+                       "paintDeclaredStateImage: assignKeyImage threw for key {}: {}",
+                       static_cast<int>(keyIndex),
+                       e.what());
+        return;
+    }
+    reapplyTitle(keyIndex); // keep any plugin-set title over the new base image
+}
+
 QString PluginDeviceBridge::resolveOwner(QString const& actionUuid) const {
     // Stored-owner map first (OpenDeck model): the manifest that declares this
     // action UUID names its owner explicitly, so the action UUID need not be a
@@ -930,12 +961,43 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         if (!ctxOpt.has_value()) {
             return; // unbound coordinate — silent drop (T-19-leak)
         }
-        ActionContext const& ctx = *ctxOpt;
-        QString const eventName =
-            (ev.kind == Kind::KeyPressed) ? QStringLiteral("keyDown") : QStringLiteral("keyUp");
+        ActionContext ctx = *ctxOpt;
+        bool const isRelease = (ev.kind == Kind::KeyReleased);
+
+        // Automatic state cycle (Elgato/OpenDeck keyUp semantics, keypad.rs:154):
+        // an action declaring EXACTLY two states advances state on key RELEASE
+        // unless its manifest sets DisableAutomaticStates. The keyUp envelope
+        // carries the NEW state, the new state's declared image is auto-
+        // rendered, and a titleParametersDidChange follows. Plugins that manage
+        // state themselves (setState) either declare one state or set the
+        // disable flag — both leave this path inert.
+        if (isRelease && m_actionStateMetaResolver) {
+            auto const [stateCount, disableAuto] = m_actionStateMetaResolver(ctx.actionUUID);
+            if (stateCount == 2 && !disableAuto) {
+                int const nextState = (ctx.stateIndex + 1) % 2;
+                QString const ctxId = ContextRegistry::deriveContextId(ctx);
+                if (m_registry.setState(ctxId, nextState)) {
+                    ctx.stateIndex = nextState;
+                    paintDeclaredStateImage(ctx, kDefaultKeyCols);
+                }
+            }
+        }
+
+        QString const eventName = isRelease ? QStringLiteral("keyUp") : QStringLiteral("keyDown");
         // Full Elgato envelope: top-level action/context/device + GenericInstancePayload.
         // sendEvent returns false safely if socket is closed (T-19-sock).
         m_server->sendEvent(ctx.pluginUuid, eventEnvelope(eventName, ctx, instancePayload(ctx)));
+        if (isRelease && m_actionStateMetaResolver) {
+            // State may have just cycled — let the plugin observe the new title
+            // parameters/state, mirroring OpenDeck's post-cycle notification.
+            auto const [stateCount, disableAuto] = m_actionStateMetaResolver(ctx.actionUUID);
+            if (stateCount == 2 && !disableAuto) {
+                m_server->sendEvent(ctx.pluginUuid,
+                                    eventEnvelope(QStringLiteral("titleParametersDidChange"),
+                                                  ctx,
+                                                  titlePayload(ctx)));
+            }
+        }
         break;
     }
 
@@ -1198,6 +1260,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                   ContextRegistry::deriveContextId(ctx),
                                                   QString::fromStdString(action.settingsJson));
 
+            // Track newness BEFORE registering: a brand-new context gets the
+            // manifest default render below; an idempotent re-registration must
+            // NOT clobber an image the plugin may have pushed since.
+            bool const isNewContext =
+                !m_registry.byContext(ContextRegistry::deriveContextId(ctx)).has_value();
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
@@ -1205,6 +1272,16 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             // we serialise so willAppear carries the live state, not the default 0.
             if (regOpt.has_value()) {
                 ctx.stateIndex = regOpt->stateIndex;
+            }
+
+            // Mount-time default render (OpenDeck/Elgato parity): paint the
+            // manifest's declared image for the current state (state Image,
+            // else the action Icon) the moment the action lands on a key, so a
+            // plugin that never pushes setImage (e.g. com.jk.weather) still
+            // shows its icon instead of a blank key. The plugin's own
+            // setImage/setTitle, when it comes, overwrites this base.
+            if (isNewContext) {
+                paintDeclaredStateImage(ctx, kDefaultKeyCols);
             }
 
             // Full Elgato envelope: top-level action/context/device + payload

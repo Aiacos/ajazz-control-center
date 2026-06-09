@@ -47,6 +47,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <utility>
 
 // AJAZZ_HAVE_WEBSOCKETS gate: the whole PluginDeviceBridge surface compiles away when the
 // WebSockets module is absent (it composes SdPluginServer). Mirrors obs_client.hpp /
@@ -663,6 +664,20 @@ private:
     /// action UUID is not a dotted prefix of its plugin UUID.
     std::function<QString(QString const&)> m_actionOwnerResolver;
 
+    /// Resolver: actionUuid -> {state count, DisableAutomaticStates}. Injected
+    /// from Application (PluginManager::actionStateMeta). Drives the host-side
+    /// automatic state cycle on keyUp (Elgato/OpenDeck: a 2-state action
+    /// advances state on keyUp unless DisableAutomaticStates). {0,false} or an
+    /// unset resolver disables cycling — graceful degradation.
+    std::function<std::pair<int, bool>(QString const&)> m_actionStateMetaResolver;
+
+    /// Paint the manifest-declared image for @p ctx's CURRENT state onto its
+    /// key (Keypad contexts on the active device only) and re-apply the title
+    /// overlay. No-op when the resolver is unset, resolves "", the image fails
+    /// to load, or the controller is not Keypad. Shared by the mount-time
+    /// default render (willAppear) and the keyUp automatic state cycle.
+    void paintDeclaredStateImage(ActionContext const& ctx, std::uint8_t keyCols);
+
     /// Resolve the owning plugin UUID for an action: stored-owner map first
     /// (m_actionOwnerResolver), then the dotted-prefix fallback over the set of
     /// currently-registered plugins. Returns "" when no owner can be determined.
@@ -709,6 +724,19 @@ public:
      * @param resolver  actionUuid -> owning plugin UUID, or "" if unknown.
      */
     void setActionOwnerResolver(std::function<QString(QString const&)> resolver);
+
+    /**
+     * @brief Inject the action state-metadata resolver (PluginManager::actionStateMeta).
+     *
+     * When set, keyUp on a Keypad context whose action declares EXACTLY two
+     * states (and not DisableAutomaticStates) advances the tracked state
+     * (Elgato/OpenDeck automatic state cycle), auto-renders the new state's
+     * declared image, and the keyUp envelope + a follow-up
+     * titleParametersDidChange carry the NEW state. When unset, no cycling.
+     *
+     * @param resolver  actionUuid -> {stateCount, disableAutomaticStates}.
+     */
+    void setActionStateMetaResolver(std::function<std::pair<int, bool>(QString const&)> resolver);
 };
 
 } // namespace ajazz::app

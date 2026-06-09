@@ -49,6 +49,7 @@
 #include <QSet>
 #include <QStandardPaths>
 #include <QString>
+#include <QTemporaryDir>
 
 #include <cstdint>
 
@@ -2144,6 +2145,201 @@ TEST_CASE("PluginDeviceBridge BIND-06 onDeviceEvent routes Keypad Encoder and to
     REQUIRE_FALSE(event.isEmpty());
     CHECK(event.value(QStringLiteral("device")).toString() == QStringLiteral("akp05e"));
     CHECK(event.value(QStringLiteral("action")).toString() == c.expectedAction);
+}
+
+// ---------------------------------------------------------------------------
+// Automatic state cycle on keyUp (Elgato/OpenDeck parity)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E keyUp auto-cycles a 2-state action and carries the new state",
+          "[plugin-device-bridge][e2e][outbound][state-cycle]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+    // 2-state action, automatic states enabled.
+    bridge->setActionStateMetaResolver(
+        [](QString const&) -> std::pair<int, bool> { return {2, false}; });
+
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 2;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.test.plug.action1");
+    ctx.pluginUuid = QStringLiteral("com.test.plug");
+    [[maybe_unused]] auto ctxId = bridge->registry().registerContext(ctx);
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    ajazz::core::DeviceEvent down;
+    down.kind = ajazz::core::DeviceEvent::Kind::KeyPressed;
+    down.index = 3; // 1-based key 3 -> {row:0, col:2}
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), down);
+    ajazz::core::DeviceEvent up;
+    up.kind = ajazz::core::DeviceEvent::Kind::KeyReleased;
+    up.index = 3;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), up);
+    pump19(500);
+
+    // keyDown carries the OLD state (0); keyUp carries the cycled state (1).
+    auto const downPayload = firstPayloadForEvent(msgSpy, QStringLiteral("keyDown"));
+    CHECK(downPayload.value(QStringLiteral("state")).toInt() == 0);
+    auto const upPayload = firstPayloadForEvent(msgSpy, QStringLiteral("keyUp"));
+    CHECK(upPayload.value(QStringLiteral("state")).toInt() == 1);
+
+    // The cycle is observable to later events (registry state advanced)...
+    auto const regOpt =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 2);
+    REQUIRE(regOpt.has_value());
+    CHECK(regOpt->stateIndex == 1);
+
+    // ...and a titleParametersDidChange followed the cycle (OpenDeck states.rs:38).
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("titleParametersDidChange")));
+
+    // A second press/release cycles back to 0 (modulo wrap).
+    msgSpy.clear();
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), down);
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), up);
+    pump19(500);
+    auto const upPayload2 = firstPayloadForEvent(msgSpy, QStringLiteral("keyUp"));
+    CHECK(upPayload2.value(QStringLiteral("state")).toInt() == 0);
+}
+
+TEST_CASE("PluginDeviceBridgeE2E keyUp does NOT cycle when disabled or not exactly 2 states",
+          "[plugin-device-bridge][e2e][outbound][state-cycle]") {
+    ensureQCoreApp();
+
+    struct Case {
+        int stateCount;
+        bool disableAuto;
+    };
+    auto const c = GENERATE(Case{2, true},   // DisableAutomaticStates
+                            Case{1, false},  // single-state
+                            Case{3, false},  // 3-state: Elgato cycles ONLY 2-state
+                            Case{0, false}); // unknown action
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+    bridge->setActionStateMetaResolver(
+        [c](QString const&) -> std::pair<int, bool> { return {c.stateCount, c.disableAuto}; });
+
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp05e");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 0;
+    ctx.column = 2;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.test.plug.action1");
+    ctx.pluginUuid = QStringLiteral("com.test.plug");
+    [[maybe_unused]] auto ctxId = bridge->registry().registerContext(ctx);
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+
+    ajazz::core::DeviceEvent up;
+    up.kind = ajazz::core::DeviceEvent::Kind::KeyReleased;
+    up.index = 3;
+    bridge->onDeviceEvent(QStringLiteral("akp05e"), up);
+    pump19(400);
+
+    auto const upPayload = firstPayloadForEvent(msgSpy, QStringLiteral("keyUp"));
+    CHECK(upPayload.value(QStringLiteral("state")).toInt() == 0);
+    auto const regOpt =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 2);
+    REQUIRE(regOpt.has_value());
+    CHECK(regOpt->stateIndex == 0);
+}
+
+// ---------------------------------------------------------------------------
+// Mount-time default state image render (OpenDeck/Elgato parity)
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridge populateContexts paints the manifest default state image on a "
+          "new context",
+          "[plugin-device-bridge][e2e][lifecycle][default-image]") {
+    ensureQCoreApp();
+
+    // Fake device + control service (records every key paint).
+    auto fake = makeE2eFake();
+    ajazz::app::StreamDockControlService control(
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    auto const paintsAfterOpen = fake->keyImages.size();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, &control, nullptr);
+
+    // Manifest default image: a real PNG on disk (decode of a data URI is not
+    // the path under test — paintDeclaredStateImage loads from a file path).
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const imgPath = tmp.filePath(QStringLiteral("default.png"));
+    {
+        QImage img(8, 8, QImage::Format_ARGB32);
+        img.fill(Qt::green);
+        REQUIRE(img.save(imgPath));
+    }
+    bridge->setStateImageResolver([imgPath](QString const&, int stateIndex) -> QString {
+        return stateIndex == 0 ? imgPath : QString{};
+    });
+
+    // Profile: key 2 (0-based) bound to a plugin action -> {row:0, col:2} = wire key 3.
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-defimg";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.action1";
+    binding.onPress.push_back(act);
+    prof.keys[2] = std::move(binding);
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+
+    // Drain until the control service paints the key (NO plugin setImage sent!).
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        if (fake->keyImages.size() > paintsAfterOpen) {
+            break;
+        }
+    }
+    REQUIRE(fake->keyImages.size() > paintsAfterOpen);
+    bool paintedKey3 = false;
+    for (std::size_t i = paintsAfterOpen; i < fake->keyImages.size(); ++i) {
+        if (fake->keyImages[i].index == 3) {
+            paintedKey3 = true;
+        }
+    }
+    CHECK(paintedKey3);
+
+    // Idempotent re-population must NOT repaint (the context is no longer new;
+    // a plugin-pushed image would be clobbered otherwise).
+    auto const paintsAfterMount = fake->keyImages.size();
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+    pump19(400);
+    CHECK(fake->keyImages.size() == paintsAfterMount);
 }
 
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

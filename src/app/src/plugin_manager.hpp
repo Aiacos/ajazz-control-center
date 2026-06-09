@@ -62,6 +62,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #if defined(AJAZZ_HAVE_WEBENGINE)
@@ -357,6 +358,19 @@ public:
      * @return            Absolute image path, or "" if unresolved.
      */
     [[nodiscard]] QString stateImagePath(QString const& actionUuid, int stateIndex) const;
+
+    /**
+     * @brief State metadata for an action: {state count, DisableAutomaticStates}.
+     *
+     * Drives the host-side automatic state cycle (Elgato/OpenDeck keyUp
+     * semantics: a 2-state action advances state on keyUp unless the manifest
+     * sets DisableAutomaticStates). Unknown action -> {0, false}, which callers
+     * treat as "no automatic cycling".
+     *
+     * @param actionUuid  Dotted action id, e.g. com.vendor.plugin.action.
+     * @return            {stateCount, disableAutomaticStates}.
+     */
+    [[nodiscard]] std::pair<int, bool> actionStateMeta(QString const& actionUuid) const;
 
     /**
      * @brief Resolve the owning plugin UUID for an action UUID (stored-owner map).

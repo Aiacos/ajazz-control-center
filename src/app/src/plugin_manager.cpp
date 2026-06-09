@@ -905,7 +905,11 @@ QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex)
             if (stateIndex >= static_cast<int>(action.states.size())) {
                 return {}; // action matched but no such state declared
             }
-            QString const rel = action.states[static_cast<std::size_t>(stateIndex)].image;
+            // OpenDeck/Elgato default: a state with no Image falls back to the
+            // ACTION icon (shared.rs:150 — state.image defaults to action.icon).
+            QString const rel = action.states[static_cast<std::size_t>(stateIndex)].image.isEmpty()
+                                    ? action.icon
+                                    : action.states[static_cast<std::size_t>(stateIndex)].image;
             if (rel.isEmpty()) {
                 return {};
             }
@@ -926,6 +930,17 @@ QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex)
         }
     }
     return {};
+}
+
+std::pair<int, bool> PluginManager::actionStateMeta(QString const& actionUuid) const {
+    for (auto const& [key, live] : m_live) {
+        for (PluginAction const& action : live.manifest.actions) {
+            if (action.uuid == actionUuid) {
+                return {static_cast<int>(action.states.size()), action.disableAutomaticStates};
+            }
+        }
+    }
+    return {0, false}; // unknown action — caller treats as "no automatic states"
 }
 
 QString PluginManager::ownerForAction(QString const& actionUuid) const {

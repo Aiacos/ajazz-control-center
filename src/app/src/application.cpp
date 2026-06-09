@@ -554,6 +554,15 @@ Application::Application(QObject* parent)
         return m_pluginManager ? m_pluginManager->ownerForAction(actionUuid) : QString{};
     });
 
+    // 1a-ter. Inject the action state-metadata resolver so the bridge can apply
+    //     the Elgato/OpenDeck automatic state cycle on keyUp (2-state actions
+    //     advance unless DisableAutomaticStates). Same lazy null-guard pattern.
+    m_pluginBridge->setActionStateMetaResolver(
+        [this](QString const& actionUuid) -> std::pair<int, bool> {
+            return m_pluginManager ? m_pluginManager->actionStateMeta(actionUuid)
+                                   : std::pair<int, bool>{0, false};
+        });
+
     // 1b. Wire deviceActivated -> input-service codename + bridge.onDeviceConnected
     //     (GAP-28B fix): StreamDockControlService::setActiveDevice now emits
     //     deviceActivated on every successful open. By wiring it here we ensure
