@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v2.0
 milestone_name: Modular Plugin & Binding System
-status: verifying
-stopped_at: Completed 35-01-PLAN.md (WINPLG-01/02 classifier + native-run gate + ADR; 798/798 green).
-last_updated: '2026-06-08T20:00:53.605Z'
-last_activity: 2026-06-08
+status: Awaiting next milestone
+stopped_at: "Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)"
+last_updated: '2026-06-09T04:48:40.635Z'
+last_activity: 2026-06-09 — Milestone v2.0 completed and archived
 progress:
   total_phases: 6
   completed_phases: 6
@@ -28,31 +28,34 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: 35 (windows-plugin-support-security-hardening-milestone-verifica) — COMPLETE + VERIFIED (human_needed; 8/8 automated must-haves; WINPLG-03 partial chip-only per locked CONTEXT). Code review found+fixed a real Critical (CR-01 no-op chip wiring: LoadedPluginsModel was fed only by the Python host, not the UnifiedPluginHost merged inventory; fixed 12acd2f) + WR-01 (MinimumVersion floor) + WR-02 (production-path test). 807/807. 4 live/hardware items in 35-HUMAN-UAT.md. User chose Proceed-to-milestone-lifecycle.
-
-ALL 6 v2.0 PHASES COMPLETE (30-35). Running milestone lifecycle: audit -> complete -> cleanup.
-
-Phase: 34 (per-app-profiles-event-parity-audit) — COMPLETE + VERIFIED (human_needed; 7 live/hardware items deferred to 34-HUMAN-UAT.md). 5/5 must-haves (automated). All 8 reqs (APROF-01..04, EVENT-01..04) code-verified. Code review found + fixed a real BLOCKER (CR-01: X11 missing XSetErrorHandler → BadWindow exit) + 5 warnings (WR-01 manual-selection clobber, WR-02 ApplicationsToMonitor filter, WR-03/04/05). 785/785 ctest. User chose Continue-to-35 (live niri walk deferred).
-
-Phase: 33 (Property Inspector E2E) — COMPLETE + VERIFIED (human_needed: PI render/lifecycle-on-open + criterion-5 deferred by user). 4/5 must-haves; PI-01/02/04 done, PI-03 partial. 728/728 + 17 qml.
-Plan: 3 of 3
-Status: Phase complete — ready for verification
-Next: Plan 35-02 (status chip on LoadedPluginsModel/LoadedPluginsPage consuming PluginInfo.winClass, objectName-addressed per VERIF-01) + 35-03 (PLGSEC verify-locks + VERIF audit doc).
-Last activity: 2026-06-08
-Tests: 798/798 ctest green (linux-release, incl 17 qml).
-Stopped at: Completed 35-01-PLAN.md (WINPLG-01/02 classifier + native-run gate + ADR; 798/798 green).
+Phase: Milestone v2.0 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-06-09 — Milestone v2.0 completed and archived
 
 ### Progress bar
 
 ```
-v2.0 [██████████████████████████    ] 5/6 phases (Phase 34 VERIFIED human_needed; Phase 35 next)
-Phase 30 DONE
-Phase 31 DONE (Plan 01 + 02)
-Phase 32 DONE (5 plans; BIND-03/04/05/06/07 + EDIT-01; EDIT-01 canvas-collapse live-fixed; 2 Multi/Toggle live walks deferred to HUMAN-UAT)
-Phase 33 DONE (3 plans; PI-01/02/04; PI-03 relay live-confirmed; CR WR-01 fixed; render/lifecycle-on-open + criterion-5 deferred to HUMAN-UAT)
-Phase 34 DONE + VERIFIED (5/5 plans; APROF-01..04 + EVENT-01..04; CR-01 BLOCKER + 5 warnings fixed; 785/785; 7 live/hardware items in 34-HUMAN-UAT.md; logind wake-source deferred)
-Phase 35 .... (NEXT — Windows plugins + security hardening + milestone verification; FINAL)
+v2.0 [██████████████████████████████] 6/6 phases — SHIPPED 2026-06-09 (archived)
+Phase 30 DONE   Phase 31 DONE   Phase 32 DONE   Phase 33 DONE   Phase 34 DONE   Phase 35 DONE
+807/807 ctest green. Milestone audit: tech_debt (0 blockers). Awaiting next milestone (/gsd:new-milestone).
 ```
+
+## Deferred Items
+
+Items acknowledged and deferred at v2.0 milestone close on 2026-06-09 (all hardware/GUI-gated; tracked
+in per-phase HUMAN-UAT files + the carry-forward list in ROADMAP Backlog):
+
+| Category         | Item                                                             | Status                    |
+| ---------------- | ---------------------------------------------------------------- | ------------------------- |
+| uat_gap          | 32-HUMAN-UAT (Multi/Toggle author+drive walk)                    | partial                   |
+| uat_gap          | 33-HUMAN-UAT (PI-03 real-JS $SD.setSettings round-trip)          | partial (1 open)          |
+| uat_gap          | 34-HUMAN-UAT (niri/X11/EVENT/retail-device live walks)           | partial (7 open)          |
+| uat_gap          | 35-HUMAN-UAT (WINPLG-03 chip-render + PLGSEC-02 consent restart) | partial                   |
+| verification_gap | Phases 32/33/34/35 human_needed live confirmations               | deferred                  |
+| deferred         | WINPLG-03 Wine launch path (no Wine/Windows hardware)            | partial by locked CONTEXT |
+| deferred         | systemDidWakeUp real logind PrepareForSleep D-Bus source         | dispatch unit-proven      |
+| deferred         | WR-04 Win32 recycled-HWND dedup (needs a Windows host)           | compile-only              |
 
 ## Blockers / Concerns
 
@@ -172,3 +175,7 @@ Phase 33 depends on Phase 31 only (not Phase 32); Phases 32 and 33 can run concu
 Last session: 2026-06-08T20:00:43.656Z
 Stopped at: Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)
 Resume: `/gsd:execute-phase 32` (all code/test plans 01/02/03/04/05 landed; next is the consolidated live debug-channel pass + phase-verify for Phase 32)
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone

@@ -105,6 +105,74 @@ ______________________________________________________________________
 
 ______________________________________________________________________
 
+## Milestone: v2.0 — Modular Plugin & Binding System
+
+**Shipped:** 2026-06-09
+**Phases:** 6 (30-35) | **Plans:** 21 | **Tasks:** 43 | **Tests:** 807/807 ctest (from 694 baseline) | **Audit:** tech_debt (0 blockers)
+
+### What Was Built
+
+Unified plugin host (IPluginHost2 + UnifiedPluginHost aggregating .sdPlugin + Python); ActionInstance/
+ActionState core model (COD-031 hand-rolled JSON) + v1->v2 profile migration; drag-to-bind willAppear
+fix + Multi/Toggle actions + scrolling device editor; Property Inspector E2E ($SD bridge, settings
+round-trip, lifecycle events); per-app profiles (IActiveWindowWatcher wayland/x11/win/mac + auto-switch)
+
+- full event-parity audit; Windows-plugin classification (WS-only vs vendor-DLL) + status chip +
+  Tampered/Unsigned security split + consent persistence + loopback CI gate + milestone modularity audit.
+
+### What Worked
+
+- **The mandatory code-review + live-debug-channel gate per phase is the standout pattern.** EVERY
+  phase (31-35) found and fixed a real defect that the 700-800-test suite passed clean over: 31 reader-
+  recursion DoS, 32 invisible-canvas (live screenshot), 33 PI reload churn, 34 X11 missing
+  XSetErrorHandler (whole-app crash on window churn), 35 no-op chip wiring + the audit-stage install-
+  refresh gap. Unit-green is necessary, never sufficient — the integration/composition bugs only surface
+  under review or a live drive. This is the v1.3 "checked but not working" lesson, now institutionalized.
+- **Research-first "grep before coding" caught that ~70% of v2.0 was already shipped** (PLGSEC/VERIF in
+  Phase 35, ~70% of PI in Phase 33, BIND-03/06 in Phase 32). Framing those as verify+test-lock instead
+  of reimplement avoided needless churn + regression risk (Phase 35 had `git diff --stat == 0` on the
+  security source).
+- **Opus-everywhere (model_profile=quality + sub-agent overrides) + sequential executors (worktrees off)**
+  ran cleanly with no Sonnet-quota stalls and simpler merge semantics than worktree isolation.
+- The plan-checker caught real plan defects pre-execution (Phase-34 buggy verify gates, Phase-35
+  nonexistent-test-file/missing-CMakeLists) that would have produced false-green or never-compiled tests.
+
+### What Was Inefficient
+
+- Sub-agent SUMMARY narratives drifted from the code after later fixes (Phase 35 SUMMARY said CR-01 "not
+  patched" after it WAS patched). The verifier/orchestrator must grep the live tree, never trust SUMMARY
+  prose — caught here, but it cost a reconciliation pass.
+- The pattern-mapper's "DECISIVE" A1 claim (LoadedPluginsModel carries .sdPlugin) was wrong about the
+  call site; only the Phase-35 code review + integration checker (reading application.cpp) caught it.
+  Composition-root claims need call-site verification, not just "the API exists."
+- clangd false positives (no compile_commands) flooded every executor return; had to verify via real
+  `cmake --build` + `ctest` each time.
+
+### Patterns Established
+
+- Per-phase HUMAN-UAT.md for hardware/GUI-gated live walks; never fabricate a screenshot/walk — defer
+  honestly and carry forward. 4 phases (32/33/34/35) closed human_needed with documented backlogs.
+- "Constructed-but-never-wired" is a recurring composition-gap class (Phase-35 CR-01) — the milestone
+  integration checker now explicitly hunts for it across all seams at close.
+- Orchestrator applies plan-checker/code-review fixes inline for small, precisely-specified findings
+  rather than re-spinning a full planner/fixer cycle (cheaper, same correctness).
+
+### Key Lessons
+
+- The live gate pays for itself every single phase — budget for it as a definition-of-done item.
+- Verify executor/sub-agent file:line claims by grep before propagating to STATE/deliverables.
+- On a heavily-pre-shipped milestone, the highest-value work is honest verification + the few genuinely-
+  new pieces, not re-deriving what already works.
+
+### Cost Observations
+
+- Model mix: ~100% opus (deliberate quality profile; UI agents added to overrides mid-run).
+- Run shape: autonomous (/gsd-autonomous), 2 context-budget pauses after discuss (pre-34, pre-35).
+- Notable: each phase's heavy work (research/plan/execute/review) ran in isolated sub-agents; the
+  orchestrator stayed in the loop for routing + the live/honesty gates.
+
+______________________________________________________________________
+
 ## Cross-Milestone Trends
 
 ### Process Evolution

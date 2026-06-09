@@ -41,7 +41,16 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 ### Active
 
-## Current Milestone: v2.0 Modular Plugin & Binding System (OpenDeck/Elgato-correct)
+## Current State: v2.0 SHIPPED (2026-06-09) — awaiting next milestone
+
+v2.0 "Modular Plugin & Binding System" is complete and archived (6 phases 30–35, 21 plans, 807/807
+ctest green, milestone audit `tech_debt` / 0 blockers). The plugin host is unified, the
+ActionInstance model + Multi/Toggle binding + Property Inspector + per-app profiles + Windows-plugin
+classification + security hardening all shipped. Outstanding work is the hardware/GUI-gated HUMAN-UAT
+backlog (see `.planning/STATE.md` Deferred Items + ROADMAP Backlog). Start the next milestone with
+`/gsd:new-milestone`. The detail below documents the (now-shipped) v2.0 milestone.
+
+### (Shipped) Milestone: v2.0 Modular Plugin & Binding System (OpenDeck/Elgato-correct)
 
 **Goal:** Reimplement the entire plugin system and the key/dial/touch action-assignment layer as a rigorous, **modular** architecture aligned with OpenDeck and the Elgato Stream Deck SDK, running on top of the **mirajazz** device backend — closing for good what v1.3 marked `[x]` but never made genuinely complete, robust, or modular. Strategy is a **modular refactor that reuses what already works**, not a green-field rewrite.
 
@@ -114,6 +123,7 @@ Honest, capability-driven control of AJAZZ hardware with a sandboxed plugin syst
 
 - **v1.0** (shipped 2026-05-13) — Retro-fit catalogue. 2 phases, 7/7 success criteria, audit `tech_debt` (CR-01 + WR-01 deferred). Archived in `.planning/milestones/`.
 - **v1.1** (shipped 2026-05-14) — Device lifecycle hardening + scaffolding-to-functional. 6 phases (3-8), 26 plans, 28/28 requirements, 178/178 tests, audit `tech_debt` (6 deferred items — real-hardware UI verifies + Windows CI back-fill + maturity promotion blocked on captures + libFuzzer Fedora packaging). Archived in `.planning/milestones/`.
+- **v2.0** (shipped 2026-06-09) — Modular Plugin & Binding System. 6 phases (30-35), 21 plans, 43 tasks, 807/807 ctest, audit `tech_debt` (0 blockers; HUMAN-UAT live walks + WINPLG-03 Wine launch deferred). Unified plugin host (IPluginHost2/UnifiedPluginHost), ActionInstance model + Multi/Toggle, Property Inspector E2E, per-app profiles + event-parity, Windows-plugin classification + security hardening. Each phase's code-review/live gate caught a real bug 700-800 tests missed. Archived in `.planning/milestones/v2.0-*`.
 - **v1.2** (phases 9-13, 2026-05-15 → 2026-05-22) — Connected-Device Capability Parity. Delivered the research/capture infrastructure (Phase 9) and the **device-side wire protocol** for the Stream Dock, AK980 PRO, and AJ-series mouse (capture-verified, byte-tested), plus a full health-report fix loop (sandbox CWE-200, PATH-hijack CWE-426, QML test harness). Phase-10 UAT then revealed the device backends were never wired into the app (no live image push, no input routing) — that **app→device integration is carried into v1.3**. Phase dirs `09-13` retained in `.planning/phases/` (not archived); numbering continues at 14.
 
 ## Key Constraints
@@ -162,4 +172,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ______________________________________________________________________
 
-*Last updated: 2026-06-06 — v2.0 milestone "Modular Plugin & Binding System" bootstrap*
+*Last updated: 2026-06-09 — v2.0 milestone "Modular Plugin & Binding System" SHIPPED + archived*
