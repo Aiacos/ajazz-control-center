@@ -498,6 +498,15 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                     // Covers FailedToStart (emits finished(-2, CrashExit)) and abnormal exits.
                     if (status == QProcess::CrashExit || exitCode != 0) {
                         onProcessFailed(pluginId);
+                    } else {
+                        // Clean exit (code 0). Plugins are long-running daemons, so
+                        // even a clean exit deserves a trace: a child that exits 0
+                        // before registering over the WebSocket was previously
+                        // INDISTINGUISHABLE from "never spawned" in the logs
+                        // (observed with a comment-only dummy CodePath, 2026-06-09).
+                        qWarning("PluginManager: plugin '%s' exited cleanly (code 0) — "
+                                 "it will receive no events until rediscover/app restart",
+                                 qPrintable(pluginId));
                     }
                 });
 
@@ -615,6 +624,15 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                 [this, pluginId](int exitCode, QProcess::ExitStatus status) {
                     if (status == QProcess::CrashExit || exitCode != 0) {
                         onProcessFailed(pluginId);
+                    } else {
+                        // Clean exit (code 0). Plugins are long-running daemons, so
+                        // even a clean exit deserves a trace: a child that exits 0
+                        // before registering over the WebSocket was previously
+                        // INDISTINGUISHABLE from "never spawned" in the logs
+                        // (observed with a comment-only dummy CodePath, 2026-06-09).
+                        qWarning("PluginManager: plugin '%s' exited cleanly (code 0) — "
+                                 "it will receive no events until rediscover/app restart",
+                                 qPrintable(pluginId));
                     }
                 });
 
