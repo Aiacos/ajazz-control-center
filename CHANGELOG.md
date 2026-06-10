@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Built-in dial layouts (`$X1/$A0/$A1/$B1/$B2/$C1`) + `setFeedback`/`setFeedbackLayout`**
+  (2026-06-10): the encoder feedback surface (the touch-strip zone above each dial) now renders
+  the Stream Deck SDK built-in layouts — title/icon/value items, plain + gradient progress bars,
+  the `$C1` dual-bar mixer row — driven by the manifest `Encoder.layout`/`Encoder.Icon` at mount
+  and by `setFeedback` (item merge) / `setFeedbackLayout` (runtime switch) / `setText` (title
+  alias) at runtime. Replaces the long-standing "aux-surface rendering deferred to Phase 23"
+  stub. Live-verified on the AKP05E (dialRotate -> bar updates 42%->57%->72%).
 - **OpenDeck/Elgato plugin-protocol parity completion** (2026-06-09/10, verified live on the AKP05E
   against a full OpenDeck source analysis): mount-time default state-image render
   (`States[i].Image` with action-`Icon` fallback painted the moment an action lands on a key —
