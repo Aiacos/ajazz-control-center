@@ -155,6 +155,51 @@ Each platform's compiler catches things the others don't. Land all three.
 - **Release** (`.github/workflows/release.yml`): triggered by `push: tags: ['v*']` or `workflow_dispatch`. Produces `.deb` + `.rpm` + `.flatpak` +
   `.dmg` + `.msi`. The `workflow_dispatch` trigger lets you re-test
   without retagging.
+- **CodeQL** (`.github/workflows/codeql.yml`): the *analysis* job and the
+  PR *gate* are separate checks — the gate fails on new high-severity
+  alerts even when the 14-minute analyze leg is green. Result filtering
+  lives in `.github/codeql/codeql-config.yml` (`paths-ignore: build` —
+  FetchContent'd deps and moc autogen are compiled into the database, so
+  they must be filtered at results level, not extraction).
+  **`cpp/unused-static-function` findings are presumed extractor
+  call-graph FPs here**: in 2026-06-10 CodeQL flagged the entire (live,
+  test-covered) `profile.cpp` writer cluster + `settingsForContext` as
+  unreachable; 12 alerts were dismissed after grep-verifying call sites.
+  Never delete "dead code" off a CodeQL unreachable finding without
+  grepping the callers first.
+- **Secret scan** (`.github/workflows/gitleaks.yml`) checks out with
+  `fetch-depth: 0`: rewording a flagged string in a later commit does NOT
+  clear the finding on the original commit. Triaged false positives go in
+  `.gitleaksignore` (fingerprint format `commit:file:rule:line`) — the
+  only deterministic fix, honoured by both the action and the pre-commit
+  hook.
+- **macOS DMG flake**: `cpack -G DragNDrop` → `hdiutil` intermittently
+  fails with "Resource busy" on hosted runners (XProtect scanning the
+  fresh mount). Both nightly.yml and release.yml wrap it in a 3-attempt
+  retry; if it fails after 3, it's a real error, not the flake.
+
+## Pre-commit / local gates (shift-left)
+
+- **`pre-commit install` installs all three hook types** (`pre-commit`,
+  `commit-msg`, `pre-push` — `default_install_hook_types`). The pre-push
+  stage runs clang-tidy on changed files via `scripts/run-clang-tidy.sh`,
+  which strips GCC ≥ 15 C++20 module-scan flags (`-fmodules-ts`,
+  `-fmodule-mapper=…`, `-fdeps-*`) from a temp copy of the compdb
+  (clang-tidy hard-errors on them) and skips files with no compdb entry
+  (headers, `*_win32.cpp` on Linux).
+- **MSVC-fatal API hook** (`scripts/check_msvc_fatal_apis.py`): bans
+  `std::getenv` / `sprintf` / `strcpy` / `strcat` / `_wgetenv` in shared
+  C++ at commit time — the MSVC C4996→`/WX` class otherwise only fails
+  the windows-2022 leg after a full build. Escape hatches: platform-named
+  files (`*linux*`, `*posix*`, `*x11*`, `*wayland*`, `*macos*`,
+  `*darwin*`, `.mm`), `NOLINT` lines, comment-only lines; the `_s`
+  variants never match.
+- **Custom local hooks are pure-Python**, not bash — `language: system`
+  bash hooks silently no-op on Windows clones without Git-Bash on PATH.
+- **Formatter hooks abort the commit when they rewrite files**
+  (clang-format / ruff-format / shfmt): re-`git add` and re-run the
+  identical commit. pre-commit also refuses to commit while
+  `.pre-commit-config.yaml` itself has unstaged changes.
 
 ## Methodology — be methodical and precise, don't grope
 
