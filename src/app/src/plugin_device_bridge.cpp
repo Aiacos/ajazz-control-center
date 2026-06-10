@@ -34,6 +34,7 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
+#include "encoder_layout_renderer.hpp"
 #include "plugin_settings_store.hpp"
 #include "sd_plugin_server.hpp"
 #include "stream_dock_control_service.hpp"
@@ -434,8 +435,9 @@ namespace {
 bool isVisualAction(QString const& event) {
     return event == QStringLiteral("setImage") || event == QStringLiteral("setTitle") ||
            event == QStringLiteral("setState") || event == QStringLiteral("setBG") ||
-           event == QStringLiteral("setFeedback") || event == QStringLiteral("setText") ||
-           event == QStringLiteral("showAlert") || event == QStringLiteral("showOk");
+           event == QStringLiteral("setFeedback") || event == QStringLiteral("setFeedbackLayout") ||
+           event == QStringLiteral("setText") || event == QStringLiteral("showAlert") ||
+           event == QStringLiteral("showOk");
 }
 
 /// Render a transient feedback glyph (Elgato showAlert/showOk) onto an 85x85
@@ -714,12 +716,31 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
                 }
             });
         }
-    } else if (event == QStringLiteral("setFeedback") || event == QStringLiteral("setText")) {
-        // Aux-surface rendering (encoder LCD strip / touch strip) deferred to Phase 23.
-        AJAZZ_LOG_INFO("plugin-bridge",
-                       "{}: aux-surface rendering deferred to Phase 23 for context '{}'",
-                       event.toStdString(),
-                       contextId.toStdString());
+    } else if (event == QStringLiteral("setFeedback")) {
+        // Merge the item bag into the per-context feedback state, then re-render
+        // the active layout (Elgato Dials guide: setFeedback updates items of
+        // the CURRENT layout; unknown keys are ignored by the renderer).
+        QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+        QJsonObject& bag = m_encoderFeedback[contextId];
+        for (auto it = payload.constBegin(); it != payload.constEnd(); ++it) {
+            bag.insert(it.key(), it.value());
+        }
+        renderEncoderFeedback(ctx);
+    } else if (event == QStringLiteral("setFeedbackLayout")) {
+        // Switch the built-in layout for this context; feedback items persist
+        // across the switch (Elgato behaviour) and re-apply on the new layout.
+        QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+        QString const layout = payload.value(QStringLiteral("layout")).toString();
+        if (!layout.isEmpty()) {
+            m_encoderLayoutOverride[contextId] = layout;
+        }
+        renderEncoderFeedback(ctx);
+    } else if (event == QStringLiteral("setText")) {
+        // AJAZZ legacy alias: treat the text as the layout's title item.
+        QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
+        m_encoderFeedback[contextId].insert(QStringLiteral("title"),
+                                            payload.value(QStringLiteral("text")));
+        renderEncoderFeedback(ctx);
     }
 }
 
@@ -883,6 +904,52 @@ void PluginDeviceBridge::setActionOwnerResolver(std::function<QString(QString co
 void PluginDeviceBridge::setActionStateMetaResolver(
     std::function<std::pair<int, bool>(QString const&)> resolver) {
     m_actionStateMetaResolver = std::move(resolver);
+}
+
+void PluginDeviceBridge::setEncoderLayoutResolver(
+    std::function<std::pair<QString, QString>(QString const&)> resolver) {
+    m_encoderLayoutResolver = std::move(resolver);
+}
+
+void PluginDeviceBridge::renderEncoderFeedback(ActionContext const& ctx) {
+    if (m_control == nullptr || ctx.controller != QStringLiteral("Encoder")) {
+        return;
+    }
+    QString const ctxId = ContextRegistry::deriveContextId(ctx);
+
+    // Layout precedence: runtime setFeedbackLayout > manifest Encoder.layout > $X1.
+    QString layoutId;
+    QString manifestIcon;
+    if (m_encoderLayoutResolver) {
+        auto const [mlayout, micon] = m_encoderLayoutResolver(ctx.actionUUID);
+        layoutId = mlayout;
+        manifestIcon = micon;
+    }
+    if (auto const it = m_encoderLayoutOverride.find(ctxId); it != m_encoderLayoutOverride.end()) {
+        layoutId = it->second;
+    }
+
+    // Feedback bag; seed the icon item from the manifest Encoder.Icon when the
+    // plugin has not pushed one (mirrors the key path's mount-time default).
+    QJsonObject fb;
+    if (auto const it = m_encoderFeedback.find(ctxId); it != m_encoderFeedback.end()) {
+        fb = it->second;
+    }
+    if (!fb.contains(QStringLiteral("icon")) && !manifestIcon.isEmpty()) {
+        fb.insert(QStringLiteral("icon"), manifestIcon);
+    }
+
+    // AKP05 strip zone is square 128x128 (hardware-pinned 2026-05-31); the
+    // renderer lays out proportionally so other geometries can be passed later.
+    QImage const img = renderEncoderLayout(layoutId, fb, QSize(128, 128));
+    try {
+        m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), img);
+    } catch (std::exception const& e) {
+        AJAZZ_LOG_WARN("plugin-bridge",
+                       "renderEncoderFeedback: assignEncoderImage threw for zone {}: {}",
+                       ctx.column,
+                       e.what());
+    }
 }
 
 void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::uint8_t keyCols) {
@@ -1355,11 +1422,27 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                                                   ContextRegistry::deriveContextId(ctx),
                                                   QString::fromStdString(action.settingsJson));
 
+            // Same newness/in-place-rebind semantics as the Keypad loop above.
+            auto const priorEnc = m_registry.byContext(ContextRegistry::deriveContextId(ctx));
+            bool const encActionChanged =
+                priorEnc.has_value() && priorEnc->actionUUID != ctx.actionUUID;
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
             if (regOpt.has_value()) {
                 ctx.stateIndex = regOpt->stateIndex;
+            }
+
+            // Mount-time dial layout render: paint the manifest layout/icon the
+            // moment the dial action lands (the plugin's setFeedback, when it
+            // comes, updates items on top). On an in-place rebind drop the old
+            // action's accumulated feedback first.
+            if (encActionChanged) {
+                m_encoderFeedback.erase(ctxId);
+                m_encoderLayoutOverride.erase(ctxId);
+            }
+            if (!priorEnc.has_value() || encActionChanged) {
+                renderEncoderFeedback(ctx);
             }
 
             m_server->sendEvent(

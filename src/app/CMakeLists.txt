@@ -182,6 +182,9 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # Gated on WebSockets because it will compose SdPluginServer (Phase 17) in 19-02/19-03. Pure
     # in-tree C++/Qt6; no new external packages (Package Legitimacy Gate N/A per 19-RESEARCH).
     target_sources(ajazz-control-center PRIVATE src/plugin_device_bridge.cpp)
+    # Built-in dial layout renderer ($X1/$A0/$A1/$B1/$B2/$C1) — pure QImage composition consumed by
+    # the bridge's setFeedback/setFeedbackLayout path.
+    target_sources(ajazz-control-center PRIVATE src/encoder_layout_renderer.cpp)
     # Phase 21 Plan 21-02 (PLUGIN-12): obs-websocket v5 client for the obsstudio built-in action.
     # Auth default-on (LOCKED anti-feature T-21-obsauth): refuses Identify when OBS demands auth but
     # no password is configured. App-tier QJsonDocument (COD-031: no nlohmann). 21-03 wires the

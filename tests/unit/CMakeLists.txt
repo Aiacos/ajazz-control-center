@@ -702,7 +702,9 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     target_sources(
         ajazz_unit_tests
         PRIVATE test_plugin_device_bridge.cpp
+                test_encoder_layout_renderer.cpp
                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/encoder_layout_renderer.cpp
                 # plugin_settings_store.cpp is already linked unconditionally above (pi_bridge
                 # block, PLUGIN-22 / 29-02) — do NOT add it again here to avoid duplicate-symbol
                 # linker errors. The websocket-conditional block only adds plugin_device_bridge.cpp.

@@ -554,6 +554,15 @@ Application::Application(QObject* parent)
         return m_pluginManager ? m_pluginManager->ownerForAction(actionUuid) : QString{};
     });
 
+    // 1a-quarter. Inject the encoder layout resolver so dial actions get their
+    //     manifest layout + icon rendered on the strip zone at mount, and
+    //     setFeedback/setFeedbackLayout drive the built-in layouts at runtime.
+    m_pluginBridge->setEncoderLayoutResolver(
+        [this](QString const& actionUuid) -> std::pair<QString, QString> {
+            return m_pluginManager ? m_pluginManager->encoderLayoutInfo(actionUuid)
+                                   : std::pair<QString, QString>{};
+        });
+
     // 1a-ter. Inject the action state-metadata resolver so the bridge can apply
     //     the Elgato/OpenDeck automatic state cycle on keyUp (2-state actions
     //     advance unless DisableAutomaticStates). Same lazy null-guard pattern.

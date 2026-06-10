@@ -664,6 +664,24 @@ private:
     /// action UUID is not a dotted prefix of its plugin UUID.
     std::function<QString(QString const&)> m_actionOwnerResolver;
 
+    /// Per-encoder-context feedback state for the built-in dial layouts:
+    /// ctxId -> merged setFeedback item bag, and ctxId -> active layout id
+    /// (setFeedbackLayout overrides the manifest Encoder.layout). Cleared when
+    /// the context retires.
+    std::map<QString, QJsonObject> m_encoderFeedback;
+    std::map<QString, QString> m_encoderLayoutOverride;
+
+    /// Resolver: actionUuid -> {manifest Encoder.layout id, resolved absolute
+    /// Encoder.Icon path}. Injected from Application
+    /// (PluginManager::encoderLayoutInfo). Unset/empty -> $X1 with no icon.
+    std::function<std::pair<QString, QString>(QString const&)> m_encoderLayoutResolver;
+
+    /// Compose and paint the feedback surface for an Encoder context: active
+    /// layout (override > manifest > $X1) rendered with the merged feedback
+    /// bag (defaults: title = nothing, icon = manifest Encoder.Icon) onto the
+    /// strip zone via assignEncoderImage(column). No-op without m_control.
+    void renderEncoderFeedback(ActionContext const& ctx);
+
     /// Resolver: actionUuid -> {state count, DisableAutomaticStates}. Injected
     /// from Application (PluginManager::actionStateMeta). Drives the host-side
     /// automatic state cycle on keyUp (Elgato/OpenDeck: a 2-state action
@@ -737,6 +755,20 @@ public:
      * @param resolver  actionUuid -> {stateCount, disableAutomaticStates}.
      */
     void setActionStateMetaResolver(std::function<std::pair<int, bool>(QString const&)> resolver);
+
+    /**
+     * @brief Inject the encoder layout/icon resolver (PluginManager::encoderLayoutInfo).
+     *
+     * Enables the built-in dial layouts: a dial action's manifest
+     * `Encoder.layout` selects the initial layout ($X1 default) and
+     * `Encoder.Icon` seeds the icon item; `setFeedbackLayout` / `setFeedback`
+     * then drive the surface at runtime. When unset, dial actions render $X1
+     * with whatever the plugin pushes.
+     *
+     * @param resolver  actionUuid -> {layout id, absolute icon path} ("" allowed).
+     */
+    void
+    setEncoderLayoutResolver(std::function<std::pair<QString, QString>(QString const&)> resolver);
 };
 
 } // namespace ajazz::app

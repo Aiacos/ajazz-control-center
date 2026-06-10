@@ -929,6 +929,38 @@ QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex)
     return {};
 }
 
+std::pair<QString, QString> PluginManager::encoderLayoutInfo(QString const& actionUuid) const {
+    for (auto const& [key, live] : m_live) {
+        for (PluginAction const& action : live.manifest.actions) {
+            if (action.uuid != actionUuid) {
+                continue;
+            }
+            QString iconAbs;
+            // Prefer the Encoder.Icon, else the action icon (Elgato fallback).
+            QString const rel =
+                action.encoderBlock.icon.isEmpty() ? action.icon : action.encoderBlock.icon;
+            if (!rel.isEmpty()) {
+                QDir const base(live.manifest.sourceDir);
+                QString const asDeclared = base.absoluteFilePath(rel);
+                if (QFileInfo::exists(asDeclared)) {
+                    iconAbs = asDeclared;
+                } else {
+                    for (auto const* ext :
+                         {".png", "@2x.png", ".jpg", ".jpeg", ".svg", ".gif", ".bmp"}) {
+                        QString const probe = asDeclared + QLatin1String(ext);
+                        if (QFileInfo::exists(probe)) {
+                            iconAbs = probe;
+                            break;
+                        }
+                    }
+                }
+            }
+            return {action.encoderBlock.layout, iconAbs};
+        }
+    }
+    return {{}, {}};
+}
+
 std::pair<int, bool> PluginManager::actionStateMeta(QString const& actionUuid) const {
     for (auto const& [key, live] : m_live) {
         for (PluginAction const& action : live.manifest.actions) {

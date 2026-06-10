@@ -373,6 +373,18 @@ public:
     [[nodiscard]] std::pair<int, bool> actionStateMeta(QString const& actionUuid) const;
 
     /**
+     * @brief Dial layout metadata for an action: {Encoder.layout id, icon path}.
+     *
+     * The icon resolves Encoder.Icon (falling back to the action Icon) against
+     * the plugin dir, probing the usual Elgato extension-less variants. Feeds
+     * the bridge's built-in dial layout renderer at mount time.
+     *
+     * @param actionUuid  Dotted action id.
+     * @return            {layout id ("" -> $X1 default), absolute icon path or ""}.
+     */
+    [[nodiscard]] std::pair<QString, QString> encoderLayoutInfo(QString const& actionUuid) const;
+
+    /**
      * @brief Resolve the owning plugin UUID for an action UUID (stored-owner map).
      *
      * Scans the live plugins for the manifest action whose `uuid` matches

@@ -214,6 +214,8 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     # already in ACC_QML_MODULE_SOURCES for AUTOMOC; the .cpp must match (pre-existing latent issue
     # fixed in Phase 26 Plan 26-05).
     target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_device_bridge.cpp")
+    # plugin_device_bridge.cpp composes the dial layout renderer (setFeedback path).
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/encoder_layout_renderer.cpp")
     # plugin_device_bridge.cpp calls plugin_settings_store::{read,write}{Global,Context}; its
     # definitions live in plugin_settings_store.cpp. Only needed when the bridge is compiled (i.e.
     # under WebSockets), so it is scoped to this block.
