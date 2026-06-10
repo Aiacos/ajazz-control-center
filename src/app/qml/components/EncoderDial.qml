@@ -63,7 +63,12 @@ ItemDelegate {
         border.width: dropArea.dragRejected
             ? Theme.focusRingWidth
             : (root.activeFocus || root.selected ? Theme.focusRingWidth : 2)
-        border.color: dropArea.dragRejected ? Theme.errorAccent : Theme.accent
+        // UI audit 2026-06-09: reserve the accent ring for focus/selection
+        // (OpenDeck-style neutral idle outline); always-red dials outweighed
+        // the content.
+        border.color: dropArea.dragRejected
+            ? Theme.errorAccent
+            : (root.activeFocus || root.selected ? Theme.accent : Theme.borderSubtle)
     }
 
     contentItem: Item {

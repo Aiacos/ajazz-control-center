@@ -125,8 +125,10 @@ ItemDelegate {
                 text: root.label !== ""
                     ? root.label
                     : (root.iconSource.toString() === "" ? (root.index + 1).toString() : "")
-                color: Theme.fgPrimary
-                font.pixelSize: root.label !== "" ? Theme.fontSm : Theme.fontLg
+                // UI audit 2026-06-09: the empty-key index is an orientation
+                // hint, not content — mute it (labels keep full contrast).
+                color: root.label !== "" ? Theme.fgPrimary : Theme.fgMuted
+                font.pixelSize: root.label !== "" ? Theme.fontSm : Theme.fontMd
                 font.weight: root.label !== "" ? Font.DemiBold : Font.Normal
                 horizontalAlignment: Text.AlignHCenter
                 verticalAlignment: root.label !== "" ? Text.AlignBottom : Text.AlignVCenter
