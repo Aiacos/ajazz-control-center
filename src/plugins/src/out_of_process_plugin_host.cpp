@@ -40,6 +40,7 @@
 
 #include "ajazz/core/logger.hpp"
 #include "ajazz/plugins/sandbox.hpp"
+#include "manifest_path_guard.hpp"
 #include "wire_protocol.hpp"
 
 #include <cerrno>
@@ -145,6 +146,10 @@ struct OutOfProcessPluginHost::Impl {
     std::string pythonVersion;
     std::mutex mutex;
     bool aliveCached{false};
+    /// Canonicalised roots registered via addSearchPath(); the only
+    /// places a child-reported manifest_path may resolve into (see
+    /// manifest_path_guard.hpp).
+    std::vector<std::filesystem::path> searchRoots;
 
     void cleanupFds() noexcept {
         if (writeFd >= 0) {
@@ -419,11 +424,20 @@ std::vector<PluginInfo> OutOfProcessPluginHost::plugins() {
             // `signed_=false, publisher=""` — the unsigned-plugin contract.
             auto const manifestPath = findStringField(result.line, "manifest_path");
             if (!manifestPath.empty() && m_impl->config.manifestVerifier.has_value()) {
-                auto const verdict = verifyManifest(manifestPath, *m_impl->config.manifestVerifier);
-                info.signed_ = verdict.valid;
-                info.publisher = verdict.publisherName.empty() && verdict.valid
-                                     ? "self-signed"
-                                     : verdict.publisherName;
+                // SEC (CodeQL cpp/path-injection): the child is less trusted
+                // than the parent, so only open a manifest that resolves
+                // inside a search root we registered ourselves; anything
+                // else falls through to the unsigned contract.
+                auto const contained =
+                    detail::containedManifestPath(manifestPath, m_impl->searchRoots);
+                if (contained.has_value()) {
+                    auto const verdict =
+                        verifyManifest(*contained, *m_impl->config.manifestVerifier);
+                    info.signed_ = verdict.valid;
+                    info.publisher = verdict.publisherName.empty() && verdict.valid
+                                         ? "self-signed"
+                                         : verdict.publisherName;
+                }
             }
             out.push_back(std::move(info));
             continue;
@@ -457,6 +471,9 @@ void OutOfProcessPluginHost::addSearchPath(std::filesystem::path const& path) {
         throw std::runtime_error("plugin-host: unexpected event in response to add_search_path: " +
                                  result.line);
     }
+    // Remember the canonical root: list_plugins only trusts a
+    // child-reported manifest_path that resolves under one of these.
+    m_impl->searchRoots.push_back(detail::recordSearchRoot(path));
 }
 
 std::size_t OutOfProcessPluginHost::loadAll() {
