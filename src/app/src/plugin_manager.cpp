@@ -345,6 +345,17 @@ void tieChildToParentLifetime(QProcess& proc) {
 #endif
 }
 
+/// Trace a plugin child's CLEAN exit (code 0). Plugins are long-running
+/// daemons, so even a clean exit deserves a log line: a child that exits 0
+/// before registering over the WebSocket was previously INDISTINGUISHABLE
+/// from "never spawned" (observed with a comment-only dummy CodePath,
+/// 2026-06-09). Shared by the node and native finished-handlers.
+void logCleanPluginExit(QString const& pluginId) {
+    qWarning("PluginManager: plugin '%s' exited cleanly (code 0) — "
+             "it will receive no events until rediscover/app restart",
+             qPrintable(pluginId));
+}
+
 } // namespace
 
 void PluginManager::spawn(PluginManifest const& manifest) {
@@ -488,14 +499,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                     if (status == QProcess::CrashExit || exitCode != 0) {
                         onProcessFailed(pluginId);
                     } else {
-                        // Clean exit (code 0). Plugins are long-running daemons, so
-                        // even a clean exit deserves a trace: a child that exits 0
-                        // before registering over the WebSocket was previously
-                        // INDISTINGUISHABLE from "never spawned" in the logs
-                        // (observed with a comment-only dummy CodePath, 2026-06-09).
-                        qWarning("PluginManager: plugin '%s' exited cleanly (code 0) — "
-                                 "it will receive no events until rediscover/app restart",
-                                 qPrintable(pluginId));
+                        logCleanPluginExit(pluginId);
                     }
                 });
 
@@ -614,14 +618,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                     if (status == QProcess::CrashExit || exitCode != 0) {
                         onProcessFailed(pluginId);
                     } else {
-                        // Clean exit (code 0). Plugins are long-running daemons, so
-                        // even a clean exit deserves a trace: a child that exits 0
-                        // before registering over the WebSocket was previously
-                        // INDISTINGUISHABLE from "never spawned" in the logs
-                        // (observed with a comment-only dummy CodePath, 2026-06-09).
-                        qWarning("PluginManager: plugin '%s' exited cleanly (code 0) — "
-                                 "it will receive no events until rediscover/app restart",
-                                 qPrintable(pluginId));
+                        logCleanPluginExit(pluginId);
                     }
                 });
 

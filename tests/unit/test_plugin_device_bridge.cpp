@@ -2342,4 +2342,96 @@ TEST_CASE("PluginDeviceBridge populateContexts paints the manifest default state
     CHECK(fake->keyImages.size() == paintsAfterMount);
 }
 
+TEST_CASE("PluginDeviceBridge populateContexts treats an in-place rebind as a new context",
+          "[plugin-device-bridge][e2e][lifecycle][default-image]") {
+    ensureQCoreApp();
+
+    // Fake device + control service (records every key paint).
+    auto fake = makeE2eFake();
+    ajazz::app::StreamDockControlService control(
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, &control, nullptr);
+
+    // Action A declares a state image; action B declares none.
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const imgPath = tmp.filePath(QStringLiteral("a.png"));
+    {
+        QImage img(8, 8, QImage::Format_ARGB32);
+        img.fill(Qt::blue);
+        REQUIRE(img.save(imgPath));
+    }
+    bridge->setStateImageResolver([imgPath](QString const& uuid, int) -> QString {
+        return uuid == QStringLiteral("com.test.plug.actionA") ? imgPath : QString{};
+    });
+
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-rebind";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.actionA";
+    binding.onPress.push_back(act);
+    prof.keys[2] = binding; // {row:0, col:2} = wire key 3
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(400);
+
+    // Mount of action A registered the context and advanced its state via setState.
+    auto const ctxA =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 2);
+    REQUIRE(ctxA.has_value());
+    CHECK(ctxA->actionUUID == QStringLiteral("com.test.plug.actionA"));
+    QString const ctxId = ajazz::app::ContextRegistry::deriveContextId(*ctxA);
+    REQUIRE(bridge->registry().setState(ctxId, 1)); // simulate a live state change
+
+    // IN-PLACE REBIND: same key, different action.
+    prof.keys[2].onPress[0].id = "com.test.plug.actionB";
+    auto const paintsBefore = fake->keyImages.size();
+    bridge->populateContextsForActivePage(QStringLiteral("akp05e"));
+    pump19(400);
+
+    auto const ctxB =
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Keypad"), 0, 2);
+    REQUIRE(ctxB.has_value());
+    // The context now belongs to action B...
+    CHECK(ctxB->actionUUID == QStringLiteral("com.test.plug.actionB"));
+    // ...the OLD action's plugin was told its instance went away (OpenDeck
+    // move_instance parity; without it the old plugin streams forever)...
+    CHECK(receivedEventNames(msgSpy).contains(QStringLiteral("willDisappear")));
+    // ...and did NOT inherit action A's stateIndex (review finding 2026-06-10).
+    CHECK(ctxB->stateIndex == 0);
+
+    // The rebind cleared the old action's frame: the control service received a
+    // clear (black frame) for wire key 3 even though action B has no image.
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        if (fake->keyImages.size() > paintsBefore) {
+            break;
+        }
+    }
+    REQUIRE(fake->keyImages.size() > paintsBefore);
+    bool clearedKey3 = false;
+    for (std::size_t i = paintsBefore; i < fake->keyImages.size(); ++i) {
+        if (fake->keyImages[i].index == 3) {
+            clearedKey3 = true;
+        }
+    }
+    CHECK(clearedKey3);
+}
+
 #endif // AJAZZ_HAVE_WEBSOCKETS (Phase 19-02 + 19-03)

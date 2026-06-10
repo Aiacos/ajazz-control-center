@@ -85,8 +85,12 @@ QString ContextRegistry::registerContext(ActionContext const& ctx) {
     // Idempotent re-registration (e.g. page re-activation) must NOT wipe the
     // current action state: the context id excludes stateIndex, so preserve the
     // prior stateIndex if this context already exists (setState tracks it).
+    // ONLY for the same action, though — the context id is coordinate-based, so
+    // an in-place rebind (a different action dropped on the same key) reuses the
+    // id; inheriting the OLD action's stateIndex would start the new action in
+    // an arbitrary state (review finding 2026-06-10).
     auto const it = m_byContext.constFind(ctxId);
-    if (it != m_byContext.constEnd()) {
+    if (it != m_byContext.constEnd() && it->actionUUID == stored.actionUUID) {
         stored.stateIndex = it->stateIndex;
     }
     m_byContext.insert(ctxId, stored);
@@ -971,6 +975,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         // rendered, and a titleParametersDidChange follows. Plugins that manage
         // state themselves (setState) either declare one state or set the
         // disable flag — both leave this path inert.
+        bool cycled = false;
         if (isRelease && m_actionStateMetaResolver) {
             auto const [stateCount, disableAuto] = m_actionStateMetaResolver(ctx.actionUUID);
             if (stateCount == 2 && !disableAuto) {
@@ -979,6 +984,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
                 if (m_registry.setState(ctxId, nextState)) {
                     ctx.stateIndex = nextState;
                     paintDeclaredStateImage(ctx, kDefaultKeyCols);
+                    cycled = true;
                 }
             }
         }
@@ -987,16 +993,15 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         // Full Elgato envelope: top-level action/context/device + GenericInstancePayload.
         // sendEvent returns false safely if socket is closed (T-19-sock).
         m_server->sendEvent(ctx.pluginUuid, eventEnvelope(eventName, ctx, instancePayload(ctx)));
-        if (isRelease && m_actionStateMetaResolver) {
-            // State may have just cycled — let the plugin observe the new title
+        if (cycled) {
+            // The state just cycled — let the plugin observe the new title
             // parameters/state, mirroring OpenDeck's post-cycle notification.
-            auto const [stateCount, disableAuto] = m_actionStateMetaResolver(ctx.actionUUID);
-            if (stateCount == 2 && !disableAuto) {
-                m_server->sendEvent(ctx.pluginUuid,
-                                    eventEnvelope(QStringLiteral("titleParametersDidChange"),
-                                                  ctx,
-                                                  titlePayload(ctx)));
-            }
+            // (Single source of truth: no second resolver call, and no
+            // notification when setState did not actually advance — review
+            // finding 2026-06-10.)
+            m_server->sendEvent(
+                ctx.pluginUuid,
+                eventEnvelope(QStringLiteral("titleParametersDidChange"), ctx, titlePayload(ctx)));
         }
         break;
     }
@@ -1262,9 +1267,14 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
 
             // Track newness BEFORE registering: a brand-new context gets the
             // manifest default render below; an idempotent re-registration must
-            // NOT clobber an image the plugin may have pushed since.
-            bool const isNewContext =
-                !m_registry.byContext(ContextRegistry::deriveContextId(ctx)).has_value();
+            // NOT clobber an image the plugin may have pushed since. An IN-PLACE
+            // REBIND (different action, same key — the context id is coordinate-
+            // based) counts as new too: without this, the new action gets no
+            // default render and the OLD action's last frame lingers on the key
+            // (review finding 2026-06-10).
+            auto const prior = m_registry.byContext(ContextRegistry::deriveContextId(ctx));
+            bool const actionChanged = prior.has_value() && prior->actionUUID != ctx.actionUUID;
+            bool const isNewContext = !prior.has_value() || actionChanged;
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);
             auto const regOpt = m_registry.byContext(ctxId);
@@ -1281,6 +1291,24 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             // shows its icon instead of a blank key. The plugin's own
             // setImage/setTitle, when it comes, overwrites this base.
             if (isNewContext) {
+                if (actionChanged) {
+                    // The OLD action's instance is going away. Tell its plugin
+                    // (OpenDeck move_instance parity — without this the old
+                    // plugin keeps streaming setTitle/setImage for a context it
+                    // no longer owns), drop its stale title overlay (otherwise
+                    // reapplyTitle() re-paints e.g. "CPU 11%" over the NEW
+                    // action's default image), and clear the lingering frame
+                    // (the new action's default paint below may be a legitimate
+                    // no-op when it declares no image).
+                    m_server->sendEvent(prior->pluginUuid,
+                                        eventEnvelope(QStringLiteral("willDisappear"),
+                                                      *prior,
+                                                      instancePayload(*prior)));
+                    m_titleByKey.erase(keyIdx1);
+                    if (m_control != nullptr) {
+                        m_control->clearKeyImage(keyIdx1);
+                    }
+                }
                 paintDeclaredStateImage(ctx, kDefaultKeyCols);
             }
 
