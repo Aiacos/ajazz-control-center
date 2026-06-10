@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# CodeQL result filters. For compiled languages the extractor still sees
+# everything that was compiled; `paths-ignore` drops alerts whose location
+# falls inside these globs so vendored / generated code never gates a PR.
+paths-ignore:
+  # The whole CMake build tree: FetchContent'd third-party sources
+  # (_deps/nlohmann_json-src/**) and moc/uic/rcc generated TUs
+  # (**/*_autogen/**) both live under here.
+  - build

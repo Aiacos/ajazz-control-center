@@ -46,6 +46,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: +security-and-quality
+          # Result filter only (vendored _deps + moc autogen under build/);
+          # see the config for rationale.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Install Linux build dependencies
         if: matrix.language == 'cpp'
