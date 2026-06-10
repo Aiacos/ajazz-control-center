@@ -173,6 +173,31 @@ TEST_CASE("FileSink appends records in the legacy format", "[logsinks][file]") {
     std::filesystem::remove(path);
 }
 
+#if !defined(_WIN32)
+TEST_CASE("FileSink creates the log file owner-only (0600)", "[logsinks][file]") {
+    using namespace ajazz::core;
+
+    auto const path = std::filesystem::temp_directory_path() / "ajazz_test_log_sink_mode.log";
+    std::filesystem::remove(path);
+
+    {
+        FileSink sink(path.string());
+        REQUIRE(sink.isOpen());
+    }
+
+    // The sink must pin the create mode itself (0600), independent of the
+    // process umask: world/group-writable logs are the CodeQL
+    // cpp/world-writable-file-creation finding this guards against.
+    auto const perms = std::filesystem::status(path).permissions();
+    REQUIRE((perms & std::filesystem::perms::owner_read) != std::filesystem::perms::none);
+    REQUIRE((perms & std::filesystem::perms::owner_write) != std::filesystem::perms::none);
+    REQUIRE((perms & (std::filesystem::perms::group_all | std::filesystem::perms::others_all)) ==
+            std::filesystem::perms::none);
+
+    std::filesystem::remove(path);
+}
+#endif
+
 TEST_CASE("FileSink degrades to a silent no-op on an unopenable path", "[logsinks][file]") {
     using namespace ajazz::core;
 

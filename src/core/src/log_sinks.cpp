@@ -15,6 +15,12 @@
 #include <cstdio>
 #include <utility>
 
+#if !defined(_MSC_VER)
+#include <fcntl.h>    // open, O_*
+#include <sys/stat.h> // S_IRUSR, S_IWUSR
+#include <unistd.h>   // close
+#endif
+
 namespace ajazz::core {
 namespace {
 
@@ -116,9 +122,18 @@ FileSink::FileSink(std::string path) : path_(std::move(path)) {
         file_ = nullptr;
     }
 #else
-    // POSIX: keep the "e" (O_CLOEXEC) flag so the log fd is not inherited by the
-    // forked/bwrap'd plugin host child.
-    file_ = std::fopen(path_.c_str(), "ae");
+    // POSIX: open(2) instead of fopen(3) so the create mode is explicit.
+    // fopen creates with 0666 & ~umask, which goes world-writable under a
+    // permissive umask (CodeQL cpp/world-writable-file-creation); logs can
+    // carry device serials and plugin paths, so pin them to owner-only 0600.
+    // O_CLOEXEC keeps the log fd out of the forked/bwrap'd plugin host child
+    // (same intent as the glibc-only "e" fopen flag this replaces).
+    int const fd =
+        ::open(path_.c_str(), O_WRONLY | O_APPEND | O_CREAT | O_CLOEXEC, S_IRUSR | S_IWUSR);
+    file_ = fd >= 0 ? ::fdopen(fd, "a") : nullptr;
+    if (fd >= 0 && file_ == nullptr) {
+        ::close(fd); // fdopen failed (OOM); don't leak the descriptor.
+    }
 #endif
 }
 
