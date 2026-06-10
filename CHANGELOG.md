@@ -6,6 +6,49 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **OpenDeck/Elgato plugin-protocol parity completion** (2026-06-09/10, verified live on the AKP05E
+  against a full OpenDeck source analysis): mount-time default state-image render
+  (`States[i].Image` with action-`Icon` fallback painted the moment an action lands on a key —
+  a plugin that never pushes `setImage`, e.g. `com.jk.weather`, now shows its icon instead of a
+  blank key); host-side **automatic state cycle** for 2-state actions on `keyUp` (honours
+  `DisableAutomaticStates`, paints the new state image, the `keyUp` envelope carries the new
+  state, `titleParametersDidChange` follows — also after inbound `setState`); manifest-level
+  `PropertyInspectorPath` now backfills actions that declare none (Elgato default-PI semantics).
+- `plugin.installFromCatalog {uuid}` debug RPC driving the PluginStore tile install from the
+  debug channel.
+
+### Fixed
+
+- **Plugin children no longer outlive the host** (`PR_SET_PDEATHSIG` on both spawn sites — the
+  graceful exitApp→terminate→kill protocol lives in the destructor and never ran on
+  SIGTERM/SIGKILL; 11 orphaned `node` processes had accumulated across killed sessions). A
+  clean exit (code 0) of a plugin child is now logged instead of being indistinguishable from
+  "never spawned".
+- **Action-picker gate unified with the spawn gate**: `installedActions()` compared
+  `Software.MinimumVersion` against the real app version (0.1.x) instead of the emulated
+  Stream Deck version (6.9), hiding actions of plugins that were running (observed live with
+  Weather); it also now mirrors the spawn step's effective-CodePath check so Windows-native
+  bundles don't surface bindable-but-dead actions on Linux.
+- **In-place rebind** (a different action dropped on the same key) now sends `willDisappear`
+  to the old plugin, clears the lingering frame + stale title overlay, paints the new action's
+  default image, and no longer inherits the old action's state index.
+- Canvas live-render mirror survives profile-model rebuilds (one-shot renders such as the
+  mount-time default icon vanished from the editor while staying on the device).
+- CI: `qtwayland` removed from `install-qt-action` modules (the 2026-06 Qt online-repo
+  restructure folded it into the base desktop install; requesting the old module name
+  hard-failed all three platform legs); first cross-platform exposure of the v2.0 phases fixed
+  three platform-specific failures (missing `override` under Apple Clang `-Werror`; exit-time
+  `QCoreApplication` destructor SEGFAULT on Qt 6.8.3; a `processEvents`-based test pump that
+  never actually waited on the windows-2022 runner).
+
+### Changed
+
+- UI palette polish: update banner re-skinned to the dark in-palette layer (was the only blue
+  element in the dark+red scheme), encoder dial rings reserve the accent for focus/selection,
+  empty-key index numbers muted.
+
 ## [0.1.1] - 2026-06-04
 
 ### Fixed

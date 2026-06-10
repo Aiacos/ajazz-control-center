@@ -4,7 +4,7 @@ milestone: v2.0
 milestone_name: Modular Plugin & Binding System
 status: Awaiting next milestone
 stopped_at: "Completed 33-02-PLAN.md (PI-02 thin-UI: piPanelLoader/piWebView/openPiButton/closePiButton objectNames + open/close SecondaryButton affordances on Inspector.qml/PIWebView.qml; QML-only, zero C++ -- loadInspector/closeInspector already Q_INVOKABLE; PI-01+PI-02 marked complete, PI-03 partial pending the real-PI human-verify in 33-03; 728/728 + 17/17 qml green; live debug-channel pass for criteria 1/2/3 is the orchestrator's consolidated step, exact ajazz-debug commands in 33-02-SUMMARY)"
-last_updated: '2026-06-09T04:48:40.635Z'
+last_updated: '2026-06-10T10:30:00.000Z'
 last_activity: 2026-06-09 — Milestone v2.0 completed and archived
 progress:
   total_phases: 6
@@ -28,10 +28,18 @@ silently leaking host state into plugin children.
 
 ## Current Position
 
-Phase: Milestone v2.0 complete
+Phase: Milestone v2.0 complete (inter-milestone hardening, 2026-06-09/10)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-06-09 — Milestone v2.0 completed and archived
+Status: Awaiting next milestone — next: Stream Deck + (Elgato 0x0FD9:0x0084) device support (/gsd:new-milestone)
+Last activity: 2026-06-10 — Post-milestone hardening pushed + PR #80 CI green-up: OpenDeck-parity
+completion (mount-time default state image, keyUp auto state cycle, manifest-level PI fallback,
+in-place-rebind willDisappear/clear), PR_SET_PDEATHSIG child lifetime, gate unification,
+plugin.installFromCatalog RPC, UI palette polish; CI fixes (qtwayland module folded into Qt base
+install; override markers for Apple Clang; exit-time QCoreApplication SEGFAULT on Qt 6.8.3;
+deadline-loop test pump for windows-2022). 794/794 + 17/17 qml. Incoming milestone brief: native
+Elgato Stream Deck + support integrated into the existing app (HID layer via sidecar, touch strip
+partial updates, flick page-swipe, encoder stacks, $X1/$A0..$C1 setFeedback layouts) — spec
+received 2026-06-10, to be formalised via /gsd:new-milestone.
 
 ### Progress bar
 
