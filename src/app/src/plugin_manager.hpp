@@ -179,7 +179,7 @@ public:
      *
      * @return Vector of validated, runnable PluginManifest objects.
      */
-    [[nodiscard]] std::vector<PluginManifest> discover();
+    [[nodiscard]] std::vector<PluginManifest> discover() override;
 
     /**
      * @brief Spawn the plugin described by @p manifest.
@@ -193,7 +193,7 @@ public:
      *
      * @param manifest  Validated, runnable manifest from `discover()`.
      */
-    void spawn(PluginManifest const& manifest);
+    void spawn(PluginManifest const& manifest) override;
 
     /**
      * @brief Re-scan the plugins directory and spawn ONLY newly-added plugins.
@@ -258,7 +258,7 @@ public:
      *
      * Source: akp_plugin_sdk.md §3 shutdown protocol + Pitfall 5.
      */
-    void shutdown();
+    void shutdown() override;
 
     /**
      * @brief Disable a plugin and surface the reason.

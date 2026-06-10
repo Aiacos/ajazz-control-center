@@ -34,11 +34,17 @@ using namespace ajazz::app;
 namespace {
 
 void ensureQCoreApp() {
+    // Pitfall 5: LEAK the QCoreApplication (never destroyed — mirrors
+    // test_plugin_device_bridge.cpp / test_sd_plugin_server.cpp). The previous
+    // function-local `static QCoreApplication` ran its destructor at exit,
+    // racing Qt's other exit-time globals: deterministic SEGFAULT *after*
+    // "All tests passed" on the ubuntu-24.04 leg (Qt 6.8.3); Qt 6.11 locally
+    // happened to survive the teardown order (2026-06-10).
     if (QCoreApplication::instance() == nullptr) {
         static int argc = 1;
         static char arg0[] = "app_lifecycle_events";
         static char* argv[] = {arg0, nullptr};
-        static QCoreApplication app(argc, argv);
+        new QCoreApplication(argc, argv); // deliberately leaked
     }
 }
 

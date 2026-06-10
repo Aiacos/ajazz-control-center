@@ -27,6 +27,7 @@
 #include "sd_plugin_server.hpp"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -52,8 +53,16 @@ QCoreApplication* ensureQCoreApp() {
 }
 
 void pump(int ms = 300) {
-    QCoreApplication::processEvents(QEventLoop::AllEvents, ms);
-    QCoreApplication::processEvents(QEventLoop::AllEvents, ms);
+    // Deadline loop (mirrors pump19 in test_plugin_device_bridge.cpp):
+    // processEvents(AllEvents, ms) returns IMMEDIATELY when the queue is
+    // momentarily empty, so the old two-pass form waited ~0ms on a slow
+    // runner and the loopback WebSocket frame never arrived — flaky on the
+    // windows-2022 leg (first Windows exposure of the Phase 34 EVENT-02
+    // suite, 2026-06-10).
+    auto const until = QDateTime::currentMSecsSinceEpoch() + ms;
+    while (QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+    }
 }
 
 bool waitForSpy(QSignalSpy& spy, int timeout_ms = 3000) {
