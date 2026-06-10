@@ -157,8 +157,22 @@ jobs:
         run: cmake --build build/macos-release
       - name: Package (DMG + TGZ)
         working-directory: build/macos-release
+        # hdiutil (driving cpack -G DragNDrop) intermittently fails with
+        # "Resource busy" on hosted macOS runners (XProtect scans the fresh
+        # mount; well-known runner-image flake). Retry up to 3 times with a
+        # short pause before declaring the nightly dead.
         run: |
-          cpack -G DragNDrop
+          for attempt in 1 2 3; do
+            if cpack -G DragNDrop; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::cpack -G DragNDrop failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::cpack -G DragNDrop attempt ${attempt} failed (hdiutil flake?), retrying in 10s"
+            sleep 10
+          done
           cpack -G TGZ
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:

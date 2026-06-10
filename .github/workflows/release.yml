@@ -300,8 +300,20 @@ jobs:
 
       - name: Package (DMG + TGZ)
         working-directory: build/macos-release
+        # Same hdiutil "Resource busy" retry as nightly.yml — see the
+        # comment there. A release run is the worst place to eat the flake.
         run: |
-          cpack -G DragNDrop
+          for attempt in 1 2 3; do
+            if cpack -G DragNDrop; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "::error::cpack -G DragNDrop failed after 3 attempts"
+              exit 1
+            fi
+            echo "::warning::cpack -G DragNDrop attempt ${attempt} failed (hdiutil flake?), retrying in 10s"
+            sleep 10
+          done
           cpack -G TGZ
 
       - name: Notarize + staple DMG
