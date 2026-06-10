@@ -33,6 +33,16 @@ if [[ ${#files[@]} -eq 0 ]]; then
     exit 0
 fi
 
+# Build-time generated headers (qtwaylandscanner: qwayland-*.h +
+# *-client-protocol.h) don't exist on a configured-but-never-built tree and
+# clang-tidy hard-errors on their includes. Generate just the scanner
+# outputs first; no-op when the wayland backend isn't configured.
+if command -v ninja >/dev/null 2>&1 && [[ -f ${BUILD_DIR}/build.ninja ]]; then
+    ninja -C "$BUILD_DIR" -t targets all 2>/dev/null |
+        awk -F': ' '/(qwayland-[^:]*\.h|client-protocol\.h):/ {print $1}' |
+        xargs -r ninja -C "$BUILD_DIR" >/dev/null
+fi
+
 # GCC >= 15 writes C++20 module-scanning flags (-fmodules-ts,
 # -fmodule-mapper=..., -fdeps-format=p1689r5, -fdeps-file=..., -fdeps-target=...)
 # into compile_commands.json; clang-tidy's clang driver rejects them as

@@ -164,6 +164,20 @@ jobs:
         # so skip wiring the Rust sidecar (no cargo on this lint runner).
         run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF -DAJAZZ_BUILD_SIDECAR=OFF
 
+      - name: Generate build-time headers needed for analysis
+        # qtwaylandscanner outputs (qwayland-*.h + *-client-protocol.h, the
+        # includes of active_window_watcher_wayland.cpp) are produced at
+        # BUILD time, but this job only configures — clang-tidy hard-errors
+        # with "file not found" on them. Exposed when the wayland system
+        # deps were added to this job: the TU only enters
+        # compile_commands.json once Qt6::WaylandClient is found. Build just
+        # the scanner outputs (seconds, not a full compile). xargs -r keeps
+        # this a no-op if a future configure drops the wayland backend.
+        run: |
+          ninja -C build/dev -t targets all \
+            | awk -F': ' '/(qwayland-[^:]*\.h|client-protocol\.h):/ {print $1}' \
+            | xargs -r ninja -C build/dev
+
       - name: Run clang-tidy on every translation unit
         run: |
           if [ ! -f build/dev/compile_commands.json ]; then
