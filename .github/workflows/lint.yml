@@ -142,6 +142,7 @@ jobs:
             libusb-1.0-0-dev libhidapi-dev \
             libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
             libxcb-cursor-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols \
             clang-tidy-18
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy \
               /usr/bin/clang-tidy-18 100

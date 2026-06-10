@@ -54,7 +54,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential ninja-build cmake \
             libusb-1.0-0-dev libhidapi-dev libudev-dev \
-            libgl1-mesa-dev libxkbcommon-dev
+            libgl1-mesa-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols
 
       - name: Install Qt
         if: matrix.language == 'cpp'
