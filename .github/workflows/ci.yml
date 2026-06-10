@@ -125,9 +125,13 @@ jobs:
           # tolerates its absence (find_package(... QUIET) sets
           # AJAZZ_HAVE_WEBSOCKETS=OFF), but for CI we want the .cpp
           # actually compiled so the integration is exercised.
-          # qtwayland: Qt6::WaylandClient + qtwaylandscanner for the Phase 34
-          # APROF-01 foreground-window watcher (zwlr-foreign-toplevel binding).
-          modules: qtshadertools qtwebsockets qtwayland
+          # qtwayland (Qt6::WaylandClient + qtwaylandscanner, Phase 34 APROF-01
+          # watcher) is NO LONGER a separate module: the 2026-06 restructure of
+          # the Qt online repo folded the qtwayland archive into the BASE
+          # desktop install (only qtwaylandcompositor remains an addon), and
+          # requesting the old module name now hard-fails aqtinstall on every
+          # platform ("packages ['qtwayland'] were not found").
+          modules: qtshadertools qtwebsockets
 
       # ---- Python ---------------------------------------------------------
       - name: Set up Python
@@ -244,8 +248,9 @@ jobs:
         with:
           version: 6.8.3
           cache: true
-          # qtwayland: Qt6::WaylandClient for the Phase 34 APROF-01 watcher.
-          modules: qtwebsockets qtwayland
+          # qtwayland ships in the BASE desktop install since the 2026-06 Qt
+          # repo restructure (see the build job note) — do not list it here.
+          modules: qtwebsockets
 
       # Same rationale as the `build` job: the C++ test_manifest_signer.cpp
       # cases exec `python3 sign-plugin-manifest.py` which imports
@@ -377,9 +382,13 @@ jobs:
         with:
           version: 6.8.3
           cache: true
-          # qtwayland: Qt6::WaylandClient + qtwaylandscanner for the Phase 34
-          # APROF-01 foreground-window watcher (zwlr-foreign-toplevel binding).
-          modules: qtshadertools qtwebsockets qtwayland
+          # qtwayland (Qt6::WaylandClient + qtwaylandscanner, Phase 34 APROF-01
+          # watcher) is NO LONGER a separate module: the 2026-06 restructure of
+          # the Qt online repo folded the qtwayland archive into the BASE
+          # desktop install (only qtwaylandcompositor remains an addon), and
+          # requesting the old module name now hard-fails aqtinstall on every
+          # platform ("packages ['qtwayland'] were not found").
+          modules: qtshadertools qtwebsockets
 
       # Same rationale as the `build` job: ctest runs the manifest verifier
       # tests which exec `python3 sign-plugin-manifest.py`, importing
