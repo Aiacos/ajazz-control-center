@@ -422,7 +422,18 @@ void PluginManager::spawn(PluginManifest const& manifest) {
     // CWD so a relative subpath stays inside the plugin dir. Still reject
     // traversal (".."), absolute paths (leading '/'), and backslashes
     // (Windows separators / traversal). (T-18-PATHTRAV.)
-    if (code.isEmpty() || code.startsWith(QLatin1Char('/')) || code.contains(QLatin1Char('\\')) ||
+    if (code.isEmpty()) {
+        // Not a security rejection: the manifest simply has no runnable entry
+        // point for this platform (e.g. a Windows-only native plugin shipping
+        // only CodePathWin). Distinct message so the log doesn't read as a
+        // path-traversal attempt.
+        qInfo("PluginManager: skipping plugin '%s': no code path for this platform "
+              "(CodePath/CodePath%s missing in manifest)",
+              qPrintable(manifest.name),
+              currentPlatformString() == QLatin1String("windows") ? "Win" : "Lin/Mac");
+        return;
+    }
+    if (code.startsWith(QLatin1Char('/')) || code.contains(QLatin1Char('\\')) ||
         code.contains(QLatin1String(".."))) {
         qWarning("PluginManager: rejecting plugin '%s': resolved code path '%s' is unsafe "
                  "(absolute, backslash, or traversal component)",
