@@ -30,8 +30,8 @@ Rectangle {
     property var actionList: []        ///< QVariantList: [{actionKind, actionId, label, iconSource}, ...]
 
     // ---- Appearance ------------------------------------------------------------
-    color: Theme.surfaceVariant
-    radius: Theme.radiusCard
+    color: Theme.surfaceContainer
+    radius: Theme.radiusLg
     visible: root.keyIndex >= 0 && root.actionList.length > 0
 
     // Minimum height: title row + rows + append hint.
@@ -52,16 +52,16 @@ Rectangle {
                 objectName: "keyBindingListTitle"
                 Layout.fillWidth: true
                 text: qsTr("Actions for Key %1").arg(root.keyIndex + 1)
-                font.pixelSize: Theme.fontSizeSm
+                font.pixelSize: Theme.fontSm
                 font.bold: true
-                color: Theme.textSecondary
+                color: Theme.fgMuted
                 elide: Text.ElideRight
             }
 
             Text {
                 text: qsTr("(%1)").arg(root.actionList.length)
-                font.pixelSize: Theme.fontSizeSm
-                color: Theme.textTertiary
+                font.pixelSize: Theme.fontSm
+                color: Theme.fgFaint
             }
         }
 
@@ -139,10 +139,10 @@ Rectangle {
                 // ---- Row visual -------------------------------------------
                 Rectangle {
                     anchors.fill: parent
-                    radius: Theme.radiusCard
+                    radius: Theme.radiusLg
                     color: rowDropArea.hovering
-                        ? Theme.primaryContainer
-                        : (rowMouseArea.containsMouse ? Theme.hoverOverlay : Theme.surfaceVariant)
+                        ? Theme.tileHover
+                        : (rowMouseArea.containsMouse ? Theme.bgRowHover : Theme.tile)
                     border.width: rowDropArea.hovering ? 1 : 0
                     border.color: Theme.accent
 
@@ -170,7 +170,7 @@ Rectangle {
                                 font.family: "Material Symbols Outlined"
                                 font.pixelSize: 20
                                 text: "bolt"
-                                color: Theme.textSecondary
+                                color: Theme.fgMuted
                                 visible: !parent.children[0].visible
                                         || parent.children[0].source.toString() === ""
                                 horizontalAlignment: Text.AlignHCenter
@@ -185,8 +185,8 @@ Rectangle {
                                       ? rowDelegate.modelData.label
                                       : rowDelegate.modelData.actionId)
                                 : ""
-                            font.pixelSize: Theme.fontSizeSm
-                            color: Theme.textPrimary
+                            font.pixelSize: Theme.fontSm
+                            color: Theme.fgPrimary
                             elide: Text.ElideRight
                         }
 
@@ -195,7 +195,7 @@ Rectangle {
                             font.family: "Material Symbols Outlined"
                             font.pixelSize: 18
                             text: "drag_handle"
-                            color: Theme.textSecondary
+                            color: Theme.fgMuted
                             verticalAlignment: Text.AlignVCenter
                         }
                     }
@@ -258,16 +258,16 @@ Rectangle {
             objectName: "keyBindingListAppendZone"
             Layout.fillWidth: true
             height: 36
-            radius: Theme.radiusCard
-            color: appendDropArea.containsDrag ? Theme.primaryContainer : "transparent"
+            radius: Theme.radiusLg
+            color: appendDropArea.containsDrag ? Theme.tileHover : "transparent"
             border.width: 1
-            border.color: appendDropArea.containsDrag ? Theme.accent : Theme.divider
+            border.color: appendDropArea.containsDrag ? Theme.accent : Theme.borderSubtle
 
             Text {
                 anchors.centerIn: parent
                 text: qsTr("Drop here to add action")
-                font.pixelSize: Theme.fontSizeXs
-                color: appendDropArea.containsDrag ? Theme.textPrimary : Theme.textTertiary
+                font.pixelSize: Theme.fontXs
+                color: appendDropArea.containsDrag ? Theme.fgPrimary : Theme.fgFaint
                 horizontalAlignment: Text.AlignHCenter
             }
 
