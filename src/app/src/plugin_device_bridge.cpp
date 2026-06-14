@@ -620,41 +620,24 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         return; // cross-plugin denial: no paint, no crash
     }
 
-    // Determine keyCols from the active device's displayInfo (T-19-coord).
     // Guard: if m_control is null (test shim without a real control service) we
     // cannot drive a device, so skip — but still do NOT crash.
     if (m_control == nullptr) {
         return;
     }
 
-    // Source keyCols from the active device via m_control's DeviceLookup.
-    // We need keyCols to convert 0-based Elgato coordinates to a 1-based keyIndex.
-    // The AKP05E grid is 2 rows × 5 columns; keyCols=5 is the canonical value.
-    // Phase 14 holds the device; we call back through the control service's held
-    // handle. For the Phase 19-02 implementation we derive keyCols from the control
-    // service's firmware accessor pattern — the simplest approach that avoids
-    // coupling to an internal detail of StreamDockControlService is to use the
-    // device's displayInfo when reachable. Because StreamDockControlService does not
-    // expose the held device pointer, we use a conservative fallback: accept keyCols
-    // from the context's deviceId via the registry (which is populated with the
-    // device's actual key layout at willAppear time in Phase 19-03). For Phase 19-02
-    // tests we supply keyCols via a fixed 5 (AKP05E 2×5 layout). The production path
-    // wires keyCols through the registry ActionContext's own device descriptor at
-    // willAppear time (Phase 19-03 completes this). See the test fixture pattern.
-    //
-    // Practical resolution: the test pre-registers contexts that carry deviceId;
-    // keyCols is hardcoded to the AKP05E constant here. A future Phase-23+ refactor
-    // will source keyCols from the DeviceRegistry via the bridge's device accessor.
-    // For now, 5 is the correct value for the only connected Stream Dock family
-    // device (AKP05E, 2×5). This is documented in the SUMMARY.
-    constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5 grid
+    // Source keyCols from the context's own device via the injected geometry
+    // resolver (F2): converts 0-based Elgato {row,column} to a 1-based keyIndex
+    // for the device the context is actually bound to, not a hardcoded AKP05E
+    // 5×2. Unset resolver / unknown codename => AKP05E default (prior behaviour).
+    std::uint8_t const keyCols = geometryForDevice(ctx.deviceId).keyCols;
 
     if (event == QStringLiteral("setImage")) {
-        onSetImage(pluginUuid, action, ctx, kDefaultKeyCols);
+        onSetImage(pluginUuid, action, ctx, keyCols);
     } else if (event == QStringLiteral("setTitle")) {
-        onSetTitle(pluginUuid, action, ctx, kDefaultKeyCols);
+        onSetTitle(pluginUuid, action, ctx, keyCols);
     } else if (event == QStringLiteral("setBG")) {
-        onSetBG(pluginUuid, action, ctx, kDefaultKeyCols);
+        onSetBG(pluginUuid, action, ctx, keyCols);
     } else if (event == QStringLiteral("setState")) {
         // setState changes the current 0-based action state. Track it on the
         // context so subsequent willAppear / keyDown / keyUp / dial* events report
@@ -681,7 +664,7 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         if (ok) {
             ActionContext painted = ctx;
             painted.stateIndex = newState;
-            paintDeclaredStateImage(painted, kDefaultKeyCols);
+            paintDeclaredStateImage(painted, keyCols);
             m_server->sendEvent(painted.pluginUuid,
                                 eventEnvelope(QStringLiteral("titleParametersDidChange"),
                                               painted,
@@ -692,7 +675,7 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         // revert to the cached key image after a short dwell. Keypad only.
         if (ctx.controller == QStringLiteral("Keypad")) {
             bool const okGlyph = (event == QStringLiteral("showOk"));
-            std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, kDefaultKeyCols);
+            std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
             QImage const prev = m_control->lastKeyImage(keyIndex);
             try {
                 // updateBase=false: the flash is a transient overlay, it must
@@ -901,6 +884,21 @@ void PluginDeviceBridge::setActionOwnerResolver(std::function<QString(QString co
     m_actionOwnerResolver = std::move(resolver);
 }
 
+void PluginDeviceBridge::setDeviceGeometryResolver(
+    std::function<DeviceGeometry(QString const&)> resolver) {
+    m_deviceGeometryResolver = std::move(resolver);
+}
+
+DeviceGeometry PluginDeviceBridge::geometryForDevice(QString const& deviceId) const {
+    // No resolver wired (unit fixtures) or an empty id => the AKP05E default,
+    // which is the geometry the bridge hardcoded before F2. A resolver that does
+    // not know the codename also returns its own default for the same reason.
+    if (!m_deviceGeometryResolver || deviceId.isEmpty()) {
+        return DeviceGeometry{};
+    }
+    return m_deviceGeometryResolver(deviceId);
+}
+
 void PluginDeviceBridge::setActionStateMetaResolver(
     std::function<std::pair<int, bool>(QString const&)> resolver) {
     m_actionStateMetaResolver = std::move(resolver);
@@ -1023,8 +1021,10 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     case Kind::KeyPressed:
     case Kind::KeyReleased: {
         // ev.index is 1-based (device.hpp: "index = 1-based key number").
-        constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
-        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(ev.index), kDefaultKeyCols);
+        // Source keyCols from the emitting device's geometry (F2), not a hardcoded
+        // AKP05E 5; a 3-column AKP153 key index must map to its own row/column.
+        std::uint8_t const keyCols = geometryForDevice(deviceId).keyCols;
+        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(ev.index), keyCols);
         // CR-02 / WR-04: pass deviceId to byCoord so events from one device cannot
         // route to a plugin context registered for a different device.
         auto const ctxOpt =
@@ -1050,7 +1050,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
                 QString const ctxId = ContextRegistry::deriveContextId(ctx);
                 if (m_registry.setState(ctxId, nextState)) {
                     ctx.stateIndex = nextState;
-                    paintDeclaredStateImage(ctx, kDefaultKeyCols);
+                    paintDeclaredStateImage(ctx, keyCols);
                     cycled = true;
                 }
             }
@@ -1200,7 +1200,7 @@ void PluginDeviceBridge::renderToggleState(QString const& controller,
                               : 0u; // defensive clamp (model also clamps on read)
     auto const& visual = instance.states[stateIdx].visual;
 
-    constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5 (matches setState path)
+    std::uint8_t const keyCols = geometryForDevice(m_activeDeviceId).keyCols; // F2
 
     // --- (1) Repaint -------------------------------------------------------
     // Source the image from the per-state imagePath (URL/path -> filesystem via
@@ -1250,7 +1250,7 @@ void PluginDeviceBridge::renderToggleState(QString const& controller,
     // 0-based key index to {row,column}; Encoder/touch-zone uses row=0,col=index.
     std::optional<ActionContext> ctxOpt;
     if (controller == QStringLiteral("Keypad")) {
-        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(index + 1), kDefaultKeyCols);
+        auto const gc = coordsForKeyIndex(static_cast<std::uint8_t>(index + 1), keyCols);
         ctxOpt = m_registry.byCoord(m_activeDeviceId, controller, gc.row, gc.column);
     } else if (controller == QStringLiteral("Encoder")) {
         ctxOpt = m_registry.byCoord(m_activeDeviceId, controller, 0, index);
@@ -1281,7 +1281,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
     }
 
     auto const& prof = m_profileAccessor();
-    constexpr std::uint8_t kDefaultKeyCols = 5; // AKP05E 2x5; Phase 23 sources from registry
+    std::uint8_t const keyCols = geometryForDevice(deviceId).keyCols; // F2
     QString const pageId = QStringLiteral("root");
 
     // RECONCILE (PLUGIN-move parity, mirrors OpenDeck move_instance): collect the
@@ -1315,7 +1315,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             }
             // Profile::keys use 0-based uint16_t index; device uses 1-based.
             std::uint8_t const keyIdx1 = static_cast<std::uint8_t>(keyIdx0 + 1);
-            auto const gc = coordsForKeyIndex(keyIdx1, kDefaultKeyCols);
+            auto const gc = coordsForKeyIndex(keyIdx1, keyCols);
 
             ActionContext ctx;
             ctx.deviceId = deviceId;
@@ -1376,7 +1376,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                         m_control->clearKeyImage(keyIdx1);
                     }
                 }
-                paintDeclaredStateImage(ctx, kDefaultKeyCols);
+                paintDeclaredStateImage(ctx, keyCols);
             }
 
             // Full Elgato envelope: top-level action/context/device + payload
@@ -1603,20 +1603,22 @@ void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
         return;
     }
     // Elgato deviceDidConnect: top-level `device` + `deviceInfo` siblings (NOT
-    // wrapped in payload). type 7 = Stream Deck Plus (keys + 4 dials + touch
-    // strip), matching the AKP05E and opendeck-akp05's DEVICE_TYPE. Geometry is
-    // AKP05E-centric (5x2 + 4 encoders); a per-device registry is Phase 23.
+    // wrapped in payload). `size` is the action-slot grid; `type` is the Elgato
+    // DeviceType (SD+ = 7). Sourced per-device from the geometry resolver (F2)
+    // instead of the former AKP05E-hardcoded 5x2+4 — see
+    // docs/protocols/streamdeck/elgato_plugin_protocol.md §3.6/§6.3.
+    DeviceGeometry const geom = geometryForDevice(deviceId);
     QJsonObject const deviceInfo{
-        {QStringLiteral("name"), deviceId},
-        {QStringLiteral("type"), 7},
+        {QStringLiteral("name"), geom.model.isEmpty() ? deviceId : geom.model},
+        {QStringLiteral("type"), geom.elgatoType},
         {QStringLiteral("size"),
          QJsonObject{
-             {QStringLiteral("columns"), 5},
-             {QStringLiteral("rows"), 2},
+             {QStringLiteral("columns"), geom.keyCols},
+             {QStringLiteral("rows"), geom.keyRows},
          }},
-        {QStringLiteral("columns"), 5},
-        {QStringLiteral("rows"), 2},
-        {QStringLiteral("encoders"), 4},
+        {QStringLiteral("columns"), geom.keyCols},
+        {QStringLiteral("rows"), geom.keyRows},
+        {QStringLiteral("encoders"), geom.encoderCount},
     };
     QJsonObject const event{
         {QStringLiteral("event"), QStringLiteral("deviceDidConnect")},

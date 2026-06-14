@@ -554,6 +554,42 @@ Application::Application(QObject* parent)
         return m_pluginManager ? m_pluginManager->ownerForAction(actionUuid) : QString{};
     });
 
+    // 1a-quinquies. Inject the device-geometry resolver (PLUGIN-GAP-ANALYSIS F2)
+    //     so the bridge sources key columns/rows, the Elgato DeviceType, and the
+    //     model name from the connected device's own core::DeviceDescriptor
+    //     instead of the former AKP05E-hardcoded keyCols=5. Same O(N) codename
+    //     walk over m_deviceRegistry.enumerate() as the DeviceLookup lambdas
+    //     above (N ~20, resolved on plugin events, off the hot path). An unknown
+    //     codename yields the AKP05E DeviceGeometry default — identical to the
+    //     pre-F2 behaviour, so single-device setups are unchanged.
+    m_pluginBridge->setDeviceGeometryResolver(
+        [this](QString const& codename) -> ajazz::app::DeviceGeometry {
+            auto const descriptors = m_deviceRegistry.enumerate();
+            for (auto const& d : descriptors) {
+                if (QString::fromStdString(d.codename) != codename) {
+                    continue;
+                }
+                ajazz::app::DeviceGeometry g;
+                g.keyCols = static_cast<std::uint8_t>(d.gridColumns);
+                // keyRows: prefer the explicit descriptor field; fall back to
+                // keyCount/gridColumns when 0 (the AKP815 deferred sentinel).
+                g.keyRows = d.keyRows != 0
+                                ? d.keyRows
+                                : (d.gridColumns != 0
+                                       ? static_cast<std::uint8_t>(d.keyCount / d.gridColumns)
+                                       : 0);
+                g.keyCount = d.keyCount;
+                g.encoderCount = d.encoderCount;
+                // Elgato DeviceType: a device with dials or a touch strip is
+                // modelled as Stream Deck + (7); a pure key grid as the classic
+                // Stream Deck (0). See elgato_plugin_protocol.md §6.3.
+                g.elgatoType = (d.hasTouchStrip || d.encoderCount > 0) ? 7 : 0;
+                g.model = QString::fromStdString(d.model);
+                return g;
+            }
+            return ajazz::app::DeviceGeometry{}; // unknown codename -> AKP05E default
+        });
+
     // 1a-quarter. Inject the encoder layout resolver so dial actions get their
     //     manifest layout + icon rendered on the strip zone at mount, and
     //     setFeedback/setFeedbackLayout drive the built-in layouts at runtime.

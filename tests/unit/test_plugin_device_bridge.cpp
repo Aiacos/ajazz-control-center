@@ -878,6 +878,93 @@ TEST_CASE("PluginDeviceBridgeE2E setImage paints correct key via control service
 }
 
 // ---------------------------------------------------------------------------
+// e2e: F2 — the injected device-geometry resolver drives coordinate math, so a
+// non-5-column device routes setImage to the correct key index (regression for
+// the former hardcoded keyCols=5). A 3-column geometry maps {row:1,col:1} to
+// 1-based keyIndex 1*3+1+1 = 5; the old hardcode would have produced 1*5+1+1 = 7.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E injected geometry routes setImage to 3-column key index",
+          "[plugin-device-bridge][e2e][PLUGIN-GAP-F2]") {
+    ensureQCoreApp();
+
+    auto fake = makeE2eFake(); // control paints by index; only the index matters here
+    ajazz::app::StreamDockControlService control(
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+    auto const paintsAfterOpen = fake->keyImages.size();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, &control, nullptr);
+
+    // Inject a 3-column geometry for the "akp03_test" codename (mirrors the
+    // AKP03 family: 3 columns). Any other codename gets the AKP05E default.
+    bridge->setDeviceGeometryResolver([](QString const& codename) -> ajazz::app::DeviceGeometry {
+        if (codename == QStringLiteral("akp03_test")) {
+            ajazz::app::DeviceGeometry g;
+            g.keyCols = 3;
+            g.keyRows = 2;
+            g.keyCount = 6;
+            g.encoderCount = 3;
+            g.elgatoType = 7;
+            g.model = QStringLiteral("AJAZZ AKP03 (e2e-test)");
+            return g;
+        }
+        return ajazz::app::DeviceGeometry{};
+    });
+
+    // Context at {row:1, col:1} on the 3-column device -> 1-based keyIndex 5.
+    ajazz::app::ActionContext ctx;
+    ctx.deviceId = QStringLiteral("akp03_test");
+    ctx.pageId = QStringLiteral("root");
+    ctx.row = 1;
+    ctx.column = 1;
+    ctx.controller = QStringLiteral("Keypad");
+    ctx.actionUUID = QStringLiteral("com.test.plug.action1");
+    ctx.pluginUuid = QStringLiteral("com.test.plug");
+    QString const contextId = bridge->registry().registerContext(ctx);
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    QString const imageMsg =
+        QStringLiteral(R"({"event":"setImage","context":"%1","payload":{"image":"%2","target":0}})")
+            .arg(contextId, makeSmallPngDataUri());
+    client.sendTextMessage(imageMsg);
+
+    auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+        if (fake->keyImages.size() > paintsAfterOpen) {
+            break;
+        }
+    }
+
+    REQUIRE(fake->keyImages.size() > paintsAfterOpen);
+    bool paintedKey5 = false;
+    bool paintedKey7 = false;
+    for (std::size_t i = paintsAfterOpen; i < fake->keyImages.size(); ++i) {
+        if (fake->keyImages[i].index == 5) {
+            paintedKey5 = true;
+        }
+        if (fake->keyImages[i].index == 7) {
+            paintedKey7 = true;
+        }
+    }
+    CHECK(paintedKey5);       // 3-column geometry: 1*3+1+1
+    CHECK_FALSE(paintedKey7); // would be the old hardcoded keyCols=5 result
+}
+
+// ---------------------------------------------------------------------------
 // e2e: malformed data-URI -> placeholder, no crash, no failure event back
 // ---------------------------------------------------------------------------
 

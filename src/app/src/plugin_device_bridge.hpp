@@ -87,6 +87,31 @@ struct ActionContext {
 };
 
 // ---------------------------------------------------------------------------
+// DeviceGeometry — physical key/encoder layout of one device codename
+// ---------------------------------------------------------------------------
+
+/**
+ * @brief Resolved physical geometry for a device, used to convert between
+ *        Elgato 0-based {row,column} coordinates and 1-based key indices and to
+ *        advertise device size in `deviceDidConnect` / the `-info` payload.
+ *
+ * The defaults describe the AKP05E (the value the bridge hardcoded before the
+ * geometry resolver existed), so an un-injected resolver preserves the prior
+ * single-device behaviour and every pre-existing test fixture keeps passing.
+ * The real per-device values come from `core::DeviceDescriptor`
+ * (`gridColumns`, `keyRows`, `keyCount`, `encoderCount`) via the resolver wired
+ * in Application. See docs/protocols/streamdeck/elgato_plugin_protocol.md §6.3.
+ */
+struct DeviceGeometry {
+    std::uint8_t keyCols{5};                       ///< Key grid columns (AKP05E = 5, AKP03 = 3).
+    std::uint8_t keyRows{2};                       ///< Key grid rows (AKP05E = 2, AKP153 = 3).
+    std::uint16_t keyCount{10};                    ///< Total LCD keys.
+    std::uint16_t encoderCount{4};                 ///< Rotary encoders (Stream Deck + dials).
+    int elgatoType{7};                             ///< Elgato DeviceType for deviceInfo (SD+ = 7).
+    QString model{QStringLiteral("AJAZZ AKP05E")}; ///< Human-readable name.
+};
+
+// ---------------------------------------------------------------------------
 // ContextRegistry — opaque context-string ↔ ActionContext
 // ---------------------------------------------------------------------------
 
@@ -664,6 +689,18 @@ private:
     /// action UUID is not a dotted prefix of its plugin UUID.
     std::function<QString(QString const&)> m_actionOwnerResolver;
 
+    /// Resolver: device codename -> physical DeviceGeometry. Injected from
+    /// Application (over core::DeviceRegistry / streamDockSidecarDescriptors).
+    /// Drives every 0-based{row,column} <-> 1-based keyIndex conversion and the
+    /// deviceDidConnect / -info device size, replacing the AKP05E-hardcoded
+    /// keyCols=5 (PLUGIN-GAP-ANALYSIS F2). Unset or unknown codename => the
+    /// DeviceGeometry default (AKP05E), preserving prior single-device behaviour.
+    std::function<DeviceGeometry(QString const&)> m_deviceGeometryResolver;
+
+    /// Resolve the physical geometry for a device codename via
+    /// m_deviceGeometryResolver, or the AKP05E default when unset/unknown.
+    [[nodiscard]] DeviceGeometry geometryForDevice(QString const& deviceId) const;
+
     /// Per-encoder-context feedback state for the built-in dial layouts:
     /// ctxId -> merged setFeedback item bag, and ctxId -> active layout id
     /// (setFeedbackLayout overrides the manifest Encoder.layout). Cleared when
@@ -742,6 +779,20 @@ public:
      * @param resolver  actionUuid -> owning plugin UUID, or "" if unknown.
      */
     void setActionOwnerResolver(std::function<QString(QString const&)> resolver);
+
+    /**
+     * @brief Inject the device-geometry resolver (codename -> DeviceGeometry).
+     *
+     * When set, every coordinate<->keyIndex conversion and the
+     * deviceDidConnect / -info device size source columns/rows/type from the
+     * device's own core::DeviceDescriptor instead of the AKP05E-hardcoded
+     * keyCols=5 (PLUGIN-GAP-ANALYSIS F2). Unset (or a codename the resolver
+     * does not know) falls back to the AKP05E DeviceGeometry default, so
+     * existing single-device fixtures and tests are unaffected.
+     *
+     * @param resolver  device codename -> DeviceGeometry.
+     */
+    void setDeviceGeometryResolver(std::function<DeviceGeometry(QString const&)> resolver);
 
     /**
      * @brief Inject the action state-metadata resolver (PluginManager::actionStateMeta).
