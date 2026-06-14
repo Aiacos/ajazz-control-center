@@ -417,6 +417,8 @@ endif()
 # interpreter-location-independent while the dedicated "unresolvable interpreter fails closed" case
 # still exercises a bare name.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+# zlib for the directly-compiled sdplugin_extractor.cpp (raw DEFLATE inflate).
+find_package(ZLIB REQUIRED)
 set_source_files_properties(
     test_manifest_signer.cpp
     PROPERTIES
@@ -476,10 +478,13 @@ target_link_libraries(
             # used by the rest of the test binary (COD-031 invariant).
             nlohmann_json::nlohmann_json
             Qt6::Core
-            # CorePrivate exposes QZipReader / QZipWriter. plugin_catalog_model.cpp uses QZipReader
-            # to extract `.sdPlugin` archives (issue #62); the matching test builds a synthetic
-            # archive via QZipWriter and round-trips it through the extractor.
+            # CorePrivate exposes QZipWriter, used by the extractor test to build a synthetic
+            # archive that is round-tripped through sdplugin_extractor.cpp (which now reads via
+            # central-directory + zlib raw-inflate, not QZipReader).
             Qt6::CorePrivate
+            # zlib: sdplugin_extractor.cpp (compiled into this binary) raw-inflates plugin archives.
+            # Without it the link fails on inflate/inflateEnd.
+            ZLIB::ZLIB
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration

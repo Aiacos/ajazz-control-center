@@ -1,12 +1,16 @@
+# zlib: raw DEFLATE inflate for the self-contained plugin-archive extractor
+# (sdplugin_extractor.cpp). Qt already depends on zlib transitively, so this is
+# always resolvable; REQUIRED makes a missing dev package a clear build error.
+find_package(ZLIB REQUIRED)
+
 # ----------------------------------------------------------------------------
 # Optional: Qt WebEngine for the Property Inspector HTML panel
 # ----------------------------------------------------------------------------
-# When ON and Qt6::WebEngineQuick is found, the Property Inspector pane embeds
-# plugin-authored HTML PI pages (Stream Deck SDK-compatible). When OFF or the
-# Qt module is missing — common on minimal Qt installs and headless CI — the
-# build falls back silently to the schema-driven native inspector. The stub
-# controller compiles either way so QML bindings to `propertyInspectorController`
-# never break.
+# When ON and Qt6::WebEngineQuick is found, the Property Inspector pane embeds plugin-authored HTML
+# PI pages (Stream Deck SDK-compatible). When OFF or the Qt module is missing — common on minimal Qt
+# installs and headless CI — the build falls back silently to the schema-driven native inspector.
+# The stub controller compiles either way so QML bindings to `propertyInspectorController` never
+# break.
 option(AJAZZ_BUILD_PROPERTY_INSPECTOR "Embed plugin Property Inspector HTML pages via Qt WebEngine"
        ON
 )
@@ -645,10 +649,14 @@ target_link_libraries(
             ajazz::warnings
             ajazz::sanitizers
             Qt6::Core
-            # CorePrivate exposes QZipReader / QZipWriter — the only Qt zip API short of pulling in
-            # QuaZip. PluginCatalogModel uses it to extract downloaded `.sdPlugin` archives (issue
-            # #62). Stable since Qt 4.7; API has not changed across the Qt 6 series.
+            # CorePrivate exposes QZipWriter, still used by the unit tests to build fixture
+            # archives. (The runtime extractor no longer uses QZipReader — see
+            # sdplugin_extractor.cpp: it parses the central directory + zlib raw-inflate directly to
+            # handle data-descriptor archives QZipReader mis-reads.) Stable since Qt 4.7.
             Qt6::CorePrivate
+            # zlib: raw DEFLATE inflate for the self-contained `.sdPlugin` / `.streamDeckPlugin`
+            # extractor (sdplugin_extractor.cpp).
+            ZLIB::ZLIB
             Qt6::Gui
             Qt6::Network
             Qt6::Widgets
