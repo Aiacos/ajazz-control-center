@@ -320,12 +320,16 @@ A `willAppear`-style message identifying the bound instance:
 ```
 
 > **Engine note.** A from-scratch host MUST track the PI as a distinct connection
-> keyed by its instance `context` (NOT collapse it onto the plugin's socket). Our
-> current `SdPluginServer` mishandles `registerPropertyInspector` as a second
-> `registerPlugin` and closes the PI as a duplicate-UUID impostor — see
-> [`PLUGIN-GAP-ANALYSIS.md`](../../architecture/PLUGIN-GAP-ANALYSIS.md) F3. The
-> bundled PIs sidestep this via a QWebChannel `$SD` bridge, but a stock `.sdPlugin`
-> PI that uses the WS handshake will not connect until this is fixed.
+> keyed by its instance `context` (NOT collapse it onto the plugin's socket).
+> `SdPluginServer` now does this (commit `6a32191`): a `registerPropertyInspector`
+> connection is flagged `isPropertyInspector`, its owning plugin is resolved via
+> `setContextOwnerResolver`, it sends no `passHello` / `pluginRegistered`, and
+> `sendToPlugin`/`sendToPropertyInspector` relay between the PI socket and the owning
+> plugin socket (cross-plugin denial enforced). The bundled PIs use a QWebChannel
+> `$SD` bridge; a stock `.sdPlugin` PI that opens its own WS now registers correctly
+> over the wire. **Remaining:** our PI WebEngine host does not yet *call* the PI's
+> `connectElgatoStreamDeckSocket` entry point, so a modern WS-only PI loads but is not
+> yet auto-bootstrapped — see [`PLUGIN-GAP-ANALYSIS.md`](../../architecture/PLUGIN-GAP-ANALYSIS.md) F3.
 
 ______________________________________________________________________
 

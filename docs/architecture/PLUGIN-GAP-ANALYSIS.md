@@ -43,27 +43,51 @@ geometry already exists on `core::DeviceDescriptor` (`gridColumns`, `keyRows`,
 **Fix:** source columns/rows from the active device's `DeviceDescriptor`; this same
 source feeds F1's `devices[]` and `deviceDidConnect`. One coherent change.
 
-### F3 — `registerPropertyInspector` mishandled · **MEDIUM** · OPEN
+### F3 — `registerPropertyInspector` mishandled · **MEDIUM** · ✅ SERVER MODEL DONE (6a32191) · PI-launch bootstrap OPEN
 
-`sd_plugin_server.cpp:246` treats `registerPropertyInspector` **identically to
-`registerPlugin`**: rekeys the socket, sends `passHello`, emits `pluginRegistered`.
+`sd_plugin_server.cpp` *used to* treat `registerPropertyInspector` **identically to
+`registerPlugin`**: rekey the socket, send `passHello`, emit `pluginRegistered`.
 A real Elgato PI opens a **separate** WS with the bound action-instance `context` as
-its uuid; our duplicate-UUID impersonation guard then closes it as an impostor. The
-bundled PIs avoid this via a QWebChannel `$SD` bridge, but a stock `.sdPlugin` PI
-using the WS handshake (canonical doc §5) cannot connect.
-**Fix:** model the PI as a distinct connection keyed by instance `context`; route
-`sendToPlugin`/`sendToPropertyInspector` between the PI socket and the owning plugin.
+its uuid; the duplicate-UUID impersonation guard then closed it as an impostor, and
+the false `pluginRegistered(<context>)` wired the device backends to a PI's instance
+context as if it were a plugin (a security footgun).
 
-### F4 — routed-but-unhandled vendor actions are silent no-ops · **MEDIUM** · OPEN
+**Done (server model, `6a32191`):** the server now models a PI as a distinct
+connection (`isPropertyInspector` + resolved `ownerPluginUuid` via an injected
+`setContextOwnerResolver`, backed by the bridge's `ContextRegistry`). It sends no
+`passHello`, never emits `pluginRegistered`, is excluded from `connectedPluginCount`,
+and emits the new `propertyInspectorRegistered`/`propertyInspectorDisconnected`.
+`sendToPlugin` from a PI is forwarded to the owner plugin socket; a plugin's
+`sendToPropertyInspector` is forwarded to a stock PI's WS socket **iff the sender owns
+the context** (mirrors the bridge's cross-plugin denial), then falls through to
+`actionReceived` so the bundled QWebChannel `$SD` flow is preserved byte-for-byte.
+Two synthetic-WS e2e tests cover modelling + bidirectional relay + cross-plugin denial.
 
-20+ events in `kRoutedActions` (`sd_plugin_server.cpp:432`) emit `actionReceived` with
-no consumer (`sendToDevice`, `getScreenshot`, `clearIcon`, `lockScreen`,
-`getUserInfo`, `startAudioCapture`, …). `setBackground` is routed (`:433`) but
-`onAction` only checks `setBG` — a dead branch. Plugins calling these get no response
-and no error.
-**Fix:** implement the safe subset (`setBackground` alias, `clearIcon`), and for the
-genuinely-unsupported ones return an explicit `logMessage`/error rather than a silent
-drop. `sendToDevice` raw-HID forwarding stays blocked (RE hard rule).
+**Remaining sub-task (own session):** the PI-launch bootstrap. Our PI controller hosts
+PI HTML in WebEngine and bridges it via cefQuery → `$SD` (legacy/vendor PIs work). A
+*modern* stock Elgato PI uses `connectElgatoStreamDeckSocket(port, context,
+"registerPropertyInspector", info, actionInfo)` + a real `new WebSocket`; nobody calls
+that entry point on the PI side yet (the HTML-*plugin* path already does — see
+`plugin_manager.cpp:606`). Adding a guarded DocumentReady bootstrap that calls it would
+make modern PIs register over the now-correct F3 server path — BUT it must first
+reconcile a **double-`propertyInspectorDidAppear`**: the existing PI-04 path
+(`inspectorOpened` → didAppear, `application.cpp:942`) already fires for every
+`loadInspector` regardless of transport, so a WS-registering PI would also trigger the
+F3 `propertyInspectorRegistered` → didAppear. Deduplicate before enabling the bootstrap.
+
+### F4 — routed-but-unhandled vendor actions are silent no-ops · **MEDIUM** · ✅ DONE (5ad7578)
+
+20+ events in `kRoutedActions` emit `actionReceived` with no consumer (`sendToDevice`,
+`getScreenshot`, `clearIcon`, `lockScreen`, `getUserInfo`, `startAudioCapture`, …).
+`setBackground` was routed but `onAction` only checked `setBG` — a dead branch.
+
+**Done (`5ad7578`):** `setBackground` is now the `setBG` alias (added to
+`isVisualAction`, dispatched to `onSetBG`); `clearIcon` resets the bound key to a blank
+surface and drops its cached title; the genuinely-unsupported set is recognised by
+`isUnsupportedVendorAction()` in the host `actionReceived` consumer and logged with an
+explicit WARN instead of being a silent drop. `sendToDevice` raw-HID forwarding stays
+unimplemented (RE hard rule) — logged, never executed. An e2e test covers the
+`setBackground` alias + `clearIcon` paints.
 
 ## Secondary bugs (real, lower leverage)
 
@@ -110,18 +134,14 @@ still hardware-gated).
    size/type, killing the hardcoded `keyCols=5` (commit `095b199`).
 2. ✅ **F1** — complete `-info` RegistrationInfo: application/colors/plugin blocks +
    provider-backed `devices[]` (commit `522dddf`).
-3. **F3** — real `registerPropertyInspector` second-connection model. NEXT.
-   Security-sensitive: `SdPluginServer` currently models every connection as a
-   plugin keyed by uuid (`sd_plugin_server.cpp:240-303`); a real PI must be a
-   distinct connection keyed by its action-instance `context`, with
-   `sendToPlugin`/`sendToPropertyInspector` routed between the PI socket and the
-   owning plugin socket. Touches the impersonation/auth guards — needs its own
-   focused pass with the QWebChannel `$SD` PI flow kept working. Deserves a
-   dedicated session, not a tail-end change.
-4. **F4** — vendor action handlers (`setBackground` alias, `clearIcon`) + an
-   explicit `logMessage`/error for genuinely-unsupported routed actions instead of
-   the current silent drop (`sd_plugin_server.cpp:432`). `sendToDevice` raw-HID
-   stays blocked (RE hard rule).
+3. ✅ **F3 server model** (`6a32191`) — `registerPropertyInspector` second-connection
+   model: distinct PI connection keyed by instance `context`, owner resolved via
+   `setContextOwnerResolver`, `sendToPlugin`/`sendToPropertyInspector` routed between
+   the PI socket and the owning plugin socket with cross-plugin denial. QWebChannel
+   `$SD` flow preserved. **Open sub-task:** the modern-PI WS-launch bootstrap (see F3
+   above) — needs the double-`didAppear` dedup first.
+4. ✅ **F4** (`5ad7578`) — `setBackground` alias, `clearIcon`, explicit WARN for
+   genuinely-unsupported routed actions. `sendToDevice` raw-HID stays blocked.
 5. Secondary: B6 (HTML page lifetime), B5 (dispatch contract), B9 (app monitoring),
    B7 (hello deviceInfo). B4 stays hardware-gated.
 
@@ -132,3 +152,12 @@ Each lands atomic + ctest-green + live debug-channel verified (project MANDATORY
 - 2026-06-14: canonical protocol doc + this gap analysis + stale-doc banners
   (`7df6957`); F2 (`095b199`); F1 (`522dddf`). All ctest-green (819) and
   live-verified on the real AKP05E. F3/F4 remain.
+- 2026-06-14 (cont.): **F4** done (`5ad7578`) — setBackground alias, clearIcon,
+  unsupported-action WARN, +e2e test. **F3 server model** done (`6a32191`) —
+  PI-as-distinct-connection, owner resolver, sendToPlugin/sendToPropertyInspector
+  relay with cross-plugin denial, +2 synthetic-WS e2e tests. ctest 822 green.
+  Live-verified on the real AKP05E: sidecar opens the device (fw V3.AKP05E.01.007),
+  `device.renderTest` paints; binding `com.ajazz.sysmon.cpu` to a key streams
+  `setTitle "CPU n%"` → key renders. UI confirmed already Stream-Deck-shaped
+  (actions right, inspector bottom, canvas centre, selection outline, brightness).
+  Remaining: F3 modern-PI WS-launch bootstrap (own session; dedup didAppear first).
