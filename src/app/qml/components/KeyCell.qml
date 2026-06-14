@@ -81,9 +81,18 @@ ItemDelegate {
         }
     }
 
+    // True when this cell carries a binding (icon or label). Drives the
+    // empty-vs-lit LCD look below.
+    readonly property bool occupied: root.iconSource.toString() !== "" || root.label !== ""
+
     background: Rectangle {
         radius: Theme.radiusLg
-        color: root.hovered ? Theme.tileHover : Theme.tile
+        // Faithful Stream Deck look: an OCCUPIED key is a lit LCD (black behind
+        // the icon, exactly as the hardware renders it); an EMPTY key is a dark,
+        // slightly-raised "off" tile. Hover lightens either.
+        color: root.hovered
+            ? Theme.tileHover
+            : (root.occupied ? "#000000" : Theme.bgBase)
         // UI-REVIEW.md fix: drag-rejected state uses errorAccent border so the
         // user sees a clear "no-go" signal during cross-controller drag-over.
         border.width: dropArea.dragRejected
@@ -114,29 +123,28 @@ ItemDelegate {
             // Overlay label. Always rendered when `label` is non-empty;
             // otherwise (for icon-less cells) falls back to the 1-based key
             // index so the grid never looks blank.
+            // Title overlay, drawn over the icon at the bottom like the hardware
+            // LCD. Faithful to Stream Deck: EMPTY keys show NOTHING (a blank dark
+            // square), not an index number. A live device render (image://livekey)
+            // already bakes the plugin title into the frame, so the separate
+            // overlay is suppressed for those to avoid double text.
             Text {
                 id: overlayText
                 anchors.fill: parent
-                // Phase 29 (OpenDeck parity): a live device render (image://livekey)
-                // already bakes the plugin's title into the frame, so suppress the
-                // separate label overlay to avoid double text -- show only the
-                // rendered key, like OpenDeck. Static icons keep their label.
-                visible: root.iconSource.toString().indexOf("image://livekey") !== 0
-                text: root.label !== ""
-                    ? root.label
-                    : (root.iconSource.toString() === "" ? (root.index + 1).toString() : "")
-                // UI audit 2026-06-09: the empty-key index is an orientation
-                // hint, not content — mute it (labels keep full contrast).
-                color: root.label !== "" ? Theme.fgPrimary : Theme.fgMuted
-                font.pixelSize: root.label !== "" ? Theme.fontSm : Theme.fontMd
-                font.weight: root.label !== "" ? Font.DemiBold : Font.Normal
+                visible: root.label !== ""
+                    && root.iconSource.toString().indexOf("image://livekey") !== 0
+                text: root.label
+                color: Theme.fgPrimary
+                font.pixelSize: Theme.fontSm
+                font.weight: Font.DemiBold
                 horizontalAlignment: Text.AlignHCenter
-                verticalAlignment: root.label !== "" ? Text.AlignBottom : Text.AlignVCenter
+                // Bottom-aligned over an icon (LCD style); centered when label-only.
+                verticalAlignment: root.iconSource.toString() !== ""
+                    ? Text.AlignBottom
+                    : Text.AlignVCenter
                 wrapMode: Text.WordWrap
 
-                // When the label sits on top of an icon, draw a subtle dark
-                // shadow under the text so light foregrounds stay legible on
-                // bright icons. Cheap drop-shadow via doubled Text.
+                // 1px dark outline so a light title stays legible over any icon.
                 style: root.iconSource.toString() !== "" ? Text.Outline : Text.Normal
                 styleColor: "#000000"
             }

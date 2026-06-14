@@ -56,7 +56,7 @@ Item {
     // ---- Sizing tokens -----------------------------------------------------
     // A single key cell drives the whole schematic; the strip + dial lanes are
     // sized off the resulting key-grid content width so everything aligns.
-    readonly property int _keyCell: 76
+    readonly property int _keyCell: 96
     readonly property int _gap: Theme.spacingSm
     readonly property int _contentWidth:
         keyColumns > 0
@@ -83,6 +83,9 @@ Item {
         width:  body.implicitWidth + 2 * Theme.spacingXl
         height: body.implicitHeight + 2 * Theme.spacingXl
         radius: Theme.radiusLg
+        // Mid-dark device chassis: lighter than the page and the recessed LCD
+        // keys (bgBase) so the keys read as panels set into the hardware, like
+        // the Stream Deck editor's device-faithful canvas.
         color: Theme.tile
         border.color: Theme.borderSubtle
         border.width: 1
