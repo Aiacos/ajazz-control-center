@@ -306,6 +306,100 @@ Item {
             Layout.fillHeight: true
             spacing: Theme.spacingMd
 
+            // ---- Canvas header (Stream Deck style) -------------------------
+            // A control bar pinned above the device canvas: device identity +
+            // grid summary on the left; live-device brightness + clear-all on
+            // the right (the controls a Stream Deck user expects next to the
+            // canvas, not buried below). Drives the StreamDockControlService
+            // singleton with this view's codename — the same backend the old
+            // bottom row used. Only shown for an LCD-key device.
+            Rectangle {
+                id: canvasHeader
+                objectName: "canvasHeader"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 48
+                visible: root.codename !== "" && root.keyCount > 0
+                color: Theme.surfaceContainerLow
+                radius: Theme.radiusMd
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingLg
+                    anchors.rightMargin: Theme.spacingLg
+                    spacing: Theme.spacingMd
+
+                    ColumnLayout {
+                        spacing: 0
+                        Layout.alignment: Qt.AlignVCenter
+                        Text {
+                            objectName: "canvasHeaderName"
+                            text: root.codename
+                            color: Theme.fgPrimary
+                            font.pixelSize: Theme.typeLabelMedium.pixelSize
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            text: {
+                                let parts = [qsTr("%1 keys").arg(root.keyCount)];
+                                if (root.encoderCount > 0)
+                                    parts.push(qsTr("%1 dials").arg(root.encoderCount));
+                                if (root.touchZoneCount > 0)
+                                    parts.push(qsTr("touch strip"));
+                                return parts.join(" · ");
+                            }
+                            color: Theme.fgMuted
+                            font.pixelSize: Theme.typeLabelSmall.pixelSize
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: qsTr("Brightness")
+                        color: Theme.fgFaint
+                        font.pixelSize: Theme.typeLabelSmall.pixelSize
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Slider {
+                        id: brightnessSlider
+                        objectName: "brightnessSlider"
+                        Layout.preferredWidth: 160
+                        Layout.alignment: Qt.AlignVCenter
+                        from: 0
+                        to: 100
+                        stepSize: 1
+                        value: 80 // matches kDefaultBrightnessPercent in the service
+                        Accessible.role: Accessible.Slider
+                        Accessible.name: qsTr("Panel brightness")
+
+                        // Debounce LIG writes during drag (T-16a-01 / DISPLAY-09):
+                        // at most one write per ~80 ms, plus a final write on release.
+                        Timer {
+                            id: brightnessDebounce
+                            interval: 80
+                            repeat: false
+                            onTriggered: StreamDockControlService.setBrightness(
+                                root.codename, brightnessSlider.value)
+                        }
+                        onMoved: brightnessDebounce.restart()
+                        onPressedChanged: {
+                            if (!pressed) {
+                                brightnessDebounce.stop();
+                                StreamDockControlService.setBrightness(root.codename, value);
+                            }
+                        }
+                    }
+
+                    SecondaryButton {
+                        objectName: "clearAllKeysButton"
+                        text: qsTr("Clear all")
+                        enabled: root.codename !== ""
+                        onClicked: StreamDockControlService.clearAll(root.codename)
+                        accessibleDescription: qsTr("Blank all LCD keys on the device")
+                    }
+                }
+            }
+
             // Device chassis area (center, fills remaining height).
             FocusScope {
                 id: chassisScope

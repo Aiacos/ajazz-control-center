@@ -49,12 +49,25 @@ Rectangle {
         { actionLabel: qsTr("Open folder"),     kind: 5, iconName: "folder_open" }
     ]
 
+    /// Free-text filter (bound to the search field). Empty = show everything.
+    property string searchText: ""
+
+    function _matches(label, plugin) {
+        if (root.searchText === "")
+            return true;
+        const q = root.searchText.toLowerCase();
+        return label.toLowerCase().indexOf(q) !== -1
+            || (plugin !== "" && plugin.toLowerCase().indexOf(q) !== -1);
+    }
+
     function _rebuild() {
         actionModel.clear();
 
         const builtinGroup = qsTr("Built-in actions");
         for (let i = 0; i < _builtins.length; ++i) {
             const b = _builtins[i];
+            if (!root._matches(b.actionLabel, ""))
+                continue;
             // Built-in actions are Key-capable (affordanceMask: 1 = Key).
             actionModel.append({
                 group: builtinGroup, actionLabel: b.actionLabel, kind: b.kind,
@@ -64,31 +77,48 @@ Rectangle {
             });
         }
 
-        const pluginGroup = qsTr("Plugins");
         const actions = (typeof PluginCatalog !== "undefined" && PluginCatalog)
             ? PluginCatalog.installedActions() : [];
-        if (actions.length === 0) {
-            // A non-draggable hint so the empty Plugins section explains itself.
-            // affordanceMask: 0 = non-draggable (hint rows cannot be dropped).
+        // Stream Deck groups actions UNDER each plugin: one collapsible section per
+        // plugin, not a single "Plugins" bucket. ListView sections require items of
+        // the same section to be CONSECUTIVE, so sort by plugin name (then action
+        // name) before appending — otherwise a plugin's actions would split across
+        // repeated headers.
+        const sorted = actions.slice().sort(function (a, b) {
+            const pa = (a.pluginName || "").toLowerCase();
+            const pb = (b.pluginName || "").toLowerCase();
+            if (pa !== pb)
+                return pa < pb ? -1 : 1;
+            return (a.actionName || "").toLowerCase() < (b.actionName || "").toLowerCase() ? -1 : 1;
+        });
+        let shown = 0;
+        for (let j = 0; j < sorted.length; ++j) {
+            const a = sorted[j];
+            if (!root._matches(a.actionName || "", a.pluginName || ""))
+                continue;
             actionModel.append({
-                group: pluginGroup, actionLabel: qsTr("Install plugins from the store"),
+                // Section header = the owning plugin's display name.
+                group: a.pluginName || qsTr("Plugins"), actionLabel: a.actionName, kind: 0,
+                iconName: "extension", actionId: a.actionId, pluginName: a.pluginName,
+                iconUrl: a.icon || "", propertyInspectorPath: a.propertyInspectorPath || "",
+                isPlugin: true, isHint: false,
+                controllers: a.controllers || [], affordanceMask: a.affordanceMask || 0
+            });
+            ++shown;
+        }
+        // Empty-state hint only when nothing plugin-side is shown AND no search is
+        // narrowing the list (a search miss is self-explanatory).
+        if (shown === 0 && root.searchText === "") {
+            actionModel.append({
+                group: qsTr("Plugins"), actionLabel: qsTr("Install plugins from the store"),
                 kind: 0, iconName: "extension", actionId: "", pluginName: "",
                 iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: true,
                 controllers: [], affordanceMask: 0
             });
-        } else {
-            for (let j = 0; j < actions.length; ++j) {
-                const a = actions[j];
-                actionModel.append({
-                    group: pluginGroup, actionLabel: a.actionName, kind: 0,
-                    iconName: "extension", actionId: a.actionId, pluginName: a.pluginName,
-                    iconUrl: a.icon || "", propertyInspectorPath: a.propertyInspectorPath || "",
-                    isPlugin: true, isHint: false,
-                    controllers: a.controllers || [], affordanceMask: a.affordanceMask || 0
-                });
-            }
         }
     }
+
+    onSearchTextChanged: root._rebuild()
 
     Component.onCompleted: root._rebuild()
 
@@ -101,23 +131,31 @@ Rectangle {
         anchors.fill: parent
         spacing: 0
 
-        // Header row.
-        Item {
+        // Header: title + search field (Stream Deck's actions panel is search-first).
+        ColumnLayout {
             Layout.fillWidth: true
-            implicitHeight: headerLabel.implicitHeight + Theme.spacingMd * 2
+            Layout.margins: Theme.spacingMd
+            spacing: Theme.spacingSm
 
             Text {
                 id: headerLabel
-                anchors {
-                    left: parent.left
-                    right: parent.right
-                    verticalCenter: parent.verticalCenter
-                    leftMargin: Theme.spacingLg
-                }
+                Layout.fillWidth: true
+                Layout.leftMargin: Theme.spacingXs
                 text: qsTr("Actions")
                 color: Theme.fgPrimary
                 font.pixelSize: Theme.typeTitleSmall.pixelSize
                 font.weight: Theme.typeTitleSmall.weight
+            }
+
+            TextField {
+                id: searchField
+                objectName: "actionLibrarySearch"
+                Layout.fillWidth: true
+                placeholderText: qsTr("Search actions…")
+                text: root.searchText
+                onTextChanged: root.searchText = text
+                selectByMouse: true
+                Accessible.name: qsTr("Search actions")
             }
         }
 

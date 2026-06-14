@@ -264,6 +264,9 @@ Rectangle {
     Component {
         id: deviceViewComp
 
+        // Keys tab: DeviceView only. Its live-device controls (brightness +
+        // clear-all) moved INTO the canvas header inside DeviceView (Stream
+        // Deck layout: controls next to the canvas, not a separate bottom row).
         ColumnLayout {
             spacing: Theme.spacingSm
 
@@ -276,65 +279,6 @@ Rectangle {
                 encoderCount: root._encoderCount
                 touchZoneCount: root._touchZoneCount
                 codename: root.codename
-            }
-
-            // Live-device controls row: brightness slider + clear-all button.
-            // Visible only when a valid LCD-key device is selected (_showKeys).
-            RowLayout {
-                Layout.fillWidth: true
-                visible: root._showKeys && root.codename !== ""
-                spacing: Theme.spacingMd
-
-                Label {
-                    text: qsTr("Brightness")
-                    color: Theme.fgFaint
-                    Layout.alignment: Qt.AlignVCenter
-                }
-
-                Slider {
-                    id: brightnessSlider
-                    objectName: "brightnessSlider"
-                    Layout.fillWidth: true
-                    from: 0
-                    to: 100
-                    stepSize: 1
-                    value: 80 // matches kDefaultBrightnessPercent in the service
-                    Accessible.role: Accessible.Slider
-                    Accessible.name: qsTr("Panel brightness")
-
-                    // Timer debounce (T-16a-01 / DISPLAY-09): coalesces drag
-                    // steps into at most one LIG write per ~80 ms interval,
-                    // plus one final write on pointer release.
-                    Timer {
-                        id: brightnessDebounce
-                        interval: 80
-                        repeat: false
-                        onTriggered: StreamDockControlService.setBrightness(root.codename,
-                                                                             brightnessSlider.value)
-                    }
-
-                    // onMoved fires on every drag step; restart the timer so only
-                    // the trailing value within each 80 ms window is sent.
-                    onMoved: brightnessDebounce.restart()
-
-                    // Issue one final write on pointer release so the last dragged
-                    // value is always committed even if it arrived within the
-                    // debounce window.
-                    onPressedChanged: {
-                        if (!pressed) {
-                            brightnessDebounce.stop()
-                            StreamDockControlService.setBrightness(root.codename, value)
-                        }
-                    }
-                }
-
-                SecondaryButton {
-                    objectName: "clearAllKeysButton"
-                    text: qsTr("Clear all keys")
-                    enabled: root.codename !== "" && root._showKeys
-                    onClicked: StreamDockControlService.clearAll(root.codename)
-                    accessibleDescription: qsTr("Blank all LCD keys on the device")
-                }
             }
         }
     }
