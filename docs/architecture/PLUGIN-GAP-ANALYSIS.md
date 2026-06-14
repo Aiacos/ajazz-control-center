@@ -19,7 +19,7 @@ small set of **foundational** gaps, in priority order below.
 
 ## Foundational gaps (priority order)
 
-### F1 — `-info` registration payload is incomplete · **HIGH** · OPEN
+### F1 — `-info` registration payload is incomplete · **HIGH** · ✅ DONE (522dddf)
 
 `PluginManager::buildInfoJson()` (`src/app/src/plugin_manager.cpp:206`) emits only
 `{application:{version,platform}, devicePixelRatio:1, devices:[]}`. The real Elgato
@@ -31,7 +31,7 @@ payload. The empty `devices:[]` is the most damaging omission.
 **Fix:** build the full payload; source `devices[]` geometry from the
 `DeviceDescriptor` (see F2); thread the per-plugin manifest into `buildInfoJson`.
 
-### F2 — `keyCols` hardcoded to 5 · **HIGH** · OPEN
+### F2 — `keyCols` hardcoded to 5 · **HIGH** · ✅ DONE (095b199)
 
 `kDefaultKeyCols = 5` is a literal at `plugin_device_bridge.cpp:650`, `:1026`, and
 the geometry feeding `populateContextsForActivePage`, `renderToggleState`, and
@@ -106,12 +106,29 @@ still hardware-gated).
 
 ## Remediation order
 
-1. **F1+F2 together** — device-geometry source feeding coordinate math, `-info
-   devices[]`, and `deviceDidConnect`. Highest leverage; one coherent change.
-2. **F1 application/plugin/colors** — complete the `-info` shape; thread the manifest.
-3. **F3** — real `registerPropertyInspector` second-connection model.
-4. **F4** — vendor action handlers + explicit-error for unsupported.
+1. ✅ **F2** — device-geometry resolver feeding coordinate math, `deviceDidConnect`
+   size/type, killing the hardcoded `keyCols=5` (commit `095b199`).
+2. ✅ **F1** — complete `-info` RegistrationInfo: application/colors/plugin blocks +
+   provider-backed `devices[]` (commit `522dddf`).
+3. **F3** — real `registerPropertyInspector` second-connection model. NEXT.
+   Security-sensitive: `SdPluginServer` currently models every connection as a
+   plugin keyed by uuid (`sd_plugin_server.cpp:240-303`); a real PI must be a
+   distinct connection keyed by its action-instance `context`, with
+   `sendToPlugin`/`sendToPropertyInspector` routed between the PI socket and the
+   owning plugin socket. Touches the impersonation/auth guards — needs its own
+   focused pass with the QWebChannel `$SD` PI flow kept working. Deserves a
+   dedicated session, not a tail-end change.
+4. **F4** — vendor action handlers (`setBackground` alias, `clearIcon`) + an
+   explicit `logMessage`/error for genuinely-unsupported routed actions instead of
+   the current silent drop (`sd_plugin_server.cpp:432`). `sendToDevice` raw-HID
+   stays blocked (RE hard rule).
 5. Secondary: B6 (HTML page lifetime), B5 (dispatch contract), B9 (app monitoring),
    B7 (hello deviceInfo). B4 stays hardware-gated.
 
 Each lands atomic + ctest-green + live debug-channel verified (project MANDATORY).
+
+### Session log
+
+- 2026-06-14: canonical protocol doc + this gap analysis + stale-doc banners
+  (`7df6957`); F2 (`095b199`); F1 (`522dddf`). All ctest-green (819) and
+  live-verified on the real AKP05E. F3/F4 remain.
