@@ -20,6 +20,7 @@ import AjazzControlCenter
 
 RowLayout {
     id: root
+    objectName: "profileBar" // debug-channel addressing (profile selector bar)
 
     // Machine codename of the device being edited (from ProfileEditor).
     property string deviceCodename: ""

@@ -28,6 +28,7 @@ import AjazzControlCenter
 
 Rectangle {
     id: root
+    objectName: "actionLibrary" // debug-channel addressing (Stream Deck actions list)
 
     color: Theme.bgBase
 

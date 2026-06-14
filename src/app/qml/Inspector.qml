@@ -51,6 +51,7 @@ import "components"
 
 Rectangle {
     id: root
+    objectName: "inspector" // debug-channel addressing (Property Inspector dock)
 
     property string selectionLabel: ""
     property bool   hasSelection: selectionLabel.length > 0

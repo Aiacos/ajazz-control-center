@@ -44,6 +44,7 @@ import "components"
 
 Item {
     id: root
+    objectName: "deviceView" // debug-channel addressing (qml.get selectedKeyIndex etc.)
 
     // ---- Property contract (extends KeyDesigner.qml contract) ---------------
     property int    keyCount:    0
