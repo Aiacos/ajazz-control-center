@@ -189,7 +189,13 @@ QByteArray readZipEntryData(QByteArray const& buf, ZipEntry const& e) {
     if (e.compSize > kMaxEntryBytes || e.uncompSize > kMaxEntryBytes) {
         return {};
     }
-    if (lo + 30 > n || rd32(d + lo) != 0x04034b50u) {
+    // `lo` is attacker-controlled (a 64-bit value from the ZIP64 extra field).
+    // Check `lo >= n` FIRST: without it a hostile offset near UINT64_MAX makes
+    // `lo + 30` wrap around to a small value that slips past `> n`, and then
+    // `rd32(d + lo)` reads far out of bounds. With `lo < n` guaranteed (n is
+    // bounded by the download cap), the subsequent `lo + 30`/`dataStart`
+    // additions cannot overflow.
+    if (lo >= n || lo + 30 > n || rd32(d + lo) != 0x04034b50u) {
         return {};
     }
     // The local header's filename/extra lengths can differ from the central

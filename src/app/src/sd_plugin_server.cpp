@@ -538,6 +538,19 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         // PI -> plugin. Forward the full envelope ({action,context,event,payload})
         // to the owning plugin's socket. The owner is bound at register time from
         // the trusted context→plugin map; re-resolve if it was unresolved then.
+        //
+        // Protocol-integrity guard: a PI may only relay for the context it
+        // registered with. Reject a forged `context` so a PI bound to instance A
+        // cannot make its plugin act on instance B (Elgato §5 invariant).
+        QString const claimedCtx = msg.value(QStringLiteral("context")).toString();
+        if (!claimedCtx.isEmpty() && claimedCtx != senderIt->uuid) {
+            AJAZZ_LOG_WARN("plugin-server",
+                           "sendToPlugin from PI context={} claims context={}; denied "
+                           "(context mismatch)",
+                           senderIt->uuid.toStdString(),
+                           claimedCtx.toStdString());
+            return;
+        }
         QString owner = senderIt->ownerPluginUuid;
         if (owner.isEmpty() && m_contextOwnerResolver) {
             owner = m_contextOwnerResolver(senderIt->uuid);

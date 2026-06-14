@@ -303,3 +303,39 @@ TEST_CASE("extractSdPluginArchive extracts a ZIP64 archive with real file conten
     cf.close();
     REQUIRE(code.contains("console.log"));
 }
+
+TEST_CASE("extractSdPluginArchive rejects a hostile ZIP64 local-header offset (no over-read)",
+          "[plugin-store][security][zip64]") {
+    // Regression for a buffer over-read in the central-directory parser: a ZIP64
+    // central-directory entry whose local-header offset field is the 0xFFFFFFFF
+    // sentinel can carry an arbitrary 64-bit offset in its ZIP64 extra field
+    // (header 0x0001). Without a `localOffset >= bufferSize` guard, an offset
+    // near UINT64_MAX makes the `lo + 30 > n` bounds check WRAP to a small value
+    // that passes, then `rd32(buf + lo)` reads far past the buffer. This fixture
+    // (hand-built) sets localOffset to 0xFFFFFFFFFFFFFFF0; the extractor must
+    // reject it cleanly (return false), never over-read / crash.
+    static constexpr char kHostileZip64B64[] =
+        "UEsDBC0AAAAIAAAAAAAAAAAADgAAAAwAAAAfAAAAY29tLmV2aWwuc2RQbHVnaW4vbWFuaWZl"
+        "c3QuanNvbqtWCg31dFGyUqpQqgUAUEsBAi0ALQAAAAgAAAAAAAAAAAAOAAAADAAAAB8ADAAA"
+        "AAAAAAAAAAAA/////2NvbS5ldmlsLnNkUGx1Z2luL21hbmlmZXN0Lmpzb24BAAgA8P//////"
+        "//9QSwUGAAAAAAEAAQBZAAAASwAAAAAA";
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    QString const destDir = scratch.path();
+    QString const archive = destDir + QStringLiteral("/hostile.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes = QByteArray::fromBase64(
+            QByteArray::fromRawData(kHostileZip64B64, sizeof(kHostileZip64B64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const target = QStringLiteral("com.evil.sdPlugin");
+    // Must reject without crashing or extracting anything.
+    REQUIRE_FALSE(extractSdPluginArchive(archive, destDir, target));
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/") + target).exists());
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/.tmp_") + target).exists());
+}
