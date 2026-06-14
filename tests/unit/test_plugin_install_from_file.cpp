@@ -164,6 +164,17 @@ buildSdPluginArchive(QString const& dir, QByteArray const& manifestBytes, QStrin
     return archivePath;
 }
 
+/// #81: return the minimal manifest with its UUID rewritten to @p uuid. Since
+/// the install directory is now named from the manifest UUID (and per-plugin
+/// consent is keyed by it), a test that asserts the install path by — or
+/// isolates QSettings consent under — a specific id must give the manifest that
+/// same UUID. Used for UNSIGNED archives only; signed archives keep the
+/// canonical UUID so the signature stays valid.
+QByteArray manifestWithUuid(QString const& uuid) {
+    return QByteArray{kMinimalManifest}.replace("com.example.install-from-file-test",
+                                                uuid.toUtf8());
+}
+
 } // namespace
 
 // ---------------------------------------------------------------------------
@@ -473,7 +484,7 @@ TEST_CASE("PluginInstallFromFile CR-01 extract+verify failure does not mark inst
     // (because the manifest is not signed). This is the regression path for
     // CR-01: the old code would fall through to markInstalled even when
     // the verify gate Refused the package.
-    QByteArray const unsignedManifest(kMinimalManifest);
+    QByteArray const unsignedManifest = manifestWithUuid("com.example.cr01-regression");
     QString const archivePath =
         buildSdPluginArchive(tmp.path(), unsignedManifest, "com.example.cr01-regression");
     REQUIRE_FALSE(archivePath.isEmpty());
@@ -656,7 +667,7 @@ TEST_CASE("PluginInstallFromFile unsigned plugin refused without consent", "[plu
     QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
 
     // Build an unsigned .sdPlugin (no Ajazz.Signing block).
-    QByteArray const unsignedBytes{kMinimalManifest};
+    QByteArray const unsignedBytes = manifestWithUuid("com.example.unsigned-no-consent");
     QString const archivePath =
         buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.unsigned-no-consent");
     REQUIRE_FALSE(archivePath.isEmpty());
@@ -701,10 +712,16 @@ TEST_CASE("PluginInstallFromFile zip-extension archive promotes to sdPlugin dir"
     // FileDialog accepts). Inner payload is `<id>.sdPlugin/manifest.json`.
     QString const pluginId = QStringLiteral("com.example.zip-name-regression");
     QString const archivePath = tmp.path() + "/" + pluginId + ".sdPlugin.zip";
+    // #81: the install dir is now named from the manifest UUID, so this
+    // extension-stripping regression keeps the manifest UUID == pluginId to stay
+    // focused on the `.zip` suffix (the differing-name case is covered by the
+    // dedicated "names dir from manifest UUID" test below).
+    QByteArray const manifestBytes = QByteArray{kMinimalManifest}.replace(
+        "com.example.install-from-file-test", pluginId.toUtf8());
     {
         QZipWriter zip(archivePath);
         REQUIRE(zip.status() == QZipWriter::NoError);
-        zip.addFile(pluginId + ".sdPlugin/manifest.json", QByteArray{kMinimalManifest});
+        zip.addFile(pluginId + ".sdPlugin/manifest.json", manifestBytes);
         zip.addFile(pluginId + ".sdPlugin/Code/main.py", QByteArray("# placeholder\n"));
         zip.close();
     }
@@ -716,6 +733,42 @@ TEST_CASE("PluginInstallFromFile zip-extension archive promotes to sdPlugin dir"
     // and MUST NOT keep the `.zip` extension.
     REQUIRE(QFile::exists(QDir(pluginsDir).filePath(pluginId + ".sdPlugin/manifest.json")));
     REQUIRE_FALSE(QDir(pluginsDir).exists(pluginId + ".sdPlugin.zip"));
+}
+
+// ---------------------------------------------------------------------------
+// #81: the sideload (from-file) path must name the install directory from the
+// manifest UUID (`<UUID>.sdPlugin`), NOT the archive file name. A divergent name
+// breaks the action-owner match (action UUID is a dotted prefix of the plugin
+// UUID, compared against the install-dir key), so a sideloaded plugin's actions
+// surface in the library but may not route/render. Mirrors the catalogue
+// install() path, which already names by UUID.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile names install dir from manifest UUID not file name",
+          "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+
+    // Archive FILE NAME ("teams") deliberately differs from the manifest UUID
+    // ("com.example.install-from-file-test"), mirroring the real bug report
+    // (teams.streamDeckPlugin whose manifest UUID is com.niccohagedorn.teamsnavigator).
+    QByteArray const unsignedBytes{kMinimalManifest};
+    QString const archivePath = buildSdPluginArchive(tmp.path(), unsignedBytes, "teams");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+
+    // Promoted under the manifest UUID, NOT the file-derived name.
+    REQUIRE(QFile::exists(
+        QDir(pluginsDir).filePath("com.example.install-from-file-test.sdPlugin/manifest.json")));
+    REQUIRE_FALSE(QDir(pluginsDir).exists(QStringLiteral("teams.sdPlugin")));
 }
 
 TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
@@ -798,7 +851,7 @@ TEST_CASE("PluginCatalog allowUnsignedPlugins setting installs unsigned without 
     model.setAllowUnsignedPlugins(true);
     QSignalSpy finishedSpy(&model, &PluginCatalogModel::installFinished);
 
-    QByteArray const unsignedBytes{kMinimalManifest};
+    QByteArray const unsignedBytes = manifestWithUuid("com.example.allow-unsigned-setting");
     QString const archivePath =
         buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.allow-unsigned-setting");
     REQUIRE_FALSE(archivePath.isEmpty());
@@ -835,7 +888,7 @@ TEST_CASE("PluginCatalog allowUnsignedPlugins=false refuses unsigned without con
     qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
     QSignalSpy spy(&model, &PluginCatalogModel::installFinished);
 
-    QByteArray const unsignedBytes{kMinimalManifest};
+    QByteArray const unsignedBytes = manifestWithUuid("com.example.setting-false-unsigned");
     QString const archivePath =
         buildSdPluginArchive(tmp.path(), unsignedBytes, "com.example.setting-false-unsigned");
     REQUIRE_FALSE(archivePath.isEmpty());
@@ -963,7 +1016,7 @@ TEST_CASE("PluginCatalog per-plugin allow survives launch-sweep with global togg
 
         // Step 1: install the unsigned plugin WITH explicit per-call consent so
         // it lands on disk (global toggle is off, so we use the per-call path).
-        QByteArray const unsignedBytes{kMinimalManifest};
+        QByteArray const unsignedBytes = manifestWithUuid(pluginId);
         QString const archivePath = buildSdPluginArchive(tmp.path(), unsignedBytes, pluginId);
         REQUIRE_FALSE(archivePath.isEmpty());
         REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));

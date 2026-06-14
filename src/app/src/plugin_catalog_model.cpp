@@ -66,6 +66,36 @@ QString g_pluginsDirOverride{};
     return settings.value(QStringLiteral("plugins/allowed/") + uuid, false).toBool();
 }
 
+/// #81: derive a safe install-directory name (`<UUID>.sdPlugin`) from a
+/// manifest's plugin UUID. The Stream Deck convention is that the install
+/// directory is named for the manifest UUID, and the action-owner match keys
+/// off that directory name (an action UUID is a dotted prefix of the plugin
+/// UUID, compared against the install-dir key); the catalogue install() path
+/// already follows it. The manifest is ATTACKER-CONTROLLED, so a UUID like
+/// "../../etc" must never name a directory: accept only a conservative
+/// single-path-component charset (reverse-DNS UUIDs are [A-Za-z0-9._-]) and
+/// reject path separators, leading dots, and any ".." run. Returns an empty
+/// string when the UUID is absent or unsafe, so the caller falls back to the
+/// already-sanitized file-derived name.
+[[nodiscard]] QString safeUuidDirName(QString const& uuid) {
+    if (uuid.isEmpty() || uuid.size() > 255) {
+        return {};
+    }
+    for (QChar const c : uuid) {
+        bool const ok = (c >= QLatin1Char('A') && c <= QLatin1Char('Z')) ||
+                        (c >= QLatin1Char('a') && c <= QLatin1Char('z')) ||
+                        (c >= QLatin1Char('0') && c <= QLatin1Char('9')) || c == QLatin1Char('.') ||
+                        c == QLatin1Char('_') || c == QLatin1Char('-');
+        if (!ok) {
+            return {};
+        }
+    }
+    if (uuid.startsWith(QLatin1Char('.')) || uuid.contains(QStringLiteral(".."))) {
+        return {};
+    }
+    return uuid + QStringLiteral(".sdPlugin");
+}
+
 } // namespace
 
 PluginCatalogModel* PluginCatalogModel::create(QQmlEngine* /*qml*/, QJSEngine* /*js*/) {
@@ -916,6 +946,28 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         return false;
     }
 
+    // #81: name the final install directory `<manifest UUID>.sdPlugin`, mirroring
+    // the catalogue install() path. The from-file sideload path previously named
+    // the dir from the archive FILE NAME, so a plugin whose file name differs
+    // from its manifest UUID (e.g. teams.streamDeckPlugin ->
+    // com.niccohagedorn.teamsnavigator) landed at the wrong dir name; the
+    // action-owner match keys off that name, so its actions surfaced in the
+    // library but could fail to route/render. Read the staged manifest's UUID
+    // now (the staged dir is what step 3 verifies) and fall back to the
+    // already-sanitized file-derived `archiveName` when the manifest has no UUID
+    // or carries one that is unsafe as a path component.
+    QString installName = archiveName;
+    {
+        QFile staged(QDir(stagingParent).filePath(archiveName + QStringLiteral("/manifest.json")));
+        if (staged.open(QIODevice::ReadOnly)) {
+            if (auto const m = parsePluginManifest(staged.read(kMaxPluginDownloadBytes + 1))) {
+                if (QString const byUuid = safeUuidDirName(m->puuid); !byUuid.isEmpty()) {
+                    installName = byUuid;
+                }
+            }
+        }
+    }
+
     // Step 3: verify the staged manifest (T-22-toctou, T-22-tamper-local,
     // T-22-unsigned). The staging dir is NOT in installedPlugins/ so even on
     // Refused the discoverable directory is unaffected.
@@ -947,7 +999,7 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     }
 
     if (vout.verdict == VerifyVerdict::Unsigned && !userConfirmedUnsigned && !consentToUnsigned() &&
-        !perPluginAllowed(archiveName)) {
+        !perPluginAllowed(installName)) {
         // Unsigned (no signature block) — developer sideload. Requires explicit
         // user consent, the allowUnsignedPlugins setting, the env var override,
         // OR a prior per-plugin "Allow this plugin" decision (WR-01) so a
@@ -985,7 +1037,7 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     // The Phase-18 layout expects: <pluginsDir>/<name>.sdPlugin/manifest.json
     // so we rename the staging subdir into pluginsDir directly.
     QString const stagedDir = QDir(stagingParent).filePath(archiveName);
-    QString const promotedDir = QDir(pluginsDir).filePath(archiveName);
+    QString const promotedDir = QDir(pluginsDir).filePath(installName);
 
     // Remove any existing install at the target path before rename
     // (idempotent re-install case).
@@ -1075,10 +1127,13 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     // The localPath key was never cleaned up by reload()/uninstall() and caused
     // installedCount() to drift above the true count over repeated installs
     // from different file paths.
-    // Try to find a matching catalogue row by the promoted dir name (archiveName
-    // may match a UUID in the catalogue if the user is re-installing).
+    // Try to find a matching catalogue row by the promoted dir name. #81: this
+    // is now the manifest-UUID-derived `installName` (falling back to the
+    // file-derived name), so a sideloaded plugin whose file name differed from
+    // its UUID flips the correct catalogue row and persists consent under the
+    // real plugin UUID — the same key the launch-sweep and allowPlugin() use.
     QString const candidateUuid =
-        archiveName.endsWith(QStringLiteral(".sdPlugin")) ? archiveName.chopped(9) : archiveName;
+        installName.endsWith(QStringLiteral(".sdPlugin")) ? installName.chopped(9) : installName;
 
     // FIX-CONSENT: when the user explicitly confirmed a non-trusted install
     // (Unsigned / SelfSigned via userConfirmedUnsigned), persist that consent so
