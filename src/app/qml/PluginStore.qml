@@ -729,6 +729,11 @@ Page {
             required property bool verified
             required property bool installed
             required property string source
+            // Direct archive URL (empty for rows whose upstream only exposes a
+            // landing page — e.g. the AJAZZ Streamdock store, whose CDN base is
+            // not in-app resolvable). Drives the Install-vs-open-browser label so
+            // a browser-only row never looks like a broken install.
+            required property url downloadUrl
             // In-flight install state: set by the action button onClick,
             // cleared by the Connections block listening on
             // PluginCatalogModel::installFinished. Drives the inline
@@ -893,29 +898,45 @@ Page {
                         Layout.fillWidth: true
                         spacing: Theme.spacingXs
 
+                        // A row is in-app installable only when it carries a
+                        // direct archive URL; otherwise install() falls back to
+                        // opening the upstream page in the browser, so the button
+                        // says so plainly rather than appearing to install.
+                        readonly property bool tileInstallable: tile.downloadUrl.toString() !== ""
+
                         Button {
                             Layout.fillWidth: true
                             text: tile.installing
                                 ? qsTr("Installing… %1%").arg(tile.installProgress)
-                                : tile.installed ? qsTr("Installed") : qsTr("Install")
+                                : tile.installed
+                                    ? qsTr("Installed")
+                                    : (parent.tileInstallable ? qsTr("Install")
+                                                              : qsTr("Open page ↗"))
                             enabled: !tile.installing
                             flat: tile.installed
                             Material.foreground: tile.installed ? Theme.fgMuted : "white"
-                            Material.background: tile.installed ? "transparent" : Theme.accent
+                            Material.background: tile.installed
+                                ? "transparent"
+                                : (parent.tileInstallable ? Theme.accent : Theme.surfaceContainerHigh)
                             onClicked: {
                                 if (!PluginCatalog) return;
                                 if (tile.installed) {
                                     PluginCatalog.uninstall(tile.uuid);
-                                } else {
+                                } else if (parent.tileInstallable) {
                                     tile.installing = true;
                                     tile.installProgress = 0;
+                                    PluginCatalog.install(tile.uuid);
+                                } else {
+                                    // Browser-only row: open the upstream store page.
                                     PluginCatalog.install(tile.uuid);
                                 }
                             }
                             Accessible.role: Accessible.Button
                             Accessible.name: tile.installed
                                 ? qsTr("Uninstall %1").arg(tile.name)
-                                : qsTr("Install %1").arg(tile.name)
+                                : (parent.tileInstallable
+                                    ? qsTr("Install %1").arg(tile.name)
+                                    : qsTr("Open %1 store page in browser").arg(tile.name))
                         }
 
                         ProgressBar {
