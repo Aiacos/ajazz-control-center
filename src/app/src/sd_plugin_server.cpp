@@ -157,8 +157,11 @@ int SdPluginServer::connectedPluginCount() const noexcept {
     return static_cast<int>(
         std::count_if(m_connections.begin(), m_connections.end(), [](auto const& c) {
             // Only count fully-registered plugins: socket live, UUID non-empty,
-            // and NOT a sentinel (pre-registration) UUID (HOST-02).
-            return c.socket != nullptr && !c.uuid.isEmpty() && !isSentinelUuid(c.uuid);
+            // NOT a sentinel (pre-registration) UUID (HOST-02), and NOT a
+            // Property Inspector connection (F3: a PI's uuid is an instance
+            // context, not a plugin — it must not inflate the plugin count).
+            return c.socket != nullptr && !c.uuid.isEmpty() && !isSentinelUuid(c.uuid) &&
+                   !c.isPropertyInspector;
         }));
 }
 
@@ -181,7 +184,7 @@ void SdPluginServer::onNewConnection() {
         // pointer leaks if the socket dies before registration (T-30-rekey-race).
         QString const sentinelUuid =
             QStringLiteral("__pending__") + QUuid::createUuid().toString(QUuid::WithoutBraces);
-        m_connections.push_back({sentinelUuid, client, QString{}, 0, false});
+        m_connections.push_back({sentinelUuid, client, QString{}, 0, false, false, QString{}});
         AJAZZ_LOG_INFO("plugin-server",
                        "client connected (pre-registration sentinel={}), total slots {}",
                        sentinelUuid.toStdString(),
@@ -194,7 +197,21 @@ void SdPluginServer::onClientDisconnected() {
     if (!client) {
         return;
     }
-    QString const uuid = uuidForClient(client); // capture before erasing the slot
+    // Capture identity + kind before erasing the slot (F3: a PI disconnect must
+    // emit propertyInspectorDisconnected, not pluginDisconnected).
+    QString uuid;
+    bool wasPropertyInspector = false;
+    QString piOwner;
+    {
+        auto it = std::find_if(m_connections.begin(), m_connections.end(), [client](auto const& c) {
+            return c.socket == client;
+        });
+        if (it != m_connections.end()) {
+            uuid = it->uuid;
+            wasPropertyInspector = it->isPropertyInspector;
+            piOwner = it->ownerPluginUuid;
+        }
+    }
     // Erase the slot rather than nulling its socket (WR-07): a nulled entry
     // lingers forever, so a long-lived session accumulates dead {uuid, nullptr}
     // rows that connectedPluginCount/uuidForClient/registerPlugin must linear-
@@ -204,7 +221,16 @@ void SdPluginServer::onClientDisconnected() {
                                        [client](auto const& c) { return c.socket == client; }),
                         m_connections.end());
     client->deleteLater();
-    if (!uuid.isEmpty() && !isSentinelUuid(uuid)) {
+    if (wasPropertyInspector && !uuid.isEmpty()) {
+        // F3: a Property Inspector disconnected — tell the app so it forwards
+        // propertyInspectorDidDisappear to the owning plugin. Never emit
+        // pluginDisconnected for a PI (it was never a plugin).
+        AJAZZ_LOG_INFO("plugin-server",
+                       "property inspector disconnected: context={} owner={}",
+                       uuid.toStdString(),
+                       piOwner.isEmpty() ? "<unresolved>" : piOwner.toStdString());
+        emit propertyInspectorDisconnected(uuid, piOwner);
+    } else if (!uuid.isEmpty() && !isSentinelUuid(uuid)) {
         // Fully-registered plugin disconnected: notify the app layer.
         AJAZZ_LOG_INFO("plugin-server", "plugin disconnected: uuid={}", uuid.toStdString());
         emit pluginDisconnected(uuid);
@@ -279,10 +305,35 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
                 });
             if (existing != m_connections.end()) {
                 AJAZZ_LOG_WARN("plugin-server",
-                               "registerPlugin for uuid={} already held by another socket; "
+                               "{} for uuid={} already held by another socket; "
                                "closing impostor",
+                               eventName.toStdString(),
                                uuid.toStdString());
                 client->close();
+                return;
+            }
+
+            // --- F3: Property Inspector second-connection model ---
+            // A real Elgato PI opens its OWN WebSocket and registers with
+            // `registerPropertyInspector` using the bound action-instance
+            // `context` as its uuid (canonical doc §5). It is NOT a plugin:
+            // it has no passHello/auth handshake, must NOT emit pluginRegistered
+            // (which would wire device backends to the PI's instance context),
+            // and routes sendToPlugin to its owning plugin. Model it as a
+            // distinct connection keyed by the context, with the owning plugin
+            // resolved via the injected context-owner resolver.
+            if (eventName == QStringLiteral("registerPropertyInspector")) {
+                QString const ownerUuid =
+                    m_contextOwnerResolver ? m_contextOwnerResolver(uuid) : QString{};
+                it->uuid = uuid; // slot keyed by the instance context
+                it->isPropertyInspector = true;
+                it->ownerPluginUuid = ownerUuid;
+                it->authenticated = true; // Elgato PIs have no auth (loopback-only)
+                AJAZZ_LOG_INFO("plugin-server",
+                               "property inspector registered: context={} owner={}",
+                               uuid.toStdString(),
+                               ownerUuid.isEmpty() ? "<unresolved>" : ownerUuid.toStdString());
+                emit propertyInspectorRegistered(uuid, ownerUuid);
                 return;
             }
 
@@ -474,6 +525,61 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         return;
     }
 
+    // --- F3: Property Inspector <-> plugin relay routing ---
+    // These two events are relays between a PI's own WebSocket and its owning
+    // plugin's socket. They are intercepted here so a stock PI (canonical doc §5)
+    // works over the wire; the bundled-PI QWebChannel path is left untouched.
+    auto senderIt = std::find_if(m_connections.begin(),
+                                 m_connections.end(),
+                                 [client](auto const& c) { return c.socket == client; });
+
+    if (eventName == QStringLiteral("sendToPlugin") && senderIt != m_connections.end() &&
+        senderIt->isPropertyInspector) {
+        // PI -> plugin. Forward the full envelope ({action,context,event,payload})
+        // to the owning plugin's socket. The owner is bound at register time from
+        // the trusted context→plugin map; re-resolve if it was unresolved then.
+        QString owner = senderIt->ownerPluginUuid;
+        if (owner.isEmpty() && m_contextOwnerResolver) {
+            owner = m_contextOwnerResolver(senderIt->uuid);
+        }
+        if (!owner.isEmpty()) {
+            sendEvent(owner, msg); // full-envelope overload
+        } else {
+            AJAZZ_LOG_WARN("plugin-server",
+                           "sendToPlugin from PI context={} but no owner plugin resolved; dropping",
+                           senderIt->uuid.toStdString());
+        }
+        return;
+    }
+
+    if (eventName == QStringLiteral("sendToPropertyInspector")) {
+        // plugin -> PI. If a stock PI is connected over its own WS for this
+        // context, forward the full envelope to it — but ONLY if the sending
+        // plugin actually owns the context (mirror the bridge's cross-plugin
+        // denial for the QWebChannel path; a hostile plugin must not poke another
+        // plugin's PI). Then fall through to the routed-action emit so the bundled
+        // QWebChannel-bridge PI path is preserved byte-for-byte (only one
+        // transport has a live target per context, so no double-delivery).
+        QString const ctx = msg.value(QStringLiteral("context")).toString();
+        QWebSocket* piSock = propertyInspectorSocketForContext(ctx);
+        if (piSock != nullptr) {
+            QString const owner = m_contextOwnerResolver ? m_contextOwnerResolver(ctx) : QString{};
+            QString const sender = (senderIt != m_connections.end()) ? senderIt->uuid : QString{};
+            if (!owner.isEmpty() && owner == sender) {
+                auto const frame =
+                    QString::fromUtf8(QJsonDocument(msg).toJson(QJsonDocument::Compact));
+                piSock->sendTextMessage(frame);
+            } else {
+                AJAZZ_LOG_WARN("plugin-server",
+                               "sendToPropertyInspector for context={} from uuid={} denied "
+                               "(not the owning plugin)",
+                               ctx.toStdString(),
+                               sender.toStdString());
+            }
+        }
+        // fall through to the routed-action emit below (QWebChannel path)
+    }
+
     bool isAction = false;
     for (auto const* known : kRoutedActions) {
         if (eventName == QLatin1String(known)) {
@@ -523,6 +629,19 @@ QWebSocket* SdPluginServer::socketForUuid(QString const& uuid) const {
 
 void SdPluginServer::setPasswordForTesting(QString const& password) {
     m_password = password;
+}
+
+void SdPluginServer::setContextOwnerResolver(std::function<QString(QString const&)> resolver) {
+    m_contextOwnerResolver = std::move(resolver);
+}
+
+QWebSocket* SdPluginServer::propertyInspectorSocketForContext(QString const& context) const {
+    // F3: a PI connection is keyed by the instance context in its uuid slot and
+    // flagged isPropertyInspector. Only live (non-null) sockets are returned.
+    auto it = std::find_if(m_connections.begin(), m_connections.end(), [&context](auto const& c) {
+        return c.isPropertyInspector && c.uuid == context && c.socket != nullptr;
+    });
+    return (it == m_connections.end()) ? nullptr : it->socket;
 }
 
 void SdPluginServer::injectAction(QString const& pluginUuid, QJsonObject const& action) {

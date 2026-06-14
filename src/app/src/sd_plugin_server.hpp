@@ -55,6 +55,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 QT_BEGIN_NAMESPACE
@@ -157,6 +158,19 @@ public:
     /// @warning Do NOT use in production code.  Call only from unit tests.
     void setPasswordForTesting(QString const& password);
 
+    /// **F3 (Property Inspector routing)**: inject a resolver mapping an
+    /// action-instance `context` to its owning plugin UUID. A real Elgato
+    /// Property Inspector opens a SEPARATE WebSocket and registers with
+    /// `registerPropertyInspector` using the bound instance `context` as its
+    /// uuid (canonical doc §5). To route `sendToPlugin` from that PI to the
+    /// right plugin — and `propertyInspectorDidAppear`/`…DidDisappear` back to
+    /// it — the server must know which plugin owns the context. The server does
+    /// not own the context→plugin map (the device bridge's ContextRegistry
+    /// does), so the app wires it here (mirrors the bridge's actionOwnerResolver
+    /// / geometry-resolver injection pattern). Unset (default) ⇒ PI connections
+    /// still register but cannot route until a resolver is provided.
+    void setContextOwnerResolver(std::function<QString(QString const& context)> resolver);
+
     /// **Debug/simulation seam**: emit `actionReceived` as if a registered
     /// plugin had sent @p action over the WebSocket. Lets the opt-in debug
     /// channel (PluginDebugService::simulatePluginAction) drive the exact
@@ -179,6 +193,19 @@ signals:
 
     /// A previously-registered plugin disconnected.
     void pluginDisconnected(QString const& pluginUuid);
+
+    /// **F3**: a Property Inspector completed `registerPropertyInspector` on its
+    /// own WebSocket. @p context is the bound action-instance context (the PI's
+    /// registration uuid); @p ownerPluginUuid is the resolved owning plugin (may
+    /// be empty if no resolver is set or the context is unknown). The app routes
+    /// this to `sendEvent(ownerPluginUuid, "propertyInspectorDidAppear", …)`.
+    /// Distinct from pluginRegistered — a PI is NOT a plugin and must NOT be
+    /// wired to device backends.
+    void propertyInspectorRegistered(QString const& context, QString const& ownerPluginUuid);
+
+    /// **F3**: a previously-registered Property Inspector disconnected. The app
+    /// routes this to `sendEvent(ownerPluginUuid, "propertyInspectorDidDisappear", …)`.
+    void propertyInspectorDisconnected(QString const& context, QString const& ownerPluginUuid);
 
     /// A plugin sent an `action`-class message (setTitle / setImage / etc.).
     /// The app layer routes the action to the appropriate device backend.
@@ -234,6 +261,9 @@ private:
         QString salt;              ///< Hex-encoded random per-connection salt.
         int authAttempts{0};       ///< Bad-challenge counter; socket closed at kMaxAuthAttempts.
         bool authenticated{false}; ///< True once the connection has passed auth (or no password).
+        // F3 (Property Inspector second-connection model):
+        bool isPropertyInspector{false}; ///< True for a registerPropertyInspector connection.
+        QString ownerPluginUuid; ///< For a PI: the resolved owning plugin (routes sendToPlugin).
     };
     std::vector<PluginConnection> m_connections;
 
@@ -241,6 +271,14 @@ private:
     /// Empty (default) = no-password-accept: passHello is sent and the
     /// connection is immediately treated as authenticated.
     QString m_password;
+
+    /// F3: context→owning-plugin resolver for Property Inspector routing.
+    /// Unset by default; see setContextOwnerResolver().
+    std::function<QString(QString const&)> m_contextOwnerResolver;
+
+    /// F3: look up the live PI socket bound to @p context (a PI connection whose
+    /// uuid == context). Returns nullptr if no live WS PI is registered for it.
+    [[nodiscard]] QWebSocket* propertyInspectorSocketForContext(QString const& context) const;
 };
 
 } // namespace ajazz::app

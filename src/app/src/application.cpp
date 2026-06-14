@@ -700,6 +700,49 @@ Application::Application(QObject* parent)
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onPluginDisconnected);
 
+    // 3a-F3. Property Inspector second-connection model (canonical doc §5).
+    //   The server resolves which plugin owns a PI's instance context via this
+    //   resolver, backed by the bridge's ContextRegistry (the trusted
+    //   context→plugin map). It routes sendToPlugin from a stock PI to the owner
+    //   and lets us forward propertyInspectorDidAppear/…DidDisappear back.
+    m_pluginServer->setContextOwnerResolver([this](QString const& context) -> QString {
+        auto const ctx = m_pluginBridge->registry().byContext(context);
+        return ctx.has_value() ? ctx->pluginUuid : QString{};
+    });
+    //   On PI connect/disconnect, tell the owning plugin its PI is visible/hidden.
+    //   These events carry {action,context,device,event} and NO payload (§3).
+    auto const sendPiLifecycle =
+        [this](QString const& context, QString const& owner, QString const& eventName) {
+            if (owner.isEmpty()) {
+                return; // unresolved context — nothing to notify
+            }
+            auto const ctx = m_pluginBridge->registry().byContext(context);
+            if (!ctx.has_value()) {
+                return;
+            }
+            QJsonObject const ev{
+                {QStringLiteral("action"), ctx->actionUUID},
+                {QStringLiteral("context"), context},
+                {QStringLiteral("device"), ctx->deviceId},
+                {QStringLiteral("event"), eventName},
+            };
+            m_pluginServer->sendEvent(owner, ev);
+        };
+    QObject::connect(m_pluginServer.get(),
+                     &SdPluginServer::propertyInspectorRegistered,
+                     this,
+                     [sendPiLifecycle](QString const& context, QString const& owner) {
+                         sendPiLifecycle(
+                             context, owner, QStringLiteral("propertyInspectorDidAppear"));
+                     });
+    QObject::connect(m_pluginServer.get(),
+                     &SdPluginServer::propertyInspectorDisconnected,
+                     this,
+                     [sendPiLifecycle](QString const& context, QString const& owner) {
+                         sendPiLifecycle(
+                             context, owner, QStringLiteral("propertyInspectorDidDisappear"));
+                     });
+
     // 3b. Host-level (context-free) plugin system events. The device bridge
     //     deliberately ignores everything that is not a key-visual action
     //     (isVisualAction), so openUrl / logMessage — which Elgato and OpenDeck

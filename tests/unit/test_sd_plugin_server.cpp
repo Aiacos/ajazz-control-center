@@ -783,3 +783,131 @@ TEST_CASE("PluginAuthTest duplicate UUID registration rejected",
     REQUIRE(server.connectedPluginCount() == 1);
     REQUIRE(legit.state() == QAbstractSocket::ConnectedState);
 }
+
+// ===========================================================================
+// F3 — Property Inspector second-connection model (canonical doc §5).
+//
+// A real Elgato PI opens its OWN WebSocket and registers with
+// `registerPropertyInspector` using the bound action-instance `context` as its
+// uuid. It must NOT be modelled as a plugin (no pluginRegistered, not counted),
+// and sendToPlugin / sendToPropertyInspector must relay between the PI socket
+// and the owning plugin socket. These tests drive synthetic WS clients exactly
+// as an Elgato PI behaves on the wire.
+// ===========================================================================
+
+TEST_CASE("SdPluginServer registerPropertyInspector is modelled as a PI not a plugin",
+          "[plugin-server][property-inspector][PLUGIN-GAP-F3]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    // Resolver: context "CTX1" is owned by plugin "com.test.plug".
+    server.setContextOwnerResolver([](QString const& ctx) -> QString {
+        return ctx == QStringLiteral("CTX1") ? QStringLiteral("com.test.plug") : QString{};
+    });
+    QSignalSpy pluginRegSpy(&server, &SdPluginServer::pluginRegistered);
+    QSignalSpy piRegSpy(&server, &SdPluginServer::propertyInspectorRegistered);
+    QSignalSpy piDiscSpy(&server, &SdPluginServer::propertyInspectorDisconnected);
+    REQUIRE(server.start(0));
+    auto const url = QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort()));
+
+    // Register the owning plugin first.
+    QWebSocket plugin;
+    QSignalSpy pluginConnected(&plugin, &QWebSocket::connected);
+    plugin.open(url);
+    REQUIRE(waitForSpy(pluginConnected));
+    plugin.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy(pluginRegSpy));
+    REQUIRE(server.connectedPluginCount() == 1);
+
+    // Now register the Property Inspector on its own socket, keyed by CTX1.
+    QWebSocket pi;
+    QSignalSpy piConnected(&pi, &QWebSocket::connected);
+    pi.open(url);
+    REQUIRE(waitForSpy(piConnected));
+    pi.sendTextMessage(QStringLiteral(R"({"event":"registerPropertyInspector","uuid":"CTX1"})"));
+    REQUIRE(waitForSpy(piRegSpy));
+
+    // The PI must NOT be reported as a plugin and must NOT inflate the count.
+    CHECK(piRegSpy.count() == 1);
+    CHECK(piRegSpy.first().at(0).toString() == QStringLiteral("CTX1"));
+    CHECK(piRegSpy.first().at(1).toString() == QStringLiteral("com.test.plug"));
+    CHECK(pluginRegSpy.count() == 1); // still just the plugin, NOT +1 for the PI
+    CHECK(server.connectedPluginCount() == 1);
+
+    // Disconnecting the PI emits propertyInspectorDisconnected, never pluginDisconnected.
+    pi.close();
+    REQUIRE(waitForSpy(piDiscSpy));
+    CHECK(piDiscSpy.first().at(0).toString() == QStringLiteral("CTX1"));
+    CHECK(piDiscSpy.first().at(1).toString() == QStringLiteral("com.test.plug"));
+    CHECK(server.connectedPluginCount() == 1); // plugin still live
+}
+
+TEST_CASE("SdPluginServer relays sendToPlugin and sendToPropertyInspector between PI and owner",
+          "[plugin-server][property-inspector][PLUGIN-GAP-F3]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    server.setContextOwnerResolver([](QString const& ctx) -> QString {
+        return ctx == QStringLiteral("CTX1") ? QStringLiteral("com.test.plug") : QString{};
+    });
+    QSignalSpy pluginRegSpy(&server, &SdPluginServer::pluginRegistered);
+    QSignalSpy piRegSpy(&server, &SdPluginServer::propertyInspectorRegistered);
+    REQUIRE(server.start(0));
+    auto const url = QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort()));
+
+    QWebSocket plugin;
+    QSignalSpy pluginConnected(&plugin, &QWebSocket::connected);
+    QSignalSpy pluginRx(&plugin, &QWebSocket::textMessageReceived);
+    plugin.open(url);
+    REQUIRE(waitForSpy(pluginConnected));
+    plugin.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy(pluginRegSpy));
+    pluginRx.clear(); // drop the passHello frame
+
+    QWebSocket pi;
+    QSignalSpy piConnected(&pi, &QWebSocket::connected);
+    QSignalSpy piRx(&pi, &QWebSocket::textMessageReceived);
+    pi.open(url);
+    REQUIRE(waitForSpy(piConnected));
+    pi.sendTextMessage(QStringLiteral(R"({"event":"registerPropertyInspector","uuid":"CTX1"})"));
+    REQUIRE(waitForSpy(piRegSpy));
+
+    // PI -> plugin: the owning plugin must receive the sendToPlugin frame.
+    pi.sendTextMessage(QStringLiteral(
+        R"({"action":"com.test.plug.act","context":"CTX1","event":"sendToPlugin","payload":{"k":"v"}})"));
+    REQUIRE(waitForSpy(pluginRx));
+    {
+        auto const obj =
+            QJsonDocument::fromJson(pluginRx.first().at(0).toString().toUtf8()).object();
+        CHECK(obj.value(QStringLiteral("event")).toString() == QStringLiteral("sendToPlugin"));
+        CHECK(obj.value(QStringLiteral("context")).toString() == QStringLiteral("CTX1"));
+        CHECK(
+            obj.value(QStringLiteral("payload")).toObject().value(QStringLiteral("k")).toString() ==
+            QStringLiteral("v"));
+    }
+
+    // plugin -> PI: the owning plugin's sendToPropertyInspector reaches the PI socket.
+    plugin.sendTextMessage(QStringLiteral(
+        R"({"context":"CTX1","event":"sendToPropertyInspector","payload":{"hello":"pi"}})"));
+    REQUIRE(waitForSpy(piRx));
+    {
+        auto const obj = QJsonDocument::fromJson(piRx.first().at(0).toString().toUtf8()).object();
+        CHECK(obj.value(QStringLiteral("event")).toString() ==
+              QStringLiteral("sendToPropertyInspector"));
+        CHECK(obj.value(QStringLiteral("payload"))
+                  .toObject()
+                  .value(QStringLiteral("hello"))
+                  .toString() == QStringLiteral("pi"));
+    }
+
+    // Cross-plugin denial: a DIFFERENT plugin must not poke CTX1's PI.
+    QWebSocket evil;
+    QSignalSpy evilConnected(&evil, &QWebSocket::connected);
+    evil.open(url);
+    REQUIRE(waitForSpy(evilConnected));
+    evil.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.evil.plug"})"));
+    pump(200);
+    piRx.clear();
+    evil.sendTextMessage(QStringLiteral(
+        R"({"context":"CTX1","event":"sendToPropertyInspector","payload":{"x":"y"}})"));
+    pump(300);
+    CHECK(piRx.count() == 0); // the impostor's frame must NOT reach the PI
+}
