@@ -1132,6 +1132,44 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
         m_pluginManager = std::make_unique<PluginManager>(
             pluginsDir, m_pluginServer.get(), makeDefaultNodeProbe(), m_propertyInspector.get());
 
+        // F1 (PLUGIN-GAP-ANALYSIS): feed the -info.devices[] array from the
+        // currently-connected devices so device-aware plugins can target keys.
+        // Built from DeviceModel::connectedCodenames() + the descriptor geometry,
+        // matching the deviceDidConnect deviceInfo (same id=codename, size, and
+        // Elgato DeviceType). MUST be set before discover()/spawn() below, which
+        // call buildInfoJson(). See elgato_plugin_protocol.md §2.3.
+        m_pluginManager->setDevicesInfoProvider([this]() -> QJsonArray {
+            QJsonArray devices;
+            auto const descriptors = m_deviceRegistry.enumerate();
+            for (QString const& codename : m_deviceModel->connectedCodenames()) {
+                for (auto const& d : descriptors) {
+                    if (QString::fromStdString(d.codename) != codename) {
+                        continue;
+                    }
+                    // Only renderable Stream Deck surfaces belong in the plugin
+                    // devices[] — a keyboard/mouse (keyCount==0) is not addressable
+                    // by a .sdPlugin and would appear as a useless 0x0 device.
+                    if (d.keyCount == 0) {
+                        break;
+                    }
+                    int const rows = d.keyRows != 0
+                                         ? d.keyRows
+                                         : (d.gridColumns != 0 ? d.keyCount / d.gridColumns : 0);
+                    int const type = (d.hasTouchStrip || d.encoderCount > 0) ? 7 : 0;
+                    devices.append(QJsonObject{
+                        {QStringLiteral("id"), codename},
+                        {QStringLiteral("name"), QString::fromStdString(d.model)},
+                        {QStringLiteral("type"), type},
+                        {QStringLiteral("size"),
+                         QJsonObject{{QStringLiteral("columns"), d.gridColumns},
+                                     {QStringLiteral("rows"), rows}}},
+                    });
+                    break;
+                }
+            }
+            return devices;
+        });
+
         // HOST-01 (Phase 30-03): construct the UnifiedPluginHost aggregator now that both
         // sub-hosts are known. m_pluginHost may still be nullptr if AJAZZ_PYTHON_HOST is
         // not set or the Python host failed to start — the aggregator degrades gracefully.

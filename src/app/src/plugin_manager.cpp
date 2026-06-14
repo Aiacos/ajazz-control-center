@@ -33,12 +33,14 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLocale>
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QSettings>
 #include <QStandardPaths>
 #include <QString>
 #include <QStringList>
+#include <QSysInfo>
 #include <QTimer>
 
 #include <utility>
@@ -203,22 +205,67 @@ QString PluginManager::resolveCodePath(PluginManifest const& manifest) {
     return resolveEffectiveCodePath(manifest);
 }
 
-QString PluginManager::buildInfoJson() {
-    // Minimal Elgato application-info envelope.
-    // Shape: {application:{version,platform},devicePixelRatio:1,devices:[]}.
-    // Source: 18-RESEARCH.md A2 — exact shape pinned against a real package in Phase 25;
-    //         this minimal form is sufficient for the plugin host to identify itself.
-    // The advertised version is the EMULATED Stream Deck app version (not our own
-    // app version): plugins compare against the Stream Deck app, so reporting our
-    // 0.1.0 would make version-gated plugins refuse to run. See emulatedStreamDeckVersion().
+void PluginManager::setDevicesInfoProvider(std::function<QJsonArray()> provider) {
+    m_devicesInfoProvider = std::move(provider);
+}
+
+QString PluginManager::buildInfoJson(PluginManifest const& manifest) const {
+    // Full Elgato RegistrationInfo envelope (F1, PLUGIN-GAP-ANALYSIS). The prior
+    // minimal {application:{version,platform},devices:[]} broke version- and
+    // device-gated real .sdPlugin plugins, which read application.version,
+    // plugin{}, and a populated devices[] at startup. Shape pinned against the
+    // open-source SDK; see docs/protocols/streamdeck/elgato_plugin_protocol.md §2.3.
+
+    // application: the EMULATED Stream Deck app identity (NOT our own app
+    // version — plugins gate Software.MinimumVersion against the SD app, so
+    // reporting 0.1.x would make them refuse to run). version is the 4-part
+    // Elgato format ("6.9.0.0").
     QJsonObject app;
-    app[QStringLiteral("version")] = emulatedStreamDeckVersion();
+    app[QStringLiteral("font")] = QStringLiteral("Liberation Sans");
+    // BCP-47 left part (e.g. "en" from "en_US"); Elgato uses a short language code.
+    app[QStringLiteral("language")] = QLocale::system().name().section(QLatin1Char('_'), 0, 0);
     app[QStringLiteral("platform")] = currentPlatformString();
+    app[QStringLiteral("platformVersion")] = QSysInfo::productVersion();
+    app[QStringLiteral("version")] = emulatedStreamDeckVersion() + QStringLiteral(".0.0");
+
+    // colors: the standard Stream Deck dark-theme palette (8-digit RGBA hex).
+    // Property Inspectors read these to match the host chrome.
+    QJsonObject const colors{
+        {QStringLiteral("buttonMouseOverBackgroundColor"), QStringLiteral("#464646FF")},
+        {QStringLiteral("buttonPressedBackgroundColor"), QStringLiteral("#303030FF")},
+        {QStringLiteral("buttonPressedBorderColor"), QStringLiteral("#646464FF")},
+        {QStringLiteral("buttonPressedTextColor"), QStringLiteral("#969696FF")},
+        {QStringLiteral("highlightColor"), QStringLiteral("#0090FFFF")},
+    };
+
+    // plugin: per-plugin identity. The plugin UUID is the PUUID alias when set,
+    // else the bare .sdPlugin directory name (the canonical Elgato manifest UUID;
+    // mirrors the pluginId derivation in spawn()), else the manifest Name. version
+    // is the manifest Version. A plugin reads plugin.uuid to address its own
+    // global settings / deep links.
+    QString pluginUuid = manifest.puuid;
+    if (pluginUuid.isEmpty()) {
+        if (!manifest.sourceDir.isEmpty()) {
+            pluginUuid = QFileInfo(manifest.sourceDir).fileName();
+            if (pluginUuid.endsWith(QStringLiteral(".sdPlugin"))) {
+                pluginUuid.chop(static_cast<int>(QStringLiteral(".sdPlugin").size()));
+            }
+        } else {
+            pluginUuid = manifest.name;
+        }
+    }
+    QJsonObject const plugin{
+        {QStringLiteral("uuid"), pluginUuid},
+        {QStringLiteral("version"), manifest.version},
+    };
 
     QJsonObject envelope;
     envelope[QStringLiteral("application")] = app;
+    envelope[QStringLiteral("colors")] = colors;
     envelope[QStringLiteral("devicePixelRatio")] = 1;
-    envelope[QStringLiteral("devices")] = QJsonArray{};
+    envelope[QStringLiteral("devices")] =
+        m_devicesInfoProvider ? m_devicesInfoProvider() : QJsonArray{};
+    envelope[QStringLiteral("plugin")] = plugin;
 
     return QString::fromUtf8(QJsonDocument(envelope).toJson(QJsonDocument::Compact));
 }
@@ -463,7 +510,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
             return;
         }
 
-        QString const infoJson = buildInfoJson();
+        QString const infoJson = buildInfoJson(manifest);
         quint16 port = 0;
 #if defined(AJAZZ_HAVE_WEBSOCKETS)
         if (m_server) {
@@ -534,7 +581,7 @@ void PluginManager::spawn(PluginManifest const& manifest) {
             htmlPort = m_server->serverPort();
         }
 #endif
-        QString const infoJson = buildInfoJson();
+        QString const infoJson = buildInfoJson(manifest);
         QString const htmlAbs =
             manifest.sourceDir.isEmpty() ? code : manifest.sourceDir + QLatin1Char('/') + code;
 

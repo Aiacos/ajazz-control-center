@@ -416,6 +416,29 @@ public:
      */
     [[nodiscard]] bool monitorsApplication(QString const& pluginUuid, QString const& appId) const;
 
+    /**
+     * @brief Inject the provider for the `-info.devices[]` array (F1).
+     *
+     * The registration `-info` payload must advertise the currently-connected
+     * devices (id/name/size/type) so device-aware plugins behave; a plugin that
+     * reads an empty `devices:[]` cannot target any key. PluginManager has no
+     * DeviceRegistry, so Application supplies a provider that walks the connected
+     * codenames and builds the Elgato deviceInfo entries (see
+     * docs/protocols/streamdeck/elgato_plugin_protocol.md §2.3). Unset => empty
+     * array (prior behaviour).
+     *
+     * @param provider  () -> QJsonArray of Elgato device-info objects.
+     */
+    void setDevicesInfoProvider(std::function<QJsonArray()> provider);
+
+    /// Build the JSON string passed as the `-info` argv to spawned plugins.
+    /// Full Elgato RegistrationInfo shape (F1): application{font,language,
+    /// platform,platformVersion,version}, colors{}, devicePixelRatio,
+    /// devices[] (from m_devicesInfoProvider), and a per-plugin plugin{uuid,
+    /// version} sourced from @p manifest. Public so it can be unit-tested
+    /// directly. See docs/protocols/streamdeck/elgato_plugin_protocol.md §2.3.
+    [[nodiscard]] QString buildInfoJson(PluginManifest const& manifest) const;
+
 signals:
     /**
      * @brief Emitted when a plugin is permanently disabled (3-in-30s crash or node absent).
@@ -443,10 +466,9 @@ private:
      */
     [[nodiscard]] static bool shouldSkipSpawn(QString const& pluginId);
 
-    /// Build the JSON string passed as the `-info` argv to spawned plugins.
-    /// Shape: `{application:{version,platform},devicePixelRatio:1,devices:[]}`.
-    /// Minimal but correct per 18-RESEARCH.md A2; real-device envelope pinned in Phase 25.
-    [[nodiscard]] static QString buildInfoJson();
+    /// Provider for the `-info.devices[]` array, injected by Application over the
+    /// DeviceRegistry (setDevicesInfoProvider). Unset => empty array.
+    std::function<QJsonArray()> m_devicesInfoProvider;
 
     QString m_pluginsDir;
     SdPluginServer* m_server; ///< Non-owning. May be nullptr in test contexts.

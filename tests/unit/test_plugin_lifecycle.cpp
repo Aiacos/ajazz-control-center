@@ -858,3 +858,85 @@ TEST_CASE("PluginManagerTest rediscover skips user-disabled plugins", "[plugin-m
 
     QStandardPaths::setTestModeEnabled(false);
 }
+
+// ===========================================================================
+// F1 (PLUGIN-GAP-ANALYSIS): buildInfoJson emits the full Elgato RegistrationInfo
+// shape. The prior minimal {application:{version,platform},devices:[]} broke
+// version- and device-gated real .sdPlugin plugins.
+// ===========================================================================
+TEST_CASE("PluginManagerTest buildInfoJson emits the full Elgato -info shape",
+          "[plugin-manager][PLUGIN-GAP-F1]") {
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    PluginManager mgr(scratch.path(), nullptr, {});
+
+    // Inject a one-device provider (mirrors Application's DeviceModel-backed one).
+    mgr.setDevicesInfoProvider([]() -> QJsonArray {
+        return QJsonArray{QJsonObject{
+            {QStringLiteral("id"), QStringLiteral("akp05e")},
+            {QStringLiteral("name"), QStringLiteral("AJAZZ AKP05E")},
+            {QStringLiteral("type"), 7},
+            {QStringLiteral("size"),
+             QJsonObject{{QStringLiteral("columns"), 5}, {QStringLiteral("rows"), 2}}},
+        }};
+    });
+
+    PluginManifest manifest;
+    manifest.name = QStringLiteral("Counter");
+    manifest.version = QStringLiteral("1.2.3.4");
+    manifest.sourceDir = QStringLiteral("/plugins/com.example.counter.sdPlugin");
+
+    QJsonObject const info = QJsonDocument::fromJson(mgr.buildInfoJson(manifest).toUtf8()).object();
+
+    // application block: 4-part version + platform identity.
+    QJsonObject const app = info.value(QStringLiteral("application")).toObject();
+    CHECK(app.value(QStringLiteral("version")).toString() == QStringLiteral("6.9.0.0"));
+    CHECK_FALSE(app.value(QStringLiteral("platform")).toString().isEmpty());
+    CHECK(app.contains(QStringLiteral("platformVersion")));
+    CHECK(app.contains(QStringLiteral("font")));
+    CHECK(app.contains(QStringLiteral("language")));
+
+    // colors block present (PI chrome matching).
+    CHECK(info.value(QStringLiteral("colors"))
+              .toObject()
+              .value(QStringLiteral("highlightColor"))
+              .toString() == QStringLiteral("#0090FFFF"));
+
+    CHECK(info.value(QStringLiteral("devicePixelRatio")).toInt() == 1);
+
+    // plugin block: uuid derived from the .sdPlugin dir name (suffix stripped),
+    // version from the manifest.
+    QJsonObject const plugin = info.value(QStringLiteral("plugin")).toObject();
+    CHECK(plugin.value(QStringLiteral("uuid")).toString() == QStringLiteral("com.example.counter"));
+    CHECK(plugin.value(QStringLiteral("version")).toString() == QStringLiteral("1.2.3.4"));
+
+    // devices[] reflects the injected provider (NOT an empty array).
+    QJsonArray const devices = info.value(QStringLiteral("devices")).toArray();
+    REQUIRE(devices.size() == 1);
+    QJsonObject const dev = devices.at(0).toObject();
+    CHECK(dev.value(QStringLiteral("id")).toString() == QStringLiteral("akp05e"));
+    CHECK(dev.value(QStringLiteral("type")).toInt() == 7);
+    CHECK(dev.value(QStringLiteral("size")).toObject().value(QStringLiteral("columns")).toInt() ==
+          5);
+}
+
+TEST_CASE("PluginManagerTest buildInfoJson prefers PUUID for plugin.uuid",
+          "[plugin-manager][PLUGIN-GAP-F1]") {
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    PluginManager mgr(scratch.path(), nullptr, {});
+
+    PluginManifest manifest;
+    manifest.name = QStringLiteral("Weather");
+    manifest.version = QStringLiteral("2.0.0.0");
+    manifest.puuid = QStringLiteral("com.vendor.weather");
+    manifest.sourceDir = QStringLiteral("/plugins/com.jk.weather.sdPlugin");
+
+    QJsonObject const info = QJsonDocument::fromJson(mgr.buildInfoJson(manifest).toUtf8()).object();
+    // PUUID wins over the directory-derived uuid.
+    CHECK(
+        info.value(QStringLiteral("plugin")).toObject().value(QStringLiteral("uuid")).toString() ==
+        QStringLiteral("com.vendor.weather"));
+    // Unset provider => empty devices[] (graceful default).
+    CHECK(info.value(QStringLiteral("devices")).toArray().isEmpty());
+}
