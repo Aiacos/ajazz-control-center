@@ -1148,6 +1148,74 @@ TEST_CASE("PluginDeviceBridgeE2E visual family events do not crash",
     CHECK(true);
 }
 
+// ---------------------------------------------------------------------------
+// e2e: F4 — `setBackground` is the vendor alias for `setBG` (both routed by the
+// server); previously `setBackground` matched no handler and was a silent no-op.
+// `clearIcon` resets the bound key to a blank surface. Both must paint the key.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E setBackground alias and clearIcon paint the bound key",
+          "[plugin-device-bridge][e2e][PLUGIN-GAP-F4]") {
+    ensureQCoreApp();
+
+    auto fake = makeE2eFake();
+
+    ajazz::app::StreamDockControlService control(
+        [fake](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return fake; }, nullptr);
+    control.setActiveDevice(QStringLiteral("akp05e"));
+    QCoreApplication::processEvents();
+    QCoreApplication::processEvents();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto fx = makeE2eFixture(&server, &control);
+    // fx.contextId is for key {row:0, col:2} = 1-based keyIndex 3.
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy19(connectedSpy));
+    client.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
+    REQUIRE(waitForSpy19(registeredSpy));
+
+    auto const paintsBeforeBg = fake->keyImages.size();
+
+    // setBackground (vendor alias for setBG): must paint key 3 with the solid fill.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"setBackground","context":"%1","payload":{"color":"#00FF00"}})")
+            .arg(fx.contextId));
+    {
+        auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+        while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+            if (fake->keyImages.size() > paintsBeforeBg) {
+                break;
+            }
+        }
+    }
+    REQUIRE(fake->keyImages.size() > paintsBeforeBg);
+    CHECK(fake->keyImages.back().index == 3); // routed to the bound key
+
+    auto const paintsBeforeClear = fake->keyImages.size();
+
+    // clearIcon: must paint key 3 again (blank surface).
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"clearIcon","context":"%1"})").arg(fx.contextId));
+    {
+        auto deadline = QDateTime::currentMSecsSinceEpoch() + 3000;
+        while (QDateTime::currentMSecsSinceEpoch() < deadline) {
+            QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+            if (fake->keyImages.size() > paintsBeforeClear) {
+                break;
+            }
+        }
+    }
+    REQUIRE(fake->keyImages.size() > paintsBeforeClear);
+    CHECK(fake->keyImages.back().index == 3);
+}
+
 // ==========================================================================
 // Phase 19-03 e2e tests (PLUGIN-10): outbound device->plugin event routing
 //

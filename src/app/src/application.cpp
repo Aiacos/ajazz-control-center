@@ -72,6 +72,45 @@
 #endif
 #endif
 
+namespace {
+
+/// F4: vendor actions that SdPluginServer routes (so they pass the auth gate and
+/// reach an actionReceived consumer) but for which the host has no implementation.
+/// `setBackground`/`clearIcon` are handled by the device bridge and are NOT here;
+/// the visual/settings families are handled elsewhere too. This is the residual
+/// set that would otherwise be a silent no-op — logged explicitly instead.
+/// `sendToDevice` (raw-HID forwarding) stays unimplemented by the RE hard rule.
+bool isUnsupportedVendorAction(QString const& event) {
+    static QString const kUnsupported[] = {
+        QStringLiteral("sendToDevice"),
+        QStringLiteral("openTouchbarSecondaryMenu"),
+        QStringLiteral("exitTouchbarSecondaryMenu"),
+        QStringLiteral("enterGatheringEvent"),
+        QStringLiteral("registrationScreenSaverEvent"),
+        QStringLiteral("unRegistrationScreenSaverEvent"),
+        QStringLiteral("lockScreen"),
+        QStringLiteral("unLockScreen"),
+        QStringLiteral("getScreenshot"),
+        QStringLiteral("getSystemAudioVolume"),
+        QStringLiteral("getUserInfo"),
+        QStringLiteral("setAcImgTop"),
+        QStringLiteral("onSwitchToFolderProfile"),
+        QStringLiteral("onSwitchFromFolderProfile"),
+        QStringLiteral("deleteAction"),
+        QStringLiteral("stopBackground"),
+        QStringLiteral("exitFullScreen"),
+        QStringLiteral("getDetectedSensorsData"),
+        QStringLiteral("startAudioCapture"),
+        QStringLiteral("stopAudioCapture"),
+        QStringLiteral("sendUserInfo"),
+    };
+    return std::any_of(std::begin(kUnsupported), std::end(kUnsupported), [&](QString const& e) {
+        return e == event;
+    });
+}
+
+} // namespace
+
 namespace ajazz::app {
 
 Application::Application(QObject* parent)
@@ -742,6 +781,21 @@ Application::Application(QObject* parent)
                         : msg;
                 AJAZZ_LOG_INFO(
                     "plugin", "[{}] {}", pluginUuid.toStdString(), bounded.toStdString());
+            } else if (isUnsupportedVendorAction(event)) {
+                // F4: these vendor actions are ROUTED by SdPluginServer (so they
+                // pass the auth gate and reach a consumer) but have no handler in
+                // either the device bridge (not isVisualAction) or here. Previously
+                // they vanished silently, leaving a plugin author with no signal
+                // that the call did nothing. Surface an explicit WARN so the
+                // unsupported call is visible in the unified log / debug console
+                // instead of being an invisible no-op. `sendToDevice` raw-HID
+                // forwarding stays deliberately unimplemented (RE hard rule); it is
+                // logged here, never executed.
+                AJAZZ_LOG_WARN("plugin",
+                               "unsupported action '{}' requested by plugin {} — not implemented "
+                               "(no-op)",
+                               event.toStdString(),
+                               pluginUuid.toStdString());
             }
         });
 

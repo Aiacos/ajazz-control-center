@@ -435,6 +435,9 @@ namespace {
 bool isVisualAction(QString const& event) {
     return event == QStringLiteral("setImage") || event == QStringLiteral("setTitle") ||
            event == QStringLiteral("setState") || event == QStringLiteral("setBG") ||
+           // F4: `setBackground` is the documented vendor alias for `setBG`
+           // (sd_plugin_server.cpp routes both); `clearIcon` resets a key to blank.
+           event == QStringLiteral("setBackground") || event == QStringLiteral("clearIcon") ||
            event == QStringLiteral("setFeedback") || event == QStringLiteral("setFeedbackLayout") ||
            event == QStringLiteral("setText") || event == QStringLiteral("showAlert") ||
            event == QStringLiteral("showOk");
@@ -636,8 +639,30 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         onSetImage(pluginUuid, action, ctx, keyCols);
     } else if (event == QStringLiteral("setTitle")) {
         onSetTitle(pluginUuid, action, ctx, keyCols);
-    } else if (event == QStringLiteral("setBG")) {
+    } else if (event == QStringLiteral("setBG") || event == QStringLiteral("setBackground")) {
+        // F4: `setBackground` is the vendor alias for `setBG` — same {color}
+        // payload, same fill behaviour. Previously `setBackground` was routed by
+        // the server but never matched here, so it was a silent no-op.
         onSetBG(pluginUuid, action, ctx, keyCols);
+    } else if (event == QStringLiteral("clearIcon")) {
+        // F4: reset the key to a blank surface (vendor extension; OpenDeck has no
+        // analogue). Paint a solid black key and drop any cached title overlay so
+        // the cleared key does not keep a stale label on the next reapplyTitle.
+        if (ctx.controller == QStringLiteral("Keypad")) {
+            constexpr int kKeySize = 85;
+            QImage blank(kKeySize, kKeySize, QImage::Format_RGBA8888);
+            blank.fill(QColor(0, 0, 0));
+            std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
+            m_titleByKey.erase(keyIndex);
+            try {
+                m_control->assignKeyImage(keyIndex, blank);
+            } catch (std::exception const& e) {
+                AJAZZ_LOG_WARN("plugin-bridge",
+                               "clearIcon: assignKeyImage threw for key {}: {}",
+                               static_cast<int>(keyIndex),
+                               e.what());
+            }
+        }
     } else if (event == QStringLiteral("setState")) {
         // setState changes the current 0-based action state. Track it on the
         // context so subsequent willAppear / keyDown / keyUp / dial* events report
