@@ -81,6 +81,14 @@ Item {
         }
         return -1;
     }
+    // Keep the header device selector fresh when a device is plugged/unplugged
+    // mid-session (DeviceModel emits dataChanged on the ConnectedRole flip and
+    // modelReset on a full refresh).
+    Connections {
+        target: (typeof DeviceModel !== "undefined") ? DeviceModel : null
+        function onDataChanged() { root._refreshDevices(); }
+        function onModelReset() { root._refreshDevices(); }
+    }
 
     // ---- Resolved grid dimensions ------------------------------------------
     readonly property int _keyColumnsResolved: gridColumns > 0

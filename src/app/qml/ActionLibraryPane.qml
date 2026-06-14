@@ -75,6 +75,17 @@ Rectangle {
             || (plugin !== "" && plugin.toLowerCase().indexOf(q) !== -1);
     }
 
+    /// Cached plugin-action list. installedActions() does disk I/O (scans the
+    /// plugins dir + parses every manifest), so it is fetched ONLY when the set
+    /// of installed plugins changes — never per keystroke. Search filtering and
+    /// section collapse operate on this cache.
+    property var _pluginActions: []
+    function _refetch() {
+        root._pluginActions = (typeof PluginCatalog !== "undefined" && PluginCatalog)
+            ? PluginCatalog.installedActions() : [];
+        root._rebuild();
+    }
+
     function _rebuild() {
         actionModel.clear();
 
@@ -92,8 +103,7 @@ Rectangle {
             });
         }
 
-        const actions = (typeof PluginCatalog !== "undefined" && PluginCatalog)
-            ? PluginCatalog.installedActions() : [];
+        const actions = root._pluginActions;
         // Stream Deck groups actions UNDER each plugin: one collapsible section per
         // plugin, not a single "Plugins" bucket. ListView sections require items of
         // the same section to be CONSECUTIVE, so sort by plugin name (then action
@@ -135,11 +145,12 @@ Rectangle {
 
     onSearchTextChanged: root._rebuild()
 
-    Component.onCompleted: root._rebuild()
+    Component.onCompleted: root._refetch()
 
     Connections {
         target: (typeof PluginCatalog !== "undefined") ? PluginCatalog : null
-        function onInstalledCountChanged() { root._rebuild(); }
+        // Re-read from disk only when the installed set actually changes.
+        function onInstalledCountChanged() { root._refetch(); }
     }
 
     ColumnLayout {
