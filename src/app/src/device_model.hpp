@@ -174,6 +174,15 @@ public:
     [[nodiscard]] Q_INVOKABLE QString firstConnectedCodename() const;
 
     /**
+     * @brief Connected devices as a QVariantList of `{codename, name}` maps,
+     *        for the canvas-header device selector ComboBox.
+     *
+     * @invokable Callable from QML as `DeviceModel.connectedDevices()`.
+     * @return One map per currently-connected device (model order).
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList connectedDevices() const;
+
+    /**
      * @brief Return the codenames of devices currently considered
      *        connected (per the last @ref refresh()).
      *

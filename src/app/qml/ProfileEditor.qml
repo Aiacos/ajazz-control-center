@@ -279,6 +279,15 @@ Rectangle {
                 encoderCount: root._encoderCount
                 touchZoneCount: root._touchZoneCount
                 codename: root.codename
+                // Canvas-header device selector → re-point the editor at the
+                // chosen device (same path as the sidebar selection in Main.qml).
+                onDeviceChangeRequested: function(codename) {
+                    if (codename === "" || codename === root.codename)
+                        return;
+                    StreamDockControlService.setActiveDevice(codename);
+                    root.codename = codename;
+                    root.capabilities = DeviceModel.capabilitiesFor(codename);
+                }
             }
         }
     }

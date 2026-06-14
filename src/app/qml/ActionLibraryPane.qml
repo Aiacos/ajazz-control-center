@@ -52,6 +52,21 @@ Rectangle {
     /// Free-text filter (bound to the search field). Empty = show everything.
     property string searchText: ""
 
+    // ---- Collapsible sections ----------------------------------------------
+    /// Set of collapsed section names ({name: true}). _collapseRev is bumped on
+    /// every toggle so the delegate height/visible bindings re-evaluate (mutating
+    /// a JS object in place does not by itself notify QML bindings).
+    property var _collapsedSections: ({})
+    property int _collapseRev: 0
+    function _toggleSection(name) {
+        root._collapsedSections[name] = !root._collapsedSections[name];
+        root._collapseRev++;
+    }
+    function _isCollapsed(name) {
+        void root._collapseRev; // register the dependency for binding reactivity
+        return root._collapsedSections[name] === true;
+    }
+
     function _matches(label, plugin) {
         if (root.searchText === "")
             return true;
@@ -178,20 +193,45 @@ Rectangle {
             section.property: "group"
             section.criteria: ViewSection.FullString
             section.delegate: Rectangle {
+                id: sectionHeader
                 required property string section
                 width: ListView.view ? ListView.view.width : 0
                 height: 28
-                color: Theme.bgSidebar
+                color: sectionMouse.containsMouse ? Theme.bgRowHover : Theme.bgSidebar
+
+                // Chevron: points down when expanded, right when collapsed.
                 Text {
+                    id: chevron
                     anchors {
                         left: parent.left
                         verticalCenter: parent.verticalCenter
-                        leftMargin: Theme.spacingLg
+                        leftMargin: Theme.spacingMd
                     }
-                    text: parent.section
+                    font.family: "Material Symbols Outlined"
+                    font.pixelSize: 16
+                    text: "expand_more"
+                    color: Theme.fgMuted
+                    rotation: root._isCollapsed(sectionHeader.section) ? -90 : 0
+                    Behavior on rotation { NumberAnimation { duration: 120 } }
+                }
+                Text {
+                    anchors {
+                        left: chevron.right
+                        verticalCenter: parent.verticalCenter
+                        leftMargin: Theme.spacingXs
+                    }
+                    text: sectionHeader.section
                     color: Theme.fgMuted
                     font.pixelSize: Theme.typeLabelMedium.pixelSize
                     font.weight: Font.DemiBold
+                }
+
+                MouseArea {
+                    id: sectionMouse
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root._toggleSection(sectionHeader.section)
                 }
             }
 
@@ -210,6 +250,7 @@ Rectangle {
     component LibraryTile: ItemDelegate {
         id: tile
 
+        required property string group
         required property string actionLabel
         required property int    kind
         required property string iconName
@@ -232,8 +273,13 @@ Rectangle {
         objectName: "libraryTile_" + index
 
         width:  ListView.view ? ListView.view.width : root.implicitWidth
-        height: 48
-        enabled: !isHint
+        // Collapse: a tile in a collapsed section takes no space and is hidden,
+        // so its section header acts as an accordion toggle.
+        readonly property bool _collapsed: root._isCollapsed(group)
+        height: _collapsed ? 0 : 48
+        visible: !_collapsed
+        clip: true
+        enabled: !isHint && !_collapsed
 
         // ----- Drag source (disabled for the hint row) ---------------------
         // DragHandler grabs the pointer + enforces the threshold; the drag is

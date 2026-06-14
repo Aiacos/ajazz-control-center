@@ -380,4 +380,31 @@ QString DeviceModel::firstConnectedCodename() const {
     return connected.empty() ? QString{} : connected.front();
 }
 
+QVariantList DeviceModel::connectedDevices() const {
+    // Mirror connectedCodenames() but carry the display name too, for the
+    // canvas-header device-selector ComboBox (textRole "name", valueRole
+    // "codename").
+    QVariantList out;
+    for (auto const& row : m_rows) {
+        auto const it = m_codename_keys.find(row.codename);
+        if (it == m_codename_keys.end()) {
+            continue;
+        }
+        bool connected = false;
+        for (auto const& key : it->second) {
+            if (m_connected.find(key) != m_connected.end()) {
+                connected = true;
+                break;
+            }
+        }
+        if (connected) {
+            out.append(QVariantMap{
+                {QStringLiteral("codename"), QString::fromStdString(row.codename)},
+                {QStringLiteral("name"), QString::fromStdString(row.model)},
+            });
+        }
+    }
+    return out;
+}
+
 } // namespace ajazz::app
