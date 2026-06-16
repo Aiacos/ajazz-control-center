@@ -203,6 +203,26 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
+     * @brief Installed plugins that cannot run on the current platform (#83).
+     *
+     * Companion to @ref installedActions: scans the same install directory and
+     * returns the plugins whose actions installedActions() drops for platform
+     * reasons, so the UI can show them as "installed but unrunnable" instead of
+     * silently hiding them (the official Elgato `com.elgato.*` set ships native
+     * Windows/macOS binaries with no Linux code path — they install but never
+     * surface an action). Each entry is a QVariantMap:
+     *   - @c id        — plugin directory id (`<id>.sdPlugin` minus the suffix)
+     *   - @c name      — manifest Name
+     *   - @c version   — manifest Version
+     *   - @c author    — manifest Author
+     *   - @c platforms — comma-joined manifest OS platforms (e.g. "mac, windows")
+     *   - @c reason    — "noCodePath" (no build for this OS) | "osVersion"
+     *                    (OS / Software.MinimumVersion gate)
+     *   - @c detail    — human-readable one-liner for the status chip
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList installedUnsupportedPlugins() const;
+
+    /**
      * @brief Diagnostic counters from the most recent installedActions() scan.
      *
      * Returns a QVariantMap with integer keys:

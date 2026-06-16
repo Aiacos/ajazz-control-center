@@ -37,6 +37,22 @@ Page {
     Material.theme: ThemeService.effectiveMode === "light" ? Material.Light : Material.Dark
     Material.accent: Theme.accent
 
+    // #83: snapshot of installed plugins that can't run on this platform — native
+    // Windows/macOS binaries with no Linux build (e.g. the official com.elgato.*
+    // set). They install but surface no actions, so without this they'd vanish
+    // silently; listed below with a clear status. Refreshed on load and whenever
+    // the installed set changes so they appear/disappear without a restart.
+    property var _unsupported: []
+    function _refreshUnsupported() {
+        root._unsupported = (typeof PluginCatalog !== "undefined" && PluginCatalog)
+            ? PluginCatalog.installedUnsupportedPlugins() : [];
+    }
+    Component.onCompleted: root._refreshUnsupported()
+    Connections {
+        target: (typeof PluginCatalog !== "undefined") ? PluginCatalog : null
+        function onInstalledCountChanged() { root._refreshUnsupported(); }
+    }
+
     // Frame the page with the standard column layout used by SettingsPage
     // and PluginStore.qml so the visual rhythm is consistent.
     ColumnLayout {
@@ -339,6 +355,92 @@ Page {
                     // "Allow unsigned plugins" toggle + the install-from-file
                     // unsigned confirm dialog). Wiring PluginCatalog.allowPlugin
                     // to a Python plugin id was a no-op (see note at top).
+                }
+            }
+        }
+
+        // #83: installed-but-unrunnable plugins (e.g. the official Elgato
+        // com.elgato.* native Windows/macOS binaries). Surfaced with a clear
+        // status chip instead of being hidden entirely from the user.
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spacingSm
+            visible: root._unsupported.length > 0
+
+            Text {
+                text: qsTr("Installed — not runnable on this platform")
+                color: Theme.fgMuted
+                font.pixelSize: Theme.fontMd
+                font.weight: Font.DemiBold
+            }
+
+            Repeater {
+                model: root._unsupported
+                delegate: Rectangle {
+                    id: uRow
+                    required property var modelData
+                    Layout.fillWidth: true
+                    implicitHeight: 64
+                    radius: Theme.radiusMd
+                    color: Theme.bgRow
+                    border.color: Theme.borderSubtle
+                    border.width: 1
+
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.margins: Theme.spacingMd
+                        spacing: Theme.spacingMd
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: (uRow.modelData.name && uRow.modelData.name !== "")
+                                    ? uRow.modelData.name : uRow.modelData.id
+                                color: Theme.fgPrimary
+                                font.pixelSize: Theme.fontMd
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                text: {
+                                    let bits = [];
+                                    if (uRow.modelData.author)
+                                        bits.push(uRow.modelData.author);
+                                    bits.push(uRow.modelData.detail);
+                                    return bits.join(" · ");
+                                }
+                                color: Theme.fgMuted
+                                font.pixelSize: Theme.fontSm
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        // Clear "can't run here" status chip (#83).
+                        Rectangle {
+                            objectName: "unsupportedStatusChip"
+                            Layout.preferredHeight: 24
+                            Layout.preferredWidth: uChipText.implicitWidth + Theme.spacingMd * 2
+                            radius: 12
+                            color: Theme.chipBgError
+                            border.color: Theme.chipBorderError
+                            border.width: 1
+                            Text {
+                                id: uChipText
+                                anchors.centerIn: parent
+                                text: uRow.modelData.reason === "noCodePath"
+                                    ? ((uRow.modelData.platforms && uRow.modelData.platforms !== "")
+                                        ? qsTr("%1 only").arg(uRow.modelData.platforms)
+                                        : qsTr("Other OS only"))
+                                    : qsTr("Unsupported here")
+                                color: Theme.chipFgError
+                                font.pixelSize: Theme.fontXs
+                                font.weight: Font.DemiBold
+                            }
+                        }
+                    }
                 }
             }
         }

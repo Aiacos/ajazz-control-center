@@ -817,6 +817,65 @@ TEST_CASE("PluginInstallFromFile names dir from action-UUID prefix when manifest
     REQUIRE_FALSE(QDir(pluginsDir).exists(QStringLiteral("unrelated-download-name.sdPlugin")));
 }
 
+// ---------------------------------------------------------------------------
+// #83: a native Windows/macOS-only plugin (no Linux code path — e.g. the
+// official Elgato com.elgato.* set) installs but surfaces no action; it must
+// appear in installedUnsupportedPlugins() with reason "noCodePath" so the UI
+// can show it instead of hiding it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstalledUnsupportedPlugins lists native-only plugins with reason",
+          "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+
+    // Native Win/macOS-only manifest: OS lists mac+windows, code paths are
+    // platform binaries, no Linux CodePath — installs but cannot run on Linux.
+    QByteArray const nativeOnly = QByteArray(R"({
+      "Name": "CPU",
+      "Version": "1.4.2",
+      "Author": "Elgato",
+      "Description": "Native binary plugin.",
+      "Icon": "icon",
+      "CodePathWin": "cpu.exe",
+      "CodePathMac": "cpu",
+      "Actions": [{ "UUID": "com.elgato.cpu.cpu", "Name": "CPU", "Icon": "i", "States": [{ "Image": "x" }] }],
+      "OS": [{ "Platform": "mac", "MinimumVersion": "10.11" }, { "Platform": "windows", "MinimumVersion": "10" }],
+      "SDKVersion": 2
+    })");
+    QString const archivePath = buildSdPluginArchive(tmp.path(), nativeOnly, "com.elgato.cpu");
+    REQUIRE_FALSE(archivePath.isEmpty());
+    REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+
+    // It must NOT surface any action (no Linux code path -> dropped).
+    bool elgatoAction = false;
+    for (QVariant const& v : model.installedActions()) {
+        if (v.toMap()
+                .value(QStringLiteral("pluginUuid"))
+                .toString()
+                .contains(QStringLiteral("elgato"))) {
+            elgatoAction = true;
+        }
+    }
+    REQUIRE_FALSE(elgatoAction);
+
+    // ...but it MUST appear in installedUnsupportedPlugins() with reason noCodePath.
+    QVariantList const unsupported = model.installedUnsupportedPlugins();
+    REQUIRE(unsupported.size() == 1);
+    QVariantMap const e = unsupported.at(0).toMap();
+    REQUIRE(e.value(QStringLiteral("name")).toString() == QStringLiteral("CPU"));
+    REQUIRE(e.value(QStringLiteral("reason")).toString() == QStringLiteral("noCodePath"));
+    REQUIRE(e.value(QStringLiteral("platforms")).toString().contains(QStringLiteral("mac")));
+    REQUIRE(e.value(QStringLiteral("platforms")).toString().contains(QStringLiteral("windows")));
+}
+
 TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
     auto& app = qtApp();
     Q_UNUSED(app);

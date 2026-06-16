@@ -576,6 +576,75 @@ QVariantList PluginCatalogModel::installedActions() const {
     return out;
 }
 
+QVariantList PluginCatalogModel::installedUnsupportedPlugins() const {
+    QVariantList out;
+
+    QString const pluginsDirPath = userPluginsDir();
+    QDir const dir(pluginsDirPath);
+    if (!dir.exists()) {
+        return out;
+    }
+
+    QString const platform = currentPlatformString();
+    QString const appVer = emulatedStreamDeckVersion();
+    QStringList const entries =
+        dir.entryList(QStringList{QStringLiteral("*.sdPlugin")}, QDir::Dirs | QDir::NoDotAndDotDot);
+
+    for (QString const& entry : entries) {
+        QString const pluginDir = dir.filePath(entry);
+        QFile manifestFile(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        if (!manifestFile.open(QIODevice::ReadOnly)) {
+            continue;
+        }
+        QByteArray const json = manifestFile.readAll();
+        manifestFile.close();
+
+        auto const parsed = parsePluginManifest(json);
+        if (!parsed) {
+            continue; // unparsable — not a usable plugin to report (#83)
+        }
+
+        // Mirror the two platform gates installedActions() applies, but instead
+        // of dropping the plugin silently, classify WHY it cannot run so the UI
+        // can list it as installed-but-unrunnable (#83).
+        QString reason;
+        QString detail;
+        if (!manifestRunnableHere(*parsed, platform, appVer)) {
+            reason = QStringLiteral("osVersion");
+            detail = tr("Not available for this OS or Stream Deck version");
+        } else if (resolveEffectiveCodePath(*parsed).isEmpty()) {
+            reason = QStringLiteral("noCodePath");
+            detail = tr("No build for this platform — installs but cannot run here");
+        } else {
+            continue; // runnable here — surfaced normally by installedActions()
+        }
+
+        QStringList platforms;
+        for (PluginOsRequirement const& os : parsed->os) {
+            if (!os.platform.isEmpty()) {
+                platforms << os.platform;
+            }
+        }
+
+        QString id = entry;
+        if (id.endsWith(QStringLiteral(".sdPlugin"))) {
+            id.chop(static_cast<int>(QStringLiteral(".sdPlugin").size()));
+        }
+
+        out.append(QVariantMap{
+            {QStringLiteral("id"), id},
+            {QStringLiteral("name"), parsed->name},
+            {QStringLiteral("version"), parsed->version},
+            {QStringLiteral("author"), parsed->author},
+            {QStringLiteral("platforms"), platforms.join(QStringLiteral(", "))},
+            {QStringLiteral("reason"), reason},
+            {QStringLiteral("detail"), detail},
+        });
+    }
+
+    return out;
+}
+
 QVariantMap PluginCatalogModel::lastScanDiagnostics() const {
     return QVariantMap{
         {QStringLiteral("installedCount"), m_lastInstalledCount},
