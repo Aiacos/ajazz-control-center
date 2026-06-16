@@ -62,33 +62,6 @@ Item {
     signal keyActivated(int idx)
     signal encoderSelected(int idx)
     signal zoneSelected(int idx)
-    /// Emitted when the canvas-header device selector picks a different device.
-    /// The parent (ProfileEditor → Main) re-points the editor at that codename.
-    signal deviceChangeRequested(string codename)
-
-    // ---- Canvas-header device selector backing -----------------------------
-    /// Connected devices [{codename,name}] for the header ComboBox. Refreshed on
-    /// load and whenever the active device changes (hotplug usually re-selects).
-    property var _connectedDevices: []
-    function _refreshDevices() {
-        root._connectedDevices = (typeof DeviceModel !== "undefined" && DeviceModel)
-            ? DeviceModel.connectedDevices() : [];
-    }
-    function _deviceIndexFor(cn) {
-        for (let i = 0; i < root._connectedDevices.length; ++i) {
-            if (root._connectedDevices[i].codename === cn)
-                return i;
-        }
-        return -1;
-    }
-    // Keep the header device selector fresh when a device is plugged/unplugged
-    // mid-session (DeviceModel emits dataChanged on the ConnectedRole flip and
-    // modelReset on a full refresh).
-    Connections {
-        target: (typeof DeviceModel !== "undefined") ? DeviceModel : null
-        function onDataChanged() { root._refreshDevices(); }
-        function onModelReset() { root._refreshDevices(); }
-    }
 
     // ---- Resolved grid dimensions ------------------------------------------
     readonly property int _keyColumnsResolved: gridColumns > 0
@@ -157,7 +130,7 @@ Item {
     }
 
     onKeyCountChanged: { _ensureBindings(); _syncFromProfile(); }
-    Component.onCompleted: { _ensureBindings(); _syncFromProfile(); root._refreshDevices(); }
+    Component.onCompleted: { _ensureBindings(); _syncFromProfile(); }
 
     // Rebuild the preview model from the active profile's key bindings. Called
     // on profileChanged so switching profiles (or any commit) refreshes the
@@ -312,7 +285,6 @@ Item {
     onCodenameChanged: {
         root._layout = null;   // reset immediately so stale layout does not flicker
         loadLayout(root.codename);
-        root._refreshDevices(); // keep the header device selector current
     }
 
     // TODO(Phase 26 Plan 26-06): _hasPhoto gates per-SKU photo rendering. Currently
@@ -360,25 +332,9 @@ Item {
                         spacing: 2
                         Layout.alignment: Qt.AlignVCenter
 
-                        // Device selector: switch the edited device without going
-                        // back to the sidebar (Stream Deck keeps a device picker in
-                        // the header). Lists currently-connected devices.
-                        ComboBox {
-                            id: deviceSelector
-                            objectName: "deviceSelector"
-                            Layout.preferredWidth: 220
-                            textRole: "name"
-                            valueRole: "codename"
-                            model: root._connectedDevices
-                            // Keep the shown entry in sync with the active device.
-                            currentIndex: root._deviceIndexFor(root.codename)
-                            onActivated: function(idx) {
-                                const cn = model[idx] ? model[idx].codename : "";
-                                if (cn !== "" && cn !== root.codename)
-                                    root.deviceChangeRequested(cn);
-                            }
-                            Accessible.name: qsTr("Device selector")
-                        }
+                        // Device identity lives in the editor header and the
+                        // left sidebar already switches devices, so the canvas
+                        // header just summarises the grid geometry here.
                         Text {
                             text: {
                                 let parts = [qsTr("%1 keys").arg(root.keyCount)];
