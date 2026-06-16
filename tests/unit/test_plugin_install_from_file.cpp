@@ -771,6 +771,52 @@ TEST_CASE("PluginInstallFromFile names install dir from manifest UUID not file n
     REQUIRE_FALSE(QDir(pluginsDir).exists(QStringLiteral("teams.sdPlugin")));
 }
 
+// ---------------------------------------------------------------------------
+// #82 (follow-up to #81): manifests with NO top-level UUID (the entire Elgato
+// SDKv2 ecosystem + many community plugins — identity is the directory name)
+// must name the install dir from the common dotted prefix of the action UUIDs,
+// NOT the archive file name, so the action-owner match resolves.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile names dir from action-UUID prefix when manifest has no UUID",
+          "[plugin-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+
+    PluginCatalogModel model(nullptr);
+
+    // Elgato-SDKv2-shaped manifest: no top-level UUID; two actions sharing the
+    // dotted prefix com.vendor.gadget. File name deliberately unrelated.
+    QByteArray const noUuid = QByteArray(R"({
+      "Name": "No UUID plugin",
+      "Version": "1.0.0",
+      "Author": "Vendor",
+      "Description": "Elgato-style manifest with no top-level UUID.",
+      "Icon": "icon",
+      "CodePath": "main.py",
+      "Actions": [
+        { "UUID": "com.vendor.gadget.toggle", "Name": "Toggle", "Icon": "i", "States": [{ "Image": "x" }] },
+        { "UUID": "com.vendor.gadget.cycle",  "Name": "Cycle",  "Icon": "i", "States": [{ "Image": "x" }] }
+      ],
+      "OS": [{ "Platform": "linux", "MinimumVersion": "22.04" }],
+      "SDKVersion": 2,
+      "Software": { "MinimumVersion": "1.0" }
+    })");
+    QString const archivePath = buildSdPluginArchive(tmp.path(), noUuid, "unrelated-download-name");
+    REQUIRE_FALSE(archivePath.isEmpty());
+
+    REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+
+    // Dir derived from the shared action prefix (com.vendor.gadget), NOT the file.
+    REQUIRE(QFile::exists(QDir(pluginsDir).filePath("com.vendor.gadget.sdPlugin/manifest.json")));
+    REQUIRE_FALSE(QDir(pluginsDir).exists(QStringLiteral("unrelated-download-name.sdPlugin")));
+}
+
 TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
     auto& app = qtApp();
     Q_UNUSED(app);

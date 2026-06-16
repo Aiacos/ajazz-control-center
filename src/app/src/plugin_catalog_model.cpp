@@ -33,6 +33,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <limits>
 
 namespace ajazz::app {
 
@@ -94,6 +95,59 @@ QString g_pluginsDirOverride{};
         return {};
     }
     return uuid + QStringLiteral(".sdPlugin");
+}
+
+/// #82: derive a plugin id from the longest common dotted-component prefix of the
+/// action UUIDs. Manifests in the Elgato Stream Deck SDKv2 format (and many
+/// community plugins) carry NO top-level UUID/PUUID — the plugin identity is the
+/// `.sdPlugin` directory name, and every action UUID is a dotted child of it
+/// (e.g. plugin `com.elgato.cpu`, action `com.elgato.cpu.cpu`). When such a
+/// plugin is sideloaded from a file whose name diverges from that identity, #81's
+/// file-name fallback breaks the action-owner match. Recover the identity here:
+/// return the longest dotted prefix that is a PROPER prefix of EVERY action UUID
+/// (so `<id>.` still prefix-matches each action), or empty when none exists.
+[[nodiscard]] QString pluginIdFromActionUuids(std::vector<PluginAction> const& actions) {
+    std::vector<QStringList> parts;
+    int minLen = std::numeric_limits<int>::max();
+    for (auto const& a : actions) {
+        if (a.uuid.isEmpty()) {
+            continue;
+        }
+        QStringList const comps = a.uuid.split(QLatin1Char('.'), Qt::SkipEmptyParts);
+        if (comps.isEmpty()) {
+            continue;
+        }
+        minLen = std::min(minLen, static_cast<int>(comps.size()));
+        parts.push_back(comps);
+    }
+    if (parts.empty()) {
+        return {};
+    }
+    // Longest run of leading components shared by ALL action UUIDs.
+    int commonLen = 0;
+    for (; commonLen < minLen; ++commonLen) {
+        QString const& token = parts.front().at(commonLen);
+        bool const shared = std::all_of(parts.begin(), parts.end(), [&](QStringList const& p) {
+            return p.at(commonLen) == token;
+        });
+        if (!shared) {
+            break;
+        }
+    }
+    // The id must be a PROPER prefix of every action UUID so the owner-match
+    // `<id>.` resolves: if the shared run spans an entire (shortest) action UUID,
+    // drop its last component.
+    if (commonLen >= minLen) {
+        --commonLen;
+    }
+    if (commonLen < 1) {
+        return {};
+    }
+    QStringList idParts;
+    for (int i = 0; i < commonLen; ++i) {
+        idParts << parts.front().at(i);
+    }
+    return idParts.join(QLatin1Char('.'));
 }
 
 } // namespace
@@ -961,8 +1015,16 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
         QFile staged(QDir(stagingParent).filePath(archiveName + QStringLiteral("/manifest.json")));
         if (staged.open(QIODevice::ReadOnly)) {
             if (auto const m = parsePluginManifest(staged.read(kMaxPluginDownloadBytes + 1))) {
-                if (QString const byUuid = safeUuidDirName(m->puuid); !byUuid.isEmpty()) {
-                    installName = byUuid;
+                // Prefer the manifest UUID/PUUID; #82: when absent (Elgato SDKv2
+                // and many community manifests carry no top-level UUID), recover
+                // the identity from the common dotted prefix of the action UUIDs
+                // before falling back to the file-derived name.
+                QString pluginId = m->puuid;
+                if (pluginId.isEmpty()) {
+                    pluginId = pluginIdFromActionUuids(m->actions);
+                }
+                if (QString const byId = safeUuidDirName(pluginId); !byId.isEmpty()) {
+                    installName = byId;
                 }
             }
         }
