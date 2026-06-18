@@ -11,7 +11,9 @@ Decks, keyboards, mice) with Qt 6 / QML UI and a Python out-of-process
 plugin system. C++20, Qt 6.7+, CMake, Ninja. Linux primary; Windows and
 macOS supported.
 
-For full context: `.planning/PROJECT.md`. For current state: `.planning/STATE.md`.
+For full context and current product requirements: `specs/001-control-center-baseline/spec.md`
+(the Spec Kit baseline, which superseded the former `.planning/` GSD artifacts on 2026-06-18).
+Project principles live in `.specify/memory/constitution.md`.
 
 ## Workflow conventions
 
@@ -413,12 +415,21 @@ memory `project_phase_tracking_vs_code_divergence`.
 - `docs/superpowers/plans/` — pre-GSD ad-hoc plans, occasionally inherited
   into formal phases (e.g. v1.1 Phase 5 time-sync adopted
   `2026-05-13-time-sync.md`).
-- `.planning/milestones/v1.0-*` and `v1.1-*` — historical milestone
-  artifacts, sealed but referenceable.
-- `.planning/RETROSPECTIVE.md` — living retrospective with patterns and
-  cross-milestone trends. Read before non-trivial new work.
+- `specs/` — Spec Kit feature specifications (current planning system). The
+  product baseline is `specs/001-control-center-baseline/spec.md`.
+- Milestone history (v1.0–v2.0 audits, ROADMAP, RETROSPECTIVE, ADRs) lived in
+  the former `.planning/` GSD tree, removed 2026-06-18 in the migration to Spec
+  Kit; recover from git history (`git log -- .planning/`) if a past decision
+  rationale is needed.
 
 ______________________________________________________________________
 
 *This file is project memory. Update via PR. Personal session notes
 belong in your Claude Code auto-memory, not here.*
+
+<!-- SPECKIT START -->
+
+For additional context about technologies to be used, project structure,
+shell commands, and other important information, read the current plan
+
+<!-- SPECKIT END -->
