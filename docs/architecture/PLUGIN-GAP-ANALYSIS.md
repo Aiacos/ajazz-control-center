@@ -97,7 +97,7 @@ unimplemented (RE hard rule) — logged, never executed. An e2e test covers the
 | B5 | `plugin_manager.cpp:1047` | `IPluginHost2::dispatch` forwards `actionId` as the event name — contract mislabeled; live path bypasses it |
 | B6 | `plugin_manager.cpp` HTML path | `m_htmlPages` (`QWebEnginePage`) never torn down on disable/uninstall — pages leak for app lifetime |
 | B7 | `sd_plugin_server.cpp:324` | `passHello.deviceInfo` is an empty `{}` placeholder; plugins reading it at hello time get nothing (real geometry only via `deviceDidConnect`) |
-| B9 | `plugin_manager.cpp:1006` | `monitorsApplication()` implemented but no caller sends `applicationDidLaunch/Terminate` — `ApplicationsToMonitor` parsing is inert |
+| B9 | `plugin_manager.cpp:1006` | ~~`monitorsApplication()` implemented but no caller sends `applicationDidLaunch/Terminate`~~ **RETIRED (false as of 2026-06-18):** `applicationDidLaunch/Terminate` IS dispatched via `app_event_dispatch.cpp` (focus-approximated, not OS process lifecycle). The remaining nuance — focus-approximation vs true process monitoring — is tracked as a known semantic gap, not a missing caller. |
 
 ## Faithfulness divergences (intentional, document don't "fix")
 

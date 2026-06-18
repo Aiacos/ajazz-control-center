@@ -4,7 +4,7 @@
   "title": "AJAZZ Control Center plugin manifest",
   "description": "Manifest format for AJAZZ Control Center plugins. Designed to be a strict superset of the public fields of the Elgato Stream Deck plugin manifest (https://schemas.elgato.com/streamdeck/plugins/manifest.json) and OpenDeck's CodePathLin / CodePaths extensions, so existing plugins can be loaded with at most a thin compatibility shim. AJAZZ-specific fields live under the `Ajazz` namespace and are optional for SDK-2 compatibility.",
   "type": "object",
-  "additionalProperties": false,
+  "additionalProperties": true,
   "required": [
     "UUID",
     "Name",
@@ -153,8 +153,8 @@
     },
     "SDKVersion": {
       "type": "integer",
-      "enum": [2, 3],
-      "description": "Stream Deck SDK protocol version this plugin targets. AJAZZ Control Center implements SDK 2 today; SDK 3 reserved."
+      "enum": [1, 2, 3],
+      "description": "Stream Deck SDK protocol version this plugin targets. AJAZZ Control Center implements SDK 2; SDK 3 reserved. SDKVersion 1 is accepted because real AJAZZ/Mirabox vendor manifests ship it (the runtime parser is permissive; this schema must validate them)."
     },
     "Software": {
       "type": "object",
@@ -228,10 +228,13 @@
           "Controllers": {
             "type": "array",
             "minItems": 1,
-            "maxItems": 2,
+            "maxItems": 4,
             "uniqueItems": true,
-            "items": { "type": "string", "enum": ["Keypad", "Encoder"] },
-            "description": "Hardware affordances supported by the action. Default: [\"Keypad\"]."
+            "items": {
+              "type": "string",
+              "enum": ["Keypad", "Encoder", "Knob", "SecondaryScreen", "Information"]
+            },
+            "description": "Hardware affordances supported by the action. Default: [\"Keypad\"]. Vendor values are accepted additively and normalised at parse time (Knob -> Encoder); SecondaryScreen / Information are vendor-only and tolerated."
           },
           "States": {
             "type": "array",

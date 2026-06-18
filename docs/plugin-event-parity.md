@@ -2,6 +2,13 @@
 
 # Plugin Event Parity Coverage (EVENT-01)
 
+> **⚠️ PARTIALLY STALE (snapshot as of Phase 34, 2026-06-08).** Several rows below predate work
+> that has since landed: `systemDidWakeUp` and `switchToProfile` are **implemented** (dispatch +
+> tests, EVENT-03 — commits `bf5e417`/`e5a81ef`), and `setFeedbackLayout` / encoder layouts are
+> implemented (`encoder_layout_renderer.cpp`, `a9dfe5e`). For current status trust the **code** and
+> `docs/architecture/PLUGIN-GAP-ANALYSIS.md`, not the per-row `missing` markers here. (Spec Kit
+> baseline `specs/001-control-center-baseline/research.md` C1.)
+
 > **Living verification deliverable.** This document is the source-of-truth coverage
 > map for the Stream Deck plugin event surface. It cross-references the AJAZZ Control
 > Center host (`SdPluginServer` + `PluginDeviceBridge`) against the OpenDeck
