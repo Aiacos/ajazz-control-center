@@ -25,6 +25,7 @@
 #include "unified_plugin_host.hpp"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -393,6 +394,69 @@ TEST_CASE("Python runtime dispatches via OOP host through unified surface",
     REQUIRE(fakePy.lastDispatch.actionId == "testAction");
     // Payload must have been converted to a JSON string.
     REQUIRE_FALSE(fakePy.lastDispatch.settingsJson.empty());
+}
+
+// B5 (research D4): the .sdPlugin dispatch path must NOT forward the actionId as
+// the Elgato event name. The wire event name lives in payload["event"]; the
+// actionId belongs in the envelope's `action` field. Drive a real server + a
+// registered WS client and assert the received frame's shape.
+TEST_CASE("sdPlugin dispatch builds a well-formed event envelope, not actionId-as-event (B5)",
+          "[plugin-host2][b5]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return {}; };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
+
+    SdPluginServer server;
+    REQUIRE(server.start(0));
+    PluginManager manager(scratch.path(), &server, fakeProbe);
+
+    // A registered WS client standing in for the .sdPlugin runtime.
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    QJsonObject received;
+    bool gotEvent = false;
+    QObject::connect(&client, &QWebSocket::textMessageReceived, [&](QString const& text) {
+        auto const obj = QJsonDocument::fromJson(text.toUtf8()).object();
+        // Ignore the passHello handshake; capture the dispatched action event.
+        if (obj.value(QStringLiteral("event")).toString() != QStringLiteral("passHello")) {
+            received = obj;
+            gotEvent = true;
+        }
+    });
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(connectedSpy));
+
+    constexpr char const* kUuid = "com.test.sd.b5";
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"%1"})").arg(QLatin1String(kUuid)));
+    pump(200);
+    manager.seedLiveForTest(QString::fromLatin1(kUuid)); // make dispatch's m_live guard pass
+
+    // Dispatch: actionId = "onKeyDown", the WIRE event lives in payload["event"].
+    QJsonObject payload;
+    payload[QStringLiteral("event")] = QStringLiteral("keyDown");
+    payload[QStringLiteral("settings")] = QJsonObject{{QStringLiteral("k"), 1}};
+    REQUIRE(manager.dispatch(QString::fromLatin1(kUuid), QStringLiteral("onKeyDown"), payload));
+
+    auto until = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (!gotEvent && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+    REQUIRE(gotEvent);
+    // B5 regression: event is the real Elgato event, NOT the action UUID.
+    REQUIRE(received.value(QStringLiteral("event")).toString() == QStringLiteral("keyDown"));
+    REQUIRE(received.value(QStringLiteral("event")).toString() != QStringLiteral("onKeyDown"));
+    // The action UUID is preserved in `action`, and the payload passes through.
+    REQUIRE(received.value(QStringLiteral("action")).toString() == QStringLiteral("onKeyDown"));
+    REQUIRE(
+        received.value(QStringLiteral("settings")).toObject().value(QStringLiteral("k")).toInt() ==
+        1);
+
+    server.stop();
 }
 
 // ===========================================================================

@@ -121,7 +121,7 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 
 - [x] T020 [P] [US2] `propertyInspectorDidAppear` single-emit test in `tests/unit/test_pi_bridge.cpp`: exactly one emit per PI open (locks the dedup before T023/T024).
 - [ ] T021 [P] [US2] `setTriggerDescription` routing test in `tests/unit/test_plugin_device_bridge.cpp` (RED before T025).
-- [ ] T022 [P] [US2] Secondary-bug regression tests: B5 dispatch event-name in `tests/unit/test_plugin_host2.cpp`, B6 HTML page teardown in `tests/unit/test_plugin_lifecycle.cpp`, B7 non-empty `passHello.deviceInfo` in `tests/unit/test_sd_plugin_server.cpp` (there is no `test_plugin_manager.cpp`; `PluginManager` is covered across the lifecycle/host2/concurrency suites).
+- [x] T022 [P] [US2] Secondary-bug regression tests: B5 dispatch event-name in `tests/unit/test_plugin_host2.cpp`, B6 HTML page teardown in `tests/unit/test_plugin_lifecycle.cpp`, B7 non-empty `passHello.deviceInfo` in `tests/unit/test_sd_plugin_server.cpp` (there is no `test_plugin_manager.cpp`; `PluginManager` is covered across the lifecycle/host2/concurrency suites).
 
 ### Implementation for User Story 2 — Property Inspector chain (ORDERED, top priority D1)
 
@@ -135,7 +135,7 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 
 ### Implementation for User Story 2 — Secondary correctness bugs (D4)
 
-- [ ] T027 [P] [US2] Fix B5: `IPluginHost2::dispatch` forwards `actionId` as the event name — correct the contract in `src/app/src/plugin_manager.cpp` (~:1047).
+- [x] T027 [P] [US2] Fix B5: `IPluginHost2::dispatch` forwards `actionId` as the event name — correct the contract in `src/app/src/plugin_manager.cpp` (~:1047).
 - [x] T028 [P] [US2] Fix B6: tear down `m_htmlPages` `QWebEnginePage` instances on plugin disable/uninstall in `src/app/src/plugin_manager.cpp` (page leak for app lifetime).
 - [x] T029 [P] [US2] Fix B7: populate `passHello.deviceInfo` geometry in `src/app/src/sd_plugin_server.cpp` (~:324) so plugins reading geometry at hello get real values.
 

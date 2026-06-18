@@ -1112,7 +1112,24 @@ bool PluginManager::dispatch(QString const& pluginUuid,
     if (m_live.find(pluginUuid) == m_live.end()) {
         return false; // plugin not registered / not live
     }
-    return m_server->sendEvent(pluginUuid, actionId, payload);
+    // B5 (research D4): the second argument is an ACTION id, not an Elgato event
+    // name — the same contract the Python sub-host uses (the wire event name is
+    // carried in payload["event"], e.g. "keyDown"; actionId identifies which
+    // action). The previous code passed actionId as the event name, so a plugin
+    // received an event literally named by the action UUID, which it cannot
+    // recognise. Build a well-formed {event, action, …payload} envelope: the
+    // event comes from the payload, the action UUID is preserved in `action`,
+    // and the remaining payload fields pass through. Falls back to actionId only
+    // when the payload omits an explicit event, preserving the prior wire for any
+    // caller that genuinely passed an event name as the second argument.
+    QString const eventName = payload.value(QStringLiteral("event")).toString();
+    if (eventName.isEmpty()) {
+        return m_server->sendEvent(pluginUuid, actionId, payload);
+    }
+    QJsonObject envelope = payload;
+    envelope.insert(QStringLiteral("event"), eventName);
+    envelope.insert(QStringLiteral("action"), actionId);
+    return m_server->sendEvent(pluginUuid, envelope);
 #else
     Q_UNUSED(pluginUuid)
     Q_UNUSED(actionId)
