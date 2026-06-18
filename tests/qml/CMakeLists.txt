@@ -29,6 +29,10 @@ if(NOT DEFINED ACC_QML_MODULE_SOURCES OR NOT DEFINED ACC_APP_SOURCE_DIR)
     )
 endif()
 
+# sdplugin_extractor.cpp (compiled into this target) links zlib directly; ZLIB::ZLIB is found in
+# src/app but its imported target is directory-scoped, so re-find it here.
+find_package(ZLIB REQUIRED)
+
 # qt_add_qml_module's SOURCES / QML_FILES / RESOURCES are relative to the current source directory,
 # but the exported lists are relative to src/app. Rebase them to absolute paths so this target can
 # sit in tests/qml.
@@ -179,6 +183,10 @@ target_link_libraries(
             # global-destructor teardown) — link Catch2 WITHOUT its provided main to avoid a
             # duplicate-symbol clash.
             Catch2::Catch2
+            # sdplugin_extractor.cpp raw-inflates with zlib (inflateEnd/inflate); the app target
+            # links ZLIB::ZLIB for the same TU. Without it this target fails at link with "undefined
+            # reference to symbol 'inflateEnd' / DSO missing from command line".
+            ZLIB::ZLIB
             Qt6::Core
             Qt6::CorePrivate # QZipReader in sdplugin_extractor / plugin_catalog_model
             Qt6::Gui

@@ -32,9 +32,9 @@ ______________________________________________________________________
 
 **Purpose**: Establish a known-green baseline and a working verification harness before changing code.
 
-- [ ] T001 Establish and record a green baseline: `cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release`; capture the live ctest count for the PR (do NOT hand-edit the figure in CLAUDE.md).
-- [ ] T002 [P] Build + test the mirajazz sidecar: `cargo build --release` and `cargo test` in `streamdock-host/` (expect the 10 existing cases green).
-- [ ] T003 [P] Confirm the verification harness: launch `AJAZZ_DEBUG_CONTROL=1 build/linux-release/src/app/ajazz-control-center`, then `scripts/ajazz-debug ping` and `scripts/ajazz-debug device.list` respond.
+- [x] T001 Establish and record a green baseline: `cmake --preset linux-release && cmake --build --preset linux-release && ctest --preset linux-release`; capture the live ctest count for the PR (do NOT hand-edit the figure in CLAUDE.md).
+- [x] T002 [P] Build + test the mirajazz sidecar: `cargo build --release` and `cargo test` in `streamdock-host/` (expect the 10 existing cases green).
+- [x] T003 [P] Confirm the verification harness: launch `AJAZZ_DEBUG_CONTROL=1 build/linux-release/src/app/ajazz-control-center`, then `scripts/ajazz-debug ping` and `scripts/ajazz-debug device.list` respond.
 
 ______________________________________________________________________
 
