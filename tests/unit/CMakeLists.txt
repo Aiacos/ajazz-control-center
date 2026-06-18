@@ -645,6 +645,9 @@ set_source_files_properties(
 # ACC_STREAMDOCK_CATALOG_URL=disabled env seam + QStandardPaths::setTestModeEnabled.
 # plugin_catalog_model.cpp already compiled (test_plugin_catalog_proxy_model entry above).
 target_sources(ajazz_unit_tests PRIVATE test_catalog_offline.cpp)
+# US1 (002-streamdeck-plugin-ui): install availability state machine + the no-browser invariant.
+# plugin_catalog_model.cpp already compiled (above).
+target_sources(ajazz_unit_tests PRIVATE test_plugin_catalog_install.cpp)
 set(_pvg_defs
     "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
     "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""

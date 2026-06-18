@@ -731,9 +731,14 @@ Page {
             required property string source
             // Direct archive URL (empty for rows whose upstream only exposes a
             // landing page — e.g. the AJAZZ Streamdock store, whose CDN base is
-            // not in-app resolvable). Drives the Install-vs-open-browser label so
-            // a browser-only row never looks like a broken install.
+            // not in-app resolvable).
             required property url downloadUrl
+            // US1: derived in C++ (PluginCatalogModel). installableInApp is true
+            // iff a resolvable https package URL exists; when false the primary
+            // button is DISABLED and shows unavailableReason — never an "Open
+            // page" browser affordance (spec FR-006).
+            required property bool installableInApp
+            required property string unavailableReason
             // In-flight install state: set by the action button onClick,
             // cleared by the Connections block listening on
             // PluginCatalogModel::installFinished. Drives the inline
@@ -898,45 +903,50 @@ Page {
                         Layout.fillWidth: true
                         spacing: Theme.spacingXs
 
-                        // A row is in-app installable only when it carries a
-                        // direct archive URL; otherwise install() falls back to
-                        // opening the upstream page in the browser, so the button
-                        // says so plainly rather than appearing to install.
-                        readonly property bool tileInstallable: tile.downloadUrl.toString() !== ""
-
+                        // US1 (spec FR-001/FR-002/FR-006): the primary action is a
+                        // single in-app install. State machine:
+                        //   Installable  → "Install"            (enabled, accent)
+                        //   Installing   → "Installing… N%"     (disabled)
+                        //   Installed    → "Installed"          (uninstall, flat)
+                        //   NotInstallable → unavailableReason  (DISABLED, no Open)
+                        // There is NO "Open page ↗" / browser affordance.
                         Button {
+                            objectName: "pluginInstallButton_" + tile.uuid
                             Layout.fillWidth: true
                             text: tile.installing
                                 ? qsTr("Installing… %1%").arg(tile.installProgress)
                                 : tile.installed
                                     ? qsTr("Installed")
-                                    : (parent.tileInstallable ? qsTr("Install")
-                                                              : qsTr("Open page ↗"))
-                            enabled: !tile.installing
+                                    : (tile.installableInApp ? qsTr("Install")
+                                                             : tile.unavailableReason)
+                            // Disabled while installing AND when not installable
+                            // in-app (the row is shown but cannot be actioned).
+                            enabled: !tile.installing && (tile.installed || tile.installableInApp)
                             flat: tile.installed
                             Material.foreground: tile.installed ? Theme.fgMuted : "white"
                             Material.background: tile.installed
                                 ? "transparent"
-                                : (parent.tileInstallable ? Theme.accent : Theme.surfaceContainerHigh)
+                                : (tile.installableInApp ? Theme.accent : Theme.surfaceContainerHigh)
+                            ToolTip.visible: hovered && !tile.installableInApp && !tile.installed
+                            ToolTip.text: tile.unavailableReason
                             onClicked: {
                                 if (!PluginCatalog) return;
                                 if (tile.installed) {
                                     PluginCatalog.uninstall(tile.uuid);
-                                } else if (parent.tileInstallable) {
+                                } else if (tile.installableInApp) {
                                     tile.installing = true;
                                     tile.installProgress = 0;
                                     PluginCatalog.install(tile.uuid);
-                                } else {
-                                    // Browser-only row: open the upstream store page.
-                                    PluginCatalog.install(tile.uuid);
                                 }
+                                // NotInstallable rows are disabled → no onClick path,
+                                // and never open a browser.
                             }
                             Accessible.role: Accessible.Button
                             Accessible.name: tile.installed
                                 ? qsTr("Uninstall %1").arg(tile.name)
-                                : (parent.tileInstallable
+                                : (tile.installableInApp
                                     ? qsTr("Install %1").arg(tile.name)
-                                    : qsTr("Open %1 store page in browser").arg(tile.name))
+                                    : qsTr("%1 is not installable in-app").arg(tile.name))
                         }
 
                         ProgressBar {

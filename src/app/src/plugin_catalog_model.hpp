@@ -92,8 +92,10 @@ struct CatalogEntry {
      * (Streamdock) or `releaseAsset.browserDownloadUrl` (OpenDeck)
      * fields. Empty when the source feed does not surface a direct
      * download (e.g. a community page that only exposes a landing-page
-     * URL). When empty, @ref PluginCatalogModel::install falls back to
-     * the @ref openUpstream browser bridge.
+     * URL). When empty / non-https, the row is reported as **not
+     * installable in-app** (see @ref InstallableInAppRole) and
+     * @ref PluginCatalogModel::install is a no-op returning false — it no
+     * longer opens a browser (US1, spec FR-006).
      */
     QUrl downloadUrl = {};
 };
@@ -161,6 +163,8 @@ public:
         SourceRole,                  ///< "local" | "community" | "streamdock".
         StreamdockProductIdRole,     ///< Upstream Streamdock product id (when source==streamdock).
         DownloadUrlRole,             ///< Direct download URL (QUrl) for in-app install.
+        InstallableInAppRole,        ///< True iff a resolvable https package URL exists (US1).
+        UnavailableReasonRole,       ///< Short reason shown when not installable in-app (US1).
     };
 
     // No default on `parent`: see BrandingService — a default-constructible
@@ -589,6 +593,13 @@ signals:
     void installFinished(QString const& uuid, bool success, QString const& error);
 
 private:
+    /// Test seam: grants unit tests access to the private row-injection
+    /// internals (@ref replaceStreamdockRows) so the install-availability and
+    /// install() no-op logic can be exercised deterministically WITHOUT
+    /// widening the production API. Defined only in the test binary. Mirrors
+    /// the existing `setPluginsDirOverride` test-only convention.
+    friend struct PluginCatalogTestAccess;
+
     /// Per-row install bookkeeping kept outside @ref CatalogEntry so the
     /// catalogue feed (which is read-only) and the local user state stay
     /// cleanly separated.

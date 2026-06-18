@@ -51,6 +51,16 @@ QString g_pluginsDirOverride{};
 /// install() codepath also calls it.
 [[nodiscard]] QString userPluginsDir();
 
+/// US1 (spec FR-006): a catalogue row is installable in-app iff it carries a
+/// resolvable https package URL. Shared by data() (the InstallableInApp /
+/// UnavailableReason roles) and install() (which is a no-op returning false for
+/// a non-installable row — NO browser fallback). Same predicate both sites use,
+/// so the row's button state and install()'s behaviour can never disagree.
+[[nodiscard]] bool entryInstallableInApp(CatalogEntry const& entry) {
+    return entry.downloadUrl.isValid() && !entry.downloadUrl.isEmpty() &&
+           entry.downloadUrl.scheme().toLower() == QStringLiteral("https");
+}
+
 /// WR-01: per-plugin consent predicate. Reads the QSettings key written by
 /// PluginCatalogModel::allowPlugin() (`plugins/allowed/<uuid>=true`). @p
 /// pluginDirName may be either the install dir name (`<uuid>.sdPlugin`) or a
@@ -392,6 +402,10 @@ QVariant PluginCatalogModel::data(QModelIndex const& index, int role) const {
         return row.streamdockProductId;
     case DownloadUrlRole:
         return row.downloadUrl;
+    case InstallableInAppRole:
+        return entryInstallableInApp(row);
+    case UnavailableReasonRole:
+        return entryInstallableInApp(row) ? QString{} : QStringLiteral("Not installable in-app");
     default:
         return {};
     }
@@ -416,6 +430,8 @@ QHash<int, QByteArray> PluginCatalogModel::roleNames() const {
         {SourceRole, "source"},
         {StreamdockProductIdRole, "streamdockProductId"},
         {DownloadUrlRole, "downloadUrl"},
+        {InstallableInAppRole, "installableInApp"},
+        {UnavailableReasonRole, "unavailableReason"},
     };
 }
 
@@ -1314,23 +1330,18 @@ bool PluginCatalogModel::install(QString const& uuid) {
     }
 
     auto const& entry = m_rows[static_cast<std::size_t>(row)];
-    if (!entry.downloadUrl.isValid() || entry.downloadUrl.isEmpty() ||
-        entry.downloadUrl.scheme().toLower() != QStringLiteral("https")) {
-        // No direct download URL on file: fall back to the browser
-        // bridge so the user can still grab the plugin from the
-        // upstream catalogue. This is the legitimate path for
-        // OpenDeck (no per-plugin API) and any local/community row
-        // that ships only a landing page.
+    if (!entryInstallableInApp(entry)) {
+        // US1 (spec FR-006): no resolvable https package URL → this row is
+        // "not installable in-app". Install is a no-op returning false; we do
+        // NOT open a browser (the old openUpstream/QDesktopServices fallback is
+        // removed). The store row presents a disabled button with the
+        // UnavailableReason instead of an "Open page" affordance.
         AJAZZ_LOG_INFO("plugin-catalog",
-                       "install: no direct downloadUrl for '{}'; opening upstream page",
+                       "install: '{}' is not installable in-app (no resolvable https "
+                       "download URL); no-op (no browser fallback)",
                        uuid.toStdString());
-        bool const opened = openUpstream(uuid);
-        emit installFinished(uuid,
-                             opened,
-                             opened ? QString{}
-                                    : QStringLiteral("No download URL on file and no "
-                                                     "browser-openable fallback."));
-        return opened;
+        emit installFinished(uuid, false, QStringLiteral("Not installable in-app"));
+        return false;
     }
 
     // Real in-app install path: HTTPS GET against the upstream CDN, save
