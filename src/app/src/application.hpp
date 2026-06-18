@@ -34,6 +34,7 @@
 
 #ifdef AJAZZ_HAVE_WEBSOCKETS
 #include "app_event_dispatch.hpp"
+#include "pi_appear_gate.hpp"
 #include "plugin_device_bridge.hpp"
 #include "plugin_manager.hpp"
 #include "sd_plugin_server.hpp"
@@ -363,6 +364,12 @@ private:
     /// (destruction order: m_pluginHost2 first, then m_pluginManager, since the
     /// aggregator holds a raw pointer to the manager). Non-owning sub-host pointers.
     std::unique_ptr<UnifiedPluginHost> m_pluginHost2;
+    /// De-dup gate for propertyInspectorDidAppear/…DidDisappear. A modern PI fires
+    /// BOTH the WS registration path (SdPluginServer::propertyInspectorRegistered)
+    /// AND the WebEngine path (PropertyInspectorController::inspectorOpened); both
+    /// emit sites consult this gate (keyed on the instance context) so the host
+    /// emits exactly one appear/disappear per open (research D1, T023).
+    PiAppearGate m_piAppearGate;
 #endif
     /// Developer debug console: logs plugin/device protocol traffic and injects
     /// simulated device input + plugin->host actions. Always present (logging

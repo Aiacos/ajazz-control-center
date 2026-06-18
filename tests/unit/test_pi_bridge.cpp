@@ -349,6 +349,65 @@ TEST_CASE("PI settings refuse path-traversal uuids", "[pi-bridge][persistence]")
 }
 
 // ---------------------------------------------------------------------------
+// PiAppearGate — propertyInspectorDidAppear single-emit dedup (T020 / research D1)
+//
+// A modern PI fires BOTH PropertyInspectorController::inspectorOpened AND
+// SdPluginServer::propertyInspectorRegistered for one open, so Application would
+// emit propertyInspectorDidAppear twice without this gate. These tests lock the
+// "exactly one appear per open, keyed on context" contract before the dedup is
+// wired into Application (T023) and the modern-PI WS bootstrap lands (T024).
+// ---------------------------------------------------------------------------
+#include "pi_appear_gate.hpp"
+
+TEST_CASE("PiAppearGate emits appear exactly once per PI open", "[pi-bridge][pi-appear]") {
+    ajazz::app::PiAppearGate gate;
+    QString const ctx = QStringLiteral("ctx-pi-001");
+
+    // First emit site (e.g. inspectorOpened) — should emit.
+    REQUIRE(gate.noteAppear(ctx) == true);
+    REQUIRE(gate.isAppeared(ctx));
+    // Second emit site (e.g. propertyInspectorRegistered) for the SAME open —
+    // suppressed (this is the double-emit the gate exists to kill).
+    REQUIRE(gate.noteAppear(ctx) == false);
+    // Any further duplicate also suppressed.
+    REQUIRE(gate.noteAppear(ctx) == false);
+}
+
+TEST_CASE("PiAppearGate re-arms after a disappear (re-open emits again)",
+          "[pi-bridge][pi-appear]") {
+    ajazz::app::PiAppearGate gate;
+    QString const ctx = QStringLiteral("ctx-pi-002");
+
+    REQUIRE(gate.noteAppear(ctx) == true);
+    // Closing the PI: the first disappear emits; it also clears the gate.
+    REQUIRE(gate.noteDisappear(ctx) == true);
+    REQUIRE_FALSE(gate.isAppeared(ctx));
+    // A second disappear (the other emit site) is unpaired — suppressed.
+    REQUIRE(gate.noteDisappear(ctx) == false);
+    // Re-opening the same context emits appear again (not stuck "appeared").
+    REQUIRE(gate.noteAppear(ctx) == true);
+}
+
+TEST_CASE("PiAppearGate keeps distinct contexts independent", "[pi-bridge][pi-appear]") {
+    ajazz::app::PiAppearGate gate;
+    QString const a = QStringLiteral("ctx-A");
+    QString const b = QStringLiteral("ctx-B");
+
+    REQUIRE(gate.noteAppear(a) == true);
+    REQUIRE(gate.noteAppear(b) == true); // different context — not a duplicate
+    REQUIRE(gate.noteAppear(a) == false);
+    REQUIRE(gate.noteDisappear(a) == true);
+    REQUIRE(gate.isAppeared(b)); // closing A leaves B visible
+}
+
+TEST_CASE("PiAppearGate never emits for an empty (unresolved) context", "[pi-bridge][pi-appear]") {
+    ajazz::app::PiAppearGate gate;
+    REQUIRE(gate.noteAppear(QString{}) == false);
+    REQUIRE(gate.noteDisappear(QString{}) == false);
+    REQUIRE_FALSE(gate.isAppeared(QString{}));
+}
+
+// ---------------------------------------------------------------------------
 // cefQuery shim tests (PLUGIN-09 / 20-02)
 //
 // kCefQueryShimSource is a pure constexpr string — no WebEngine needed.

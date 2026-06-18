@@ -716,6 +716,16 @@ Application::Application(QObject* parent)
             if (owner.isEmpty()) {
                 return; // unresolved context — nothing to notify
             }
+            // T023 dedup: a modern PI also registers its own WebSocket, so the
+            // inspectorOpened path (below) fires for the same open. Gate on the
+            // instance context so propertyInspectorDidAppear/…DidDisappear is sent
+            // exactly once regardless of which emit site fires first.
+            bool const isAppear = eventName == QStringLiteral("propertyInspectorDidAppear");
+            bool const shouldEmit = isAppear ? m_piAppearGate.noteAppear(context)
+                                             : m_piAppearGate.noteDisappear(context);
+            if (!shouldEmit) {
+                return; // duplicate appear, or unpaired disappear — suppress
+            }
             auto const ctx = m_pluginBridge->registry().byContext(context);
             if (!ctx.has_value()) {
                 return;
@@ -942,7 +952,10 @@ Application::Application(QObject* parent)
                      &PropertyInspectorController::inspectorOpened,
                      this,
                      [this](QString uuid, QString action, QString ctx) {
-                         if (m_pluginServer) {
+                         // T023 dedup: shares m_piAppearGate with the WS-registration
+                         // path above so a modern PI (WebEngine page + its own
+                         // WebSocket) yields exactly one propertyInspectorDidAppear.
+                         if (m_pluginServer && m_piAppearGate.noteAppear(ctx)) {
                              m_pluginServer->sendEvent(
                                  uuid,
                                  QStringLiteral("propertyInspectorDidAppear"),
@@ -954,7 +967,7 @@ Application::Application(QObject* parent)
                      &PropertyInspectorController::inspectorClosed,
                      this,
                      [this](QString uuid, QString action, QString ctx) {
-                         if (m_pluginServer) {
+                         if (m_pluginServer && m_piAppearGate.noteDisappear(ctx)) {
                              m_pluginServer->sendEvent(
                                  uuid,
                                  QStringLiteral("propertyInspectorDidDisappear"),
