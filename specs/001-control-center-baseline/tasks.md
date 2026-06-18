@@ -174,7 +174,7 @@ ______________________________________________________________________
 - [x] T034 [P] Refreshed `docs/architecture/PLUGIN-GAP-ANALYSIS.md` (F3 bootstrap DONE, B5/B6/B7 DONE, setTriggerDescription/showAlert-showOk status, session log) and the plan-level contract `contracts/elgato-plugin-ws.md` status column (propertyInspectorDidAppear dedup'd, setTriggerDescription routed, showAlert/showOk done).
 - [x] T035 [P] Added an explicit **Deferred / hardware-gated** section to `PLUGIN-GAP-ANALYSIS.md`: `userDesiredState` (US4 multi-layer gap), retail-AKP05E encoder/touch wire values (B4/T013), live modern-PI WS registration (T024/T030 harness-gated), Windows VendorDll Wine launch (WINPLG-03), optional per-device `SupportedDevices` SKU enforcement (D6). None silently dropped.
 - [ ] T036 Run the full quickstart.md (Scenarios 1–6) end-to-end through `scripts/ajazz-debug`; read every screenshot.
-- [ ] T037 Final gate: `ctest --preset linux-release` green + confirm the change compiles clean on Linux GCC/Clang, Apple Clang (`-Werror`), and MSVC (`/W4 /WX`).
+- [~] T037 Final gate: **`ctest --preset linux-release` GREEN — 845/845** (Linux GCC, -Werror, full build clean). Cross-platform hygiene verified on the diff: no MSVC-fatal APIs (C4996 hook passed on every commit), ASCII-only TEST_CASE names, `#pragma once` headers, Qt/std-only (no platform APIs). The **Apple Clang (-Werror) + MSVC (/W4 /WX)** legs run in CI (`.github/workflows/ci.yml` matrix) on push — cannot be run locally; the shift-left pre-commit gates passed.
 
 ______________________________________________________________________
 
