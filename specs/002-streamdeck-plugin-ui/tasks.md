@@ -86,12 +86,12 @@ presents an Elgato-faithful PI + title/image layout.
 
 ### Implementation for User Story 2
 
-- [ ] T013 [US2] Polish key render in `src/app/qml/components/KeyCell.qml` to be Elgato-faithful: action image dominant with title overlay, live update via the existing `image://livekey/<index>` provider, and a sensible placeholder when a state has no image/title.
-- [ ] T014 [US2] Arrange the key configuration surface Elgato-style in `src/app/qml/Inspector.qml` + `src/app/qml/PropertyInspector.qml`: plugin Property Inspector together with the standard title/image controls (action visual dominant, title overlay, selected control highlighted), consistent location.
-- [ ] T015 [US2] Highlight the key as a valid drop target during a drag in `src/app/qml/components/DeviceCanvas.qml`/`KeyCell.qml` using the gating helper (T005); reject a non-`Keypad` action with a clear affordance, leaving the target unchanged.
-- [ ] T016 [US2] Ensure a Property-Inspector setting change reflects in the on-screen key preview (FR-010): verify the PI→profile→`image://livekey` round-trip in `src/app/src/property_inspector_controller.*` / `profile_controller.*` updates the preview.
-- [ ] T017 [P] [US2] QML smoke for key-bind render in `tests/qml/`: a plugin-bound key shows image+title and reflects a simulated live update.
-- [ ] T018 [US2] Live-verify Scenario 2 (quickstart.md) via the debug channel: `device.setActiveDevice akp05e`, profile-inject a key binding, `input.key`, `plugin.protocolLog` (setTitle/setImage), `screenshot` and READ the live key render. Flag the modern-PI-open-via-selection walk for a manual session (harness gap).
+- [x] T013 [US2] Polish key render in `src/app/qml/components/KeyCell.qml` to be Elgato-faithful: action image dominant with title overlay, live update via the existing `image://livekey/<index>` provider, and a sensible placeholder when a state has no image/title.
+- [x] T014 [US2] Arrange the key configuration surface Elgato-style in `src/app/qml/Inspector.qml` + `src/app/qml/PropertyInspector.qml`: plugin Property Inspector together with the standard title/image controls (action visual dominant, title overlay, selected control highlighted), consistent location.
+- [x] T015 [US2] Highlight the key as a valid drop target during a drag in `src/app/qml/components/DeviceCanvas.qml`/`KeyCell.qml` using the gating helper (T005); reject a non-`Keypad` action with a clear affordance, leaving the target unchanged.
+- [x] T016 [US2] Ensure a Property-Inspector setting change reflects in the on-screen key preview (FR-010): verify the PI→profile→`image://livekey` round-trip in `src/app/src/property_inspector_controller.*` / `profile_controller.*` updates the preview.
+- [x] T017 [P] [US2] QML smoke for key-bind render in `tests/qml/`: a plugin-bound key shows image+title and reflects a simulated live update.
+- [x] T018 [US2] Live-verify Scenario 2 (quickstart.md) via the debug channel: `device.setActiveDevice akp05e`, profile-inject a key binding, `input.key`, `plugin.protocolLog` (setTitle/setImage), `screenshot` and READ the live key render. Flag the modern-PI-open-via-selection walk for a manual session (harness gap).
 
 **Checkpoint**: US1 + US2 work independently — full P1 MVP.
 

@@ -273,43 +273,110 @@ Rectangle {
             width: formScroll.availableWidth
             spacing: Theme.spacingMd
 
+            // -- Dominant key preview (US2 / FR-009) --------------------------
+            // Elgato-faithful: the action visual is the dominant element at the
+            // top of the config form, rendered exactly like the on-canvas key
+            // (image + title overlaid at the bottom, live via image://livekey).
+            // A bound action with no image/title falls back to a sensible
+            // placeholder (glyph + action name) rather than an empty/broken tile
+            // (spec edge case). Centred so it reads as the "what this key looks
+            // like" hero, mirroring the Stream Deck software's selected-key card.
+            Item {
+                Layout.alignment: Qt.AlignHCenter
+                Layout.topMargin: Theme.spacingXs
+                Layout.preferredWidth: 140
+                Layout.preferredHeight: 140
+
+                Rectangle {
+                    id: keyPreview
+                    objectName: "keyPreview"
+                    anchors.fill: parent
+                    radius: Theme.radiusLg
+                    // Lit-LCD black behind an icon (hardware-faithful), like KeyCell.
+                    readonly property bool hasIcon: root.binding && root.binding.iconSource
+                        && root.binding.iconSource.toString() !== ""
+                    readonly property string previewLabel:
+                        root.binding && root.binding.label ? root.binding.label : ""
+                    color: keyPreview.hasIcon ? "#000000" : Theme.tile
+                    border.color: Theme.accent
+                    border.width: 1
+
+                    Image {
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        source: keyPreview.hasIcon ? root.binding.iconSource : ""
+                        fillMode: Image.PreserveAspectCrop
+                        smooth: true
+                        asynchronous: true
+                        visible: keyPreview.hasIcon
+                    }
+
+                    // Title overlay — bottom-aligned over the icon, exactly like
+                    // KeyCell. Suppressed for live device renders (image://livekey
+                    // bakes the title into the frame, avoiding double text).
+                    Text {
+                        anchors.fill: parent
+                        anchors.margins: 6
+                        visible: keyPreview.previewLabel !== ""
+                            && (!keyPreview.hasIcon
+                                || root.binding.iconSource.toString().indexOf("image://livekey") !== 0)
+                        text: keyPreview.previewLabel
+                        color: Theme.fgPrimary
+                        font.pixelSize: Theme.fontMd
+                        font.weight: Font.DemiBold
+                        horizontalAlignment: Text.AlignHCenter
+                        verticalAlignment: keyPreview.hasIcon ? Text.AlignBottom : Text.AlignVCenter
+                        wrapMode: Text.WordWrap
+                        style: keyPreview.hasIcon ? Text.Outline : Text.Normal
+                        styleColor: "#000000"
+                    }
+
+                    // Sensible placeholder: a bound action with neither image nor
+                    // title shows a glyph + the action name so the tile never reads
+                    // as empty or broken (spec edge case).
+                    ColumnLayout {
+                        anchors.centerIn: parent
+                        spacing: Theme.spacingXs
+                        visible: !keyPreview.hasIcon && keyPreview.previewLabel === ""
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: "▢" // ▢ white square with rounded corners
+                            color: Theme.fgMuted
+                            font.pixelSize: 36
+                        }
+                        Label {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.maximumWidth: 124
+                            horizontalAlignment: Text.AlignHCenter
+                            text: root.hasSelection ? root.selectionLabel : ""
+                            color: Theme.fgMuted
+                            font.pixelSize: Theme.fontSm
+                            elide: Text.ElideRight
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
+                        }
+                    }
+                }
+            }
+
             // -- Icon row -----------------------------------------------------
+            // The dominant preview above is the 1:1 visual; this row is just the
+            // Choose/Clear controls (the redundant small swatch was removed).
             Label { text: qsTr("Icon"); color: Theme.fgMuted; font.pixelSize: Theme.fontSm }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spacingSm
 
-                // Preview swatch — mirrors the LCD-key visual at 1:1 size.
-                Rectangle {
-                    Layout.preferredWidth: 64
-                    Layout.preferredHeight: 64
-                    radius: Theme.radiusMd
-                    color: Theme.tile
-                    border.color: Theme.borderSubtle
-                    border.width: 1
-                    Image {
-                        anchors.fill: parent
-                        anchors.margins: 4
-                        source: root.binding && root.binding.iconSource ? root.binding.iconSource : ""
-                        fillMode: Image.PreserveAspectCrop
-                        smooth: true
-                        visible: source.toString() !== ""
-                    }
-                }
-                ColumnLayout {
+                SecondaryButton {
                     Layout.fillWidth: true
-                    spacing: Theme.spacingXs
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        text: qsTr("Choose file…")
-                        onClicked: iconPicker.open()
-                    }
-                    SecondaryButton {
-                        Layout.fillWidth: true
-                        text: qsTr("Clear")
-                        enabled: root.binding && root.binding.iconSource && root.binding.iconSource.toString() !== ""
-                        onClicked: root.bindingFieldChanged("iconSource", "")
-                    }
+                    text: qsTr("Choose file…")
+                    onClicked: iconPicker.open()
+                }
+                SecondaryButton {
+                    Layout.fillWidth: true
+                    text: qsTr("Clear")
+                    enabled: root.binding && root.binding.iconSource && root.binding.iconSource.toString() !== ""
+                    onClicked: root.bindingFieldChanged("iconSource", "")
                 }
             }
 
