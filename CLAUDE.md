@@ -429,7 +429,10 @@ belong in your Claude Code auto-memory, not here.*
 
 <!-- SPECKIT START -->
 
-For additional context about technologies to be used, project structure,
-shell commands, and other important information, read the current plan
+Active implementation plan: `specs/001-control-center-baseline/plan.md` — Stream Deck
+device + plugin system (Elgato/OpenDeck parity on the mirajazz sidecar). See its
+`research.md`, `data-model.md`, `contracts/`, and `quickstart.md` for the subsystem
+decomposition, the Elgato/PI/sidecar contracts, and the debug-channel validation scenarios.
+Keyboard/mouse are out of scope for that plan (already functional).
 
 <!-- SPECKIT END -->
