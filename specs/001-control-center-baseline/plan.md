@@ -8,8 +8,10 @@
 Stream Deck device layer + the plugin system only** — User Stories 1, 2, 4 and the Story-5
 resilience guarantees *as they apply to Stream Dock families*. Keyboard (AK980) and mouse
 (AJ-series) are **explicitly out of scope here**: they are already functional (FR-001/004/005 for
-those families are satisfied). Non-Stream-Dock device work and packaging (US6) are out of scope for
-this plan.
+those families are satisfied). User Story 3 (multi-profile + per-application switching, FR-015/FR-016),
+non-Stream-Dock device work, and packaging (US6, FR-025) are **deferred to a later plan, not dropped**
+— their requirements remain live in the baseline spec and will be planned in a subsequent
+`/speckit.plan` cycle.
 
 ## Summary
 

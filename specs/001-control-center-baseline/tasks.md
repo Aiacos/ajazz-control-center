@@ -83,7 +83,11 @@ ______________________________________________________________________
 ## Phase 4: User Story 5 — Honest capability + resilient device (no idle wedge) (Priority: P1)
 
 **Goal**: The device never wedges on idle — the keep-alive path actually keeps the handle alive (today
-`keepAlive()` is a silent no-op while a timer fires into the void).
+`keepAlive()` is a silent no-op while a timer fires into the void). This phase also covers US5's other
+two dimensions for Stream Dock: **honest capability** (FR-018 — an unsupported/provisional capability
+is never advertised as working; reinforced by T013 provisional isolation + T035 deferred-item honesty)
+and **resilient hot-plug** (FR-019 — removal preserves the user's selection + list position; FR-020
+coalescing).
 
 **Independent Test**: Select a device, leave it idle past the keep-alive interval, then render — it
 still renders (no wedge); a unit test asserts `keepAlive()` emits a `keep_alive` command (quickstart
@@ -97,7 +101,7 @@ Scenario 2).
 
 - [ ] T016 [US5] Add a `keep_alive {serial}` command (sends mirajazz `CRT CONNECT`) to the sidecar dispatch in `streamdock-host/src/main.rs` + a cargo test for the codec.
 - [ ] T017 [US5] Wire `SidecarStreamDockDevice::keepAlive()` to emit the `keep_alive` command via `sidecar_protocol` in `src/app/src/sidecar_stream_dock_device.cpp` (~:293), replacing the empty no-op.
-- [ ] T018 [US5] Confirm `StreamDockControlService` keep-alive timer drives it (`src/app/src/stream_dock_control_service.cpp` ~:102) and the registry evicts a stale handle on hot-plug Removed; add an assertion/test.
+- [ ] T018 [US5] Confirm `StreamDockControlService` keep-alive timer drives it (`src/app/src/stream_dock_control_service.cpp` ~:102) and the registry evicts a stale handle on hot-plug Removed while preserving the user's device selection + list position (FR-019); add an assertion/test pinning both the eviction and selection retention.
 - [ ] T019 [US5] Live-verify quickstart Scenario 2 (idle, then render — no wedge) via `scripts/ajazz-debug`.
 
 **Checkpoint**: P1 MVP complete (US1 + US5) — the device renders, routes all input, and never wedges.
@@ -117,7 +121,7 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 
 - [ ] T020 [P] [US2] `propertyInspectorDidAppear` single-emit test in `tests/unit/test_pi_bridge.cpp`: exactly one emit per PI open (locks the dedup before T023/T024).
 - [ ] T021 [P] [US2] `setTriggerDescription` routing test in `tests/unit/test_plugin_device_bridge.cpp` (RED before T025).
-- [ ] T022 [P] [US2] Secondary-bug regression tests (B5 dispatch event-name, B6 HTML page teardown, B7 non-empty `passHello.deviceInfo`) in `tests/unit/test_plugin_manager.cpp` + `tests/unit/test_sd_plugin_server.cpp`.
+- [ ] T022 [P] [US2] Secondary-bug regression tests: B5 dispatch event-name in `tests/unit/test_plugin_host2.cpp`, B6 HTML page teardown in `tests/unit/test_plugin_lifecycle.cpp`, B7 non-empty `passHello.deviceInfo` in `tests/unit/test_sd_plugin_server.cpp` (there is no `test_plugin_manager.cpp`; `PluginManager` is covered across the lifecycle/host2/concurrency suites).
 
 ### Implementation for User Story 2 — Property Inspector chain (ORDERED, top priority D1)
 
@@ -207,7 +211,7 @@ ______________________________________________________________________
 # RED tests first, in parallel:
 Task: "propertyInspectorDidAppear single-emit test in tests/unit/test_pi_bridge.cpp"      # T020
 Task: "setTriggerDescription routing test in tests/unit/test_plugin_device_bridge.cpp"     # T021
-Task: "B5/B6/B7 regression tests in test_plugin_manager.cpp + test_sd_plugin_server.cpp"   # T022
+Task: "B5/B6/B7 regression tests in test_plugin_host2.cpp + test_plugin_lifecycle.cpp + test_sd_plugin_server.cpp"  # T022
 
 # Then the independent fixes in parallel (after T023->T024 PI chain lands):
 Task: "Wire setTriggerDescription into kRoutedActions + handler"                            # T025

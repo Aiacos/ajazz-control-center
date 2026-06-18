@@ -10,6 +10,10 @@ in `ajazz_core` (COD-031).
 This captures the entities, their fields, relationships, validation rules, and state transitions for
 the subsystem. It is a design reference, not implementation code.
 
+**Canonical terminology** (resolves drift across the artifacts): the physical AKP05-family LCD strip
+is the **touch strip**; the 4 discrete addressable regions on it (BAT wire 1–4) are **touch zones**.
+"Strip zone" is a synonym for touch zone; prefer the canonical terms above.
+
 ______________________________________________________________________
 
 ## 1. Binding model (in `ajazz_core`)

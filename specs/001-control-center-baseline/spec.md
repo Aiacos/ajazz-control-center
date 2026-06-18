@@ -233,7 +233,9 @@ ______________________________________________________________________
   consent.
 - **FR-012**: System MUST be compatible with the Stream Deck / OpenDeck plugin event model so
   that existing ecosystem plugins function (action lifecycle, settings, and Property Inspector
-  events).
+  events). The authoritative, exhaustive inbound/outbound event and command set this requirement
+  refers to is defined in `contracts/elgato-plugin-ws.md`; that contract governs when this prose and
+  the contract differ.
 - **FR-013**: System MUST present a Property Inspector for plugin actions that expose
   configuration, and changes made there MUST round-trip to the plugin and update device output.
 - **FR-014**: System MUST source plugin catalog content without requiring user accounts or
@@ -311,7 +313,7 @@ ______________________________________________________________________
 - **SC-005**: A user can create a second profile and switch to it, with the device repainting
   correctly, in under 1 minute.
 - **SC-006**: Configuration changes made in a plugin's Property Inspector are reflected in device
-  output within a few seconds, with the setting surviving an application restart.
+  output within 3 seconds, with the setting surviving an application restart.
 - **SC-007**: Every interactive control in the application can be exercised and its result
   observed through the automated validation channel, enabling regression verification without
   manual GUI steps.
