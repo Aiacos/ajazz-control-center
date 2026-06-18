@@ -295,6 +295,48 @@ TEST_CASE("ProfileController: key binding round-trips through save/load",
 }
 
 // ===========================================================================
+// US4 / FR-017: a Toggle Action's currentState survives an app restart.
+// The bound ActionInstance.currentState is what advances on each press; the
+// profile JSON must persist it so a 3-state toggle re-opens on the same state.
+// ===========================================================================
+
+TEST_CASE("Profile: a key binding's ActionInstance currentState persists across save/load",
+          "[profile-persistence][US4][toggle]") {
+    ajazz::tests::qtApp();
+
+    // Build a profile with a key bound to a 3-state toggle instance sitting on
+    // state 2 (the state the user last advanced to before "restart").
+    core::Profile prof{};
+    prof.id = "test-toggle-persist";
+    prof.name = "Toggle Persist";
+    prof.deviceCodename = "akp05e";
+
+    core::ActionInstance inst{};
+    inst.id = "com.test.toggle";
+    inst.states = {core::ActionState{}, core::ActionState{}, core::ActionState{}};
+    inst.currentState = 2;
+    inst.settings = R"({"mode":"cycle"})";
+
+    core::Binding binding{};
+    binding.instance = inst;
+    prof.keys[3] = std::move(binding);
+
+    // Serialize -> parse (the on-disk restart round-trip).
+    std::string const json = core::profileToJson(prof);
+    core::Profile const reloaded = core::profileFromJson(json);
+
+    auto const it = reloaded.keys.find(3);
+    REQUIRE(it != reloaded.keys.end());
+    REQUIRE(it->second.instance.has_value());
+    auto const& ri = *it->second.instance;
+    CHECK(ri.id == std::string{"com.test.toggle"});
+    CHECK(ri.states.size() == 3);
+    // The toggle state survives the restart — this is the US4 persistence guarantee.
+    CHECK(ri.currentState == 2);
+    CHECK(ri.settings == std::string{R"({"mode":"cycle"})"});
+}
+
+// ===========================================================================
 // PROFILE-01: encoder binding round-trip (LOCKED decision 3 - programmatic)
 // ===========================================================================
 

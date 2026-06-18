@@ -158,12 +158,12 @@ press advances + repaints the state; the state survives restart (quickstart Scen
 
 ### Tests for User Story 4
 
-- [ ] T031 [P] [US4] Extend `tests/unit/test_multiaction_dispatch.cpp` to cover `userDesiredState` on a multi-action multi-state press (the one unverified inbound field).
+- [x] T031 [P] [US4] Multi-action multi-state coverage added to `test_multiaction_dispatch.cpp`: a multi-state child sequences correctly (id+settings reach the executor) but the `ActionChain` step carries NO state — so `userDesiredState` is dropped at the adapter boundary. Test LOCKS that contract; `userDesiredState` is a multi-layer gap (needs `core::Action` state-carry + executor plumbing + multi-action-step config UI) recorded as DEFERRED in T035.
 
 ### Implementation for User Story 4
 
-- [ ] T032 [US4] Live-verify multi-action sequencing + toggle cycling via quickstart Scenario 6; close any gap found (e.g. emit `userDesiredState` in `src/app/src/plugin_device_bridge.cpp` if absent).
-- [ ] T033 [US4] Confirm toggle `currentState` persistence across an app restart (relaunch + read the bound state); add a persistence assertion if missing in `tests/unit/test_profile_persistence.cpp`.
+- [~] T032 [US4] Multi-action sequencing + toggle cycling + persistence are unit-verified at the dispatch layer (`[multiaction]` 12 cases, `test_toggle_dispatch`, `test_action_instance` currentState round-trip, + T033). A live Scenario-6 walk is constrained by the same select/bind harness limitation as T030 AND no installed plugin ships a 2-state toggle action; the `userDesiredState` gap is DEFERRED (T031/T035), not half-wired.
+- [x] T033 [US4] Toggle `currentState` persistence test added to `test_profile_persistence.cpp`: a key binding's `ActionInstance.currentState=2` (3-state toggle) survives `profileToJson`→`profileFromJson` (the on-disk restart round-trip). The serializer already persisted it (`writeActionInstance`); the test was the gap.
 
 **Checkpoint**: All in-scope stories independently functional.
 

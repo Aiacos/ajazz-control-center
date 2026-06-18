@@ -129,3 +129,40 @@ TEST_CASE("multiaction adapter truncates a nest beyond the depth cap without cra
     REQUIRE(chain.size() <= 64);
     REQUIRE_FALSE(chain.empty());
 }
+
+/// US4 / userDesiredState (the one unverified inbound field): a Multi Action that
+/// runs a multi-state child sequences the step correctly (id + settings reach the
+/// plugin executor), but the flattened ActionChain step carries NO state field —
+/// so the child's chosen toggle state ("userDesiredState") is dropped at the
+/// adapter boundary. This test LOCKS that current contract and documents the gap:
+/// emitting userDesiredState requires extending core::ActionChain (and the plugin
+/// executor) to carry a per-step desired-state, plus multi-action-step config UI
+/// to set it. Tracked as an explicit DEFERRED item rather than half-wired.
+TEST_CASE("multiaction adapter does not yet carry a multi-state child's desired state (US4)",
+          "[multiaction][US4]") {
+    using namespace ajazz::core;
+
+    ActionInstance parent{};
+    ActionInstance child{};
+    child.id = "com.test.toggle.step";
+    child.settings = R"({"target":"on"})";
+    // The child is a 3-state action the multi-action wants to drive to state 2 --
+    // this is precisely what Elgato's userDesiredState would encode.
+    child.states = {ActionState{}, ActionState{}, ActionState{}};
+    child.currentState = 2;
+    parent.children.push_back(child);
+
+    ActionChain const chain = instanceChildrenToChain(parent);
+    // Sequencing works: the plugin step is produced with id + settings so the
+    // executor invokes it.
+    REQUIRE(chain.size() == 1);
+    CHECK(chain[0].kind == ActionKind::Plugin);
+    CHECK(chain[0].id == "com.test.toggle.step");
+    CHECK(chain[0].settingsJson == R"({"target":"on"})");
+    // GAP (userDesiredState): the ActionChain step (core::Action) has no
+    // state-carrying field, so the child's currentState=2 is NOT propagated to
+    // the plugin executor. Emitting userDesiredState would require extending
+    // core::Action + the plugin executor to carry a per-step desired state, then
+    // sending it on keyDown with isInMultiAction:true. Tracked as an explicit
+    // DEFERRED item (see specs .../tasks.md T035) rather than half-wired.
+}
