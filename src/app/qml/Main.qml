@@ -78,6 +78,26 @@ ApplicationWindow {
     Material.accent: Theme.accent
     Material.primary: Theme.accent2
 
+    // Make the editor follow the backend's active device for EVERY caller of
+    // setActiveDevice() — not just the DeviceList click path. The control service
+    // emits deviceActivated() at the end of a successful activation regardless of
+    // origin (QML auto-select, hot-plug arrival, AND the AJAZZ_DEBUG_CONTROL
+    // `device.setActiveDevice` RPC). Binding the editor here means a headless
+    // `device.setActiveDevice` drive populates the device canvas (and therefore
+    // instantiates the addressable `key_N` KeyCells), closing the offscreen
+    // verification gap for the device-binding + plugin walks (constitution
+    // Principle V; T004/T005). It is also a behavioural improvement: the editor
+    // now tracks programmatic device selection, mirroring the DeviceList path.
+    Connections {
+        target: StreamDockControlService
+        function onDeviceActivated(codename) {
+            if (codename !== "" && editor.codename !== codename) {
+                editor.codename = codename;
+                editor.capabilities = DeviceModel.capabilitiesFor(codename);
+            }
+        }
+    }
+
     // Surface the tray's "Show window" action.
     Connections {
         target: Tray
@@ -159,6 +179,7 @@ ApplicationWindow {
 
             ProfileEditor {
                 id: editor
+                objectName: "profileEditor" // debug-channel addressable (qml.get/set codename)
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 // Phase 16-02 (PROFILE-01): Apply -> saveActiveProfile persists
@@ -273,6 +294,7 @@ ApplicationWindow {
     // ----------------------------------------------------------------------
     Drawer {
         id: debugDrawer
+        objectName: "debugDrawer" // debug-channel addressable (qml.invoke open/close)
         edge: Qt.RightEdge
         modal: true
         dragMargin: 0
