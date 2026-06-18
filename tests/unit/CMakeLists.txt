@@ -100,6 +100,12 @@ add_executable(
     # sidecar wire protocol — no process spawned, encode/decode functions only.
     test_sidecar_protocol.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_protocol.cpp
+    # WR-05 / keep-alive: first dedicated unit test for the app-side sidecar proxy
+    # SidecarStreamDockDevice (previously only compiled by the QML smoke target). Process-free
+    # surface: construction, capability interfaces, descriptor-driven geometry, crash-safe
+    # closed-state output incl. the formerly-no-op keepAlive().
+    test_sidecar_stream_dock_device.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_stream_dock_device.cpp
     # experiment/mirajazz Slice B: in-process FakeStreamDockDevice fixture
     # (header-only) self-test — backs the app-behavior assertions once the C++
     # AKP05 wire fixture (makeAkp05WithTransport) is removed.

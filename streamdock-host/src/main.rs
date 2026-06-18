@@ -152,6 +152,7 @@ async fn main() {
             Some("ping") => emit(serde_json::json!({"event": "pong"})),
             Some("set_brightness") => handle_set_brightness(&devices, &cmd, allow_output).await,
             Some("set_image") => handle_set_image(&devices, &cmd, allow_output).await,
+            Some("keep_alive") => handle_keep_alive(&devices, &cmd, allow_output).await,
             Some("render_test") => handle_render_test(&devices, &cmd, allow_output).await,
             other => emit(serde_json::json!({
                 "event": "error",
@@ -219,6 +220,26 @@ async fn handle_set_brightness(devices: &DeviceMap, cmd: &serde_json::Value, all
         Some(device) => match device.set_brightness(percent).await {
             Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"set_brightness"})),
             Err(e) => emit(serde_json::json!({"event":"error","msg":format!("set_brightness: {e}")})),
+        },
+        None => emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")})),
+    }
+}
+
+/// `{"cmd":"keep_alive","serial":..}` — sends mirajazz `keep_alive()` (CRT CONNECT) to hold the
+/// persistent HID handle alive while idle, preventing the panel from wedging. Driven by the app's
+/// StreamDockControlService keep-alive timer (whose IDisplayCapable::keepAlive() was a no-op before
+/// this command existed).
+async fn handle_keep_alive(devices: &DeviceMap, cmd: &serde_json::Value, allow_output: bool) {
+    if !allow_output {
+        emit(serde_json::json!({"event": "error", "msg": "output disabled (--allow-output)"}));
+        return;
+    }
+    let serial = cmd.get("serial").and_then(|s| s.as_str()).unwrap_or("");
+    let device = devices.lock().await.get(serial).map(|e| e.device.clone());
+    match device {
+        Some(device) => match device.keep_alive().await {
+            Ok(()) => emit(serde_json::json!({"event":"ok","cmd":"keep_alive"})),
+            Err(e) => emit(serde_json::json!({"event":"error","msg":format!("keep_alive: {e}")})),
         },
         None => emit(serde_json::json!({"event":"error","msg":format!("no device {serial}")})),
     }

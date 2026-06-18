@@ -35,6 +35,13 @@ QByteArray buildSetBrightness(QString const& serial, std::uint8_t percent) {
     });
 }
 
+QByteArray buildKeepAlive(QString const& serial) {
+    return toLine(QJsonObject{
+        {"cmd", "keep_alive"},
+        {"serial", serial},
+    });
+}
+
 QByteArray buildSetImage(QString const& serial,
                          std::uint8_t key,
                          bool touchzone,

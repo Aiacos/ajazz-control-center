@@ -42,6 +42,14 @@ TEST_CASE("buildSetBrightness clamps and carries serial", "[sidecar]") {
     REQUIRE(obj.value("percent").toInt() == 100); // 250 clamped to 100
 }
 
+// WR-05 / idle-wedge guard: SidecarStreamDockDevice::keepAlive() (previously a no-op) now emits
+// this command so the sidecar sends mirajazz keep_alive() (CRT CONNECT) on the persistent handle.
+TEST_CASE("buildKeepAlive emits a keep_alive command carrying the serial", "[sidecar]") {
+    auto const obj = reparse(ajazz::app::sidecar::buildKeepAlive("ABC123"));
+    REQUIRE(obj.value("cmd").toString() == "keep_alive");
+    REQUIRE(obj.value("serial").toString() == "ABC123");
+}
+
 TEST_CASE("buildSetImage base64-encodes the RGBA payload losslessly", "[sidecar]") {
     // 2x1 RGBA image = 8 bytes.
     std::array<std::uint8_t, 8> rgba{1, 2, 3, 255, 4, 5, 6, 128};

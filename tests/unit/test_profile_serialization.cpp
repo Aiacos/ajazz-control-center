@@ -69,6 +69,9 @@ TEST_CASE("profile JSON reader round-trips writer output", "[profile][roundtrip]
                              .delayMs = 0});
     eb.onCcw.push_back(
         Action{.kind = ActionKind::BackToParent, .id = "", .label = "Back", .delayMs = 0});
+    // WR-05: the new onRelease chain must round-trip like the other encoder chains.
+    eb.onRelease.push_back(
+        Action{.kind = ActionKind::RunCommand, .id = "", .label = "Release", .delayMs = 0});
     p.encoders[0] = eb;
 
     p.applicationHints = {"obs", "obs-studio", "OBS"};
@@ -96,6 +99,8 @@ TEST_CASE("profile JSON reader round-trips writer output", "[profile][roundtrip]
     REQUIRE(restored.encoders.at(0).onCw.size() == 1);
     REQUIRE(restored.encoders.at(0).onCw.front().kind == ActionKind::OpenUrl);
     REQUIRE(restored.encoders.at(0).onCcw.front().kind == ActionKind::BackToParent);
+    REQUIRE(restored.encoders.at(0).onRelease.size() == 1);
+    REQUIRE(restored.encoders.at(0).onRelease.front().kind == ActionKind::RunCommand);
 }
 
 TEST_CASE("profile round-trips mouseButtons (string-keyed Bindings)",

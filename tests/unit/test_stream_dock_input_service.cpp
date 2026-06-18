@@ -201,6 +201,39 @@ TEST_CASE("INPUT-04b: encoder press fires onPress and synthesises paired release
     REQUIRE(syntheticRelCount == 1); // host synthesises release without a wire frame
 }
 
+// WR-05: a real wire EncoderReleased (AKP03 protocol-v3) must fire the binding's onRelease
+// chain — previously this event was dropped (the case only `break`-ed).
+TEST_CASE("INPUT-04d: real EncoderReleased fires onRelease chain (WR-05)", "[stream-dock-input]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    int onPressCount = 0;
+    int onReleaseCount = 0;
+    ActionExecutors spies;
+    spies.keyPress = [&](std::string_view) { ++onPressCount; };
+    spies.runCommand = [&](std::string_view) { ++onReleaseCount; };
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.encoders[2].onPress = {Action{.kind = ActionKind::KeyPress}};
+    prof.encoders[2].onRelease = {Action{.kind = ActionKind::RunCommand}};
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    SECTION("EncoderReleased fires onRelease (runCommand), not onPress") {
+        fake->injectEvent(ev(DeviceEvent::Kind::EncoderReleased, 2, 0));
+        REQUIRE(onReleaseCount == 1);
+        REQUIRE(onPressCount == 0);
+    }
+    SECTION("EncoderReleased with an empty onRelease is a harmless no-op") {
+        prof.encoders[2].onRelease.clear();
+        fake->injectEvent(ev(DeviceEvent::Kind::EncoderReleased, 2, 0));
+        REQUIRE(onReleaseCount == 0);
+    }
+}
+
 TEST_CASE("INPUT-05a: touch tap at X=140 routes to encoder 2 onPress (zone 140*4/256==2)",
           "[stream-dock-input]") {
     ajazz::tests::qtApp();

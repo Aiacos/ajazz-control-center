@@ -110,10 +110,12 @@ struct Binding {
  * action-chain editors (rotate clockwise, rotate counter-clockwise, push).
  */
 struct EncoderBinding {
-    std::vector<Action> onCw;    ///< Chain fired on a clockwise rotation tick.
-    std::vector<Action> onCcw;   ///< Chain fired on a counter-clockwise tick.
-    std::vector<Action> onPress; ///< Chain fired on a knob press.
-    KeyState state;              ///< Optional LCD label for AKP05's encoder strip.
+    std::vector<Action> onCw;      ///< Chain fired on a clockwise rotation tick.
+    std::vector<Action> onCcw;     ///< Chain fired on a counter-clockwise tick.
+    std::vector<Action> onPress;   ///< Chain fired on a knob press.
+    std::vector<Action> onRelease; ///< Chain fired on a knob release (AKP03 protocol-v3
+                                   ///< EncoderReleased; WR-05). Empty when unused.
+    KeyState state;                ///< Optional LCD label for AKP05's encoder strip.
     /// Additive OpenDeck-shaped action instance (per-state visuals + settings +
     /// Multi Action children). std::nullopt when the profile predates v2 /
     /// carries no "instance" key. Coexists with the legacy chains and `state`.

@@ -240,6 +240,8 @@ void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
     writeChain(out, "onCcw", b.onCcw);
     out << ",";
     writeChain(out, "onPress", b.onPress);
+    out << ",";
+    writeChain(out, "onRelease", b.onRelease);
     if (!keyStateIsDefault(b.state)) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
@@ -965,6 +967,8 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
                 eb.onCcw = readActionArray(r);
             } else if (key == "onPress") {
                 eb.onPress = readActionArray(r);
+            } else if (key == "onRelease") {
+                eb.onRelease = readActionArray(r);
             } else if (key == "state") {
                 eb.state = readKeyState(r);
             } else if (key == "instance") {

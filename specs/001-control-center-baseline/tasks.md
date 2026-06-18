@@ -46,7 +46,7 @@ ______________________________________________________________________
 
 - [ ] T004 Close the KeyCell verification gap: add a per-cell `objectName` to the device-canvas key cells in `src/app/qml/DeviceView.qml` (and the KeyCell delegate) so `qml.get`/`qml.click` can address them (constitution Principle V).
 - [ ] T005 Close the modal headless-open gap: add a debug-addressable open path for the editor Drawer/Popup (expose a `Q_INVOKABLE` or `objectName`) in `src/app/qml/` + the backing controller, so PI / multi-action walks can be driven headlessly.
-- [ ] T006 Create the missing `SidecarStreamDockDevice` unit-test target `tests/unit/test_sidecar_stream_dock_device.cpp` (register in `tests/unit/CMakeLists.txt`) with RED scaffolds for: QProcess handshake, `connected`/`input` event parse, `mapSidecarInput`, and `keepAlive()` — behavior filled in US1/US5.
+- [x] T006 Create the missing `SidecarStreamDockDevice` unit-test target `tests/unit/test_sidecar_stream_dock_device.cpp` (register in `tests/unit/CMakeLists.txt`) with RED scaffolds for: QProcess handshake, `connected`/`input` event parse, `mapSidecarInput`, and `keepAlive()` — behavior filled in US1/US5.
 - [ ] T007 [P] Relax the over-strict manifest schema `docs/schemas/plugin_manifest.schema.json` (accept `Knob`/`SecondaryScreen` controllers, `SDKVersion:1`, OpenDeck `CodePathLin`/`CodePaths`; drop `additionalProperties:false` where vendor keys appear) and update `tests/unit/test_plugin_manifest.cpp` to validate a real vendor manifest (research C2).
 - [ ] T008 [P] Refresh the stale `docs/plugin-event-parity.md` to match current code (`switchToProfile`/`systemDidWakeUp`/encoder-layouts have landed) and reconcile `docs/architecture/PLUGIN-GAP-ANALYSIS.md` — explicitly retire **B9** (`applicationDidLaunch/Terminate` is already wired via `app_event_dispatch.cpp`) (research C1, D4).
 
@@ -66,15 +66,15 @@ Scenarios 1 + 5).
 
 ### Tests for User Story 1
 
-- [ ] T009 [P] [US1] Encoder-release routing test in `tests/unit/test_stream_dock_input_service.cpp`: assert a sidecar `EncoderReleased` reaches `EncoderBinding::onRelease` (RED before T011/T012).
-- [ ] T010 [P] [US1] Profile round-trip test for the new `EncoderBinding::onRelease` field in `tests/unit/test_profile_serialization.cpp` (serialize → parse → equal).
+- [x] T009 [P] [US1] Encoder-release routing test in `tests/unit/test_stream_dock_input_service.cpp`: assert a sidecar `EncoderReleased` reaches `EncoderBinding::onRelease` (RED before T011/T012).
+- [x] T010 [P] [US1] Profile round-trip test for the new `EncoderBinding::onRelease` field in `tests/unit/test_profile_serialization.cpp` (serialize → parse → equal).
 
 ### Implementation for User Story 1
 
-- [ ] T011 [US1] Add the `onRelease` action chain to `EncoderBinding` in `src/core/include/ajazz/core/profile.hpp` and serialize it (nlohmann-free) in `src/core/src/profile.cpp` (WR-05); gate the reader on key presence, never a schema version.
-- [ ] T012 [US1] Route the real `EncoderReleased` event to `onRelease` in `src/app/src/stream_dock_input_service.cpp` (resolve the drop-TODO at ~:306).
-- [ ] T013 [US1] Isolate the PROVISIONAL input/geometry constants (encoder polarity, `zoneForX`, touch `tapPos.y`, DRA/ENC 200×100) behind the synthetic-event path in `src/app/src/sidecar_stream_dock_device.cpp` (~:42) and `stream_dock_control_service.cpp`; comment them PROVISIONAL and do NOT hard-commit demo-unit values (constitution Principle VI).
-- [ ] T014 [US1] Live-verify quickstart Scenarios 1 (render + brightness) and 5 (encoder/touch routing) via `scripts/ajazz-debug`; read the screenshot.
+- [x] T011 [US1] Add the `onRelease` action chain to `EncoderBinding` in `src/core/include/ajazz/core/profile.hpp` and serialize it (nlohmann-free) in `src/core/src/profile.cpp` (WR-05); gate the reader on key presence, never a schema version.
+- [x] T012 [US1] Route the real `EncoderReleased` event to `onRelease` in `src/app/src/stream_dock_input_service.cpp` (resolve the drop-TODO at ~:306).
+- [x] T013 [US1] Isolate the PROVISIONAL input/geometry constants (encoder polarity, `zoneForX`, touch `tapPos.y`, DRA/ENC 200×100) behind the synthetic-event path in `src/app/src/sidecar_stream_dock_device.cpp` (~:42) and `stream_dock_control_service.cpp`; comment them PROVISIONAL and do NOT hard-commit demo-unit values (constitution Principle VI).
+- [x] T014 [US1] Live-verify quickstart Scenarios 1 (render + brightness) and 5 (encoder/touch routing) via `scripts/ajazz-debug`; read the screenshot.
 
 **Checkpoint**: The device binding loop is correct and the dropped encoder-release is captured.
 
@@ -95,14 +95,14 @@ Scenario 2).
 
 ### Tests for User Story 5
 
-- [ ] T015 [P] [US5] Keep-alive regression test in `tests/unit/test_sidecar_stream_dock_device.cpp`: assert `keepAlive()` writes a `keep_alive` command to the sidecar stdin (RED before T017 — the no-op is the bug that shipped because nothing tested it).
+- [x] T015 [P] [US5] Keep-alive regression test in `tests/unit/test_sidecar_stream_dock_device.cpp`: assert `keepAlive()` writes a `keep_alive` command to the sidecar stdin (RED before T017 — the no-op is the bug that shipped because nothing tested it).
 
 ### Implementation for User Story 5
 
-- [ ] T016 [US5] Add a `keep_alive {serial}` command (sends mirajazz `CRT CONNECT`) to the sidecar dispatch in `streamdock-host/src/main.rs` + a cargo test for the codec.
-- [ ] T017 [US5] Wire `SidecarStreamDockDevice::keepAlive()` to emit the `keep_alive` command via `sidecar_protocol` in `src/app/src/sidecar_stream_dock_device.cpp` (~:293), replacing the empty no-op.
-- [ ] T018 [US5] Confirm `StreamDockControlService` keep-alive timer drives it (`src/app/src/stream_dock_control_service.cpp` ~:102) and the registry evicts a stale handle on hot-plug Removed while preserving the user's device selection + list position (FR-019); add an assertion/test pinning both the eviction and selection retention.
-- [ ] T019 [US5] Live-verify quickstart Scenario 2 (idle, then render — no wedge) via `scripts/ajazz-debug`.
+- [x] T016 [US5] Add a `keep_alive {serial}` command (sends mirajazz `CRT CONNECT`) to the sidecar dispatch in `streamdock-host/src/main.rs` + a cargo test for the codec.
+- [x] T017 [US5] Wire `SidecarStreamDockDevice::keepAlive()` to emit the `keep_alive` command via `sidecar_protocol` in `src/app/src/sidecar_stream_dock_device.cpp` (~:293), replacing the empty no-op.
+- [x] T018 [US5] Confirm `StreamDockControlService` keep-alive timer drives it (`src/app/src/stream_dock_control_service.cpp` ~:102) and the registry evicts a stale handle on hot-plug Removed while preserving the user's device selection + list position (FR-019); add an assertion/test pinning both the eviction and selection retention.
+- [x] T019 [US5] Live-verify quickstart Scenario 2 (idle, then render — no wedge) via `scripts/ajazz-debug`.
 
 **Checkpoint**: P1 MVP complete (US1 + US5) — the device renders, routes all input, and never wedges.
 

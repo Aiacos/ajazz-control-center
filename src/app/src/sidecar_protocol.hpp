@@ -37,6 +37,10 @@ namespace ajazz::app::sidecar {
 /// `{"cmd":"set_brightness","serial":..,"percent":..}` (0..100, clamped).
 [[nodiscard]] QByteArray buildSetBrightness(QString const& serial, std::uint8_t percent);
 
+/// `{"cmd":"keep_alive","serial":..}` — sidecar sends mirajazz keep_alive() (CRT CONNECT) to
+/// hold the persistent handle alive while idle (prevents the panel wedging).
+[[nodiscard]] QByteArray buildKeepAlive(QString const& serial);
+
 /**
  * @brief `{"cmd":"set_image",...}` with the RGBA payload base64-encoded.
  *

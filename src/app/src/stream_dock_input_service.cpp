@@ -293,17 +293,19 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
         break;
 
     case core::DeviceEvent::Kind::EncoderReleased:
-        // AKP05 is press-only (akp05.md:76); we synthesise a release on EncoderPressed
-        // via synthesiseEncoderRelease() above, so a real wire release is never emitted
-        // by that family and this case is unreachable for AKP05.
-        //
-        // AKP03 v3 firmware DOES emit real EncoderReleased events (akp03.cpp:393-397
-        // dispatches DeviceEvent::Kind::EncoderReleased). However, EncoderBinding has
-        // no onRelease field yet (profile.hpp:113-118). When onRelease is added, route
-        // the hardware release here for AKP03 v3 — and also route the synthesised
-        // release from synthesiseEncoderRelease() through this same path so AKP05 gets
-        // the same semantics without a separate case.
-        // TODO(WR-05): implement onRelease dispatch once profile.hpp adds the field.
+        // WR-05: AKP03 protocol-v3 firmware emits a real EncoderReleased (akp03 dispatches
+        // DeviceEvent::Kind::EncoderReleased). Route it to the binding's onRelease chain — this
+        // was previously dropped. AKP05 is press-only (akp05.md:76): a real wire release is never
+        // emitted by that family, so this case is unreachable for it and the synthesised release
+        // (synthesiseEncoderRelease() on EncoderPressed) is intentionally NOT routed to onRelease
+        // — doing so would double-fire onRelease on AKP03 v3 (which both synthesises on press AND
+        // delivers a real release here).
+        if (m_engine) {
+            if (auto it = prof.encoders.find(ev.index);
+                it != prof.encoders.end() && !it->second.onRelease.empty()) {
+                m_engine->run(it->second.onRelease);
+            }
+        }
         break;
 
     // ---- Touch strip (INPUT-05): raw down/move/up -> synthesised tap/swipe ----

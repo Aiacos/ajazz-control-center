@@ -291,9 +291,14 @@ void SidecarStreamDockDevice::flush() {
 }
 
 void SidecarStreamDockDevice::keepAlive() {
-    // TODO(Slice 4+): add a keep_alive command so the sidecar emits CRT CONNECT
-    // on an idle timer. The persistent handle already avoided the open/close
-    // wedge in the Slice 2 hardware test; idle keep-alive is a separate guard.
+    // WR-05 / idle-wedge guard: send keep_alive so the sidecar emits mirajazz keep_alive()
+    // (CRT CONNECT) on the persistent handle. Driven by StreamDockControlService's keep-alive
+    // timer. (Previously a no-op, so the timer fired into the void and the panel could wedge on
+    // idle despite the persistent handle.)
+    if (!isOpen()) {
+        return;
+    }
+    writeCommand(sidecar::buildKeepAlive(effectiveSerial()));
 }
 
 core::EncoderInfo SidecarStreamDockDevice::encoderInfo() const noexcept {
