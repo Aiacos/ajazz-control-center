@@ -43,7 +43,7 @@ geometry already exists on `core::DeviceDescriptor` (`gridColumns`, `keyRows`,
 **Fix:** source columns/rows from the active device's `DeviceDescriptor`; this same
 source feeds F1's `devices[]` and `deviceDidConnect`. One coherent change.
 
-### F3 — `registerPropertyInspector` mishandled · **MEDIUM** · ✅ SERVER MODEL DONE (6a32191) · PI-launch bootstrap OPEN
+### F3 — `registerPropertyInspector` mishandled · **MEDIUM** · ✅ SERVER MODEL DONE (6a32191) · ✅ PI-launch bootstrap DONE (T024)
 
 `sd_plugin_server.cpp` *used to* treat `registerPropertyInspector` **identically to
 `registerPlugin`**: rekey the socket, send `passHello`, emit `pluginRegistered`.
@@ -63,17 +63,18 @@ the context** (mirrors the bridge's cross-plugin denial), then falls through to
 `actionReceived` so the bundled QWebChannel `$SD` flow is preserved byte-for-byte.
 Two synthetic-WS e2e tests cover modelling + bidirectional relay + cross-plugin denial.
 
-**Remaining sub-task (own session):** the PI-launch bootstrap. Our PI controller hosts
-PI HTML in WebEngine and bridges it via cefQuery → `$SD` (legacy/vendor PIs work). A
-*modern* stock Elgato PI uses `connectElgatoStreamDeckSocket(port, context,
-"registerPropertyInspector", info, actionInfo)` + a real `new WebSocket`; nobody calls
-that entry point on the PI side yet (the HTML-*plugin* path already does — see
-`plugin_manager.cpp:606`). Adding a guarded DocumentReady bootstrap that calls it would
-make modern PIs register over the now-correct F3 server path — BUT it must first
-reconcile a **double-`propertyInspectorDidAppear`**: the existing PI-04 path
-(`inspectorOpened` → didAppear, `application.cpp:942`) already fires for every
-`loadInspector` regardless of transport, so a WS-registering PI would also trigger the
-F3 `propertyInspectorRegistered` → didAppear. Deduplicate before enabling the bootstrap.
+**Done (PI-launch bootstrap, T024):** `PropertyInspectorController::loadInspector`
+now builds the modern entry-point call `connectElgatoStreamDeckSocket(port, context,
+"registerPropertyInspector", info, actionInfo)` (`buildModernPiBootstrapJs` in
+`pi_bootstrap.hpp`) and `PIWebView` runs it on `LoadSucceeded`; `Application` injects
+the `SdPluginServer` loopback port after the server starts (port 0 ⇒ legacy `$SD`
+bridge only). A modern WS-only PI (e.g. `com.jk.weather`) now registers over the F3
+server path. The mandatory **double-`propertyInspectorDidAppear`** reconciliation
+landed **first** (T023): a `PiAppearGate` keyed on the instance context makes both the
+PI-04 `inspectorOpened` path and the F3 `propertyInspectorRegistered` path emit exactly
+one appear/disappear per open (unit-locked, `[pi-appear]`). The builder is unit-tested
+(`[t024]`); live end-to-end WS registration is harness-gated (needs a PI-bearing key
+selected — see DEFERRED).
 
 ### F4 — routed-but-unhandled vendor actions are silent no-ops · **MEDIUM** · ✅ DONE (5ad7578)
 
@@ -94,9 +95,9 @@ unimplemented (RE hard rule) — logged, never executed. An e2e test covers the
 | ID | Site | Failure mode |
 |---|---|---|
 | B4 | `plugin_device_bridge.cpp:1153` | `touchTap` zone math provisional; `tapPos.y` always 0 (hardware-gated) |
-| B5 | `plugin_manager.cpp:1047` | `IPluginHost2::dispatch` forwards `actionId` as the event name — contract mislabeled; live path bypasses it |
-| B6 | `plugin_manager.cpp` HTML path | `m_htmlPages` (`QWebEnginePage`) never torn down on disable/uninstall — pages leak for app lifetime |
-| B7 | `sd_plugin_server.cpp:324` | `passHello.deviceInfo` is an empty `{}` placeholder; plugins reading it at hello time get nothing (real geometry only via `deviceDidConnect`) |
+| B5 | `plugin_manager.cpp` dispatch | ✅ **DONE (T027):** `PluginManager::dispatch` now builds a well-formed `{event, action, …payload}` envelope (event from `payload["event"]`, actionId in `action`) instead of mislabeling the actionId as the event name. Latent (no production `.sdPlugin` caller — real events flow via `PluginDeviceBridge`); regression-tested `[b5]`. |
+| B6 | `plugin_manager.cpp` HTML path | ✅ **DONE (T028):** `m_htmlPages` is keyed by plugin UUID and torn down on disable + shutdown (was a flat vector that only grew). `htmlPageCountForTesting` seam; regression-tested `[b6]` (full page destruction live-gated on WebEngine). |
+| B7 | `sd_plugin_server.cpp` passHello | ✅ **DONE (T029):** `passHello.deviceInfo` is populated from the device geometry via an injected resolver (`PluginDeviceBridge::deviceInfoFor`, the same shape `deviceDidConnect` sends); empty `{}` fallback without a resolver. Regression-tested `[b7]`. |
 | B9 | `plugin_manager.cpp:1006` | ~~`monitorsApplication()` implemented but no caller sends `applicationDidLaunch/Terminate`~~ **RETIRED (false as of 2026-06-18):** `applicationDidLaunch/Terminate` IS dispatched via `app_event_dispatch.cpp` (focus-approximated, not OS process lifecycle). The remaining nuance — focus-approximation vs true process monitoring — is tracked as a known semantic gap, not a missing caller. |
 
 ## Faithfulness divergences (intentional, document don't "fix")
@@ -142,10 +143,37 @@ still hardware-gated).
    above) — needs the double-`didAppear` dedup first.
 4. ✅ **F4** (`5ad7578`) — `setBackground` alias, `clearIcon`, explicit WARN for
    genuinely-unsupported routed actions. `sendToDevice` raw-HID stays blocked.
-5. Secondary: B6 (HTML page lifetime), B5 (dispatch contract), B9 (app monitoring),
-   B7 (hello deviceInfo). B4 stays hardware-gated.
+5. ✅ Secondary: **B6** (T028, HTML page lifetime), **B5** (T027, dispatch contract),
+   **B7** (T029, hello deviceInfo) all DONE; **B9** retired (false). B4 stays
+   hardware-gated.
+6. ✅ **F3 PI-launch bootstrap** (T024) + its **didAppear dedup** prerequisite (T023).
+7. ✅ **setTriggerDescription** (T025/D3) routed + ownership-gated
+   `triggerDescriptionChanged` signal; **showAlert/showOk** visual surface confirmed
+   already implemented (T026, stale note).
 
-Each lands atomic + ctest-green + live debug-channel verified (project MANDATORY).
+Each lands atomic + ctest-green + live debug-channel verified where the harness allows.
+
+## Deferred / hardware-gated (explicit — NOT silently dropped, T035)
+
+These are tracked, not forgotten. None block the achievable parity work; all are
+gated on hardware, an OS, or UI/plumbing out of this milestone's scope.
+
+- **`userDesiredState`** (multi-action multi-state, US4/T031): the `instanceChildrenToChain`
+  adapter and `core::Action` carry no per-step desired state, so a Multi Action driving
+  a multi-state child cannot emit `userDesiredState` on `keyDown` (`isInMultiAction:true`).
+  Needs a `core::Action` state field + executor plumbing + multi-action-step config UI.
+- **Retail-AKP05E encoder/touch wire values** (B4 / T013 provisionals): encoder
+  ticks/polarity, `touchTap.tapPos.y` (hardcoded 0), DRA/ENC zone geometry — PROVISIONAL,
+  verified only on the `0x3004` demo unit which emits no input. All routing is verified
+  headless via synthetic `input.*`; the raw values need a retail AKP05E / Mirabox N4.
+- **Live modern-PI WS registration** (T024/T030): the bootstrap is unit-tested and the
+  wiring is in place, but driving a real WS-only PI to register needs a PI-bearing key
+  to be SELECTED so the Inspector calls `loadInspector` — the synthetic click-to-select
+  harness path does not propagate the binding (`inspector.binding` stays null), a
+  pre-existing Wayland synthetic-input limitation. Needs a manual/hardware session.
+- **Windows VendorDll Wine launch** (WINPLG-03): native vendor-DLL plugins on Linux/Wine.
+- **Optional per-device `SupportedDevices` SKU enforcement** (research D6): a plugin could
+  declare which SKUs it supports; not enforced today (all devices accepted).
 
 ### Session log
 
@@ -160,4 +188,11 @@ Each lands atomic + ctest-green + live debug-channel verified (project MANDATORY
   `device.renderTest` paints; binding `com.ajazz.sysmon.cpu` to a key streams
   `setTitle "CPU n%"` → key renders. UI confirmed already Stream-Deck-shaped
   (actions right, inspector bottom, canvas centre, selection outline, brightness).
+- 2026-06-18 (Spec Kit US2/US4/Polish): **B5** (T027), **B6** (T028), **B7** (T029) all
+  fixed with regression tests; **propertyInspectorDidAppear dedup** (T023, `PiAppearGate`)
+  + the **modern-PI WS-launch bootstrap** (T024) landed; **setTriggerDescription** routed
+  (T025); **T026** showAlert/showOk confirmed already done. US4 toggle-state persistence
+  test added (T033); `userDesiredState` documented DEFERRED (T031). ctest 843 green; the
+  System-Monitor `setTitle "CPU 15%"` → key repaint re-verified live (screenshot read).
+  Deferred items catalogued above.
   Remaining: F3 modern-PI WS-launch bootstrap (own session; dedup didAppear first).
