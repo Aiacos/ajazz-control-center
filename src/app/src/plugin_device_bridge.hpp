@@ -599,6 +599,14 @@ signals:
                                   QString const& contextId,
                                   QJsonObject const& payload);
 
+    /// Emitted when a plugin sends setTriggerDescription (SD+ dial interaction
+    /// hints: rotate/push/touch/longTouch). Non-visual — the host records the
+    /// hints for the encoder UI surface; the bridge does not repaint a key.
+    /// @p descriptions is the command payload object. (T025/D3)
+    void triggerDescriptionChanged(QString const& deviceId,
+                                   QString const& contextId,
+                                   QJsonObject const& descriptions);
+
 private:
     /// Handle the inbound settings + PI-relay family (setSettings / getSettings /
     /// setGlobalSettings / getGlobalSettings / sendToPropertyInspector) that the

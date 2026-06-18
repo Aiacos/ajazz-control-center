@@ -486,7 +486,8 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         "sendToPlugin",
         "openUrl",
         "logMessage",
-        "setFeedback", // Stream Deck Plus encoder feedback — standard per spec 4.3
+        "setFeedback",           // Stream Deck Plus encoder feedback — standard per spec 4.3
+        "setTriggerDescription", // SD+ dial trigger hints — standard per spec 4.3 (T025/D3)
         // --- AJAZZ-only routed (26) — spec 4.3 "Standard Elgato? AJAZZ-only".
         //     setFeedback is NOT in this group (it is standard).
         "setBG",

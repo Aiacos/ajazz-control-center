@@ -1643,6 +1643,69 @@ TEST_CASE("PluginDeviceBridgeE2E plugin setSettings persists and getSettings ech
 }
 
 // ---------------------------------------------------------------------------
+// T025/D3: setTriggerDescription routes to triggerDescriptionChanged with
+// ownership enforcement (RED before the kRoutedActions + bridge wiring).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridge setTriggerDescription routes to a signal, ownership-gated (T025)",
+          "[plugin-device-bridge][outbound][trigger-description]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    ajazz::core::Profile prof;
+    prof.id = "test-profile";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.plug.action1";
+    binding.onPress.push_back(act);
+    prof.keys[0] = std::move(binding);
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    QWebSocket client;
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.plug"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.plug"));
+    pump19(300);
+
+    QSignalSpy descSpy(bridge.get(), &ajazz::app::PluginDeviceBridge::triggerDescriptionChanged);
+    QString const ctxId = QStringLiteral("akp05e#root#Keypad#0#0");
+
+    // Owning plugin sets the dial hints — must reach the signal.
+    bridge->onAction(QStringLiteral("com.test.plug"),
+                     QJsonObject{{QStringLiteral("event"), QStringLiteral("setTriggerDescription")},
+                                 {QStringLiteral("context"), ctxId},
+                                 {QStringLiteral("payload"),
+                                  QJsonObject{{QStringLiteral("rotate"), QStringLiteral("Adjust")},
+                                              {QStringLiteral("push"), QStringLiteral("Mute")}}}});
+    pump19(100);
+
+    REQUIRE(descSpy.count() == 1);
+    auto const args = descSpy.takeFirst();
+    CHECK(args.at(0).toString() == QStringLiteral("akp05e")); // deviceId
+    CHECK(args.at(1).toString() == ctxId);                    // contextId
+    auto const desc = args.at(2).toJsonObject();
+    CHECK(desc.value(QStringLiteral("rotate")).toString() == QStringLiteral("Adjust"));
+    CHECK(desc.value(QStringLiteral("push")).toString() == QStringLiteral("Mute"));
+
+    // Cross-plugin denial: a different plugin must NOT drive this context's hints.
+    bridge->onAction(
+        QStringLiteral("com.other.plug"),
+        QJsonObject{{QStringLiteral("event"), QStringLiteral("setTriggerDescription")},
+                    {QStringLiteral("context"), ctxId},
+                    {QStringLiteral("payload"),
+                     QJsonObject{{QStringLiteral("rotate"), QStringLiteral("Hijack")}}}});
+    pump19(100);
+    CHECK(descSpy.count() == 0); // no additional emit
+}
+
+// ---------------------------------------------------------------------------
 // 19-03 e2e: unbound-coordinate drop (T-19-leak) + no cross-plugin leak
 // ---------------------------------------------------------------------------
 

@@ -605,6 +605,21 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         return;
     }
 
+    // T025/D3: setTriggerDescription (SD+ dial hints) — non-visual. Enforce
+    // context ownership like a visual action, then surface the hints via a
+    // signal for the encoder UI. No key repaint, so it sits before the visual
+    // gate (which would otherwise drop it).
+    if (event == QStringLiteral("setTriggerDescription")) {
+        QString const contextId = action.value(QStringLiteral("context")).toString();
+        auto const ctxOpt = m_registry.byContext(contextId);
+        if (!ctxOpt.has_value() || ctxOpt->pluginUuid != pluginUuid) {
+            return; // stale/unknown context or cross-plugin denial (no emit)
+        }
+        emit triggerDescriptionChanged(
+            ctxOpt->deviceId, contextId, action.value(QStringLiteral("payload")).toObject());
+        return;
+    }
+
     if (!isVisualAction(event)) {
         return; // no-op for other non-visual actions (handled in later phases)
     }
