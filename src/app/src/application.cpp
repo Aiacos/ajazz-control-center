@@ -709,6 +709,11 @@ Application::Application(QObject* parent)
         auto const ctx = m_pluginBridge->registry().byContext(context);
         return ctx.has_value() ? ctx->pluginUuid : QString{};
     });
+    //   B7: source the vendor passHello.deviceInfo from the bridge's per-device
+    //   geometry (the same shape deviceDidConnect sends) so a plugin reading
+    //   geometry at hello gets the real grid, not an empty {}.
+    m_pluginServer->setDeviceInfoResolver(
+        [this](QString const& deviceId) { return m_pluginBridge->deviceInfoFor(deviceId); });
     //   On PI connect/disconnect, tell the owning plugin its PI is visible/hidden.
     //   These events carry {action,context,device,event} and NO payload (§3).
     auto const sendPiLifecycle =

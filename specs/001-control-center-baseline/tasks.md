@@ -137,7 +137,7 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 
 - [ ] T027 [P] [US2] Fix B5: `IPluginHost2::dispatch` forwards `actionId` as the event name — correct the contract in `src/app/src/plugin_manager.cpp` (~:1047).
 - [ ] T028 [P] [US2] Fix B6: tear down `m_htmlPages` `QWebEnginePage` instances on plugin disable/uninstall in `src/app/src/plugin_manager.cpp` (page leak for app lifetime).
-- [ ] T029 [P] [US2] Fix B7: populate `passHello.deviceInfo` geometry in `src/app/src/sd_plugin_server.cpp` (~:324) so plugins reading geometry at hello get real values.
+- [x] T029 [P] [US2] Fix B7: populate `passHello.deviceInfo` geometry in `src/app/src/sd_plugin_server.cpp` (~:324) so plugins reading geometry at hello get real values.
 
 ### Verification for User Story 2
 

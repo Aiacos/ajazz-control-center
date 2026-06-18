@@ -145,6 +145,87 @@ TEST_CASE("SdPluginServer registerPlugin handshake emits pluginRegistered",
     REQUIRE(server.connectedPluginCount() == 1);
 }
 
+TEST_CASE("SdPluginServer passHello.deviceInfo is populated from the resolver (B7)",
+          "[plugin-server][handshake][b7]") {
+    ensureQCoreApp();
+    SdPluginServer server;
+    // B7: wire a deviceInfo resolver exactly as Application does (here a fixed
+    // AKP05E grid) so passHello carries real geometry instead of an empty {}.
+    server.setDeviceInfoResolver([](QString const& deviceId) {
+        return QJsonObject{
+            {QStringLiteral("name"), QStringLiteral("AJAZZ AKP05E")},
+            {QStringLiteral("type"), 7},
+            {QStringLiteral("size"),
+             QJsonObject{{QStringLiteral("columns"), 5}, {QStringLiteral("rows"), 2}}},
+            {QStringLiteral("device"), deviceId},
+        };
+    });
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    // Capture the passHello frame the server pushes back on registration.
+    QJsonObject passHelloPayload;
+    bool gotPassHello = false;
+    QObject::connect(&client, &QWebSocket::textMessageReceived, [&](QString const& text) {
+        auto const obj = QJsonDocument::fromJson(text.toUtf8()).object();
+        if (obj.value(QStringLiteral("event")).toString() == QStringLiteral("passHello")) {
+            passHelloPayload = obj.value(QStringLiteral("payload")).toObject();
+            gotPassHello = true;
+        }
+    });
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(connectedSpy));
+
+    // Register WITH a device codename — passHello.deviceInfo must be populated.
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.b7","device":"akp05e"})"));
+    auto until = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (!gotPassHello && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+    REQUIRE(gotPassHello);
+
+    QJsonObject const deviceInfo = passHelloPayload.value(QStringLiteral("deviceInfo")).toObject();
+    REQUIRE_FALSE(deviceInfo.isEmpty()); // B7 regression: was {} before the fix
+    REQUIRE(deviceInfo.value(QStringLiteral("name")).toString() == QStringLiteral("AJAZZ AKP05E"));
+    REQUIRE(deviceInfo.value(QStringLiteral("size"))
+                .toObject()
+                .value(QStringLiteral("columns"))
+                .toInt() == 5);
+}
+
+TEST_CASE("SdPluginServer passHello.deviceInfo stays empty without a resolver (B7 fallback)",
+          "[plugin-server][handshake][b7]") {
+    ensureQCoreApp();
+    SdPluginServer server; // no setDeviceInfoResolver
+    REQUIRE(server.start(0));
+
+    QWebSocket client;
+    QSignalSpy connectedSpy(&client, &QWebSocket::connected);
+    QJsonObject passHelloPayload;
+    bool gotPassHello = false;
+    QObject::connect(&client, &QWebSocket::textMessageReceived, [&](QString const& text) {
+        auto const obj = QJsonDocument::fromJson(text.toUtf8()).object();
+        if (obj.value(QStringLiteral("event")).toString() == QStringLiteral("passHello")) {
+            passHelloPayload = obj.value(QStringLiteral("payload")).toObject();
+            gotPassHello = true;
+        }
+    });
+    client.open(QUrl(QStringLiteral("ws://127.0.0.1:%1").arg(server.serverPort())));
+    REQUIRE(waitForSpy(connectedSpy));
+
+    client.sendTextMessage(
+        QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.b7b","device":"akp05e"})"));
+    auto until = QDateTime::currentMSecsSinceEpoch() + 3000;
+    while (!gotPassHello && QDateTime::currentMSecsSinceEpoch() < until) {
+        QCoreApplication::processEvents(QEventLoop::AllEvents, 25);
+    }
+    REQUIRE(gotPassHello);
+    // The handshake still completes; deviceInfo is just an empty object.
+    REQUIRE(passHelloPayload.value(QStringLiteral("deviceInfo")).toObject().isEmpty());
+}
+
 TEST_CASE("SdPluginServer action message emits actionReceived with parsed JSON",
           "[plugin-server][actions][elgato-v6]") {
     ensureQCoreApp();

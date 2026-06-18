@@ -370,9 +370,18 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
                 {QStringLiteral("challenge"), QString{}}, // empty host-side challenge (§4.5 Q2)
                 {QStringLiteral("salt"), it->salt},
             };
+            // B7: populate deviceInfo from the injected resolver so a plugin
+            // reading geometry at the vendor hello gets the real per-device grid
+            // instead of an empty {}. The device codename comes from the hello
+            // message; an unset resolver or empty codename keeps the {} fallback.
+            QJsonValue const deviceField = msg.value(QStringLiteral("device"));
+            QJsonObject const helloDeviceInfo = (m_deviceInfoResolver && deviceField.isString() &&
+                                                 !deviceField.toString().isEmpty())
+                                                    ? m_deviceInfoResolver(deviceField.toString())
+                                                    : QJsonObject{};
             QJsonObject const helloPayload{
-                {QStringLiteral("device"), msg.value(QStringLiteral("device"))},
-                {QStringLiteral("deviceInfo"), QJsonObject{}}, // placeholder; Phase 19 fills this
+                {QStringLiteral("device"), deviceField},
+                {QStringLiteral("deviceInfo"), helloDeviceInfo},
                 {QStringLiteral("authentication"), authObj},
             };
             sendEvent(uuid, QStringLiteral("passHello"), helloPayload);
@@ -646,6 +655,10 @@ void SdPluginServer::setPasswordForTesting(QString const& password) {
 
 void SdPluginServer::setContextOwnerResolver(std::function<QString(QString const&)> resolver) {
     m_contextOwnerResolver = std::move(resolver);
+}
+
+void SdPluginServer::setDeviceInfoResolver(std::function<QJsonObject(QString const&)> resolver) {
+    m_deviceInfoResolver = std::move(resolver);
 }
 
 QWebSocket* SdPluginServer::propertyInspectorSocketForContext(QString const& context) const {

@@ -171,6 +171,13 @@ public:
     /// still register but cannot route until a resolver is provided.
     void setContextOwnerResolver(std::function<QString(QString const& context)> resolver);
 
+    /// Inject the device-info resolver used to populate the vendor
+    /// `passHello.deviceInfo` (B7). The server does not own device geometry (the
+    /// PluginDeviceBridge does), so the app wires this to
+    /// `PluginDeviceBridge::deviceInfoFor`. Unset ⇒ `deviceInfo` stays `{}` (the
+    /// prior behaviour), so the passHello handshake still completes.
+    void setDeviceInfoResolver(std::function<QJsonObject(QString const& deviceId)> resolver);
+
     /// **Debug/simulation seam**: emit `actionReceived` as if a registered
     /// plugin had sent @p action over the WebSocket. Lets the opt-in debug
     /// channel (PluginDebugService::simulatePluginAction) drive the exact
@@ -275,6 +282,10 @@ private:
     /// F3: context→owning-plugin resolver for Property Inspector routing.
     /// Unset by default; see setContextOwnerResolver().
     std::function<QString(QString const&)> m_contextOwnerResolver;
+
+    /// B7: device codename→Elgato deviceInfo resolver for passHello.deviceInfo.
+    /// Unset by default; see setDeviceInfoResolver().
+    std::function<QJsonObject(QString const&)> m_deviceInfoResolver;
 
     /// F3: look up the live PI socket bound to @p context (a PI connection whose
     /// uuid == context). Returns nullptr if no live WS PI is registered for it.

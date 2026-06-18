@@ -924,6 +924,25 @@ DeviceGeometry PluginDeviceBridge::geometryForDevice(QString const& deviceId) co
     return m_deviceGeometryResolver(deviceId);
 }
 
+QJsonObject PluginDeviceBridge::deviceInfoFor(QString const& deviceId) const {
+    // Canonical Elgato deviceInfo (§4.4). `size` is the action-slot grid; `type`
+    // is the Elgato DeviceType (SD+ = 7). Sourced per-device from the geometry
+    // resolver (F2). Reused by deviceDidConnect AND passHello.deviceInfo (B7).
+    DeviceGeometry const geom = geometryForDevice(deviceId);
+    return QJsonObject{
+        {QStringLiteral("name"), geom.model.isEmpty() ? deviceId : geom.model},
+        {QStringLiteral("type"), geom.elgatoType},
+        {QStringLiteral("size"),
+         QJsonObject{
+             {QStringLiteral("columns"), geom.keyCols},
+             {QStringLiteral("rows"), geom.keyRows},
+         }},
+        {QStringLiteral("columns"), geom.keyCols},
+        {QStringLiteral("rows"), geom.keyRows},
+        {QStringLiteral("encoders"), geom.encoderCount},
+    };
+}
+
 void PluginDeviceBridge::setActionStateMetaResolver(
     std::function<std::pair<int, bool>(QString const&)> resolver) {
     m_actionStateMetaResolver = std::move(resolver);
@@ -1628,27 +1647,12 @@ void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
         return;
     }
     // Elgato deviceDidConnect: top-level `device` + `deviceInfo` siblings (NOT
-    // wrapped in payload). `size` is the action-slot grid; `type` is the Elgato
-    // DeviceType (SD+ = 7). Sourced per-device from the geometry resolver (F2)
-    // instead of the former AKP05E-hardcoded 5x2+4 — see
-    // docs/protocols/streamdeck/elgato_plugin_protocol.md §3.6/§6.3.
-    DeviceGeometry const geom = geometryForDevice(deviceId);
-    QJsonObject const deviceInfo{
-        {QStringLiteral("name"), geom.model.isEmpty() ? deviceId : geom.model},
-        {QStringLiteral("type"), geom.elgatoType},
-        {QStringLiteral("size"),
-         QJsonObject{
-             {QStringLiteral("columns"), geom.keyCols},
-             {QStringLiteral("rows"), geom.keyRows},
-         }},
-        {QStringLiteral("columns"), geom.keyCols},
-        {QStringLiteral("rows"), geom.keyRows},
-        {QStringLiteral("encoders"), geom.encoderCount},
-    };
+    // wrapped in payload). The deviceInfo shape is built once in deviceInfoFor()
+    // and reused for the vendor passHello.deviceInfo (B7).
     QJsonObject const event{
         {QStringLiteral("event"), QStringLiteral("deviceDidConnect")},
         {QStringLiteral("device"), deviceId},
-        {QStringLiteral("deviceInfo"), deviceInfo},
+        {QStringLiteral("deviceInfo"), deviceInfoFor(deviceId)},
     };
     for (QString const& uuid : m_registeredPlugins) {
         m_server->sendEvent(uuid, event);

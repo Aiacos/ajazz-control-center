@@ -795,6 +795,20 @@ public:
     void setDeviceGeometryResolver(std::function<DeviceGeometry(QString const&)> resolver);
 
     /**
+     * @brief Build the Elgato `deviceInfo` JSON for @p deviceId.
+     *
+     * The canonical `{name,type,size:{columns,rows},columns,rows,encoders}`
+     * object sent in `deviceDidConnect` (§4.4) and reused for the vendor
+     * `passHello.deviceInfo` (B7) so a plugin reading geometry at hello gets the
+     * real per-device grid instead of an empty `{}`. Sourced from the injected
+     * geometry resolver; an unknown/empty codename yields the AKP05E default.
+     *
+     * @param deviceId  device codename, e.g. "akp05e".
+     * @return the deviceInfo object (never empty for a resolvable device).
+     */
+    [[nodiscard]] QJsonObject deviceInfoFor(QString const& deviceId) const;
+
+    /**
      * @brief Inject the action state-metadata resolver (PluginManager::actionStateMeta).
      *
      * When set, keyUp on a Keypad context whose action declares EXACTLY two
