@@ -141,7 +141,7 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 
 ### Verification for User Story 2
 
-- [ ] T030 [US2] Live-verify quickstart Scenarios 3 (press → plugin → key repaint) and 4 (PI round-trip with a single `propertyInspectorDidAppear`) via `scripts/ajazz-debug`; read the screenshot + protocol log.
+- [~] T030 [US2] Live-verify Scenarios 3+4. **Scenario 3 PASS (live):** sysmon plugin streams `setTitle` to `akp05e#root#Keypad#1#3`; key repaints "CPU 15%" (screenshot read + protocol log), `plugin.simulateAction` injection works. **Scenario 4 PARTIAL:** PI settings round-trip + single-didAppear are unit-verified (`[pi-bridge]` persistence + the 4 `[pi-appear]` dedup cases); the live WebEngine modern-PI WS registration could NOT be driven headlessly — selecting a PI-bearing key via synthetic click does not propagate the binding to the Inspector (`inspector.binding` stays null), a pre-existing Wayland synthetic-input harness limitation. Needs a manual/hardware session.
 
 **Checkpoint**: Plugins install and run with PI round-trip and a complete, correct outbound contract.
 
