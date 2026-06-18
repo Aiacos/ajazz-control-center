@@ -34,13 +34,17 @@
 #include <QString>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
+#include "pi_bootstrap.hpp"
 #include "pi_bridge.hpp"
 #include "pi_cef_shim.hpp"
 #include "pi_url_request_interceptor.hpp"
 #include "plugin_mirabox_shim.hpp"
 
+#include <QCoreApplication>
 #include <QFileInfo>
 #include <QHash>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QQmlEngine>
 #include <QtWebChannelQuick/QQmlWebChannel>
 #include <QtWebEngineQuick/QQuickWebEngineProfile>
@@ -271,6 +275,16 @@ void PropertyInspectorController::loadInspector(QString const& pluginUuid,
     webEngine_->activeChannel = channel;
     webEngine_->activeBridge = bridge;
     activeUrl_ = QUrl::fromLocalFile(htmlAbsPath);
+
+    // T024: build the modern-PI bootstrap the PIWebView runs once the document
+    // loads. A modern PI defines connectElgatoStreamDeckSocket and waits for the
+    // host to call it (exactly like the HTML-plugin self-bootstrap in
+    // plugin_manager.cpp); without this call a WS-only PI never registers. The
+    // legacy $SD/cefQuery bridge above still serves PIs that use cefQuery. The
+    // didAppear dedup (PiAppearGate, T023) keeps the two registration paths from
+    // double-firing propertyInspectorDidAppear.
+    activeBootstrapJs_ = buildModernPiBootstrapJs(wsPort_, pluginUuid, actionUuid, contextUuid);
+
     emit activeInspectorChanged();
     // Notify the Application so it can wire bridge->toPluginRequested to
     // SdPluginServer::sendEvent (Phase 20 / 17-02 STOP gate relay wiring).
@@ -330,6 +344,7 @@ void PropertyInspectorController::closeInspector() {
         webEngine_->activeBridge = nullptr;
         channel->deleteLater();
         activeUrl_.clear();
+        activeBootstrapJs_.clear(); // T024: no PI loaded ⇒ nothing to bootstrap
         emit activeInspectorChanged();
     }
 #endif

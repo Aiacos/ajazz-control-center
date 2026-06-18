@@ -81,6 +81,20 @@ Item {
         settings.fullScreenSupportEnabled: false
         settings.screenCaptureEnabled: false
 
+        // T024: run the modern-PI bootstrap once the document finishes loading.
+        // A WS-only PI defines connectElgatoStreamDeckSocket and waits for the
+        // host to call it; PropertyInspectorController.activeBootstrapJs is the
+        // `connectElgatoStreamDeckSocket(port, context, "registerPropertyInspector",
+        // info, actionInfo)` call (empty when there is no WS port / inspector, in
+        // which case the legacy $SD/cefQuery bridge carries the PI alone).
+        onLoadingChanged: function(loadRequest) {
+            if (loadRequest.status === WebEngineView.LoadSucceededStatus) {
+                var js = PropertyInspectorController.activeBootstrapJs;
+                if (js !== "")
+                    webView.runJavaScript(js);
+            }
+        }
+
         // WR-01: deny-by-default navigation guard (defence-in-depth).
         // The URL interceptor handles sub-resource policy; this handler
         // prevents the PI page from redirecting the view itself (e.g. via

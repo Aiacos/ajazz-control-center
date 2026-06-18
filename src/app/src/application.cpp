@@ -1234,6 +1234,14 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
                        "SdPluginServer listening on port {}",
                        static_cast<int>(m_pluginServer->serverPort()));
 
+        // T024: tell the PI controller which loopback port the modern-PI
+        // bootstrap should point connectElgatoStreamDeckSocket at. Without this
+        // a WS-only Property Inspector never registers (it just waits for the
+        // host to call its connect function).
+        if (m_propertyInspector) {
+            m_propertyInspector->setWebSocketPort(m_pluginServer->serverPort());
+        }
+
         // Elgato .sdPlugin (node/html/native) discovery + spawn. The manager
         // must be created AFTER the server is listening because spawn() reads
         // serverPort() for the child's -port argv. User-level install dir:

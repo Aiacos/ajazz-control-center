@@ -120,18 +120,18 @@ see live output on the key; open its PI and round-trip a setting (quickstart Sce
 ### Tests for User Story 2
 
 - [x] T020 [P] [US2] `propertyInspectorDidAppear` single-emit test in `tests/unit/test_pi_bridge.cpp`: exactly one emit per PI open (locks the dedup before T023/T024).
-- [ ] T021 [P] [US2] `setTriggerDescription` routing test in `tests/unit/test_plugin_device_bridge.cpp` (RED before T025).
+- [x] T021 [P] [US2] `setTriggerDescription` routing test in `tests/unit/test_plugin_device_bridge.cpp` (RED before T025).
 - [x] T022 [P] [US2] Secondary-bug regression tests: B5 dispatch event-name in `tests/unit/test_plugin_host2.cpp`, B6 HTML page teardown in `tests/unit/test_plugin_lifecycle.cpp`, B7 non-empty `passHello.deviceInfo` in `tests/unit/test_sd_plugin_server.cpp` (there is no `test_plugin_manager.cpp`; `PluginManager` is covered across the lifecycle/host2/concurrency suites).
 
 ### Implementation for User Story 2 — Property Inspector chain (ORDERED, top priority D1)
 
 - [x] T023 [US2] De-duplicate `propertyInspectorDidAppear`: emit once keyed on the instance `context`, reconciling the two live emit sites at `src/app/src/application.cpp:736` (F3 `propertyInspectorRegistered`) and `:948` (PI-04 `inspectorOpened`). **MUST precede T024.**
-- [ ] T024 [US2] Inject the modern PI WebSocket bootstrap `connectElgatoStreamDeckSocket(port, context, "registerPropertyInspector", info, actionInfo)` at PI DocumentReady in `src/app/src/property_inspector_controller.cpp` (mirror the HTML-plugin self-bootstrap at `plugin_manager.cpp:606`). **Depends on T023.**
+- [x] T024 [US2] Inject the modern PI WebSocket bootstrap `connectElgatoStreamDeckSocket(port, context, "registerPropertyInspector", info, actionInfo)` at PI DocumentReady in `src/app/src/property_inspector_controller.cpp` (mirror the HTML-plugin self-bootstrap at `plugin_manager.cpp:606`). **Depends on T023.**
 
 ### Implementation for User Story 2 — Outbound contract completion (D3)
 
-- [ ] T025 [P] [US2] Wire `setTriggerDescription` into `kRoutedActions` + handler in `src/app/src/sd_plugin_server.cpp` and `src/app/src/plugin_device_bridge.cpp` (manifest field is parsed; runtime command is missing).
-- [ ] T026 [P] [US2] Render a visual surface for `showAlert`/`showOk` (currently host-ack only) in `src/app/src/plugin_device_bridge.cpp`.
+- [x] T025 [P] [US2] Wire `setTriggerDescription` into `kRoutedActions` + handler in `src/app/src/sd_plugin_server.cpp` and `src/app/src/plugin_device_bridge.cpp` (manifest field is parsed; runtime command is missing).
+- [x] T026 [P] [US2] Render a visual surface for `showAlert`/`showOk` (currently host-ack only) in `src/app/src/plugin_device_bridge.cpp`.
 
 ### Implementation for User Story 2 — Secondary correctness bugs (D4)
 

@@ -408,6 +408,48 @@ TEST_CASE("PiAppearGate never emits for an empty (unresolved) context", "[pi-bri
 }
 
 // ---------------------------------------------------------------------------
+// Modern-PI WebSocket bootstrap (T024) — pure JS builder, no WebEngine needed.
+// ---------------------------------------------------------------------------
+#include "pi_bootstrap.hpp"
+
+TEST_CASE("buildModernPiBootstrapJs emits a registerPropertyInspector call", "[pi-bridge][t024]") {
+    ajazz::tests::qtApp();
+    QString const js =
+        ajazz::app::buildModernPiBootstrapJs(44839,
+                                             QStringLiteral("com.jk.weather"),
+                                             QStringLiteral("com.jk.weather.current"),
+                                             QStringLiteral("akp05e#root#Keypad#0#0"));
+
+    REQUIRE_FALSE(js.isEmpty());
+    // Calls the Elgato boilerplate the PI defines, with the WS port + context +
+    // the registerPropertyInspector event (the 5-arg modern entry point).
+    CHECK(js.contains(QStringLiteral("connectElgatoStreamDeckSocket")));
+    CHECK(js.contains(QStringLiteral("44839")));
+    CHECK(js.contains(QStringLiteral("'akp05e#root#Keypad#0#0'")));
+    CHECK(js.contains(QStringLiteral("registerPropertyInspector")));
+    // inInfo / inActionInfo are passed through JSON.stringify (the PI JSON.parses).
+    CHECK(js.contains(QStringLiteral("JSON.stringify")));
+    // The actionInfo carries the action + the device parsed from the context.
+    CHECK(js.contains(QStringLiteral("com.jk.weather.current")));
+    CHECK(js.contains(QStringLiteral("akp05e")));
+}
+
+TEST_CASE("buildModernPiBootstrapJs is empty without a WS port or context (legacy bridge only)",
+          "[pi-bridge][t024]") {
+    ajazz::tests::qtApp();
+    // No WS port → no bootstrap (the $SD/cefQuery bridge carries the PI alone).
+    CHECK(ajazz::app::buildModernPiBootstrapJs(0,
+                                               QStringLiteral("com.x"),
+                                               QStringLiteral("com.x.a"),
+                                               QStringLiteral("akp05e#root#Keypad#0#0"))
+              .isEmpty());
+    // No context → nothing to register.
+    CHECK(ajazz::app::buildModernPiBootstrapJs(
+              44839, QStringLiteral("com.x"), QStringLiteral("com.x.a"), QString{})
+              .isEmpty());
+}
+
+// ---------------------------------------------------------------------------
 // cefQuery shim tests (PLUGIN-09 / 20-02)
 //
 // kCefQueryShimSource is a pure constexpr string — no WebEngine needed.

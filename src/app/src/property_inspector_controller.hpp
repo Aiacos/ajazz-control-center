@@ -131,6 +131,14 @@ class PropertyInspectorController : public QObject {
     /// inspector is loaded.
     Q_PROPERTY(QUrl activeUrl READ activeUrl NOTIFY activeInspectorChanged)
 
+    /// JS the PIWebView runs once the PI document finishes loading: the modern
+    /// Elgato bootstrap `connectElgatoStreamDeckSocket(port, context,
+    /// "registerPropertyInspector", info, actionInfo)` (T024). Empty when there
+    /// is no WS port or no active inspector — the legacy `$SD`/cefQuery bridge
+    /// then carries the PI alone. A modern PI that only does `new WebSocket(...)`
+    /// stays dead without this call.
+    Q_PROPERTY(QString activeBootstrapJs READ activeBootstrapJs NOTIFY activeInspectorChanged)
+
 public:
     /// QML singleton factory — see BrandingService::create for the pattern.
     static PropertyInspectorController* create(QQmlEngine* qml, QJSEngine* js);
@@ -149,6 +157,13 @@ public:
     [[nodiscard]] QQuickWebEngineProfile* activeProfile() const noexcept;
     [[nodiscard]] QQmlWebChannel* activeChannel() const noexcept;
     [[nodiscard]] QUrl activeUrl() const noexcept { return activeUrl_; }
+    [[nodiscard]] QString activeBootstrapJs() const noexcept { return activeBootstrapJs_; }
+
+    /// Inject the loopback WebSocket port the SdPluginServer listens on. The
+    /// modern-PI bootstrap (T024) needs it to point the PI's WebSocket at the
+    /// host. Set by Application after the server starts; 0 disables the bootstrap
+    /// (the legacy $SD bridge still works).
+    void setWebSocketPort(std::uint16_t port) noexcept { wsPort_ = port; }
 
     /**
      * @brief Load the Property Inspector for an action context.
@@ -214,6 +229,11 @@ signals:
 private:
     bool hasHtmlInspector_ = false;
     QUrl activeUrl_;
+
+    /// T024: loopback WS port (0 = bootstrap disabled) and the per-load modern-PI
+    /// bootstrap JS built in loadInspector / cleared in closeInspector.
+    std::uint16_t wsPort_ = 0;
+    QString activeBootstrapJs_;
 
     /// PI-04: identity of the currently-loaded inspector, captured at
     /// loadInspector time so the disappear event can be emitted with the
