@@ -614,7 +614,10 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                     rawPage->runJavaScript(js);
                 });
         rawPage->load(QUrl::fromLocalFile(htmlAbs));
-        m_htmlPages.push_back(std::move(page));
+        // B6: key by the registration UUID so disable/uninstall/shutdown can tear
+        // this page down. Assigning over an existing entry destroys the old page
+        // (a re-spawn replaces, never leaks).
+        m_htmlPages[pluginUuid] = std::move(page);
         qInfo("PluginManager: HTML plugin '%s' loading %s (port=%u)",
               qPrintable(manifest.name),
               qPrintable(htmlAbs),
@@ -883,6 +886,11 @@ void PluginManager::setPluginEnabled(QString const& pluginId, bool enabled) {
                 }
             }
             m_live.erase(it);
+#if defined(AJAZZ_HAVE_WEBENGINE)
+            // B6: an HTML plugin has no process; tear its in-process page down
+            // here so a disabled HTML plugin does not leak its QWebEnginePage.
+            m_htmlPages.erase(pluginId);
+#endif
         }
     }
 }
@@ -946,6 +954,19 @@ void PluginManager::shutdown() {
         }
     }
     m_live.clear();
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    // B6: destroy all in-process HTML plugin pages on shutdown (the profile
+    // outlives them by reverse-of-declaration order — see plugin_manager.hpp).
+    m_htmlPages.clear();
+#endif
+}
+
+std::size_t PluginManager::htmlPageCountForTesting() const noexcept {
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    return m_htmlPages.size();
+#else
+    return 0;
+#endif
 }
 
 QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex) const {

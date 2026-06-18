@@ -484,6 +484,37 @@ TEST_CASE("PluginManagerTest HTML plugin is not re-spawned on failure", "[plugin
     CHECK(disabledSpy.count() == 0);
 }
 
+// B6: HTML plugin pages must be torn down, not leaked for the app lifetime.
+// A real QWebEnginePage needs WebEngine (a GUI app + event loop) that the
+// QCoreApplication unit harness cannot host, so this asserts the teardown
+// wiring is in place and safe: the page bookkeeping starts empty and stays
+// empty across disable + shutdown (full page-destruction is covered by the
+// live debug-channel walk, quickstart Scenario 3). The keyed map + the
+// disable/shutdown erases are the regression guard against the former
+// only-ever-grows std::vector.
+TEST_CASE("PluginManagerTest html page bookkeeping is torn down on disable and shutdown",
+          "[plugin-manager][b6]") {
+    ensureQCoreApp();
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    NodeProbe fakeProbe;
+    fakeProbe.findNode = []() -> QString { return {}; };
+    fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
+    PluginManager manager(scratch.path(), nullptr, fakeProbe);
+
+    REQUIRE(manager.htmlPageCountForTesting() == 0);
+
+    // Disabling a plugin must not crash with the new page-teardown call and
+    // leaves no page bookkeeping behind.
+    manager.setPluginEnabled(QStringLiteral("com.test.html.disable"), false);
+    CHECK(manager.htmlPageCountForTesting() == 0);
+
+    // Shutdown clears any remaining pages (and must be safe with none).
+    manager.shutdown();
+    CHECK(manager.htmlPageCountForTesting() == 0);
+}
+
 // WR-03: PUUID is passed as -pluginUUID when non-empty.
 TEST_CASE("PluginManagerTest spawn uses puuid as -pluginUUID when set", "[plugin-manager]") {
     ensureQCoreApp();

@@ -310,6 +310,15 @@ public:
     [[nodiscard]] QStringList lastNodeArgvForTesting(QString const& uuid) const;
 
     /**
+     * @brief Test/inspection seam (B6): number of live HTML plugin pages.
+     *
+     * Returns 0 on builds without WebEngine. Used to assert that a disabled or
+     * shut-down plugin's QWebEnginePage is destroyed rather than leaked for the
+     * app lifetime.
+     */
+    [[nodiscard]] std::size_t htmlPageCountForTesting() const noexcept;
+
+    /**
      * @brief Test seam: insert a synthetic live-plugin entry for @p uuid WITHOUT spawning.
      *
      * Inserts `{PluginManifest{}, nullptr}` into `m_live` under @p uuid so that
@@ -515,7 +524,10 @@ private:
     /// pages (reverse-of-declaration destruction). Both owned solely by these
     /// unique_ptrs (no QObject parent) to avoid double-delete.
     std::unique_ptr<QWebEngineProfile> m_htmlProfile;
-    std::vector<std::unique_ptr<QWebEnginePage>> m_htmlPages;
+    /// B6: keyed by the plugin's registration UUID so a disabled/uninstalled
+    /// plugin's page can be torn down (destroying the QWebEnginePage) instead of
+    /// leaking for the app lifetime. Was a flat vector that only ever grew.
+    std::map<QString, std::unique_ptr<QWebEnginePage>> m_htmlPages;
 #endif
 };
 
