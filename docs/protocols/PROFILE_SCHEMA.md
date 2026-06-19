@@ -234,3 +234,14 @@ keys produced by `profileToJson()` and consumed by `profileFromJson()`.
   migration); the writer always emits `states[]`. Discrimination is by key
   presence (`instance` / `states`), never by an explicit schema-version
   field.
+- **`touchZones` is deprecated for dial devices (feature 002 US3).** On Stream
+  Deck + class dial devices the touch-strip segment above each dial belongs to
+  that dial: the segment renders the dial's `encoders[N]` bound-action feedback
+  and a tap on it routes to that dial's action (one control = dial + segment,
+  the Elgato model). The editor no longer creates independent `touchZones`
+  bindings for dial devices, and the writer emits none for new dial profiles.
+  `touchZones` is **retained for read-compat**: a legacy profile carrying
+  `touchZones` loads losslessly (the reader keeps parsing it; no crash, no data
+  loss). When both `encoders[N]` and a legacy `touchZones[N]` are present, the
+  encoder (dial) wins. Non-dial devices that expose touch zones (if any) are
+  unaffected.

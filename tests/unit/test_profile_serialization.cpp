@@ -273,6 +273,51 @@ TEST_CASE("v2 profile touchZones round-trip", "[profile][touchzone]") {
     REQUIRE(r3.state.text.value() == "Z3");
 }
 
+/// US3 (002) read-compat: a legacy profile carrying BOTH an encoder binding and
+/// an independent touchZone at the same index must load losslessly. Under the
+/// dial-owns-segment model the dial (encoder) wins, but the legacy touchZone is
+/// retained in-model (no crash, no data loss) so older readers still see it. This
+/// is the backward-compatibility guarantee for the touch-zone -> dial migration.
+TEST_CASE("encoder and legacy touchZone at same index coexist losslessly",
+          "[profile][touchzone][readcompat]") {
+    using namespace ajazz::core;
+
+    Profile p{};
+    p.id = "coexist-uuid";
+    p.name = "Coexist";
+    p.deviceCodename = "akp05e";
+
+    // Dial 0: a plugin encoder binding (the dial that now owns segment 0).
+    EncoderBinding eb0{};
+    eb0.onCw.push_back(
+        Action{.kind = ActionKind::Plugin, .id = "vol.up", .label = "Vol+", .delayMs = 0});
+    eb0.state.text = "Dial0";
+    p.encoders[0] = eb0;
+
+    // Legacy independent touchZone 0 (authored before the dial-owns-segment
+    // model). It must survive the round-trip even though the dial now owns it.
+    TouchZoneBinding tz0{};
+    tz0.onTap.push_back(
+        Action{.kind = ActionKind::Plugin, .id = "media.play", .label = "Play", .delayMs = 0});
+    tz0.state.text = "Zone0";
+    p.touchZones[0] = tz0;
+
+    auto const json = profileToJson(p);
+    Profile const restored = profileFromJson(json);
+
+    // The encoder (dial) survives intact — it is the live control for index 0.
+    REQUIRE(restored.encoders.count(0) == 1);
+    REQUIRE(restored.encoders.at(0).onCw.size() == 1);
+    REQUIRE(restored.encoders.at(0).onCw.front().id == "vol.up");
+    REQUIRE(restored.encoders.at(0).state.text.value_or("") == "Dial0");
+
+    // The legacy touchZone is retained losslessly (read-compat; no data loss).
+    REQUIRE(restored.touchZones.count(0) == 1);
+    REQUIRE(restored.touchZones.at(0).onTap.size() == 1);
+    REQUIRE(restored.touchZones.at(0).onTap.front().id == "media.play");
+    REQUIRE(restored.touchZones.at(0).state.text.value_or("") == "Zone0");
+}
+
 /// CR-01 / WR-06 regression: touchZones BEFORE _schemaVersion must not be discarded.
 ///
 /// RFC 8259 does not specify JSON key order, so a compliant serialiser or

@@ -108,6 +108,14 @@ struct Binding {
  *
  * Stored separately from @ref Binding so the UI can render three distinct
  * action-chain editors (rotate clockwise, rotate counter-clockwise, push).
+ *
+ * On Stream Deck + class dial devices (feature 002 US3) this binding ALSO owns
+ * the touch-strip segment directly above the dial: the segment renders this
+ * binding's bound-action feedback layout (via the host-side encoder layout
+ * renderer / `instance`, with `state` as the fallback label) and a tap on the
+ * segment routes to this dial's action (`touchTap`). The dial and its segment
+ * are one control — binding/clearing the dial binds/clears the segment. There
+ * is no separate touch-zone binding on dial devices (see @ref TouchZoneBinding).
  */
 struct EncoderBinding {
     std::vector<Action> onCw;      ///< Chain fired on a clockwise rotation tick.
@@ -124,6 +132,16 @@ struct EncoderBinding {
 
 /**
  * @brief Touch-strip-zone binding (Phase 26 D-11).
+ *
+ * @deprecated For dial devices (feature 002 US3). The Stream Deck + model makes
+ * the touch-strip segment part of its dial's @ref EncoderBinding (one control =
+ * dial + segment), so the UI no longer creates independent touch-zone bindings
+ * for dial devices and the writer emits none for new dial profiles. This struct
+ * and @ref Profile::touchZones are RETAINED for read-compat: a legacy profile
+ * that still carries `touchZones` MUST load losslessly (no crash, no data loss).
+ * When both `encoders[N]` and a legacy `touchZones[N]` are present, the encoder
+ * (dial) wins — the Elgato model. Do not add new writers of this type for dial
+ * devices.
  *
  * Fired on a tap of the corresponding zone on the AKP05/N4 4-zone touch
  * strip; semantically distinct from a key press but shares the @ref KeyState
@@ -174,6 +192,9 @@ struct Profile {
     std::unordered_map<std::uint16_t, EncoderBinding> encoders; ///< Encoder index → binding.
     /// Zone index → touch-zone binding; on-disk schema v2 (Phase 26 D-11).
     /// uint8 matches DeviceDescriptor::touchZoneCount. Empty for v1 profiles.
+    /// @deprecated for dial devices (feature 002 US3): the touch-strip segment is
+    /// now part of @ref EncoderBinding. Retained for read-compat of legacy
+    /// profiles; new dial profiles leave this empty (encoder wins on conflict).
     std::unordered_map<std::uint8_t, TouchZoneBinding> touchZones;
     std::unordered_map<std::string, Binding> mouseButtons; ///< Button name → binding.
 
