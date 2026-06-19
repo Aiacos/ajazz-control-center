@@ -8,6 +8,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Elgato-parity plugin UI for keys & dials + one-click install** (feature 002, 2026-06-19):
+  - **Install replaces Open**: the Plugin Store row is now a single in-app action
+    (Install → Installing N% → Installed / disabled "Not installable in-app"). The
+    browser "Open page ↗" fallback is removed; a source without a resolvable https
+    package is shown disabled with a reason, never as a browser launch.
+  - **Dominant key preview**: selecting a plugin-bound key shows an Elgato-style
+    140px preview (action image + bottom title overlay, live `image://livekey`),
+    with a sensible placeholder when an action has no image/title.
+  - **Dial owns its touch-strip segment**: on Stream Deck + class devices the
+    segment above each dial mirrors that dial's bound action and a tap selects the
+    dial (one control = dial + segment, the Elgato model). The independent
+    touch-zone binding is retired for dial devices; legacy profiles carrying
+    `touchZones` still load losslessly (read-compat).
+  - Uninstalling a plugin now reverts any key/dial bound to its actions to unbound
+    (no stale reference, no crash).
 - **Built-in dial layouts (`$X1/$A0/$A1/$B1/$B2/$C1`) + `setFeedback`/`setFeedbackLayout`**
   (2026-06-10): the encoder feedback surface (the touch-strip zone above each dial) now renders
   the Stream Deck SDK built-in layouts — title/icon/value items, plain + gradient progress bars,

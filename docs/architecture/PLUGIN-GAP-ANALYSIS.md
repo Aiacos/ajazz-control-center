@@ -196,3 +196,18 @@ gated on hardware, an OS, or UI/plumbing out of this milestone's scope.
   System-Monitor `setTitle "CPU 15%"` → key repaint re-verified live (screenshot read).
   Deferred items catalogued above.
   Remaining: F3 modern-PI WS-launch bootstrap (own session; dedup didAppear first).
+- 2026-06-19 (feature 002 — Elgato-parity plugin UI for keys & dials + one-click install):
+  **US1** install-flow parity — Plugin Store is now a single in-app Install action
+  (Install/Installing/Installed/disabled "Not installable in-app"); the browser
+  "Open page" fallback is removed (`install()` is in-app-only, no-op for non-resolvable
+  rows). **US2** dominant Elgato key preview in the inspector (image + bottom title
+  overlay + placeholder). **US3** the dial now OWNS its touch-strip segment: segment N
+  mirrors dial N's bound action and a tap selects the dial; the independent touch-zone
+  binding is retired for dial devices (`commitTouchZoneBinding`/`Profile::touchZones`
+  kept for legacy read-compat, locked by a test). Uninstall reverts bindings owned by
+  the removed plugin (`clearBindingsForPlugin`). Live-verified on the AKP05E (store rows,
+  key preview, segment Volume/Brightness above dials, segment-tap selects dial); ctest 850.
+  **Dial-UI follow-up**: the on-screen segment renders the bound action icon+label
+  (baseline); the full live feedback-layout render ($A1/$B1 value+indicator) via an
+  encoder image provider — analogous to `image://livekey` for keys — is the remaining
+  enhancement on top of the working dial-owns-segment model.

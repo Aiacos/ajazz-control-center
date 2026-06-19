@@ -135,10 +135,10 @@ mirrors the device.
 
 ### Implementation for User Story 4
 
-- [ ] T028 [US4] Ensure the coherent Elgato arrangement in `src/app/qml/DeviceView.qml` + `src/app/qml/components/DeviceCanvas.qml`: device canvas centre-stage (key grid and, where present, touch strip with one segment above each dial), action list alongside, selected-control configuration in a consistent location (FR-016).
-- [ ] T029 [US4] Unify selection highlight + valid/invalid drop-target highlight across keys and dials (FR-017) in `DeviceCanvas.qml`/`KeyCell.qml`/`EncoderDial.qml`, reusing the gating helper (T005).
-- [ ] T030 [US4] Verify live-preview parity (FR-018): the on-screen key and dial segment mirror what the physical device renders, using the shared `renderEncoderLayout`/`image://livekey` paths; reconcile any drift.
-- [ ] T031 [US4] Live-verify Scenario 4 (quickstart.md) via the debug channel: attempt a `Keypad`-only drop on a dial and an `Encoder`-only drop on a key, `screenshot` and READ the reject affordance + selection/drop highlighting + preview parity.
+- [x] T028 [US4] Ensure the coherent Elgato arrangement in `src/app/qml/DeviceView.qml` + `src/app/qml/components/DeviceCanvas.qml`: device canvas centre-stage (key grid and, where present, touch strip with one segment above each dial), action list alongside, selected-control configuration in a consistent location (FR-016).
+- [x] T029 [US4] Unify selection highlight + valid/invalid drop-target highlight across keys and dials (FR-017) in `DeviceCanvas.qml`/`KeyCell.qml`/`EncoderDial.qml`, reusing the gating helper (T005).
+- [x] T030 [US4] Verify live-preview parity (FR-018): the on-screen key and dial segment mirror what the physical device renders, using the shared `renderEncoderLayout`/`image://livekey` paths; reconcile any drift.
+- [x] T031 [US4] Live-verify Scenario 4 (quickstart.md) via the debug channel: attempt a `Keypad`-only drop on a dial and an `Encoder`-only drop on a key, `screenshot` and READ the reject affordance + selection/drop highlighting + preview parity.
 
 **Checkpoint**: All four stories functional and consistent.
 
@@ -148,12 +148,12 @@ ______________________________________________________________________
 
 **Purpose**: Documentation, addressability audit, and final gates spanning all stories.
 
-- [ ] T032 [P] Update `docs/architecture/PLUGIN-GAP-ANALYSIS.md` with the install-flow + dial-UI parity status, and confirm `docs/protocols/streamdeck/**` reflects the touch-zone→dial model (complete any not landed in T006).
-- [ ] T033 [P] Audit that every new interactive control (store row button, dial drop target, touch-strip segment, dial PI controls) sets `objectName` and is `qml.get/set/invoke/click`-addressable (Principle V definition-of-done).
-- [ ] T034 Run `ctest --preset linux-release` green and confirm 3-compiler cleanliness expectations (GCC/Clang/Apple-Clang `-Werror`, MSVC `/W4 /WX`; ASCII-only test names).
-- [ ] T035 Run the full `specs/002-streamdeck-plugin-ui/quickstart.md` validation end-to-end; flag the harness-gated modern-PI-open-via-selection walk for a manual session per the Notes section.
-- [ ] T036 [P] Refresh the agent context (`/speckit-agent-context-update`) and add a CHANGELOG `[Unreleased]` entry for the install-flow + key/dial parity change.
-- [ ] T037 Handle the uninstall-while-bound edge case (spec Edge Cases): when a plugin is uninstalled while one of its actions is bound to a key or a dial, the affected control MUST revert to an unbound state with a clear indication and MUST NOT crash the editor. Cross-cutting across US1 (uninstall), US2 (key binding) and US3 (dial binding) in `src/app/src/plugin_catalog_model.cpp` / `profile_controller.*` / the binding model; add a unit test (`tests/unit/`) for the revert and a QML smoke (`tests/qml/`) for no-crash, then live-verify via the debug channel (install→bind→uninstall→`screenshot` reads the reverted control).
+- [x] T032 [P] Update `docs/architecture/PLUGIN-GAP-ANALYSIS.md` with the install-flow + dial-UI parity status, and confirm `docs/protocols/streamdeck/**` reflects the touch-zone→dial model (complete any not landed in T006).
+- [x] T033 [P] Audit that every new interactive control (store row button, dial drop target, touch-strip segment, dial PI controls) sets `objectName` and is `qml.get/set/invoke/click`-addressable (Principle V definition-of-done).
+- [x] T034 Run `ctest --preset linux-release` green and confirm 3-compiler cleanliness expectations (GCC/Clang/Apple-Clang `-Werror`, MSVC `/W4 /WX`; ASCII-only test names).
+- [x] T035 Run the full `specs/002-streamdeck-plugin-ui/quickstart.md` validation end-to-end; flag the harness-gated modern-PI-open-via-selection walk for a manual session per the Notes section.
+- [x] T036 [P] Refresh the agent context (`/speckit-agent-context-update`) and add a CHANGELOG `[Unreleased]` entry for the install-flow + key/dial parity change.
+- [x] T037 Handle the uninstall-while-bound edge case (spec Edge Cases): when a plugin is uninstalled while one of its actions is bound to a key or a dial, the affected control MUST revert to an unbound state with a clear indication and MUST NOT crash the editor. Cross-cutting across US1 (uninstall), US2 (key binding) and US3 (dial binding) in `src/app/src/plugin_catalog_model.cpp` / `profile_controller.*` / the binding model; add a unit test (`tests/unit/`) for the revert and a QML smoke (`tests/qml/`) for no-crash, then live-verify via the debug channel (install→bind→uninstall→`screenshot` reads the reverted control).
 
 ______________________________________________________________________
 
