@@ -39,6 +39,10 @@ Item {
 
     // ---- Data + selection (owned by DeviceView) ----------------------------
     property var bindings: null            // ListModel of {iconSource,label,actionKind,actionParams}
+    // US3: per-encoder bindings {iconSource,label,actionKind,actionId}. Drives the
+    // touch-strip segment above each dial (segment N mirrors dial N) — the dial
+    // owns its segment (Elgato Stream Deck + model).
+    property var encoderBindings: null
     property int selectedKeyIndex:     -1
     property int selectedEncoderIndex: -1
     property int selectedZoneIndex:    -1
@@ -147,13 +151,15 @@ Item {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.preferredWidth: canvas._contentWidth
                 cellSpacing: canvas._gap
-                visible: canvas.touchZoneCount > 0
-                touchZoneCount: canvas.touchZoneCount
-                zoneIconSources: []
-                zoneLabels: []
-                onZoneTapped: (idx) => canvas.zoneClicked(idx)
-                onZoneSwapRequested: (src, dst) => canvas.zoneSwapRequested(src, dst)
-                onZoneDragActiveChanged: (active) => canvas.cellDragActiveChanged(active)
+                // US3: the strip shows one segment per dial (encoderCount), each
+                // mirroring its dial's bound action. The segment is owned by the
+                // dial — read-only here; the dial below is the drop target. A tap
+                // on segment N selects dial N (one control).
+                visible: canvas.encoderCount > 0
+                segmentCount: canvas.encoderCount
+                segmentModel: canvas.encoderBindings
+                selectedIndex: canvas.selectedEncoderIndex
+                onSegmentTapped: (idx) => canvas.encoderClicked(idx)
             }
 
             // ---- Lane 3: rotary dials (one slot per zone, aligned) ----------
@@ -178,10 +184,15 @@ Item {
 
                         EncoderDial {
                             anchors.centerIn: parent
+                            objectName: "encoderDial_" + parent.index
                             width: 64
                             height: 64
                             index: parent.index
-                            iconSource: ""
+                            // US3: the dial knob mirrors its bound action icon too
+                            // (the segment above shows the same — one control).
+                            iconSource: (canvas.encoderBindings
+                                         && parent.index < canvas.encoderBindings.count)
+                                ? canvas.encoderBindings.get(parent.index).iconSource : ""
                             selected: canvas.selectedEncoderIndex === parent.index
                             onDragActiveChanged: (active) => canvas.cellDragActiveChanged(active)
                             onClicked: canvas.encoderClicked(parent.index)

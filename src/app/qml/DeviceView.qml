@@ -94,6 +94,14 @@ Item {
     // ---- Per-key binding model (mirrors KeyDesigner.qml) -------------------
     ListModel { id: bindings }
 
+    // ---- Per-encoder binding model (US3: dial owns its touch-strip segment) -
+    // One row per dial {iconSource,label,actionKind,actionId}. Drives BOTH the
+    // dial knob and the touch-strip segment above it (segment N mirrors dial N),
+    // so the segment renders the dial's bound action — the Elgato Stream Deck +
+    // model where the dial and its segment are one control. Populated from
+    // ProfileController.activeEncoderBindings() in _syncFromProfile().
+    ListModel { id: encoderBindings }
+
     // Phase 29 (OpenDeck parity / update_state): when the device renders a key
     // (a plugin's setImage/setTitle, a built-in icon, or a profile repaint), the
     // control service emits keyImageAssigned so the on-screen cell mirrors the
@@ -129,8 +137,18 @@ Item {
         }
     }
 
+    function _ensureEncoderBindings() {
+        while (encoderBindings.count < root.encoderCount) {
+            encoderBindings.append({ iconSource: "", label: "", actionKind: 0, actionId: "" });
+        }
+        while (encoderBindings.count > root.encoderCount) {
+            encoderBindings.remove(encoderBindings.count - 1);
+        }
+    }
+
     onKeyCountChanged: { _ensureBindings(); _syncFromProfile(); }
-    Component.onCompleted: { _ensureBindings(); _syncFromProfile(); }
+    onEncoderCountChanged: { _ensureEncoderBindings(); _syncFromProfile(); }
+    Component.onCompleted: { _ensureBindings(); _ensureEncoderBindings(); _syncFromProfile(); }
 
     // Rebuild the preview model from the active profile's key bindings. Called
     // on profileChanged so switching profiles (or any commit) refreshes the
@@ -161,6 +179,23 @@ Item {
             var rev = StreamDockControlService.liveKeyRevision(k);
             if (rev >= 0 && !bindings.get(k).iconSource) {
                 bindings.setProperty(k, "iconSource", "image://livekey/" + k + "?r=" + rev);
+            }
+        }
+
+        // US3: rebuild the per-encoder model so each touch-strip segment mirrors
+        // its dial's bound action (icon + label). The segment is owned by the dial.
+        for (var e = 0; e < encoderBindings.count; ++e) {
+            encoderBindings.set(e, { iconSource: "", label: "", actionKind: 0, actionId: "" });
+        }
+        var eb = ProfileController.activeEncoderBindings();
+        for (var m = 0; m < eb.length; ++m) {
+            var enc = eb[m];
+            if (enc.index >= 0 && enc.index < encoderBindings.count) {
+                encoderBindings.set(enc.index, {
+                    iconSource: enc.iconSource ? enc.iconSource : "",
+                    label: enc.label ? enc.label : "",
+                    actionKind: enc.actionKind,
+                    actionId: enc.actionId ? enc.actionId : "" });
             }
         }
     }
@@ -503,6 +538,7 @@ Item {
                     touchZoneCount: root.touchZoneCount
                     deviceName:     root.codename
                     bindings:       bindings
+                    encoderBindings: encoderBindings
                     selectedKeyIndex:     root.selectedKeyIndex
                     selectedEncoderIndex: root.selectedEncoderIndex
                     selectedZoneIndex:    root.selectedZoneIndex
