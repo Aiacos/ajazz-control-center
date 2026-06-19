@@ -504,3 +504,38 @@ TEST_CASE("ProfileController: activeEncoderBindings exposes the bound dial actio
     }
     CHECK(found);
 }
+
+// ===========================================================================
+// T037 (002): uninstall-while-bound — clearBindingsForPlugin reverts owned
+// key + encoder bindings to unbound, leaves others intact, no crash.
+// ===========================================================================
+TEST_CASE("ProfileController: clearBindingsForPlugin reverts owned key+encoder, keeps others",
+          "[multi-action][uninstall]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmp, "clr-uuid");
+
+    // Key 0 -> a child action of the victim plugin; key 1 -> a different plugin.
+    ctrl.commitKeyBinding(0, {}, QStringLiteral("V"), 0, {}, QStringLiteral("com.victim.action"));
+    ctrl.commitKeyBinding(1, {}, QStringLiteral("K"), 0, {}, QStringLiteral("com.keep.action"));
+    // Encoder 2 -> a victim dial action; encoder 3 -> a different plugin.
+    ctrl.commitEncoderBinding(
+        2, {}, QStringLiteral("VD"), 0, {}, QStringLiteral("com.victim.dial"));
+    ctrl.commitEncoderBinding(3, {}, QStringLiteral("KD"), 0, {}, QStringLiteral("com.keep.dial"));
+
+    // Uninstalling "com.victim" clears its owned key + encoder (2 bindings).
+    int const cleared = ctrl.clearBindingsForPlugin(QStringLiteral("com.victim"));
+    CHECK(cleared == 2);
+
+    // Victim bindings reverted to unbound; the other plugin's bindings survive.
+    CHECK(ctrl.activeProfile().keys.count(0) == 0);
+    CHECK(ctrl.activeProfile().keys.count(1) == 1);
+    CHECK(ctrl.activeProfile().encoders.count(2) == 0);
+    CHECK(ctrl.activeProfile().encoders.count(3) == 1);
+
+    // Idempotent: a second clear removes nothing; an empty uuid is a safe no-op.
+    CHECK(ctrl.clearBindingsForPlugin(QStringLiteral("com.victim")) == 0);
+    CHECK(ctrl.clearBindingsForPlugin(QString{}) == 0);
+}

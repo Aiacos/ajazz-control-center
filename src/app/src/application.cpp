@@ -1151,6 +1151,14 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     DeviceModel::registerInstance(m_deviceModel.get());
     ProfileController::registerInstance(m_profileController.get());
     PluginCatalogModel::registerInstance(m_pluginCatalog.get());
+    // T037 (002): when a plugin is uninstalled, revert any key/dial bound to its
+    // actions to unbound (the control must not reference a gone plugin or crash).
+    // Both members are constructor-owned, so wire it unconditionally here.
+    QObject::connect(
+        m_pluginCatalog.get(),
+        &PluginCatalogModel::pluginUninstalled,
+        m_profileController.get(),
+        [this](QString const& uuid) { m_profileController->clearBindingsForPlugin(uuid); });
     PluginDebugService::registerInstance(m_pluginDebug.get());
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     PropertyInspectorController::registerInstance(m_propertyInspector.get());

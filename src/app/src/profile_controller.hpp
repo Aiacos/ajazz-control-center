@@ -453,6 +453,24 @@ public:
                                             QString const& settingsJson,
                                             QString const& actionId = {});
 
+    /**
+     * @brief Clear every key/encoder binding owned by an uninstalled plugin.
+     *
+     * Feature 002 US3/T037 (spec edge case): when a plugin is uninstalled while
+     * one of its actions is bound to a key or a dial, the affected control MUST
+     * revert to an unbound state without crashing the editor. A binding is owned
+     * by @p pluginUuid when its action id (the onPress front, or the OpenDeck
+     * `instance` id) equals the plugin uuid or is a dotted child of it (the same
+     * owner-prefix rule ContextRegistry uses). Matching bindings are erased from
+     * the active profile (root keys + encoders). Emits profileChanged() once if
+     * anything changed; does NOT save to disk (downstream persistence handles it).
+     *
+     * @param pluginUuid reverse-DNS plugin id (e.g. "com.elgato.counter").
+     * @return number of bindings cleared.
+     * @invokable Callable from QML / the debug channel for verification.
+     */
+    Q_INVOKABLE int clearBindingsForPlugin(QString const& pluginUuid);
+
     // -------------------------------------------------------------------------
     // Phase 29-03 (PLUGIN-23): Multi-action editing — append / reorder / remove
     // on a key's onPress action vector.

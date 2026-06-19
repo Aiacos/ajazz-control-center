@@ -592,6 +592,16 @@ signals:
      */
     void installFinished(QString const& uuid, bool success, QString const& error);
 
+    /**
+     * @brief Emitted when a plugin is uninstalled (feature 002 US3/T037).
+     *
+     * Wired in application.cpp to ProfileController::clearBindingsForPlugin so a
+     * key/dial bound to the uninstalled plugin's action reverts to unbound
+     * instead of referencing a gone plugin. Distinct from installedCountChanged
+     * (which only triggers a catalogue/action-list refresh).
+     */
+    void pluginUninstalled(QString const& uuid);
+
 private:
     /// Test seam: grants unit tests access to the private row-injection
     /// internals (@ref replaceStreamdockRows) so the install-availability and

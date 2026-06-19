@@ -808,6 +808,57 @@ void ProfileController::commitEncoderBinding(int encoderIndex,
     emit profileChanged();
 }
 
+int ProfileController::clearBindingsForPlugin(QString const& pluginUuid) {
+    if (pluginUuid.isEmpty()) {
+        return 0;
+    }
+    // Owner-prefix rule (mirrors ContextRegistry / plugin_device_bridge.cpp:295):
+    // an action id belongs to the plugin when it equals the plugin uuid or is a
+    // dotted child of it ("com.foo" owns "com.foo" and "com.foo.action").
+    auto const owns = [&pluginUuid](std::string const& id) {
+        QString const qid = QString::fromStdString(id);
+        return qid == pluginUuid || qid.startsWith(pluginUuid + QLatin1Char('.'));
+    };
+    // A binding belongs to the plugin if the action the tile/PI keys off (the
+    // onPress front, or the OpenDeck-shaped instance id) is owned by it.
+    auto const bindingOwned = [&owns](auto const& binding) {
+        if (!binding.onPress.empty() && owns(binding.onPress.front().id)) {
+            return true;
+        }
+        if (binding.instance.has_value() && owns(binding.instance->id)) {
+            return true;
+        }
+        return false;
+    };
+
+    int cleared = 0;
+    for (auto it = m_profile.keys.begin(); it != m_profile.keys.end();) {
+        if (bindingOwned(it->second)) {
+            it = m_profile.keys.erase(it);
+            ++cleared;
+        } else {
+            ++it;
+        }
+    }
+    for (auto it = m_profile.encoders.begin(); it != m_profile.encoders.end();) {
+        if (bindingOwned(it->second)) {
+            it = m_profile.encoders.erase(it);
+            ++cleared;
+        } else {
+            ++it;
+        }
+    }
+
+    if (cleared > 0) {
+        AJAZZ_LOG_INFO("profile-controller",
+                       "clearBindingsForPlugin: '{}' -> cleared {} binding(s) (plugin uninstalled)",
+                       pluginUuid.toStdString(),
+                       cleared);
+        emit profileChanged();
+    }
+    return cleared;
+}
+
 void ProfileController::commitTouchZoneBinding(int zoneIndex,
                                                QString const& iconPath,
                                                QString const& label,

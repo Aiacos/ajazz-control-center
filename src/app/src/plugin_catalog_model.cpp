@@ -1537,6 +1537,9 @@ bool PluginCatalogModel::uninstall(QString const& uuid) {
     it->enabled = false;
     QModelIndex const idx = index(row);
     emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
+    // T037: let any key/dial bound to this plugin's actions revert to unbound
+    // (wired in application.cpp to ProfileController::clearBindingsForPlugin).
+    emit pluginUninstalled(uuid);
     emit installedCountChanged();
     return true;
 }
