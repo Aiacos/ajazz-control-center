@@ -13,7 +13,16 @@ macOS supported.
 
 For full context and current product requirements: `specs/001-control-center-baseline/spec.md`
 (the Spec Kit baseline, which superseded the former `.planning/` GSD artifacts on 2026-06-18).
-Project principles live in `.specify/memory/constitution.md`.
+
+> **⚠️ ALWAYS read `.specify/memory/constitution.md` first.** It holds the
+> project's nine NON-NEGOTIABLE principles (code quality & architectural
+> boundaries, testing standards, UX consistency, performance, **auto-debug &
+> live validation**, research-backed implementation, documentation currency,
+> repo hygiene, CI/CD) and the binding definition-of-done checklist. The
+> constitution **governs on matters of principle**; this `CLAUDE.md` governs on
+> mechanical detail, and where the two conflict the constitution wins. Re-read it
+> before planning a change, before opening a PR, and at audit time — every task
+> on this repo must satisfy its quality gates.
 
 ## Workflow conventions
 
@@ -38,6 +47,12 @@ Project principles live in `.specify/memory/constitution.md`.
 
 ## Hard rules
 
+- **Consult the constitution (`.specify/memory/constitution.md`) on every task.**
+  Its nine principles and the "Development Workflow & Quality Gates" checklist are
+  binding; it supersedes this file on matters of principle. A change is not "done"
+  until it satisfies the constitution's gates (ctest green on all three compilers,
+  live debug-channel verification, docs/schemas updated, hooks pass without
+  bypass, RE cross-checked for protocol/wire changes).
 - **No system-level mutations from project tooling.** Code-only fixes inside
   the project repo. Don't write to `/etc/`, `~/.config/niri/`,
   `~/.config/noctalia/`, `/usr/share/`, etc. Even read-only inspection of
