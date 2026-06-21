@@ -578,3 +578,130 @@ TEST_CASE("ProfileController: commitEncoderVolume wires directional volume chain
     ctrl.commitEncoderVolume(-1);
     CHECK(ctrl.activeProfile().encoders.count(2) == 1);
 }
+
+// ===========================================================================
+// Pages / Folders (Elgato-parity Delta A)
+// ===========================================================================
+
+TEST_CASE("ProfileController: createFolderOnKey binds OpenFolder + seeds BackToParent",
+          "[pages][delta-a]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-folder-create");
+
+    QString const pageId = ctrl.createFolderOnKey(2, QStringLiteral("Lights"));
+    REQUIRE_FALSE(pageId.isEmpty());
+
+    // The root key 2 now holds an OpenFolder action targeting the new page.
+    REQUIRE(ctrl.activeProfile().keys.count(2) == 1);
+    auto const& onPress = onPressFor(ctrl, 2);
+    REQUIRE(onPress.size() == 1);
+    CHECK(onPress[0].kind == core::ActionKind::OpenFolder);
+    CHECK(onPress[0].settingsJson.find(pageId.toStdString()) != std::string::npos);
+
+    // The new page exists and carries a BackToParent key at index 0.
+    auto const pit = ctrl.activeProfile().pages.find(pageId.toStdString());
+    REQUIRE(pit != ctrl.activeProfile().pages.end());
+    REQUIRE(pit->second.keys.count(0) == 1);
+    CHECK(pit->second.keys.at(0).onPress.front().kind == core::ActionKind::BackToParent);
+
+    // activeKeyBindings surfaces the folder marker for the canvas.
+    auto const kb = ctrl.activeKeyBindings();
+    bool sawFolder = false;
+    for (auto const& v : kb) {
+        auto const m = v.toMap();
+        if (m.value("index").toInt() == 2) {
+            CHECK(m.value("isFolder").toBool());
+            CHECK(m.value("folderTarget").toString() == pageId);
+            sawFolder = true;
+        }
+    }
+    CHECK(sawFolder);
+}
+
+TEST_CASE("ProfileController: enterFolder routes edits to the folder page, not root",
+          "[pages][delta-a]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-folder-edit");
+
+    // Bind a root key, then make a folder on another key and enter it.
+    ctrl.commitKeyBinding(
+        0, {}, QStringLiteral("RootKey"), 0, QStringLiteral("{}"), QStringLiteral("com.root"));
+    QString const pageId = ctrl.createFolderOnKey(1, QStringLiteral("Sub"));
+    REQUIRE(ctrl.activePageId() == QStringLiteral("root"));
+
+    ctrl.enterFolder(pageId);
+    CHECK(ctrl.activePageId() == pageId);
+    CHECK(ctrl.activePageName() == QStringLiteral("Sub"));
+    // Breadcrumb is root -> Sub.
+    REQUIRE(ctrl.pageBreadcrumb().size() == 2);
+    CHECK(ctrl.pageBreadcrumb().at(0).toMap().value("id").toString() == QStringLiteral("root"));
+    CHECK(ctrl.pageBreadcrumb().at(1).toMap().value("id").toString() == pageId);
+
+    // Committing now writes to the FOLDER page, leaving root key 0 intact.
+    ctrl.commitKeyBinding(
+        3, {}, QStringLiteral("InFolder"), 0, QStringLiteral("{}"), QStringLiteral("com.sub"));
+    auto const& pg = ctrl.activeProfile().pages.at(pageId.toStdString());
+    REQUIRE(pg.keys.count(3) == 1);
+    CHECK(pg.keys.at(3).onPress.front().id == "com.sub");
+    // Root key 0 unchanged; root has no key 3.
+    CHECK(ctrl.activeProfile().keys.at(0).onPress.front().id == "com.root");
+    CHECK(ctrl.activeProfile().keys.count(3) == 0);
+
+    // activeKeyBindings now reflects the FOLDER page: key 3 (com.sub) is present,
+    // and the key-0 entry is the folder's seeded BackToParent (kind 6) -- NOT the
+    // root's com.root plugin action, proving the view switched pages.
+    bool sawFolderKey3 = false, sawFolderKey0Back = false;
+    for (auto const& v : ctrl.activeKeyBindings()) {
+        auto const m = v.toMap();
+        int const idx = m.value("index").toInt();
+        if (idx == 3)
+            sawFolderKey3 = true;
+        if (idx == 0) {
+            sawFolderKey0Back =
+                m.value("actionKind").toInt() == static_cast<int>(core::ActionKind::BackToParent);
+        }
+    }
+    CHECK(sawFolderKey3);
+    CHECK(sawFolderKey0Back);
+}
+
+TEST_CASE("ProfileController: goBackPage returns to root", "[pages][delta-a]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-folder-back");
+
+    QString const pageId = ctrl.createFolderOnKey(0, QStringLiteral("F"));
+    ctrl.enterFolder(pageId);
+    REQUIRE(ctrl.activePageId() == pageId);
+
+    ctrl.goBackPage();
+    CHECK(ctrl.activePageId() == QStringLiteral("root"));
+    // goBackPage at root is a no-op.
+    ctrl.goBackPage();
+    CHECK(ctrl.activePageId() == QStringLiteral("root"));
+}
+
+TEST_CASE("ProfileController: loading a profile resets page nav to root", "[pages][delta-a]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-folder-reset");
+
+    QString const pageId = ctrl.createFolderOnKey(0, QStringLiteral("F"));
+    ctrl.enterFolder(pageId);
+    REQUIRE(ctrl.activePageId() == pageId);
+
+    // Reload the profile from disk: nav must snap back to root (loadProfile calls
+    // resetPageNav, so a freshly-loaded profile always opens at the top level).
+    ctrl.loadProfile(tmpDir.filePath(QStringLiteral("profile.json")));
+    CHECK(ctrl.activePageId() == QStringLiteral("root"));
+}

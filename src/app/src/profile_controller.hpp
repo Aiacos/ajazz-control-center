@@ -688,6 +688,49 @@ public:
      */
     [[nodiscard]] ajazz::core::Profile const& activeProfile() const noexcept;
 
+    // -------------------------------------------------------------------------
+    // Pages / Folders (Elgato-parity Delta A). A profile's root key map is
+    // Profile::keys; nested folder pages live in Profile::pages keyed by id (see
+    // profile.hpp). The editor tracks which page is currently shown via a
+    // navigation stack ([root] at the bottom); the key read/write methods above
+    // (activeKeyBindings/commitKeyBinding/appendKeyAction/reorderKeyAction/
+    // removeKeyActionAt/swapKeyBindings) resolve against that active page instead
+    // of always editing root. Encoders/touch-zones stay profile-global (a
+    // ProfilePage carries keys only), matching the Elgato model where folders are
+    // a key-grid concept. The device-render side (repaintPage) is already
+    // page-aware; this brings the editor in line.
+    // -------------------------------------------------------------------------
+
+    /// Id of the page the editor is currently showing ("root" at the top level).
+    [[nodiscard]] Q_INVOKABLE QString activePageId() const;
+
+    /// User-visible name of the active page ("Home" for root).
+    [[nodiscard]] Q_INVOKABLE QString activePageName() const;
+
+    /// Breadcrumb from root to the active page as a QVariantList of {id, name}
+    /// maps. Always starts with the root entry; drives the editor breadcrumb bar.
+    [[nodiscard]] Q_INVOKABLE QVariantList pageBreadcrumb() const;
+
+    /// Navigate the editor INTO an existing folder page (push onto the nav stack).
+    /// No-op (logged) if @p pageId is unknown. Emits profileChanged() so the
+    /// canvas re-syncs to the folder's keys.
+    Q_INVOKABLE void enterFolder(QString const& pageId);
+
+    /// Pop one level off the editor nav stack (return to the parent page). No-op
+    /// at root. Emits profileChanged().
+    Q_INVOKABLE void goBackPage();
+
+    /// Reset the editor nav stack to the root page. Emits profileChanged().
+    Q_INVOKABLE void goToRootPage();
+
+    /// Create a folder on @p keyIndex of the CURRENT page: makes a fresh
+    /// ProfilePage (generated id), binds the key to an OpenFolder action targeting
+    /// it, seeds the new page with a BackToParent key at index 0 so the device can
+    /// return, and persists. Returns the new page id ("" on invalid index). Emits
+    /// profileChanged() + profileSaved(). The editor does NOT auto-enter the new
+    /// folder (caller decides) so the just-created OpenFolder key stays visible.
+    Q_INVOKABLE QString createFolderOnKey(int keyIndex, QString const& name);
+
 signals:
     /**
      * @signal profileChanged
@@ -754,7 +797,27 @@ private:
     /// callers decide whether to emit profilesChanged().
     void rescanLibrary();
 
+    /// Resolve the key-binding map for the page the editor is currently showing
+    /// (Delta A). "root"/empty -> Profile::keys; otherwise Profile::pages[id].keys.
+    /// An unknown active page id falls back to root (safe — never default-creates
+    /// a page via operator[]). The per-page key read/write methods route through
+    /// this so editing follows the active folder.
+    [[nodiscard]] std::unordered_map<std::uint16_t, ajazz::core::Binding>& activeKeyMap();
+    [[nodiscard]] std::unordered_map<std::uint16_t, ajazz::core::Binding> const&
+    activeKeyMap() const;
+
+    /// Reset the editor navigation stack to [root]. Called whenever a new profile
+    /// becomes active (load/switch/reset) so the canvas opens at the top level
+    /// rather than a stale folder from the previous profile.
+    void resetPageNav();
+
     ajazz::core::Profile m_profile{};
+
+    /// Editor page-navigation stack (Delta A). Always non-empty: index 0 is the
+    /// implicit root ("root"); each enterFolder() pushes a child page id, goBack()
+    /// pops. activePageId() == m_pageStack.back(). NOT persisted (a profile has no
+    /// "currently-open folder" on disk; it always loads at root).
+    QStringList m_pageStack{QStringLiteral("root")};
     QString m_path;
     QHash<QString, ProfileMeta> m_library; ///< id -> on-disk profile metadata.
 

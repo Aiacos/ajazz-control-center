@@ -36,6 +36,11 @@ without bypass. Concurrency: ≤2 execute agents.
 
 ## Phase 1 — Delta B: on-screen dial/encoder live-feedback preview
 
+> **Status: DONE (`000c90f`, 2026-06-21).** `LiveEncoderImageProvider` registered
+> at `application.cpp:1230`; `DeviceView.qml:134` binds dials + strip segments to
+> `image://liveencoder/<idx>?r=<rev>`. Real on-device dial feedback remains
+> hardware-gated (retail AKP05E). Phase 2 (Delta A) is now the head of the queue.
+
 **Goal.** The editor canvas mirrors what the device LCD shows for each dial: the
 Elgato feedback layout (`$X1/$A0/$A1/$B1/$B2/$C1` + custom JSON), live, via an
 `image://liveencoder` provider analogous to `image://livekey`.

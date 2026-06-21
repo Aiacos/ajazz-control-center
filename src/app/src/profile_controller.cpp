@@ -17,6 +17,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QQmlEngine>
 #include <QStandardPaths>
 #include <QString>
@@ -60,6 +62,7 @@ void ProfileController::loadProfile(QString const& path) {
         std::filesystem::path const fsPath = path.toStdString();
         m_profile = ajazz::core::readProfileFromDisk(fsPath);
         m_path = path;
+        resetPageNav(); // Delta A: a freshly-loaded profile always opens at root.
         emit profileChanged();
     } catch (ajazz::core::ProfileIoError const& e) {
         emit loadFailed(QString::fromUtf8(e.what()));
@@ -190,6 +193,7 @@ QString ProfileController::createProfile(QString const& name, QString const& dev
 
     m_profile = std::move(fresh);
     m_path.clear(); // force saveActiveProfile to treat this as a new id
+    resetPageNav(); // Delta A: open the new profile at root.
     emit profileChanged();
 
     saveActiveProfile(); // persists + emits profileSaved/profilesChanged on new id
@@ -264,6 +268,7 @@ QString ProfileController::duplicateProfile(QString const& profileId, QString co
 
     m_profile = std::move(source);
     m_path.clear();
+    resetPageNav(); // Delta A: open the duplicated profile at root.
     emit profileChanged();
     saveActiveProfile();
     rescanLibrary();
@@ -602,7 +607,7 @@ QString ProfileController::foregroundCapabilityWarning() const {
 
 QVariantList ProfileController::activeKeyBindings() const {
     QVariantList out;
-    for (auto const& [idx, binding] : m_profile.keys) {
+    for (auto const& [idx, binding] : activeKeyMap()) {
         QVariantMap m;
         m.insert(QStringLiteral("index"), static_cast<int>(idx));
         m.insert(QStringLiteral("iconSource"),
@@ -620,6 +625,24 @@ QVariantList ProfileController::activeKeyBindings() const {
         }
         m.insert(QStringLiteral("actionKind"), kind);
         m.insert(QStringLiteral("actionId"), actionId);
+
+        // Delta A: surface folder keys so the canvas can show the folder look and
+        // navigate INTO the child page on activation. A key is a folder when its
+        // first onPress step is an OpenFolder action; its target page id lives in
+        // settingsJson as {"target":"<id>"}.
+        bool isFolder = false;
+        QString folderTarget;
+        if (!binding.onPress.empty() &&
+            binding.onPress.front().kind == ajazz::core::ActionKind::OpenFolder) {
+            isFolder = true;
+            auto const doc = QJsonDocument::fromJson(
+                QByteArray::fromStdString(binding.onPress.front().settingsJson));
+            if (doc.isObject()) {
+                folderTarget = doc.object().value(QStringLiteral("target")).toString();
+            }
+        }
+        m.insert(QStringLiteral("isFolder"), isFolder);
+        m.insert(QStringLiteral("folderTarget"), folderTarget);
 
         // PLUGIN-23: full onPress list exposed as "actionList" — a nested
         // QVariantList of {actionKind, actionId, label, iconSource} maps.
@@ -641,6 +664,163 @@ QVariantList ProfileController::activeKeyBindings() const {
         out.append(m);
     }
     return out;
+}
+
+// ---------------------------------------------------------------------------
+// Pages / Folders (Delta A)
+// ---------------------------------------------------------------------------
+
+std::unordered_map<std::uint16_t, ajazz::core::Binding>& ProfileController::activeKeyMap() {
+    if (m_pageStack.isEmpty() || m_pageStack.last() == QStringLiteral("root")) {
+        return m_profile.keys;
+    }
+    auto it = m_profile.pages.find(m_pageStack.last().toStdString());
+    if (it != m_profile.pages.end()) {
+        return it->second.keys;
+    }
+    return m_profile.keys; // Unknown active page -> safe fallback to root.
+}
+
+std::unordered_map<std::uint16_t, ajazz::core::Binding> const&
+ProfileController::activeKeyMap() const {
+    if (m_pageStack.isEmpty() || m_pageStack.last() == QStringLiteral("root")) {
+        return m_profile.keys;
+    }
+    auto it = m_profile.pages.find(m_pageStack.last().toStdString());
+    if (it != m_profile.pages.end()) {
+        return it->second.keys;
+    }
+    return m_profile.keys;
+}
+
+void ProfileController::resetPageNav() {
+    m_pageStack = QStringList{QStringLiteral("root")};
+}
+
+QString ProfileController::activePageId() const {
+    return m_pageStack.isEmpty() ? QStringLiteral("root") : m_pageStack.last();
+}
+
+QString ProfileController::activePageName() const {
+    QString const id = activePageId();
+    if (id == QStringLiteral("root")) {
+        return tr("Home");
+    }
+    auto const it = m_profile.pages.find(id.toStdString());
+    if (it != m_profile.pages.end() && !it->second.name.empty()) {
+        return QString::fromStdString(it->second.name);
+    }
+    return tr("Folder");
+}
+
+QVariantList ProfileController::pageBreadcrumb() const {
+    QVariantList out;
+    for (QString const& id : m_pageStack) {
+        QVariantMap m;
+        m.insert(QStringLiteral("id"), id);
+        if (id == QStringLiteral("root")) {
+            m.insert(QStringLiteral("name"), tr("Home"));
+        } else {
+            auto const it = m_profile.pages.find(id.toStdString());
+            m.insert(QStringLiteral("name"),
+                     (it != m_profile.pages.end() && !it->second.name.empty())
+                         ? QString::fromStdString(it->second.name)
+                         : tr("Folder"));
+        }
+        out.append(m);
+    }
+    return out;
+}
+
+void ProfileController::enterFolder(QString const& pageId) {
+    if (pageId.isEmpty() || pageId == QStringLiteral("root")) {
+        goToRootPage();
+        return;
+    }
+    if (m_profile.pages.find(pageId.toStdString()) == m_profile.pages.end()) {
+        AJAZZ_LOG_WARN(
+            "profile-controller", "enterFolder: unknown page '{}', ignoring", pageId.toStdString());
+        return;
+    }
+    if (m_pageStack.last() == pageId) {
+        return; // Already showing this folder.
+    }
+    m_pageStack.append(pageId);
+    emit profileChanged(); // Canvas re-syncs to the folder's keys via activeKeyBindings().
+}
+
+void ProfileController::goBackPage() {
+    if (m_pageStack.size() <= 1) {
+        return; // Already at root.
+    }
+    m_pageStack.removeLast();
+    emit profileChanged();
+}
+
+void ProfileController::goToRootPage() {
+    if (m_pageStack.size() == 1 && m_pageStack.last() == QStringLiteral("root")) {
+        return;
+    }
+    resetPageNav();
+    emit profileChanged();
+}
+
+QString ProfileController::createFolderOnKey(int keyIndex, QString const& name) {
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "createFolderOnKey: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return {};
+    }
+
+    QString const pageId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    std::string const folderName =
+        name.trimmed().isEmpty() ? std::string{"Folder"} : name.trimmed().toStdString();
+
+    // Create the new child page, seeded with a BackToParent key at index 0 so the
+    // device can navigate back out (Elgato folders always carry a return key).
+    ajazz::core::ProfilePage page;
+    page.id = pageId.toStdString();
+    page.name = folderName;
+    {
+        ajazz::core::Action back;
+        back.kind = ajazz::core::ActionKind::BackToParent;
+        back.label = "Back";
+        ajazz::core::Binding backBinding;
+        backBinding.onPress.push_back(back);
+        backBinding.state.text = std::string{"Back"};
+        page.keys.emplace(static_cast<std::uint16_t>(0), std::move(backBinding));
+    }
+    m_profile.pages.emplace(page.id, std::move(page));
+
+    // Track the parent->child relationship when the parent is a real ProfilePage
+    // (a child folder). The root page lives in Profile::keys and has no
+    // ProfilePage wrapper, so root-level folders are reachable purely via the
+    // OpenFolder key below (children tracking is best-effort, not load-bearing).
+    QString const parentId = activePageId();
+    if (parentId != QStringLiteral("root")) {
+        if (auto pit = m_profile.pages.find(parentId.toStdString()); pit != m_profile.pages.end()) {
+            pit->second.children.push_back(pageId.toStdString());
+        }
+    }
+
+    // Bind the key on the CURRENT page to an OpenFolder action targeting the new
+    // page (settingsJson carries {"target":"<id>"} per profile.hpp Action docs).
+    ajazz::core::Action open;
+    open.kind = ajazz::core::ActionKind::OpenFolder;
+    open.settingsJson = std::string{"{\"target\":\""} + pageId.toStdString() + "\"}";
+    open.label = folderName;
+    auto& binding = activeKeyMap()[static_cast<std::uint16_t>(keyIndex)];
+    binding.onPress = {open};
+    binding.onRelease.clear();
+    binding.onLongPress.clear();
+    binding.state.text = std::string{folderName};
+    binding.state.imagePath.reset(); // Folder uses the built-in folder look in QML.
+
+    saveActiveProfile();
+    emit profileChanged();
+    return pageId;
 }
 
 QVariantList ProfileController::activeEncoderBindings() const {
@@ -747,7 +927,7 @@ void ProfileController::commitKeyBinding(int keyIndex,
     }
 
     auto const idx = static_cast<std::uint16_t>(keyIndex);
-    auto& binding = m_profile.keys[idx];
+    auto& binding = activeKeyMap()[idx];
 
     binding.state.imagePath =
         iconPath.isEmpty() ? std::nullopt : std::optional<std::string>{iconPath.toStdString()};
@@ -961,7 +1141,7 @@ void ProfileController::appendKeyAction(int keyIndex,
     }
 
     auto const idx = static_cast<std::uint16_t>(keyIndex);
-    auto& binding = m_profile.keys[idx]; // default-constructs if absent (new key)
+    auto& binding = activeKeyMap()[idx]; // default-constructs if absent (new key)
 
     ajazz::core::Action act{};
     act.kind = static_cast<ajazz::core::ActionKind>(actionKind);
@@ -983,8 +1163,9 @@ void ProfileController::reorderKeyAction(int keyIndex, int fromPos, int toPos) {
     }
 
     auto const idx = static_cast<std::uint16_t>(keyIndex);
-    auto const it = m_profile.keys.find(idx);
-    if (it == m_profile.keys.end()) {
+    auto& keyMap = activeKeyMap();
+    auto const it = keyMap.find(idx);
+    if (it == keyMap.end()) {
         return; // No binding for this key — no-op.
     }
 
@@ -1031,8 +1212,9 @@ void ProfileController::removeKeyActionAt(int keyIndex, int pos) {
     }
 
     auto const idx = static_cast<std::uint16_t>(keyIndex);
-    auto const it = m_profile.keys.find(idx);
-    if (it == m_profile.keys.end()) {
+    auto& keyMap = activeKeyMap();
+    auto const it = keyMap.find(idx);
+    if (it == keyMap.end()) {
         return; // No binding for this key — no-op.
     }
 
@@ -1076,7 +1258,8 @@ void ProfileController::cycleInstanceState(QString const& controller, int index)
     // wire controller strings ("Keypad"/"Encoder") match regardless of source.
     std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
     if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
-        if (auto it = m_profile.keys.find(idx); it != m_profile.keys.end()) {
+        auto& keyMap = activeKeyMap();
+        if (auto it = keyMap.find(idx); it != keyMap.end()) {
             instanceSlot = &it->second.instance;
         }
     } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
@@ -1151,9 +1334,11 @@ void ProfileController::swapKeyBindings(int srcIndex, int dstIndex) {
     auto const d = static_cast<std::uint16_t>(dstIndex);
     // operator[] on an absent key default-constructs an empty Binding, which is
     // the correct semantics for "swap with an empty slot moves the binding".
-    auto src_copy = m_profile.keys[s];
-    m_profile.keys[s] = m_profile.keys[d];
-    m_profile.keys[d] = std::move(src_copy);
+    // Page-aware (Delta A): swap within whichever page the editor is showing.
+    auto& keyMap = activeKeyMap();
+    auto src_copy = keyMap[s];
+    keyMap[s] = keyMap[d];
+    keyMap[d] = std::move(src_copy);
     emit profileChanged();
 }
 

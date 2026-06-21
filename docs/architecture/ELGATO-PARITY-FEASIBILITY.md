@@ -11,6 +11,12 @@
 > [`../protocols/streamdeck/elgato_plugin_protocol.md`](../protocols/streamdeck/elgato_plugin_protocol.md),
 > and the project [`constitution`](../../.specify/memory/constitution.md).
 > The companion implementation plan is [`ELGATO-PARITY-PLAN.md`](ELGATO-PARITY-PLAN.md).
+>
+> **Parity audit 2026-06-21:** matrix re-verified against live code. Criterion 6
+> (Smart Profiles per-app UI) was already shipped at authoring (`52abf5c`,
+> 2026-06-08) and is corrected to DONE. Criterion 7 (live encoder preview, Delta
+> B) closed the same morning (`000c90f`) and is now DONE. Criteria 4, 5, 8, 9
+> remain genuinely open (backend/data layers exist; editor UI surfaces absent).
 
 ## Goal
 
@@ -39,8 +45,8 @@ boundary.
 | 3  | Bottom-docked, plugin-rendered HTML Property Inspector (own WebSocket)   | DONE                  | Live modern-PI WS registration is harness/hardware-gated                  |
 | 4  | **Pages + nested Folders** with on-canvas navigation                     | DATA MODEL ONLY       | **No UI** (page bar, folder open/back, breadcrumb) — biggest feature gap  |
 | 5  | Multi-Actions + **Multi-Action Switch** (two-state sequence toggle)      | PARTIAL               | Multi-action editor done; Switch UI + `userDesiredState` deferred         |
-| 6  | **Smart Profiles** (per-app auto-switch) + per-device profiles           | PARTIAL               | Per-device profiles done; foreground watcher exists; no per-app assign UI |
-| 7  | Stream Deck + encoders; **feedback layouts previewed live**              | PARTIAL               | Device-side layout render done; **no on-screen `image://liveencoder`**    |
+| 6  | **Smart Profiles** (per-app auto-switch) + per-device profiles       | DONE                  | Per-app assign UI shipped `52abf5c` (2026-06-08): `SettingsPage.qml:171`, `ProfileController::addAppProfileMapping` |
+| 7  | Stream Deck + encoders; **feedback layouts previewed live**              | DONE                  | Delta B landed `000c90f` (2026-06-21): `LiveEncoderImageProvider` (`application.cpp:1230`), `DeviceView.qml:134` binds `image://liveencoder` |
 | 8  | Title styling (font/size/color/align) + per-state icons                  | PARTIAL               | Title text + preview done; no styling controls; toggle renderer deferred  |
 | 9  | Marketplace / one-click `.streamDeckPlugin` install                      | DONE                  | Plugins only — no icon-pack / profile install                            |
 | 10 | Full WS event/command protocol + handshake (run 3rd-party plugins as-is) | DONE                  | A few AJAZZ-only routed actions unhandled (intentional)                   |

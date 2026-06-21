@@ -417,6 +417,65 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"id", pc->activeProfileId()}, {"name", pc->activeProfileName()}};
     });
 
+    // ---- Pages / Folders (Delta A) -------------------------------------
+    // profile.activePage -> {id, name, breadcrumb:[{id,name}...]} so headless
+    // verification can read which folder the editor canvas is showing.
+    server.registerMethod("profile.activePage", [&app](QJsonObject const&, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QJsonArray crumb;
+        for (auto const& v : pc->pageBreadcrumb()) {
+            auto const m = v.toMap();
+            crumb.append(QJsonObject{{"id", m.value("id").toString()},
+                                     {"name", m.value("name").toString()}});
+        }
+        return QJsonObject{
+            {"id", pc->activePageId()}, {"name", pc->activePageName()}, {"breadcrumb", crumb}};
+    });
+
+    // profile.createFolderOnKey {index, name?} -> {pageId} (binds the key to an
+    // OpenFolder action, seeds a BackToParent key on the new page).
+    server.registerMethod(
+        "profile.createFolderOnKey", [&app](QJsonObject const& params, QString& err) {
+            auto* pc = app.profileController();
+            if (pc == nullptr) {
+                err = QStringLiteral("profile controller unavailable");
+                return QJsonObject{};
+            }
+            int const index = params.value("index").toInt(-1);
+            if (index < 0) {
+                err = QStringLiteral("missing/invalid 'index'");
+                return QJsonObject{};
+            }
+            QString const id = pc->createFolderOnKey(index, params.value("name").toString());
+            return QJsonObject{{"pageId", id}};
+        });
+
+    // profile.enterFolder {pageId} -> {activePage}
+    server.registerMethod("profile.enterFolder", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        pc->enterFolder(params.value("pageId").toString());
+        return QJsonObject{{"activePage", pc->activePageId()}};
+    });
+
+    // profile.goBackPage -> {activePage}
+    server.registerMethod("profile.goBackPage", [&app](QJsonObject const&, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        pc->goBackPage();
+        return QJsonObject{{"activePage", pc->activePageId()}};
+    });
+
     server.registerMethod("profile.load", [&app](QJsonObject const& params, QString& err) {
         auto* pc = app.profileController();
         if (pc == nullptr) {
