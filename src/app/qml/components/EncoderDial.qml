@@ -214,10 +214,18 @@ ItemDelegate {
 
             if (DragRelay.mimeKey === "application/x-ajazz-action") {
                 var ap = JSON.parse(DragRelay.payload);
+                var aid = ap.actionId ? ap.actionId : "";
+                // System Volume: directional dial (CW up / CCW down / press mute).
+                // Routed to a dedicated commit because commitEncoderBinding only
+                // sets onPress, whereas a volume dial needs onCw/onCcw too.
+                if (aid === "com.hotspot.streamdock.system.volume") {
+                    ProfileController.commitEncoderVolume(root.index);
+                    drop.acceptProposedAction();
+                    return;
+                }
                 // Library -> encoder: commit binding; iconPath empty in v1.
                 // PLUGIN-19: pass actionId as 6th arg (was dropped in 5-arg call).
                 // Seed defaultSettings from the payload if available (RESEARCH §Q3).
-                var aid = ap.actionId ? ap.actionId : "";
                 var defaults = ap.defaultSettings ? ap.defaultSettings : "";
                 ProfileController.commitEncoderBinding(root.index, "", ap.label,
                                                        ap.actionKind, defaults, aid);

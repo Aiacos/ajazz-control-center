@@ -808,6 +808,39 @@ void ProfileController::commitEncoderBinding(int encoderIndex,
     emit profileChanged();
 }
 
+void ProfileController::commitEncoderVolume(int encoderIndex) {
+    if (encoderIndex < 0 ||
+        encoderIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitEncoderVolume: encoderIndex {} out of range [0, 65534], ignoring",
+                       encoderIndex);
+        return;
+    }
+
+    // Built-in volume action; routed by ActionEngine -> BuiltinActionsService ->
+    // input synthesizer media keys (Linux uinput KEY_VOLUMEUP/DOWN/MUTE).
+    constexpr char const* kVolumeAction = "com.hotspot.streamdock.system.volume";
+    auto makeStep = [&](char const* settingsJson) {
+        ajazz::core::Action a{};
+        a.kind = ajazz::core::ActionKind::Plugin;
+        a.id = kVolumeAction;
+        a.settingsJson = settingsJson;
+        return a;
+    };
+
+    auto const idx = static_cast<std::uint16_t>(encoderIndex);
+    auto& binding = m_profile.encoders[idx];
+    // Directional chains: CW -> up, CCW -> down, press -> mute (Stream Deck + dial).
+    binding.onCw = {makeStep(R"({"direction":"up"})")};
+    binding.onCcw = {makeStep(R"({"direction":"down"})")};
+    binding.onPress = {makeStep(R"({"key":"Mute"})")};
+    binding.state.text = std::optional<std::string>{"Volume"};
+    binding.state.imagePath = std::nullopt; // segment falls back to label + glyph
+
+    AJAZZ_LOG_INFO("profile-controller", "commitEncoderVolume: dial {} -> system volume", idx);
+    emit profileChanged();
+}
+
 int ProfileController::clearBindingsForPlugin(QString const& pluginUuid) {
     if (pluginUuid.isEmpty()) {
         return 0;

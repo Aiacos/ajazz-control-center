@@ -41,11 +41,12 @@ option(AJAZZ_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 # Clang sanitizer runtime); the tests/CMakeLists.txt gate errors out at configure time if
 # AJAZZ_BUILD_FUZZ_TESTS=ON is paired with GCC/MSVC, surfacing the constraint up front.
 option(AJAZZ_BUILD_FUZZ_TESTS "Build libFuzzer harnesses (Clang only, opt-in)" OFF)
-# Phase 21-01 (PLUGIN-12): IInputSynthesizer native OS backends. OFF by default so builds and tests
-# are hardware-free (no /dev/uinput, no OS Accessibility permission). Set ON to enable the Linux
-# uinput / Windows SendInput / macOS CGEvent real backends (mirrors AJAZZ_HAVE_WEBSOCKETS gating
-# pattern).
-option(AJAZZ_FEATURE_INPUT_SYNTH "Build native OS input synthesis backends" OFF)
+# Phase 21-01 (PLUGIN-12): IInputSynthesizer native OS backends. ON by default so the built-in
+# system actions (e.g. the Volume dial: Linux uinput / Windows SendInput / macOS CGEvent) actually
+# drive the OS instead of the no-op recording stub. The per-OS TU still self-guards with the
+# platform #if, and the stub remains the fallback when this is OFF (hardware-free builds/tests, no
+# /dev/uinput, no OS Accessibility permission). Mirrors the AJAZZ_HAVE_WEBSOCKETS gating pattern.
+option(AJAZZ_FEATURE_INPUT_SYNTH "Build native OS input synthesis backends" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(Warnings)

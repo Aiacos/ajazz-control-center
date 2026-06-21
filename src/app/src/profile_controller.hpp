@@ -425,6 +425,26 @@ public:
                                           QString const& actionId = {});
 
     /**
+     * @brief Bind a dial to system volume control (Stream Deck + style).
+     *
+     * Sets up the encoder's directional chains so the dial drives the OS volume
+     * via the built-in @c com.hotspot.streamdock.system.volume action (which
+     * routes to the input synthesizer's media keys — Linux uinput KEY_VOLUMEUP/
+     * DOWN/MUTE, Windows SendInput, macOS CGEvent):
+     *   - clockwise  (onCw)    -> volume up
+     *   - counter-cw (onCcw)   -> volume down
+     *   - press      (onPress) -> mute toggle
+     * The segment label is set to "Volume". Emits profileChanged(); does NOT save
+     * (downstream persistence handles it). This is the first directional encoder
+     * binding — drag-drop of the library "Volume" action routes here instead of
+     * the onPress-only @ref commitEncoderBinding.
+     *
+     * @param encoderIndex 0-based dial index (validated like commitEncoderBinding).
+     * @invokable Callable from QML (the dial drop handler) and the debug channel.
+     */
+    Q_INVOKABLE void commitEncoderVolume(int encoderIndex);
+
+    /**
      * @brief Commit a touch-strip-zone binding into the active Profile (touchZones map).
      *
      * REQ-26-B touch strip zone binding (Phase 26 D-11).

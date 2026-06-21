@@ -539,3 +539,42 @@ TEST_CASE("ProfileController: clearBindingsForPlugin reverts owned key+encoder, 
     CHECK(ctrl.clearBindingsForPlugin(QStringLiteral("com.victim")) == 0);
     CHECK(ctrl.clearBindingsForPlugin(QString{}) == 0);
 }
+
+// ===========================================================================
+// Volume dial: commitEncoderVolume wires CW=up / CCW=down / press=mute to the
+// built-in system.volume action (the Linux-working volume control).
+// ===========================================================================
+TEST_CASE("ProfileController: commitEncoderVolume wires directional volume chains",
+          "[multi-action][volume]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmp, "vol-uuid");
+
+    ctrl.commitEncoderVolume(2);
+
+    REQUIRE(ctrl.activeProfile().encoders.count(2) == 1);
+    auto const& eb = ctrl.activeProfile().encoders.at(2);
+
+    constexpr char const* kVol = "com.hotspot.streamdock.system.volume";
+    // CW -> volume up.
+    REQUIRE(eb.onCw.size() == 1);
+    CHECK(eb.onCw.front().kind == core::ActionKind::Plugin);
+    CHECK(eb.onCw.front().id == kVol);
+    CHECK(eb.onCw.front().settingsJson.find("up") != std::string::npos);
+    // CCW -> volume down.
+    REQUIRE(eb.onCcw.size() == 1);
+    CHECK(eb.onCcw.front().id == kVol);
+    CHECK(eb.onCcw.front().settingsJson.find("down") != std::string::npos);
+    // Press -> mute.
+    REQUIRE(eb.onPress.size() == 1);
+    CHECK(eb.onPress.front().id == kVol);
+    CHECK(eb.onPress.front().settingsJson.find("Mute") != std::string::npos);
+    // Segment label.
+    CHECK(eb.state.text.value_or("") == "Volume");
+
+    // Out-of-range index is a safe no-op.
+    ctrl.commitEncoderVolume(-1);
+    CHECK(ctrl.activeProfile().encoders.count(2) == 1);
+}

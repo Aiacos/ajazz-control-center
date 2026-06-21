@@ -473,6 +473,22 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             return QJsonObject{{"committed", true}, {"index", index}, {"actionId", actionId}};
         });
 
+    // profile.commitEncoderVolume {index} -> {committed, index}
+    // Binds a dial to system volume (CW up / CCW down / press mute) via
+    // ProfileController::commitEncoderVolume, so the rotate->volume chain is
+    // automatable without a real drag-and-drop. Gated behind AJAZZ_DEBUG_CONTROL=1.
+    server.registerMethod("profile.commitEncoderVolume",
+                          [&app](QJsonObject const& params, QString& err) {
+                              auto* pc = app.profileController();
+                              if (pc == nullptr) {
+                                  err = QStringLiteral("profile controller unavailable");
+                                  return QJsonObject{};
+                              }
+                              int const index = params.value("index").toInt(0);
+                              pc->commitEncoderVolume(index);
+                              return QJsonObject{{"committed", true}, {"index", index}};
+                          });
+
     // profile.commitKeyBinding {index, actionId, label?, settings?}
     // -> {committed, index, actionId}
     // Drives ProfileController::commitKeyBinding directly (ActionKind::Plugin=0) so a

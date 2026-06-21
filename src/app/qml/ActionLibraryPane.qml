@@ -103,6 +103,21 @@ Rectangle {
             });
         }
 
+        // System group: built-in actions that bind to a DIAL (affordanceMask 2 =
+        // Encoder). "Volume" drives the OS volume via the in-process
+        // com.hotspot.streamdock.system.volume action (rotate up/down, press =
+        // mute) — the dial drop handler routes this id to commitEncoderVolume.
+        const systemGroup = qsTr("System");
+        if (root._matches(qsTr("Volume"), "")) {
+            actionModel.append({
+                group: systemGroup, actionLabel: qsTr("Volume"), kind: 0,
+                iconName: "volume_up",
+                actionId: "com.hotspot.streamdock.system.volume", pluginName: "",
+                iconUrl: "", propertyInspectorPath: "", isPlugin: false, isHint: false,
+                controllers: ["Encoder"], affordanceMask: 2
+            });
+        }
+
         const actions = root._pluginActions;
         // Stream Deck groups actions UNDER each plugin: one collapsible section per
         // plugin, not a single "Plugins" bucket. ListView sections require items of
