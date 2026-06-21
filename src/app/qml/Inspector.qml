@@ -69,6 +69,52 @@ Rectangle {
 
     signal bindingFieldChanged(string field, var value)
 
+    // ----- Toggle Action states (Delta C) -----------------------------------
+    // A key is a multi-state Toggle when it carries >= 2 states; the input
+    // service cycles currentState on press and the device repaints
+    // states[currentState]. The editor reads/writes the states straight through
+    // ProfileController (which owns the active page), so no nested ListModel role
+    // is needed. _toggleStates is a JS array of {title, image}.
+    property var _toggleStates: []
+    function _refreshToggleStates() {
+        root._toggleStates = (root.keyIndex >= 0 && typeof ProfileController !== "undefined")
+            ? ProfileController.toggleStatesForKey(root.keyIndex) : [];
+    }
+    function _commitToggleStates() {
+        if (root.keyIndex >= 0)
+            ProfileController.commitToggleStates(root.keyIndex, root._toggleStates);
+    }
+    function _setToggleTitle(i, title) {
+        var arr = root._toggleStates.slice();
+        arr[i] = { title: title, image: arr[i].image ? arr[i].image : "" };
+        root._toggleStates = arr;
+        root._commitToggleStates();
+    }
+    function _addToggleState() {
+        var arr = root._toggleStates.slice();
+        // Seed the first conversion with two states (a toggle needs >= 2); after
+        // that each click appends one more.
+        if (arr.length === 0) {
+            arr.push({ title: qsTr("State 1"), image: "" });
+            arr.push({ title: qsTr("State 2"), image: "" });
+        } else {
+            arr.push({ title: qsTr("State %1").arg(arr.length + 1), image: "" });
+        }
+        root._toggleStates = arr;
+        root._commitToggleStates();
+    }
+    function _removeToggleState(i) {
+        var arr = root._toggleStates.slice();
+        arr.splice(i, 1);
+        root._toggleStates = arr; // commit; < 2 states reverts the key to single-state
+        root._commitToggleStates();
+        root._refreshToggleStates(); // backend may have dropped the instance
+    }
+    Connections {
+        target: typeof ProfileController !== "undefined" ? ProfileController : null
+        function onProfileChanged() { root._refreshToggleStates(); }
+    }
+
     // Clip so the form can never paint outside the docked pane and bleed
     // onto the brightness row / footer below it (the fields are taller than
     // the pane; the ScrollView below makes them scrollable instead).
@@ -144,7 +190,7 @@ Rectangle {
     // Also reload when the selected control's index settles, so the wire context
     // id (_contextUuid) is rebuilt from the final keyIndex/encoderIndex rather
     // than a stale value when switching key<->dial. The last call wins.
-    onKeyIndexChanged: maybeLoadInspector()
+    onKeyIndexChanged: { maybeLoadInspector(); _refreshToggleStates(); }
     onEncoderIndexChanged: maybeLoadInspector()
 
     color: Theme.bgSidebar
@@ -436,6 +482,72 @@ Rectangle {
                 onTextEdited: root.bindingFieldChanged("actionParams", text)
                 Accessible.role: Accessible.EditableText
                 Accessible.name: qsTr("Action parameters")
+            }
+
+            // -- Toggle states (multi-state key, Delta C) ---------------------
+            // Keys only (a ProfilePage carries keys; dials stay single-state).
+            // Each state is one title the device shows for that step; pressing
+            // the key cycles them. The renderer composites title (and image, if
+            // set) over the base, live on the device + editor canvas.
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.topMargin: Theme.spacingSm
+                height: 1
+                color: Theme.borderSubtle
+                visible: root.keyIndex >= 0
+            }
+            Label {
+                objectName: "toggleStatesSection"
+                text: qsTr("Toggle states (multi-state key)")
+                color: Theme.fgMuted
+                font.pixelSize: Theme.fontSm
+                visible: root.keyIndex >= 0
+            }
+            Label {
+                text: qsTr("A single tap cycles these states on the key.")
+                color: Theme.fgFaint
+                font.pixelSize: Theme.typeLabelSmall.pixelSize
+                visible: root.keyIndex >= 0 && root._toggleStates.length === 0
+            }
+            Repeater {
+                model: root._toggleStates
+                delegate: RowLayout {
+                    required property var modelData
+                    required property int index
+                    Layout.fillWidth: true
+                    spacing: Theme.spacingSm
+                    visible: root.keyIndex >= 0
+                    Label {
+                        text: (index + 1) + "."
+                        color: Theme.fgFaint
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    TextField {
+                        objectName: "toggleStateTitle_" + index
+                        Layout.fillWidth: true
+                        text: modelData.title ? modelData.title : ""
+                        placeholderText: qsTr("State title")
+                        color: Theme.fgPrimary
+                        placeholderTextColor: Theme.fgMuted
+                        onEditingFinished: root._setToggleTitle(index, text)
+                    }
+                    Button {
+                        objectName: "removeToggleState_" + index
+                        text: "✕"
+                        flat: true
+                        Layout.preferredWidth: 32
+                        onClicked: root._removeToggleState(index)
+                    }
+                }
+            }
+            Button {
+                objectName: "addToggleStateButton"
+                text: root._toggleStates.length === 0
+                      ? qsTr("Make this a multi-state key")
+                      : qsTr("Add state")
+                visible: root.keyIndex >= 0
+                Layout.fillWidth: true
+                onClicked: root._addToggleState()
             }
             }
         }
