@@ -664,7 +664,40 @@ Application::Application(QObject* parent)
     QObject::connect(m_streamDockControl.get(),
                      &StreamDockControlService::deviceActivated,
                      m_streamDockInput.get(),
-                     &StreamDockInputService::setActiveDeviceCodename);
+                     [this](QString const& codename) {
+                         // 1. Record the active-device codename (the id string used to tag
+                         //    every emitted DeviceEvent). setActiveDevice(handle) below does
+                         //    NOT carry this — it only sizes the poll/encoder state.
+                         m_streamDockInput->setActiveDeviceCodename(codename);
+
+                         // 2. Share the held flyweight handle with the input service so it can
+                         //    poll real hardware AND size its encoder-count guard
+                         //    (m_encoderCount, from descriptor.encoderCount). Without this the
+                         //    dispatch() guard `encIndex >= m_encoderCount` drops EVERY encoder
+                         //    event — real or synthetic — because m_encoderCount stays 0.
+                         //
+                         //    This previously lived ONLY in the hot-plug Arrived branch, so a
+                         //    device present at startup (Linux udev does not replay coldplug as
+                         //    an Arrived event; macOS drains the initial set, so it worked there)
+                         //    never had its input service sized. Moving it onto the shared
+                         //    deviceActivated channel makes QML auto-select, the debug RPC, and
+                         //    hot-plug all size the input service identically (GAP-28B spirit).
+                         //
+                         //    The DeviceRegistry flyweight guarantees open() with the same
+                         //    (vid, pid) returns the SAME backend shared_ptr the control service
+                         //    already holds (ARCH-03 single-handle invariant — no second HID
+                         //    session). Resolve codename -> DeviceId via enumerate().
+                         for (auto const& d : m_deviceRegistry.enumerate()) {
+                             if (QString::fromStdString(d.codename) == codename &&
+                                 d.family == core::DeviceFamily::StreamDeck) {
+                                 core::DeviceId const devId{.vendorId = d.vendorId,
+                                                            .productId = d.productId,
+                                                            .serial = {}};
+                                 m_streamDockInput->setActiveDevice(m_deviceRegistry.open(devId));
+                                 break;
+                             }
+                         }
+                     });
     QObject::connect(m_streamDockControl.get(),
                      &StreamDockControlService::deviceActivated,
                      m_pluginBridge.get(),
@@ -1592,22 +1625,18 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
                         std::chrono::milliseconds(300),
                         m_streamDockControl.get(),
                         [this, codename = QString::fromStdString(d.codename), devId] {
-                            // 1. Let the control service open the device and light the panel.
-                            //    setActiveDevice() now emits deviceActivated(codename) on success,
+                            // Let the control service open the device and light the panel.
+                            //    setActiveDevice() emits deviceActivated(codename) on success,
                             //    which Application wires (in the constructor body above) to:
                             //      - StreamDockInputService::setActiveDeviceCodename
+                            //      - StreamDockInputService::setActiveDevice(handle)  (sizes the
+                            //        input service + starts the poll pump; shared flyweight handle)
                             //      - PluginDeviceBridge::onDeviceConnected
-                            //    No explicit calls needed here (GAP-28B fix: all paths share one
-                            //    propagation channel instead of each call site wiring separately).
+                            //    No explicit input-service call needed here anymore: the handle
+                            //    share moved onto the shared deviceActivated channel so coldplug
+                            //    (startup-present) devices are sized identically (see constructor).
+                            Q_UNUSED(devId)
                             m_streamDockControl->setActiveDevice(codename);
-                            // 2. Share the held handle with the input service (ARCH-03).
-                            //    The flyweight open() returns the same shared_ptr<IDevice>
-                            //    that the control service holds; no second HID open occurs.
-                            //    This MUST remain an explicit call: setActiveDevice(handle) sets
-                            //    m_device for real hardware polling, which deviceActivated
-                            //    does not carry (only the codename string is broadcast).
-                            auto handle = m_deviceRegistry.open(devId);
-                            m_streamDockInput->setActiveDevice(std::move(handle));
                         });
                 }
                 break;
