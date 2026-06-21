@@ -696,13 +696,24 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     )
 endif()
 
-# Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. Hardware-free
-# (AJAZZ_FEATURE_INPUT_SYNTH OFF = default) — no /dev/uinput, no OS permissions needed.
-# test_input_synth.cpp defines a FakeSynth recording subclass and exercises
-# makeDefaultInputSynthesizer() from ajazz::core (already linked above). No direct stub re-link
-# needed — makeDefaultInputSynthesizer() is already provided by ajazz::core (mirror of
-# test_action_engine.cpp pattern: include header + link core).
+# Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. test_input_synth.cpp
+# defines a FakeSynth recording subclass and exercises makeDefaultInputSynthesizer() from
+# ajazz::core (already linked above). No direct stub re-link needed — makeDefaultInputSynthesizer()
+# is already provided by ajazz::core (mirror of test_action_engine.cpp pattern: include header +
+# link core).
 target_sources(ajazz_unit_tests PRIVATE test_input_synth.cpp)
+
+# AJAZZ_FEATURE_INPUT_SYNTH is now ON by default (the Volume dial + built-in system actions need the
+# real OS backend, not the no-op stub). The option is PRIVATE on ajazz_core, so the test TU cannot
+# see it via linkage. Mirror it onto the test target so test_input_synth.cpp can tell whether
+# makeDefaultInputSynthesizer() returns the no-op stub (flag OFF) or a real OS backend (flag ON):
+# the stub-only contract assertions (OUTPUT methods return true; capture never grabs) hold ONLY for
+# the stub. With a real backend, OUTPUT results are environment-dependent (no /dev/uinput on CI) and
+# capture behavior is platform-specific, so those cases are compiled out and replaced with the
+# environment-independent real-backend invariant.
+if(AJAZZ_FEATURE_INPUT_SYNTH)
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_FEATURE_INPUT_SYNTH=1)
+endif()
 
 # Phase 19 Plans 19-01/19-02 (PLUGIN-10): PluginDeviceBridge pure-helper, ContextRegistry, and e2e
 # loopback tests. Gated on AJAZZ_HAVE_WEBSOCKETS — the bridge header composes SdPluginServer (Phase

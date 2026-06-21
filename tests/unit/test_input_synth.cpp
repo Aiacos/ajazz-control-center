@@ -260,6 +260,9 @@ TEST_CASE("makeDefaultInputSynthesizer returns non-null", "[input-synth]") {
     REQUIRE(synth != nullptr);
 }
 
+#if !defined(AJAZZ_FEATURE_INPUT_SYNTH)
+// Stub default (flag OFF): the no-op stub "succeeds" at every OUTPUT call so the
+// registry path can drive it green without /dev/uinput or OS permissions.
 TEST_CASE("Default synthesizer OUTPUT methods return true (no-op stub)", "[input-synth]") {
     auto synth = makeDefaultInputSynthesizer();
     REQUIRE(synth != nullptr);
@@ -274,6 +277,20 @@ TEST_CASE("Default synthesizer OUTPUT methods return true (no-op stub)", "[input
     // sendMediaKey
     REQUIRE(synth->sendMediaKey(MediaKey::PlayPause));
 }
+#else
+// Real backend default (flag ON, now the default): OUTPUT results are
+// environment-dependent (e.g. typeText returns false without a writable
+// /dev/uinput, as on CI). The only environment-independent invariant is that the
+// factory yields a usable synthesizer; the real OUTPUT path is verified live
+// through the debug-control channel (the Volume dial drives the OS sink), not here.
+TEST_CASE("Default synthesizer is a usable real backend (no-op-stub contract N/A)",
+          "[input-synth]") {
+    auto synth = makeDefaultInputSynthesizer();
+    REQUIRE(synth != nullptr);
+    // Do not assert OUTPUT return values: they depend on OS device access, which
+    // is intentionally absent in the unit-test/CI environment.
+}
+#endif
 
 TEST_CASE("Default synthesizer captureHotkeys(false) returns false - capture OFF",
           "[input-synth]") {
