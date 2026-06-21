@@ -62,6 +62,14 @@ ItemDelegate {
     // application/x-ajazz-action object.
     signal cellActionDropped(int index, var payload)
 
+    /// True when this key holds an OpenFolder action (Delta A). Drives the folder
+    /// look and enables double-click-to-enter.
+    property bool isFolder: false
+
+    /// Emitted when a folder key is double-clicked; DeviceView navigates the
+    /// editor INTO the child page (it owns the folderTarget lookup).
+    signal folderOpenRequested(int index)
+
     width: 96
     height: 96
 
@@ -118,6 +126,18 @@ ItemDelegate {
                 smooth: true
                 asynchronous: true
                 visible: root.iconSource.toString() !== ""
+            }
+
+            // Delta A: folder look. A folder key (OpenFolder, no live render) shows
+            // a centered Material Symbols folder glyph so it reads as a folder, not
+            // a blank tile. Suppressed once a live device frame is present.
+            Text {
+                anchors.centerIn: parent
+                visible: root.isFolder && root.iconSource.toString() === ""
+                text: "folder"
+                font.family: "Material Symbols Outlined"
+                font.pixelSize: Math.round(parent.height * 0.5)
+                color: Theme.accent
             }
 
             // Overlay label. Always rendered when `label` is non-empty;
@@ -200,9 +220,20 @@ ItemDelegate {
         anchors.fill: parent
         acceptedButtons: Qt.NoButton          // never steal clicks
         hoverEnabled: true
-        cursorShape: root.iconSource.toString() !== ""
-            ? (dragHandler.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
-            : Qt.ArrowCursor
+        cursorShape: root.isFolder
+            ? Qt.PointingHandCursor
+            : (root.iconSource.toString() !== ""
+                ? (dragHandler.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor)
+                : Qt.ArrowCursor)
+    }
+
+    // Delta A: double-click a folder key to navigate INTO it (Elgato folders open
+    // on activation). Single click still selects (ItemDelegate.clicked); the
+    // TapHandler only consumes the double-tap, and only on folder keys.
+    TapHandler {
+        enabled: root.isFolder
+        acceptedButtons: Qt.LeftButton
+        onDoubleTapped: root.folderOpenRequested(root.index)
     }
 
     // ----- Drop target (always) --------------------------------------------

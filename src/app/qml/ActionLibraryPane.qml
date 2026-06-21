@@ -46,7 +46,7 @@ Rectangle {
         { actionLabel: qsTr("Key macro"),      kind: 2, iconName: "keyboard"    },
         { actionLabel: qsTr("Launch command"), kind: 3, iconName: "terminal"    },
         { actionLabel: qsTr("Open URL"),        kind: 4, iconName: "link"        },
-        { actionLabel: qsTr("Open folder"),     kind: 5, iconName: "folder_open" }
+        { actionLabel: qsTr("Create folder"),   kind: 5, iconName: "create_new_folder" }
     ]
 
     /// Free-text filter (bound to the search field). Empty = show everything.

@@ -51,6 +51,7 @@ Item {
     signal keyClicked(int index)
     signal keySwapRequested(int src, int dst)
     signal keyActionDropped(int index, var payload)
+    signal keyFolderOpenRequested(int index)
     signal encoderClicked(int index)
     signal encoderSwapRequested(int src, int dst)
     signal zoneClicked(int index)
@@ -134,10 +135,13 @@ Item {
                         label: (canvas.bindings && index < canvas.bindings.count)
                             ? canvas.bindings.get(index).label : ""
                         selected: canvas.selectedKeyIndex === index
+                        isFolder: (canvas.bindings && index < canvas.bindings.count)
+                            ? canvas.bindings.get(index).isFolder === true : false
                         onDragActiveChanged: (active) => canvas.cellDragActiveChanged(active)
                         onClicked: canvas.keyClicked(index)
                         onCellSwapRequested: (src, dst) => canvas.keySwapRequested(src, dst)
                         onCellActionDropped: (i, payload) => canvas.keyActionDropped(i, payload)
+                        onFolderOpenRequested: (i) => canvas.keyFolderOpenRequested(i)
                     }
                 }
             }

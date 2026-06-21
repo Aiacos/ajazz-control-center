@@ -102,6 +102,14 @@ Item {
     // ProfileController.activeEncoderBindings() in _syncFromProfile().
     ListModel { id: encoderBindings }
 
+    // Delta A: cached folder breadcrumb (root -> ... -> active page) as a list of
+    // {id, name}. Refreshed on profileChanged (which enterFolder/goBack emit) so
+    // the breadcrumb bar and folder-depth visibility stay current.
+    property var _breadcrumb: []
+    function _refreshBreadcrumb() {
+        root._breadcrumb = ProfileController.pageBreadcrumb();
+    }
+
     // Phase 29 (OpenDeck parity / update_state): when the device renders a key
     // (a plugin's setImage/setTitle, a built-in icon, or a profile repaint), the
     // control service emits keyImageAssigned so the on-screen cell mirrors the
@@ -138,7 +146,8 @@ Item {
 
     function _ensureBindings() {
         while (bindings.count < root.keyCount) {
-            bindings.append({ iconSource: "", label: "", actionKind: 0, actionParams: "", actionId: "" });
+            bindings.append({ iconSource: "", label: "", actionKind: 0, actionParams: "",
+                              actionId: "", isFolder: false, folderTarget: "" });
         }
         while (bindings.count > root.keyCount) {
             bindings.remove(bindings.count - 1);
@@ -159,7 +168,9 @@ Item {
 
     onKeyCountChanged: { _ensureBindings(); _syncFromProfile(); }
     onEncoderCountChanged: { _ensureEncoderBindings(); _syncFromProfile(); }
-    Component.onCompleted: { _ensureBindings(); _ensureEncoderBindings(); _syncFromProfile(); }
+    Component.onCompleted: {
+        _ensureBindings(); _ensureEncoderBindings(); _refreshBreadcrumb(); _syncFromProfile();
+    }
 
     // Rebuild the preview model from the active profile's key bindings. Called
     // on profileChanged so switching profiles (or any commit) refreshes the
@@ -167,7 +178,8 @@ Item {
     // and ProfileController.activeKeyBindings() reflects the committed state.
     function _syncFromProfile() {
         for (var i = 0; i < bindings.count; ++i) {
-            bindings.set(i, { iconSource: "", label: "", actionKind: 0, actionParams: "", actionId: "" });
+            bindings.set(i, { iconSource: "", label: "", actionKind: 0, actionParams: "",
+                              actionId: "", isFolder: false, folderTarget: "" });
         }
         var kb = ProfileController.activeKeyBindings();
         for (var j = 0; j < kb.length; ++j) {
@@ -177,7 +189,9 @@ Item {
                                         label: b.label ? b.label : "",
                                         actionKind: b.actionKind,
                                         actionParams: "",
-                                        actionId: b.actionId ? b.actionId : "" });
+                                        actionId: b.actionId ? b.actionId : "",
+                                        isFolder: b.isFolder ? true : false,
+                                        folderTarget: b.folderTarget ? b.folderTarget : "" });
             }
         }
         // Re-point cells with a cached live-render frame back at the livekey
@@ -226,6 +240,7 @@ Item {
     Connections {
         target: ProfileController
         function onProfileChanged() {
+            root._refreshBreadcrumb(); // Delta A: page nav also emits profileChanged.
             root._syncFromProfile();
             root._refreshSelectedKeyActionList();
             root._refreshSelectedEncoderBinding();
@@ -363,6 +378,66 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: Theme.spacingMd
+
+            // ---- Folder breadcrumb (Delta A) -------------------------------
+            // Shown only inside a folder (depth > 1). "Back" pops one level; each
+            // crumb navigates straight to that page. Editing follows the active
+            // page via ProfileController's page-aware key verbs.
+            Rectangle {
+                id: folderBreadcrumbBar
+                objectName: "folderBreadcrumbBar"
+                Layout.fillWidth: true
+                Layout.preferredHeight: 40
+                visible: root._breadcrumb.length > 1
+                color: Theme.surfaceContainerLow
+                radius: Theme.radiusMd
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: Theme.spacingMd
+                    anchors.rightMargin: Theme.spacingMd
+                    spacing: Theme.spacingSm
+
+                    Button {
+                        objectName: "folderBackButton"
+                        text: "‹ " + qsTr("Back")
+                        flat: true
+                        Layout.alignment: Qt.AlignVCenter
+                        onClicked: ProfileController.goBackPage()
+                    }
+
+                    Repeater {
+                        model: root._breadcrumb
+                        delegate: RowLayout {
+                            required property var modelData
+                            required property int index
+                            spacing: Theme.spacingSm
+                            Text {
+                                text: "/"
+                                visible: index > 0
+                                color: Theme.fgFaint
+                                Layout.alignment: Qt.AlignVCenter
+                            }
+                            Text {
+                                objectName: "breadcrumb_" + modelData.id
+                                text: modelData.name
+                                color: index === root._breadcrumb.length - 1
+                                       ? Theme.fg : Theme.accent
+                                font.pixelSize: Theme.typeLabelSmall.pixelSize
+                                font.bold: index === root._breadcrumb.length - 1
+                                Layout.alignment: Qt.AlignVCenter
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
+                                    enabled: index < root._breadcrumb.length - 1
+                                    onClicked: ProfileController.enterFolder(modelData.id)
+                                }
+                            }
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+            }
 
             // ---- Canvas header (Stream Deck style) -------------------------
             // A control bar pinned above the device canvas: device identity +
@@ -602,6 +677,18 @@ Item {
                     // resolved from the plugin's manifest icon.
                     onKeyActionDropped: function(index, payload) {
                         if (index < 0 || index >= bindings.count) return;
+                        // Delta A: the "Create folder" built-in (OpenFolder, kind 5)
+                        // makes a NEW child page and binds the key to it (a bare
+                        // OpenFolder with no target page would be a dead key). The
+                        // backend seeds a BackToParent key on the new page.
+                        if (payload.actionKind === 5) {
+                            ProfileController.createFolderOnKey(index, qsTr("Folder"));
+                            root.selectedKeyIndex = index;
+                            root.selectedEncoderIndex = -1;
+                            root.selectedZoneIndex = -1;
+                            root.keySelected(index);
+                            return;
+                        }
                         var icon = payload.iconUrl ? payload.iconUrl : "";
                         var lbl = payload.label ? payload.label : "";
                         var aid = payload.actionId ? payload.actionId : "";
@@ -614,6 +701,16 @@ Item {
                         root.selectedEncoderIndex = -1;
                         root.selectedZoneIndex = -1;
                         root.keySelected(index);
+                    }
+
+                    // Delta A: double-clicking a folder key navigates the editor
+                    // INTO its child page. The folder's target page id lives on the
+                    // bindings model (folderTarget, from activeKeyBindings).
+                    onKeyFolderOpenRequested: function(index) {
+                        if (index < 0 || index >= bindings.count) return;
+                        var target = bindings.get(index).folderTarget;
+                        if (target && target.length > 0)
+                            ProfileController.enterFolder(target);
                     }
 
                     onEncoderClicked: function(index) {
