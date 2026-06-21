@@ -13,6 +13,7 @@
  * All test titles ASCII-only (CLAUDE.md cross-platform ctest filter rule).
  * Tag: [multi-action][PLUGIN-23]
  */
+#include "ajazz/core/builtin_action_registry.hpp"
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_io.hpp"
 #include "profile_controller.hpp"
@@ -704,4 +705,103 @@ TEST_CASE("ProfileController: loading a profile resets page nav to root", "[page
     // resetPageNav, so a freshly-loaded profile always opens at the top level).
     ctrl.loadProfile(tmpDir.filePath(QStringLiteral("profile.json")));
     CHECK(ctrl.activePageId() == QStringLiteral("root"));
+}
+
+// ===========================================================================
+// Toggle Action states editor (Elgato-parity Delta C)
+// ===========================================================================
+
+TEST_CASE("ProfileController: commitToggleStates makes a key a multi-state toggle",
+          "[toggle][delta-c]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-toggle-make");
+
+    QVariantList states;
+    states.append(QVariantMap{{"title", "On"}, {"image", ""}});
+    states.append(QVariantMap{{"title", "Off"}, {"image", ""}});
+    ctrl.commitToggleStates(4, states);
+
+    // The binding now carries a Toggle ActionInstance with two states.
+    auto const& keys = ctrl.activeProfile().keys;
+    REQUIRE(keys.count(4) == 1);
+    REQUIRE(keys.at(4).instance.has_value());
+    CHECK(keys.at(4).instance->id == std::string{core::BuiltinActionRegistry::kToggleActionId});
+    REQUIRE(keys.at(4).instance->states.size() == 2);
+    CHECK(keys.at(4).instance->states[0].visual.text.value_or("") == "On");
+    CHECK(keys.at(4).instance->states[1].visual.text.value_or("") == "Off");
+
+    // Reader surfaces the same states for the editor.
+    auto const read = ctrl.toggleStatesForKey(4);
+    REQUIRE(read.size() == 2);
+    CHECK(read[0].toMap().value("title").toString() == "On");
+    CHECK(ctrl.toggleCurrentState(4) == 0);
+}
+
+TEST_CASE("ProfileController: commitToggleStates with < 2 states reverts to single-state",
+          "[toggle][delta-c]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-toggle-revert");
+
+    QVariantList two;
+    two.append(QVariantMap{{"title", "A"}, {"image", ""}});
+    two.append(QVariantMap{{"title", "B"}, {"image", ""}});
+    ctrl.commitToggleStates(0, two);
+    REQUIRE(ctrl.activeProfile().keys.at(0).instance.has_value());
+
+    // One state is not a toggle -> the instance is dropped.
+    QVariantList one;
+    one.append(QVariantMap{{"title", "A"}, {"image", ""}});
+    ctrl.commitToggleStates(0, one);
+    CHECK_FALSE(ctrl.activeProfile().keys.at(0).instance.has_value());
+    CHECK(ctrl.toggleStatesForKey(0).isEmpty());
+}
+
+TEST_CASE("ProfileController: commitToggleStates preserves currentState across an edit",
+          "[toggle][delta-c]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-toggle-preserve");
+
+    QVariantList three;
+    three.append(QVariantMap{{"title", "1"}, {"image", ""}});
+    three.append(QVariantMap{{"title", "2"}, {"image", ""}});
+    three.append(QVariantMap{{"title", "3"}, {"image", ""}});
+    ctrl.commitToggleStates(2, three);
+    // Advance to state 2 via the runtime cycle path.
+    ctrl.cycleInstanceState(QStringLiteral("Keypad"), 2);
+    ctrl.cycleInstanceState(QStringLiteral("Keypad"), 2);
+    REQUIRE(ctrl.toggleCurrentState(2) == 2);
+
+    // Re-commit (e.g. user renamed a state) keeps the live active state.
+    three[0] = QVariantMap{{"title", "one"}, {"image", ""}};
+    ctrl.commitToggleStates(2, three);
+    CHECK(ctrl.toggleCurrentState(2) == 2);
+    CHECK(ctrl.toggleStatesForKey(2)[0].toMap().value("title").toString() == "one");
+}
+
+TEST_CASE("ProfileController: toggleStatesForKey is page-aware", "[toggle][delta-c][pages]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-toggle-pages");
+
+    QString const pageId = ctrl.createFolderOnKey(0, QStringLiteral("Sub"));
+    ctrl.enterFolder(pageId);
+    QVariantList two;
+    two.append(QVariantMap{{"title", "X"}, {"image", ""}});
+    two.append(QVariantMap{{"title", "Y"}, {"image", ""}});
+    ctrl.commitToggleStates(5, two); // commits to the FOLDER page
+
+    CHECK(ctrl.toggleStatesForKey(5).size() == 2); // visible inside the folder
+    ctrl.goBackPage();
+    CHECK(ctrl.toggleStatesForKey(5).isEmpty()); // not on root
 }

@@ -10,6 +10,7 @@
  */
 #include "profile_controller.hpp"
 
+#include "ajazz/core/builtin_action_registry.hpp"
 #include "ajazz/core/logger.hpp"
 #include "ajazz/core/profile.hpp"
 #include "ajazz/core/profile_io.hpp"
@@ -1289,6 +1290,91 @@ void ProfileController::cycleInstanceState(QString const& controller, int index)
     // use so the advance survives a restart, then notify observers.
     saveActiveProfile();
     emit profileChanged();
+}
+
+// ---------------------------------------------------------------------------
+// Toggle Action (multi-state key) editor support (Delta C)
+// ---------------------------------------------------------------------------
+
+void ProfileController::commitToggleStates(int keyIndex, QVariantList states) {
+    if (keyIndex < 0 ||
+        keyIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "commitToggleStates: keyIndex {} out of valid range [0, 65534], ignoring",
+                       keyIndex);
+        return;
+    }
+    auto const idx = static_cast<std::uint16_t>(keyIndex);
+    auto& binding = activeKeyMap()[idx];
+
+    if (states.size() < 2) {
+        // Fewer than two states is not a toggle -- drop the instance so the key
+        // reverts to a normal single-state binding (the renderer/dispatch only
+        // treat a key as a toggle when instance.id == kToggleActionId).
+        binding.instance.reset();
+    } else {
+        core::ActionInstance inst;
+        // Preserve the live active state across an edit when the key was already a
+        // toggle (so re-saving states does not snap it back to state 0).
+        if (binding.instance) {
+            inst.currentState = binding.instance->currentState;
+        }
+        inst.id = std::string{core::BuiltinActionRegistry::kToggleActionId};
+        for (auto const& v : states) {
+            auto const m = v.toMap();
+            core::ActionState st;
+            QString const title = m.value(QStringLiteral("title")).toString();
+            QString const image = m.value(QStringLiteral("image")).toString();
+            if (!title.isEmpty()) {
+                st.visual.text = title.toStdString();
+            }
+            if (!image.isEmpty()) {
+                st.visual.imagePath = image.toStdString();
+            }
+            inst.states.push_back(std::move(st));
+        }
+        if (inst.currentState >= inst.states.size()) {
+            inst.currentState = 0;
+        }
+        binding.instance = std::move(inst);
+    }
+
+    saveActiveProfile();
+    emit profileChanged();
+}
+
+QVariantList ProfileController::toggleStatesForKey(int keyIndex) const {
+    QVariantList out;
+    if (keyIndex < 0) {
+        return out;
+    }
+    auto const& km = activeKeyMap();
+    auto const it = km.find(static_cast<std::uint16_t>(keyIndex));
+    if (it == km.end() || !it->second.instance ||
+        it->second.instance->id != core::BuiltinActionRegistry::kToggleActionId) {
+        return out;
+    }
+    for (auto const& s : it->second.instance->states) {
+        QVariantMap m;
+        m.insert(QStringLiteral("title"),
+                 s.visual.text ? QString::fromStdString(*s.visual.text) : QString{});
+        m.insert(QStringLiteral("image"),
+                 s.visual.imagePath ? QString::fromStdString(*s.visual.imagePath) : QString{});
+        out.append(m);
+    }
+    return out;
+}
+
+int ProfileController::toggleCurrentState(int keyIndex) const {
+    if (keyIndex < 0) {
+        return 0;
+    }
+    auto const& km = activeKeyMap();
+    auto const it = km.find(static_cast<std::uint16_t>(keyIndex));
+    if (it == km.end() || !it->second.instance) {
+        return 0;
+    }
+    return static_cast<int>(it->second.instance->currentState);
 }
 
 void ProfileController::swapEncoderBindings(int srcIndex, int dstIndex) {

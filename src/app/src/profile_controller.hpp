@@ -731,6 +731,28 @@ public:
     /// folder (caller decides) so the just-created OpenFolder key stays visible.
     Q_INVOKABLE QString createFolderOnKey(int keyIndex, QString const& name);
 
+    // -------------------------------------------------------------------------
+    // Toggle Action (multi-state key) editor (Elgato-parity Delta C). A key
+    // becomes a built-in Toggle when it carries an ActionInstance with id
+    // kToggleActionId and >= 2 states; the input service cycles currentState on
+    // press and PluginDeviceBridge::renderToggleState repaints states[currentState]
+    // (image + title) -- that runtime path already exists. These verbs make it
+    // reachable from the editor (no UI existed to create/configure toggle states).
+    // -------------------------------------------------------------------------
+
+    /// Replace the active page key's toggle states wholesale. @p states is a list
+    /// of {title, image} maps. Fewer than two states removes the toggle (the key
+    /// reverts to a normal single-state binding). The live currentState is
+    /// preserved across an edit (clamped). Persists + emits profileChanged().
+    Q_INVOKABLE void commitToggleStates(int keyIndex, QVariantList states);
+
+    /// The active page key's toggle states as a QVariantList of {title, image}
+    /// maps; empty when the key is not a toggle. Drives the Inspector editor.
+    [[nodiscard]] Q_INVOKABLE QVariantList toggleStatesForKey(int keyIndex) const;
+
+    /// 0-based active state index for a toggle key (0 when not a toggle).
+    [[nodiscard]] Q_INVOKABLE int toggleCurrentState(int keyIndex) const;
+
 signals:
     /**
      * @signal profileChanged

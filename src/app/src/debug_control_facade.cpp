@@ -476,6 +476,51 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"activePage", pc->activePageId()}};
     });
 
+    // ---- Toggle states (Delta C) --------------------------------------
+    // profile.commitToggleStates {index, states:[{title,image}...]} -> {count}
+    server.registerMethod(
+        "profile.commitToggleStates", [&app](QJsonObject const& params, QString& err) {
+            auto* pc = app.profileController();
+            if (pc == nullptr) {
+                err = QStringLiteral("profile controller unavailable");
+                return QJsonObject{};
+            }
+            int const index = params.value("index").toInt(-1);
+            if (index < 0) {
+                err = QStringLiteral("missing/invalid 'index'");
+                return QJsonObject{};
+            }
+            QVariantList states;
+            for (auto const& v : params.value("states").toArray()) {
+                auto const o = v.toObject();
+                states.append(QVariantMap{{"title", o.value("title").toString()},
+                                          {"image", o.value("image").toString()}});
+            }
+            pc->commitToggleStates(index, states);
+            return QJsonObject{{"count", static_cast<int>(pc->toggleStatesForKey(index).size())}};
+        });
+
+    // profile.toggleStates {index} -> {states:[{title,image}...], currentState}
+    server.registerMethod("profile.toggleStates", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        int const index = params.value("index").toInt(-1);
+        if (index < 0) {
+            err = QStringLiteral("missing/invalid 'index'");
+            return QJsonObject{};
+        }
+        QJsonArray states;
+        for (auto const& v : pc->toggleStatesForKey(index)) {
+            auto const m = v.toMap();
+            states.append(QJsonObject{{"title", m.value("title").toString()},
+                                      {"image", m.value("image").toString()}});
+        }
+        return QJsonObject{{"states", states}, {"currentState", pc->toggleCurrentState(index)}};
+    });
+
     server.registerMethod("profile.load", [&app](QJsonObject const& params, QString& err) {
         auto* pc = app.profileController();
         if (pc == nullptr) {
