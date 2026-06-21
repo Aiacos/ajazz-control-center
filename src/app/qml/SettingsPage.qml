@@ -108,6 +108,52 @@ Page {
                             }
                         }
                     }
+
+                    // Accent colour (Delta F): user-selectable; the choice
+                    // re-tints the whole palette via Theme.accent. "" = AJAZZ brand.
+                    Label {
+                        text: qsTr("Accent colour")
+                        color: Theme.fgPrimary
+                        font.pixelSize: Theme.typeBodyMedium.pixelSize
+                        font.weight: Theme.typeBodyMedium.weight
+                    }
+                    Label {
+                        text: qsTr("Tint the app. Default follows AJAZZ branding.")
+                        color: Theme.fgMuted
+                        font.pixelSize: Theme.typeBodySmall.pixelSize
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        objectName: "accentSwatchRow"
+                        spacing: Theme.spacingMd
+                        Repeater {
+                            model: [
+                                { id: "",        sw: "#41CD52", label: qsTr("Brand") },
+                                { id: "#204cfe", sw: "#204cfe", label: qsTr("Elgato blue") },
+                                { id: "#e1342b", sw: "#e1342b", label: qsTr("Red") },
+                                { id: "#a855f7", sw: "#a855f7", label: qsTr("Purple") }
+                            ]
+                            delegate: AbstractButton {
+                                required property var modelData
+                                objectName: "accentSwatch_" + (modelData.id === "" ? "brand" : modelData.id)
+                                implicitWidth: 32
+                                implicitHeight: 32
+                                ToolTip.visible: hovered
+                                ToolTip.text: modelData.label
+                                Accessible.role: Accessible.Button
+                                Accessible.name: modelData.label
+                                onClicked: ThemeService.accentHex = modelData.id
+                                background: Rectangle {
+                                    radius: width / 2
+                                    color: modelData.id === "" ? Branding.accent : modelData.sw
+                                    // Ring the active choice.
+                                    border.width: (ThemeService.accentHex === modelData.id) ? 3 : 0
+                                    border.color: Theme.fgPrimary
+                                }
+                            }
+                        }
+                    }
                 }
             }
 

@@ -56,8 +56,15 @@ QtObject {
     readonly property color fgFaint:
         Qt.rgba(fgPrimary.r, fgPrimary.g, fgPrimary.b, 0.55)
 
-    /// Brand accent (primary CTAs, focus rings, key indicators).
-    readonly property color accent:     Branding.accent
+    /// Brand accent (primary CTAs, focus rings, key indicators). Delta F: a
+    /// user accent override (ThemeService.accentHex) wins over the brand accent,
+    /// so one Settings choice re-tints the whole palette (every surface below is
+    /// derived from `accent`). Empty override falls back to Branding.accent.
+    readonly property color accent: {
+        var h = (typeof ThemeService !== "undefined" && ThemeService.accentHex)
+                ? ThemeService.accentHex : "";
+        return (h && h.length > 0) ? h : Branding.accent;
+    }
     /// Secondary accent (hover/pressed states, links, info badges).
     readonly property color accent2:    Branding.accent2
     /// Error accent (destructive states, error toasts, validation

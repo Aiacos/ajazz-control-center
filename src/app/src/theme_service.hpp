@@ -43,6 +43,9 @@ class ThemeService : public QObject {
     QML_SINGLETON
     Q_PROPERTY(QString mode READ mode WRITE setMode NOTIFY modeChanged)
     Q_PROPERTY(QString effectiveMode READ effectiveMode NOTIFY effectiveModeChanged)
+    /// User accent override (Delta F): "" = brand accent, else an "#rrggbb" hex
+    /// Theme.qml prefers over BrandingService.accent. Persisted via QSettings.
+    Q_PROPERTY(QString accentHex READ accentHex WRITE setAccentHex NOTIFY accentChanged)
 
 public:
     /// Appearance modes the service can be in.
@@ -72,6 +75,13 @@ public:
     /// Set the mode by string ("auto" / "light" / "dark"). Persists to QSettings.
     void setMode(QString const& mode);
 
+    /// Accent override hex ("" = brand accent). Theme.qml prefers it over the
+    /// brand accent so a single setting re-tints the whole palette (Delta F).
+    [[nodiscard]] QString accentHex() const noexcept;
+    /// Set the accent override ("" or "brand" clears it; else an "#rrggbb" hex).
+    /// Persists to QSettings.
+    void setAccentHex(QString const& hex);
+
     /// QML singleton factory. Returns the @ref Application-owned instance
     /// previously handed in via @ref registerInstance with CppOwnership.
     static ThemeService* create(QQmlEngine* qml, QJSEngine* js);
@@ -87,6 +97,8 @@ signals:
     /// the user picked a different mode, or (in Auto mode) the OS color
     /// scheme flipped.
     void effectiveModeChanged();
+    /// Emitted after the accent override changes (Delta F).
+    void accentChanged();
 
 private:
     /// Apply the given mode by calling BrandingService::loadThemeFile() with
@@ -95,6 +107,7 @@ private:
 
     BrandingService* branding_ = nullptr; ///< Non-owning pointer.
     Mode mode_ = Mode::Auto;
+    QString accentHex_; ///< "" = brand accent; else an "#rrggbb" override (Delta F).
 };
 
 // QML_SINGLETON dual-instance trap: ThemeService stays safe today only

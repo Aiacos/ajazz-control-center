@@ -20,6 +20,9 @@ namespace {
 ThemeService* s_themeServiceInstance = nullptr;
 
 constexpr auto kSettingsKey = "Appearance/Mode";
+/// Persisted user accent override (Delta F). Empty string = use the brand accent
+/// (BrandingService.accent); otherwise an "#rrggbb" hex the Theme prefers.
+constexpr auto kAccentKey = "Appearance/Accent";
 constexpr auto kDarkPath = ":/qt/qml/AjazzControlCenter/branding/theme.json";
 constexpr auto kLightPath = ":/qt/qml/AjazzControlCenter/branding/theme-light.json";
 
@@ -63,6 +66,7 @@ ThemeService::ThemeService(BrandingService* branding, QObject* parent)
     QSettings settings;
     auto const stored = settings.value(kSettingsKey, QStringLiteral("auto")).toString();
     mode_ = parseMode(stored);
+    accentHex_ = settings.value(kAccentKey, QString{}).toString();
     applyMode(mode_);
 
     // Track OS color-scheme changes so Auto mode keeps the BrandingService
@@ -106,6 +110,25 @@ void ThemeService::setMode(QString const& mode) {
     applyMode(mode_);
     emit modeChanged();
     emit effectiveModeChanged();
+}
+
+QString ThemeService::accentHex() const noexcept {
+    return accentHex_;
+}
+
+void ThemeService::setAccentHex(QString const& hex) {
+    // Normalise: empty/"brand" means "use the brand accent"; otherwise keep the
+    // "#rrggbb" string verbatim (Theme.qml validates it as a colour).
+    QString const next = (hex.compare(QStringLiteral("brand"), Qt::CaseInsensitive) == 0)
+                             ? QString{}
+                             : hex.trimmed();
+    if (next == accentHex_) {
+        return;
+    }
+    accentHex_ = next;
+    QSettings settings;
+    settings.setValue(kAccentKey, accentHex_);
+    emit accentChanged();
 }
 
 void ThemeService::applyMode(Mode mode) {
