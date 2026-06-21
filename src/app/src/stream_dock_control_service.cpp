@@ -31,6 +31,7 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
+#include "live_encoder_image_provider.hpp"
 #include "live_key_image_provider.hpp"
 
 #include <QImage>
@@ -355,6 +356,28 @@ void StreamDockControlService::assignEncoderImage(std::uint8_t encoderIndex, QIm
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0);
     }
+
+    // Delta B (Elgato dial parity): mirror this composited dial-feedback frame to
+    // the QML editor canvas so the on-screen EncoderDial + touch-strip segment show
+    // the same live render the device LCD shows. The encoder index is already
+    // 0-based (canvas/model convention) -- no offset, unlike assignKeyImage.
+    if (m_liveEncoderImages) {
+        int const encoderIndex0 = static_cast<int>(encoderIndex);
+        m_liveEncoderImages->set(encoderIndex0, img);
+        emit encoderImageAssigned(encoderIndex0, ++m_encoderImageRevision);
+    }
+}
+
+void StreamDockControlService::setLiveEncoderImageStore(
+    std::shared_ptr<LiveEncoderImageStore> store) {
+    m_liveEncoderImages = std::move(store);
+}
+
+qint64 StreamDockControlService::liveEncoderRevision(int encoderIndex) const {
+    if (!m_liveEncoderImages || encoderIndex < 0 || !m_liveEncoderImages->has(encoderIndex)) {
+        return -1;
+    }
+    return m_encoderImageRevision;
 }
 
 void StreamDockControlService::assignTouchStripZone(std::uint8_t zone, QImage const& img) {

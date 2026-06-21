@@ -22,6 +22,11 @@ import AjazzControlCenter
 ItemDelegate {
     id: root
 
+    // Debug-addressable (constitution V): the channel resolves controls by
+    // objectName, so each dial cell is drivable via qml.get/click (e.g. read its
+    // live iconSource = image://liveencoder/<index> after a dial render).
+    objectName: "encoderDial_" + index
+
     required property int    index
     required property url    iconSource
     property string          label: ""

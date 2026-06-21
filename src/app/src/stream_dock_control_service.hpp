@@ -61,7 +61,8 @@ class QQmlEngine;
 
 namespace ajazz::app {
 
-class LiveKeyImageStore; // Phase 29: shared live-render store mirrored to the editor.
+class LiveKeyImageStore;     // Phase 29: shared live-render store mirrored to the editor.
+class LiveEncoderImageStore; // Delta B: dial/encoder live-render store mirrored to the editor.
 
 /**
  * @class StreamDockControlService
@@ -213,6 +214,15 @@ public:
      *        writes the composited frame here and emits keyImageAssigned().
      */
     void setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store);
+
+    /**
+     * @brief Inject the shared store that mirrors live dial/encoder renders to the
+     *        QML editor canvas (Delta B, Elgato dial parity). When set,
+     *        assignEncoderImage() writes the composited encoder frame here and
+     *        emits encoderImageAssigned(). The dial analogue of
+     *        setLiveKeyImageStore().
+     */
+    void setLiveEncoderImageStore(std::shared_ptr<LiveEncoderImageStore> store);
 
     // -------------------------------------------------------------------------
     // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
@@ -434,6 +444,21 @@ public:
      */
     [[nodiscard]] Q_INVOKABLE qint64 liveKeyRevision(int keyIndex0) const;
 
+    /**
+     * @brief Cache-bust revision for an encoder's live-rendered frame, or -1 if none.
+     *
+     * The dial analogue of liveKeyRevision(): the editor's profile sync rebuilds
+     * the per-encoder model on every profileChanged, wiping iconSource. A plugin
+     * rendering a dial feedback layout continuously re-asserts within a tick, but a
+     * one-shot render would be lost from the canvas even though the frame still
+     * lives in the LiveEncoderImageStore and on the device. QML calls this after a
+     * rebuild to re-point segments at image://liveencoder/<idx>?r=<revision>.
+     *
+     * @param encoderIndex 0-based encoder index (canvas/model convention).
+     * @return Current revision counter when a frame exists for the encoder; -1 if not.
+     */
+    [[nodiscard]] Q_INVOKABLE qint64 liveEncoderRevision(int encoderIndex) const;
+
 signals:
     /**
      * @brief Emitted after navigatePage() successfully advances to a new page.
@@ -487,6 +512,21 @@ signals:
      * @param keyIndex  0-based key index (the cleared key).
      */
     void keyImageCleared(int keyIndex);
+
+    /**
+     * @brief Emitted after an encoder's composited image is rendered (Delta B).
+     *
+     * The dial analogue of keyImageAssigned(): every assignEncoderImage() pushes
+     * the final dial feedback frame to the device AND notifies the QML editor so
+     * the on-screen EncoderDial and its touch-strip segment show the same live
+     * render the device LCD shows. The editor binds the matching segment's
+     * iconSource to "image://liveencoder/<encoderIndex>?r=<revision>"; the revision
+     * changes every emit to bust QML's image cache.
+     *
+     * @param encoderIndex  0-based encoder index (assignEncoderImage's convention).
+     * @param revision      Monotonic counter; only its change matters to the cache.
+     */
+    void encoderImageAssigned(int encoderIndex, qint64 revision);
 
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
@@ -551,6 +591,13 @@ private:
     /// Null until Application injects the store in exposeToQml().
     std::shared_ptr<LiveKeyImageStore> m_liveKeyImages;
     qint64 m_keyImageRevision{0};
+
+    /// Delta B (Elgato dial parity): shared store + monotonic revision that mirror
+    /// each composited encoder/dial render to the QML editor canvas via
+    /// encoderImageAssigned(). Null until Application injects the store in
+    /// exposeToQml(). The dial analogue of m_liveKeyImages.
+    std::shared_ptr<LiveEncoderImageStore> m_liveEncoderImages;
+    qint64 m_encoderImageRevision{0};
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};

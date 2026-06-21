@@ -25,6 +25,7 @@
 #include "debug_control_server.hpp"
 #include "debug_logging.hpp"
 #include "hotplug_debouncer.hpp"
+#include "live_encoder_image_provider.hpp"
 #include "live_key_image_provider.hpp"
 #include "node_runner.hpp"
 #include "sidecar_stream_dock_device.hpp"
@@ -1216,6 +1217,18 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
         m_streamDockControl->setLiveKeyImageStore(liveKeyStore);
         engine.addImageProvider(QStringLiteral("livekey"),
                                 new LiveKeyImageProvider(std::move(liveKeyStore)));
+    }
+    // Delta B (Elgato dial parity): the dial analogue of "livekey". The encoder
+    // layout renderer composites a plugin's setFeedback/setFeedbackLayout into a
+    // QImage rendered to the device via assignEncoderImage; the same frame is
+    // mirrored here so the on-screen EncoderDial + touch-strip segment show it.
+    // The control service emits encoderImageAssigned() and the editor reloads
+    // "image://liveencoder/<idx>?r=<rev>".
+    {
+        auto liveEncoderStore = std::make_shared<LiveEncoderImageStore>();
+        m_streamDockControl->setLiveEncoderImageStore(liveEncoderStore);
+        engine.addImageProvider(QStringLiteral("liveencoder"),
+                                new LiveEncoderImageProvider(std::move(liveEncoderStore)));
     }
     // Before the vendor firmware tool is launched, drop our HID handle for the
     // matching device family so the vendor flasher can claim the USB interface

@@ -18,11 +18,14 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
 #include "fixtures/fake_stream_dock_device.hpp"
+#include "live_encoder_image_provider.hpp"
 #include "qt_app_fixture.hpp"
 #include "stream_dock_control_service.hpp"
 
 #include <QCoreApplication>
 #include <QImage>
+#include <QSignalSpy>
+#include <QSize>
 #include <QString>
 
 #include <memory>
@@ -224,6 +227,54 @@ TEST_CASE("StreamDockControlService: assignEncoderImage paints the encoder zone 
 
     REQUIRE(fake->encoderImages.size() == baseline + 1);
     CHECK(fake->encoderImages.back().index == 2);
+}
+
+TEST_CASE(
+    "StreamDockControlService: assignEncoderImage mirrors the dial frame to the editor (Delta B)",
+    "[stream-dock-control][liveencoder][delta-b]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+    app::StreamDockControlService svc(
+        [fake](QString const&) -> std::shared_ptr<core::IDevice> { return fake; }, nullptr);
+
+    auto store = std::make_shared<app::LiveEncoderImageStore>();
+    svc.setLiveEncoderImageStore(store);
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+
+    QSignalSpy spy(&svc, &app::StreamDockControlService::encoderImageAssigned);
+
+    // Before any render: no cached frame, revision is -1.
+    CHECK(svc.liveEncoderRevision(1) == -1);
+    CHECK_FALSE(store->has(1));
+
+    svc.assignEncoderImage(1, solid(128, 128)); // 0-based encoder index, no offset
+    drainQueue();
+
+    // The frame is mirrored into the shared store (read by the QML provider) and a
+    // monotonic revision is emitted so the editor busts its image cache.
+    REQUIRE(store->has(1));
+    CHECK(store->get(1).size() == QSize(128, 128));
+    REQUIRE(spy.count() == 1);
+    CHECK(spy.front().at(0).toInt() == 1);   // encoder index, NOT index-1 (dials are 0-based)
+    CHECK(svc.liveEncoderRevision(1) >= 0);  // a frame now exists for encoder 1
+    CHECK(svc.liveEncoderRevision(0) == -1); // untouched encoder still has none
+}
+
+TEST_CASE("StreamDockControlService: liveEncoderRevision is -1 without an injected store (Delta B)",
+          "[stream-dock-control][liveencoder][delta-b]") {
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+    app::StreamDockControlService svc(
+        [fake](QString const&) -> std::shared_ptr<core::IDevice> { return fake; }, nullptr);
+
+    svc.setActiveDevice(QStringLiteral("akp05e"));
+    drainQueue();
+
+    // No store injected: the device still renders, but there is nothing to mirror.
+    svc.assignEncoderImage(0, solid(128, 128));
+    drainQueue();
+    CHECK(svc.liveEncoderRevision(0) == -1);
 }
 
 TEST_CASE("StreamDockControlService: assignTouchStripZone paints the zone (DISPLAY-10)",

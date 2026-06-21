@@ -123,6 +123,17 @@ Item {
                 bindings.setProperty(keyIndex, "iconSource", "");
             }
         }
+        // Delta B (Elgato dial parity): when the device renders a dial feedback
+        // layout (a plugin's setFeedback/setFeedbackLayout, or an encoder setState),
+        // the control service emits encoderImageAssigned so the on-screen EncoderDial
+        // AND its touch-strip segment (both fed by encoderBindings) mirror the SAME
+        // live frame the device LCD shows.
+        function onEncoderImageAssigned(encoderIndex, revision) {
+            if (encoderIndex >= 0 && encoderIndex < encoderBindings.count) {
+                encoderBindings.setProperty(encoderIndex, "iconSource",
+                                            "image://liveencoder/" + encoderIndex + "?r=" + revision);
+            }
+        }
     }
 
     function _ensureBindings() {
@@ -196,6 +207,18 @@ Item {
                     label: enc.label ? enc.label : "",
                     actionKind: enc.actionKind,
                     actionId: enc.actionId ? enc.actionId : "" });
+            }
+        }
+        // Delta B: re-point encoders with a cached live dial-feedback frame back at
+        // the liveencoder provider (the rebuild above wiped iconSource). Mirrors the
+        // livekey re-point above: a continuously-rendering dial plugin re-asserts
+        // within a tick, but a one-shot feedback render would vanish from the canvas
+        // while still on the device. The store still holds the frame -- restore it.
+        for (var n = 0; n < encoderBindings.count; ++n) {
+            var erev = StreamDockControlService.liveEncoderRevision(n);
+            if (erev >= 0 && !encoderBindings.get(n).iconSource) {
+                encoderBindings.setProperty(n, "iconSource",
+                                            "image://liveencoder/" + n + "?r=" + erev);
             }
         }
     }
