@@ -1258,14 +1258,20 @@ void ProfileController::cycleInstanceState(QString const& controller, int index)
     // in the bridge, so they share this path). Case-insensitive compare so the
     // wire controller strings ("Keypad"/"Encoder") match regardless of source.
     std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
+    // Also track the binding's visual so the new active state mirrors into
+    // binding.state (keeps the editor canvas + a reloaded profile showing the
+    // correct state; the device itself is repainted live by renderToggleState).
+    ajazz::core::KeyState* visualSlot = nullptr;
     if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
         auto& keyMap = activeKeyMap();
         if (auto it = keyMap.find(idx); it != keyMap.end()) {
             instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
         }
     } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
         if (auto it = m_profile.encoders.find(idx); it != m_profile.encoders.end()) {
             instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
         }
     } else {
         AJAZZ_LOG_WARN("profile-controller",
@@ -1285,6 +1291,9 @@ void ProfileController::cycleInstanceState(QString const& controller, int index)
         return;
     }
     inst.currentState = (inst.currentState + 1u) % static_cast<std::uint32_t>(inst.states.size());
+    if (visualSlot != nullptr && inst.currentState < inst.states.size()) {
+        *visualSlot = inst.states[inst.currentState].visual;
+    }
 
     // Persist (Q1): route through the same save path commitKeyBinding's callers
     // use so the advance survives a restart, then notify observers.
@@ -1336,6 +1345,12 @@ void ProfileController::commitToggleStates(int keyIndex, QVariantList states) {
         if (inst.currentState >= inst.states.size()) {
             inst.currentState = 0;
         }
+        // Mirror the active state's visual into binding.state so the INITIAL render
+        // shows state[currentState] immediately. renderToggleState only fires on a
+        // press; the editor canvas (activeKeyBindings -> binding.state) and the
+        // device repaint (repaintPage -> binding.state) both read binding.state, so
+        // without this a freshly-created toggle would look blank until first press.
+        binding.state = inst.states[inst.currentState].visual;
         binding.instance = std::move(inst);
     }
 

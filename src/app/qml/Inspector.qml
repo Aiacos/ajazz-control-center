@@ -90,6 +90,15 @@ Rectangle {
         root._toggleStates = arr;
         root._commitToggleStates();
     }
+    // Delta E: per-state icon. Stored as the file:// URL string (renderToggleState
+    // strips file: via QUrl().toLocalFile()). Empty clears it.
+    property int _pendingToggleRow: -1
+    function _setToggleImage(i, image) {
+        var arr = root._toggleStates.slice();
+        arr[i] = { title: arr[i].title ? arr[i].title : "", image: image };
+        root._toggleStates = arr;
+        root._commitToggleStates();
+    }
     function _addToggleState() {
         var arr = root._toggleStates.slice();
         // Seed the first conversion with two states (a toggle needs >= 2); after
@@ -222,6 +231,23 @@ Rectangle {
         // QImage(QString).
         onAccepted: root.bindingFieldChanged(
             "iconSource", iconPicker.selectedFile.toString())
+    }
+
+    // Delta E: per-state icon picker for toggle states. _pendingToggleRow records
+    // which state the chosen image applies to (set before opening).
+    FileDialog {
+        id: toggleStateIconPicker
+        title: qsTr("Choose state icon")
+        nameFilters: [
+            qsTr("Images (*.png *.jpg *.jpeg *.bmp *.webp)"),
+            qsTr("All files (*)")
+        ]
+        onAccepted: {
+            if (root._pendingToggleRow >= 0)
+                root._setToggleImage(root._pendingToggleRow,
+                                     toggleStateIconPicker.selectedFile.toString());
+            root._pendingToggleRow = -1;
+        }
     }
 
     ColumnLayout {
@@ -530,6 +556,40 @@ Rectangle {
                         color: Theme.fgPrimary
                         placeholderTextColor: Theme.fgMuted
                         onEditingFinished: root._setToggleTitle(index, text)
+                    }
+                    // Per-state icon: a small thumbnail when set, else an image glyph.
+                    // Click to pick; the thumbnail click clears it.
+                    Button {
+                        objectName: "toggleStateIcon_" + index
+                        Layout.preferredWidth: 32
+                        Layout.preferredHeight: 32
+                        flat: true
+                        ToolTip.visible: hovered
+                        ToolTip.text: modelData.image ? qsTr("Click to clear icon")
+                                                       : qsTr("Choose state icon")
+                        Image {
+                            anchors.centerIn: parent
+                            width: 22; height: 22
+                            source: modelData.image ? modelData.image : ""
+                            fillMode: Image.PreserveAspectFit
+                            visible: modelData.image
+                        }
+                        Label {
+                            anchors.centerIn: parent
+                            text: "image"
+                            font.family: "Material Symbols Outlined"
+                            font.pixelSize: 20
+                            color: Theme.accent
+                            visible: !modelData.image
+                        }
+                        onClicked: {
+                            if (modelData.image) {
+                                root._setToggleImage(index, ""); // clear
+                            } else {
+                                root._pendingToggleRow = index;
+                                toggleStateIconPicker.open();
+                            }
+                        }
                     }
                     Button {
                         objectName: "removeToggleState_" + index

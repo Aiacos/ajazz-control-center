@@ -805,3 +805,31 @@ TEST_CASE("ProfileController: toggleStatesForKey is page-aware", "[toggle][delta
     ctrl.goBackPage();
     CHECK(ctrl.toggleStatesForKey(5).isEmpty()); // not on root
 }
+
+TEST_CASE(
+    "ProfileController: commitToggleStates mirrors the active state visual for initial render",
+    "[toggle][delta-e]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-toggle-initial");
+
+    QVariantList states;
+    states.append(QVariantMap{{"title", "On"}, {"image", "/tmp/on.png"}});
+    states.append(QVariantMap{{"title", "Off"}, {"image", "/tmp/off.png"}});
+    ctrl.commitToggleStates(1, states);
+
+    // binding.state mirrors states[currentState=0] so the editor canvas + device
+    // repaint show the active state immediately (renderToggleState only fires on
+    // press). activeKeyBindings reads binding.state.
+    auto const& binding = ctrl.activeProfile().keys.at(1);
+    REQUIRE(binding.state.imagePath.has_value());
+    CHECK(*binding.state.imagePath == "/tmp/on.png");
+    CHECK(binding.state.text.value_or("") == "On");
+
+    // After a cycle the mirror follows the new active state.
+    ctrl.cycleInstanceState(QStringLiteral("Keypad"), 1);
+    REQUIRE(ctrl.toggleCurrentState(1) == 1);
+    CHECK(*ctrl.activeProfile().keys.at(1).state.imagePath == "/tmp/off.png");
+}
