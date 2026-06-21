@@ -236,7 +236,8 @@ public:
         // Non-ASCII and non-printable characters are skipped in this initial impl.
         // TODO: full Unicode compose sequence for Phase 25.
         bool ok = true;
-        for (unsigned char c : utf8) {
+        for (char const rawC : utf8) {
+            auto const c = static_cast<unsigned char>(rawC);
             std::uint16_t keyCode = 0;
             bool needShift = false;
             if (c >= 'a' && c <= 'z') {

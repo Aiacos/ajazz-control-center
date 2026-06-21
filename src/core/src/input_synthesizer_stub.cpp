@@ -30,13 +30,15 @@
 
 namespace ajazz::core {
 
-namespace {
-
 // Forward declaration for the platform backend (defined in the per-OS TU when
-// AJAZZ_FEATURE_INPUT_SYNTH is ON).
+// AJAZZ_FEATURE_INPUT_SYNTH is ON). Must have EXTERNAL linkage (namespace
+// ajazz::core, NOT the anonymous namespace) so it links against the per-OS
+// definition; an anonymous-namespace decl is internal and "never defined".
 #if defined(AJAZZ_FEATURE_INPUT_SYNTH)
 std::unique_ptr<IInputSynthesizer> makePlatformInputSynthesizer();
 #endif
+
+namespace {
 
 /**
  * @brief Recording no-op stub used as the default synthesizer.
