@@ -23,6 +23,7 @@
 #include <QQmlEngine>
 #include <QStandardPaths>
 #include <QString>
+#include <QUrl>
 #include <QUuid>
 #include <QVariantList>
 #include <QVariantMap>
@@ -272,6 +273,81 @@ QString ProfileController::duplicateProfile(QString const& profileId, QString co
     resetPageNav(); // Delta A: open the duplicated profile at root.
     emit profileChanged();
     saveActiveProfile();
+    rescanLibrary();
+    emit profilesChanged();
+    return QString::fromStdString(m_profile.id);
+}
+
+namespace {
+/// Accept either a bare filesystem path or a "file://" URL (the form a QML
+/// FileDialog yields) and return a local path. Mirrors the icon-path boundary
+/// handling (see normaliseImagePath / the iconSource file:// convention).
+QString toLocalPath(QString const& s) {
+    return s.startsWith(QStringLiteral("file:")) ? QUrl(s).toLocalFile() : s;
+}
+} // namespace
+
+bool ProfileController::exportProfile(QString const& profileId, QString const& destPath) {
+    // Resolve the profile to export. The active profile (whether or not it is yet
+    // indexed in the library) wins when the id is empty or matches it; otherwise
+    // load the named library entry.
+    ajazz::core::Profile source;
+    if (profileId.isEmpty() || QString::fromStdString(m_profile.id) == profileId) {
+        source = m_profile;
+    } else {
+        auto const it = m_library.find(profileId);
+        if (it == m_library.end()) {
+            emit saveFailed(tr("Profile '%1' not found").arg(profileId));
+            return false;
+        }
+        try {
+            source =
+                ajazz::core::readProfileFromDisk(std::filesystem::path{it->path.toStdString()});
+        } catch (std::exception const& e) {
+            emit saveFailed(QString::fromUtf8(e.what()));
+            return false;
+        }
+    }
+
+    QString const local = toLocalPath(destPath);
+    if (local.isEmpty()) {
+        emit saveFailed(tr("Invalid export path"));
+        return false;
+    }
+    try {
+        ajazz::core::writeProfileToDisk(std::filesystem::path{local.toStdString()}, source);
+    } catch (std::exception const& e) {
+        emit saveFailed(QString::fromUtf8(e.what()));
+        return false;
+    }
+    emit profileSaved(local);
+    return true;
+}
+
+QString ProfileController::importProfile(QString const& srcPath) {
+    QString const local = toLocalPath(srcPath);
+    ajazz::core::Profile imported;
+    try {
+        imported = ajazz::core::readProfileFromDisk(std::filesystem::path{local.toStdString()});
+    } catch (std::exception const& e) {
+        emit loadFailed(QString::fromUtf8(e.what()));
+        return {};
+    }
+    // Assign a fresh id so an imported profile never collides with an existing
+    // library entry (two installs of the same shared file stay distinct), and
+    // tag the name so the user can tell it apart. Device codename is preserved.
+    imported.id = QUuid::createUuid().toString(QUuid::WithoutBraces).toStdString();
+    if (imported.name.empty()) {
+        imported.name = "Imported profile";
+    } else {
+        imported.name += " (imported)";
+    }
+
+    m_profile = std::move(imported);
+    m_path.clear(); // saveActiveProfile derives a fresh path from the new id
+    resetPageNav();
+    emit profileChanged();
+    saveActiveProfile(); // persists + emits profileSaved/profilesChanged on the new id
     rescanLibrary();
     emit profilesChanged();
     return QString::fromStdString(m_profile.id);

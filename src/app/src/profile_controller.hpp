@@ -202,6 +202,19 @@ public:
     /// Returns the new id (or "" on failure).
     Q_INVOKABLE QString duplicateProfile(QString const& profileId, QString const& newName);
 
+    /// Export a profile (by @p profileId, or the active one when empty) to
+    /// @p destPath (a filesystem path or a file:// URL) as a shareable JSON file
+    /// — the native-format slice of marketplace "profile install" (Delta G).
+    /// Returns true on success; emits saveFailed() on error.
+    Q_INVOKABLE bool exportProfile(QString const& profileId, QString const& destPath);
+
+    /// Import a profile from @p srcPath (filesystem path or file:// URL). A fresh
+    /// id is assigned so it never collides with an existing library entry and the
+    /// name is tagged "(imported)"; the device codename is preserved. The imported
+    /// profile is made active. Returns the new id ("" on failure; emits
+    /// loadFailed()). Emits profileChanged() + profilesChanged().
+    Q_INVOKABLE QString importProfile(QString const& srcPath);
+
     /// Ensure the active profile belongs to @p deviceCodename: loads that
     /// device's first known profile, or creates a "Default" one when none
     /// exist. Called when the selected device changes so the editor always

@@ -551,6 +551,37 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"id", pc->createProfile(name, codename)}};
     });
 
+    // ---- Profile export / import (Delta G, native format) --------------
+    // profile.export {id?, path} -> {ok}
+    server.registerMethod("profile.export", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QString const path = params.value("path").toString();
+        if (path.isEmpty()) {
+            err = QStringLiteral("missing 'path'");
+            return QJsonObject{};
+        }
+        return QJsonObject{{"ok", pc->exportProfile(params.value("id").toString(), path)}};
+    });
+
+    // profile.import {path} -> {id}
+    server.registerMethod("profile.import", [&app](QJsonObject const& params, QString& err) {
+        auto* pc = app.profileController();
+        if (pc == nullptr) {
+            err = QStringLiteral("profile controller unavailable");
+            return QJsonObject{};
+        }
+        QString const path = params.value("path").toString();
+        if (path.isEmpty()) {
+            err = QStringLiteral("missing 'path'");
+            return QJsonObject{};
+        }
+        return QJsonObject{{"id", pc->importProfile(path)}};
+    });
+
     // profile.commitEncoderBinding {index, actionId, label?, settings?}
     // -> {committed, index, actionId}
     // Drives ProfileController::commitEncoderBinding directly (ActionKind::Plugin=0)

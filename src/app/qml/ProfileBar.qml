@@ -15,6 +15,7 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import AjazzControlCenter
 
@@ -133,6 +134,39 @@ RowLayout {
         tip: qsTr("Delete profile")
         enabled: ProfileController.activeProfileId() !== ""
         onClicked: confirmDelete.open()
+    }
+    // Delta G: share profiles as native .json files (export the active profile,
+    // import a shared one as a fresh copy). objectName for debug addressing.
+    BarButton {
+        objectName: "exportProfileButton"
+        glyph: "upload"
+        tip: qsTr("Export profile to a file")
+        enabled: ProfileController.activeProfileId() !== ""
+        onClicked: exportDialog.open()
+    }
+    BarButton {
+        objectName: "importProfileButton"
+        glyph: "download"
+        tip: qsTr("Import a profile from a file")
+        onClicked: importDialog.open()
+    }
+
+    FileDialog {
+        id: exportDialog
+        objectName: "exportProfileDialog"
+        title: qsTr("Export profile")
+        fileMode: FileDialog.SaveFile
+        defaultSuffix: "json"
+        nameFilters: [qsTr("Profile files (*.json)"), qsTr("All files (*)")]
+        onAccepted: ProfileController.exportProfile(ProfileController.activeProfileId(),
+                                                    exportDialog.selectedFile.toString())
+    }
+    FileDialog {
+        id: importDialog
+        objectName: "importProfileDialog"
+        title: qsTr("Import profile")
+        nameFilters: [qsTr("Profile files (*.json)"), qsTr("All files (*)")]
+        onAccepted: ProfileController.importProfile(importDialog.selectedFile.toString())
     }
 
     // ---- Name input dialog (new / rename / duplicate) ---------------------

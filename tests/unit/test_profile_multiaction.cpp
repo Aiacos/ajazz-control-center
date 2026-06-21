@@ -833,3 +833,47 @@ TEST_CASE(
     REQUIRE(ctrl.toggleCurrentState(1) == 1);
     CHECK(*ctrl.activeProfile().keys.at(1).state.imagePath == "/tmp/off.png");
 }
+
+// ===========================================================================
+// Profile export / import (Elgato-parity Delta G, native format)
+// ===========================================================================
+
+TEST_CASE("ProfileController: export then import round-trips the bindings with a fresh id",
+          "[profile-share][delta-g]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-export-src");
+
+    // Give the active profile a recognizable binding + name.
+    ctrl.commitKeyBinding(
+        4, {}, QStringLiteral("Shared"), 0, QStringLiteral("{}"), QStringLiteral("com.shared"));
+    QString const srcId = ctrl.activeProfileId();
+
+    // Export to a standalone file.
+    QString const out = tmpDir.filePath(QStringLiteral("shared-profile.json"));
+    REQUIRE(ctrl.exportProfile(srcId, out));
+
+    // Import it back: a NEW id, name tagged, binding preserved, made active.
+    QString const newId = ctrl.importProfile(out);
+    REQUIRE_FALSE(newId.isEmpty());
+    CHECK(newId != srcId); // fresh id, never collides with the source
+    CHECK(ctrl.activeProfileId() == newId);
+    CHECK(ctrl.activeProfileName().endsWith(QStringLiteral("(imported)")));
+    auto const& keys = ctrl.activeProfile().keys;
+    REQUIRE(keys.count(4) == 1);
+    CHECK(keys.at(4).onPress.front().id == "com.shared");
+}
+
+TEST_CASE("ProfileController: importProfile on a bad path fails cleanly (empty id)",
+          "[profile-share][delta-g]") {
+    ajazz::tests::qtApp();
+    QTemporaryDir tmpDir;
+    REQUIRE(tmpDir.isValid());
+    app::ProfileController ctrl(nullptr);
+    seedProfile(ctrl, tmpDir, "test-import-bad");
+
+    QString const id = ctrl.importProfile(tmpDir.filePath(QStringLiteral("does-not-exist.json")));
+    CHECK(id.isEmpty()); // no crash, no spurious profile
+}
