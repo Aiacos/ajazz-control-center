@@ -11,6 +11,7 @@
 
 #include "ajazz/core/logger.hpp"
 #include "mirabox_github_catalog_fetcher.hpp"
+#include "mirabox_github_installer.hpp"
 #include "opendeck_catalog_fetcher.hpp"
 #include "plugin_manifest.hpp"
 #include "plugin_verify_gate.hpp"
@@ -58,6 +59,15 @@ QString g_pluginsDirOverride{};
 /// a non-installable row — NO browser fallback). Same predicate both sites use,
 /// so the row's button state and install()'s behaviour can never disagree.
 [[nodiscard]] bool entryInstallableInApp(CatalogEntry const& entry) {
+    // Mirabox-GitHub rows have no single archive URL; they are installed by
+    // fetching the plugin's subtree from GitHub and assembling the bundle (see
+    // MiraboxGithubInstaller). A non-empty repo path (stashed in
+    // streamdockProductId at catalogue time) is the install handle. Whether the
+    // dir actually ships a manifest.json (vs source-only) is resolved at fetch
+    // time — a source-only row fails install() with a clear message.
+    if (entry.source == QStringLiteral("mirabox-github")) {
+        return !entry.streamdockProductId.isEmpty();
+    }
     return entry.downloadUrl.isValid() && !entry.downloadUrl.isEmpty() &&
            entry.downloadUrl.scheme().toLower() == QStringLiteral("https");
 }
@@ -1371,6 +1381,77 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     return true;
 }
 
+void PluginCatalogModel::finalizeAssembledInstall(QString const& uuid,
+                                                  QString const& stagingDir,
+                                                  QString const& destDir) {
+    QString const stagedManifest = QDir(stagingDir).filePath(QStringLiteral("manifest.json"));
+
+    // Install dir name = manifest UUID/PUUID (Stream Deck convention; the
+    // action-owner match keys off it), falling back to the catalogue row uuid.
+    QString installName;
+    if (QFile mf(stagedManifest); mf.open(QIODevice::ReadOnly)) {
+        if (auto const m = parsePluginManifest(mf.read(kMaxPluginDownloadBytes + 1))) {
+            installName = safeUuidDirName(m->puuid);
+        }
+    }
+    if (installName.isEmpty()) {
+        installName = safeUuidDirName(uuid);
+    }
+    if (installName.isEmpty()) {
+        QDir(stagingDir).removeRecursively();
+        emit installFinished(uuid, false, QStringLiteral("Plugin has no usable UUID."));
+        return;
+    }
+
+    // Verify gate — mirror the network install path: only Refused is quarantined
+    // (these are community GPL plugins; Unsigned/SelfSigned are allowed + logged).
+    VerifyOutcome const vout = verifyStagedPlugin(stagedManifest);
+    if (vout.verdict == VerifyVerdict::Refused) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "install '{}': signature verification refused ({}); quarantining staging",
+                       uuid.toStdString(),
+                       vout.reason.toStdString());
+        QDir(stagingDir).removeRecursively();
+        emit installFinished(
+            uuid, false, tr("Plugin signature verification failed: %1").arg(vout.reason));
+        return;
+    }
+
+    // Promote: atomic rename of the staging dir into <destDir>/<installName>
+    // (same filesystem — staging lives inside destDir). Replace any prior copy.
+    QString const promoted = QDir(destDir).filePath(installName);
+    if (QDir(promoted).exists()) {
+        QDir(promoted).removeRecursively();
+    }
+    if (!QDir().rename(stagingDir, promoted)) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "install '{}': promote rename failed ({} -> {})",
+                       uuid.toStdString(),
+                       stagingDir.toStdString(),
+                       promoted.toStdString());
+        QDir(stagingDir).removeRecursively();
+        emit installFinished(
+            uuid, false, QStringLiteral("Failed to promote plugin to install dir."));
+        return;
+    }
+
+    int const r = findRow(m_rows, uuid);
+    if (r >= 0) {
+        auto& s = m_install[uuid];
+        s.installed = true;
+        s.enabled = true;
+        QModelIndex const idx = index(r);
+        emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
+    }
+    emit installedCountChanged(); // re-queries installedActions() so the new actions surface
+    AJAZZ_LOG_INFO("plugin-catalog",
+                   "install '{}': mirabox-github OK -> {} ({})",
+                   uuid.toStdString(),
+                   promoted.toStdString(),
+                   verdictToTrustLevel(vout.verdict).toStdString());
+    emit installFinished(uuid, true, QString{});
+}
+
 bool PluginCatalogModel::install(QString const& uuid) {
     int const row = findRow(m_rows, uuid);
     if (row < 0) {
@@ -1398,6 +1479,65 @@ bool PluginCatalogModel::install(QString const& uuid) {
                        uuid.toStdString());
         emit installFinished(uuid, false, QStringLiteral("Not installable in-app"));
         return false;
+    }
+
+    // Mirabox-GitHub source: there is no single archive URL — assemble the
+    // .sdPlugin bundle by fetching the plugin's subtree from GitHub, then run
+    // the SAME verify -> promote stages as the other paths (finalizeAssembledInstall).
+    if (entry.source == QStringLiteral("mirabox-github")) {
+        if (m_downloader == nullptr) {
+            m_downloader = new QNetworkAccessManager(this);
+        }
+        QString const destDir = userPluginsDir();
+        if (destDir.isEmpty()) {
+            emit installFinished(
+                uuid, false, QStringLiteral("Cannot resolve user plugins directory."));
+            return false;
+        }
+        // Stage INSIDE the scan dir but dot-prefixed so the `*.sdPlugin` scanner
+        // ignores it; rename into place atomically (same filesystem) after verify.
+        QString safeSuffix;
+        safeSuffix.reserve(uuid.size());
+        for (QChar const c : uuid) {
+            bool const ok = c.isLetterOrNumber() || c == QLatin1Char('.') ||
+                            c == QLatin1Char('-') || c == QLatin1Char('_');
+            safeSuffix.append(ok ? c : QLatin1Char('_'));
+        }
+        QString const stagingDir =
+            QDir(destDir).filePath(QStringLiteral(".mgh-staging-") + safeSuffix);
+        QDir(stagingDir).removeRecursively(); // clear any stale staging dir
+
+        auto* const installer = new MiraboxGithubInstaller(m_downloader, this);
+        QPointer<PluginCatalogModel> self(this);
+        QString const uuidCopy = uuid;
+        QString const destDirCopy = destDir;
+        QObject::connect(
+            installer,
+            &MiraboxGithubInstaller::finished,
+            this,
+            [self, uuidCopy, destDirCopy](bool ok, QString assembledDir, QString error) {
+                if (!self) {
+                    return;
+                }
+                if (!ok) {
+                    if (!assembledDir.isEmpty()) {
+                        QDir(assembledDir).removeRecursively();
+                    }
+                    emit self->installFinished(uuidCopy, false, error);
+                    return;
+                }
+                self->finalizeAssembledInstall(uuidCopy, assembledDir, destDirCopy);
+            });
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "install: mirabox-github '{}' -> assembling from {} into staging",
+                       uuid.toStdString(),
+                       entry.streamdockProductId.toStdString());
+        emit installProgressChanged(uuid, 0);
+        installer->start(MiraboxGithubCatalogFetcher::repoOwnerRepo(),
+                         MiraboxGithubCatalogFetcher::repoBranch(),
+                         entry.streamdockProductId,
+                         stagingDir);
+        return true;
     }
 
     // Real in-app install path: HTTPS GET against the upstream CDN, save

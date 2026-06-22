@@ -268,6 +268,11 @@ add_executable(
     # plugin_catalog_model.cpp (below) now references MiraboxGithubCatalogFetcher.
     test_mirabox_github_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/mirabox_github_catalog_fetcher.cpp
+    # Mirabox-GitHub installer: pure bundle-root detection + path-safety helpers
+    # (the async fetch is exercised live). Also pulled in because
+    # plugin_catalog_model.cpp (below) now references MiraboxGithubInstaller.
+    test_mirabox_github_installer.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/mirabox_github_installer.cpp
     # PluginCatalogProxyModel: pins the filter contract for the Plugin
     # Store GridView (HIGH-1/HIGH-2 fix from quick task 260513-u0b). The
     # proxy references PluginCatalogModel::Roles only — no networking,

@@ -658,6 +658,16 @@ private:
     /// @ref replaceStreamdockRows with `source == "mirabox-github"`.
     void replaceMiraboxGithubRows(std::vector<CatalogEntry> rows);
 
+    /// Finalize a Mirabox-GitHub install: the bundle has been assembled into
+    /// @p stagingDir (a dot-prefixed dir inside @p destDir that the plugin
+    /// scanner ignores). Resolves the install dir name from the manifest UUID,
+    /// runs the verify gate (Refused → quarantine), then atomically renames the
+    /// staging dir into @c <destDir>/<uuid>.sdPlugin and flips the install bit.
+    /// Same verify → promote contract the network install path uses.
+    void finalizeAssembledInstall(QString const& uuid,
+                                  QString const& stagingDir,
+                                  QString const& destDir);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 

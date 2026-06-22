@@ -319,9 +319,27 @@ external browser).
     qml smoke 123 green. **Screenshot of the rendered tab is blocked by the
     headless modal-Drawer harness gap** (can't open a modal Popup via the debug
     channel) — verification is the live fetch log + the two unit tests.
-  - **Increment 2 (TODO — makes them installable):** branch `install()` on
-    `source == "mirabox-github"`: fetch the plugin's subtree files via the GitHub
-    API, assemble the `.sdPlugin` dir in staging (path-safety on each relative
-    path), then reuse the existing `verifyStagedPlugin` → promote stages; flip
-    `entryInstallableInApp` to accept the source; live-install one plugin (e.g.
-    World Weather) and confirm its actions appear + render on the AKP05E.
+  - **Increment 2 DONE (installable) — live-verified.** `MiraboxGithubInstaller`
+    (`mirabox_github_installer.{hpp,cpp}`) fetches the plugin's subtree (GitHub
+    Contents → tree SHA → `git/trees/<sha>?recursive=1`, no whole-repo truncation)
+    and downloads each blob from raw.githubusercontent.com into a staging dir at
+    its path relative to the **bundle root** (the dir holding the shallowest
+    `manifest.json` — handles both root-manifest and nested `*.sdPlugin/` layouts).
+    Security: per-file path-safety (`isSafeRelPath` — no `..`/absolute/drive) +
+    a post-resolve staging-escape check + file-count (512) and total-byte (64 MB)
+    caps. `PluginCatalogModel::install()` branches on `source=="mirabox-github"`,
+    stages into a dot-prefixed dir inside the scan dir (scanner ignores it), then
+    `finalizeAssembledInstall()` resolves the install dir name from the manifest
+    UUID, runs the SAME `verifyStagedPlugin` gate (only Refused quarantined,
+    mirroring the network path), and atomically renames staging → `<uuid>.sdPlugin`.
+    `entryInstallableInApp` now accepts mirabox-github rows. Source-only dirs
+    (no manifest.json anywhere, e.g. WorldWeather's un-built Vite project) fail
+    with a clear "distributed as source" message.
+    - **Verified LIVE (debug channel `plugin.installFromCatalog`):** installing
+      `com.mirabox.streamdock.weather` assembled **129 files** → verified
+      (Unsigned→allowed) → promoted to `Weather.sdPlugin`; its action
+      "Weather query" then appeared in `plugin.installedActions` (count 1) with a
+      working Property Inspector + icon, no staging leftover. The source-only
+      negative path (`com.mirabox.github.worldweather`) was rejected gracefully.
+      Pure helpers (`findBundleRoot`, `isSafeRelPath`) unit-tested
+      (`test_mirabox_github_installer.cpp`). Unit 863 / qml smoke 123 green.
