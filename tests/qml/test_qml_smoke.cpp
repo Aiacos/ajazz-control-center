@@ -225,6 +225,7 @@ std::vector<InstantiableComponent> instantiableComponents() {
     return {
         {"Theme", {}},            // pragma Singleton — resolving it proves singleton wiring
         {"BatteryIndicator", {}}, // changed in recent fixes; the minimum-bar component
+        {"DeviceRow", {}},        // device sidebar row delegate
         {"Card", {}},
         {"DeviceImage", {}},
         {"EmptyState", {}},
@@ -254,6 +255,7 @@ std::vector<InstantiableComponent> instantiableComponents() {
 // produce noise unrelated to the load-error class this harness guards.
 char const* const kCompileOnlyComponents[] = {
     "Main",
+    "DeviceList",
     "ProfileEditor",
     // KeyDesigner was deleted in Phase 26 Plan 26-04 (commit 6c746a1);
     // replaced by DeviceView + ActionLibraryPane below.

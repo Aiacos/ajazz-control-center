@@ -36,20 +36,10 @@ Rectangle {
     /// plugin debug console drawer (protocol log + input/response simulation).
     signal debugConsoleRequested()
 
-    /// Emitted when the user picks a device in the header device selector
-    /// (OpenDeck-style top-bar dropdown that replaced the left device list).
-    signal deviceSelected(string codename)
-
-    /// Codename of the currently-active device, set by Main.qml so the device
-    /// dropdown reflects the active selection (incl. headless setActiveDevice).
+    /// Codename of the currently-active device, set by Main.qml (from the left
+    /// DeviceList sidebar selection) so the top-bar profile selector reflects
+    /// the active device.
     property string activeCodename: ""
-
-    // Keep the device dropdown in sync with the live connected-device set.
-    Connections {
-        target: DeviceModel
-        function onModelReset() { deviceCombo.refresh(); }
-        function onDataChanged() { deviceCombo.refresh(); }
-    }
 
     RowLayout {
         anchors.fill: parent
@@ -89,53 +79,12 @@ Rectangle {
             Accessible.name: text
         }
 
-        // OpenDeck-style device selector (replaces the former left device-list
-        // sidebar): a top-bar dropdown of connected stream controllers.
-        // Selecting one drives StreamDockControlService.setActiveDevice via
-        // Main.qml's onDeviceSelected handler.
-        ComboBox {
-            id: deviceCombo
-            objectName: "deviceSelectorHeader"
-            Layout.preferredWidth: 280
-            textRole: "name" // connectedDevices() maps: {name, codename}
-            valueRole: "codename"
-            model: DeviceModel.connectedDevices()
-            visible: count > 0
-            onActivated: {
-                var d = model[currentIndex];
-                if (d && d.codename) root.deviceSelected(d.codename);
-            }
-            // Rebuild the list and re-sync the shown item on hot-plug / activation.
-            function refresh() {
-                model = DeviceModel.connectedDevices();
-                syncToActive();
-            }
-            function syncToActive() {
-                if (!root.activeCodename) return;
-                for (var i = 0; i < model.length; ++i) {
-                    if (model[i] && model[i].codename === root.activeCodename) {
-                        currentIndex = i;
-                        return;
-                    }
-                }
-            }
-            Component.onCompleted: syncToActive()
-            Connections {
-                target: root
-                function onActiveCodenameChanged() { deviceCombo.syncToActive(); }
-            }
-            Accessible.role: Accessible.ComboBox
-            Accessible.name: qsTr("Device selector")
-            Accessible.description: qsTr("Choose which connected device to edit")
-        }
-
-        // OpenDeck-style profile selector in the top bar, next to the device
-        // dropdown (OpenDeck puts device + profile <select>s together on the
-        // left). Self-sufficient: queries ProfileController directly (mirroring
-        // the device combo's DeviceModel pattern) and re-syncs on profile CRUD,
-        // profile switch, and active-device change. The editor's ProfileBar keeps
-        // the New/Rename/Duplicate/Delete/Export/Import actions but hides its own
-        // (now-redundant) selector.
+        // Profile selector in the top bar. Device selection is handled by the
+        // left DeviceList sidebar; this reflects/sets the active device's profile.
+        // Self-sufficient: queries ProfileController directly and re-syncs on
+        // profile CRUD, profile switch, and active-device change. The editor's
+        // ProfileBar keeps the New/Rename/Duplicate/Delete/Export/Import actions
+        // but hides its own (now-redundant) selector.
         ComboBox {
             id: profileCombo
             objectName: "profileSelectorHeader"

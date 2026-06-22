@@ -343,3 +343,18 @@ external browser).
       negative path (`com.mirabox.github.worldweather`) was rejected gracefully.
       Pure helpers (`findBundleRoot`, `isSafeRelPath`) unit-tested
       (`test_mirabox_github_installer.cpp`). Unit 863 / qml smoke 123 green.
+- 2026-06-22: **Left device sidebar RESTORED (user feedback).** The user
+  rejected the OpenDeck top-bar device dropdown ("la barra laterale di sinistra
+  con i dispositivi … non va bene, ripristinala"). Recovered `DeviceList.qml` +
+  `components/DeviceRow.qml` byte-identical from commit 229353de, re-added to the
+  app QML module + the qml smoke registrations, restored the `DeviceList`
+  sidebar in `Main.qml` (drives `setActiveDevice` + editor codename/capabilities),
+  and removed the now-redundant top-bar device `ComboBox` from `AppHeader`. KEPT:
+  the top-bar **profile** selector (separate follow-up, not objected to) — it now
+  reflects the active device chosen in the sidebar. So the layout is: left device
+  sidebar + top-bar profile selector + full-device canvas + docked inspector +
+  right action sidebar. Verified live (offscreen screenshot): sidebar lists the
+  connected AKP05E + AJ159 (battery chip), editor shows the AKP05E canvas; qml
+  smoke 17 cases / 127 assertions green. (This partially reverts the Phase 3
+  device-selector reshape; the OpenDeck-parity epic's device-selection model is
+  now sidebar-based per user preference.)

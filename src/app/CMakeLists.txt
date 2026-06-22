@@ -575,6 +575,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/Main.qml
     qml/Theme.qml
     qml/DragRelay.qml
+    qml/DeviceList.qml
     qml/ProfileEditor.qml
     qml/RgbPicker.qml
     qml/SettingsRow.qml
@@ -595,6 +596,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/components/Card.qml
     qml/components/DeviceCanvas.qml
     qml/components/DeviceImage.qml
+    qml/components/DeviceRow.qml
     qml/components/EmptyState.qml
     qml/components/FirmwarePanel.qml
     qml/components/EncoderCard.qml
