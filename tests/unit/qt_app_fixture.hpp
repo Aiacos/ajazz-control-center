@@ -88,9 +88,16 @@ inline void disableLiveCatalogs() {
     };
     setIfUnset("ACC_STREAMDOCK_CATALOG_URL");
     setIfUnset("ACC_OPENDECK_CATALOG_URL");
+    setIfUnset("ACC_MIRABOX_GITHUB_CATALOG_URL");
 #else
     ::setenv("ACC_STREAMDOCK_CATALOG_URL", "disabled", /*overwrite*/ 0);
     ::setenv("ACC_OPENDECK_CATALOG_URL", "disabled", /*overwrite*/ 0);
+    // The Mirabox-GitHub fetcher (added 2026-06-22) must be disabled in tests
+    // too: PluginCatalogModel's ctor reload() fires every fetcher, and a live
+    // QNetworkReply torn down at test exit SEGFAULTs (PR#80 root cause). Without
+    // this, PluginInstallFromFile tests crash on CI (timing-dependent — passes
+    // locally, segfaults on the runner).
+    ::setenv("ACC_MIRABOX_GITHUB_CATALOG_URL", "disabled", /*overwrite*/ 0);
 #endif
 }
 
