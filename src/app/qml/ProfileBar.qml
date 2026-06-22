@@ -26,6 +26,14 @@ RowLayout {
     // Machine codename of the device being edited (from ProfileEditor).
     property string deviceCodename: ""
 
+    // When false, the "Profile" label + selector ComboBox are hidden and only
+    // the New/Rename/Duplicate/Delete/Export/Import action buttons remain — used
+    // once the profile selector moved into the top-bar AppHeader (OpenDeck
+    // parity). The device-scoped activate/refresh logic still runs (the combo
+    // stays instantiated, just not visible) so the active profile tracks the
+    // selected device exactly as before.
+    property bool selectorVisible: true
+
     // {id, name} maps for this device; rebuilt from the controller.
     property var _profiles: []
 
@@ -67,10 +75,12 @@ RowLayout {
         text: qsTr("Profile")
         color: Theme.fgFaint
         Layout.alignment: Qt.AlignVCenter
+        visible: root.selectorVisible
     }
 
     ComboBox {
         id: combo
+        visible: root.selectorVisible
         Layout.fillWidth: true
         Layout.preferredHeight: 36
         model: root._profiles

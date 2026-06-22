@@ -129,6 +129,48 @@ Rectangle {
             Accessible.description: qsTr("Choose which connected device to edit")
         }
 
+        // OpenDeck-style profile selector in the top bar, next to the device
+        // dropdown (OpenDeck puts device + profile <select>s together on the
+        // left). Self-sufficient: queries ProfileController directly (mirroring
+        // the device combo's DeviceModel pattern) and re-syncs on profile CRUD,
+        // profile switch, and active-device change. The editor's ProfileBar keeps
+        // the New/Rename/Duplicate/Delete/Export/Import actions but hides its own
+        // (now-redundant) selector.
+        ComboBox {
+            id: profileCombo
+            objectName: "profileSelectorHeader"
+            Layout.preferredWidth: 220
+            textRole: "name" // profilesForDevice() maps: {id, name}
+            valueRole: "id"
+            model: ProfileController.profilesForDevice(root.activeCodename)
+            visible: root.activeCodename !== "" && count > 0
+            onActivated: {
+                var id = currentValue;
+                if (id && id !== ProfileController.activeProfileId())
+                    ProfileController.loadProfileById(id);
+            }
+            function refresh() {
+                model = ProfileController.profilesForDevice(root.activeCodename);
+                syncToActive();
+            }
+            function syncToActive() {
+                currentIndex = indexOfValue(ProfileController.activeProfileId());
+            }
+            Component.onCompleted: refresh()
+            Connections {
+                target: ProfileController
+                function onProfilesChanged() { profileCombo.refresh(); }
+                function onProfileChanged() { profileCombo.syncToActive(); }
+            }
+            Connections {
+                target: root
+                function onActiveCodenameChanged() { profileCombo.refresh(); }
+            }
+            Accessible.role: Accessible.ComboBox
+            Accessible.name: qsTr("Profile selector")
+            Accessible.description: qsTr("Choose the active profile for this device")
+        }
+
         Item { Layout.fillWidth: true }
 
         // Search box (no functional binding yet; surfaces a placeholder).

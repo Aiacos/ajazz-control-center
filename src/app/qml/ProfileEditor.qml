@@ -87,60 +87,20 @@ Rectangle {
         PageHeader {
             Layout.fillWidth: true
             visible: root.codename === ""
-            title: qsTr("Select a device on the left")
+            title: qsTr("Select a device")
         }
 
-        RowLayout {
-            Layout.fillWidth: true
-            visible: root.codename !== ""
-            spacing: Theme.spacingMd
-
-            // Product photo (remote, per-codename) with per-family SVG fallback.
-            DeviceImage {
-                Layout.alignment: Qt.AlignVCenter
-                codename: root.codename
-                family: root._family
-            }
-
-            ColumnLayout {
-                Layout.fillWidth: true
-                Layout.alignment: Qt.AlignVCenter
-                spacing: 2
-
-                // Line 1 — the human product NAME, large. Falls back to the
-                // codename when the capability map carries no model string.
-                Text {
-                    Layout.fillWidth: true
-                    text: root.capabilities && root.capabilities.model
-                              ? root.capabilities.model
-                              : root.codename
-                    color: Theme.fgPrimary
-                    font.pixelSize: Theme.fontXl
-                    font.bold: true
-                    wrapMode: Text.NoWrap
-                    elide: Text.ElideRight
-                }
-
-                // Line 2 — "Editing: <machine codename>".
-                Text {
-                    Layout.fillWidth: true
-                    text: qsTr("Editing: %1").arg(root.codename)
-                    color: Theme.fgMuted
-                    font.pixelSize: Theme.fontSm
-                    wrapMode: Text.NoWrap
-                    elide: Text.ElideRight
-                }
-            }
-        }
-
-        // Profile switcher bar (Workstream D) --------------------------------
-        // Profiles are device-scoped. Selecting a device activates that
-        // device's profile (creating a "Default" the first time); this bar
-        // lets the user switch between them and create/rename/duplicate/delete.
+        // Profile action bar (Workstream D). The device name + profile selector
+        // now live in the top-bar AppHeader (OpenDeck parity), so the large
+        // device-photo/name header block is gone and this bar carries only the
+        // New/Rename/Duplicate/Delete/Export/Import actions (selectorVisible:
+        // false). Profiles stay device-scoped: ProfileBar still activates this
+        // device's profile (creating "Default" the first time) on device change.
         ProfileBar {
             Layout.fillWidth: true
             visible: root.codename !== ""
             deviceCodename: root.codename
+            selectorVisible: false
         }
 
         // Empty state when nothing is selected -------------------------------
@@ -150,7 +110,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: qsTr("No device selected")
-            body: qsTr("Pick a device from the sidebar to see its keys, encoders, RGB, and pointer settings.")
+            body: qsTr("Pick a device from the top bar to see its keys, encoders, RGB, and pointer settings.")
         }
 
         // Tab strip + content ----------------------------------------------

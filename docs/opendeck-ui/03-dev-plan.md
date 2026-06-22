@@ -271,12 +271,24 @@ external browser).
     the ad-hoc layout patches waits on the Phase 3 parity follow-ups below; doing
     it now risks the same regression class an earlier single-view rewrite hit.
     `ctest` on macOS/Windows compilers also still to confirm (Linux green).
-- 2026-06-22: **Phase 3 follow-ups (main screen scoped this task; not yet done):** move
-  the profile dropdown + Plugins/Settings into the same top bar and slim the
-  large device-header block (currently the profile dropdown + device
-  icon/name/"Editing" row sit below the bar); inline-inspector relayout
-  (OpenDeck docks it under the canvas); restyle the action sidebar to
-  OpenDeck's exact neutral tokens; OpenDeck-shape the Multi/Toggle
-  (ParentActionView), Profiles, Plugins, and Settings overlays. The Loaded/
-  Debug/search header items are our extras (not in OpenDeck) — keep or move
-  behind an overflow later.
+- 2026-06-22: **Phase 3 follow-up 1 DONE — profile selector to the top bar +
+  device-header block removed.** Added an OpenDeck-style profile `ComboBox` to
+  `AppHeader` next to the device dropdown (`profileSelectorHeader`, self-sufficient:
+  queries `ProfileController.profilesForDevice/activeProfileId` directly and
+  re-syncs on `profilesChanged`/`profileChanged`/active-device change, mirroring
+  the device combo). `ProfileBar` gained `selectorVisible` (false in the editor) so
+  its now-redundant label+combo hide while the New/Rename/Duplicate/Delete/Export/
+  Import actions stay; the device-scoped activate/refresh logic is unchanged.
+  `ProfileEditor` dropped the large device-photo/name/"Editing" header block (the
+  device name is in the top-bar dropdown now) and the stale "on the left"/"from the
+  sidebar" copy. Verified live (AKP05E, offscreen): top bar shows device + profile
+  selectors side-by-side, the big header is gone, the canvas gains the reclaimed
+  height. qml smoke 17/123 green; unit 856 green.
+  - **Remaining Phase 3 follow-ups (not done):** the inline inspector is ALREADY
+    docked under the canvas (Phase 3 + the Phase-5 canvas-clip fix); restyle the
+    action sidebar to OpenDeck's exact neutral tokens (broad — the dark palette is
+    `Branding`-derived app-wide, so this is a cosmetic theme alignment, lower value
+    / higher blast radius); OpenDeck-shape the Multi/Toggle (ParentActionView),
+    Profiles, Plugins, and Settings overlays (a larger chunk — 4 surfaces). The
+    Loaded/Debug/search header items are our extras (not in OpenDeck) — keep or move
+    behind an overflow later.
