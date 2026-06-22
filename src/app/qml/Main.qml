@@ -157,6 +157,14 @@ ApplicationWindow {
 
         AppHeader {
             Layout.fillWidth: true
+            // OpenDeck-style top-bar device dropdown (replaces the former left
+            // DeviceList sidebar — REQ-26-A / GAP-25A path preserved here).
+            activeCodename: editor.codename
+            onDeviceSelected: codename => {
+                StreamDockControlService.setActiveDevice(codename);
+                editor.codename = codename;
+                editor.capabilities = DeviceModel.capabilitiesFor(codename);
+            }
             onMinimizeRequested: root.hide()
             onPluginStoreRequested: pluginStoreDrawer.open()
             onLoadedPluginsRequested: loadedPluginsDrawer.open()
@@ -168,18 +176,6 @@ ApplicationWindow {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
-
-            DeviceList {
-                id: sidebar
-                Layout.preferredWidth: root.width < 700 ? 64 : 320
-                Layout.fillHeight: true
-                model: DeviceModel
-                onDeviceSelected: codename => {
-                    StreamDockControlService.setActiveDevice(codename); // REQ-26-A, closes GAP-25A
-                    editor.codename = codename;
-                    editor.capabilities = DeviceModel.capabilitiesFor(codename);
-                }
-            }
 
             ProfileEditor {
                 id: editor
