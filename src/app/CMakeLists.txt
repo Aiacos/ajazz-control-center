@@ -1,7 +1,7 @@
-# zlib: raw DEFLATE inflate for the self-contained plugin-archive extractor
-# (sdplugin_extractor.cpp). Qt already depends on zlib transitively, so this is
-# always resolvable; REQUIRED makes a missing dev package a clear build error.
-find_package(ZLIB REQUIRED)
+# zlib (ZLIB::ZLIB) for the self-contained plugin-archive extractor (sdplugin_extractor.cpp) is
+# resolved centrally in the root CMakeLists.txt: find_package under AJAZZ_USE_SYSTEM_DEPS (Flatpak /
+# distro), vendored via FetchContent otherwise. A find_package(ZLIB) here would fail on the Windows
+# CI runner, which has no findable system zlib.
 
 # ----------------------------------------------------------------------------
 # Optional: Qt WebEngine for the Property Inspector HTML panel

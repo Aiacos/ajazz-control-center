@@ -183,6 +183,10 @@ if(AJAZZ_USE_SYSTEM_DEPS)
     # nlohmann::json stays PRIVATE-linked to `ajazz_plugins` (COD-031); see
     # `src/plugins/CMakeLists.txt`. The config target is nlohmann_json::nlohmann_json.
     find_package(nlohmann_json 3.12 REQUIRED)
+    # zlib: raw DEFLATE inflate for the plugin-archive extractor (sdplugin_extractor.cpp). Provided
+    # by the Flatpak freedesktop runtime / distro under AJAZZ_USE_SYSTEM_DEPS; the config target is
+    # ZLIB::ZLIB.
+    find_package(ZLIB REQUIRED)
 else()
     # hidapi — vendored via FetchContent for reproducibility
     FetchContent_Declare(
@@ -217,6 +221,41 @@ else()
     set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
     set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
     FetchContent_MakeAvailable(nlohmann_json)
+
+    # zlib — vendored via FetchContent for reproducibility. The plugin-archive extractor
+    # (sdplugin_extractor.cpp) uses the raw <zlib.h> inflate API. `find_package(ZLIB)` cannot locate
+    # a zlib on the Windows CI runner (Qt bundles zlib but does not export it as a findable CMake
+    # package), so vendoring is the only platform-uniform path. Pinned to v1.3.1.
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+        GIT_SHALLOW TRUE
+    )
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Disable zlib examples" FORCE)
+    # zlib v1.3.1 targets cmake_minimum_required < 3.10; force a 3.10 policy floor for the
+    # subproject so CMake 4.x accepts it without the `Compatibility with CMake < 3.10` deprecation
+    # (same handling as hidapi above; violates our zero-warnings invariant otherwise).
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
+    FetchContent_MakeAvailable(zlib)
+    unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+    # zlib's headers (zlib.h) use constructs our strict warning wall rejects (-Wold-style-cast et
+    # al.). find_package(ZLIB) headers come in via -isystem (warnings suppressed); FetchContent
+    # propagates them as plain -I, so mark them SYSTEM explicitly or sdplugin_extractor.cpp fails
+    # under -Werror.
+    get_target_property(_ajazz_zlib_inc zlibstatic INTERFACE_INCLUDE_DIRECTORIES)
+    if(_ajazz_zlib_inc)
+        set_target_properties(
+            zlibstatic PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_ajazz_zlib_inc}"
+        )
+    endif()
+    # zlib's CMake exports `zlibstatic`/`zlib`, not the canonical `ZLIB::ZLIB` config target that
+    # the code links (and that find_package(ZLIB) would provide). Synthesise the alias from the
+    # static lib (no runtime DLL to deploy on Windows). The `zlibstatic` target carries include dirs
+    # for both the source tree and the generated zconf.h, so `#include <zlib.h>` resolves.
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------
