@@ -632,11 +632,9 @@ Application::Application(QObject* parent)
                 g.keyCols = static_cast<std::uint8_t>(d.gridColumns);
                 // keyRows: prefer the explicit descriptor field; fall back to
                 // keyCount/gridColumns when 0 (the AKP815 deferred sentinel).
-                g.keyRows = d.keyRows != 0
-                                ? d.keyRows
-                                : (d.gridColumns != 0
-                                       ? static_cast<std::uint8_t>(d.keyCount / d.gridColumns)
-                                       : 0);
+                g.keyRows = static_cast<std::uint8_t>(
+                    d.keyRows != 0 ? d.keyRows
+                                   : (d.gridColumns != 0 ? d.keyCount / d.gridColumns : 0));
                 g.keyCount = d.keyCount;
                 g.encoderCount = d.encoderCount;
                 // Elgato DeviceType: a device with dials or a touch strip is
