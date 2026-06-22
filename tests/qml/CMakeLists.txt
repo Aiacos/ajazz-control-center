@@ -115,6 +115,14 @@ qt_add_executable(
     # (and omits the per-OS backend TUs), so the factory's #else branch returns the core recording
     # stub — exactly the right headless behaviour for the offscreen QML smoke test.
     ${ACC_APP_SOURCE_DIR}/src/active_window_watcher_factory.cpp
+    # OpenDeck-UI seam (commit 6bcf8199): application.cpp constructs OpenDeckBridge and calls
+    # notify{ProfileChanged,DevicesChanged}(); debug_control_facade.cpp calls
+    # OpenDeckBridge::handle() for the `opendeck.invoke` debug method — both UNCONDITIONAL (no
+    # AJAZZ_BUILD_WEBUI guard, since the bridge is plain Qt with no WebEngine dependency). Compile
+    # the bridge + its pure shaping TU here or the qml smoke target fails to link with "undefined
+    # reference to OpenDeckBridge::*".
+    ${ACC_APP_SOURCE_DIR}/src/opendeck_bridge.cpp
+    ${ACC_APP_SOURCE_DIR}/src/opendeck_shaping.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)
