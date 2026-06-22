@@ -449,8 +449,13 @@ endif()
 # interpreter-location-independent while the dedicated "unresolvable interpreter fails closed" case
 # still exercises a bare name.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
-# zlib for the directly-compiled sdplugin_extractor.cpp (raw DEFLATE inflate).
-find_package(ZLIB REQUIRED)
+# zlib for the directly-compiled sdplugin_extractor.cpp (raw DEFLATE inflate). The root CMakeLists
+# already provides ZLIB::ZLIB (vendored FetchContent alias by default, find_package under
+# AJAZZ_USE_SYSTEM_DEPS); only fall back to find_package when that target is not visible here. A
+# bare find_package(ZLIB) fails on the Windows CI runner, which has no findable system zlib.
+if(NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB REQUIRED)
+endif()
 set_source_files_properties(
     test_manifest_signer.cpp
     PROPERTIES

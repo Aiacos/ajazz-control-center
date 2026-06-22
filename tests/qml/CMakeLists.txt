@@ -29,9 +29,13 @@ if(NOT DEFINED ACC_QML_MODULE_SOURCES OR NOT DEFINED ACC_APP_SOURCE_DIR)
     )
 endif()
 
-# sdplugin_extractor.cpp (compiled into this target) links zlib directly; ZLIB::ZLIB is found in
-# src/app but its imported target is directory-scoped, so re-find it here.
-find_package(ZLIB REQUIRED)
+# sdplugin_extractor.cpp (compiled into this target) links zlib directly. The root CMakeLists
+# provides ZLIB::ZLIB (vendored FetchContent alias by default, find_package under
+# AJAZZ_USE_SYSTEM_DEPS); only fall back to find_package when that target is not visible here. A
+# bare find_package(ZLIB) fails on the Windows CI runner, which has no findable system zlib.
+if(NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB REQUIRED)
+endif()
 
 # qt_add_qml_module's SOURCES / QML_FILES / RESOURCES are relative to the current source directory,
 # but the exported lists are relative to src/app. Rebase them to absolute paths so this target can
