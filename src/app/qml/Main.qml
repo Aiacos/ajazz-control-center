@@ -157,9 +157,8 @@ ApplicationWindow {
 
         AppHeader {
             Layout.fillWidth: true
-            // The left DeviceList sidebar drives device selection; the header's
-            // profile selector reflects the active device via activeCodename.
-            activeCodename: editor.codename
+            // Device selection is driven by the left DeviceList sidebar; the
+            // device-scoped profile selector lives in the editor's ProfileBar.
             onMinimizeRequested: root.hide()
             onPluginStoreRequested: pluginStoreDrawer.open()
             onLoadedPluginsRequested: loadedPluginsDrawer.open()

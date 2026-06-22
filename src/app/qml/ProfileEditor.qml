@@ -90,17 +90,14 @@ Rectangle {
             title: qsTr("Select a device")
         }
 
-        // Profile action bar (Workstream D). The device name + profile selector
-        // now live in the top-bar AppHeader (OpenDeck parity), so the large
-        // device-photo/name header block is gone and this bar carries only the
-        // New/Rename/Duplicate/Delete/Export/Import actions (selectorVisible:
-        // false). Profiles stay device-scoped: ProfileBar still activates this
-        // device's profile (creating "Default" the first time) on device change.
+        // Profile switcher bar (Workstream D) — device-scoped. Carries the
+        // profile selector ("Default" dropdown) + New/Rename/Duplicate/Delete/
+        // Export/Import actions. The profile dropdown belongs here (with the
+        // Stream Dock it configures), NOT in the global top bar.
         ProfileBar {
             Layout.fillWidth: true
             visible: root.codename !== ""
             deviceCodename: root.codename
-            selectorVisible: false
         }
 
         // Empty state when nothing is selected -------------------------------

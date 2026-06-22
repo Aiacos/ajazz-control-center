@@ -36,11 +36,6 @@ Rectangle {
     /// plugin debug console drawer (protocol log + input/response simulation).
     signal debugConsoleRequested()
 
-    /// Codename of the currently-active device, set by Main.qml (from the left
-    /// DeviceList sidebar selection) so the top-bar profile selector reflects
-    /// the active device.
-    property string activeCodename: ""
-
     RowLayout {
         anchors.fill: parent
         anchors.leftMargin: Theme.spacingLg
@@ -77,47 +72,6 @@ Rectangle {
             visible: !brandLogo.visible
             Accessible.role: Accessible.StaticText
             Accessible.name: text
-        }
-
-        // Profile selector in the top bar. Device selection is handled by the
-        // left DeviceList sidebar; this reflects/sets the active device's profile.
-        // Self-sufficient: queries ProfileController directly and re-syncs on
-        // profile CRUD, profile switch, and active-device change. The editor's
-        // ProfileBar keeps the New/Rename/Duplicate/Delete/Export/Import actions
-        // but hides its own (now-redundant) selector.
-        ComboBox {
-            id: profileCombo
-            objectName: "profileSelectorHeader"
-            Layout.preferredWidth: 220
-            textRole: "name" // profilesForDevice() maps: {id, name}
-            valueRole: "id"
-            model: ProfileController.profilesForDevice(root.activeCodename)
-            visible: root.activeCodename !== "" && count > 0
-            onActivated: {
-                var id = currentValue;
-                if (id && id !== ProfileController.activeProfileId())
-                    ProfileController.loadProfileById(id);
-            }
-            function refresh() {
-                model = ProfileController.profilesForDevice(root.activeCodename);
-                syncToActive();
-            }
-            function syncToActive() {
-                currentIndex = indexOfValue(ProfileController.activeProfileId());
-            }
-            Component.onCompleted: refresh()
-            Connections {
-                target: ProfileController
-                function onProfilesChanged() { profileCombo.refresh(); }
-                function onProfileChanged() { profileCombo.syncToActive(); }
-            }
-            Connections {
-                target: root
-                function onActiveCodenameChanged() { profileCombo.refresh(); }
-            }
-            Accessible.role: Accessible.ComboBox
-            Accessible.name: qsTr("Profile selector")
-            Accessible.description: qsTr("Choose the active profile for this device")
         }
 
         Item { Layout.fillWidth: true }
