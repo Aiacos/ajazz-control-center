@@ -380,6 +380,12 @@ Page {
                 TabButton { text: qsTr("AJAZZ Streamdock"); width: implicitWidth }
                 TabButton { text: qsTr("OpenDeck"); width: implicitWidth }
                 TabButton { text: qsTr("Community"); width: implicitWidth }
+                // Mirabox (GitHub): open StreamDock-Plugins repo (proxy MiraboxGithubTab = 5).
+                TabButton {
+                    objectName: "tabMiraboxGithub"
+                    text: qsTr("Mirabox (GitHub)")
+                    width: implicitWidth
+                }
             }
 
             TextField {

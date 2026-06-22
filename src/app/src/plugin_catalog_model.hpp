@@ -46,6 +46,7 @@ namespace ajazz::app {
 
 class StreamdockCatalogFetcher;
 class OpenDeckCatalogFetcher;
+class MiraboxGithubCatalogFetcher;
 
 /// Single catalogue entry shown by the Plugin Store grid.
 ///
@@ -653,6 +654,10 @@ private:
     /// @ref replaceStreamdockRows with `source == "opendeck"`.
     void replaceOpendeckRows(std::vector<CatalogEntry> rows);
 
+    /// Replace the Mirabox-GitHub-sourced rows with @p rows. Mirrors
+    /// @ref replaceStreamdockRows with `source == "mirabox-github"`.
+    void replaceMiraboxGithubRows(std::vector<CatalogEntry> rows);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 
@@ -698,6 +703,10 @@ private:
     std::unique_ptr<OpenDeckCatalogFetcher> m_opendeckFetcher;
     QString m_opendeckStateString = QStringLiteral("loading");
     qint64 m_opendeckFetchedAtUnixMs = 0;
+
+    /// Mirabox-GitHub mirror (open StreamDock-Plugins repo) — same lifetime /
+    /// lazy-creation contract as the other fetchers.
+    std::unique_ptr<MiraboxGithubCatalogFetcher> m_miraboxGithubFetcher;
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.

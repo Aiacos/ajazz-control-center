@@ -73,6 +73,7 @@ qt_add_executable(
     ${ACC_APP_SOURCE_DIR}/src/hotplug_debouncer.cpp
     ${ACC_APP_SOURCE_DIR}/src/streamdock_catalog_fetcher.cpp
     ${ACC_APP_SOURCE_DIR}/src/opendeck_catalog_fetcher.cpp
+    ${ACC_APP_SOURCE_DIR}/src/mirabox_github_catalog_fetcher.cpp
     ${ACC_APP_SOURCE_DIR}/src/sdplugin_extractor.cpp
     # FirmwareUpdateService is an Application member but is NOT in the QML module SOURCES list (it
     # has no QML_NAMED_ELEMENT export path via the module — it's registered manually). app_icon

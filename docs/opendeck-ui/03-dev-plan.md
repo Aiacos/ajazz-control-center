@@ -292,3 +292,36 @@ external browser).
     Profiles, Plugins, and Settings overlays (a larger chunk — 4 surfaces). The
     Loaded/Debug/search header items are our extras (not in OpenDeck) — keep or move
     behind an overflow later.
+- 2026-06-22: **Mirabox plugin install — investigation + GitHub source increment 1
+  (browse).** User goal clarified: make Mirabox plugins INSTALLABLE in-app (not a
+  Mirabox UI). Live RE of the Space store proved the full 469-plugin catalogue is
+  NOT installable — `download` is a relative path resolvable only by the
+  proprietary desktop app's secret CDN base (0/50 absolute; the web SPA's
+  `window.open(download)` returns the SPA index, not a file; the OSS object keys
+  aren't derivable from the list API or the icon path; `productInfo/download` is
+  auth-gated). Captured in the plugin-install memory. Chosen path (open,
+  license-clean): a **Mirabox (GitHub) catalog source** backed by
+  `github.com/MiraboxSpace/StreamDock-Plugins` (GPL-3.0, ~21 plugin SOURCE dirs;
+  no releases/archives → needs a multi-file fetch-and-assemble install path).
+  - **Increment 1 DONE (browse):** `MiraboxGithubCatalogFetcher`
+    (`mirabox_github_catalog_fetcher.{hpp,cpp}`) hits the GitHub Contents API for
+    `Plugins/` (one call → immediate child dirs, no recursive-tree truncation),
+    derives one `CatalogEntry{source:"mirabox-github"}` per dir (dir-name
+    humanised → display name; repo-relative path stashed in `streamdockProductId`
+    for the future install fetch; `downloadUrl` EMPTY → browse-only for now).
+    Wired into `PluginCatalogModel` (member + ctor + reload + refreshOnline +
+    `replaceMiraboxGithubRows`, symmetric with the streamdock/opendeck fetchers),
+    a `MiraboxGithubTab = 5` proxy filter, and a "Mirabox (GitHub)" PluginStore tab.
+    **Verified:** live GitHub fetch returned **21 plugins** (+ cache written,
+    log-confirmed); fetcher parse + humaniser + cached round-trip unit-tested
+    (`test_mirabox_github_catalog_fetcher.cpp`, 4 cases); proxy filter locked
+    (`test_plugin_catalog_proxy_model.cpp` MiraboxGithubTab case); unit 861 /
+    qml smoke 123 green. **Screenshot of the rendered tab is blocked by the
+    headless modal-Drawer harness gap** (can't open a modal Popup via the debug
+    channel) — verification is the live fetch log + the two unit tests.
+  - **Increment 2 (TODO — makes them installable):** branch `install()` on
+    `source == "mirabox-github"`: fetch the plugin's subtree files via the GitHub
+    API, assemble the `.sdPlugin` dir in staging (path-safety on each relative
+    path), then reuse the existing `verifyStagedPlugin` → promote stages; flip
+    `entryInstallableInApp` to accept the source; live-install one plugin (e.g.
+    World Weather) and confirm its actions appear + render on the AKP05E.

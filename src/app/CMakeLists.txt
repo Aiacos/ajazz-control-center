@@ -115,6 +115,7 @@ qt_add_executable(
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
+    src/mirabox_github_catalog_fetcher.cpp
     src/profile_controller.cpp
     src/branding_service.cpp
     src/tray_controller.cpp

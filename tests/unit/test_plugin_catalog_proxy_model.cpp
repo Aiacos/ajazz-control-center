@@ -144,6 +144,23 @@ TEST_CASE("PluginCatalogProxyModel: OpenDeckTab and CommunityTab partition the r
     REQUIRE(proxy.count() == 2);
 }
 
+TEST_CASE("PluginCatalogProxyModel: MiraboxGithubTab filters by source", "[plugin_catalog_proxy]") {
+    qtApp();
+    // Isolated 3-source fixture so the shared makeFixture() counts stay intact.
+    MockCatalogSource src({
+        {"World Weather", "Mirabox weather plugin.", {"weather"}, "mirabox-github", false},
+        {"AJAZZ Clock", "Show the time.", {"clock"}, "streamdock", false},
+        {"OBS Mute", "Mute OBS.", {"obs"}, "opendeck", false},
+    });
+    PluginCatalogProxyModel proxy;
+    proxy.setSourceModel(&src);
+
+    proxy.setActiveTab(PluginCatalogProxyModel::MiraboxGithubTab);
+    REQUIRE(proxy.count() == 1);
+    REQUIRE(proxy.data(proxy.index(0, 0), PluginCatalogModel::SourceRole).toString() ==
+            "mirabox-github");
+}
+
 TEST_CASE("PluginCatalogProxyModel: InstalledTab filters by installed flag",
           "[plugin_catalog_proxy]") {
     qtApp();

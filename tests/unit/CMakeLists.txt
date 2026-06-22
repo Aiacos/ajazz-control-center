@@ -262,6 +262,12 @@ add_executable(
     # different path.
     test_opendeck_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_catalog_fetcher.cpp
+    # Mirabox-GitHub catalogue fetcher (open StreamDock-Plugins repo): the
+    # GitHub Contents-API shape (a flat JSON array of {name,path,type} dir
+    # entries) + the dir-name → display-name humaniser. Also pulled in because
+    # plugin_catalog_model.cpp (below) now references MiraboxGithubCatalogFetcher.
+    test_mirabox_github_catalog_fetcher.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/mirabox_github_catalog_fetcher.cpp
     # PluginCatalogProxyModel: pins the filter contract for the Plugin
     # Store GridView (HIGH-1/HIGH-2 fix from quick task 260513-u0b). The
     # proxy references PluginCatalogModel::Roles only — no networking,

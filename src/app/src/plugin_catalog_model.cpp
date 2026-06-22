@@ -10,6 +10,7 @@
 #include "plugin_catalog_model.hpp"
 
 #include "ajazz/core/logger.hpp"
+#include "mirabox_github_catalog_fetcher.hpp"
 #include "opendeck_catalog_fetcher.hpp"
 #include "plugin_manifest.hpp"
 #include "plugin_verify_gate.hpp"
@@ -217,7 +218,8 @@ QString stateToString(OpenDeckCatalogFetcher::State s) {
 PluginCatalogModel::PluginCatalogModel(QObject* parent)
     : QAbstractListModel(parent),
       m_streamdockFetcher(std::make_unique<StreamdockCatalogFetcher>(this)),
-      m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)) {
+      m_opendeckFetcher(std::make_unique<OpenDeckCatalogFetcher>(this)),
+      m_miraboxGithubFetcher(std::make_unique<MiraboxGithubCatalogFetcher>(this)) {
     // PLUGIN-14 (T-22-phonehome): load the persisted online-catalog flag.
     // The catalog is now ON by default so a fresh install can browse and
     // install Stream Dock / OpenDeck plugins without first hunting for a
@@ -339,6 +341,15 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                              m_opendeckStateString = updated;
                              emit opendeckStateChanged();
                          }
+                     });
+
+    // Mirabox-GitHub mirror — same snapshot-replaces-rows wiring. (No state
+    // banner property yet; the tab renders from the snapshot rows directly.)
+    QObject::connect(m_miraboxGithubFetcher.get(),
+                     &MiraboxGithubCatalogFetcher::snapshotReady,
+                     this,
+                     [this](MiraboxGithubCatalogFetcher::Snapshot snapshot) {
+                         replaceMiraboxGithubRows(std::move(snapshot.rows));
                      });
 
     // Populate with the mock fixture so the QML grid has rows in dev
@@ -730,6 +741,10 @@ void PluginCatalogModel::reload() {
         m_opendeckFetcher->setCatalogUrlOverride(liveUrlOverride);
         m_opendeckFetcher->refresh();
     }
+    if (m_miraboxGithubFetcher) {
+        m_miraboxGithubFetcher->setCatalogUrlOverride(liveUrlOverride);
+        m_miraboxGithubFetcher->refresh();
+    }
 }
 
 QString PluginCatalogModel::streamdockState() const {
@@ -873,6 +888,10 @@ void PluginCatalogModel::refreshOnline() {
         m_opendeckFetcher->setCatalogUrlOverride(QString{});
         m_opendeckFetcher->refresh();
     }
+    if (m_miraboxGithubFetcher) {
+        m_miraboxGithubFetcher->setCatalogUrlOverride(QString{});
+        m_miraboxGithubFetcher->refresh();
+    }
 }
 
 void PluginCatalogModel::setPluginsDirOverride(QString const& dir) {
@@ -922,6 +941,35 @@ void PluginCatalogModel::replaceOpendeckRows(std::vector<CatalogEntry> rows) {
     kept.reserve(m_rows.size() + rows.size());
     for (auto& row : m_rows) {
         if (row.source != QStringLiteral("opendeck")) {
+            kept.push_back(std::move(row));
+        }
+    }
+    for (auto& row : rows) {
+        kept.push_back(std::move(row));
+    }
+    m_rows = std::move(kept);
+
+    QHash<QString, InstallState> reconciled;
+    reconciled.reserve(static_cast<int>(m_rows.size()));
+    for (auto const& row : m_rows) {
+        if (auto const it = m_install.find(row.uuid); it != m_install.end()) {
+            reconciled.insert(row.uuid, *it);
+        }
+    }
+    m_install = std::move(reconciled);
+    endResetModel();
+    emit countChanged();
+    emit installedCountChanged();
+}
+
+void PluginCatalogModel::replaceMiraboxGithubRows(std::vector<CatalogEntry> rows) {
+    // Same strategy as replaceStreamdockRows but scoped to source =
+    // "mirabox-github". Disjoint partition of m_rows from the other fetchers.
+    beginResetModel();
+    std::vector<CatalogEntry> kept;
+    kept.reserve(m_rows.size() + rows.size());
+    for (auto& row : m_rows) {
+        if (row.source != QStringLiteral("mirabox-github")) {
             kept.push_back(std::move(row));
         }
     }

@@ -62,6 +62,7 @@ public:
         StreamdockTab = 2,
         OpenDeckTab = 3,
         CommunityTab = 4,
+        MiraboxGithubTab = 5, ///< Open MiraboxSpace/StreamDock-Plugins GitHub repo.
     };
     Q_ENUM(Tab)
 
