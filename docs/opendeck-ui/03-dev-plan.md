@@ -240,6 +240,37 @@ external browser).
     bindable inputs is unverified (no AKP03 hardware). AKP153 input is likewise
     unconfirmed. Both are PROVISIONAL in kind.rs; verify on a retail unit before
     modelling the side buttons (CLAUDE.md hardware-wins rule).
+- 2026-06-22: **Phase 5 (cleanup) — partial: orphan retirement + revealed
+  regression fixed; wholesale retirement still gated on parity.** The full
+  Phase 5 ("retire superseded QML") is gated on the native UI reaching parity,
+  which it has NOT (Phase 3 follow-ups below are open), so only the safe subset
+  was done now:
+  - **Orphan removal:** Phase 3 dropped the left device sidebar, leaving
+    `DeviceList.qml` instantiated nowhere and `DeviceRow.qml` instantiated only by
+    it. Both retired (git rm) + removed from `src/app/CMakeLists.txt` and the two
+    `tests/qml/test_qml_smoke.cpp` registrations. The top-bar `AppHeader` dropdown
+    now owns `deviceSelected`.
+  - **Latent link gap fixed:** the `ajazz_qml_tests` target has been *unbuildable
+    since the webui commit `6bcf8199`* — `application.cpp`/`debug_control_facade.cpp`
+    reference `OpenDeckBridge` but `opendeck_bridge.cpp`/`opendeck_shaping.cpp` were
+    never added to its source list. Added them (Qt-only, no WebEngine dep). The
+    offscreen QML smoke gate builds + runs again on Linux.
+  - **Regression surfaced + fixed (the screenshot win):** with the smoke target
+    runnable again, `test_under_threshold_is_not_scrollable` went red
+    (`contentH 385 > viewH 294`) and the live AKP05E screenshot confirmed it — the
+    **2nd key row + dials were clipped** because the docked Inspector and the canvas
+    were BOTH `fillHeight`, so the Inspector's larger `preferredHeight` starved the
+    canvas below its content height. Fixed in `DeviceView.qml`: when the grid does
+    NOT overflow (AKP05/03/153 all do), the canvas sizes to its natural content
+    height (`deviceCanvas.implicitHeight + 2·spacingMd`) and the Inspector becomes
+    the sole `fillHeight` pane; only an oversized SKU reverts to the shared-flex
+    250 px + ScrollView path. Re-verified live: full AKP05E stack (10 keys + 4 strip
+    zones + 4 dials) renders above a right-sized Inspector. qml suite 17 cases /
+    123 assertions green; unit suite 856 green.
+  - **Still gated (not done):** retiring the rest of the superseded QML + removing
+    the ad-hoc layout patches waits on the Phase 3 parity follow-ups below; doing
+    it now risks the same regression class an earlier single-view rewrite hit.
+    `ctest` on macOS/Windows compilers also still to confirm (Linux green).
 - 2026-06-22: **Phase 3 follow-ups (main screen scoped this task; not yet done):** move
   the profile dropdown + Plugins/Settings into the same top bar and slim the
   large device-header block (currently the profile dropdown + device
