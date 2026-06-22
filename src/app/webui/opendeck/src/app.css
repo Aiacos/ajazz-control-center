@@ -1,0 +1,147 @@
+@import url("fonts.css");
+
+@import "tailwindcss/theme.css";
+@import "tailwindcss/preflight.css";
+@import "tailwindcss/utilities.css";
+
+*, ::after, ::before, ::backdrop, ::file-selector-button {
+	border-color: var(--color-gray-200, currentColor);
+}
+
+button:focus:not(:focus-visible), select:focus:not(:focus-visible), input:focus, textarea:focus {
+	@apply outline-hidden;
+}
+
+button, input[type="radio"], input[type="checkbox"], input[type="range"], input[type="color"] {
+	@apply cursor-pointer;
+}
+
+.select-wrapper {
+	@apply relative;
+}
+
+.select-wrapper select {
+	@apply appearance-none;
+	@apply px-2 py-1;
+	@apply text-sm text-neutral-300;
+	@apply bg-neutral-700;
+	@apply border border-neutral-600 rounded-lg;
+	@apply cursor-pointer;
+}
+
+.select-wrapper::after {
+	@apply absolute right-4 top-[47.5%] -translate-y-1/2;
+	@apply w-2 h-2 rotate-45;
+	@apply border-r-2 border-b-2;
+	@apply pointer-events-none content-["_"];
+}
+
+.select-device-wrapper {
+	@apply relative;
+}
+
+.select-device-wrapper select {
+	@apply appearance-none;
+	@apply font-semibold text-xl text-neutral-200;
+	@apply cursor-pointer;
+}
+
+.select-device-wrapper::after {
+	@apply absolute right-0.5 top-[47.5%] -translate-y-1/2;
+	@apply w-2 h-2 rotate-45;
+	@apply border-r-2 border-b-2 border-neutral-100;
+	@apply pointer-events-none content-["_"];
+}
+
+.select-profile-wrapper {
+	@apply relative;
+}
+
+.select-profile-wrapper select {
+	@apply appearance-none;
+	@apply text-neutral-400;
+	@apply cursor-pointer;
+}
+
+.select-profile-wrapper::after {
+	@apply absolute right-0.5 top-[47.5%] -translate-y-1/2;
+	@apply w-1.5 h-1.5 rotate-45;
+	@apply border-r-2 border-b-2 border-neutral-400;
+	@apply pointer-events-none content-["_"];
+}
+
+.plugin-readme h1, .plugin-readme h2, .plugin-readme h3, .plugin-readme h4, .plugin-readme h5, .plugin-readme h6 {
+	@apply font-medium text-neutral-200;
+}
+.plugin-readme h1:not(:first-child), .plugin-readme h2:not(:first-child), .plugin-readme h3:not(:first-child) {
+	@apply mt-5;
+}
+.plugin-readme h1, .plugin-readme h2, .plugin-readme h3 {
+	@apply mb-3 pb-1.5 border-b border-neutral-600;
+}
+.plugin-readme h1 {
+	@apply text-2xl;
+}
+.plugin-readme h2 {
+	@apply text-xl;
+}
+.plugin-readme h3 {
+	@apply text-lg;
+}
+.plugin-readme a {
+	@apply text-blue-400 hover:underline cursor-pointer;
+}
+.plugin-readme ul {
+	@apply list-disc ml-6;
+}
+.plugin-readme img {
+	@apply my-3;
+}
+
+.plugin-readme .octicon {
+	display: inline-block;
+	fill: currentColor;
+	vertical-align: text-bottom;
+}
+.plugin-readme .markdown-alert {
+	padding: 0 1em;
+	margin-top: 16px;
+	margin-bottom: 16px;
+	color: inherit;
+	border-left: 0.25em solid #444c56;
+}
+.plugin-readme .markdown-alert-title {
+	display: inline-flex;
+	align-items: center;
+	font-weight: 500;
+}
+.plugin-readme .markdown-alert-note {
+	border-left-color: #539bf5;
+}
+.plugin-readme .markdown-alert-tip {
+	border-left-color: #57ab5a;
+}
+.plugin-readme .markdown-alert-important {
+	border-left-color: #986ee2;
+}
+.plugin-readme .markdown-alert-warning {
+	border-left-color: #c69026;
+}
+.plugin-readme .markdown-alert-caution {
+	border-left-color: #e5534b;
+}
+.plugin-readme .markdown-alert-note > .markdown-alert-title {
+	color: #539bf5;
+}
+.plugin-readme .markdown-alert-tip > .markdown-alert-title {
+	color: #57ab5a;
+}
+.plugin-readme .markdown-alert-important > .markdown-alert-title {
+	color: #986ee2;
+}
+.plugin-readme .markdown-alert-warning > .markdown-alert-title {
+	color: #c69026;
+}
+.plugin-readme .markdown-alert-caution > .markdown-alert-title {
+	color: #e5534b;
+}

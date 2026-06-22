@@ -1,5 +1,14 @@
 add_executable(
     ajazz_unit_tests
+    # OpenDeck UI integration Phase 0: pure UI-mode config resolution
+    # (env -> config -> default). See docs/opendeck-ui/02-architecture.md.
+    test_ui_mode_resolver.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/ui_mode_resolver.cpp
+    # OpenDeck UI integration Phase 1: pure our-types -> OpenDeck-JSON shaping
+    # (opendeck_shaping.cpp links against only Qt JSON + header-only core types,
+    # so the bridge contract is tested without the heavy backend QObjects).
+    test_opendeck_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_shaping.cpp
     test_logger.cpp
     # Debug epic Phase 1: tee / ring-buffer / file LogSink building blocks.
     test_log_sinks.cpp

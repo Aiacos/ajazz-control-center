@@ -145,6 +145,40 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
         return QJsonObject{{"path", app.logFilePath()}};
     });
 
+    // ---- OpenDeck UI bridge (headless contract verification) ----------
+    // opendeck.invoke {command, args?} -> {command, result}. Runs the OpenDeck
+    // command through OpenDeckBridge::handle() so the webui IPC contract can be
+    // verified without QtWebEngine (the visual gate). `result` is the parsed
+    // JSON value the bridge would return to the web UI.
+    server.registerMethod("opendeck.invoke", [&app](QJsonObject const& params, QString& error) {
+        auto* bridge = app.openDeckBridge();
+        if (bridge == nullptr) {
+            error = QStringLiteral("opendeck bridge unavailable");
+            return QJsonObject{};
+        }
+        QString const command = params.value("command").toString();
+        if (command.isEmpty()) {
+            error = QStringLiteral("require 'command'");
+            return QJsonObject{};
+        }
+        QString argsJson = QStringLiteral("{}");
+        if (params.contains("args")) {
+            argsJson = QString::fromUtf8(
+                QJsonDocument(params.value("args").toObject()).toJson(QJsonDocument::Compact));
+        }
+        QString const resultStr = bridge->handle(command, argsJson);
+        // handle() returns a bare JSON value (object/array/scalar); wrap to parse.
+        QJsonParseError parseErr{};
+        QJsonDocument const wrapped =
+            QJsonDocument::fromJson(("[" + resultStr + "]").toUtf8(), &parseErr);
+        QJsonValue result;
+        if (parseErr.error == QJsonParseError::NoError && wrapped.isArray() &&
+            !wrapped.array().isEmpty()) {
+            result = wrapped.array().at(0);
+        }
+        return QJsonObject{{"command", command}, {"result", result}};
+    });
+
     // ---- Inventory + state --------------------------------------------
     server.registerMethod("device.list", [&app](QJsonObject const&, QString&) {
         auto const descriptors = app.deviceRegistry().enumerate();
@@ -902,6 +936,13 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
             return QJsonObject{};
         }
         mgr->rediscover();
+        // Refresh the Action Library too: rediscover() spawns newly-appeared
+        // on-disk plugins but does not go through the catalogue install flow, so
+        // without this the library stays stale until restart (the sideload +
+        // rediscover refresh gap).
+        if (auto* cat = app.pluginCatalog()) {
+            cat->refreshInstalled();
+        }
         auto* srv = app.pluginServer();
         return QJsonObject{{"rediscovered", true},
                            {"connectedCount", srv != nullptr ? srv->connectedPluginCount() : 0}};

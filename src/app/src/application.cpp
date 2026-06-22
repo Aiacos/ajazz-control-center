@@ -128,6 +128,10 @@ Application::Application(QObject* parent)
       m_trayController(
           std::make_unique<TrayController>(m_branding.get(), m_profileController.get(), this)),
       m_pluginCatalog(std::make_unique<PluginCatalogModel>(this)),
+      m_openDeckBridge(std::make_unique<OpenDeckBridge>(m_deviceModel.get(),
+                                                        m_profileController.get(),
+                                                        m_pluginCatalog.get(),
+                                                        this)),
       m_loadedPlugins(std::make_unique<LoadedPluginsModel>(this)),
       m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
       // Phase 5 Plan 05-07 / A-04: TimeSyncService is constructed with a
@@ -505,6 +509,21 @@ Application::Application(QObject* parent)
                      &HotplugDebouncer::coalesced,
                      m_deviceModel.get(),
                      [this](core::HotplugEvent const&) { m_deviceModel->refresh(); });
+
+    // OpenDeck UI (Phase 2B): give the bridge the live device-image path
+    // (update_image -> set_image) and push backend changes to the web UI as
+    // OpenDeck events. Set after construction (StreamDockControlService is
+    // declared after the bridge in the member list, so the init list can't pass
+    // it).
+    m_openDeckBridge->setStreamDockControl(m_streamDockControl.get());
+    QObject::connect(m_profileController.get(),
+                     &ProfileController::profileChanged,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyProfileChanged);
+    QObject::connect(m_deviceModel.get(),
+                     &DeviceModel::modelReset,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyDevicesChanged);
 
     // Phase 14 Plan 14-02 (DISPLAY-08): wire profileChanged -> repaintFromProfile so
     // loading a profile repaints every bound key on the active Stream Deck.

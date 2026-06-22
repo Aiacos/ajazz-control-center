@@ -23,6 +23,7 @@
 #include "firmware_update_service.hpp"
 #include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
+#include "opendeck_bridge.hpp"
 #include "plugin_catalog_model.hpp"
 #include "plugin_debug_service.hpp"
 #include "profile_controller.hpp"
@@ -173,6 +174,10 @@ public:
     [[nodiscard]] PluginCatalogModel* pluginCatalog() const noexcept {
         return m_pluginCatalog.get();
     }
+    /// OpenDeck IPC bridge (webui seam). Maps the OpenDeck command/event contract
+    /// to our backend; driven by the debug channel's opendeck.invoke and (Phase 1
+    /// part 2) the QWebChannel that the embedded OpenDeck web UI talks to.
+    [[nodiscard]] OpenDeckBridge* openDeckBridge() const noexcept { return m_openDeckBridge.get(); }
 
 public:
 #ifdef AJAZZ_HAVE_WEBSOCKETS
@@ -239,6 +244,9 @@ private:
     std::unique_ptr<ProfileController> m_profileController; ///< Profile load/save controller.
     std::unique_ptr<TrayController> m_trayController;       ///< System tray icon + menu.
     std::unique_ptr<PluginCatalogModel> m_pluginCatalog; ///< Plugin Store catalogue (mock for now).
+    /// OpenDeck IPC bridge — declared AFTER m_deviceModel/m_profileController/
+    /// m_pluginCatalog so it is constructed after the singletons it borrows.
+    std::unique_ptr<OpenDeckBridge> m_openDeckBridge;
     std::unique_ptr<LoadedPluginsModel>
         m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
     std::unique_ptr<PropertyInspectorController>

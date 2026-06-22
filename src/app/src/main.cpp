@@ -15,19 +15,27 @@
 #include "app_icon.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
+#include "opendeck_bridge.hpp"
 #include "single_instance_guard.hpp"
 #include "tray_controller.hpp"
+#include "ui_mode_resolver.hpp"
 
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include <QWindow>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include <QtWebEngineQuick/QtWebEngineQuick>
+#ifdef AJAZZ_HAVE_WEBUI
+#include "opendeck_scheme_handler.hpp"
+
+#include <QWebEngineProfile>
+#endif
 #endif
 
 #include <csignal>
@@ -62,6 +70,11 @@ int main(int argc, char* argv[]) {
     // (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`); minimal Qt installs and
     // headless CI builds compile this branch out and stay on the
     // schema-driven Property Inspector renderer at runtime.
+#ifdef AJAZZ_HAVE_WEBUI
+    // Register the custom scheme that serves the bundled OpenDeck SPA with a
+    // clean web origin (opendeck://app/). MUST precede QtWebEngine init.
+    ajazz::app::registerOpenDeckScheme();
+#endif
     QtWebEngineQuick::initialize();
 #endif
     // Use QApplication (not QGuiApplication) because TrayController relies on
@@ -176,9 +189,60 @@ int main(int argc, char* argv[]) {
     ajazz::app::Application controller;
     controller.bootstrap();
 
+    // OpenDeck UI integration (Phase 0): pick the UI implementation to load.
+    // env AJAZZ_UI_MODE -> QSettings "ui/mode" config -> default "qml". The
+    // resolved token is exposed to QML as `AppUiMode` so the root surface (and
+    // the debug channel) can branch on it; the webui root is wired in Phase 1.
+    // QApplication org/app names are already set above, so QSettings resolves
+    // to the right config file.
+    ajazz::app::UiMode const uiMode = ajazz::app::resolveUiMode();
+    QString const uiModeStr = ajazz::app::uiModeToString(uiMode);
+    qInfo().noquote() << "[ui] mode:" << uiModeStr
+                      << "(override with AJAZZ_UI_MODE or the [ui] mode= config key)";
+
     QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty(QStringLiteral("AppUiMode"), uiModeStr);
     controller.exposeToQml(engine);
-    engine.loadFromModule("AjazzControlCenter", "Main");
+
+    // Phase 1: pick the root surface. The webui root (WebUiHost.qml) only exists
+    // when Qt WebEngine is compiled in; the SPA bundle (:/opendeck) only when
+    // AJAZZ_BUILD_WEBUI was ON. main.cpp owns that compile-time knowledge and
+    // forwards it to the host via context properties.
+#ifdef AJAZZ_HAVE_WEBENGINE
+    bool const webEngineAvailable = true;
+#else
+    bool const webEngineAvailable = false;
+#endif
+#ifdef AJAZZ_HAVE_WEBUI
+    bool const webUiBundlePresent = true;
+#else
+    bool const webUiBundlePresent = false;
+#endif
+    engine.rootContext()->setContextProperty(QStringLiteral("AppHasWebUiBundle"),
+                                             webUiBundlePresent);
+
+    QString rootComponent = QStringLiteral("Main");
+    if (uiMode == ajazz::app::UiMode::WebUi) {
+        if (webEngineAvailable) {
+            engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
+                                                     controller.openDeckBridge());
+            rootComponent = QStringLiteral("WebUiHost");
+#ifdef AJAZZ_HAVE_WEBUI
+            // Serve the bundled SPA via the custom scheme so SvelteKit routes
+            // from a clean origin and Fetch works. Handler is parented to qApp.
+            QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
+                QByteArray(ajazz::app::kOpenDeckScheme),
+                new ajazz::app::OpenDeckSchemeHandler(qApp));
+#else
+            qInfo().noquote() << "[ui] webui mode: SPA bundle not built (configure with "
+                                 "-DAJAZZ_BUILD_WEBUI=ON); showing the host placeholder.";
+#endif
+        } else {
+            qInfo().noquote() << "[ui] webui requested but Qt WebEngine is not built; "
+                                 "falling back to the native qml UI.";
+        }
+    }
+    engine.loadFromModule("AjazzControlCenter", rootComponent);
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }

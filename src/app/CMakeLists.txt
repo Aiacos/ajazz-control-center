@@ -37,10 +37,28 @@ else()
     set(AJAZZ_HAVE_WEBENGINE FALSE)
 endif()
 
+# ----------------------------------------------------------------------------
+# Optional: embed the OpenDeck Svelte SPA (the `webui` UI mode)
+# ----------------------------------------------------------------------------
+# OFF by default: the native QML UI (ui.mode = qml) is the default and needs no Node.js. When ON
+# (and Qt WebEngine is present), scripts/build-webui.sh runs `vite build` on the vendored frontend
+# (src/app/webui/opendeck) + injects the Tauri-compat shim, and the static SPA is bundled into the
+# :/opendeck Qt resource. WebUiHost.qml then loads it. See docs/opendeck-ui/.
+option(AJAZZ_BUILD_WEBUI "Embed the OpenDeck Svelte web UI (webui mode); requires Node.js" OFF)
+
 qt_add_executable(
     ajazz-control-center
     src/main.cpp
     src/application.cpp
+    # OpenDeck UI integration Phase 0: resolve which UI implementation to load (native QML vs
+    # embedded OpenDeck web UI) from env -> config -> default. See docs/opendeck-ui/.
+    src/ui_mode_resolver.cpp
+    # OpenDeck UI integration Phase 1: command/event bridge mapping our backend singletons to the
+    # OpenDeck IPC contract (webui seam). See docs/opendeck-ui/. opendeck_shaping.cpp is the pure
+    # (unit-testable) our-types -> OpenDeck-JSON layer; opendeck_bridge.cpp is the QObject that
+    # drives it from the singletons.
+    src/opendeck_shaping.cpp
+    src/opendeck_bridge.cpp
     # Debug epic Phase 1: unifies core AJAZZ_LOG_* and Qt qDebug/qCDebug into one tee (stderr + file
     # + ring) and installs the qInstallMessageHandler bridge. Backs the out-of-process debug log
     # stream.
@@ -693,9 +711,15 @@ if(AJAZZ_HAVE_WEBENGINE)
     # present. Adding it to the QML module list unconditionally would fail QML compilation on
     # minimal Qt installs, so we attach it via qt_target_qml_sources only on the WebEngine path.
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/PIWebView.qml)
+    # WebUiHost.qml hosts the OpenDeck SPA in a WebEngineView + QWebChannel; like PIWebView it
+    # imports QtWebEngine/QtWebChannel, so it is WebEngine-gated too.
+    qt_target_qml_sources(ajazz-control-center QML_FILES qml/WebUiHost.qml)
     # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
     # inside it), so it only compiles when WebEngine is present.
     target_sources(ajazz-control-center PRIVATE src/pi_url_request_interceptor.cpp)
+    # OpenDeck webui: custom URL-scheme handler that serves the bundled SPA over opendeck://app/
+    # (QWebEngineUrlSchemeHandler -> :/opendeck). WebEngine-gated.
+    target_sources(ajazz-control-center PRIVATE src/opendeck_scheme_handler.cpp)
     # Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim. kMiraboxShimSource is declared
     # inline constexpr in the header (always reachable); makeMiraboxShim() body uses
     # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
@@ -707,6 +731,52 @@ if(AJAZZ_HAVE_WEBENGINE)
     # here. PropertyInspectorController::loadInspector() calls
     # profile->scripts()->insert(makeCefQueryShim()) before loading the PI HTML.
     target_sources(ajazz-control-center PRIVATE src/pi_cef_shim.cpp)
+endif()
+
+# ----------------------------------------------------------------------------
+# OpenDeck webui SPA bundle (-DAJAZZ_BUILD_WEBUI=ON)
+# ----------------------------------------------------------------------------
+# Builds the vendored OpenDeck SPA at configure time (scripts/build-webui.sh) and bundles the static
+# output under the :/opendeck Qt resource prefix, then defines AJAZZ_HAVE_WEBUI so main.cpp knows
+# the bundle is present. OFF by default → no Node dependency and the default build is unaffected.
+if(AJAZZ_BUILD_WEBUI)
+    if(NOT AJAZZ_HAVE_WEBENGINE)
+        message(
+            FATAL_ERROR
+                "AJAZZ_BUILD_WEBUI=ON requires Qt WebEngine "
+                "(AJAZZ_BUILD_PROPERTY_INSPECTOR=ON + WebEngineQuick/WebChannelQuick found)."
+        )
+    endif()
+    set(_webui_out "${CMAKE_CURRENT_SOURCE_DIR}/webui/opendeck/build")
+    message(STATUS "AJAZZ_BUILD_WEBUI=ON — building OpenDeck SPA (scripts/build-webui.sh) ...")
+    execute_process(
+        COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/build-webui.sh"
+        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        RESULT_VARIABLE _webui_rc
+        OUTPUT_VARIABLE _webui_log
+        ERROR_VARIABLE _webui_log
+    )
+    if(NOT _webui_rc EQUAL 0)
+        message(FATAL_ERROR "build-webui.sh failed (rc=${_webui_rc}):\n${_webui_log}")
+    endif()
+    if(NOT EXISTS "${_webui_out}/index.html")
+        message(FATAL_ERROR "build-webui.sh produced no ${_webui_out}/index.html")
+    endif()
+    # Bundle the whole SPA tree under :/opendeck (BASE strips the build dir so index.html ->
+    # :/opendeck/index.html and _app/* keep their relative paths).
+    file(GLOB_RECURSE _webui_files "${_webui_out}/*")
+    qt_add_resources(
+        ajazz-control-center
+        "opendeck_spa"
+        PREFIX
+        "/opendeck"
+        BASE
+        "${_webui_out}"
+        FILES
+        ${_webui_files}
+    )
+    target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBUI=1)
+    message(STATUS "AJAZZ_BUILD_WEBUI: bundled OpenDeck SPA into :/opendeck")
 endif()
 
 # ----------------------------------------------------------------------------
