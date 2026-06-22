@@ -192,3 +192,60 @@ external browser).
     rerender_images/update_state/...). Then Phase 3 (qml native UI), Phase 4
     (Mirabox manifest extensions — plugin_manifest.cpp already parses
     Nodejs/Controllers/PUUID), Phase 5 (cleanup).
+- 2026-06-22: **Phase 3 (native qml UI) — main screen DONE + verified.** The
+  native `qml` (default) UI was already Stream-Deck-shaped; reshaped its header
+  toward OpenDeck's main screen: the former left `DeviceList` sidebar is removed
+  and replaced by an **OpenDeck-style top-bar device dropdown**
+  (`AppHeader.qml` ComboBox `deviceSelectorHeader`, model
+  `DeviceModel.connectedDevices()` textRole "name"/valueRole "codename",
+  syncs to the active codename, emits `deviceSelected` → `Main.qml` wires it to
+  `StreamDockControlService.setActiveDevice` + editor.codename/capabilities,
+  mirroring the old sidebar path). The canvas is now full-width; the right
+  grouped+searchable action sidebar and Keys/Settings/Firmware editor are
+  retained. Verified offscreen via `screenshot`: top-bar device dropdown
+  ("AJAZZ AKP05E (Stream Dock Plus)") + Plugins/Settings, full-width canvas,
+  grouped Actions sidebar — matches the OpenDeck mainmenu layout. Build green;
+  unit suite 855 cases / 12754 assertions (1 pre-existing flaky `input_synth`
+  test that needs /dev/uinput — env-related, unaffected by this QML-only change;
+  passes on rerun).
+- 2026-06-22: **Phase 4 (Mirabox plugin-layer additions) — verified largely
+  pre-shipped + geometry cross-check codified.** Methodical audit before touching
+  code (CLAUDE.md "GSD planned ≠ unimplemented") found the two implementation
+  bullets already landed in earlier phases:
+  1. **`.sdPlugin` manifest extensions** — `plugin_manifest.cpp` already parses
+     `Nodejs.Version` (l.271-275), `Knob`/`Information`/`SecondaryScreen`
+     controllers verbatim (l.76-81; `affordanceMask` maps `Knob`→Dial), `PUUID`
+     (with Elgato `UUID` fallback), and the Mirabox `FSize`/`FFamily` font
+     synonyms. No change needed.
+  1. **Space / StreamDock-Plugins catalog source** — `streamdock_catalog_fetcher`
+     is a full paginated fetcher against `space.key123.vip` (device-UUID→AKP
+     codename mapping, on-disk cache, bundled offline fallback), wired into
+     `plugin_catalog_model` alongside the OpenDeck fetcher. No change needed.
+  1. **Geometry/input cross-check (the genuinely-open bullet)** — cross-checked
+     the app `DeviceDescriptor`s (`streamDockSidecarDescriptors()` in
+     `register.cpp`) against the mirajazz sidecar's authoritative wire model
+     (`streamdock-host/src/kind.rs::params_for`). 1:1 SKU correspondence (16
+     each). The two `key_count`s measure different layers and reconcile cleanly:
+     `encoderCount` matches exactly (4/3/0 for AKP05/AKP03/AKP153); the sidecar
+     wire-slot count = app `keyCount` + `touchZoneCount` + per-family non-render
+     slots (AKP05 +1 dead BAT slot → 10+4+1=15; AKP03 +3 physical side buttons →
+     6+0+3=9; AKP153 +0 → 15). Codified as a regression guard:
+     `tests/unit/test_streamdeck_sidecar_geometry_contract.cpp` (mirrors kind.rs;
+     fails on any future drift), closing the `device.hpp` "DRIFT WARNING" gap
+     across the app↔sidecar boundary. Full unit suite 856 cases / 12803
+     assertions green; sidecar `cargo test` 10/10 green.
+  - **Phase 4 hardware-gated follow-ups (NOT fixed blind — no live unit):**
+    AKP03's 3 physical **side buttons** occupy wire slots 7-9 but the app
+    descriptor models only the 6 renderable LCD keys — whether they surface as
+    bindable inputs is unverified (no AKP03 hardware). AKP153 input is likewise
+    unconfirmed. Both are PROVISIONAL in kind.rs; verify on a retail unit before
+    modelling the side buttons (CLAUDE.md hardware-wins rule).
+- 2026-06-22: **Phase 3 follow-ups (main screen scoped this task; not yet done):** move
+  the profile dropdown + Plugins/Settings into the same top bar and slim the
+  large device-header block (currently the profile dropdown + device
+  icon/name/"Editing" row sit below the bar); inline-inspector relayout
+  (OpenDeck docks it under the canvas); restyle the action sidebar to
+  OpenDeck's exact neutral tokens; OpenDeck-shape the Multi/Toggle
+  (ParentActionView), Profiles, Plugins, and Settings overlays. The Loaded/
+  Debug/search header items are our extras (not in OpenDeck) — keep or move
+  behind an overflow later.

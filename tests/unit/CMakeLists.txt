@@ -99,6 +99,12 @@ add_executable(
     # invariant: any descriptor with hasTouchStrip or encoderCount > 0 must declare
     # touchZoneCount > 0 OR (mainScreenWidthPx > 0 AND mainScreenHeightPx > 0).
     test_streamdeck_register_geometry.cpp
+    # Phase 4 (opendeck-ui) app<->sidecar geometry cross-check: asserts every
+    # DeviceDescriptor from streamDockSidecarDescriptors() agrees with the mirajazz
+    # sidecar wire model (streamdock-host/src/kind.rs) -- encoderCount matches exactly
+    # and wire-slot count == keyCount + touchZoneCount + per-family non-render slots.
+    # Closes the device.hpp "DRIFT WARNING" gap across the app/sidecar boundary.
+    test_streamdeck_sidecar_geometry_contract.cpp
     # Phase 14 Plan 14-02 (DISPLAY-06/07/08, DOCK-01/02): MockTransport-based
     # wire assertions for StreamDockControlService. Proves the panel lights at
     # open (LIG, DISPLAY-06), key images arrive via BAT->chunks->ULEND without
