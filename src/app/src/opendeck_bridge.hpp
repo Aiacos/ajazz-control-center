@@ -122,6 +122,13 @@ public:
     void notifyProfileChanged(); ///< -> "switch_profile" + "rerender_images"
     void notifyDevicesChanged(); ///< -> "devices" (the get_devices map)
 
+    // Bring QObject::event(QEvent*) into scope so the QWebChannel `event` signal
+    // below does not "hide" the inherited virtual — AppleClang's
+    // -Werror=overloaded-virtual (and MSVC /W4) otherwise fail the build, while
+    // GCC/Linux-Clang stay silent. The signal MUST keep the name `event`: the
+    // web-UI Tauri shim subscribes to it by that exact name.
+    using QObject::event;
+
 signals:
     /// Resolves the JS-side Promise for @p requestId. @p errorJson is empty on success.
     void
