@@ -941,6 +941,12 @@ TEST_CASE("SdPluginServer relays sendToPlugin and sendToPropertyInspector betwee
     REQUIRE(waitForSpy(pluginConnected));
     plugin.sendTextMessage(QStringLiteral(R"({"event":"registerPlugin","uuid":"com.test.plug"})"));
     REQUIRE(waitForSpy(pluginRegSpy));
+    // pluginRegSpy tracks the server-side signal; the passHello frame is sent to the client
+    // asynchronously afterwards. Wait for it to actually arrive before clearing, or on a slow
+    // runner (Windows CI) clear() is a no-op and passHello becomes pluginRx.first() below.
+    // waitForSpy short-circuits when the frame is already present, so this is a no-op on fast
+    // loopback.
+    REQUIRE(waitForSpy(pluginRx));
     pluginRx.clear(); // drop the passHello frame
 
     QWebSocket pi;
