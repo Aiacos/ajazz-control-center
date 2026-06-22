@@ -854,7 +854,6 @@ TEST_CASE("PluginInstalledUnsupportedPlugins lists native-only plugins with reas
     REQUIRE_FALSE(archivePath.isEmpty());
     REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
 
-    // It must NOT surface any action (no Linux code path -> dropped).
     bool elgatoAction = false;
     for (QVariant const& v : model.installedActions()) {
         if (v.toMap()
@@ -864,16 +863,25 @@ TEST_CASE("PluginInstalledUnsupportedPlugins lists native-only plugins with reas
             elgatoAction = true;
         }
     }
-    REQUIRE_FALSE(elgatoAction);
-
-    // ...but it MUST appear in installedUnsupportedPlugins() with reason noCodePath.
     QVariantList const unsupported = model.installedUnsupportedPlugins();
+
+#if defined(Q_OS_LINUX)
+    // No Linux CodePath -> the action is dropped and the plugin is listed as
+    // unsupported with reason noCodePath so the UI can show (not hide) it.
+    REQUIRE_FALSE(elgatoAction);
     REQUIRE(unsupported.size() == 1);
     QVariantMap const e = unsupported.at(0).toMap();
     REQUIRE(e.value(QStringLiteral("name")).toString() == QStringLiteral("CPU"));
     REQUIRE(e.value(QStringLiteral("reason")).toString() == QStringLiteral("noCodePath"));
     REQUIRE(e.value(QStringLiteral("platforms")).toString().contains(QStringLiteral("mac")));
     REQUIRE(e.value(QStringLiteral("platforms")).toString().contains(QStringLiteral("windows")));
+#else
+    // On macOS/Windows the matching CodePath (CodePathMac / CodePathWin) is a
+    // valid code path for the host, so the plugin runs: its action surfaces and
+    // it must NOT appear in the unsupported list.
+    REQUIRE(elgatoAction);
+    REQUIRE(unsupported.isEmpty());
+#endif
 }
 
 TEST_CASE("PluginInstallFromFile unsigned plugin installs with consent", "[plugin-install]") {
