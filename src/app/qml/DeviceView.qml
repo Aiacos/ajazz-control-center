@@ -534,16 +534,26 @@ Item {
             FocusScope {
                 id: chassisScope
                 Layout.fillWidth: true
-                // Canvas AND Inspector are BOTH fillHeight so they SHARE the
-                // column's spare height and it never overflows — that is what
-                // keeps the Inspector pane fully on-screen (the
-                // toggle-state-editor-below-the-fold fix). A fixed-height pane
-                // here would refuse to shrink and push the Inspector below the
-                // fold. minimumHeight still guards the EDIT-01 finding: a short
-                // window must not squeeze the canvas to ~0 (clip:true would then
-                // hide it); its own ScrollView handles oversized grids.
-                Layout.fillHeight: true
-                Layout.preferredHeight: 250
+                // Canvas/Inspector height split. When the grid does NOT overflow
+                // (the common case: AKP05/AKP03/AKP153 all sit at/under the >8-col
+                // OR >4-lane-row threshold), the canvas sizes to its NATURAL content
+                // height and the Inspector becomes the sole fillHeight pane, taking
+                // all the remaining column height. This is what guarantees a
+                // non-oversized grid is shown in full without a phantom vertical
+                // scrollbar (regression caught by test_under_threshold_is_not_scrollable
+                // + the live AKP05E screenshot, where the 2nd key row was clipped:
+                // when BOTH panes were fillHeight, the Inspector's larger
+                // preferredHeight biased the split and starved the canvas below its
+                // content height). When the grid DOES overflow (e.g. a 45-key SKU),
+                // the canvas reverts to a shared-flex 250 px pane and its own
+                // ScrollView scrolls. The Inspector stays fillHeight in both modes, so
+                // it is never pushed below the fold (the toggle-state-editor fix).
+                // minimumHeight still guards EDIT-01: a short window must not squeeze
+                // the canvas to ~0 (clip:true would hide it); the ScrollView scrolls.
+                Layout.fillHeight: root._gridOverflows
+                Layout.preferredHeight: root._gridOverflows
+                    ? 250
+                    : (deviceCanvas.implicitHeight + 2 * Theme.spacingMd)
                 Layout.minimumHeight: 200
 
             Accessible.role: Accessible.Table
