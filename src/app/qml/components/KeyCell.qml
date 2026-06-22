@@ -132,7 +132,12 @@ ItemDelegate {
             // a centered Material Symbols folder glyph so it reads as a folder, not
             // a blank tile. Suppressed once a live device frame is present.
             Text {
-                anchors.centerIn: parent
+                anchors.horizontalCenter: parent.horizontalCenter
+                anchors.verticalCenter: parent.verticalCenter
+                // Lift the glyph above the bottom-aligned folder label so the two
+                // never overlap on a NAMED folder key; stays centred when unnamed.
+                anchors.verticalCenterOffset: root.label !== ""
+                    ? -Math.round(parent.height * 0.14) : 0
                 visible: root.isFolder && root.iconSource.toString() === ""
                 text: "folder"
                 font.family: "Material Symbols Outlined"
@@ -158,14 +163,18 @@ ItemDelegate {
                 font.pixelSize: Theme.fontSm
                 font.weight: Font.DemiBold
                 horizontalAlignment: Text.AlignHCenter
-                // Bottom-aligned over an icon (LCD style); centered when label-only.
-                verticalAlignment: root.iconSource.toString() !== ""
+                // Bottom-aligned over an icon (LCD style) AND on a folder key (so
+                // the title sits beneath the lifted folder glyph, not over it);
+                // centered only for a plain label-only cell.
+                verticalAlignment: (root.iconSource.toString() !== "" || root.isFolder)
                     ? Text.AlignBottom
                     : Text.AlignVCenter
                 wrapMode: Text.WordWrap
 
-                // 1px dark outline so a light title stays legible over any icon.
-                style: root.iconSource.toString() !== "" ? Text.Outline : Text.Normal
+                // 1px dark outline so a light title stays legible over any icon or
+                // the folder glyph behind it.
+                style: (root.iconSource.toString() !== "" || root.isFolder)
+                    ? Text.Outline : Text.Normal
                 styleColor: "#000000"
             }
         }

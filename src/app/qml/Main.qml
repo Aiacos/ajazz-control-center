@@ -26,7 +26,11 @@ import "components"
 ApplicationWindow {
     id: root
     width: 1280
-    height: 800
+    // 960 (was 800): the OpenDeck single-view stacks canvas + per-key action
+    // list + docked Inspector in one column. At 800 a selected key pushed the
+    // Inspector (and its toggle-state editor) below the fold; 960 keeps the
+    // whole editor on-screen at the default size.
+    height: 1000
     minimumWidth: 900
     minimumHeight: 600
     visible: true

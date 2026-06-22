@@ -445,6 +445,14 @@ int PluginCatalogModel::installedCount() const {
     return count;
 }
 
+void PluginCatalogModel::refreshInstalled() {
+    // installedActions() is disk-backed, so nothing to recompute here — just
+    // re-emit the signal the QML Action Library listens on so it refetches the
+    // current on-disk plugin set (covers sideload + rediscover paths that don't
+    // go through the catalogue install flow).
+    emit installedCountChanged();
+}
+
 QVariantList PluginCatalogModel::installedActions() const {
     QVariantList out;
 

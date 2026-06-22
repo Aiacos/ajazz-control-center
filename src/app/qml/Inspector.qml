@@ -356,8 +356,8 @@ Rectangle {
             Item {
                 Layout.alignment: Qt.AlignHCenter
                 Layout.topMargin: Theme.spacingXs
-                Layout.preferredWidth: 140
-                Layout.preferredHeight: 140
+                Layout.preferredWidth: 112
+                Layout.preferredHeight: 112
 
                 Rectangle {
                     id: keyPreview

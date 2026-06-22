@@ -207,6 +207,19 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
+     * @brief Force the Action Library to re-query @ref installedActions().
+     *
+     * @ref installedActions() reads the live install directory, but the QML
+     * Action Library only re-queries it on @c installedCountChanged — a signal
+     * the catalogue emits from its own install/uninstall flow. Plugins that
+     * appear on disk through any OTHER path (a sideloaded `.sdPlugin` picked up
+     * by @c PluginManager::rediscover(), say) therefore stay invisible until an
+     * app restart. Calling this re-emits @c installedCountChanged so the library
+     * refetches from disk immediately. Idempotent and cheap (no I/O of its own).
+     */
+    Q_INVOKABLE void refreshInstalled();
+
+    /**
      * @brief Installed plugins that cannot run on the current platform (#83).
      *
      * Companion to @ref installedActions: scans the same install directory and

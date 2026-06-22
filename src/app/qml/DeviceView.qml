@@ -534,14 +534,17 @@ Item {
             FocusScope {
                 id: chassisScope
                 Layout.fillWidth: true
+                // Canvas AND Inspector are BOTH fillHeight so they SHARE the
+                // column's spare height and it never overflows — that is what
+                // keeps the Inspector pane fully on-screen (the
+                // toggle-state-editor-below-the-fold fix). A fixed-height pane
+                // here would refuse to shrink and push the Inspector below the
+                // fold. minimumHeight still guards the EDIT-01 finding: a short
+                // window must not squeeze the canvas to ~0 (clip:true would then
+                // hide it); its own ScrollView handles oversized grids.
                 Layout.fillHeight: true
-                // The device canvas is the PRIMARY editing surface; the docked
-                // Inspector below (preferredHeight 320 / min 200) must not starve
-                // it. Without a minimum, a short window squeezes the fillHeight
-                // canvas to ~0 and the ScrollView's clip:true then hides it
-                // entirely (EDIT-01 live-verification finding 2026-06-08). Guarantee
-                // enough room for the device frame's key grid + dial/zone lanes.
-                Layout.minimumHeight: 280
+                Layout.preferredHeight: 250
+                Layout.minimumHeight: 200
 
             Accessible.role: Accessible.Table
             Accessible.name: root.codename !== ""
@@ -835,12 +838,16 @@ Item {
             // Property Inspector docked at the bottom (OpenDeck layout).
             Inspector {
                 Layout.fillWidth: true
-                // Tall enough for the native form (icon + label + action type +
-                // params) so it rarely needs to scroll; the Inspector clips +
-                // scrolls internally so it never overflows onto the controls
-                // below regardless of this value or the window size.
-                Layout.preferredHeight: 320
-                Layout.minimumHeight: 200
+                // The Inspector is the fillHeight pane: it grows to take all the
+                // vertical space the canvas (bounded preferredHeight) leaves, so
+                // the full native form (icon + label + action type + params +
+                // toggle-state editor) is on-screen at the default window size and
+                // expands further when the window is taller. minimumHeight 320
+                // keeps the form usable (it still clips + scrolls internally) when
+                // a short window forces the panes to their floors.
+                Layout.fillHeight: true
+                Layout.preferredHeight: 480
+                Layout.minimumHeight: 300
                 selectionLabel: root.selectedKeyIndex >= 0
                     ? qsTr("Key %1").arg(root.selectedKeyIndex + 1)
                     : (root.selectedEncoderIndex >= 0
