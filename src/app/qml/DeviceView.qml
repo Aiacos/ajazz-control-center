@@ -422,7 +422,7 @@ Item {
                                 objectName: "breadcrumb_" + modelData.id
                                 text: modelData.name
                                 color: index === root._breadcrumb.length - 1
-                                       ? Theme.fg : Theme.accent
+                                       ? Theme.fgPrimary : Theme.accent
                                 font.pixelSize: Theme.typeLabelSmall.pixelSize
                                 font.bold: index === root._breadcrumb.length - 1
                                 Layout.alignment: Qt.AlignVCenter
