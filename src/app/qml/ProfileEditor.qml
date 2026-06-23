@@ -113,6 +113,7 @@ Rectangle {
         // Tab strip + content ----------------------------------------------
         TabBar {
             id: tabs
+            objectName: "deviceEditorTabs" // debug-channel addressable (qml.set currentIndex)
             Layout.fillWidth: true
             visible: root.codename !== ""
             TabButton {
