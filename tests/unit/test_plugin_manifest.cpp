@@ -569,3 +569,53 @@ TEST_CASE("PluginManifestTest GAP-28C PUUID takes precedence over UUID when both
     // PUUID takes precedence.
     CHECK(maybeManifest->puuid == QStringLiteral("com.ajazz.override"));
 }
+
+TEST_CASE("resolveEffectiveCodePath falls back to a cross-platform script code path",
+          "[plugin-manifest][codepath]") {
+    // StreamDock catalogue plugins (e.g. Spotify) ship a Node plugin under
+    // CodePathWin/CodePathMac — often the SAME plugin/index.js — and no
+    // CodePathLin, so Linux must NOT drop them: a .js/.html plugin runs via the
+    // bundled node/webview regardless of declared OS. The result is identical on
+    // all three platforms here (each picks the same script path), so the
+    // assertion is platform-stable.
+    QByteArray const scriptPlugin(R"({
+        "Name": "Spotify-like",
+        "Author": "MiraBox",
+        "Version": "1.0.0",
+        "SDKVersion": 1,
+        "UUID": "com.example.script",
+        "OS": [{"Platform": "mac"}, {"Platform": "windows"}],
+        "CodePathWin": "plugin/index.js",
+        "CodePathMac": "plugin/index.js",
+        "Actions": [
+            { "UUID": "com.example.script.a", "Name": "A", "Controllers": ["Keypad"],
+              "States": [{}] }
+        ]
+    })");
+    auto const m = parsePluginManifest(scriptPlugin);
+    REQUIRE(m.has_value());
+    CHECK(resolveEffectiveCodePath(*m) == QStringLiteral("plugin/index.js"));
+
+    // A native bundle (CodePathWin/.exe + CodePathMac/Mach-O, no script) is NOT
+    // resolvable on Linux — those genuinely can't run cross-OS. Guard to Linux
+    // because Windows/macOS legitimately resolve their own native path.
+#if !defined(Q_OS_WIN) && !defined(Q_OS_MACOS)
+    QByteArray const nativePlugin(R"({
+        "Name": "Native",
+        "Author": "Vendor",
+        "Version": "1.0.0",
+        "SDKVersion": 1,
+        "UUID": "com.example.native",
+        "OS": [{"Platform": "windows"}],
+        "CodePathWin": "bin/plugin.exe",
+        "CodePathMac": "bin/plugin",
+        "Actions": [
+            { "UUID": "com.example.native.a", "Name": "A", "Controllers": ["Keypad"],
+              "States": [{}] }
+        ]
+    })");
+    auto const n = parsePluginManifest(nativePlugin);
+    REQUIRE(n.has_value());
+    CHECK(resolveEffectiveCodePath(*n).isEmpty());
+#endif
+}

@@ -545,7 +545,30 @@ QString resolveEffectiveCodePath(PluginManifest const& manifest) {
         return manifest.codePathMac;
     }
 #endif
-    return manifest.codePath;
+    if (!manifest.codePath.isEmpty()) {
+        return manifest.codePath;
+    }
+    // Cross-platform script fallback. Vendor manifests (esp. the StreamDock
+    // catalogue) ship a Node/HTML plugin under CodePathWin/CodePathMac — often
+    // the SAME `plugin/index.js` for both — and never a CodePathLin, so Linux
+    // would otherwise drop a plugin that runs perfectly via the bundled
+    // node/webview (the runtime, not the OS, executes a .js/.html plugin). When
+    // there is no platform-appropriate path, fall back to a per-OS code path
+    // that points to a script. Native bundles (.exe/.dll/Mach-O) are NOT scripts
+    // and are correctly left unresolved here — they genuinely can't run cross-OS.
+    auto const isScript = [](QString const& p) {
+        QString const lower = p.toLower();
+        return lower.endsWith(QStringLiteral(".js")) || lower.endsWith(QStringLiteral(".cjs")) ||
+               lower.endsWith(QStringLiteral(".mjs")) || lower.endsWith(QStringLiteral(".html")) ||
+               lower.endsWith(QStringLiteral(".htm"));
+    };
+    if (isScript(manifest.codePathWin)) {
+        return manifest.codePathWin;
+    }
+    if (isScript(manifest.codePathMac)) {
+        return manifest.codePathMac;
+    }
+    return {};
 }
 
 } // namespace ajazz::app
