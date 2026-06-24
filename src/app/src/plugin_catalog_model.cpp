@@ -68,6 +68,23 @@ QString g_pluginsDirOverride{};
     if (entry.source == QStringLiteral("mirabox-github")) {
         return !entry.streamdockProductId.isEmpty();
     }
+    // StreamDock rows carry only a RELATIVE `download` in the `/list` payload, so
+    // entry.downloadUrl is empty at catalogue time. The absolute CDN archive URL
+    // is resolved on demand at install() via productInfo/get/<id>, so a non-empty
+    // product id is the install handle (mirrors mirabox-github above). A row that
+    // already carries a resolved https URL falls through to the generic check.
+    if (entry.source == QStringLiteral("streamdock") && !entry.streamdockProductId.isEmpty()) {
+        return true;
+    }
+    // OpenDeck legacy rows hard-code downloads on appstore.elgato.com, a host
+    // Elgato decommissioned (no DNS). Treat those as not installable so the row
+    // shows a disabled button + reason instead of failing with an obscure DNS
+    // error on click. (Real Marketplace assets live on opaque-UUID mp-cdn paths
+    // that cannot be derived from the plugin id, so there is no in-app rescue.)
+    if (entry.downloadUrl.host().compare(QStringLiteral("appstore.elgato.com"),
+                                         Qt::CaseInsensitive) == 0) {
+        return false;
+    }
     return entry.downloadUrl.isValid() && !entry.downloadUrl.isEmpty() &&
            entry.downloadUrl.scheme().toLower() == QStringLiteral("https");
 }
@@ -1540,6 +1557,66 @@ bool PluginCatalogModel::install(QString const& uuid) {
         return true;
     }
 
+    // StreamDock rows resolve their absolute CDN archive URL on demand. The
+    // catalogue `/list` payload only carried a RELATIVE `download` path, so the
+    // row's downloadUrl is empty here; fetch the real https URL from
+    // productInfo/get/<id>, cache it on the row, then re-enter install() to run
+    // the standard download+verify pipeline below.
+    if (entry.source == QStringLiteral("streamdock") && !entry.downloadUrl.isValid()) {
+        QUrl const resolveUrl = StreamdockCatalogFetcher::productGetUrl(entry.streamdockProductId);
+        if (!resolveUrl.isValid()) {
+            emit installFinished(
+                uuid, false, QStringLiteral("Cannot resolve plugin download URL."));
+            return false;
+        }
+        if (m_downloader == nullptr) {
+            m_downloader = new QNetworkAccessManager(this);
+        }
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "install: streamdock '{}' resolving archive URL via {}",
+                       uuid.toStdString(),
+                       resolveUrl.toString().toStdString());
+        emit installProgressChanged(uuid, 0);
+        QNetworkRequest resolveReq{resolveUrl};
+        resolveReq.setRawHeader("Accept", "application/json");
+        resolveReq.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                                QNetworkRequest::NoLessSafeRedirectPolicy);
+        QNetworkReply* const resolveReply = m_downloader->get(resolveReq);
+        QPointer<PluginCatalogModel> self(this);
+        QString const uuidCopy = uuid;
+        QObject::connect(
+            resolveReply, &QNetworkReply::finished, this, [self, resolveReply, uuidCopy]() {
+                resolveReply->deleteLater();
+                if (!self) {
+                    return;
+                }
+                if (resolveReply->error() != QNetworkReply::NoError) {
+                    emit self->installFinished(
+                        uuidCopy,
+                        false,
+                        PluginCatalogModel::tr("Could not resolve plugin download URL: %1")
+                            .arg(resolveReply->errorString()));
+                    return;
+                }
+                QUrl const resolved =
+                    StreamdockCatalogFetcher::parseProductDownloadUrl(resolveReply->readAll());
+                int const r = findRow(self->m_rows, uuidCopy);
+                if (!resolved.isValid() || r < 0) {
+                    emit self->installFinished(
+                        uuidCopy,
+                        false,
+                        PluginCatalogModel::tr("Plugin has no downloadable archive."));
+                    return;
+                }
+                // Cache the resolved URL on the row and re-enter install(): downloadUrl
+                // is now populated, so this branch is skipped and the standard
+                // download+extract+verify path runs.
+                self->m_rows[static_cast<std::size_t>(r)].downloadUrl = resolved;
+                self->install(uuidCopy);
+            });
+        return true;
+    }
+
     // Real in-app install path: HTTPS GET against the upstream CDN, save
     // the .sdPlugin archive under userPluginsDir() so the plugin host
     // can pick it up on next start. Extraction of the .sdPlugin
@@ -1824,6 +1901,12 @@ QVariantMap PluginCatalogModel::entryFor(QString const& uuid) const {
         {"enabled", state.enabled},
         {"source", src.source},
         {"streamdockProductId", src.streamdockProductId},
+        // Same predicate the data() InstallableInApp / UnavailableReason roles use,
+        // so the side-sheet Install button can disable + show a reason in lockstep
+        // with the grid tile (and never present an actionable button that no-ops).
+        {"installableInApp", entryInstallableInApp(src)},
+        {"unavailableReason",
+         entryInstallableInApp(src) ? QString{} : QStringLiteral("Not installable in-app")},
     };
 }
 
