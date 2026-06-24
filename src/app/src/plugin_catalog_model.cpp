@@ -1776,6 +1776,28 @@ bool PluginCatalogModel::install(QString const& uuid) {
                            "install '{}': signature verification OK ({})",
                            uuidCopy.toStdString(),
                            verdictToTrustLevel(vout.verdict).toStdString());
+
+            // FIX-CONSENT (network path): clicking Install in the store is the
+            // user's explicit consent, so persist it for a non-Trusted
+            // (unsigned / self-signed) plugin — otherwise the next launch-sweep
+            // quarantines it (install-then-vanish: "ho installato spotify ma non
+            // posso usarlo"). The sweep keys consent on the install DIR name
+            // (perPluginAllowed strips .sdPlugin), which is destCopy's basename
+            // here — NOT the catalogue uuid (streamdock dirs are <productId>).
+            // Refused never reaches this point (quarantined above, CR-01).
+            if (vout.verdict != VerifyVerdict::Trusted) {
+                QString dirName = QFileInfo(destCopy).fileName();
+                if (dirName.endsWith(QStringLiteral(".sdPlugin"))) {
+                    dirName.chop(static_cast<int>(QStringLiteral(".sdPlugin").size()));
+                }
+                QSettings settings;
+                settings.setValue(QStringLiteral("plugins/allowed/") + dirName, true);
+                AJAZZ_LOG_INFO(
+                    "plugin-catalog",
+                    "install '{}': persisted per-plugin consent for '{}' (survives launch-sweep)",
+                    uuidCopy.toStdString(),
+                    dirName.toStdString());
+            }
         }
 
         int const r = findRow(self->m_rows, uuidCopy);
