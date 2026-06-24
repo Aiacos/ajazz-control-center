@@ -57,6 +57,11 @@ Page {
     title: qsTr("Plugin Store")
     background: Rectangle { color: Theme.bgBase }
 
+    /// Emitted when a catalogue (tile / side-sheet) install finishes, so the host
+    /// (Main.qml) can show a toast — previously these outcomes were only
+    /// console.warn'd, so a failed install looked like the button "did nothing".
+    signal catalogInstallOutcome(string message, bool success)
+
     /// Index into `tabs.contentChildren` mirroring the active source filter:
     ///   0 = All, 1 = Installed, 2 = AJAZZ Streamdock, 3 = OpenDeck, 4 = Community.
     ///
@@ -137,6 +142,17 @@ Page {
                 || path.startsWith("file:")
                 || /^[A-Za-z]:[\\/]/.test(path);
             if (!isLocalPath) {
+                // Catalogue (tile / side-sheet) install outcome — `path` is the
+                // plugin uuid. Surface success/failure as a toast so a failed
+                // install is never silent (the side-sheet button used to no-op
+                // with no feedback). The tile Connections block still drives the
+                // per-tile spinner state.
+                root.catalogRevision += 1;
+                if (success) {
+                    root.catalogInstallOutcome(qsTr("Plugin installed."), true);
+                } else if (error.length > 0) {
+                    root.catalogInstallOutcome(qsTr("Install failed: %1").arg(error), false);
+                }
                 return;
             }
             if (success) {
@@ -1173,16 +1189,30 @@ Page {
                 }
                 Item { Layout.fillWidth: true }
                 Button {
-                    text: details.entry.installed ? qsTr("Uninstall") : qsTr("Install")
+                    objectName: "detailInstallButton" // debug-channel addressable
+                    // Parity with the grid tile: a non-installable row (no
+                    // resolvable download) shows a DISABLED button with the reason
+                    // instead of an actionable "Install" that silently no-ops.
+                    enabled: details.entry.installed || (details.entry.installableInApp === true)
+                    text: details.entry.installed
+                        ? qsTr("Uninstall")
+                        : (details.entry.installableInApp === true
+                            ? qsTr("Install")
+                            : (details.entry.unavailableReason || qsTr("Not installable")))
                     Material.background: details.entry.installed
                         ? Theme.borderSubtle
-                        : Theme.accent
+                        : (details.entry.installableInApp === true
+                            ? Theme.accent
+                            : Theme.surfaceContainerHigh)
                     Material.foreground: "white"
+                    ToolTip.visible: hovered && !details.entry.installed
+                        && details.entry.installableInApp !== true
+                    ToolTip.text: details.entry.unavailableReason || ""
                     onClicked: {
                         if (!PluginCatalog) return;
                         if (details.entry.installed) {
                             PluginCatalog.uninstall(root.selectedUuid);
-                        } else {
+                        } else if (details.entry.installableInApp === true) {
                             PluginCatalog.install(root.selectedUuid);
                         }
                     }

@@ -260,6 +260,10 @@ ApplicationWindow {
 
         PluginStore {
             anchors.fill: parent
+            // Surface catalogue install outcomes as toasts (anchored at the app
+            // root so they show above the drawer). Previously a failed in-app
+            // install was only console.warn'd — the button looked inert.
+            onCatalogInstallOutcome: (message, success) => toast.show(message, success ? "success" : "error")
         }
     }
 
