@@ -16,9 +16,10 @@ using ajazz::app::normalizeUiMode;
 using ajazz::app::UiMode;
 using ajazz::app::uiModeToString;
 
-TEST_CASE("normalizeUiMode defaults to qml when nothing matches", "[ui_mode]") {
-    REQUIRE(normalizeUiMode(QString{}, QString{}) == UiMode::Qml);
-    REQUIRE(normalizeUiMode(QStringLiteral("garbage"), QStringLiteral("nonsense")) == UiMode::Qml);
+TEST_CASE("normalizeUiMode defaults to webui when nothing matches", "[ui_mode]") {
+    REQUIRE(normalizeUiMode(QString{}, QString{}) == UiMode::WebUi);
+    REQUIRE(normalizeUiMode(QStringLiteral("garbage"), QStringLiteral("nonsense")) ==
+            UiMode::WebUi);
 }
 
 TEST_CASE("normalizeUiMode falls back to the config value when env is empty", "[ui_mode]") {

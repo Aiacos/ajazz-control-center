@@ -44,7 +44,10 @@ endif()
 # (and Qt WebEngine is present), scripts/build-webui.sh runs `vite build` on the OpenDeck submodule
 # (src/app/webui/opendeck) + injects the Tauri-compat shim, and the static SPA is bundled into the
 # :/opendeck Qt resource. WebUiHost.qml then loads it. See docs/opendeck-ui/.
-option(AJAZZ_BUILD_WEBUI "Embed the OpenDeck Svelte web UI (webui mode); requires Node.js" OFF)
+option(AJAZZ_BUILD_WEBUI
+       "Embed the OpenDeck web UI (webui mode, the default); needs Node.js, else falls back to qml."
+       ON
+)
 
 qt_add_executable(
     ajazz-control-center
@@ -740,45 +743,61 @@ endif()
 # ----------------------------------------------------------------------------
 # Builds the vendored OpenDeck SPA at configure time (scripts/build-webui.sh) and bundles the static
 # output under the :/opendeck Qt resource prefix, then defines AJAZZ_HAVE_WEBUI so main.cpp knows
-# the bundle is present. OFF by default → no Node dependency and the default build is unaffected.
+# the bundle is present. ON by default (webui is the default UI mode), but degrades GRACEFULLY: a
+# missing Qt WebEngine or a missing Node/npm toolchain is a WARNING + skip — not a hard error — and
+# the app then falls back to the native qml UI at runtime (main.cpp). A genuine build failure (npm
+# present but build-webui.sh errors) stays FATAL so it surfaces.
 if(AJAZZ_BUILD_WEBUI)
     if(NOT AJAZZ_HAVE_WEBENGINE)
         message(
-            FATAL_ERROR
-                "AJAZZ_BUILD_WEBUI=ON requires Qt WebEngine "
-                "(AJAZZ_BUILD_PROPERTY_INSPECTOR=ON + WebEngineQuick/WebChannelQuick found)."
+            WARNING "AJAZZ_BUILD_WEBUI=ON but Qt WebEngine is not available "
+                    "(needs AJAZZ_BUILD_PROPERTY_INSPECTOR=ON + WebEngineQuick/WebChannelQuick). "
+                    "Skipping the OpenDeck SPA bundle; the app falls back to the native qml UI."
         )
+    else()
+        find_program(AJAZZ_NPM_EXECUTABLE npm)
+        if(NOT AJAZZ_NPM_EXECUTABLE)
+            message(
+                WARNING
+                    "AJAZZ_BUILD_WEBUI=ON but npm/Node.js (>= 20) was not found. "
+                    "Skipping the OpenDeck SPA bundle; the app falls back to the native qml UI. "
+                    "Install Node.js to embed the OpenDeck web UI."
+            )
+        else()
+            set(_webui_out "${CMAKE_CURRENT_SOURCE_DIR}/webui/opendeck/build")
+            message(
+                STATUS "AJAZZ_BUILD_WEBUI=ON — building OpenDeck SPA (scripts/build-webui.sh) ..."
+            )
+            execute_process(
+                COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/build-webui.sh"
+                WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+                RESULT_VARIABLE _webui_rc
+                OUTPUT_VARIABLE _webui_log
+                ERROR_VARIABLE _webui_log
+            )
+            if(NOT _webui_rc EQUAL 0)
+                message(FATAL_ERROR "build-webui.sh failed (rc=${_webui_rc}):\n${_webui_log}")
+            endif()
+            if(NOT EXISTS "${_webui_out}/index.html")
+                message(FATAL_ERROR "build-webui.sh produced no ${_webui_out}/index.html")
+            endif()
+            # Bundle the whole SPA tree under :/opendeck (BASE strips the build dir so index.html ->
+            # :/opendeck/index.html and _app/* keep their relative paths).
+            file(GLOB_RECURSE _webui_files "${_webui_out}/*")
+            qt_add_resources(
+                ajazz-control-center
+                "opendeck_spa"
+                PREFIX
+                "/opendeck"
+                BASE
+                "${_webui_out}"
+                FILES
+                ${_webui_files}
+            )
+            target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBUI=1)
+            message(STATUS "AJAZZ_BUILD_WEBUI: bundled OpenDeck SPA into :/opendeck")
+        endif()
     endif()
-    set(_webui_out "${CMAKE_CURRENT_SOURCE_DIR}/webui/opendeck/build")
-    message(STATUS "AJAZZ_BUILD_WEBUI=ON — building OpenDeck SPA (scripts/build-webui.sh) ...")
-    execute_process(
-        COMMAND bash "${CMAKE_SOURCE_DIR}/scripts/build-webui.sh"
-        WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
-        RESULT_VARIABLE _webui_rc
-        OUTPUT_VARIABLE _webui_log
-        ERROR_VARIABLE _webui_log
-    )
-    if(NOT _webui_rc EQUAL 0)
-        message(FATAL_ERROR "build-webui.sh failed (rc=${_webui_rc}):\n${_webui_log}")
-    endif()
-    if(NOT EXISTS "${_webui_out}/index.html")
-        message(FATAL_ERROR "build-webui.sh produced no ${_webui_out}/index.html")
-    endif()
-    # Bundle the whole SPA tree under :/opendeck (BASE strips the build dir so index.html ->
-    # :/opendeck/index.html and _app/* keep their relative paths).
-    file(GLOB_RECURSE _webui_files "${_webui_out}/*")
-    qt_add_resources(
-        ajazz-control-center
-        "opendeck_spa"
-        PREFIX
-        "/opendeck"
-        BASE
-        "${_webui_out}"
-        FILES
-        ${_webui_files}
-    )
-    target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBUI=1)
-    message(STATUS "AJAZZ_BUILD_WEBUI: bundled OpenDeck SPA into :/opendeck")
 endif()
 
 # ----------------------------------------------------------------------------

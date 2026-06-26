@@ -8,7 +8,7 @@
  *   1. env `AJAZZ_UI_MODE` (dev / CI / debug-channel override)
  *   2. QSettings key `ui/mode` — the human-editable config file
  *      (`$XDG_CONFIG_HOME/Aiacos/AJAZZ Control Center.conf`, `[ui] mode=...`)
- *   3. default `qml`
+ *   3. default `webui` (the embedded OpenDeck web UI)
  *
  * Matching is case-insensitive and trims whitespace; unknown tokens fall
  * through to the next source. See docs/opendeck-ui/02-architecture.md.
@@ -30,7 +30,7 @@ enum class UiMode : std::uint8_t {
 /// Pure, side-effect-free resolution from already-read string inputs.
 /// @param envValue      value of AJAZZ_UI_MODE (may be empty)
 /// @param settingsValue value of the `ui/mode` config key (may be empty)
-/// @return the resolved mode; defaults to UiMode::Qml when neither matches.
+/// @return the resolved mode; defaults to UiMode::WebUi when neither matches.
 UiMode normalizeUiMode(QString const& envValue, QString const& settingsValue);
 
 /// Canonical lowercase token for a mode ("qml" | "webui"). Round-trips with the

@@ -25,14 +25,14 @@ bool parseToken(QString const& raw, UiMode& out) {
 } // namespace
 
 UiMode normalizeUiMode(QString const& envValue, QString const& settingsValue) {
-    UiMode mode = UiMode::Qml;
+    UiMode mode = UiMode::WebUi;
     if (parseToken(envValue, mode)) {
         return mode;
     }
     if (parseToken(settingsValue, mode)) {
         return mode;
     }
-    return UiMode::Qml; // default
+    return UiMode::WebUi; // default: the embedded OpenDeck web UI
 }
 
 QString uiModeToString(UiMode mode) {

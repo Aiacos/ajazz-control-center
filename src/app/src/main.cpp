@@ -223,7 +223,7 @@ int main(int argc, char* argv[]) {
 
     QString rootComponent = QStringLiteral("Main");
     if (uiMode == ajazz::app::UiMode::WebUi) {
-        if (webEngineAvailable) {
+        if (webEngineAvailable && webUiBundlePresent) {
             engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
                                                      controller.openDeckBridge());
             rootComponent = QStringLiteral("WebUiHost");
@@ -233,12 +233,16 @@ int main(int argc, char* argv[]) {
             QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
                 QByteArray(ajazz::app::kOpenDeckScheme),
                 new ajazz::app::OpenDeckSchemeHandler(qApp));
-#else
-            qInfo().noquote() << "[ui] webui mode: SPA bundle not built (configure with "
-                                 "-DAJAZZ_BUILD_WEBUI=ON); showing the host placeholder.";
 #endif
+        } else if (!webEngineAvailable) {
+            qInfo().noquote() << "[ui] webui is the default but Qt WebEngine is not built; "
+                                 "falling back to the native qml UI.";
         } else {
-            qInfo().noquote() << "[ui] webui requested but Qt WebEngine is not built; "
+            // WebEngine present but the SPA was not bundled (AJAZZ_BUILD_WEBUI off
+            // or the Node toolchain was absent at configure time). Don't show a
+            // blank host — fall back to the working native qml UI.
+            qInfo().noquote() << "[ui] webui is the default but the OpenDeck SPA bundle was not "
+                                 "built (configure -DAJAZZ_BUILD_WEBUI=ON with Node.js); "
                                  "falling back to the native qml UI.";
         }
     }
