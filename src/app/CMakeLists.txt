@@ -41,7 +41,7 @@ endif()
 # Optional: embed the OpenDeck Svelte SPA (the `webui` UI mode)
 # ----------------------------------------------------------------------------
 # OFF by default: the native QML UI (ui.mode = qml) is the default and needs no Node.js. When ON
-# (and Qt WebEngine is present), scripts/build-webui.sh runs `vite build` on the vendored frontend
+# (and Qt WebEngine is present), scripts/build-webui.sh runs `vite build` on the OpenDeck submodule
 # (src/app/webui/opendeck) + injects the Tauri-compat shim, and the static SPA is bundled into the
 # :/opendeck Qt resource. WebUiHost.qml then loads it. See docs/opendeck-ui/.
 option(AJAZZ_BUILD_WEBUI "Embed the OpenDeck Svelte web UI (webui mode); requires Node.js" OFF)

@@ -358,3 +358,16 @@ external browser).
   smoke 17 cases / 127 assertions green. (This partially reverts the Phase 3
   device-selector reshape; the OpenDeck-parity epic's device-selection model is
   now sidebar-based per user preference.)
+- 2026-06-26: **OpenDeck vendoring → git submodule.** Replaced the lean copied-in
+  `src/app/webui/opendeck/` tree (57 tracked files, fonts-stripped copy of upstream
+  `58b59e9`) with a git submodule pointing at `nekename/OpenDeck`, pinned to the same
+  verified commit `58b59e9`. Rationale: easy upstream updates
+  (`git submodule update --remote src/app/webui/opendeck`). Safe because all our
+  customizations live OUTSIDE the submodule — the Tauri shim
+  (`resources/opendeck-shim/tauri-shim.js`), the C++ `OpenDeckBridge` +
+  `opendeck_scheme_handler` + `opendeck_shaping`, and `scripts/build-webui.sh` — so
+  the submodule stays pristine. Build wiring unchanged: same path, `build-webui.sh`
+  falls back to `npm install` (upstream ships no `package-lock.json`) then
+  `vite build`; upstream `.gitignore` covers `build/`/`node_modules/`/`.svelte-kit/`
+  so building never dirties the submodule. The submodule gitlink now *is* the
+  upstream-commit record (supersedes the prior NOTICE-with-commit).

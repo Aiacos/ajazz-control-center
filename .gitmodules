@@ -1,0 +1,3 @@
+[submodule "src/app/webui/opendeck"]
+	path = src/app/webui/opendeck
+	url = https://github.com/nekename/OpenDeck.git

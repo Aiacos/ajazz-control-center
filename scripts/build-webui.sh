@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# Build the vendored OpenDeck SPA (webui UI mode) and inject the Tauri-compat
-# shim so it talks to our OpenDeckBridge over a QWebChannel. Output: a static
-# site in src/app/webui/opendeck/build/ that CMake bundles into the :/opendeck
-# Qt resource when -DAJAZZ_BUILD_WEBUI=ON.
+# Build the OpenDeck SPA (webui UI mode) and inject the Tauri-compat shim so it
+# talks to our OpenDeckBridge over a QWebChannel. Output: a static site in
+# src/app/webui/opendeck/build/ that CMake bundles into the :/opendeck Qt
+# resource when -DAJAZZ_BUILD_WEBUI=ON.
+#
+# OpenDeck is vendored as a git submodule at src/app/webui/opendeck (pristine
+# upstream nekename/OpenDeck). Update it with:
+#   git submodule update --remote src/app/webui/opendeck
+# Our customizations live OUTSIDE the submodule (the shim below + the C++
+# OpenDeckBridge/scheme-handler), so the submodule stays pristine and bumpable.
 #
 # Requires Node.js (>= 20) + npm. Idempotent. See docs/opendeck-ui/.
 set -euo pipefail
