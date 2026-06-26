@@ -371,3 +371,17 @@ external browser).
   `vite build`; upstream `.gitignore` covers `build/`/`node_modules/`/`.svelte-kit/`
   so building never dirties the submodule. The submodule gitlink now *is* the
   upstream-commit record (supersedes the prior NOTICE-with-commit).
+- 2026-06-26: **webui is now the DEFAULT UI mode (direction: go webui-only).**
+  `ui_mode_resolver` default flipped `qml`->`webui` (`UiMode::WebUi`; env/config still
+  override so `qml` stays reachable during the transition); `test_ui_mode_resolver`
+  default case updated. `AJAZZ_BUILD_WEBUI` default `OFF`->`ON`, but now degrades
+  GRACEFULLY — a missing Qt WebEngine or Node/npm toolchain is a WARNING + skip (was
+  FATAL_ERROR), and `main.cpp` falls back to the native qml UI when the SPA bundle
+  isn't compiled (no more blank WebUiHost placeholder); a real build failure (npm
+  present but `build-webui.sh` errors) stays FATAL. **Verified:** `[ui_mode]` unit
+  green (12 assertions); full app builds with `-DAJAZZ_BUILD_WEBUI=ON` (OpenDeck SPA
+  bundled from the submodule via vite); headless launch with no override resolves
+  `[ui] mode: webui`, the SPA boots and drives `OpenDeckBridge` (catalog 325 rows),
+  no crash. Deferred Phase-2B commands (`set_settings`/`set_application_profiles`)
+  still no-op as documented. **Next:** close the Phase-2B webui gaps, THEN retire the
+  native QML editor (Phase 5, now webui-canonical instead of qml-canonical).
