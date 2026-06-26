@@ -317,10 +317,56 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         return str(QJsonValue(QJsonValue::Null));
     }
 
-    // TODO(phase2b-followup): move_instance, set_state, trigger_virtual_press,
+    if (command == QLatin1String("move_instance")) {
+        if (m_profiles == nullptr) {
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        Ctx const src = parseCtxValue(args.value(QStringLiteral("source")));
+        Ctx const dst = parseCtxValue(args.value(QStringLiteral("destination")));
+        bool const retain = args.value(QStringLiteral("retain")).toBool();
+        // The SPA only issues a move onto an EMPTY destination (it early-returns
+        // on an occupied slot), so a swap with the empty dst is a full-fidelity
+        // move (src binding -> dst, src cleared). retain=true (copy/paste) has no
+        // faithful primitive yet -> deferred (return null; the SPA no-ops on null).
+        if (!src.valid || !dst.valid || retain || src.controller != dst.controller) {
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        int const keyCount = keyCountOf(dst.device);
+        bool const srcTouch = src.position >= keyCount;
+        bool const dstTouch = dst.position >= keyCount;
+        if (src.controller == QLatin1String("Encoder")) {
+            m_profiles->swapEncoderBindings(src.position, dst.position);
+        } else if (srcTouch && dstTouch) {
+            m_profiles->swapTouchZoneBindings(src.position - keyCount, dst.position - keyCount);
+        } else if (!srcTouch && !dstTouch) {
+            m_profiles->swapKeyBindings(src.position, dst.position);
+        } else {
+            return str(QJsonValue(QJsonValue::Null)); // keypad<->touch moves unsupported
+        }
+        emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
+        // Return the ActionInstance now at the destination (the SPA slots it in).
+        core::Profile const& p = m_profiles->activeProfile();
+        QString const ctx = dst.device + QStringLiteral(".") + dst.profile + QStringLiteral(".") +
+                            dst.controller + QStringLiteral(".") + QString::number(dst.position);
+        if (dst.controller == QLatin1String("Encoder")) {
+            auto const it = p.encoders.find(static_cast<std::uint16_t>(dst.position));
+            return str(it != p.encoders.end() ? encoderInstanceJson(it->second, ctx)
+                                              : QJsonValue(QJsonValue::Null));
+        }
+        if (dstTouch) {
+            auto const it = p.touchZones.find(static_cast<std::uint8_t>(dst.position - keyCount));
+            return str(it != p.touchZones.end() ? touchInstanceJson(it->second, ctx)
+                                                : QJsonValue(QJsonValue::Null));
+        }
+        auto const it = p.keys.find(static_cast<std::uint16_t>(dst.position));
+        return str(it != p.keys.end() ? keyInstanceJson(it->second, ctx)
+                                      : QJsonValue(QJsonValue::Null));
+    }
+
+    // TODO(phase2b-followup): set_state, trigger_virtual_press,
     // switch_property_inspector — return null (no-op) for now so the SPA does
     // not reject; tracked in docs/opendeck-ui/03-dev-plan.md.
-    if (command == QLatin1String("move_instance") || command == QLatin1String("set_state") ||
+    if (command == QLatin1String("set_state") ||
         command == QLatin1String("trigger_virtual_press") ||
         command == QLatin1String("switch_property_inspector")) {
         return str(QJsonValue(QJsonValue::Null));
