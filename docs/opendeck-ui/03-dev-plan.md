@@ -385,3 +385,29 @@ external browser).
   no crash. Deferred Phase-2B commands (`set_settings`/`set_application_profiles`)
   still no-op as documented. **Next:** close the Phase-2B webui gaps, THEN retire the
   native QML editor (Phase 5, now webui-canonical instead of qml-canonical).
+- 2026-06-26: **Phase-2B webui gaps — 3 closed + verified live.** Got the headless
+  verification harness working again first: `AJAZZ_DEBUG_CONTROL=1` (a bare value →
+  the socket lands in `$XDG_RUNTIME_DIR`, short enough for AF_UNIX; an explicit path
+  under the long scratchpad dir hits "AF_UNIX path too long"), and `opendeck.invoke`
+  expects `args` as a JSON **object** (the facade does `params.value("args").toObject()`),
+  not a string. With that, drove `opendeck.invoke` on the real AKP05E:
+  1. **`get_settings`/`set_settings`** now persist via QSettings (`opendeck/settings`)
+     over the {language,rotation,brightness} defaults (pure `settingsWithDefaults()`
+     helper, unit-tested). Round-trip verified live: set {brightness:77,language:it}
+     → get returns 77/it, rotation default 0.
+  1. **`set_application_profiles`** accepted as a graceful no-op (no backing yet) —
+     removes the per-launch unhandled-command warning (verified: 0 warnings on boot).
+  1. **`move_instance`** wired to swap{Key,Encoder,TouchZone}Bindings (swap onto the
+     always-empty dst = full-fidelity move); returns the dst ActionInstance + emits
+     rerender_images; retain=true (copy) deferred. Verified live: bind brightness at
+     Keypad.0 → move 0→3 → key0 null, key3 bound.
+     Commits: `e3021878` (settings + app-profiles), `61506478` (move_instance).
+  - **Still no-op (deferred — each needs a new service injected into OpenDeckBridge +
+    Application wiring + nuanced verification):**
+    - `trigger_virtual_press` — `StreamDockInputService::injectSyntheticEvent` exists
+      but is not injected into the bridge; needs a member + a constructed `DeviceEvent`.
+    - `switch_property_inspector` — in webui the PI is the SPA's own iframe ("PI for
+      free"), so it's unclear the bridge must act at all; investigate before wiring
+      `PropertyInspectorController::loadInspector/closeInspector`.
+    - `set_state` — multi-state edit; map to `commitToggleStates`/`cycleInstanceState`
+      (semantics need care).
