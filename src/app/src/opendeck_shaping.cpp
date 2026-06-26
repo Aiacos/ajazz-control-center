@@ -325,4 +325,16 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
     };
 }
 
+QJsonObject settingsWithDefaults(QJsonObject const& stored) {
+    QJsonObject out{
+        {QStringLiteral("language"), QStringLiteral("en")},
+        {QStringLiteral("rotation"), 0},
+        {QStringLiteral("brightness"), 50},
+    };
+    for (auto it = stored.constBegin(); it != stored.constEnd(); ++it) {
+        out.insert(it.key(), it.value());
+    }
+    return out;
+}
+
 } // namespace ajazz::app::opendeck_detail

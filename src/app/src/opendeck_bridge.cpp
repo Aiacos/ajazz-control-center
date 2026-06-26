@@ -13,6 +13,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLoggingCategory>
+#include <QSettings>
 #include <QStringList>
 
 namespace ajazz::app {
@@ -100,13 +101,32 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         return str(fonts);
     }
     if (command == QLatin1String("get_settings")) {
-        return str(QJsonObject{{QStringLiteral("language"), QStringLiteral("en")},
-                               {QStringLiteral("rotation"), 0},
-                               {QStringLiteral("brightness"), 50}});
+        QSettings settings;
+        QJsonObject const stored =
+            QJsonDocument::fromJson(
+                settings.value(QStringLiteral("opendeck/settings")).toString().toUtf8())
+                .object();
+        return str(settingsWithDefaults(stored));
+    }
+    if (command == QLatin1String("set_settings")) {
+        // OpenDeck sends {settings:{...}} (fall back to the raw object defensively).
+        QJsonValue const v = args.value(QStringLiteral("settings"));
+        QJsonObject const incoming = v.isObject() ? v.toObject() : args;
+        QSettings settings;
+        settings.setValue(
+            QStringLiteral("opendeck/settings"),
+            QString::fromUtf8(QJsonDocument(incoming).toJson(QJsonDocument::Compact)));
+        return str(QJsonValue(QJsonValue::Null));
     }
     if (command == QLatin1String("get_localisations") || command == QLatin1String("make_info") ||
         command == QLatin1String("get_application_profiles")) {
         return str(QJsonObject{});
+    }
+    if (command == QLatin1String("set_application_profiles")) {
+        // TODO(opendeck-ui): no per-app profile backing yet — accept + ignore so
+        // the SPA's app-profile writes don't trip the unhandled-command warning.
+        // Pairs with the get_application_profiles {} stub above.
+        return str(QJsonValue(QJsonValue::Null));
     }
     if (command == QLatin1String("get_applications") || command == QLatin1String("list_plugins")) {
         return str(QJsonArray{});

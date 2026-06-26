@@ -86,6 +86,11 @@ namespace opendeck_detail {
 [[nodiscard]] QJsonObject
 profileJson(core::Profile const& profile, int keyCount, int encoderCount, int touchCount);
 
+/// Overlay persisted OpenDeck UI settings on the {language,rotation,brightness}
+/// defaults (stored values win). Pure so the merge is unit-tested without the
+/// QSettings I/O that get_settings/set_settings wrap around it.
+[[nodiscard]] QJsonObject settingsWithDefaults(QJsonObject const& stored);
+
 } // namespace opendeck_detail
 
 /**

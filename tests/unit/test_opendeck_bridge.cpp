@@ -173,6 +173,28 @@ TEST_CASE("profileJson appends touch-strip zones after the keypad in keys[]", "[
     REQUIRE(keys.at(11).isNull());
 }
 
+TEST_CASE("settingsWithDefaults overlays stored values on the defaults", "[opendeck]") {
+    // Empty store -> the {language,rotation,brightness} defaults.
+    QJsonObject const d = settingsWithDefaults(QJsonObject{});
+    REQUIRE(d.value("language").toString() == "en");
+    REQUIRE(d.value("rotation").toInt() == 0);
+    REQUIRE(d.value("brightness").toInt() == 50);
+
+    // Stored values win; unset keys keep their default.
+    QJsonObject stored;
+    stored["brightness"] = 80;
+    stored["language"] = QStringLiteral("it");
+    QJsonObject const m = settingsWithDefaults(stored);
+    REQUIRE(m.value("brightness").toInt() == 80);
+    REQUIRE(m.value("language").toString() == "it");
+    REQUIRE(m.value("rotation").toInt() == 0);
+
+    // Unknown persisted keys are preserved (forward-compatible with new settings).
+    QJsonObject extra;
+    extra["future_key"] = true;
+    REQUIRE(settingsWithDefaults(extra).value("future_key").toBool() == true);
+}
+
 TEST_CASE("jsonToString round-trips scalars and containers", "[opendeck]") {
     REQUIRE(jsonToString(QJsonValue(57116)) == "57116");
     REQUIRE(jsonToString(QJsonValue(QStringLiteral("hi"))) == "\"hi\"");
