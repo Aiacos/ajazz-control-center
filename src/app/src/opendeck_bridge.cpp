@@ -163,9 +163,13 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         return str(out);
     }
     if (command == QLatin1String("remove_plugin")) {
+        // `id` is the install-dir name that list_plugins emits (the disk-backed
+        // `pluginUuid`), so route to removeInstalledPlugin (which deletes the
+        // dir + clears bindings), NOT uninstall() (which keys off the catalogue
+        // uuid and leaves the dir on disk -> the disk-backed list never updates).
         QString const id = args.value(QStringLiteral("id")).toString();
         if (m_catalog != nullptr && !id.isEmpty()) {
-            m_catalog->uninstall(id);
+            m_catalog->removeInstalledPlugin(id);
             emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
         }
         return str(QJsonValue(QJsonValue::Null));

@@ -1839,6 +1839,117 @@ bool PluginCatalogModel::uninstall(QString const& uuid) {
     return true;
 }
 
+bool PluginCatalogModel::removeInstalledPlugin(QString const& installDirName) {
+    // Defence-in-depth path sanitation: the name crosses the SPA -> bridge ->
+    // C++ boundary (list_plugins -> remove_plugin) and is therefore untrusted.
+    // It must be a bare `<...>.sdPlugin` leaf — reject anything that could
+    // escape userPluginsDir() before we removeRecursively() a directory.
+    if (installDirName.isEmpty() || !installDirName.endsWith(QStringLiteral(".sdPlugin")) ||
+        installDirName.startsWith(QLatin1Char('.')) || installDirName.contains(QLatin1Char('/')) ||
+        installDirName.contains(QLatin1Char('\\')) ||
+        installDirName.contains(QStringLiteral(".."))) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "removeInstalledPlugin: rejected unsafe name '{}'",
+                       installDirName.toStdString());
+        return false;
+    }
+
+    QDir const pluginsDir(userPluginsDir());
+    QFileInfo const targetInfo(pluginsDir.filePath(installDirName));
+    if (!targetInfo.isDir()) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "removeInstalledPlugin: '{}' is not an installed plugin dir",
+                       installDirName.toStdString());
+        return false;
+    }
+    // Canonical containment (belt-and-braces vs symlink games): the resolved
+    // target must live directly under the resolved plugins dir.
+    QString const canonicalTarget = targetInfo.canonicalFilePath();
+    QString const canonicalRoot = QFileInfo(pluginsDir.absolutePath()).canonicalFilePath();
+    if (canonicalTarget.isEmpty() || canonicalRoot.isEmpty() ||
+        !canonicalTarget.startsWith(canonicalRoot + QLatin1Char('/'))) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "removeInstalledPlugin: '{}' escapes the plugins dir",
+                       installDirName.toStdString());
+        return false;
+    }
+
+    // Resolve the plugin-owner UUID BEFORE deletion so we can clear the bindings
+    // the plugin owns. clearBindingsForPlugin matches an owner uuid plus its
+    // dotted action children (NOT the catalogue uuid or the install-dir name).
+    // Prefer the AJAZZ PUUID extension; Elgato manifests carry no top-level
+    // plugin UUID, so fall back to the longest reverse-DNS prefix shared by the
+    // action UUIDs (e.g. actions com.foo.bar.{a,b} -> owner com.foo.bar).
+    QString manifestUuid;
+    {
+        QFile mf(QDir(targetInfo.filePath()).filePath(QStringLiteral("manifest.json")));
+        if (mf.open(QIODevice::ReadOnly)) {
+            if (auto const parsed = parsePluginManifest(mf.readAll())) {
+                if (!parsed->puuid.isEmpty()) {
+                    manifestUuid = parsed->puuid;
+                } else {
+                    auto const commonDottedPrefix = [](QString const& a, QString const& b) {
+                        QStringList const as = a.split(QLatin1Char('.'));
+                        QStringList const bs = b.split(QLatin1Char('.'));
+                        QStringList out;
+                        for (int i = 0; i < as.size() && i < bs.size() && as[i] == bs[i]; ++i) {
+                            out << as[i];
+                        }
+                        return out.join(QLatin1Char('.'));
+                    };
+                    for (PluginAction const& a : parsed->actions) {
+                        if (a.uuid.isEmpty()) {
+                            continue;
+                        }
+                        manifestUuid = manifestUuid.isEmpty()
+                                           ? a.uuid
+                                           : commonDottedPrefix(manifestUuid, a.uuid);
+                    }
+                }
+            }
+        }
+    }
+
+    if (!QDir(targetInfo.filePath()).removeRecursively()) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "removeInstalledPlugin: failed to delete '{}'",
+                       targetInfo.filePath().toStdString());
+        return false;
+    }
+    AJAZZ_LOG_INFO(
+        "plugin-catalog", "removeInstalledPlugin: removed '{}'", installDirName.toStdString());
+
+    // Best-effort catalogue-row reconcile: the install-dir base is the
+    // streamdock product id (or, for non-streamdock installs, the catalogue
+    // uuid) — see install()'s fileBase naming. Flip the matching row back to
+    // not-installed so the store tile re-offers "Install".
+    QString const base =
+        installDirName.left(installDirName.size() - QStringLiteral(".sdPlugin").size());
+    for (auto it = m_install.begin(); it != m_install.end(); ++it) {
+        int const row = findRow(m_rows, it.key());
+        if (row < 0) {
+            continue;
+        }
+        CatalogEntry const& entry = m_rows[static_cast<std::size_t>(row)];
+        if (entry.streamdockProductId == base || entry.uuid == base) {
+            if (it.value().installed) {
+                it.value().installed = false;
+                it.value().enabled = false;
+                QModelIndex const idx = index(row);
+                emit dataChanged(idx, idx, {InstalledRole, EnabledRole});
+            }
+            break;
+        }
+    }
+
+    // Clear any key/dial binding owned by the now-gone plugin (T037 contract).
+    if (!manifestUuid.isEmpty()) {
+        emit pluginUninstalled(manifestUuid);
+    }
+    emit installedCountChanged(); // re-queries the disk-backed installedActions()
+    return true;
+}
+
 bool PluginCatalogModel::openUpstream(QString const& uuid) const {
     int const row = findRow(m_rows, uuid);
     if (row < 0) {

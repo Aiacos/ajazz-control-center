@@ -449,3 +449,33 @@ external browser).
     controllers/bridges now unused by any QML), and `ui_mode_resolver.{hpp,cpp}` +
     its unit test (the UiMode root branch was dropped in c456a277). Dead C++/test
     compiles fine; retire in a focused C++ cleanup.
+- 2026-06-30: **Embedded OpenDeck Plugins tab wired to the catalog (commit
+  `45fb5166`) + the `remove_plugin` no-op FIXED + live-verified.** The embedded
+  SPA's Plugins tab was non-functional: `list_plugins` returned an empty stub and
+  `install/remove_plugin` hit the unhandled-command warning. `45fb5166` wired all
+  three to `PluginCatalogModel` (list groups `installedActions()` by `pluginUuid`
+  into OpenDeck's `{id,name,icon}`; install handles `file://`/local sync + http(s)
+  async download; remove called `uninstall(id)`).
+  - **Bug caught by live debug-channel verification (constitution V):** the
+    `list_plugins` `id` it hands the SPA is the disk-backed install-DIR name (the
+    `pluginUuid`, e.g. `20250730000814.sdPlugin`), but `remove_plugin` fed that to
+    `PluginCatalogModel::uninstall()`, which keys off the *catalogue* uuid
+    (`com.streamdock.battery.…`) AND only flips row state without deleting the dir.
+    Result: `findRow` missed → silent no-op; even with the right uuid the
+    disk-backed `list_plugins`/`installedActions` would never reflect removal.
+  - **Fix:** new `PluginCatalogModel::removeInstalledPlugin(installDirName)` —
+    sanitises the SPA-supplied name against path traversal, `removeRecursively()`s
+    `<pluginsDir>/<name>/`, clears bindings via `pluginUninstalled` (owner uuid =
+    PUUID, else the actions' longest reverse-DNS prefix — what
+    `clearBindingsForPlugin` matches), and best-effort flips the matching
+    catalogue row to not-installed. `remove_plugin` now routes here.
+  - **Live-verified end-to-end (offscreen + debug channel):** install Battery from
+    the catalog → `list_plugins` shows it + dir on disk → bridge
+    `remove_plugin {id:"20250730000814.sdPlugin"}` → `list_plugins` `[]`,
+    `installedActions` 0, dir gone from disk. Unit test
+    `CatalogOffline removeInstalledPlugin …` (path-traversal reject + non-existent
+    reject + real delete + `pluginUninstalled` carries the manifest-prefix uuid);
+    catalog tag suite 131 assertions / 17 cases green.
+  - **Known minor gap (cosmetic):** `list_plugins` `icon` is empty — the disk-backed
+    `installedActions()` rows do not carry a resolved plugin-level icon, so the
+    SPA's PluginManager shows a blank glyph. Functional, low priority.

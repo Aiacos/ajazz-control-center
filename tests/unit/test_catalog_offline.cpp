@@ -314,6 +314,80 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
 }
 
 // ---------------------------------------------------------------------------
+// removeInstalledPlugin(): the disk-backed removal the OpenDeck `remove_plugin`
+// bridge command routes to. Keys off the install-DIR name (the `pluginUuid`
+// list_plugins reports), deletes the directory so installedActions() reflects
+// it, and emits pluginUninstalled with the MANIFEST uuid (so bindings clear).
+// Regression guard for the bridge bug where remove_plugin called uninstall()
+// (catalogue-uuid keyed, no disk delete) and silently no-op'd.
+// ---------------------------------------------------------------------------
+TEST_CASE("CatalogOffline removeInstalledPlugin deletes dir and clears actions",
+          "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    QString const installDirName = QStringLiteral("com.example.demo.sdPlugin");
+    QString const pluginDir = QDir(pluginsDir).filePath(installDirName);
+    REQUIRE(QDir().mkpath(pluginDir));
+    QByteArray const manifest = R"JSON({
+      "Name": "Demo Plugin",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "UUID": "com.example.demo",
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.demo.first",  "Name": "First Action",
+          "Controllers": ["Keypad"], "States": [ {} ] },
+        { "UUID": "com.example.demo.second", "Name": "Second Action",
+          "Controllers": ["Knob"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+    REQUIRE(model.installedActions().size() == 2);
+
+    // pluginUninstalled must fire with the MANIFEST uuid (what clearBindingsForPlugin
+    // matches), not the install-dir name or a catalogue uuid.
+    QSignalSpy uninstalledSpy(&model, &PluginCatalogModel::pluginUninstalled);
+
+    // An unsafe name (path traversal / separators) is rejected BEFORE any delete.
+    CHECK_FALSE(model.removeInstalledPlugin(QStringLiteral("../evil.sdPlugin")));
+    CHECK_FALSE(model.removeInstalledPlugin(QStringLiteral("foo/bar.sdPlugin")));
+    // A non-existent install dir returns false (nothing to remove).
+    CHECK_FALSE(model.removeInstalledPlugin(QStringLiteral("com.nope.absent.sdPlugin")));
+    CHECK(QDir(pluginDir).exists()); // the real plugin is untouched by the above
+    CHECK(uninstalledSpy.isEmpty());
+
+    // The real removal: dir gone, installedActions() now empty, signal fired
+    // with the manifest uuid.
+    CHECK(model.removeInstalledPlugin(installDirName));
+    CHECK_FALSE(QDir(pluginDir).exists());
+    CHECK(model.installedActions().isEmpty());
+    REQUIRE(uninstalledSpy.size() == 1);
+    CHECK(uninstalledSpy.front().front().toString() == QStringLiteral("com.example.demo"));
+
+    QStandardPaths::setTestModeEnabled(false);
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+}
+
+// ---------------------------------------------------------------------------
 // Phase 28 Plan 02: VisibleInActionsList filter, diagnostic counters,
 // extended QVariantMap (affordanceMask, controllers, new fields).
 // ---------------------------------------------------------------------------

@@ -395,6 +395,24 @@ public:
     /// Mark a plugin as removed. Returns true on success.
     Q_INVOKABLE bool uninstall(QString const& uuid);
 
+    /**
+     * @brief Physically remove an installed plugin by its on-disk install-dir
+     *        name (the `<name>.sdPlugin` folder under @ref userPluginsDir() —
+     *        the `pluginUuid` reported by @ref installedActions() and the
+     *        OpenDeck `list_plugins` bridge command).
+     *
+     * Unlike @ref uninstall (which keys off the *catalogue* uuid and only flips
+     * the row's install state), this deletes the directory so the disk-backed
+     * @ref installedActions() view reflects the removal, clears any key/dial
+     * bindings owned by the plugin's manifest UUID (T037), and best-effort
+     * reconciles the matching catalogue row's Installed state. The name is
+     * sanitised against path traversal before any filesystem write.
+     *
+     * @param installDirName Bare `<...>.sdPlugin` leaf name (no separators).
+     * @return true when the directory was found and removed.
+     */
+    Q_INVOKABLE bool removeInstalledPlugin(QString const& installDirName);
+
     // ------------------------------------------------------------------
     // No-phone-home opt-in (PLUGIN-14 anti-feature, T-22-phonehome).
     //
