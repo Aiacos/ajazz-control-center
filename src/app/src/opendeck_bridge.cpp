@@ -268,7 +268,14 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             return str(QJsonValue(QJsonValue::Null));
         }
         Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
-        QString const actionId = args.value(QStringLiteral("action")).toString();
+        // The SPA sends `action` as the full Action OBJECT (DeviceView.handleDrop:
+        // JSON.parse(dataTransfer.getData("action"))), so read its `uuid` — a bare
+        // .toString() on an object yields "" and silently dropped every bind
+        // (drag-drop onto a key "had no effect"). Tolerate a plain-string id too.
+        QJsonValue const actionVal = args.value(QStringLiteral("action"));
+        QString const actionId = actionVal.isObject()
+                                     ? actionVal.toObject().value(QStringLiteral("uuid")).toString()
+                                     : actionVal.toString();
         if (!c.valid || actionId.isEmpty()) {
             return str(QJsonValue(QJsonValue::Null));
         }
