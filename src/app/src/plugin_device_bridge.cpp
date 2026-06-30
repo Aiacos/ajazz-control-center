@@ -1010,8 +1010,13 @@ void PluginDeviceBridge::renderEncoderFeedback(ActionContext const& ctx) {
 }
 
 void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::uint8_t keyCols) {
-    if (!m_stateImageResolver || m_control == nullptr ||
-        ctx.controller != QStringLiteral("Keypad")) {
+    // Keypad keys and encoder strip-zones both carry a plugin-declared state
+    // image; only those two controllers have a renderable surface here. (On the
+    // AKP05E the 4 "Encoder" zones ARE the BAT strip displays — same path
+    // renderEncoderFeedback() uses.) Other controllers (e.g. bare touch) no-op.
+    bool const isKeypad = ctx.controller == QStringLiteral("Keypad");
+    bool const isEncoder = ctx.controller == QStringLiteral("Encoder");
+    if (!m_stateImageResolver || m_control == nullptr || (!isKeypad && !isEncoder)) {
         return;
     }
     QString const imgPath = m_stateImageResolver(ctx.actionUUID, ctx.stateIndex);
@@ -1032,6 +1037,19 @@ void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::
         AJAZZ_LOG_WARN("plugin-bridge",
                        "paintDeclaredStateImage: image failed to load: {}",
                        imgPath.toStdString());
+        return;
+    }
+    if (isEncoder) {
+        // ctx.column is the 0-based encoder/strip-zone index; encoders carry no
+        // title overlay so there is nothing to reapply afterwards.
+        try {
+            m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), stateImg);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "paintDeclaredStateImage: assignEncoderImage threw for zone {}: {}",
+                           static_cast<int>(ctx.column),
+                           e.what());
+        }
         return;
     }
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
