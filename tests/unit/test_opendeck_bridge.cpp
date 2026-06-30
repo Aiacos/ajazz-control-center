@@ -69,6 +69,22 @@ TEST_CASE("categoriesJson always includes the six OpenDeck built-ins", "[opendec
     REQUIRE(first.contains("name"));
     REQUIRE(first.contains("controllers"));
     REQUIRE(first.value("states").toArray().size() == 1);
+    // Every built-in must carry a non-empty icon so the action list renders it
+    // (blank icon = dark tile). Icons use the `opendeck/<path>` form, served from
+    // the bundled SPA qrc via OpenDeckSchemeHandler.
+    for (QJsonValue const& v : builtins) {
+        QJsonObject const action = v.toObject();
+        QString const icon = action.value("icon").toString();
+        REQUIRE_FALSE(icon.isEmpty());
+        REQUIRE(icon.startsWith("opendeck/"));
+    }
+    // Multi Action uses OpenDeck's own bundled icon (src-tauri shared.rs CATEGORIES).
+    for (QJsonValue const& v : builtins) {
+        QJsonObject const action = v.toObject();
+        if (action.value("uuid").toString() == "opendeck.multiaction") {
+            REQUIRE(action.value("icon").toString() == "opendeck/multi-action.png");
+        }
+    }
 }
 
 TEST_CASE("categoriesJson groups installed actions by plugin name", "[opendeck]") {
