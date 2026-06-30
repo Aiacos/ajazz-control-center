@@ -491,6 +491,13 @@ void PluginCatalogModel::refreshInstalled() {
     emit installedCountChanged();
 }
 
+namespace {
+// Defined in the anonymous-namespace block below installedActions() (all
+// anonymous namespaces in a TU merge); forward-declared so installedActions()
+// can probe each action icon's on-disk spelling (.png/@2x.png/.svg).
+[[nodiscard]] QString resolvePluginIconFile(QString const& pluginDir, QString const& rel);
+} // namespace
+
 QVariantList PluginCatalogModel::installedActions() const {
     QVariantList out;
 
@@ -572,23 +579,24 @@ QVariantList PluginCatalogModel::installedActions() const {
                 continue;         // an action with no id cannot be bound or routed
             }
 
-            // Prefer the per-action icon, fall back to the plugin icon. Elgato
-            // manifests routinely omit the extension, so probe `.png` too.
-            // Returned as a file:// URL so QML Image renders it directly and the
-            // C++ load boundary (normaliseImagePath) can strip it on persist.
+            // Prefer the per-action icon, fall back to the plugin icon. Probe the
+            // common Elgato/OpenAction spellings (bare, .png, @2x.png, .svg) — e.g.
+            // OpenAction Discord ships `actions/mute_0.svg` with Icon "actions/mute_0".
             QString iconUrl;
             QString const iconRel = !action.icon.isEmpty() ? action.icon : parsed->icon;
-            if (!iconRel.isEmpty()) {
-                QString const base = QDir(pluginDir).filePath(iconRel);
-                QString resolved;
-                if (QFileInfo::exists(base)) {
-                    resolved = base;
-                } else if (QFileInfo::exists(base + QStringLiteral(".png"))) {
-                    resolved = base + QStringLiteral(".png");
-                }
-                if (!resolved.isEmpty()) {
-                    iconUrl = QUrl::fromLocalFile(resolved).toString();
-                }
+            QString const resolved = resolvePluginIconFile(pluginDir, iconRel);
+            if (!resolved.isEmpty()) {
+                // Emit the icon as an `opendeck/__pluginasset__/<dir>/<rel>` path.
+                // The embedded OpenDeck SPA's icon renderers special-case an
+                // `opendeck/` prefix (ActionList.svelte, getImage()): `opendeck/x`
+                // -> `/x`, a root-relative URL resolved against the `opendeck://app/`
+                // origin and served by OpenDeckSchemeHandler. A file:// / data: /
+                // bare path instead routes through the dead local webserver origin
+                // (http://localhost:PORT/...) and renders blank. The scheme handler
+                // maps __pluginasset__/<rest> back to userPluginsDir()/<rest> on disk.
+                QString const rel = QDir(pluginDir).relativeFilePath(resolved);
+                iconUrl =
+                    QStringLiteral("opendeck/__pluginasset__/") + entry + QLatin1Char('/') + rel;
             }
 
             // Absolute filesystem path to the action's Property Inspector HTML
