@@ -151,12 +151,21 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                 if (id.isEmpty() || byPlugin.contains(id)) {
                     continue;
                 }
-                byPlugin.insert(
-                    id,
-                    QJsonObject{
-                        {QStringLiteral("id"), id},
-                        {QStringLiteral("name"), a.value(QStringLiteral("pluginName")).toString()},
-                        {QStringLiteral("icon"), a.value(QStringLiteral("icon")).toString()}});
+                // Plugin-level icon (manifest top-level Icon/CategoryIcon),
+                // inlined as a data: URI. The per-action `icon` is a file://
+                // URL that does not load cross-origin in the SPA's
+                // `opendeck://app/` webview, and a plugin frequently has no
+                // first-action icon at all (e.g. Battery -> icon:"") — so
+                // resolve the plugin's own icon to the SPA-loadable data: form.
+                QString icon = m_catalog->pluginIconDataUri(id);
+                if (icon.isEmpty()) {
+                    icon = a.value(QStringLiteral("icon")).toString();
+                }
+                byPlugin.insert(id,
+                                QJsonObject{{QStringLiteral("id"), id},
+                                            {QStringLiteral("name"),
+                                             a.value(QStringLiteral("pluginName")).toString()},
+                                            {QStringLiteral("icon"), icon}});
             }
         }
         QJsonArray out;

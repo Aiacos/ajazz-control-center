@@ -25,8 +25,10 @@
 #include "plugin_catalog_model.hpp"
 #include "qt_app_fixture.hpp"
 
+#include <QByteArray>
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QString>
@@ -309,6 +311,97 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
               .endsWith(QStringLiteral("com.example.demo.sdPlugin/pi/index.html")));
     // An unknown action id returns an empty map.
     CHECK(model.actionInfo(QStringLiteral("com.nope.nope")).isEmpty());
+
+    PluginCatalogModel::setPluginsDirOverride(QString{});
+}
+
+// ---------------------------------------------------------------------------
+// pluginIconDataUri(): the plugin-level icon the OpenDeck `list_plugins` bridge
+// surfaces for the embedded Plugins tab. Resolves the manifest top-level Icon
+// (probing the extension-less Elgato spelling), inlines it as a data: URI, and
+// rejects path-traversal install-dir names. Regression guard for the blank
+// installed-plugin icons (e.g. Battery -> icon:"") in the embedded OpenDeck UI.
+// ---------------------------------------------------------------------------
+TEST_CASE("CatalogOffline pluginIconDataUri inlines manifest Icon as data URI",
+          "[catalog-offline]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+
+    QStandardPaths::setTestModeEnabled(true);
+    PluginCatalogModel model(nullptr);
+
+    QString const installDirName = QStringLiteral("com.example.battery.sdPlugin");
+    QString const pluginDir = QDir(pluginsDir).filePath(installDirName);
+    REQUIRE(QDir().mkpath(pluginDir));
+
+    // Top-level "Icon" omits the extension (the common Elgato spelling); the
+    // real file ships as <Icon>.png — pluginIconDataUri must probe `.png`.
+    QByteArray const manifest = R"JSON({
+      "Name": "Battery Display",
+      "Author": "Tester",
+      "Version": "1.0.0",
+      "SDKVersion": 1,
+      "Icon": "pluginIcon",
+      "OS": [ { "Platform": "windows", "MinimumVersion": "10" }, { "Platform": "mac", "MinimumVersion": "10" } ],
+      "CodePath": "code/index.js",
+      "Actions": [
+        { "UUID": "com.example.battery.show", "Name": "Show Battery",
+          "Controllers": ["Keypad"], "States": [ {} ] }
+      ]
+    })JSON";
+    {
+        QFile f(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifest);
+        f.close();
+    }
+    // Ship a real PNG at <Icon>.png so the probe + inline path is exercised
+    // end-to-end (a bogus byte blob would not survive QImage round-tripping).
+    {
+        QImage img(8, 8, QImage::Format_ARGB32);
+        img.fill(0xFF3366CC);
+        REQUIRE(img.save(QDir(pluginDir).filePath(QStringLiteral("pluginIcon.png")), "PNG"));
+    }
+
+    QString const dataUri = model.pluginIconDataUri(installDirName);
+    QStandardPaths::setTestModeEnabled(false);
+
+    // Non-empty, and in the SPA-loadable data: form with a base64 PNG payload.
+    CHECK_FALSE(dataUri.isEmpty());
+    CHECK(dataUri.startsWith(QStringLiteral("data:image/png;base64,")));
+    // The inlined payload round-trips back to a decodable image.
+    qsizetype const comma = dataUri.indexOf(QLatin1Char(','));
+    REQUIRE(comma > 0);
+    QByteArray const raw = QByteArray::fromBase64(dataUri.mid(comma + 1).toLatin1());
+    CHECK_FALSE(raw.isEmpty());
+    QImage decoded;
+    CHECK(decoded.loadFromData(raw, "PNG"));
+
+    // Path-traversal install-dir names are rejected (empty result).
+    QStandardPaths::setTestModeEnabled(true);
+    CHECK(model.pluginIconDataUri(QStringLiteral("../evil.sdPlugin")).isEmpty());
+    CHECK(model.pluginIconDataUri(QStringLiteral("foo/bar.sdPlugin")).isEmpty());
+    // A plugin that ships no Icon yields an empty string (not a crash).
+    QString const noIconDir = QStringLiteral("com.example.noicon.sdPlugin");
+    REQUIRE(QDir().mkpath(QDir(pluginsDir).filePath(noIconDir)));
+    {
+        QFile f(
+            QDir(QDir(pluginsDir).filePath(noIconDir)).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(R"JSON({"Name":"No Icon","Author":"T","Version":"1.0.0","SDKVersion":1,
+          "OS":[{"Platform":"mac","MinimumVersion":"10"}],"CodePath":"c.js","Actions":[]})JSON");
+        f.close();
+    }
+    CHECK(model.pluginIconDataUri(noIconDir).isEmpty());
+    QStandardPaths::setTestModeEnabled(false);
 
     PluginCatalogModel::setPluginsDirOverride(QString{});
 }

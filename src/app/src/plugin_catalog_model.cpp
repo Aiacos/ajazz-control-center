@@ -638,6 +638,92 @@ QVariantList PluginCatalogModel::installedActions() const {
     return out;
 }
 
+namespace {
+
+/// Probe the common on-disk spellings of a manifest icon path relative to the
+/// plugin dir. Elgato manifests routinely omit the extension and ship a `@2x`
+/// retina variant, so try the bare path, then `.png`, `@2x.png`, and `.svg`.
+/// Returns the absolute path of the first hit, or an empty string.
+[[nodiscard]] QString resolvePluginIconFile(QString const& pluginDir, QString const& rel) {
+    if (rel.isEmpty()) {
+        return {};
+    }
+    QString const base = QDir(pluginDir).filePath(rel);
+    for (QString const& cand : {base,
+                                base + QStringLiteral(".png"),
+                                base + QStringLiteral("@2x.png"),
+                                base + QStringLiteral(".svg")}) {
+        if (QFileInfo::exists(cand)) {
+            return cand;
+        }
+    }
+    return {};
+}
+
+/// Read @p absPath and return it as a `data:<mime>;base64,...` URI, or an empty
+/// string on read failure. The MIME type is inferred from the file extension
+/// (SVG is preserved as `image/svg+xml` rather than rasterised).
+[[nodiscard]] QString iconFileToDataUri(QString const& absPath) {
+    QFile f(absPath);
+    if (!f.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    QByteArray const bytes = f.readAll();
+    f.close();
+    if (bytes.isEmpty()) {
+        return {};
+    }
+    QString const lower = absPath.toLower();
+    QString mime = QStringLiteral("image/png");
+    if (lower.endsWith(QStringLiteral(".svg"))) {
+        mime = QStringLiteral("image/svg+xml");
+    } else if (lower.endsWith(QStringLiteral(".jpg")) || lower.endsWith(QStringLiteral(".jpeg"))) {
+        mime = QStringLiteral("image/jpeg");
+    } else if (lower.endsWith(QStringLiteral(".gif"))) {
+        mime = QStringLiteral("image/gif");
+    } else if (lower.endsWith(QStringLiteral(".bmp"))) {
+        mime = QStringLiteral("image/bmp");
+    }
+    return QStringLiteral("data:%1;base64,%2").arg(mime, QString::fromLatin1(bytes.toBase64()));
+}
+
+} // namespace
+
+QString PluginCatalogModel::pluginIconDataUri(QString const& installDirName) const {
+    // Path-traversal guard: installDirName is the on-disk `<id>.sdPlugin`
+    // directory name the OpenDeck `list_plugins` bridge reports — it must be a
+    // single path segment under userPluginsDir(), never an escape.
+    if (installDirName.isEmpty() || installDirName.contains(QStringLiteral("..")) ||
+        installDirName.contains(QLatin1Char('/')) || installDirName.contains(QLatin1Char('\\'))) {
+        return {};
+    }
+    QString const pluginDir = QDir(userPluginsDir()).filePath(installDirName);
+    QFile manifestFile(QDir(pluginDir).filePath(QStringLiteral("manifest.json")));
+    if (!manifestFile.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    QByteArray const json = manifestFile.readAll();
+    manifestFile.close();
+
+    auto const parsed = parsePluginManifest(json);
+    if (!parsed) {
+        return {};
+    }
+    // Plugin-level icon: the manifest top-level `Icon`, then `CategoryIcon`.
+    // Both are stored relative to the plugin dir; resolve + inline the first
+    // that exists on disk as a data: URI. A data: URI is the SPA-loadable form
+    // (the OpenDeck renderer's getImage() passes `data:` through verbatim,
+    // whereas a file:// or relative path is routed through the dead local
+    // webserver origin and fails to load cross-origin in the SPA's webview).
+    for (QString const& rel : {parsed->icon, parsed->categoryIcon}) {
+        QString const resolved = resolvePluginIconFile(pluginDir, rel);
+        if (!resolved.isEmpty()) {
+            return iconFileToDataUri(resolved);
+        }
+    }
+    return {};
+}
+
 QVariantList PluginCatalogModel::installedUnsupportedPlugins() const {
     QVariantList out;
 

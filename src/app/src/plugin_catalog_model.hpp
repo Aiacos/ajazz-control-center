@@ -208,6 +208,25 @@ public:
     [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
 
     /**
+     * @brief Plugin-level icon for an installed plugin, as a `data:` URI.
+     *
+     * @param installDirName the on-disk `<id>.sdPlugin` directory name (the
+     *        `pluginUuid` that @ref installedActions reports and the OpenDeck
+     *        `list_plugins` bridge keys on). Must be a single path segment
+     *        under @ref userPluginsDir(); a value containing `/`, `\\` or `..`
+     *        is rejected (path-traversal guard) and yields an empty string.
+     *
+     * Resolves the manifest top-level @c Icon (then @c CategoryIcon), probing
+     * the common Elgato spellings (bare, `.png`, `@2x.png`, `.svg`), and
+     * returns the file inlined as a `data:<mime>;base64,...` URI — the form the
+     * embedded OpenDeck SPA can load directly (its renderer passes `data:` URIs
+     * through verbatim; a file:// or webserver-relative path does not load
+     * cross-origin in the `opendeck://app/` webview). Returns "" when the
+     * plugin is absent, unparsable, or ships no resolvable icon.
+     */
+    [[nodiscard]] Q_INVOKABLE QString pluginIconDataUri(QString const& installDirName) const;
+
+    /**
      * @brief Force the Action Library to re-query @ref installedActions().
      *
      * @ref installedActions() reads the live install directory, but the QML
