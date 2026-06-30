@@ -580,9 +580,7 @@ set(ACC_QML_MODULE_QML_FILES
     qml/SettingsRow.qml
     qml/ProfileBar.qml
     qml/MousePanel.qml
-    qml/PluginStore.qml
     qml/DebugConsole.qml
-    qml/LoadedPluginsPage.qml
     qml/SettingsPage.qml
     qml/components/AppHeader.qml
     qml/components/BatteryIndicator.qml

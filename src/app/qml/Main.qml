@@ -160,8 +160,6 @@ ApplicationWindow {
             // Device selection is driven by the left DeviceList sidebar; the
             // device-scoped profile selector lives in the editor's ProfileBar.
             onMinimizeRequested: root.hide()
-            onPluginStoreRequested: pluginStoreDrawer.open()
-            onLoadedPluginsRequested: loadedPluginsDrawer.open()
             onSettingsRequested: settingsDrawer.open()
             onDebugConsoleRequested: debugDrawer.open()
         }
@@ -227,78 +225,6 @@ ApplicationWindow {
     }
 
     // ----------------------------------------------------------------------
-    // Plugin Store drawer.
-    //
-    // The Plugin Store is a Page that renders the catalogue exposed by the
-    // C++-side PluginCatalogModel. We mount it inside a modal Drawer
-    // anchored to the right edge so the user can browse / install plugins
-    // without losing the device list and editor state in the background.
-    // The drawer width clamps to 75 % of the window so the grid still has
-    // room for at least three tile columns on a 1280 px-wide layout.
-    // ----------------------------------------------------------------------
-    Drawer {
-        id: pluginStoreDrawer
-        objectName: "pluginStoreDrawer"
-        edge: Qt.RightEdge
-        modal: true
-        dragMargin: 0 // disable edge-drag — only the header button opens it.
-        width: Math.min(960, Math.max(720, root.width * 0.75))
-        height: root.height
-
-        // Material attached props don't propagate from ApplicationWindow to
-        // Popups; bind explicitly so Material.theme inside the drawer matches
-        // ThemeService.effectiveMode (and stays in sync with BrandingService).
-        Material.theme: root.materialTheme
-        Material.accent: Theme.accent
-        Material.primary: Theme.accent2
-
-        background: Rectangle {
-            color: Theme.surfaceContainer
-            border.color: Theme.borderSubtle
-            border.width: 1
-        }
-
-        PluginStore {
-            anchors.fill: parent
-            // Surface catalogue install outcomes as toasts (anchored at the app
-            // root so they show above the drawer). Previously a failed in-app
-            // install was only console.warn'd — the button looked inert.
-            onCatalogInstallOutcome: (message, success) => toast.show(message, success ? "success" : "error")
-        }
-    }
-
-    // ----------------------------------------------------------------------
-    // Loaded plugins drawer (SEC-003 #51 trust UI).
-    //
-    // Mirrors the Plugin Store drawer dimensions because the row layout
-    // benefits from the same horizontal real estate; the page itself is
-    // a vertical list rather than a grid, but the visual rhythm matches.
-    // ----------------------------------------------------------------------
-    Drawer {
-        id: loadedPluginsDrawer
-        objectName: "loadedPluginsDrawer"
-        edge: Qt.RightEdge
-        modal: true
-        dragMargin: 0
-        width: Math.min(960, Math.max(720, root.width * 0.75))
-        height: root.height
-
-        Material.theme: root.materialTheme
-        Material.accent: Theme.accent
-        Material.primary: Theme.accent2
-
-        background: Rectangle {
-            color: Theme.surfaceContainer
-            border.color: Theme.borderSubtle
-            border.width: 1
-        }
-
-        LoadedPluginsPage {
-            anchors.fill: parent
-        }
-    }
-
-    // ----------------------------------------------------------------------
     // Plugin debug console drawer — protocol log + input/response simulation.
     // Same right-edge / modal pattern as the other drawers.
     // ----------------------------------------------------------------------
@@ -344,8 +270,8 @@ ApplicationWindow {
         width: Math.min(560, Math.max(360, root.width * 0.4))
         height: root.height
 
-        // See pluginStoreDrawer — Material attached props don't propagate
-        // into Popup scope, so we re-apply the same trio here.
+        // Material attached props don't propagate into Popup scope, so we
+        // re-apply the same trio here.
         Material.theme: root.materialTheme
         Material.accent: Theme.accent
         Material.primary: Theme.accent2

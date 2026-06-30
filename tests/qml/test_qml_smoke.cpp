@@ -252,8 +252,6 @@ char const* const kCompileOnlyComponents[] = {
     "DeviceList",
     "ProfileEditor",
     "MousePanel",
-    "PluginStore",
-    "LoadedPluginsPage",
     "SettingsPage",
 };
 
