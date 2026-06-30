@@ -61,6 +61,7 @@ class RingBufferSink;
 namespace ajazz::app {
 class HotplugDebouncer;
 class DebugControlServer;
+class PluginAssetServer;
 } // namespace ajazz::app
 
 #ifdef AJAZZ_PYTHON_HOST
@@ -247,6 +248,11 @@ private:
     /// OpenDeck IPC bridge — declared AFTER m_deviceModel/m_profileController/
     /// m_pluginCatalog so it is constructed after the singletons it borrows.
     std::unique_ptr<OpenDeckBridge> m_openDeckBridge;
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    /// Localhost asset webserver (getWebserverUrl base = portBase+2) serving
+    /// installed-plugin icons to the embedded OpenDeck SPA. WebEngine-only.
+    std::unique_ptr<PluginAssetServer> m_pluginAssetServer;
+#endif
     std::unique_ptr<LoadedPluginsModel>
         m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
     std::unique_ptr<PropertyInspectorController>

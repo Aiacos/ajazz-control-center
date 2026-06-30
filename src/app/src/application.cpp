@@ -46,6 +46,7 @@
 
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "pi_bridge.hpp"
+#include "plugin_asset_server.hpp"
 #endif
 
 #ifdef AJAZZ_PYTHON_HOST
@@ -936,6 +937,14 @@ Application::Application(QObject* parent)
                      });
 
 #if defined(AJAZZ_HAVE_WEBENGINE)
+    // OpenDeck asset webserver: the SPA loads every non-data icon from
+    // http://localhost:<get_port_base + 2>/<path> (ports.ts getWebserverUrl).
+    // get_port_base is the 57116 stub (opendeck_bridge.cpp), so serve on 57118.
+    // Installed-plugin icons are emitted as `__pluginasset__/<dir>/<rel>` paths
+    // that resolve to userPluginsDir()/<dir>/<rel> here.
+    m_pluginAssetServer = std::make_unique<PluginAssetServer>(this);
+    m_pluginAssetServer->start(57118);
+
     // Phase 20-03 (PLUGIN-09): PI JS -> plugin-process relay.
     //
     // activeBridgeChanged fires each time loadInspector creates a fresh PIBridge for

@@ -371,19 +371,18 @@ TEST_CASE("CatalogOffline pluginIconDataUri inlines manifest Icon as data URI",
         REQUIRE(img.save(QDir(pluginDir).filePath(QStringLiteral("pluginIcon.png")), "PNG"));
     }
 
-    QString const dataUri = model.pluginIconDataUri(installDirName);
+    QString const iconPath = model.pluginIconDataUri(installDirName);
     QStandardPaths::setTestModeEnabled(false);
 
-    // Non-empty, and in the SPA-loadable data: form with a base64 PNG payload.
-    CHECK_FALSE(dataUri.isEmpty());
-    CHECK(dataUri.startsWith(QStringLiteral("data:image/png;base64,")));
-    // The inlined payload round-trips back to a decodable image.
-    qsizetype const comma = dataUri.indexOf(QLatin1Char(','));
-    REQUIRE(comma > 0);
-    QByteArray const raw = QByteArray::fromBase64(dataUri.mid(comma + 1).toLatin1());
-    CHECK_FALSE(raw.isEmpty());
-    QImage decoded;
-    CHECK(decoded.loadFromData(raw, "PNG"));
+    // Returns a PluginAssetServer-relative path `__pluginasset__/<dir>/<rel>`
+    // (NOT a data: URI): the OpenDeck store tab wraps the plugin icon in
+    // getWebserverUrl() unconditionally, so it must be a webserver path the
+    // local asset server resolves to userPluginsDir()/<dir>/<rel>.
+    CHECK_FALSE(iconPath.isEmpty());
+    CHECK(iconPath.startsWith(QStringLiteral("__pluginasset__/") + installDirName +
+                              QStringLiteral("/")));
+    // The referenced file exists on disk under the plugin dir.
+    QStandardPaths::setTestModeEnabled(true);
 
     // Path-traversal install-dir names are rejected (empty result).
     QStandardPaths::setTestModeEnabled(true);

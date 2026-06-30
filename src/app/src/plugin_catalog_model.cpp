@@ -668,33 +668,6 @@ namespace {
     return {};
 }
 
-/// Read @p absPath and return it as a `data:<mime>;base64,...` URI, or an empty
-/// string on read failure. The MIME type is inferred from the file extension
-/// (SVG is preserved as `image/svg+xml` rather than rasterised).
-[[nodiscard]] QString iconFileToDataUri(QString const& absPath) {
-    QFile f(absPath);
-    if (!f.open(QIODevice::ReadOnly)) {
-        return {};
-    }
-    QByteArray const bytes = f.readAll();
-    f.close();
-    if (bytes.isEmpty()) {
-        return {};
-    }
-    QString const lower = absPath.toLower();
-    QString mime = QStringLiteral("image/png");
-    if (lower.endsWith(QStringLiteral(".svg"))) {
-        mime = QStringLiteral("image/svg+xml");
-    } else if (lower.endsWith(QStringLiteral(".jpg")) || lower.endsWith(QStringLiteral(".jpeg"))) {
-        mime = QStringLiteral("image/jpeg");
-    } else if (lower.endsWith(QStringLiteral(".gif"))) {
-        mime = QStringLiteral("image/gif");
-    } else if (lower.endsWith(QStringLiteral(".bmp"))) {
-        mime = QStringLiteral("image/bmp");
-    }
-    return QStringLiteral("data:%1;base64,%2").arg(mime, QString::fromLatin1(bytes.toBase64()));
-}
-
 } // namespace
 
 QString PluginCatalogModel::pluginIconDataUri(QString const& installDirName) const {
@@ -723,10 +696,16 @@ QString PluginCatalogModel::pluginIconDataUri(QString const& installDirName) con
     // (the OpenDeck renderer's getImage() passes `data:` through verbatim,
     // whereas a file:// or relative path is routed through the dead local
     // webserver origin and fails to load cross-origin in the SPA's webview).
+    // NB: despite the historical name, this returns a `__pluginasset__/<dir>/<rel>`
+    // path, NOT a data: URI. The plugin-store tab (PluginManager.svelte) wraps the
+    // plugin icon in getWebserverUrl() UNCONDITIONALLY (no `data:`/`opendeck/`
+    // escape hatch), so a data: URI is dead there; a webserver-relative path is
+    // served by PluginAssetServer at http://localhost:<portBase+2>/__pluginasset__/.
     for (QString const& rel : {parsed->icon, parsed->categoryIcon}) {
         QString const resolved = resolvePluginIconFile(pluginDir, rel);
         if (!resolved.isEmpty()) {
-            return iconFileToDataUri(resolved);
+            QString const relPath = QDir(pluginDir).relativeFilePath(resolved);
+            return QStringLiteral("__pluginasset__/") + installDirName + QLatin1Char('/') + relPath;
         }
     }
     return {};

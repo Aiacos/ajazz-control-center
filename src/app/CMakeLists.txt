@@ -706,6 +706,10 @@ if(AJAZZ_HAVE_WEBENGINE)
     # OpenDeck webui: custom URL-scheme handler that serves the bundled SPA over opendeck://app/
     # (QWebEngineUrlSchemeHandler -> :/opendeck). WebEngine-gated.
     target_sources(ajazz-control-center PRIVATE src/opendeck_scheme_handler.cpp)
+    # OpenDeck webui: localhost asset webserver (getWebserverUrl base = portBase+2) serving
+    # installed-plugin icons/PI files. Qt6::Network only, but only useful with the embedded OpenDeck
+    # UI, so gated alongside the scheme handler.
+    target_sources(ajazz-control-center PRIVATE src/plugin_asset_server.cpp)
     # Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim. kMiraboxShimSource is declared
     # inline constexpr in the header (always reachable); makeMiraboxShim() body uses
     # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
