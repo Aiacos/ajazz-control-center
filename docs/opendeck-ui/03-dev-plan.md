@@ -434,3 +434,18 @@ external browser).
     qml-smoke tests + any now-dead C++ image providers/models, and retire
     WebUiHost/ui_mode_resolver. Keep mouse/keyboard + shared components. Risky
     (dead-C++ identification) → its own focused pass.
+- 2026-06-30: **Native streamdeck editor QML DELETED (commit `5eb206d0`).** Removed
+  13 grep-verified self-contained QML files (DeviceView, DeviceCanvas, KeyCell,
+  KeyBindingList, TouchStripLane, EncoderCard, EncoderDial, EncoderPanel,
+  ActionLibraryPane, Inspector, PropertyInspector, NativePropertyInspector,
+  PIWebView) + the DeviceView-only qml tests; trimmed ProfileEditor (no Keys tab /
+  deviceViewComp / dead props) + CMake QML_FILES + the smoke-test lists. The QML
+  module compiling with all 13 gone proves nothing surviving referenced them.
+  Verified live (offscreen, real hardware): app launches clean (no QML errors),
+  streamdeck → OpenDeck pane (openDeckWebView visible), AJ159 mouse still in the
+  sidebar, screenshot identical to pre-deletion. Clean build + ctest 876/876 green.
+  - **Still-dead follow-ups (separate pass, harmless if left):** C++ that only fed
+    the deleted QML (the live-key image providers, encoder-layout renderer, the PI
+    controllers/bridges now unused by any QML), and `ui_mode_resolver.{hpp,cpp}` +
+    its unit test (the UiMode root branch was dropped in c456a277). Dead C++/test
+    compiles fine; retire in a focused C++ cleanup.
