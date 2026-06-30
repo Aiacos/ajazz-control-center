@@ -34,6 +34,7 @@ class DeviceModel;
 class ProfileController;
 class PluginCatalogModel;
 class StreamDockControlService;
+class StreamDockInputService;
 
 /// Pure, side-effect-free JSON shaping helpers (our types -> OpenDeck shapes).
 /// Free functions so they are unit-testable without DeviceModel/ProfileController.
@@ -124,6 +125,12 @@ public:
     /// builds without the control service.
     void setStreamDockControl(StreamDockControlService* control) { m_control = control; }
 
+    /// Inject the live input service so trigger_virtual_press can drive a
+    /// synthetic key/encoder press through the SAME dispatch path real hardware
+    /// uses (built-in actions + plugin host). Set after construction (init-order,
+    /// like setStreamDockControl). May be null in headless builds.
+    void setInputService(StreamDockInputService* input) { m_input = input; }
+
     /// Emit the OpenDeck events the web UI subscribes to. Wired to backend
     /// signals in Application; safe to call when no web UI is attached.
     void notifyProfileChanged(); ///< -> "switch_profile" + "rerender_images"
@@ -149,10 +156,18 @@ private:
     /// off disk via PluginCatalogModel; resolves the JS Promise for @p requestId.
     void installPluginFromUrl(QString const& requestId, QString const& url);
 
+    /// Annotate a get_selected_profile result in place: any bound instance whose
+    /// action uuid is neither a builtin nor an installed action is "orphaned"
+    /// (its plugin was uninstalled / never had a Linux code path). Its name is
+    /// suffixed so the SPA's action label / property inspector show it is a stale
+    /// binding the user can remove, instead of a silent broken-image tile.
+    void markOrphanedInstances(QJsonObject& profile) const;
+
     DeviceModel* m_devices;
     ProfileController* m_profiles;
     PluginCatalogModel* m_catalog;
     StreamDockControlService* m_control = nullptr;
+    StreamDockInputService* m_input = nullptr;
     QNetworkAccessManager* m_pluginDownloader = nullptr;
 };
 

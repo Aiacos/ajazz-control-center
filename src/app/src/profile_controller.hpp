@@ -566,6 +566,36 @@ public:
      */
     Q_INVOKABLE void removeKeyActionAt(int keyIndex, int pos);
 
+    /**
+     * @brief Clear an encoder (dial) slot's binding, including its touch-strip
+     * segment (the EncoderBinding owns the segment on dial devices).
+     *
+     * Erases the whole encoder binding so the slot reads as empty, persists via
+     * saveActiveProfile(), and emits profileChanged(). No-op when the slot is
+     * already empty or @p encoderIndex is out of range. Closes the
+     * encoder/touch gap in the OpenDeck `remove_instance` command.
+     *
+     * @param encoderIndex 0-based dial index.
+     * @param pos          0-based action position (reserved; an encoder slot
+     *                     carries a single OpenDeck instance, so the whole
+     *                     binding is cleared).
+     * @invokable Callable as ProfileController.removeEncoderActionAt(...).
+     */
+    Q_INVOKABLE void removeEncoderActionAt(int encoderIndex, int pos);
+
+    /**
+     * @brief Clear a legacy touch-strip-zone slot's binding.
+     *
+     * Retained for read-compat profiles (dial devices fold the strip segment
+     * into the EncoderBinding). Persists + emits profileChanged(); no-op when
+     * empty or out of range.
+     *
+     * @param zoneIndex 0-based touch-zone index.
+     * @param pos       0-based action position (reserved; see removeEncoderActionAt).
+     * @invokable Callable as ProfileController.removeTouchZoneActionAt(...).
+     */
+    Q_INVOKABLE void removeTouchZoneActionAt(int zoneIndex, int pos);
+
     // -------------------------------------------------------------------------
     // Phase 32-03 (BIND-05/07): Toggle Action currentState cycle.
     // -------------------------------------------------------------------------
@@ -592,6 +622,24 @@ public:
      * @invokable Callable from QML as ProfileController.cycleInstanceState(...).
      */
     Q_INVOKABLE void cycleInstanceState(QString const& controller, int index);
+
+    /**
+     * @brief Set a binding's `instance.currentState` to a SPECIFIC index (vs the
+     * advance-by-one @ref cycleInstanceState), persist it, and emit
+     * profileChanged() so the canvas + device repaint the chosen state.
+     *
+     * Backs the OpenDeck `set_state` command (the InstanceEditor selects which
+     * state of a multi-state action is live). Clamped into
+     * [0, states.size()-1]; a no-op when the slot has no instance or @p
+     * stateIndex is out of range.
+     *
+     * @param controller "Keypad" or "Encoder" (case-insensitive; touch-zone
+     *                   bindings register under "Encoder", as in cycleInstanceState).
+     * @param index      0-based control index.
+     * @param stateIndex 0-based state to make current.
+     * @invokable Callable as ProfileController.setInstanceCurrentState(...).
+     */
+    Q_INVOKABLE void setInstanceCurrentState(QString const& controller, int index, int stateIndex);
 
     /**
      * @brief Atomically swap two encoder bindings.

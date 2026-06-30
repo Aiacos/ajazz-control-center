@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 #include "opendeck_bridge.hpp"
 
+#include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
 #include "device_model.hpp"
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
 #include "stream_dock_control_service.hpp"
+#include "stream_dock_input_service.hpp"
 
 #include <QByteArray>
 #include <QCoreApplication>
@@ -20,6 +22,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QSet>
 #include <QSettings>
 #include <QStringList>
 #include <QTemporaryFile>
@@ -253,7 +256,9 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         int const keyCount = caps.value(QStringLiteral("keyCount")).toInt();
         int const encoderCount = caps.value(QStringLiteral("encoderCount")).toInt();
         int const touchCount = caps.value(QStringLiteral("touchZoneCount")).toInt();
-        return str(profileJson(profile, keyCount, encoderCount, touchCount));
+        QJsonObject prof = profileJson(profile, keyCount, encoderCount, touchCount);
+        markOrphanedInstances(prof);
+        return str(prof);
     }
 
     // --- write path ---------------------------------------------------------
@@ -314,11 +319,19 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             return str(QJsonValue(QJsonValue::Null));
         }
         Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
-        if (c.valid && c.controller == QLatin1String("Keypad") &&
-            c.position < keyCountOf(c.device)) {
-            m_profiles->removeKeyActionAt(c.position, 0);
+        if (c.valid) {
+            // Mirror create_instance's surface routing: Encoder -> encoder slot;
+            // a Keypad context past the key count addresses a touch-strip zone;
+            // otherwise a real keypad key.
+            int const keyCount = keyCountOf(c.device);
+            if (c.controller == QLatin1String("Encoder")) {
+                m_profiles->removeEncoderActionAt(c.position, 0);
+            } else if (c.position >= keyCount) {
+                m_profiles->removeTouchZoneActionAt(c.position - keyCount, 0);
+            } else {
+                m_profiles->removeKeyActionAt(c.position, 0);
+            }
         }
-        // TODO(phase2b-followup): encoder/touch-zone removal verbs.
         return str(QJsonValue(QJsonValue::Null));
     }
 
@@ -439,12 +452,51 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                                       : QJsonValue(QJsonValue::Null));
     }
 
-    // TODO(phase2b-followup): set_state, trigger_virtual_press,
-    // switch_property_inspector — return null (no-op) for now so the SPA does
-    // not reject; tracked in docs/opendeck-ui/03-dev-plan.md.
-    if (command == QLatin1String("set_state") ||
-        command == QLatin1String("trigger_virtual_press") ||
-        command == QLatin1String("switch_property_inspector")) {
+    // set_state: the InstanceEditor selected which state of a multi-state action
+    // is live ({context, index}); make it current + persist + repaint.
+    if (command == QLatin1String("set_state")) {
+        if (m_profiles != nullptr) {
+            Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
+            if (c.valid) {
+                m_profiles->setInstanceCurrentState(
+                    c.controller, c.position, args.value(QStringLiteral("index")).toInt());
+                emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
+            }
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+
+    // trigger_virtual_press: the SPA's "test this key" affordance. Inject a
+    // synthetic press+release through the SAME dispatch path real hardware uses
+    // (m_input->injectSyntheticEvent), so built-in actions AND the plugin host
+    // fire exactly as on a physical press.
+    if (command == QLatin1String("trigger_virtual_press")) {
+        Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
+        if (m_input != nullptr && c.valid) {
+            bool const isEncoder = c.controller == QLatin1String("Encoder");
+            core::DeviceEvent down{};
+            core::DeviceEvent up{};
+            if (isEncoder) {
+                // Encoder index is 0-based on the wire (matches commitEncoderBinding).
+                down.kind = core::DeviceEvent::Kind::EncoderPressed;
+                up.kind = core::DeviceEvent::Kind::EncoderReleased;
+                down.index = up.index = static_cast<std::uint16_t>(c.position);
+            } else {
+                // DeviceEvent key indices are 1-based; the context position is 0-based.
+                down.kind = core::DeviceEvent::Kind::KeyPressed;
+                up.kind = core::DeviceEvent::Kind::KeyReleased;
+                down.index = up.index = static_cast<std::uint16_t>(c.position + 1);
+            }
+            m_input->injectSyntheticEvent(down);
+            m_input->injectSyntheticEvent(up);
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+
+    // switch_property_inspector: a focus hint about which context's PI is open.
+    // Our PI message routing is by-context (SdPluginServer::propertyInspectorSocketForContext),
+    // not by-focus, so there is nothing to track here — intentional no-op.
+    if (command == QLatin1String("switch_property_inspector")) {
         return str(QJsonValue(QJsonValue::Null));
     }
 
@@ -575,6 +627,47 @@ void OpenDeckBridge::notifyDevicesChanged() {
         }
     }
     emit event(QStringLiteral("devices"), opendeck_detail::jsonToString(devices));
+}
+
+void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
+    // Known action uuids = the six OpenDeck builtins + every currently-installed
+    // action. Anything else bound in the profile is a stale/orphaned reference.
+    QSet<QString> known{QStringLiteral("opendeck.multiaction"),
+                        QStringLiteral("opendeck.toggleaction"),
+                        QStringLiteral("opendeck.runcommand"),
+                        QStringLiteral("opendeck.openurl"),
+                        QStringLiteral("opendeck.switchprofile"),
+                        QStringLiteral("opendeck.brightness")};
+    if (m_catalog != nullptr) {
+        for (QVariant const& v : m_catalog->installedActions()) {
+            known.insert(v.toMap().value(QStringLiteral("actionId")).toString());
+        }
+    }
+
+    auto annotate = [&known](QJsonArray const& in) {
+        QJsonArray out;
+        for (QJsonValue const& slotV : in) {
+            if (!slotV.isObject()) {
+                out.append(slotV); // empty slot (JSON null) — leave as-is.
+                continue;
+            }
+            QJsonObject slot = slotV.toObject();
+            QJsonObject action = slot.value(QStringLiteral("action")).toObject();
+            QString const uuid = action.value(QStringLiteral("uuid")).toString();
+            if (!uuid.isEmpty() && !known.contains(uuid)) {
+                QString const name = action.value(QStringLiteral("name")).toString();
+                action[QStringLiteral("name")] =
+                    QStringLiteral("%1 (plugin not installed)").arg(name.isEmpty() ? uuid : name);
+                slot[QStringLiteral("action")] = action;
+            }
+            out.append(slot);
+        }
+        return out;
+    };
+
+    profile[QStringLiteral("keys")] = annotate(profile.value(QStringLiteral("keys")).toArray());
+    profile[QStringLiteral("sliders")] =
+        annotate(profile.value(QStringLiteral("sliders")).toArray());
 }
 
 void OpenDeckBridge::invoke(QString const& requestId,

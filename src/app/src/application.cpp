@@ -513,6 +513,9 @@ Application::Application(QObject* parent)
     // declared after the bridge in the member list, so the init list can't pass
     // it).
     m_openDeckBridge->setStreamDockControl(m_streamDockControl.get());
+    // Same init-order reason: the input service is constructed after the bridge,
+    // so inject it here for trigger_virtual_press' synthetic press path.
+    m_openDeckBridge->setInputService(m_streamDockInput.get());
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_openDeckBridge.get(),

@@ -1313,6 +1313,40 @@ void ProfileController::removeKeyActionAt(int keyIndex, int pos) {
     emit profileChanged();
 }
 
+void ProfileController::removeEncoderActionAt(int encoderIndex, int /*pos*/) {
+    if (encoderIndex < 0 ||
+        encoderIndex > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "removeEncoderActionAt: index {} out of valid range [0, 65534], ignoring",
+                       encoderIndex);
+        return;
+    }
+    // Erase the whole encoder binding. On dial devices the EncoderBinding also
+    // owns the touch-strip segment above the dial (see core::EncoderBinding), so
+    // clearing the dial clears its segment in one step — the Elgato model.
+    if (m_profile.encoders.erase(static_cast<std::uint16_t>(encoderIndex)) == 0) {
+        return; // No binding for this encoder — no-op.
+    }
+    saveActiveProfile();
+    emit profileChanged();
+}
+
+void ProfileController::removeTouchZoneActionAt(int zoneIndex, int /*pos*/) {
+    if (zoneIndex < 0 || zoneIndex > static_cast<int>(std::numeric_limits<std::uint8_t>::max())) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "removeTouchZoneActionAt: index {} out of valid range [0, 255], ignoring",
+                       zoneIndex);
+        return;
+    }
+    // Legacy touch-zone slot (read-compat profiles only; dial devices fold the
+    // strip into the EncoderBinding, cleared by removeEncoderActionAt above).
+    if (m_profile.touchZones.erase(static_cast<std::uint8_t>(zoneIndex)) == 0) {
+        return; // No binding for this zone — no-op.
+    }
+    saveActiveProfile();
+    emit profileChanged();
+}
+
 void ProfileController::cycleInstanceState(QString const& controller, int index) {
     // BIND-05/07: advance a Toggle Action binding's instance.currentState one step
     // (mod N over ALL states, N > 2 supported), PERSIST it (Q1 user decision: the
@@ -1373,6 +1407,61 @@ void ProfileController::cycleInstanceState(QString const& controller, int index)
 
     // Persist (Q1): route through the same save path commitKeyBinding's callers
     // use so the advance survives a restart, then notify observers.
+    saveActiveProfile();
+    emit profileChanged();
+}
+
+void ProfileController::setInstanceCurrentState(QString const& controller,
+                                                int index,
+                                                int stateIndex) {
+    if (index < 0 || index > static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "setInstanceCurrentState: index {} out of valid range [0, 65534], ignoring",
+                       index);
+        return;
+    }
+    auto const idx = static_cast<std::uint16_t>(index);
+
+    // Resolve the addressed instance + its visual slot. Mirrors
+    // cycleInstanceState's controller routing ("Keypad" -> keys, "Encoder" ->
+    // encoders; touch-zone bindings register under "Encoder").
+    std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
+    ajazz::core::KeyState* visualSlot = nullptr;
+    if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
+        auto& keyMap = activeKeyMap();
+        if (auto it = keyMap.find(idx); it != keyMap.end()) {
+            instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
+        }
+    } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
+        if (auto it = m_profile.encoders.find(idx); it != m_profile.encoders.end()) {
+            instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
+        }
+    } else {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "setInstanceCurrentState: unknown controller '{}', ignoring",
+                       controller.toStdString());
+        return;
+    }
+
+    if (instanceSlot == nullptr || !instanceSlot->has_value()) {
+        return; // No binding / no instance -> clean no-op.
+    }
+    auto& inst = **instanceSlot;
+    if (inst.states.empty() || stateIndex < 0 ||
+        stateIndex >= static_cast<int>(inst.states.size())) {
+        return; // Out-of-range state -> no-op.
+    }
+    // set_state fires reactively on every InstanceEditor update; skip a redundant
+    // save/repaint when the state is already current (avoids a write storm).
+    if (inst.currentState == static_cast<std::uint32_t>(stateIndex)) {
+        return;
+    }
+    inst.currentState = static_cast<std::uint32_t>(stateIndex);
+    if (visualSlot != nullptr) {
+        *visualSlot = inst.states[inst.currentState].visual;
+    }
     saveActiveProfile();
     emit profileChanged();
 }
