@@ -61,9 +61,6 @@ class QQmlEngine;
 
 namespace ajazz::app {
 
-class LiveKeyImageStore;     // Phase 29: shared live-render store mirrored to the editor.
-class LiveEncoderImageStore; // Delta B: dial/encoder live-render store mirrored to the editor.
-
 /**
  * @class StreamDockControlService
  * @brief App-layer device paint path for AKP05E Stream Dock panels.
@@ -177,14 +174,13 @@ public:
     void assignKeyImage(std::uint8_t keyIndex, QImage const& img, bool updateBase = true);
 
     /**
-     * @brief Clear a key: blank it on the device AND in the editor mirror.
+     * @brief Clear a key: blank it on the device.
      *
      * Called when an action is moved or removed from a key so the previous render
      * does not linger (fixes the "tool stays on the old button" bug after a drag-
-     * move). Pushes a black frame to the device LCD key, drops the cached
-     * last/base/live images for the key, and emits keyImageCleared() so the
-     * on-screen KeyCell reverts to the empty-tile look. Mirrors OpenDeck
-     * move_instance clearing the source slot's device image (clear_on_device).
+     * move). Pushes a black frame to the device LCD key and drops the cached
+     * last/base images for the key. Mirrors OpenDeck move_instance clearing the
+     * source slot's device image (clear_on_device).
      *
      * @param keyIndex  1-based device key index (same convention as assignKeyImage).
      */
@@ -207,22 +203,6 @@ public:
      * repeated setTitle calls do not stack title layers.
      */
     [[nodiscard]] QImage baseKeyImage(std::uint8_t keyIndex) const;
-
-    /**
-     * @brief Inject the shared store that mirrors live key renders to the QML
-     *        editor canvas (Phase 29, OpenDeck parity). When set, assignKeyImage()
-     *        writes the composited frame here and emits keyImageAssigned().
-     */
-    void setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store);
-
-    /**
-     * @brief Inject the shared store that mirrors live dial/encoder renders to the
-     *        QML editor canvas (Delta B, Elgato dial parity). When set,
-     *        assignEncoderImage() writes the composited encoder frame here and
-     *        emits encoderImageAssigned(). The dial analogue of
-     *        setLiveKeyImageStore().
-     */
-    void setLiveEncoderImageStore(std::shared_ptr<LiveEncoderImageStore> store);
 
     // -------------------------------------------------------------------------
     // Auxiliary-surface assign methods (Phase 23, DISPLAY-10)
@@ -428,37 +408,6 @@ public:
      */
     Q_INVOKABLE void clearAll(QString const& codename);
 
-    /**
-     * @brief Cache-bust revision for a key's live-rendered frame, or -1 if none.
-     *
-     * The editor's profile sync (_syncFromProfile) rebuilds the binding model on
-     * every profileChanged, wiping iconSource. A plugin that renders continuously
-     * (System Monitor) re-asserts its frame within a tick, but a one-shot render
-     * (the mount-time manifest default image, e.g. Weather's icon) was lost from
-     * the CANVAS even though the frame still lives in the LiveKeyImageStore and
-     * on the physical device. QML calls this after a rebuild to re-point cells
-     * with a cached frame back at image://livekey/<idx>?r=<revision>.
-     *
-     * @param keyIndex0 0-based key index (canvas/model convention).
-     * @return Current revision counter when a frame exists for the key; -1 if not.
-     */
-    [[nodiscard]] Q_INVOKABLE qint64 liveKeyRevision(int keyIndex0) const;
-
-    /**
-     * @brief Cache-bust revision for an encoder's live-rendered frame, or -1 if none.
-     *
-     * The dial analogue of liveKeyRevision(): the editor's profile sync rebuilds
-     * the per-encoder model on every profileChanged, wiping iconSource. A plugin
-     * rendering a dial feedback layout continuously re-asserts within a tick, but a
-     * one-shot render would be lost from the canvas even though the frame still
-     * lives in the LiveEncoderImageStore and on the device. QML calls this after a
-     * rebuild to re-point segments at image://liveencoder/<idx>?r=<revision>.
-     *
-     * @param encoderIndex 0-based encoder index (canvas/model convention).
-     * @return Current revision counter when a frame exists for the encoder; -1 if not.
-     */
-    [[nodiscard]] Q_INVOKABLE qint64 liveEncoderRevision(int encoderIndex) const;
-
 signals:
     /**
      * @brief Emitted after navigatePage() successfully advances to a new page.
@@ -485,48 +434,6 @@ signals:
      * @param codename  Active device codename, e.g. "akp05e".
      */
     void deviceActivated(QString const& codename);
-
-    /**
-     * @brief Emitted after a key's composited image is rendered (Phase 29, OpenDeck parity).
-     *
-     * Mirrors OpenDeck's update_state: every assignKeyImage() pushes the final
-     * frame to the device AND notifies the QML editor so the on-screen KeyCell
-     * shows the same live render (e.g. a plugin's "RAM 43%"). The editor binds the
-     * matching cell's iconSource to "image://livekey/<keyIndex>?r=<revision>"; the
-     * revision changes every emit to bust QML's image cache.
-     *
-     * @param keyIndex  0-based key index (assignKeyImage's 1-based index minus 1).
-     * @param revision  Monotonic counter; only its change matters to the cache.
-     */
-    void keyImageAssigned(int keyIndex, qint64 revision);
-
-    /**
-     * @brief Emitted when a key's render is CLEARED (Phase 29, OpenDeck parity).
-     *
-     * Fired by clearKeyImage() when an action is moved/removed from a key. The
-     * editor binds the matching cell back to an empty iconSource so the on-screen
-     * KeyCell reverts to the empty-tile look instead of showing the stale render
-     * of the action that used to live there (the "tool stays on the old button"
-     * bug). Mirrors OpenDeck move_instance clearing the source slot's device image.
-     *
-     * @param keyIndex  0-based key index (the cleared key).
-     */
-    void keyImageCleared(int keyIndex);
-
-    /**
-     * @brief Emitted after an encoder's composited image is rendered (Delta B).
-     *
-     * The dial analogue of keyImageAssigned(): every assignEncoderImage() pushes
-     * the final dial feedback frame to the device AND notifies the QML editor so
-     * the on-screen EncoderDial and its touch-strip segment show the same live
-     * render the device LCD shows. The editor binds the matching segment's
-     * iconSource to "image://liveencoder/<encoderIndex>?r=<revision>"; the revision
-     * changes every emit to bust QML's image cache.
-     *
-     * @param encoderIndex  0-based encoder index (assignEncoderImage's convention).
-     * @param revision      Monotonic counter; only its change matters to the cache.
-     */
-    void encoderImageAssigned(int encoderIndex, qint64 revision);
 
 private slots:
     /// Drain the pending write map: call setKeyImage() for every queued entry, then
@@ -585,19 +492,6 @@ private:
     /// setImage/setState/setBG (assignKeyImage with updateBase=true). setTitle
     /// composites over this (see baseKeyImage()). Cleared on setActiveDevice.
     std::map<std::uint8_t, QImage> m_baseKeyImage;
-
-    /// Phase 29 (OpenDeck parity): shared store + monotonic revision that mirror
-    /// each composited key render to the QML editor canvas via keyImageAssigned().
-    /// Null until Application injects the store in exposeToQml().
-    std::shared_ptr<LiveKeyImageStore> m_liveKeyImages;
-    qint64 m_keyImageRevision{0};
-
-    /// Delta B (Elgato dial parity): shared store + monotonic revision that mirror
-    /// each composited encoder/dial render to the QML editor canvas via
-    /// encoderImageAssigned(). Null until Application injects the store in
-    /// exposeToQml(). The dial analogue of m_liveKeyImages.
-    std::shared_ptr<LiveEncoderImageStore> m_liveEncoderImages;
-    qint64 m_encoderImageRevision{0};
 
     /// Single-shot coalescing timer (Pattern 3 / DOCK-02 burst mitigation).
     QTimer* m_drainTimer{nullptr};

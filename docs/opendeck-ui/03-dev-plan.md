@@ -479,3 +479,34 @@ external browser).
   - **Known minor gap (cosmetic):** `list_plugins` `icon` is empty — the disk-backed
     `installedActions()` rows do not carry a resolved plugin-level icon, so the
     SPA's PluginManager shows a blank glyph. Functional, low priority.
+- 2026-06-30: **Dead-C++ cleanup: live-image providers retired (focused pass).**
+  The native streamdeck QML deletion (`5eb206d0`) left the QML-editor "live render
+  mirror" plumbing dead. Grep-verified (constitution VI/VIII — no deletion off a
+  guess) and removed: `live_key_image_provider.hpp` + `live_encoder_image_provider.hpp`
+  (LiveKey/LiveEncoder ImageStore+Provider), their `application.cpp` `addImageProvider`
+  registration, and on `StreamDockControlService` the now-dead surface —
+  `setLive{Key,Encoder}ImageStore`, `live{Key,Encoder}Revision`, the
+  `keyImageAssigned`/`keyImageCleared`/`encoderImageAssigned` signals, the
+  `m_live*Images`/`m_*Revision` members, and the store-mirroring blocks inside
+  `assignKeyImage`/`assignEncoderImage`/`clearKeyImage`. No QML referenced
+  `image://livekey`/`image://liveencoder` or any of these methods/signals (proven
+  by grep). `assignKeyImage`/`assignEncoderImage`/`clearKeyImage` themselves STAY —
+  they are the live device render path (called by `plugin_device_bridge` +
+  `opendeck_bridge`); only the dead editor-mirror side-effect was excised.
+  - **CORRECTION to the earlier "still-dead" note:** `encoder_layout_renderer` is
+    NOT dead — it is `#include`d + used by `plugin_device_bridge.cpp` (the live
+    plugin→device encoder-feedback composite) and has its own 6-case
+    `[encoder-layout]` test suite. KEPT. (Exactly the constitution's "grep callers
+    before deleting" rule paying off.)
+  - Removed the two `[delta-b]` mirror unit tests; fixed the stale
+    `tests/unit/CMakeLists.txt` comment that cited the deleted provider header.
+  - **Verified:** clean 3-target build; full `ctest --preset linux-release`
+    **869/869** (incl. QML smoke loads — they instantiate every surviving QML);
+    live offscreen launch clean (no image-provider/QML errors), `device.renderTest`
+    paints 6 keys + main + encoders (assignKeyImage/assignEncoderImage path intact),
+    OpenDeck bridge still responds.
+  - **STILL pending (separate decision, NOT touched):** the PI controllers/bridges
+    (`PropertyInspectorController` + `PIBridge`) — these are plugin-RUNTIME (the
+    PI↔plugin WS relay), not merely QML-fed, so "no QML loads them" ≠ dead. Needs a
+    determination of whether the embedded OpenDeck path (PI = the SPA's own iframe)
+    bypasses them before any removal. `PluginDeviceBridge` is firmly live (keep).

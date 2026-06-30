@@ -31,8 +31,6 @@
 
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
-#include "live_encoder_image_provider.hpp"
-#include "live_key_image_provider.hpp"
 
 #include <QImage>
 #include <QQmlEngine>
@@ -241,22 +239,6 @@ void StreamDockControlService::assignKeyImage(std::uint8_t keyIndex,
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0); // single-shot, 0 ms -> fires on next event-loop iteration
     }
-
-    // Phase 29 (OpenDeck parity / update_state): mirror this composited frame to
-    // the QML editor canvas so the on-screen KeyCell shows the same live render
-    // the device shows. keyIndex is 1-based; the editor uses 0-based indices.
-    if (m_liveKeyImages && keyIndex >= 1) {
-        int const keyIndex0 = static_cast<int>(keyIndex) - 1;
-        m_liveKeyImages->set(keyIndex0, img);
-        emit keyImageAssigned(keyIndex0, ++m_keyImageRevision);
-    }
-}
-
-qint64 StreamDockControlService::liveKeyRevision(int keyIndex0) const {
-    if (!m_liveKeyImages || keyIndex0 < 0 || !m_liveKeyImages->has(keyIndex0)) {
-        return -1;
-    }
-    return m_keyImageRevision;
 }
 
 void StreamDockControlService::clearKeyImage(std::uint8_t keyIndex) {
@@ -280,17 +262,6 @@ void StreamDockControlService::clearKeyImage(std::uint8_t keyIndex) {
     // old render on this now-empty key.
     m_lastKeyImage.erase(keyIndex);
     m_baseKeyImage.erase(keyIndex);
-    // Clear the editor mirror so the on-screen cell reverts to the empty-tile look
-    // (its index number) rather than the stale render or a black square.
-    if (m_liveKeyImages && keyIndex >= 1) {
-        int const keyIndex0 = static_cast<int>(keyIndex) - 1;
-        m_liveKeyImages->clear(keyIndex0);
-        emit keyImageCleared(keyIndex0);
-    }
-}
-
-void StreamDockControlService::setLiveKeyImageStore(std::shared_ptr<LiveKeyImageStore> store) {
-    m_liveKeyImages = std::move(store);
 }
 
 QImage StreamDockControlService::lastKeyImage(std::uint8_t keyIndex) const {
@@ -356,28 +327,6 @@ void StreamDockControlService::assignEncoderImage(std::uint8_t encoderIndex, QIm
     if (!m_drainTimer->isActive()) {
         m_drainTimer->start(0);
     }
-
-    // Delta B (Elgato dial parity): mirror this composited dial-feedback frame to
-    // the QML editor canvas so the on-screen EncoderDial + touch-strip segment show
-    // the same live render the device LCD shows. The encoder index is already
-    // 0-based (canvas/model convention) -- no offset, unlike assignKeyImage.
-    if (m_liveEncoderImages) {
-        int const encoderIndex0 = static_cast<int>(encoderIndex);
-        m_liveEncoderImages->set(encoderIndex0, img);
-        emit encoderImageAssigned(encoderIndex0, ++m_encoderImageRevision);
-    }
-}
-
-void StreamDockControlService::setLiveEncoderImageStore(
-    std::shared_ptr<LiveEncoderImageStore> store) {
-    m_liveEncoderImages = std::move(store);
-}
-
-qint64 StreamDockControlService::liveEncoderRevision(int encoderIndex) const {
-    if (!m_liveEncoderImages || encoderIndex < 0 || !m_liveEncoderImages->has(encoderIndex)) {
-        return -1;
-    }
-    return m_encoderImageRevision;
 }
 
 void StreamDockControlService::assignTouchStripZone(std::uint8_t zone, QImage const& img) {
