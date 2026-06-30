@@ -2,19 +2,17 @@
 //
 // PiAppearGate -- de-duplicates propertyInspectorDidAppear / …DidDisappear.
 //
-// A *modern* Property Inspector both (a) opens a WebEngine page — surfaced as
-// PropertyInspectorController::inspectorOpened — AND (b) registers its OWN
-// WebSocket connection — surfaced as SdPluginServer::propertyInspectorRegistered.
-// Both paths funnel through Application, which sends the plugin
-// propertyInspectorDidAppear. Without a gate the host emits the event TWICE per
-// open (research D1: "application.cpp:736 + :948").
+// The embedded OpenDeck SPA's Property Inspector registers its OWN WebSocket
+// connection — surfaced as SdPluginServer::propertyInspectorRegistered — which
+// funnels through Application, which sends the plugin propertyInspectorDidAppear.
+// A registration can fire more than once per visible PI; without a gate the host
+// would emit the event more than once per open.
 //
 // The Elgato contract is one appear per visible PI, keyed on the action-instance
-// `context`. This gate is the single source of truth both emit sites consult:
+// `context`. This gate is the single source of truth the emit site consults:
 // the first appear for a context wins; duplicates are suppressed until a matching
 // disappear resets it. It is a plain value type (no Qt object, no signals) so it
-// is trivially unit-testable in isolation (test_pi_bridge.cpp), unlike the
-// Application wiring it de-tangles.
+// is trivially unit-testable in isolation.
 #pragma once
 
 #include <QSet>

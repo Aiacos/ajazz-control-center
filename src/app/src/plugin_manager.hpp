@@ -20,7 +20,7 @@
  * **Spawn dispatch** (PLUGIN-08 — per akp_plugin_sdk.md §3):
  *   - `.js`/`.mjs`/`.cjs` -> `resolveNode20Plus`; if absent -> `disableWithNotice`; else
  *     `QProcess::start(*nodeExe, buildNodeArgv(code, port, uuid, infoJson))`.
- *   - `.html`/`.htm`      -> WebEngine hosting via `PropertyInspectorController` surface
+ *   - `.html`/`.htm`      -> headless WebEngine hosting via a private `QWebEnginePage`
  *                            (attach `makeMiraboxShim()` to the per-plugin profile first).
  *                            Gated on `AJAZZ_HAVE_WEBENGINE`.
  *   - else (.exe/.app/no-ext) -> native `QProcess::start(codePath, {})`.
@@ -78,7 +78,6 @@ class QWebEnginePage;
 namespace ajazz::app {
 
 class SdPluginServer;
-class PropertyInspectorController;
 
 /**
  * @brief Orchestrates plugin discovery, spawn, crash lifecycle, and shutdown.
@@ -106,9 +105,6 @@ public:
      *                        unavailable (spawn-dispatch only tested; no shutdown).
      * @param probe           Injectable NodeProbe. Production: pass
      *                        `makeDefaultNodeProbe()`. Tests: inject fakes.
-     * @param piController    Optional PropertyInspectorController for HTML plugins.
-     *                        May be nullptr when `AJAZZ_HAVE_WEBENGINE` is not set
-     *                        or when the controller is not yet constructed.
      * @param clock           Injectable millisecond clock. Defaults to
      *                        `QDateTime::currentMSecsSinceEpoch`. Tests inject a
      *                        lambda returning synthetic values.
@@ -117,7 +113,6 @@ public:
     explicit PluginManager(QString const& pluginsDir,
                            SdPluginServer* server,
                            NodeProbe probe = {},
-                           PropertyInspectorController* piController = nullptr,
                            std::function<qint64()> clock = {},
                            QObject* parent = nullptr);
 
@@ -482,7 +477,6 @@ private:
     QString m_pluginsDir;
     SdPluginServer* m_server; ///< Non-owning. May be nullptr in test contexts.
     NodeProbe m_probe;
-    PropertyInspectorController* m_piController; ///< Non-owning. May be nullptr.
     std::function<qint64()> m_clock;
 
     PluginCrashTracker m_crashTracker;

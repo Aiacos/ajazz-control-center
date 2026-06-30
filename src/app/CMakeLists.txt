@@ -124,9 +124,6 @@ qt_add_executable(
     src/autostart_service.cpp
     src/single_instance_guard.cpp
     src/app_icon.cpp
-    src/property_inspector_controller.cpp
-    src/pi_bridge.cpp
-    src/pi_url_policy.cpp
     src/qt_executor.cpp
     src/hotplug_debouncer.cpp
     # P3.16: Phase C QML UX — battery query service singleton (mirrors TimeSyncService design).
@@ -518,9 +515,6 @@ set(ACC_QML_MODULE_SOURCES
     # (kMiraboxShimSource is inline constexpr, non-WebEngine builds can unit-test it); the .cpp is
     # in the WebEngine-gated block below (makeMiraboxShim uses QWebEngineScript).
     src/plugin_mirabox_shim.hpp
-    # Phase 20 Plan 20-02 (PLUGIN-09): cefQuery polyfill header. kCefQueryShimSource is always
-    # reachable (inline constexpr std::string_view, no WebEngine dep); the .cpp is WebEngine-gated.
-    src/pi_cef_shim.hpp
     src/plugin_catalog_model.cpp
     src/plugin_catalog_model.hpp
     src/loaded_plugins_model.cpp
@@ -535,8 +529,6 @@ set(ACC_QML_MODULE_SOURCES
     src/battery_service.hpp
     src/app_update_service.cpp
     src/app_update_service.hpp
-    src/property_inspector_controller.cpp
-    src/property_inspector_controller.hpp
     src/qt_executor.cpp
     src/qt_executor.hpp
     src/stream_dock_control_service.cpp
@@ -700,9 +692,6 @@ if(AJAZZ_HAVE_WEBENGINE)
     # qt_target_qml_sources only on the WebEngine path (adding it to the QML module list
     # unconditionally would fail QML compilation on minimal Qt installs).
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/OpenDeckPane.qml)
-    # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
-    # inside it), so it only compiles when WebEngine is present.
-    target_sources(ajazz-control-center PRIVATE src/pi_url_request_interceptor.cpp)
     # OpenDeck webui: custom URL-scheme handler that serves the bundled SPA over opendeck://app/
     # (QWebEngineUrlSchemeHandler -> :/opendeck). WebEngine-gated.
     target_sources(ajazz-control-center PRIVATE src/opendeck_scheme_handler.cpp)
@@ -715,12 +704,6 @@ if(AJAZZ_HAVE_WEBENGINE)
     # QWebEngineScript, so the .cpp is gated here. The Wave-4 PluginManager (18-04) calls
     # profile->userScripts()->insert(makeMiraboxShim()) before loading HTML plugin index.html.
     target_sources(ajazz-control-center PRIVATE src/plugin_mirabox_shim.cpp)
-    # Phase 20 Plan 20-02 (PLUGIN-09): cefQuery polyfill. kCefQueryShimSource is declared inline
-    # constexpr in the header (always reachable without WebEngine; unit-testable as a pure string
-    # per 18-03 discipline); makeCefQueryShim() body uses QWebEngineScript, so the .cpp is gated
-    # here. PropertyInspectorController::loadInspector() calls
-    # profile->scripts()->insert(makeCefQueryShim()) before loading the PI HTML.
-    target_sources(ajazz-control-center PRIVATE src/pi_cef_shim.cpp)
 endif()
 
 # ----------------------------------------------------------------------------

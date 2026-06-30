@@ -45,7 +45,6 @@
 #include <QUrl>
 
 #if defined(AJAZZ_HAVE_WEBENGINE)
-#include "pi_bridge.hpp"
 #include "plugin_asset_server.hpp"
 #endif
 
@@ -132,7 +131,6 @@ Application::Application(QObject* parent)
                                                         m_pluginCatalog.get(),
                                                         this)),
       m_loadedPlugins(std::make_unique<LoadedPluginsModel>(this)),
-      m_propertyInspector(std::make_unique<PropertyInspectorController>(this)),
       // Phase 5 Plan 05-07 / A-04: TimeSyncService is constructed with a
       // DeviceLookup lambda that captures m_deviceRegistry by reference.
       // The lookup returns std::shared_ptr<IDevice> directly per the
@@ -944,100 +942,6 @@ Application::Application(QObject* parent)
     // that resolve to userPluginsDir()/<dir>/<rel> here.
     m_pluginAssetServer = std::make_unique<PluginAssetServer>(this);
     m_pluginAssetServer->start(57118);
-
-    // Phase 20-03 (PLUGIN-09): PI JS -> plugin-process relay.
-    //
-    // activeBridgeChanged fires each time loadInspector creates a fresh PIBridge for
-    // the newly selected action context. We capture the new bridge and wire its
-    // toPluginRequested signal to SdPluginServer::sendEvent so that the PI page's
-    // `$SD.sendToPlugin(json)` call reaches the live plugin process over the WebSocket.
-    //
-    // The bridge is owned by the QWebEnginePage (parented inside the controller).
-    // Capturing m_pluginServer.get() by raw pointer is safe: m_pluginServer is a member
-    // and outlives the connection (both are destroyed by ~Application in declaration order).
-    //
-    // STOP gate (20-03): wired only because 17-02-SUMMARY.md is present (sendEvent exists).
-    // The live plugin-process round-trip is verified on hardware in Phase 25.
-    QObject::connect(
-        m_propertyInspector.get(),
-        &PropertyInspectorController::activeBridgeChanged,
-        this,
-        [this](ajazz::app::PIBridge* bridge) {
-            if (!bridge || !m_pluginServer) {
-                return;
-            }
-            auto* server = m_pluginServer.get();
-            QObject::connect(bridge,
-                             &ajazz::app::PIBridge::toPluginRequested,
-                             bridge, // parent as context: auto-disconnects when bridge dies
-                             [server](QString uuid, QString json) {
-                                 auto const payload =
-                                     QJsonDocument::fromJson(json.toUtf8()).object();
-                                 server->sendEvent(uuid, QStringLiteral("sendToPlugin"), payload);
-                             });
-            // PI->plugin settings round-trip: when the PI persists per-context
-            // settings, notify the live plugin process with didReceiveSettings.
-            // Routed through the bridge so the wire context id resolves to the
-            // full ActionContext (coordinates/controller/state) via the registry.
-            if (m_pluginBridge) {
-                QObject::connect(bridge,
-                                 &ajazz::app::PIBridge::contextSettingsChanged,
-                                 m_pluginBridge.get(),
-                                 &ajazz::app::PluginDeviceBridge::onPropertyInspectorSettings);
-            }
-            // Plugin->PI half of the relay: the PluginDeviceBridge surfaces a
-            // plugin's sendToPropertyInspector as relayToPropertyInspector; forward
-            // it to THIS PI page when the plugin UUID matches. bridge is the context
-            // so the connection auto-drops when the PI page is torn down.
-            if (m_pluginBridge) {
-                QObject::connect(
-                    m_pluginBridge.get(),
-                    &ajazz::app::PluginDeviceBridge::relayToPropertyInspector,
-                    bridge,
-                    [bridge](QString uuid, QString /*contextId*/, QJsonObject payload) {
-                        if (bridge->pluginUuid() != uuid) {
-                            return; // not this PI's plugin
-                        }
-                        bridge->deliverToPropertyInspector(QString::fromUtf8(
-                            QJsonDocument(payload).toJson(QJsonDocument::Compact)));
-                    });
-            }
-        });
-
-    // PI-04 lifecycle events: route the controller's inspectorOpened /
-    // inspectorClosed signals to the owning plugin as propertyInspectorDidAppear
-    // / propertyInspectorDidDisappear. Mirrors the activeBridgeChanged seam above:
-    // the controller stays free of a raw SdPluginServer* (preserving the audited
-    // indirection), and Application — which owns m_pluginServer — performs the
-    // sendEvent. sendEvent has no event-name allowlist, so the new names ship on
-    // the wire unchanged. SDK-2 envelope is {action, context}.
-    QObject::connect(m_propertyInspector.get(),
-                     &PropertyInspectorController::inspectorOpened,
-                     this,
-                     [this](QString uuid, QString action, QString ctx) {
-                         // T023 dedup: shares m_piAppearGate with the WS-registration
-                         // path above so a modern PI (WebEngine page + its own
-                         // WebSocket) yields exactly one propertyInspectorDidAppear.
-                         if (m_pluginServer && m_piAppearGate.noteAppear(ctx)) {
-                             m_pluginServer->sendEvent(
-                                 uuid,
-                                 QStringLiteral("propertyInspectorDidAppear"),
-                                 QJsonObject{{QStringLiteral("action"), action},
-                                             {QStringLiteral("context"), ctx}});
-                         }
-                     });
-    QObject::connect(m_propertyInspector.get(),
-                     &PropertyInspectorController::inspectorClosed,
-                     this,
-                     [this](QString uuid, QString action, QString ctx) {
-                         if (m_pluginServer && m_piAppearGate.noteDisappear(ctx)) {
-                             m_pluginServer->sendEvent(
-                                 uuid,
-                                 QStringLiteral("propertyInspectorDidDisappear"),
-                                 QJsonObject{{QStringLiteral("action"), action},
-                                             {QStringLiteral("context"), ctx}});
-                         }
-                     });
 #endif // AJAZZ_HAVE_WEBENGINE
 #endif // AJAZZ_HAVE_WEBSOCKETS
 }
@@ -1219,7 +1123,6 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
         [this](QString const& uuid) { m_profileController->clearBindingsForPlugin(uuid); });
     PluginDebugService::registerInstance(m_pluginDebug.get());
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
-    PropertyInspectorController::registerInstance(m_propertyInspector.get());
     TimeSyncService::registerInstance(m_timeSync.get());
     LightingService::registerInstance(m_lighting.get());
     SettingsService::registerInstance(m_settings.get());
@@ -1289,14 +1192,6 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
                        "SdPluginServer listening on port {}",
                        static_cast<int>(m_pluginServer->serverPort()));
 
-        // T024: tell the PI controller which loopback port the modern-PI
-        // bootstrap should point connectElgatoStreamDeckSocket at. Without this
-        // a WS-only Property Inspector never registers (it just waits for the
-        // host to call its connect function).
-        if (m_propertyInspector) {
-            m_propertyInspector->setWebSocketPort(m_pluginServer->serverPort());
-        }
-
         // Elgato .sdPlugin (node/html/native) discovery + spawn. The manager
         // must be created AFTER the server is listening because spawn() reads
         // serverPort() for the child's -port argv. User-level install dir:
@@ -1308,7 +1203,7 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
             QStringLiteral("/plugins");
         QDir().mkpath(pluginsDir);
         m_pluginManager = std::make_unique<PluginManager>(
-            pluginsDir, m_pluginServer.get(), makeDefaultNodeProbe(), m_propertyInspector.get());
+            pluginsDir, m_pluginServer.get(), makeDefaultNodeProbe());
 
         // F1 (PLUGIN-GAP-ANALYSIS): feed the -info.devices[] array from the
         // currently-connected devices so device-aware plugins can target keys.

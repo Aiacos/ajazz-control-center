@@ -141,8 +141,7 @@ TEST_CASE("disconnect-before-register leaves zero connected and does not crash",
     QSignalSpy registeredSpy(&server, &SdPluginServer::pluginRegistered);
     REQUIRE(server.start(0));
 
-    PluginManager manager(
-        scratch.path(), &server, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), &server, fakeProbe, [&fakeNow]() { return fakeNow; });
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
     // Connect a real QWebSocket client to the server loopback port.
@@ -210,8 +209,7 @@ TEST_CASE("pre-registration-exit is not counted as a crash",
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -303,8 +301,7 @@ TEST_CASE("HTML runtime WR-02 no-respawn guard via unified host", "[plugin-host2
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
     qint64 fakeNow = 0;
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 

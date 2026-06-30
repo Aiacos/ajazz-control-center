@@ -109,8 +109,7 @@ TEST_CASE("PluginManager crash disables only itself across siblings", "[plugin-c
     fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
     fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -173,8 +172,7 @@ TEST_CASE("PluginManager two crashes do not disable, siblings unaffected", "[plu
     fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
     fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -222,8 +220,7 @@ TEST_CASE("PluginManager WR-02 HTML plugin not re-spawned on failure", "[plugin-
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -272,8 +269,7 @@ TEST_CASE("PluginManager WR-02 HTML UUID disabled at threshold without re-spawn"
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 

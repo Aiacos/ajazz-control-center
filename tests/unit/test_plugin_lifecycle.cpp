@@ -247,8 +247,7 @@ TEST_CASE("PluginManagerTest crash 3 in 30s disables not restarts", "[plugin-man
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -284,8 +283,7 @@ TEST_CASE("PluginManagerTest 2 crashes restarts not disables", "[plugin-manager]
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
@@ -399,8 +397,7 @@ TEST_CASE("PluginManagerTest FailedToStart fires onProcessFailed only once", "[p
     fakeProbe.findNode = []() -> QString { return QStringLiteral("/nonexistent/node"); };
     fakeProbe.queryVersion = [](QString const&) -> QString { return QStringLiteral("v26.0.0"); };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
     PluginManifest m;
@@ -471,8 +468,7 @@ TEST_CASE("PluginManagerTest HTML plugin is not re-spawned on failure", "[plugin
     fakeProbe.findNode = []() -> QString { return {}; };
     fakeProbe.queryVersion = [](QString const&) -> QString { return {}; };
 
-    PluginManager manager(
-        scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+    PluginManager manager(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
     QSignalSpy disabledSpy(&manager, &PluginManager::pluginDisabled);
 
     // Call onProcessFailed for a UUID not in m_live (simulates an HTML plugin where
@@ -810,8 +806,7 @@ TEST_CASE("PluginManagerTest crash-disable is session-only and does not persist"
 
     {
         qint64 fakeNow = 0;
-        PluginManager mgr1(
-            scratch.path(), nullptr, fakeProbe, nullptr, [&fakeNow]() { return fakeNow; });
+        PluginManager mgr1(scratch.path(), nullptr, fakeProbe, [&fakeNow]() { return fakeNow; });
 
         // HOST-02: seed m_live so onProcessFailed treats pluginKey as a registered plugin.
         mgr1.seedLiveForTest(pluginKey);

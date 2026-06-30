@@ -27,7 +27,6 @@
 #include "plugin_catalog_model.hpp"
 #include "plugin_debug_service.hpp"
 #include "profile_controller.hpp"
-#include "property_inspector_controller.hpp"
 #include "qt_executor.hpp"
 #include "settings_service.hpp"
 #include "stream_dock_control_service.hpp"
@@ -255,8 +254,6 @@ private:
 #endif
     std::unique_ptr<LoadedPluginsModel>
         m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
-    std::unique_ptr<PropertyInspectorController>
-        m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
     std::unique_ptr<TimeSyncService>
         m_timeSync; ///< Phase 5: per-row Sync time + auto-sync hook. Owns the
                     ///< DeviceLookup lambda that captures m_deviceRegistry by
@@ -378,11 +375,11 @@ private:
     /// (destruction order: m_pluginHost2 first, then m_pluginManager, since the
     /// aggregator holds a raw pointer to the manager). Non-owning sub-host pointers.
     std::unique_ptr<UnifiedPluginHost> m_pluginHost2;
-    /// De-dup gate for propertyInspectorDidAppear/…DidDisappear. A modern PI fires
-    /// BOTH the WS registration path (SdPluginServer::propertyInspectorRegistered)
-    /// AND the WebEngine path (PropertyInspectorController::inspectorOpened); both
-    /// emit sites consult this gate (keyed on the instance context) so the host
-    /// emits exactly one appear/disappear per open (research D1, T023).
+    /// De-dup gate for propertyInspectorDidAppear/…DidDisappear. The embedded
+    /// OpenDeck SPA's Property Inspector registers over the plugin WebSocket
+    /// (SdPluginServer::propertyInspectorRegistered); this gate (keyed on the
+    /// instance context) ensures the host emits exactly one appear/disappear
+    /// per open (research D1, T023).
     PiAppearGate m_piAppearGate;
 #endif
     /// Developer debug console: logs plugin/device protocol traffic and injects

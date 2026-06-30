@@ -333,20 +333,9 @@ add_executable(
     # wrappers, intentionally not exercised here.
     test_firmware_update_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/firmware_update_service.cpp
-    # Property Inspector URL policy + PIBridge settings persistence: pure C++
-    # helpers (no QtWebEngine) linked directly so the test binary does not pull
-    # in the WebEngine dependency. pi_bridge.cpp uses only Qt6::Core (QSaveFile,
-    # QJsonDocument, QStandardPaths) for the persistence path; the WebEngine
-    # path is guarded by AJAZZ_HAVE_WEBENGINE and is NOT compiled here. AUTOMOC
-    # (set below) handles the Q_OBJECT moc pass for PIBridge. Coverage in
-    # test_pi_bridge.cpp (URL policy + PLUGIN-13 restart round-trip + path-
-    # traversal refusal).
-    test_pi_bridge.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/src/pi_bridge.cpp
-    # PLUGIN-22 / 29-02: pi_bridge.cpp now routes per-context settings through
-    # the shared plugin_settings_store; link the store TU so the symbols resolve
-    # even when AJAZZ_HAVE_WEBSOCKETS is OFF (the websocket block adds it only
+    # Shared per-context plugin settings store: pure Qt6::Core (QSaveFile,
+    # QJsonDocument, QStandardPaths). Linked here so its symbols resolve even
+    # when AJAZZ_HAVE_WEBSOCKETS is OFF (the websocket block adds it only
     # conditionally for test_plugin_device_bridge.cpp).
     ${CMAKE_SOURCE_DIR}/src/app/src/plugin_settings_store.cpp
     # Phase 7 / Plan 07-02 / TRUST-03: loadTrustRoots corpus — positive cases
@@ -487,9 +476,8 @@ qt_add_resources(
 )
 
 # Embed the bundled sdpi.css under the same QRC path the runtime binary uses
-# (`qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css`), so the qrc-presence test in
-# test_pi_bridge.cpp can assert QFile::exists() on it without needing a full app binary (mirrors the
-# streamdock/opendeck fallback pattern above).
+# (`qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css`), mirroring the streamdock/opendeck fallback
+# pattern above so qrc-presence assertions can resolve it without a full app binary.
 set(_acc_sdpi_css ${CMAKE_SOURCE_DIR}/resources/streamdeck/sdpi.css)
 set_source_files_properties(${_acc_sdpi_css} PROPERTIES QT_RESOURCE_ALIAS streamdock/sdpi.css)
 qt_add_resources(
@@ -585,29 +573,16 @@ target_sources(ajazz_unit_tests PRIVATE test_mirabox_compat.cpp)
 # When WebEngine is present, link plugin_mirabox_shim.cpp (contains makeMiraboxShim() which uses
 # QWebEngineScript) and add Qt6::WebEngineCore so QWebEngineScript is fully defined. The
 # kMiraboxShimSource string literal in the .cpp is always compiled (not gated); only the
-# QWebEngineScript builder needs WebEngine. Mirror the pi_url_policy pattern: the pure-logic source
-# compiles unconditionally, the WebEngine-using parts are gated.
-#
-# Phase 20 Plan 20-03 (PLUGIN-09): also link property_inspector_controller.cpp + pi_cef_shim.cpp +
-# pi_url_request_interceptor.cpp when the full WebEngine Quick + WebChannel Quick stack is present,
-# so the [pi-bridge][inspector] cases can construct a PropertyInspectorController and assert that
-# loadInspector flips hasHtmlInspector and inserts the cefQuery shim once per fresh profile. The
-# test is WebEngine-gated via #if defined(AJAZZ_HAVE_WEBENGINE) in test_pi_bridge.cpp; without
-# WebEngine only the pure-string + persistence tests run (mirror of the 20-01/20-02 discipline).
+# QWebEngineScript builder needs WebEngine. The kMiraboxShimSource string literal compiles
+# unconditionally; only the QWebEngineScript builder needs WebEngine. The WebEngine link is also
+# required by plugin_manager.cpp (HTML plugin hosting), which is linked via AJAZZ_HAVE_WEBSOCKETS.
 if(AJAZZ_HAVE_WEBENGINE)
     # Re-issue the find_package for the WebEngine components so the Qt6::WebEngineCore /
     # WebEngineQuick / WebChannelQuick imported targets are defined in this CMakeLists scope (they
     # were found in src/app/CMakeLists.txt, but CMake imported targets are not inherited across
     # directory scopes — we must re-find them here). QUIET to suppress redundant noise.
     find_package(Qt6 QUIET COMPONENTS WebEngineCore WebEngineQuick WebChannelQuick)
-    target_sources(
-        ajazz_unit_tests
-        PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp
-                # 20-03: PropertyInspectorController and its WebEngine-dependent TUs.
-                ${CMAKE_SOURCE_DIR}/src/app/src/property_inspector_controller.cpp
-                ${CMAKE_SOURCE_DIR}/src/app/src/pi_cef_shim.cpp
-                ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_request_interceptor.cpp
-    )
+    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
     target_link_libraries(
         ajazz_unit_tests PRIVATE Qt6::WebEngineCore Qt6::WebEngineQuick Qt6::WebChannelQuick
     )
@@ -754,9 +729,9 @@ if(AJAZZ_HAVE_WEBSOCKETS)
                 test_encoder_layout_renderer.cpp
                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
                 ${CMAKE_SOURCE_DIR}/src/app/src/encoder_layout_renderer.cpp
-                # plugin_settings_store.cpp is already linked unconditionally above (pi_bridge
-                # block, PLUGIN-22 / 29-02) — do NOT add it again here to avoid duplicate-symbol
-                # linker errors. The websocket-conditional block only adds plugin_device_bridge.cpp.
+                # plugin_settings_store.cpp is already linked unconditionally above — do NOT add it
+                # again here to avoid duplicate-symbol linker errors. The websocket-conditional
+                # block only adds plugin_device_bridge.cpp.
     )
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
 

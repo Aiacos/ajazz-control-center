@@ -8,7 +8,6 @@
  *     shutdown protocol (exitApp -> terminate(1s) -> kill).
  *   - 18-RESEARCH.md Pattern 3 (crash window) + Pitfall 5 (terminate no-op on Windows).
  *   - 18-RESEARCH.md A2 (infoJson minimal shape) + A3 (exitApp-then-kill required).
- *   - src/app/src/pi_bridge.cpp:66 (isSafeUuidComponent — reuse for UUID path validation).
  *   - SdPluginServer::sendEvent signature confirmed from 17-02-SUMMARY.md.
  *
  * COD-031: QJson/Qt-Core only — no nlohmann::json anywhere in this file.
@@ -58,7 +57,6 @@
 
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "plugin_mirabox_shim.hpp"
-#include "property_inspector_controller.hpp"
 
 #include <QtWebEngineCore/QWebEnginePage>
 #include <QtWebEngineCore/QWebEngineProfile>
@@ -84,11 +82,9 @@ namespace ajazz::app {
 // version 0.1.x and hid actions of plugins that were happily running).
 
 // ---------------------------------------------------------------------------
-// isSafeUuidComponent — reuse from pi_bridge.cpp:66 (T-18-PATHTRAV mitigation).
-// Declared here as a local helper to avoid exposing pi_bridge's private namespace.
-// The logic is identical to the original.
+// isSafeUuidComponent — UUID path-component validation (T-18-PATHTRAV mitigation).
 // ---------------------------------------------------------------------------
-/// isSafeUuidComponent — reuse from pi_bridge.cpp:66 (T-18-PATHTRAV mitigation).
+/// isSafeUuidComponent — T-18-PATHTRAV mitigation.
 /// Validates any plugin UUID before using it as a filesystem path component.
 [[nodiscard]] static bool isSafeUuidComponent(QString const& s) {
     if (s.isEmpty() || s.size() > 256) {
@@ -183,13 +179,11 @@ bool PluginManager::shouldSkipSpawn(QString const& pluginId) {
 PluginManager::PluginManager(QString const& pluginsDir,
                              SdPluginServer* server,
                              NodeProbe probe,
-                             PropertyInspectorController* piController,
                              std::function<qint64()> clock,
                              QObject* parent)
     : QObject(parent), m_pluginsDir(pluginsDir), m_server(server), m_probe(std::move(probe)),
-      m_piController(piController), m_clock(clock ? std::move(clock) : []() -> qint64 {
-          return QDateTime::currentMSecsSinceEpoch();
-      }) {}
+      m_clock(clock ? std::move(clock)
+                    : []() -> qint64 { return QDateTime::currentMSecsSinceEpoch(); }) {}
 
 PluginManager::~PluginManager() {
     shutdown();
