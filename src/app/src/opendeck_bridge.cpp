@@ -9,12 +9,18 @@
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QDir>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLoggingCategory>
+#include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QSettings>
 #include <QStringList>
+#include <QTemporaryFile>
+#include <QUrl>
 
 namespace ajazz::app {
 
@@ -128,8 +134,55 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         // Pairs with the get_application_profiles {} stub above.
         return str(QJsonValue(QJsonValue::Null));
     }
-    if (command == QLatin1String("get_applications") || command == QLatin1String("list_plugins")) {
+    if (command == QLatin1String("get_applications")) {
         return str(QJsonArray{});
+    }
+    if (command == QLatin1String("list_plugins")) {
+        // Group our installed actions by plugin -> OpenDeck's installed-plugin list
+        // (PluginManager + ActionList read id/name/icon).
+        QMap<QString, QJsonObject> byPlugin;
+        if (m_catalog != nullptr) {
+            for (QVariant const& v : m_catalog->installedActions()) {
+                QVariantMap const a = v.toMap();
+                QString const id = a.value(QStringLiteral("pluginUuid")).toString();
+                if (id.isEmpty() || byPlugin.contains(id)) {
+                    continue;
+                }
+                byPlugin.insert(
+                    id,
+                    QJsonObject{
+                        {QStringLiteral("id"), id},
+                        {QStringLiteral("name"), a.value(QStringLiteral("pluginName")).toString()},
+                        {QStringLiteral("icon"), a.value(QStringLiteral("icon")).toString()}});
+            }
+        }
+        QJsonArray out;
+        for (QJsonObject const& p : byPlugin) {
+            out.append(p);
+        }
+        return str(out);
+    }
+    if (command == QLatin1String("remove_plugin")) {
+        QString const id = args.value(QStringLiteral("id")).toString();
+        if (m_catalog != nullptr && !id.isEmpty()) {
+            m_catalog->uninstall(id);
+            emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+    if (command == QLatin1String("install_plugin")) {
+        // A local file / file:// path installs synchronously here; an http(s) URL
+        // is downloaded asynchronously in invoke() (handled before this seam).
+        QString const file = args.value(QStringLiteral("file")).toString();
+        QString const url = args.value(QStringLiteral("url")).toString();
+        QString const path = !file.isEmpty()                          ? file
+                             : url.startsWith(QLatin1String("file:")) ? url
+                                                                      : QString{};
+        if (m_catalog != nullptr && !path.isEmpty()) {
+            m_catalog->installFromFile(path, /*userConfirmedUnsigned=*/true);
+            emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
+        }
+        return str(QJsonValue(QJsonValue::Null));
     }
 
     // --- live backend -------------------------------------------------------
@@ -408,7 +461,60 @@ void OpenDeckBridge::notifyDevicesChanged() {
 void OpenDeckBridge::invoke(QString const& requestId,
                             QString const& command,
                             QString const& argsJson) {
+    // install_plugin with an http(s) URL is the one async command: download the
+    // archive, then install it off disk. Everything else resolves synchronously.
+    if (command == QLatin1String("install_plugin") && m_catalog != nullptr) {
+        QJsonObject const args = QJsonDocument::fromJson(argsJson.toUtf8()).object();
+        QString const url = args.value(QStringLiteral("url")).toString();
+        if (url.startsWith(QLatin1String("http"))) {
+            installPluginFromUrl(requestId, url);
+            return;
+        }
+    }
     emit invokeResponse(requestId, handle(command, argsJson), QString{});
+}
+
+void OpenDeckBridge::installPluginFromUrl(QString const& requestId, QString const& url) {
+    if (m_pluginDownloader == nullptr) {
+        m_pluginDownloader = new QNetworkAccessManager(this);
+    }
+    qCInfo(lcBridge) << "install_plugin: downloading" << url;
+    QNetworkRequest req{QUrl(url)};
+    req.setAttribute(QNetworkRequest::RedirectPolicyAttribute,
+                     QNetworkRequest::NoLessSafeRedirectPolicy);
+    QNetworkReply* reply = m_pluginDownloader->get(req);
+    connect(reply, &QNetworkReply::finished, this, [this, reply, requestId]() {
+        reply->deleteLater();
+        auto const fail = [this, requestId](QString const& msg) {
+            qCWarning(lcBridge) << "install_plugin:" << msg;
+            emit invokeResponse(
+                requestId, QStringLiteral("null"), opendeck_detail::jsonToString(msg));
+        };
+        if (reply->error() != QNetworkReply::NoError) {
+            fail(QStringLiteral("download failed: ") + reply->errorString());
+            return;
+        }
+        QByteArray const body = reply->readAll();
+        QString const bad = PluginCatalogModel::validateDownloadedArchive(body);
+        if (!bad.isEmpty()) {
+            fail(bad);
+            return;
+        }
+        QTemporaryFile tmp(QDir::tempPath() +
+                           QStringLiteral("/opendeck-plugin-XXXXXX.streamDeckPlugin"));
+        if (!tmp.open() || tmp.write(body) != body.size()) {
+            fail(QStringLiteral("cannot stage the download"));
+            return;
+        }
+        tmp.flush();
+        bool const ok = m_catalog->installFromFile(tmp.fileName(), /*userConfirmedUnsigned=*/true);
+        emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
+        if (ok) {
+            emit invokeResponse(requestId, QStringLiteral("null"), QString{});
+        } else {
+            fail(QStringLiteral("install refused (signature or format)"));
+        }
+    });
 }
 
 } // namespace ajazz::app

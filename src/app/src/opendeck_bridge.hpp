@@ -26,6 +26,8 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+class QNetworkAccessManager;
+
 namespace ajazz::app {
 
 class DeviceModel;
@@ -143,10 +145,15 @@ signals:
     void event(QString const& name, QString const& payloadJson);
 
 private:
+    /// Download an http(s) plugin archive (install_plugin {url}) and install it
+    /// off disk via PluginCatalogModel; resolves the JS Promise for @p requestId.
+    void installPluginFromUrl(QString const& requestId, QString const& url);
+
     DeviceModel* m_devices;
     ProfileController* m_profiles;
     PluginCatalogModel* m_catalog;
     StreamDockControlService* m_control = nullptr;
+    QNetworkAccessManager* m_pluginDownloader = nullptr;
 };
 
 } // namespace ajazz::app
