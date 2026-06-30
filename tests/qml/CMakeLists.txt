@@ -11,16 +11,10 @@
 # also pins it in-code) so it needs no display/GPU on CI.
 #
 # WebEngine is intentionally NOT enabled here: the harness exercises the
-# minimal-Qt fallback module (no PIWebView.qml, no QtWebEngine/QtWebChannel
-# dependency), which keeps the headless build self-contained. The HTML Property
-# Inspector path is covered separately by test_pi_bridge.cpp.
-#
-# Phase 26 Plan 26-05 (REQ-26-B) adds two sets of tests to this same target:
-#   test_device_view_tests.cpp    -- Catch2 C++ driver for geometry + drag-drop
-#   test_device_view_geometry.qml -- QtTest QML spec for 3 SKU geometry checks
-#   test_device_view_drag_drop.qml -- QtTest QML spec for commit-method wiring
-# The .qml files are added to the module's QML_FILES so they are accessible as
-# AjazzControlCenter/test_device_view_geometry and .../test_device_view_drag_drop.
+# minimal-Qt fallback module (no QtWebEngine/QtWebChannel dependency, so
+# WebUiHost.qml / OpenDeckPane.qml are absent), which keeps the headless build
+# self-contained. The embedded OpenDeck SPA path is exercised live via the
+# debug-control channel on a WebEngine build instead.
 # ----------------------------------------------------------------------------
 
 if(NOT DEFINED ACC_QML_MODULE_SOURCES OR NOT DEFINED ACC_APP_SOURCE_DIR)
@@ -68,8 +62,6 @@ set_source_files_properties(
 qt_add_executable(
     ajazz_qml_tests
     test_qml_smoke.cpp
-    # Phase 26 Plan 26-05 (REQ-26-B): DeviceView geometry + drag-drop Catch2 tests.
-    test_device_view_tests.cpp
     # Application controller + its non-module deps. These are recompiled here (rather than linked
     # from the app executable, which is not a library) so the test owns the full singleton-wiring
     # path.
@@ -152,10 +144,6 @@ qt_add_qml_module(
     VERSION 1.0 IMPORTS ${ACC_QML_IMPORTS}
     SOURCES ${_qmlt_sources}
     QML_FILES ${_qmlt_qml_files}
-              # Phase 26 Plan 26-05 (REQ-26-B): DeviceView test QML files added to the module so
-              # they are loadable as AjazzControlCenter/test_device_view_geometry etc.
-              test_device_view_geometry.qml
-              test_device_view_drag_drop.qml
 )
 
 # Branding compile defines consumed by branding_service.cpp / property_inspector_controller.cpp.
@@ -291,22 +279,14 @@ endif()
 # interaction) while passing in every normal build. They add no logic coverage, so the coverage job
 # skips them and the release build matrix keeps them as the real smoke gate.
 #
-# WINDOWS: the executable is still BUILT on windows-2022 (MSVC compile coverage of the QML module +
-# recompiled app sources) but the tests are NOT registered/run there. The first drag-drop case
-# (DeviceViewDragDrop, which is the first to force the ProfileController QML singleton via
-# singletonInstance) hangs the offscreen process on the Windows runner — most likely a crash that
-# stalls behind Windows Error Reporting until the 45-minute job timeout, NOT a clean failure. It is
-# a pre-existing, Windows-only harness issue (these tests never ran on Windows before the link gap
-# closed) and is unrelated to this branch's sidecar migration; the QML wiring it checks is
-# platform-independent and stays covered by the Linux leg. Tracked as a follow-up: needs a Windows
-# box (or WER-disabled CI debugging) to root-cause. See CLAUDE.md latent items.
-#
-# macOS: every DeviceViewScroll case SegFaults on the macos-14 runner (offscreen QML window teardown
-# — the same harness fragility class as the Windows hang + the documented gcov x QML SIGSEGV). These
-# never ran on the macOS leg before the link gap closed either. The QML wiring is
-# platform-independent and stays covered by the Linux leg, so register these tests on Linux ONLY;
-# the executable is still BUILT on macOS/Windows for compile coverage. Root-causing the offscreen
-# QML teardown crash on macOS is a follow-up (CLAUDE.md latent items).
+# WINDOWS/macOS: the executable is still BUILT on windows-2022 + macos-14 (MSVC/AppleClang compile
+# coverage of the QML module + recompiled app sources) but the tests are registered/run on Linux
+# ONLY. The DeviceView geometry/drag-drop cases that historically hung on Windows (offscreen process
+# stall behind Windows Error Reporting) and SegFaulted on macOS (offscreen QML window teardown) were
+# REMOVED with the native streamdeck editor (the streamdeck editor is now the embedded OpenDeck
+# SPA). The remaining load-time smoke test is platform-independent and is kept Linux-only
+# conservatively (the same offscreen-QML-teardown fragility class); opening it to the other runners
+# can be revisited now that the crash-prone DeviceView cases are gone. See CLAUDE.md latent items.
 if(NOT WIN32 AND NOT APPLE)
     catch_discover_tests(
         ajazz_qml_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "qml"

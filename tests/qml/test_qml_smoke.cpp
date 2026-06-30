@@ -237,12 +237,6 @@ std::vector<InstantiableComponent> instantiableComponents() {
         {"Notification", {}},
         {"UpdateBanner", {}},
         {"AppHeader", {}},
-        // KeyCell has root-level required props (index/iconSource/label).
-        {"KeyCell",
-         {{QStringLiteral("index"), 0},
-          {QStringLiteral("iconSource"), QStringLiteral("")},
-          {QStringLiteral("label"), QStringLiteral("test")}}},
-        {"EncoderCard", {}},
         {"FirmwarePanel", {}},
         {"SettingsRow", {}},
         {"RgbPicker", {}},
@@ -257,17 +251,9 @@ char const* const kCompileOnlyComponents[] = {
     "Main",
     "DeviceList",
     "ProfileEditor",
-    // KeyDesigner was deleted in Phase 26 Plan 26-04 (commit 6c746a1);
-    // replaced by DeviceView + ActionLibraryPane below.
-    "DeviceView",
-    "ActionLibraryPane",
-    "EncoderPanel",
     "MousePanel",
-    "Inspector",
     "PluginStore",
     "LoadedPluginsPage",
-    "PropertyInspector",
-    "NativePropertyInspector",
     "SettingsPage",
 };
 

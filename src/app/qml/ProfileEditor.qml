@@ -45,9 +45,7 @@ Rectangle {
 
     // ---- Capability shortcuts ----------------------------------------------
     readonly property int  _keyCount:      capabilities && capabilities.keyCount      ? capabilities.keyCount      : 0
-    readonly property int  _gridColumns:   capabilities && capabilities.gridColumns   ? capabilities.gridColumns   : 5
     readonly property int  _encoderCount:  capabilities && capabilities.encoderCount  ? capabilities.encoderCount  : 0
-    readonly property int  _keyRows:       capabilities && capabilities.keyRows       ? capabilities.keyRows       : 0
     readonly property int  _touchZoneCount: capabilities && capabilities.touchZoneCount ? capabilities.touchZoneCount : 0
     readonly property int  _dpiStageCount: capabilities && capabilities.dpiStageCount ? capabilities.dpiStageCount : 0
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
@@ -62,10 +60,7 @@ Rectangle {
     // the Firmware tab so it can resolve the FirmwareUpdate.Family.
     readonly property int  _family:        capabilities && capabilities.family !== undefined ? capabilities.family : 0
 
-    readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
-    // Encoders no longer have a dedicated tab: they are edited in-place as the
-    // rotary dials on the device canvas inside the Keys tab (DeviceCanvas Lane 3).
     readonly property bool _showMouse:     _dpiStageCount > 0
     // The Settings tab hosts per-device Time-sync, the AK-series batch, AND the
     // device maturity tier. Maturity applies to every catalogued device, so the
@@ -125,11 +120,8 @@ Rectangle {
             objectName: "deviceEditorTabs" // debug-channel addressable (qml.set currentIndex)
             Layout.fillWidth: true
             visible: root.codename !== ""
-            TabButton {
-                text: qsTr("Keys")
-                visible: root._showKeys
-                width: visible ? implicitWidth : 0
-            }
+            // No "Keys" tab: stream controllers are edited in the embedded
+            // OpenDeck pane above, never in these native tabs (mouse/keyboard).
             TabButton {
                 text: qsTr("RGB")
                 visible: root._showRgb
@@ -162,23 +154,19 @@ Rectangle {
             currentIndex: tabs.currentIndex
 
             Loader {
-                active: stack.currentIndex === 0 && root._showKeys
-                sourceComponent: deviceViewComp
-            }
-            Loader {
-                active: stack.currentIndex === 1 && root._showRgb
+                active: stack.currentIndex === 0 && root._showRgb
                 sourceComponent: rgbPickerComp
             }
             Loader {
-                active: stack.currentIndex === 2 && root._showMouse
+                active: stack.currentIndex === 1 && root._showMouse
                 sourceComponent: mousePanelComp
             }
             Loader {
-                active: stack.currentIndex === 3 && root._showSettings
+                active: stack.currentIndex === 2 && root._showSettings
                 sourceComponent: settingsRowComp
             }
             Loader {
-                active: stack.currentIndex === 4 && root._showFirmware
+                active: stack.currentIndex === 3 && root._showFirmware
                 sourceComponent: firmwarePanelComp
             }
         }
@@ -240,35 +228,7 @@ Rectangle {
         }
     }
 
-    // ---- Component definitions for the Loaders ----------------------------
-
-    // Keys tab: DeviceView (geometry-driven three-row editor, REQ-26-B, Phase 26) +
-    // live-device controls (DISPLAY-09, Phase 16).
-    // The brightness Slider is debounced via a single-shot Timer (~80 ms) so
-    // dragging does not flood LIG writes (T-16a-01). One final setBrightness is
-    // issued on pointer release (onPressedChanged when !pressed). Both controls
-    // are gated to LCD-key devices (_showKeys / codename != "").
-    Component {
-        id: deviceViewComp
-
-        // Keys tab: DeviceView only. Its live-device controls (brightness +
-        // clear-all) moved INTO the canvas header inside DeviceView (Stream
-        // Deck layout: controls next to the canvas, not a separate bottom row).
-        ColumnLayout {
-            spacing: Theme.spacingSm
-
-            DeviceView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                keyCount: root._keyCount
-                gridColumns: root._gridColumns
-                keyRows: root._keyRows
-                encoderCount: root._encoderCount
-                touchZoneCount: root._touchZoneCount
-                codename: root.codename
-            }
-        }
-    }
+    // ---- Component definitions for the Loaders (mouse + keyboard tabs) -----
 
     Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }

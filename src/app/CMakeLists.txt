@@ -475,11 +475,10 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/resources/device-layouts")
     endforeach()
 endif()
 
-# Cross-module QML imports. PIWebView.qml binds `WebEngineView.profile` and `webChannel` to our
-# `PropertyInspectorController`'s `QQuickWebEngineProfile` / `QQmlWebChannel` properties; qmllint
-# only resolves those types when the QtWebEngine + QtWebChannel modules are listed as `import`s in
-# our generated qmldir. The list is empty on minimal builds (so the WebEngine modules don't need to
-# exist on the target system) and populated on the full PI build.
+# Cross-module QML imports. WebUiHost.qml / OpenDeckPane.qml import QtWebEngine + QtWebChannel (the
+# embedded OpenDeck SPA host + bridge); qmllint only resolves those types when the modules are
+# listed as `import`s in our generated qmldir. The list is empty on minimal builds (so the WebEngine
+# modules don't need to exist on the target system) and populated on the full WebEngine build.
 set(_acc_qml_imports "")
 if(AJAZZ_HAVE_WEBENGINE)
     list(APPEND _acc_qml_imports QtWebEngine QtWebChannel)
@@ -582,31 +581,19 @@ set(ACC_QML_MODULE_QML_FILES
     qml/ProfileEditor.qml
     qml/RgbPicker.qml
     qml/SettingsRow.qml
-    qml/DeviceView.qml
     qml/ProfileBar.qml
-    qml/ActionLibraryPane.qml
-    qml/EncoderPanel.qml
     qml/MousePanel.qml
-    qml/Inspector.qml
     qml/PluginStore.qml
     qml/DebugConsole.qml
     qml/LoadedPluginsPage.qml
-    qml/PropertyInspector.qml
-    qml/NativePropertyInspector.qml
     qml/SettingsPage.qml
     qml/components/AppHeader.qml
     qml/components/BatteryIndicator.qml
     qml/components/Card.qml
-    qml/components/DeviceCanvas.qml
     qml/components/DeviceImage.qml
     qml/components/DeviceRow.qml
     qml/components/EmptyState.qml
     qml/components/FirmwarePanel.qml
-    qml/components/EncoderCard.qml
-    qml/components/EncoderDial.qml
-    qml/components/KeyBindingList.qml
-    qml/components/KeyCell.qml
-    qml/components/TouchStripLane.qml
     qml/components/Notification.qml
     qml/components/PageHeader.qml
     qml/components/PrimaryButton.qml
@@ -712,12 +699,10 @@ if(AJAZZ_HAVE_WEBENGINE)
         target_include_directories(ajazz-control-center PRIVATE "${_we_priv_path}")
     endif()
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
-    # PIWebView.qml imports `QtWebEngine` which only exists when the WebEngineQuick module is
-    # present. Adding it to the QML module list unconditionally would fail QML compilation on
-    # minimal Qt installs, so we attach it via qt_target_qml_sources only on the WebEngine path.
-    qt_target_qml_sources(ajazz-control-center QML_FILES qml/PIWebView.qml)
-    # WebUiHost.qml hosts the OpenDeck SPA in a WebEngineView + QWebChannel; like PIWebView it
-    # imports QtWebEngine/QtWebChannel, so it is WebEngine-gated too.
+    # WebUiHost.qml hosts the OpenDeck SPA in a WebEngineView + QWebChannel; it imports
+    # QtWebEngine/QtWebChannel which only exist when the WebEngineQuick module is present, so we
+    # attach it via qt_target_qml_sources only on the WebEngine path (adding it to the QML module
+    # list unconditionally would fail QML compilation on minimal Qt installs).
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/WebUiHost.qml)
     # OpenDeckPane.qml is the embeddable (Item) form of the OpenDeck SPA host that ProfileEditor
     # mounts as the streamdeck editor area; same WebEngine gating.
