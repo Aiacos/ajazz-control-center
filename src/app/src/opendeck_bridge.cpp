@@ -41,8 +41,9 @@ Q_LOGGING_CATEGORY(lcBridge, "ajazz.opendeck.bridge")
 /// gates on `instance.action.property_inspector`). Re-attach them from the
 /// catalog so a dropped action shows its real settings.
 void applyActionMeta(QJsonObject& action, QVariantMap const& entry) {
+    QString const icon = entry.value(QStringLiteral("icon")).toString();
     action[QStringLiteral("plugin")] = entry.value(QStringLiteral("pluginUuid")).toString();
-    action[QStringLiteral("icon")] = entry.value(QStringLiteral("icon")).toString();
+    action[QStringLiteral("icon")] = icon;
     action[QStringLiteral("property_inspector")] =
         entry.value(QStringLiteral("propertyInspectorPath")).toString();
     if (action.value(QStringLiteral("name")).toString().isEmpty()) {
@@ -54,6 +55,26 @@ void applyActionMeta(QJsonObject& action, QVariantMap const& entry) {
     }
     if (!controllers.isEmpty()) {
         action[QStringLiteral("controllers")] = controllers;
+    }
+    // Default the action's per-state fallback image to the icon. The SPA renders a
+    // bound key as `getImage(instanceState.image, action.states[s].image ?? action.icon)`;
+    // our reshaped action carries states with an EMPTY-STRING image, and JS `?? `
+    // treats "" as a set value, so the `?? action.icon` fallback never fires and the
+    // key paints the /alert.png placeholder. Seed each empty state image with the
+    // icon so a freshly-dropped action shows its real icon on the key/dial.
+    if (!icon.isEmpty()) {
+        QJsonArray states = action.value(QStringLiteral("states")).toArray();
+        if (states.isEmpty()) {
+            states.append(QJsonObject{});
+        }
+        for (qsizetype i = 0; i < states.size(); ++i) {
+            QJsonObject state = states.at(i).toObject();
+            if (state.value(QStringLiteral("image")).toString().isEmpty()) {
+                state[QStringLiteral("image")] = icon;
+            }
+            states[i] = state;
+        }
+        action[QStringLiteral("states")] = states;
     }
 }
 
