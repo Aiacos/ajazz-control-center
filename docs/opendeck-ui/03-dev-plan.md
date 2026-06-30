@@ -510,3 +510,25 @@ external browser).
     PI↔plugin WS relay), not merely QML-fed, so "no QML loads them" ≠ dead. Needs a
     determination of whether the embedded OpenDeck path (PI = the SPA's own iframe)
     bypasses them before any removal. `PluginDeviceBridge` is firmly live (keep).
+- 2026-06-30: **Embedded OpenDeck plugin install/remove was BLOCKED by the
+  unhandled Tauri dialog plugin — FIXED.** Diagnosed live from the running app
+  log: `[ajazz.opendeck.bridge] unhandled command: "plugin:dialog|message"`. The
+  OpenDeck SPA's `PluginManager.svelte` gates install on `ask("Install X?")`
+  (line 32: `if (!file && !await ask(...)) return;`) and reports outcome via
+  `message()`; install-from-file uses `open()`. None of `@tauri-apps/plugin-dialog`
+  was handled by the bridge → `ask` resolved to **null** → `!await ask(...)` was
+  truthy → the SPA returned BEFORE ever calling `install_plugin`. That is why
+  "can't install OpenDeck plugins": the confirm gate silently aborted.
+  - **Fix** (`opendeck_bridge.cpp` `handle()`): handle `plugin:dialog|ask` /
+    `|confirm` (native `QMessageBox::question`, return the bool), `|message`
+    (`QMessageBox` info/warn/critical by `kind`, return null), and `|open`
+    (`QFileDialog`, return the picked path string / array / null). QApplication +
+    Qt6::Widgets are already linked by the app and the qml-test target that
+    compile the bridge, so no new dependency.
+  - The download path itself (`installPluginFromUrl`, async in `invoke()`) was
+    already correct; the `opendeck://` scheme already has
+    `CorsEnabled|FetchApiAllowed` so the SPA's GitHub-releases `fetch()` works.
+  - **Verify status:** build clean (app + qml tests). The dialog is MODAL +
+    SPA-webchannel-driven, so it cannot be driven via the headless debug channel
+    (`opendeck.invoke` routes to `handle()`, not the async `invoke()` slot) —
+    needs a live click-test in the running GUI.

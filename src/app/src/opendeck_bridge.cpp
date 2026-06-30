@@ -10,10 +10,12 @@
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>
+#include <QFileDialog>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QLoggingCategory>
+#include <QMessageBox>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
@@ -427,6 +429,69 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         command == QLatin1String("trigger_virtual_press") ||
         command == QLatin1String("switch_property_inspector")) {
         return str(QJsonValue(QJsonValue::Null));
+    }
+
+    // Tauri dialog plugin (@tauri-apps/plugin-dialog). The OpenDeck SPA gates
+    // plugin install/remove on ask()/confirm() and reports the outcome with
+    // message(); install-from-file uses open(). Without these the confirm
+    // resolved to null -> "!await ask(...)" was truthy -> install aborted before
+    // ever calling install_plugin (the embedded-Plugins-tab "can't install" bug).
+    // We back them with native Qt widgets (QApplication is already in use).
+    if (command == QLatin1String("plugin:dialog|ask") ||
+        command == QLatin1String("plugin:dialog|confirm")) {
+        QString const title = args.value(QStringLiteral("title")).toString();
+        QString const heading = title.isEmpty() ? QCoreApplication::applicationName() : title;
+        bool const isConfirm = command.endsWith(QLatin1String("confirm"));
+        // ask() -> Yes/No, confirm() -> OK/Cancel (Tauri semantics); both return bool.
+        QMessageBox::StandardButtons const buttons = isConfirm
+                                                         ? (QMessageBox::Ok | QMessageBox::Cancel)
+                                                         : (QMessageBox::Yes | QMessageBox::No);
+        QMessageBox::StandardButton const def = isConfirm ? QMessageBox::Ok : QMessageBox::Yes;
+        QMessageBox::StandardButton const clicked = QMessageBox::question(
+            nullptr, heading, args.value(QStringLiteral("message")).toString(), buttons, def);
+        bool const accepted = (clicked == QMessageBox::Yes || clicked == QMessageBox::Ok);
+        return str(QJsonValue(accepted));
+    }
+    if (command == QLatin1String("plugin:dialog|message")) {
+        QString const title = args.value(QStringLiteral("title")).toString();
+        QString const heading = title.isEmpty() ? QCoreApplication::applicationName() : title;
+        QString const message = args.value(QStringLiteral("message")).toString();
+        QString const kind = args.value(QStringLiteral("kind")).toString();
+        if (kind == QLatin1String("error")) {
+            QMessageBox::critical(nullptr, heading, message);
+        } else if (kind == QLatin1String("warning")) {
+            QMessageBox::warning(nullptr, heading, message);
+        } else {
+            QMessageBox::information(nullptr, heading, message);
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+    if (command == QLatin1String("plugin:dialog|open")) {
+        // Tauri v2 nests the options under "options"; tolerate a flat form too.
+        QJsonObject opts = args.value(QStringLiteral("options")).toObject();
+        if (opts.isEmpty()) {
+            opts = args;
+        }
+        QString const title = opts.value(QStringLiteral("title")).toString();
+        bool const directory = opts.value(QStringLiteral("directory")).toBool();
+        bool const multiple = opts.value(QStringLiteral("multiple")).toBool();
+        QString path;
+        if (directory) {
+            path = QFileDialog::getExistingDirectory(
+                nullptr, title.isEmpty() ? QStringLiteral("Select a folder") : title);
+        } else {
+            path = QFileDialog::getOpenFileName(
+                nullptr,
+                title.isEmpty() ? QStringLiteral("Select a plugin file") : title,
+                QString(),
+                QStringLiteral(
+                    "Stream Deck plugins (*.streamDeckPlugin *.sdPlugin *.zip);;All files (*)"));
+        }
+        if (path.isEmpty()) {
+            return str(QJsonValue(QJsonValue::Null)); // user cancelled
+        }
+        // open() returns a string for multiple:false, an array for multiple:true.
+        return multiple ? str(QJsonArray{path}) : str(QJsonValue(path));
     }
 
     qCWarning(lcBridge) << "unhandled command:" << command;
