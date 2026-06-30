@@ -295,8 +295,12 @@ TEST_CASE("CatalogOffline installedActions flattens manifest actions", "[catalog
     CHECK(a0.value(QStringLiteral("actionName")).toString() == QStringLiteral("First Action"));
     CHECK(a1.value(QStringLiteral("actionId")).toString() ==
           QStringLiteral("com.example.demo.second"));
+    // propertyInspectorPath is emitted in the webserver-relative
+    // `__pluginasset__/<dir>/<rel>` form so the SPA's PI iframe resolves it via
+    // PluginAssetServer (the bare manifest-relative path 404s); see
+    // PluginCatalogModel::installedActions.
     CHECK(a1.value(QStringLiteral("propertyInspectorPath")).toString() ==
-          QStringLiteral("pi/index.html"));
+          QStringLiteral("__pluginasset__/com.example.demo.sdPlugin/pi/index.html"));
 
     // actionInfo() resolves a single action with the absolute PI path + the
     // plugin-uuid storage key (Workstream C).

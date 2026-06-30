@@ -610,12 +610,26 @@ QVariantList PluginCatalogModel::installedActions() const {
                 }
             }
 
+            // The SPA's PropertyInspectorView builds the PI iframe src as
+            // getWebserverUrl(property_inspector + "|opendeck_property_inspector")
+            // = http://localhost:<portBase+2>/<property_inspector>|…, served by
+            // PluginAssetServer. That server only resolves the `__pluginasset__/`
+            // namespace, so the PI path handed to the SPA must be the webserver-
+            // relative `__pluginasset__/<dir>/<rel>` form, NOT the bare manifest-
+            // relative path (which 404s). Emit it only when the file exists so a
+            // PI-less action stays blank instead of pointing at a 404.
+            QString piWebPath;
+            if (!piAbs.isEmpty()) {
+                piWebPath = QStringLiteral("__pluginasset__/") + entry + QLatin1Char('/') +
+                            action.propertyInspectorPath;
+            }
+
             QVariantMap m;
             m.insert(QStringLiteral("pluginName"), parsed->name);
             m.insert(QStringLiteral("actionId"), action.uuid);
             m.insert(QStringLiteral("actionName"), action.name);
             m.insert(QStringLiteral("icon"), iconUrl);
-            m.insert(QStringLiteral("propertyInspectorPath"), action.propertyInspectorPath);
+            m.insert(QStringLiteral("propertyInspectorPath"), piWebPath);
             m.insert(QStringLiteral("propertyInspectorAbsPath"), piAbs);
             // The install-dir name is the per-plugin settings-storage key the
             // PIBridge uses (AppDataLocation/plugins/<pluginUuid>/settings/).
