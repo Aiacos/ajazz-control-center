@@ -53,11 +53,8 @@ qt_add_executable(
     ajazz-control-center
     src/main.cpp
     src/application.cpp
-    # OpenDeck UI integration Phase 0: resolve which UI implementation to load (native QML vs
-    # embedded OpenDeck web UI) from env -> config -> default. See docs/opendeck-ui/.
-    src/ui_mode_resolver.cpp
-    # OpenDeck UI integration Phase 1: command/event bridge mapping our backend singletons to the
-    # OpenDeck IPC contract (webui seam). See docs/opendeck-ui/. opendeck_shaping.cpp is the pure
+    # OpenDeck UI integration: command/event bridge mapping our backend singletons to the OpenDeck
+    # IPC contract (webui seam). See docs/opendeck-ui/. opendeck_shaping.cpp is the pure
     # (unit-testable) our-types -> OpenDeck-JSON layer; opendeck_bridge.cpp is the QObject that
     # drives it from the singletons.
     src/opendeck_shaping.cpp
@@ -699,13 +696,11 @@ if(AJAZZ_HAVE_WEBENGINE)
         target_include_directories(ajazz-control-center PRIVATE "${_we_priv_path}")
     endif()
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
-    # WebUiHost.qml hosts the OpenDeck SPA in a WebEngineView + QWebChannel; it imports
-    # QtWebEngine/QtWebChannel which only exist when the WebEngineQuick module is present, so we
-    # attach it via qt_target_qml_sources only on the WebEngine path (adding it to the QML module
-    # list unconditionally would fail QML compilation on minimal Qt installs).
-    qt_target_qml_sources(ajazz-control-center QML_FILES qml/WebUiHost.qml)
-    # OpenDeckPane.qml is the embeddable (Item) form of the OpenDeck SPA host that ProfileEditor
-    # mounts as the streamdeck editor area; same WebEngine gating.
+    # OpenDeckPane.qml is the embeddable OpenDeck SPA host (WebEngineView + QWebChannel) that
+    # ProfileEditor mounts as the streamdeck editor area. It imports QtWebEngine/QtWebChannel which
+    # only exist when the WebEngineQuick module is present, so we attach it via
+    # qt_target_qml_sources only on the WebEngine path (adding it to the QML module list
+    # unconditionally would fail QML compilation on minimal Qt installs).
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/OpenDeckPane.qml)
     # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
     # inside it), so it only compiles when WebEngine is present.

@@ -18,7 +18,6 @@
 #include "opendeck_bridge.hpp"
 #include "single_instance_guard.hpp"
 #include "tray_controller.hpp"
-#include "ui_mode_resolver.hpp"
 
 #include <QApplication>
 #include <QCommandLineOption>
