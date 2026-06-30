@@ -28,6 +28,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSysInfo>
 #include <QVersionNumber>
 
 namespace ajazz::app {
@@ -217,17 +218,20 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
         return std::nullopt;
     if (!root.contains(QStringLiteral("Version")))
         return std::nullopt;
-    if (!root.contains(QStringLiteral("SDKVersion")))
-        return std::nullopt;
+    // SDKVersion is NOT required: Elgato/StreamDock manifests carry it, but
+    // OpenAction/OpenDeck plugins omit it. Default it below rather than reject.
     if (!root.contains(QStringLiteral("OS")))
         return std::nullopt;
     if (!root.contains(QStringLiteral("Actions")))
         return std::nullopt;
 
-    // CodePath is required OR at least one of CodePathWin / CodePathMac must be present.
-    bool const hasCodePath = root.contains(QStringLiteral("CodePath")) ||
-                             root.contains(QStringLiteral("CodePathWin")) ||
-                             root.contains(QStringLiteral("CodePathMac"));
+    // A runnable code path must exist in SOME form: the generic CodePath, a
+    // per-OS override (CodePathWin/Mac/Lin), or the OpenAction CodePaths{} map
+    // keyed by Rust target triple.
+    bool const hasCodePath =
+        root.contains(QStringLiteral("CodePath")) || root.contains(QStringLiteral("CodePathWin")) ||
+        root.contains(QStringLiteral("CodePathMac")) ||
+        root.contains(QStringLiteral("CodePathLin")) || root.contains(QStringLiteral("CodePaths"));
     if (!hasCodePath)
         return std::nullopt;
 
@@ -238,7 +242,9 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     m.name = root.value(QStringLiteral("Name")).toString();
     m.author = root.value(QStringLiteral("Author")).toString();
     m.version = root.value(QStringLiteral("Version")).toString();
-    m.sdkVersion = root.value(QStringLiteral("SDKVersion")).toInt(0);
+    // SDKVersion is optional (OpenAction/OpenDeck manifests omit it). Default to
+    // 2 — the current Elgato SDK level — so the version-gate treats it as modern.
+    m.sdkVersion = root.value(QStringLiteral("SDKVersion")).toInt(2);
 
     // Optional string fields that may also be required per vendor practice
     m.icon = root.value(QStringLiteral("Icon")).toString();
@@ -263,6 +269,36 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     m.codePath = root.value(QStringLiteral("CodePath")).toString();
     m.codePathWin = root.value(QStringLiteral("CodePathWin")).toString();
     m.codePathMac = root.value(QStringLiteral("CodePathMac")).toString();
+    m.codePathLin = root.value(QStringLiteral("CodePathLin")).toString();
+    // OpenAction/OpenDeck plugins ship a native binary per Rust target triple in
+    // a CodePaths{} map (and a generic CodePathLin pointing at the x86_64 build).
+    // Resolve the arch-correct triple so we run the right binary on arm64 too,
+    // and backfill the per-OS overrides the rest of the pipeline keys off.
+    if (root.contains(QStringLiteral("CodePaths"))) {
+        QJsonObject const cp = root.value(QStringLiteral("CodePaths")).toObject();
+        QString const arch = QSysInfo::currentCpuArchitecture(); // "x86_64", "arm64", ...
+        QString linTriple;
+        if (arch == QStringLiteral("x86_64") || arch == QStringLiteral("i386")) {
+            linTriple = QStringLiteral("x86_64-unknown-linux-gnu");
+        } else if (arch == QStringLiteral("arm64") || arch == QStringLiteral("aarch64")) {
+            linTriple = QStringLiteral("aarch64-unknown-linux-gnu");
+        }
+        if (!linTriple.isEmpty() && cp.contains(linTriple)) {
+            m.codePathLin = cp.value(linTriple).toString();
+        }
+        if (m.codePathWin.isEmpty() && cp.contains(QStringLiteral("x86_64-pc-windows-msvc"))) {
+            m.codePathWin = cp.value(QStringLiteral("x86_64-pc-windows-msvc")).toString();
+        }
+        if (m.codePathMac.isEmpty()) {
+            QString const macTriple =
+                (arch == QStringLiteral("arm64") || arch == QStringLiteral("aarch64"))
+                    ? QStringLiteral("aarch64-apple-darwin")
+                    : QStringLiteral("x86_64-apple-darwin");
+            if (cp.contains(macTriple)) {
+                m.codePathMac = cp.value(macTriple).toString();
+            }
+        }
+    }
 
     // AJAZZ extension flags (§2.1)
     m.runAsAdministrator = root.value(QStringLiteral("RunAsAdministrator")).toBool(false);
@@ -543,6 +579,12 @@ QString resolveEffectiveCodePath(PluginManifest const& manifest) {
 #elif defined(Q_OS_MACOS)
     if (!manifest.codePathMac.isEmpty()) {
         return manifest.codePathMac;
+    }
+#else
+    // Linux: a native CodePathLin (OpenAction/OpenDeck) is the real entry point.
+    // Prefer it over the generic CodePath so the arch-correct binary runs.
+    if (!manifest.codePathLin.isEmpty()) {
+        return manifest.codePathLin;
     }
 #endif
     if (!manifest.codePath.isEmpty()) {

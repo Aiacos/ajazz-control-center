@@ -116,6 +116,7 @@ struct PluginManifest {
     QString codePath;    ///< CodePath
     QString codePathWin; ///< CodePathWin (Windows override)
     QString codePathMac; ///< CodePathMac (macOS override)
+    QString codePathLin; ///< CodePathLin (Linux override; OpenAction/OpenDeck native plugins)
 
     // --- Optional fields ---
     QString url;           ///< URL (author homepage)

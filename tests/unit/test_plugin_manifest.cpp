@@ -92,6 +92,44 @@ TEST_CASE("PluginManifestTest rejects_macOnly_onLinux", "[plugin-manifest]") {
 // Test: Full Elgato v6 fields parse correctly
 // ---------------------------------------------------------------------------
 
+TEST_CASE("PluginManifestTest accepts OpenAction native manifest (no SDKVersion, CodePaths)",
+          "[plugin-manifest]") {
+    // OpenAction/OpenDeck plugins are native Rust binaries: no SDKVersion, no
+    // generic CodePath, a CodePaths{} map keyed by Rust target triple plus the
+    // CodePathLin/Win/Mac conveniences. The parser must accept all of this and
+    // populate codePathLin so the plugin is runnable on Linux.
+    QByteArray const oa(R"({
+        "Name": "System Information",
+        "Author": "nekename",
+        "Version": "1.0.0",
+        "Icon": "icon",
+        "OS": [{ "Platform": "windows" }, { "Platform": "mac" }, { "Platform": "linux" }],
+        "CodePaths": {
+            "x86_64-pc-windows-msvc": "oasystem-x86_64-pc-windows-msvc.exe",
+            "x86_64-apple-darwin": "oasystem-x86_64-apple-darwin",
+            "aarch64-apple-darwin": "oasystem-aarch64-apple-darwin",
+            "x86_64-unknown-linux-gnu": "oasystem-x86_64-unknown-linux-gnu",
+            "aarch64-unknown-linux-gnu": "oasystem-aarch64-unknown-linux-gnu"
+        },
+        "CodePathWin": "oasystem-x86_64-pc-windows-msvc.exe",
+        "CodePathMac": "oasystem-x86_64-apple-darwin",
+        "CodePathLin": "oasystem-x86_64-unknown-linux-gnu",
+        "Actions": [
+            { "UUID": "me.amankhanna.oasystem.cpu", "Name": "CPU",
+              "Controllers": ["Keypad", "Encoder"], "States": [{ "Title": "0%" }] }
+        ]
+    })");
+    auto const m = parsePluginManifest(oa);
+    REQUIRE(m.has_value());
+    CHECK(m->name == "System Information");
+    CHECK(m->sdkVersion == 2); // defaulted (absent in the manifest)
+    // Linux native binary populated from CodePathLin (or the arch triple in CodePaths).
+    CHECK_FALSE(m->codePathLin.isEmpty());
+    CHECK(m->codePathLin.contains("linux"));
+    REQUIRE(m->actions.size() == 1);
+    CHECK(m->actions.at(0).uuid == "me.amankhanna.oasystem.cpu");
+}
+
 TEST_CASE("PluginManifestTest accepts elgato v6 plus ajazz extensions", "[plugin-manifest]") {
     SECTION("elgato_v6_keypad parses with Keypad controller") {
         auto const maybeManifest = parseFixture("elgato_v6_keypad.json");
@@ -220,13 +258,18 @@ TEST_CASE("PluginManifestTest returns nullopt on invalid json", "[plugin-manifes
         CHECK(!parsePluginManifest(noAuthor).has_value());
     }
 
-    SECTION("missing SDKVersion returns nullopt") {
+    SECTION("missing SDKVersion is accepted (OpenAction/OpenDeck) and defaults to 2") {
+        // SDKVersion is OPTIONAL: Elgato manifests carry it but OpenAction/OpenDeck
+        // plugins omit it. Parsing must succeed with a modern default rather than
+        // reject the whole manifest.
         QByteArray const noSdk(R"({
             "Name":"X","Author":"A","Version":"1.0.0",
             "OS":[{"Platform":"mac"}],"CodePath":"code.js",
             "Actions":[]
         })");
-        CHECK(!parsePluginManifest(noSdk).has_value());
+        auto const m = parsePluginManifest(noSdk);
+        REQUIRE(m.has_value());
+        CHECK(m->sdkVersion == 2);
     }
 
     SECTION("missing OS returns nullopt") {

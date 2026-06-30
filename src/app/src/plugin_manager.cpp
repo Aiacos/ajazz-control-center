@@ -683,8 +683,30 @@ void PluginManager::spawn(PluginManifest const& manifest) {
                     }
                 });
 
+        // A native plugin IS its own program (no interpreter), so:
+        //  (1) launch it by ABSOLUTE path — a bare relative name with no slash is
+        //      PATH-searched and fails to start; and
+        //  (2) give it the SAME Elgato connect argv a node plugin gets, minus the
+        //      leading codePath (which for node is the script arg but here is the
+        //      program itself). Without these args an OpenAction/OpenDeck binary
+        //      has no -port/-pluginUUID and never connects to the WS server.
+        // OpenAction plugins ship in a zip that does not preserve the +x bit, so
+        // make the binary executable before launch.
+        QString const absCode = QDir(manifest.sourceDir).filePath(code);
+        QFile::setPermissions(absCode,
+                              QFile::permissions(absCode) | QFileDevice::ExeOwner |
+                                  QFileDevice::ExeUser | QFileDevice::ExeGroup);
+        QString const infoJson = buildInfoJson(manifest);
+        quint16 nativePort = 0;
+#if defined(AJAZZ_HAVE_WEBSOCKETS)
+        if (m_server) {
+            nativePort = m_server->serverPort();
+        }
+#endif
+        QStringList nativeArgv = buildNodeArgv(code, nativePort, pluginUuid, infoJson);
+        nativeArgv.removeFirst(); // the native binary is the program, not an arg
         // T-18-ARGV: start(program, args) — no shell concatenation.
-        rawProc->start(code, QStringList{});
+        rawProc->start(absCode, nativeArgv);
         m_live.emplace(std::piecewise_construct,
                        std::forward_as_tuple(pluginId),
                        std::forward_as_tuple(manifest, std::move(proc)));
