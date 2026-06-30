@@ -33,6 +33,30 @@ namespace ajazz::app {
 namespace {
 Q_LOGGING_CATEGORY(lcBridge, "ajazz.opendeck.bridge")
 
+/// Copy an installed-action catalog entry's metadata onto a bound instance's
+/// `action` object. A committed binding stores only the action UUID, so the
+/// reshaped instance (instanceJson) carries an action with empty plugin / icon /
+/// property_inspector / controllers. Without these the SPA renders no icon and —
+/// critically — never builds the Property Inspector iframe (PropertyInspectorView
+/// gates on `instance.action.property_inspector`). Re-attach them from the
+/// catalog so a dropped action shows its real settings.
+void applyActionMeta(QJsonObject& action, QVariantMap const& entry) {
+    action[QStringLiteral("plugin")] = entry.value(QStringLiteral("pluginUuid")).toString();
+    action[QStringLiteral("icon")] = entry.value(QStringLiteral("icon")).toString();
+    action[QStringLiteral("property_inspector")] =
+        entry.value(QStringLiteral("propertyInspectorPath")).toString();
+    if (action.value(QStringLiteral("name")).toString().isEmpty()) {
+        action[QStringLiteral("name")] = entry.value(QStringLiteral("actionName")).toString();
+    }
+    QJsonArray controllers;
+    for (QVariant const& c : entry.value(QStringLiteral("controllers")).toList()) {
+        controllers.append(c.toString());
+    }
+    if (!controllers.isEmpty()) {
+        action[QStringLiteral("controllers")] = controllers;
+    }
+}
+
 /// Parsed OpenDeck context (`device.profile.controller.position`).
 struct Ctx {
     QString device;
@@ -301,16 +325,16 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                             c.controller + QStringLiteral(".") + QString::number(c.position);
         if (c.controller == QLatin1String("Encoder")) {
             auto const it = p.encoders.find(static_cast<std::uint16_t>(c.position));
-            return str(it != p.encoders.end() ? encoderInstanceJson(it->second, ctx)
+            return str(it != p.encoders.end() ? enrichInstance(encoderInstanceJson(it->second, ctx))
                                               : QJsonValue(QJsonValue::Null));
         }
         if (c.position >= keyCount) {
             auto const it = p.touchZones.find(static_cast<std::uint8_t>(c.position - keyCount));
-            return str(it != p.touchZones.end() ? touchInstanceJson(it->second, ctx)
+            return str(it != p.touchZones.end() ? enrichInstance(touchInstanceJson(it->second, ctx))
                                                 : QJsonValue(QJsonValue::Null));
         }
         auto const it = p.keys.find(static_cast<std::uint16_t>(c.position));
-        return str(it != p.keys.end() ? keyInstanceJson(it->second, ctx)
+        return str(it != p.keys.end() ? enrichInstance(keyInstanceJson(it->second, ctx))
                                       : QJsonValue(QJsonValue::Null));
     }
 
@@ -439,16 +463,16 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                             dst.controller + QStringLiteral(".") + QString::number(dst.position);
         if (dst.controller == QLatin1String("Encoder")) {
             auto const it = p.encoders.find(static_cast<std::uint16_t>(dst.position));
-            return str(it != p.encoders.end() ? encoderInstanceJson(it->second, ctx)
+            return str(it != p.encoders.end() ? enrichInstance(encoderInstanceJson(it->second, ctx))
                                               : QJsonValue(QJsonValue::Null));
         }
         if (dstTouch) {
             auto const it = p.touchZones.find(static_cast<std::uint8_t>(dst.position - keyCount));
-            return str(it != p.touchZones.end() ? touchInstanceJson(it->second, ctx)
+            return str(it != p.touchZones.end() ? enrichInstance(touchInstanceJson(it->second, ctx))
                                                 : QJsonValue(QJsonValue::Null));
         }
         auto const it = p.keys.find(static_cast<std::uint16_t>(dst.position));
-        return str(it != p.keys.end() ? keyInstanceJson(it->second, ctx)
+        return str(it != p.keys.end() ? enrichInstance(keyInstanceJson(it->second, ctx))
                                       : QJsonValue(QJsonValue::Null));
     }
 
@@ -638,13 +662,19 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
                         QStringLiteral("opendeck.openurl"),
                         QStringLiteral("opendeck.switchprofile"),
                         QStringLiteral("opendeck.brightness")};
+    // uuid -> catalog entry, built from a SINGLE installedActions() scan so the
+    // per-slot enrichment below does not re-scan the plugin dir 18×.
+    QHash<QString, QVariantMap> meta;
     if (m_catalog != nullptr) {
         for (QVariant const& v : m_catalog->installedActions()) {
-            known.insert(v.toMap().value(QStringLiteral("actionId")).toString());
+            QVariantMap const e = v.toMap();
+            QString const id = e.value(QStringLiteral("actionId")).toString();
+            known.insert(id);
+            meta.insert(id, e);
         }
     }
 
-    auto annotate = [&known](QJsonArray const& in) {
+    auto annotate = [&known, &meta](QJsonArray const& in) {
         QJsonArray out;
         for (QJsonValue const& slotV : in) {
             if (!slotV.isObject()) {
@@ -654,7 +684,13 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
             QJsonObject slot = slotV.toObject();
             QJsonObject action = slot.value(QStringLiteral("action")).toObject();
             QString const uuid = action.value(QStringLiteral("uuid")).toString();
-            if (!uuid.isEmpty() && !known.contains(uuid)) {
+            auto const metaIt = meta.constFind(uuid);
+            if (metaIt != meta.constEnd()) {
+                // Installed action: re-attach its plugin/icon/PI/controllers so the
+                // bound slot renders its icon and opens its Property Inspector.
+                applyActionMeta(action, metaIt.value());
+                slot[QStringLiteral("action")] = action;
+            } else if (!uuid.isEmpty() && !known.contains(uuid)) {
                 QString const name = action.value(QStringLiteral("name")).toString();
                 action[QStringLiteral("name")] =
                     QStringLiteral("%1 (plugin not installed)").arg(name.isEmpty() ? uuid : name);
@@ -668,6 +704,28 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
     profile[QStringLiteral("keys")] = annotate(profile.value(QStringLiteral("keys")).toArray());
     profile[QStringLiteral("sliders")] =
         annotate(profile.value(QStringLiteral("sliders")).toArray());
+}
+
+QJsonValue OpenDeckBridge::enrichInstance(QJsonValue const& instance) const {
+    if (!instance.isObject() || m_catalog == nullptr) {
+        return instance;
+    }
+    QJsonObject inst = instance.toObject();
+    QJsonObject action = inst.value(QStringLiteral("action")).toObject();
+    QString const uuid = action.value(QStringLiteral("uuid")).toString();
+    if (uuid.isEmpty()) {
+        return instance;
+    }
+    for (QVariant const& v : m_catalog->installedActions()) {
+        QVariantMap const e = v.toMap();
+        if (e.value(QStringLiteral("actionId")).toString() != uuid) {
+            continue;
+        }
+        applyActionMeta(action, e);
+        inst[QStringLiteral("action")] = action;
+        return inst;
+    }
+    return instance;
 }
 
 void OpenDeckBridge::invoke(QString const& requestId,

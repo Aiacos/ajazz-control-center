@@ -163,6 +163,13 @@ private:
     /// binding the user can remove, instead of a silent broken-image tile.
     void markOrphanedInstances(QJsonObject& profile) const;
 
+    /// Re-attach catalog metadata (plugin / icon / property_inspector /
+    /// controllers) onto a single bound instance's `action` object, looked up by
+    /// its UUID. Used for the instance returned by create_instance / move_instance
+    /// so a freshly-dropped action immediately exposes its Property Inspector.
+    /// Returns the (possibly enriched) value unchanged when it is not an object.
+    [[nodiscard]] QJsonValue enrichInstance(QJsonValue const& instance) const;
+
     DeviceModel* m_devices;
     ProfileController* m_profiles;
     PluginCatalogModel* m_catalog;
