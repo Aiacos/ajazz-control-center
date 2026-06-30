@@ -757,7 +757,10 @@ Application::Application(QObject* parent)
     //   context→plugin map). It routes sendToPlugin from a stock PI to the owner
     //   and lets us forward propertyInspectorDidAppear/…DidDisappear back.
     m_pluginServer->setContextOwnerResolver([this](QString const& context) -> QString {
-        auto const ctx = m_pluginBridge->registry().byContext(context);
+        // Accept the SPA "device.profile.controller.position" context the PI
+        // registers with, not only the bridge wire id — otherwise the PI's owner
+        // never resolves and its settings/relay routing silently breaks.
+        auto const ctx = m_pluginBridge->lookupContext(context);
         return ctx.has_value() ? ctx->pluginUuid : QString{};
     });
     //   B7: source the vendor passHello.deviceInfo from the bridge's per-device
@@ -782,7 +785,7 @@ Application::Application(QObject* parent)
             if (!shouldEmit) {
                 return; // duplicate appear, or unpaired disappear — suppress
             }
-            auto const ctx = m_pluginBridge->registry().byContext(context);
+            auto const ctx = m_pluginBridge->lookupContext(context);
             if (!ctx.has_value()) {
                 return;
             }
@@ -1184,11 +1187,17 @@ void Application::startBackgroundServices(QQmlApplicationEngine& engine) {
     m_trayController->ensureTray(&engine);
 
 #ifdef AJAZZ_HAVE_WEBSOCKETS
-    // Phase 19-02 / Phase 17: start the WebSocket plugin server on an OS-assigned
-    // loopback port. Port 0 = any free port; plugins read the actual port from the
-    // registry file written by PluginManager (Phase 18). The event loop must be
-    // running before start() so QWebSocketServer can accept connections.
-    if (!m_pluginServer->start(0)) {
+    // Phase 19-02 / Phase 17: start the WebSocket plugin server on the loopback
+    // port the embedded OpenDeck SPA expects. The SPA's getWebSocketPort()
+    // returns get_port_base() (the 57116 stub in opendeck_bridge.cpp) and a
+    // Property Inspector opens its own WebSocket to ws://localhost:<that port>;
+    // it also derives the plugin-asset webserver as base+2 (57118). An OS-assigned
+    // port (start(0)) bound the server somewhere else, so PIs could never connect
+    // and setSettings never reached the plugin (configured actions stayed inert).
+    // Pin to 57116 so PI WS, spawned-plugin -port (serverPort()), and the asset
+    // server all agree. (Upstream OpenDeck likewise uses a fixed PORT_BASE.)
+    constexpr std::uint16_t kPluginServerPort = 57116;
+    if (!m_pluginServer->start(kPluginServerPort)) {
         AJAZZ_LOG_WARN("app", "SdPluginServer failed to start — plugin functionality disabled");
     } else {
         AJAZZ_LOG_INFO("app",

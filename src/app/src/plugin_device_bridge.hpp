@@ -518,6 +518,35 @@ public slots:
                                      QString const& json);
 
     /**
+     * @brief Resolve a context string to a registered ActionContext, accepting
+     *        BOTH the bridge wire id and the SPA "device.profile.controller.position"
+     *        form. Tries an exact ContextRegistry::byContext first, then falls back
+     *        to coordinate translation (resolvePropertyInspectorContext). This is
+     *        the canonical entry point for any context that originates in the
+     *        embedded OpenDeck SPA (PI registration owner lookup, PI lifecycle,
+     *        PI setSettings) so the dot-vs-hash context formats no longer diverge.
+     */
+    [[nodiscard]] std::optional<ActionContext> lookupContext(QString const& contextId) const;
+
+    /**
+     * @brief Resolve a Property Inspector context to a registered ActionContext.
+     *
+     * The embedded OpenDeck SPA addresses an instance by its own context string
+     * "device.profile.controller.position" (dot-separated, position-based), which
+     * does NOT match the bridge's wire context id
+     * "device#page#controller#row#column" (hash-separated, coordinate-based, page
+     * "root"). A direct ContextRegistry::byContext therefore misses, so PI
+     * setSettings silently never reached the plugin (the action stayed inert).
+     * This translates the SPA form: parse device/controller/position (from the
+     * right, tolerating dotted profile names), convert position->{row,column} via
+     * the device geometry, and resolve through ContextRegistry::byCoord (which is
+     * keyed by coordinates and so is page-agnostic). Returns nullopt if the string
+     * is malformed or no instance is mounted at those coordinates.
+     */
+    [[nodiscard]] std::optional<ActionContext>
+    resolvePropertyInspectorContext(QString const& contextId) const;
+
+    /**
      * @brief Register contexts + send willAppear for every bound ActionKind::Plugin
      *        action on the root page of the active profile that belongs to the
      *        given plugin (or all registered plugins if pluginUuid is empty).

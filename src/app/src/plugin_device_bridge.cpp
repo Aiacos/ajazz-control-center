@@ -553,20 +553,38 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
     if (event == QStringLiteral("setSettings") || event == QStringLiteral("getSettings") ||
         event == QStringLiteral("sendToPropertyInspector")) {
         QString const contextId = action.value(QStringLiteral("context")).toString();
-        auto const ctxOpt = m_registry.byContext(contextId);
+        // Resolve the context accepting both the wire id and the SPA dot form (a
+        // Property Inspector addresses its instance by the SPA context). Without
+        // this, every PI setSettings/getSettings missed the registry and was
+        // dropped, so dropped actions never received their configured settings.
+        auto const ctxOpt = lookupContext(contextId);
         if (!ctxOpt.has_value()) {
             return true; // consumed: stale/unknown context — drop quietly
         }
         ActionContext ctx = *ctxOpt;
-        if (ctx.pluginUuid != pluginUuid) {
+        // Authorisation: the sender is allowed if it is the owning plugin, OR the
+        // Property Inspector for THIS context (a PI registers with the instance
+        // context string as its uuid, so it resolves to the same coordinates).
+        bool authorised = (ctx.pluginUuid == pluginUuid);
+        if (!authorised) {
+            auto const senderCtx = lookupContext(pluginUuid);
+            authorised = senderCtx.has_value() && ContextRegistry::deriveContextId(*senderCtx) ==
+                                                      ContextRegistry::deriveContextId(ctx);
+        }
+        if (!authorised) {
             return true; // T-19-xplugin: cross-plugin denial
         }
+        // Storage + relay key on the REAL owner + canonical wire id (the sender
+        // may be a PI whose uuid/context is the SPA form), so willAppear's
+        // settingsForContext(owner, wireId) reads back what the PI just wrote.
+        QString const owner = ctx.pluginUuid.isEmpty() ? pluginUuid : ctx.pluginUuid;
+        QString const wireId = ContextRegistry::deriveContextId(ctx);
 
         if (event == QStringLiteral("sendToPropertyInspector")) {
             // Relay to the open Property Inspector (Application wires this to the
             // active PIBridge). The bridge does not own the PI surface.
             emit relayToPropertyInspector(
-                pluginUuid, contextId, action.value(QStringLiteral("payload")).toObject());
+                owner, contextId, action.value(QStringLiteral("payload")).toObject());
             return true;
         }
 
@@ -574,21 +592,20 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
             QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
             QString const json =
                 QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
-            if (plugin_settings_store::writeContext(pluginUuid, contextId, json)) {
+            if (plugin_settings_store::writeContext(owner, wireId, json)) {
                 ctx.settingsJson = json;
-                m_registry.updateSettings(contextId, json); // keep keyDown/willAppear fresh
+                m_registry.updateSettings(wireId, json); // keep keyDown/willAppear fresh
             }
         } else {
             // getSettings: reflect the persisted record (falls back to the in-ctx value).
-            QString const stored = plugin_settings_store::readContext(pluginUuid, contextId);
+            QString const stored = plugin_settings_store::readContext(owner, wireId);
             if (stored != QStringLiteral("{}") || ctx.settingsJson.isEmpty()) {
                 ctx.settingsJson = stored;
             }
         }
-        // Echo didReceiveSettings (full Elgato envelope, payload carries settings).
+        // Echo didReceiveSettings to the owning plugin (full Elgato envelope).
         m_server->sendEvent(
-            pluginUuid,
-            eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
+            owner, eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
         return true;
     }
 
@@ -1735,26 +1752,71 @@ void PluginDeviceBridge::onPropertyInspectorSettings(QString const& pluginUuid,
     if (m_server == nullptr) {
         return;
     }
-    // Resolve the wire context id to the live ActionContext. If nothing is
-    // registered under it the action has no mounted instance (e.g. the PI is
-    // open for a control on a page that is not active) — there is nothing to
-    // notify, so this is a safe no-op. The PI still persisted to disk, and the
-    // next willAppear will carry the value via settingsForContext().
-    auto const ctxOpt = m_registry.byContext(contextId);
+    // Resolve the context to the live ActionContext. The PI addresses the action
+    // by the SPA context string ("device.profile.controller.position"), which is
+    // NOT the bridge wire id ("device#page#controller#row#column"); try the wire
+    // id first (callers/tests may pass it directly), then translate the SPA form
+    // via coordinates. If nothing resolves the action has no mounted instance
+    // (e.g. PI open for a control on an inactive page) — a safe no-op. The PI
+    // still persisted to disk, and the next willAppear carries the value via
+    // settingsForContext(). Before this translation, real-PI setSettings silently
+    // never reached the plugin (context mismatch), so dropped actions never ran.
+    auto ctxOpt = lookupContext(contextId);
     if (!ctxOpt.has_value()) {
         return;
     }
+    ActionContext ctx = *ctxOpt;
+    // Update by the canonical wire id (the resolved context), not the raw PI id.
+    QString const wireId = ContextRegistry::deriveContextId(ctx);
     // Keep the registry's cached settings in sync so a subsequent willAppear /
     // keyDown for this context carries the just-edited value, not the stale one.
-    m_registry.updateSettings(contextId, json);
-
-    ActionContext ctx = *ctxOpt;
+    m_registry.updateSettings(wireId, json);
     ctx.settingsJson = json;
     // Prefer the bridge-known owner; fall back to the PI-supplied uuid if the
     // registry entry has none (defensive — registration always sets it).
     QString const owner = ctx.pluginUuid.isEmpty() ? pluginUuid : ctx.pluginUuid;
     m_server->sendEvent(
         owner, eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
+}
+
+std::optional<ActionContext> PluginDeviceBridge::lookupContext(QString const& contextId) const {
+    auto exact = m_registry.byContext(contextId);
+    if (exact.has_value()) {
+        return exact;
+    }
+    return resolvePropertyInspectorContext(contextId);
+}
+
+std::optional<ActionContext>
+PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) const {
+    // SPA context: "device.profile.controller.position" (profile may contain
+    // dots). Parse from the right: position is last, controller second-last,
+    // device first; the middle (profile) is irrelevant here because byCoord keys
+    // on coordinates, not page id.
+    QStringList const parts = contextId.split(QLatin1Char('.'));
+    if (parts.size() < 4) {
+        return std::nullopt;
+    }
+    QString const device = parts.first();
+    QString const controller = parts.at(parts.size() - 2);
+    bool ok = false;
+    int const position = parts.at(parts.size() - 1).toInt(&ok);
+    if (!ok || position < 0 || device.isEmpty()) {
+        return std::nullopt;
+    }
+    int row = 0;
+    int column = 0;
+    if (controller == QStringLiteral("Encoder")) {
+        column = position; // encoders are a single row indexed by column
+    } else {
+        std::uint8_t keyCols = geometryForDevice(device).keyCols;
+        if (keyCols == 0) {
+            keyCols = 5; // AKP05E default, matches geometryForDevice's fallback
+        }
+        row = position / keyCols;
+        column = position % keyCols;
+    }
+    return m_registry.byCoord(device, controller, row, column);
 }
 
 } // namespace ajazz::app
