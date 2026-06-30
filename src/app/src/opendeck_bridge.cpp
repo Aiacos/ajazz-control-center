@@ -9,6 +9,7 @@
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
 #include <QImage>
@@ -431,6 +432,16 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         return str(QJsonValue(QJsonValue::Null));
     }
 
+    // open_url: the SPA's "open external page / download latest release" button
+    // (PluginDetails.svelte). Launch it in the user's real browser.
+    if (command == QLatin1String("open_url")) {
+        QString const url = args.value(QStringLiteral("url")).toString();
+        if (!url.isEmpty()) {
+            QDesktopServices::openUrl(QUrl(url));
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+
     // Tauri dialog plugin (@tauri-apps/plugin-dialog). The OpenDeck SPA gates
     // plugin install/remove on ask()/confirm() and reports the outcome with
     // message(); install-from-file uses open(). Without these the confirm
@@ -457,6 +468,29 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         QString const heading = title.isEmpty() ? QCoreApplication::applicationName() : title;
         QString const message = args.value(QStringLiteral("message")).toString();
         QString const kind = args.value(QStringLiteral("kind")).toString();
+        // CRITICAL: this Tauri dialog plugin routes ask()/confirm() THROUGH
+        // `plugin:dialog|message` with a `buttons` discriminator (verified live:
+        // ask() arrives as buttons:"YesNo"), NOT a separate `plugin:dialog|ask`.
+        // ask() is `(await message(...)) === 'Yes'` and confirm() is `=== 'Ok'`
+        // (see @tauri-apps/plugin-dialog), so the command must return the clicked
+        // button's LABEL STRING ("Yes"/"No"/"Ok"/"Cancel"), NOT a bool. Returning
+        // a bool (or null) made the comparison always false -> the confirm read as
+        // "No" -> every install aborted before calling install_plugin.
+        QString const buttons = args.value(QStringLiteral("buttons")).toString();
+        if (buttons == QLatin1String("YesNo") || buttons == QLatin1String("OkCancel")) {
+            bool const okCancel = (buttons == QLatin1String("OkCancel"));
+            QMessageBox::StandardButtons const b = okCancel
+                                                       ? (QMessageBox::Ok | QMessageBox::Cancel)
+                                                       : (QMessageBox::Yes | QMessageBox::No);
+            QMessageBox::StandardButton const def = okCancel ? QMessageBox::Ok : QMessageBox::Yes;
+            QMessageBox::StandardButton const clicked =
+                QMessageBox::question(nullptr, heading, message, b, def);
+            bool const accepted = (clicked == QMessageBox::Yes || clicked == QMessageBox::Ok);
+            QString const label = okCancel
+                                      ? (accepted ? QStringLiteral("Ok") : QStringLiteral("Cancel"))
+                                      : (accepted ? QStringLiteral("Yes") : QStringLiteral("No"));
+            return str(QJsonValue(label));
+        }
         if (kind == QLatin1String("error")) {
             QMessageBox::critical(nullptr, heading, message);
         } else if (kind == QLatin1String("warning")) {
@@ -530,6 +564,11 @@ void OpenDeckBridge::notifyDevicesChanged() {
 void OpenDeckBridge::invoke(QString const& requestId,
                             QString const& command,
                             QString const& argsJson) {
+    // Trace every command the SPA sends (debug level — off by default, enable
+    // with QT_LOGGING_RULES="ajazz.opendeck.bridge.debug=true"). The shim only
+    // logs invokes when the SPA URL carries ?oddebug, so this is the reliable
+    // way to see the exact command sequence behind a UX action (e.g. install).
+    qCDebug(lcBridge) << "invoke" << command << argsJson;
     // install_plugin with an http(s) URL is the one async command: download the
     // archive, then install it off disk. Everything else resolves synchronously.
     if (command == QLatin1String("install_plugin") && m_catalog != nullptr) {
