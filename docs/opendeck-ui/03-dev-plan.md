@@ -411,3 +411,26 @@ external browser).
       `PropertyInspectorController::loadInspector/closeInspector`.
     - `set_state` — multi-state edit; map to `commitToggleStates`/`cycleInstanceState`
       (semantics need care).
+- 2026-06-30: **DIRECTION CORRECTED → HYBRID (not webui-only); OpenDeck embedded
+  as the streamdeck editor.** User: integrate OpenDeck only when a Stream Dock is
+  selected; mouse + keyboard KEEP their native panels. The whole-app `webui` root
+  flip (1fb6d5a5) is superseded. Implemented (commit `c456a277`):
+  - `main.cpp` always loads the native shell `Main.qml`; the OpenDeck bridge +
+    bundle flag + `opendeck://` scheme are now wired UNCONDITIONALLY (WebEngine-
+    gated). Dropped the UiMode root branch / AppUiMode.
+  - `qml/OpenDeckPane.qml` (new) — embeddable Item form of WebUiHost (WebEngineView
+    - QWebChannel → OpenDeckBridge), WebEngine-gated in CMake like PIWebView.
+  - `ProfileEditor.qml` — `_isStreamController` (keyCount|encoderCount|touchZoneCount
+    > 0, the exact get_devices filter) hides the native tabs and mounts OpenDeckPane
+    > (string-source Loader) for stream controllers; mouse (MousePanel) + keyboard
+    > (RGB/Settings/Firmware) keep their native tabs.
+  - **Verified live (real hardware, offscreen screenshot):** our sidebar lists BOTH
+    the AKP05E and the AJ159 mouse; selecting the AKP05E renders the full OpenDeck
+    SPA in the editor area; the mouse is excluded by the identical filter → native
+    panel. qml+opendeck+ui_mode tests 15/15 green.
+  - **Next (cleanup, task pending):** the native STREAMDECK editor QML
+    (DeviceView/DeviceCanvas/KeyCell/Inspector/ActionLibraryPane/Encoder\*/TouchStrip/
+    KeyBindingList) is now DEAD (unreached) but still compiled — delete it + its
+    qml-smoke tests + any now-dead C++ image providers/models, and retire
+    WebUiHost/ui_mode_resolver. Keep mouse/keyboard + shared components. Risky
+    (dead-C++ identification) → its own focused pass.
