@@ -212,6 +212,23 @@ QJsonObject actionFromCatalogEntry(QVariantMap const& entry) {
 QJsonObject categoriesJson(QVariantList const& installedActions) {
     QJsonObject categories;
 
+    // When the real OpenDeck "starterpack" plugin is installed it provides the
+    // genuine Run Command / Open URL / Switch Profile / Device Brightness /
+    // Simulate Input actions (with working backends + property inspectors) under
+    // its own category. In that case we must NOT also synthesize the placeholder
+    // built-ins below, or the action list shows duplicates. The synthesized stubs
+    // remain only as a fallback for installs without the starterpack.
+    bool starterpackInstalled = false;
+    for (QVariant const& v : installedActions) {
+        if (v.toMap()
+                .value(QStringLiteral("pluginUuid"))
+                .toString()
+                .startsWith(QStringLiteral("com.amansprojects.starterpack"))) {
+            starterpackInstalled = true;
+            break;
+        }
+    }
+
     QJsonArray builtins;
     // Icon strings use the `opendeck/<path>` form: OpenDeck's getImage()/ActionList
     // strip the `opendeck` prefix to a root-relative `/<path>` that resolves against
@@ -219,8 +236,9 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
     // bundled SPA qrc (:/opendeck/<path>). Multi/Toggle Action use OpenDeck's own
     // bundled multi-action.png / toggle-action.png (src-tauri shared.rs CATEGORIES).
     // The remaining four are OpenDeck "starterpack" plugin actions upstream; their
-    // dedicated icons live in the plugin's asset dir, which is NOT part of our SPA
-    // bundle, so they fall back to the generic OpenDeck logo cube.png (also bundled).
+    // dedicated icons ship in the bundled starterpack plugin's asset dir. CMake
+    // copies those PNGs into :/opendeck alongside the SPA (see AJAZZ_BUILD_WEBUI),
+    // so the same `opendeck/<file>.png` form resolves them via OpenDeckSchemeHandler.
     auto addBuiltin = [&](QString const& name,
                           QString const& uuid,
                           QString const& tooltip,
@@ -239,26 +257,28 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
                QStringLiteral("Toggle between actions"),
                QStringLiteral("opendeck/toggle-action.png"),
                {QStringLiteral("Keypad")});
-    addBuiltin(QStringLiteral("Run Command"),
-               QStringLiteral("opendeck.runcommand"),
-               QStringLiteral("Run a shell command"),
-               QStringLiteral("opendeck/cube.png"),
-               {QStringLiteral("Keypad")});
-    addBuiltin(QStringLiteral("Open URL"),
-               QStringLiteral("opendeck.openurl"),
-               QStringLiteral("Open a URL in the browser"),
-               QStringLiteral("opendeck/cube.png"),
-               {QStringLiteral("Keypad")});
-    addBuiltin(QStringLiteral("Switch Profile"),
-               QStringLiteral("opendeck.switchprofile"),
-               QStringLiteral("Switch the active profile"),
-               QStringLiteral("opendeck/cube.png"),
-               {QStringLiteral("Keypad")});
-    addBuiltin(QStringLiteral("Device Brightness"),
-               QStringLiteral("opendeck.brightness"),
-               QStringLiteral("Set the device brightness"),
-               QStringLiteral("opendeck/cube.png"),
-               {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+    if (!starterpackInstalled) {
+        addBuiltin(QStringLiteral("Run Command"),
+                   QStringLiteral("opendeck.runcommand"),
+                   QStringLiteral("Run a shell command"),
+                   QStringLiteral("opendeck/runCommand.png"),
+                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+        addBuiltin(QStringLiteral("Open URL"),
+                   QStringLiteral("opendeck.openurl"),
+                   QStringLiteral("Open a URL in the browser"),
+                   QStringLiteral("opendeck/openUrl.png"),
+                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+        addBuiltin(QStringLiteral("Switch Profile"),
+                   QStringLiteral("opendeck.switchprofile"),
+                   QStringLiteral("Switch the active profile"),
+                   QStringLiteral("opendeck/switchProfile.png"),
+                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+        addBuiltin(QStringLiteral("Device Brightness"),
+                   QStringLiteral("opendeck.brightness"),
+                   QStringLiteral("Set the device brightness"),
+                   QStringLiteral("opendeck/deviceBrightness.png"),
+                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+    }
     // OpenDeck's ActionList expects each category VALUE to be an object
     // `{ icon?, actions: Action[] }` (it destructures `{ actions }` and reads
     // `actions.length`), NOT a bare Action[]. Wrap every group accordingly.

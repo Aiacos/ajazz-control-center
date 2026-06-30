@@ -764,6 +764,44 @@ if(AJAZZ_BUILD_WEBUI)
             )
             target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBUI=1)
             message(STATUS "AJAZZ_BUILD_WEBUI: bundled OpenDeck SPA into :/opendeck")
+
+            # The built-in "OpenDeck" category surfaces the upstream starterpack actions (Run
+            # Command / Open URL / Switch Profile / Device Brightness). Their real icons ship in the
+            # bundled (pristine) starterpack plugin's asset dir, which SvelteKit does NOT copy into
+            # the SPA build tree. Bundle just those PNGs into :/opendeck so opendeck_shaping.cpp's
+            # `opendeck/<file>.png` icon strings resolve via OpenDeckSchemeHandler instead of
+            # falling back to cube.png.
+            set(_starterpack_icons "${CMAKE_CURRENT_SOURCE_DIR}/webui/opendeck/plugins")
+            string(APPEND _starterpack_icons "/com.amansprojects.starterpack.sdPlugin/assets/icons")
+            set(_builtin_icon_files
+                "${_starterpack_icons}/runCommand.png" "${_starterpack_icons}/openUrl.png"
+                "${_starterpack_icons}/switchProfile.png"
+                "${_starterpack_icons}/deviceBrightness.png"
+            )
+            set(_builtin_icons_present TRUE)
+            foreach(icon_file ${_builtin_icon_files})
+                if(NOT EXISTS "${icon_file}")
+                    set(_builtin_icons_present FALSE)
+                endif()
+            endforeach()
+            if(_builtin_icons_present)
+                qt_add_resources(
+                    ajazz-control-center
+                    "opendeck_builtin_icons"
+                    PREFIX
+                    "/opendeck"
+                    BASE
+                    "${_starterpack_icons}"
+                    FILES
+                    ${_builtin_icon_files}
+                )
+                message(STATUS "AJAZZ_BUILD_WEBUI: bundled built-in action icons into :/opendeck")
+            else()
+                message(WARNING "AJAZZ_BUILD_WEBUI: starterpack action icons missing under "
+                                "${_starterpack_icons}; built-in actions fall back to cube.png. "
+                                "Run: git submodule update --init src/app/webui/opendeck"
+                )
+            endif()
         endif()
     endif()
 endif()

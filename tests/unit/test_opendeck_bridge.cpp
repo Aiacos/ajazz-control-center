@@ -11,6 +11,7 @@
 #include "ajazz/core/profile.hpp"
 #include "opendeck_bridge.hpp"
 
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QVariantList>
@@ -78,11 +79,24 @@ TEST_CASE("categoriesJson always includes the six OpenDeck built-ins", "[opendec
         REQUIRE_FALSE(icon.isEmpty());
         REQUIRE(icon.startsWith("opendeck/"));
     }
-    // Multi Action uses OpenDeck's own bundled icon (src-tauri shared.rs CATEGORIES).
+    // Each built-in carries its OWN dedicated icon (no generic cube.png fallback):
+    // Multi/Toggle use OpenDeck's bundled icons (src-tauri shared.rs CATEGORIES); the
+    // starterpack actions use the icons CMake bundles from the starterpack asset dir.
+    QHash<QString, QString> const expectedIcon{
+        {"opendeck.multiaction", "opendeck/multi-action.png"},
+        {"opendeck.toggleaction", "opendeck/toggle-action.png"},
+        {"opendeck.runcommand", "opendeck/runCommand.png"},
+        {"opendeck.openurl", "opendeck/openUrl.png"},
+        {"opendeck.switchprofile", "opendeck/switchProfile.png"},
+        {"opendeck.brightness", "opendeck/deviceBrightness.png"},
+    };
     for (QJsonValue const& v : builtins) {
         QJsonObject const action = v.toObject();
-        if (action.value("uuid").toString() == "opendeck.multiaction") {
-            REQUIRE(action.value("icon").toString() == "opendeck/multi-action.png");
+        QString const icon = action.value("icon").toString();
+        REQUIRE(icon != "opendeck/cube.png");
+        auto const it = expectedIcon.constFind(action.value("uuid").toString());
+        if (it != expectedIcon.constEnd()) {
+            REQUIRE(icon == it.value());
         }
     }
 }
