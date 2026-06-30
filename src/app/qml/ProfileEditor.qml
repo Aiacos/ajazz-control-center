@@ -74,10 +74,19 @@ Rectangle {
     // Every device has firmware, so the Firmware tab is always present.
     readonly property bool _showFirmware:  true
 
+    // Stream controllers (Stream Dock keys / encoders / touch strip) are edited
+    // in the embedded OpenDeck SPA (OpenDeckPane) instead of the native tabs;
+    // mice and keyboards keep the native tabs below. A device is a stream
+    // controller when it exposes any renderable key / encoder / touch surface.
+    readonly property bool _isStreamController: _keyCount > 0 || _encoderCount > 0 || _touchZoneCount > 0
+
+    // Native editor (mouse + keyboard tabs; also the "select a device" empty
+    // state). Hidden for stream controllers — the OpenDeck pane below takes over.
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingLg
         spacing: Theme.spacingMd
+        visible: !root._isStreamController
 
         // Header — restructured so the human model name sits on line 1 next to
         // the device's product image, with the machine codename on line 2.
@@ -208,6 +217,26 @@ Rectangle {
                     accessibleDescription: qsTr("Persist the current changes and push them to the device")
                 }
             }
+        }
+    }
+
+    // Embedded OpenDeck SPA — the streamdeck editor. Fills the whole pane and
+    // covers the native ColumnLayout (which is hidden for stream controllers).
+    // Loaded by string `source` so builds without Qt WebEngine (no OpenDeckPane
+    // in the module) don't fault on a missing type — they just log and show the
+    // native editor's empty area. The Loader stays alive across device switches
+    // so the SPA isn't reloaded every time; the OpenDeck top bar drives which
+    // Stream Dock is active when more than one is connected.
+    Loader {
+        id: openDeckLoader
+        anchors.fill: parent
+        active: root._isStreamController && root.codename !== ""
+        visible: active
+        source: active ? "OpenDeckPane.qml" : ""
+        onStatusChanged: {
+            if (status === Loader.Error)
+                console.error("ProfileEditor: failed to load OpenDeckPane.qml —",
+                              "is the app built with -DAJAZZ_BUILD_WEBUI=ON?")
         }
     }
 

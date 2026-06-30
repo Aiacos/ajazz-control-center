@@ -719,6 +719,9 @@ if(AJAZZ_HAVE_WEBENGINE)
     # WebUiHost.qml hosts the OpenDeck SPA in a WebEngineView + QWebChannel; like PIWebView it
     # imports QtWebEngine/QtWebChannel, so it is WebEngine-gated too.
     qt_target_qml_sources(ajazz-control-center QML_FILES qml/WebUiHost.qml)
+    # OpenDeckPane.qml is the embeddable (Item) form of the OpenDeck SPA host that ProfileEditor
+    # mounts as the streamdeck editor area; same WebEngine gating.
+    qt_target_qml_sources(ajazz-control-center QML_FILES qml/OpenDeckPane.qml)
     # The URL request interceptor pulls QWebEngineCore types (and AUTOMOC has to find a Q_OBJECT
     # inside it), so it only compiles when WebEngine is present.
     target_sources(ajazz-control-center PRIVATE src/pi_url_request_interceptor.cpp)

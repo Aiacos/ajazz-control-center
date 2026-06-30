@@ -189,30 +189,17 @@ int main(int argc, char* argv[]) {
     ajazz::app::Application controller;
     controller.bootstrap();
 
-    // OpenDeck UI integration (Phase 0): pick the UI implementation to load.
-    // env AJAZZ_UI_MODE -> QSettings "ui/mode" config -> default "qml". The
-    // resolved token is exposed to QML as `AppUiMode` so the root surface (and
-    // the debug channel) can branch on it; the webui root is wired in Phase 1.
-    // QApplication org/app names are already set above, so QSettings resolves
-    // to the right config file.
-    ajazz::app::UiMode const uiMode = ajazz::app::resolveUiMode();
-    QString const uiModeStr = ajazz::app::uiModeToString(uiMode);
-    qInfo().noquote() << "[ui] mode:" << uiModeStr
-                      << "(override with AJAZZ_UI_MODE or the [ui] mode= config key)";
-
     QQmlApplicationEngine engine;
-    engine.rootContext()->setContextProperty(QStringLiteral("AppUiMode"), uiModeStr);
     controller.exposeToQml(engine);
 
-    // Phase 1: pick the root surface. The webui root (WebUiHost.qml) only exists
-    // when Qt WebEngine is compiled in; the SPA bundle (:/opendeck) only when
-    // AJAZZ_BUILD_WEBUI was ON. main.cpp owns that compile-time knowledge and
-    // forwards it to the host via context properties.
-#ifdef AJAZZ_HAVE_WEBENGINE
-    bool const webEngineAvailable = true;
-#else
-    bool const webEngineAvailable = false;
-#endif
+    // OpenDeck UI integration: the OpenDeck Svelte SPA is embedded as the
+    // STREAMDECK editor pane (qml/OpenDeckPane.qml, mounted by ProfileEditor when
+    // the active device is a stream controller). The native shell (Main.qml) is
+    // always the root and keeps the device sidebar + the mouse and keyboard
+    // editors. We therefore expose the bridge + the bundle flag unconditionally
+    // (gated only by the WebEngine/SPA compile-time availability) and serve the
+    // SPA over the custom opendeck://app/ scheme, regardless of which device is
+    // selected — ProfileEditor decides when to show the pane.
 #ifdef AJAZZ_HAVE_WEBUI
     bool const webUiBundlePresent = true;
 #else
@@ -220,33 +207,18 @@ int main(int argc, char* argv[]) {
 #endif
     engine.rootContext()->setContextProperty(QStringLiteral("AppHasWebUiBundle"),
                                              webUiBundlePresent);
-
-    QString rootComponent = QStringLiteral("Main");
-    if (uiMode == ajazz::app::UiMode::WebUi) {
-        if (webEngineAvailable && webUiBundlePresent) {
-            engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
-                                                     controller.openDeckBridge());
-            rootComponent = QStringLiteral("WebUiHost");
+#ifdef AJAZZ_HAVE_WEBENGINE
+    engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
+                                             controller.openDeckBridge());
 #ifdef AJAZZ_HAVE_WEBUI
-            // Serve the bundled SPA via the custom scheme so SvelteKit routes
-            // from a clean origin and Fetch works. Handler is parented to qApp.
-            QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
-                QByteArray(ajazz::app::kOpenDeckScheme),
-                new ajazz::app::OpenDeckSchemeHandler(qApp));
+    // Serve the bundled SPA via the custom scheme so SvelteKit routes from a
+    // clean origin and Fetch works. Handler is parented to qApp.
+    QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
+        QByteArray(ajazz::app::kOpenDeckScheme), new ajazz::app::OpenDeckSchemeHandler(qApp));
 #endif
-        } else if (!webEngineAvailable) {
-            qInfo().noquote() << "[ui] webui is the default but Qt WebEngine is not built; "
-                                 "falling back to the native qml UI.";
-        } else {
-            // WebEngine present but the SPA was not bundled (AJAZZ_BUILD_WEBUI off
-            // or the Node toolchain was absent at configure time). Don't show a
-            // blank host — fall back to the working native qml UI.
-            qInfo().noquote() << "[ui] webui is the default but the OpenDeck SPA bundle was not "
-                                 "built (configure -DAJAZZ_BUILD_WEBUI=ON with Node.js); "
-                                 "falling back to the native qml UI.";
-        }
-    }
-    engine.loadFromModule("AjazzControlCenter", rootComponent);
+#endif
+
+    engine.loadFromModule("AjazzControlCenter", QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }
