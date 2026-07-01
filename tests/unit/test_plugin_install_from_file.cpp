@@ -1239,6 +1239,190 @@ TEST_CASE("PluginCatalog per-plugin allow does not promote a tampered plugin (CR
 }
 
 // ---------------------------------------------------------------------------
+// Launch-sweep quarantine (non-destructive): an UNSIGNED plugin dir dropped
+// into the plugins dir by hand (never through installFromFile/allowPlugin, so
+// it has no consent key) must NOT be deleted by the launch-sweep. Pre-fix the
+// sweep removeRecursively-ed it ("removing (no consent)") — silently deleting
+// a user's manually-installed plugin at startup. Post-fix the sweep renames
+// it to `<id>.sdPlugin.disabled`: out of the `*.sdPlugin` discovery glob
+// (never spawned) but recoverable. Granting consent (per-plugin key or the
+// global toggle) restores it on the next launch-sweep.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog launch-sweep quarantines unconsented sideload instead of deleting",
+          "[plugin-install][trust]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.sweep-quarantine-sideload");
+    {
+        // No consent of any kind for this id.
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowUnsignedPlugins"), false);
+        settings.remove(QStringLiteral("plugins/allowed/") + pluginId);
+    }
+
+    // Manually sideload: create the plugin dir directly (no install path).
+    QString const liveDir = QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin"));
+    QString const quarantinedDir = liveDir + QStringLiteral(".disabled");
+    REQUIRE(QDir().mkpath(liveDir));
+    writeFile(fs::path{liveDir.toStdString()} / "manifest.json",
+              manifestWithUuid(pluginId).toStdString());
+
+    // Launch-sweep (ctor) with no consent: quarantined, NOT deleted.
+    {
+        PluginCatalogModel model(nullptr);
+        Q_UNUSED(model);
+    }
+    CHECK_FALSE(QFile::exists(QDir(liveDir).filePath(QStringLiteral("manifest.json"))));
+    REQUIRE(QFile::exists(QDir(quarantinedDir).filePath(QStringLiteral("manifest.json"))));
+
+    // Grant per-plugin consent (global toggle still OFF) and "restart": the
+    // sweep's restore pass renames the dir back and then KEEPs it.
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowed/") + pluginId, true);
+    }
+    {
+        PluginCatalogModel restarted(nullptr);
+        Q_UNUSED(restarted);
+    }
+    REQUIRE(QFile::exists(QDir(liveDir).filePath(QStringLiteral("manifest.json"))));
+    CHECK_FALSE(QFile::exists(quarantinedDir));
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// allowPlugin() restores a quarantined plugin on explicit consent, without
+// requiring a restart: the quarantined manifest is re-verified in place
+// (Unsigned only, CR-01), the dir is renamed back to `<id>.sdPlugin`, and the
+// per-plugin consent key is recorded so later launch-sweeps keep it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog allowPlugin restores quarantined unsigned plugin",
+          "[plugin-install][trust]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.allowplugin-restore");
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowUnsignedPlugins"), false);
+        settings.remove(QStringLiteral("plugins/allowed/") + pluginId);
+    }
+
+    QString const liveDir = QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin"));
+    QString const quarantinedDir = liveDir + QStringLiteral(".disabled");
+
+    // Plant the plugin already-quarantined (as a prior sweep would leave it).
+    REQUIRE(QDir().mkpath(quarantinedDir));
+    writeFile(fs::path{quarantinedDir.toStdString()} / "manifest.json",
+              manifestWithUuid(pluginId).toStdString());
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(false);
+
+    REQUIRE(model.allowPlugin(pluginId));
+    REQUIRE(QFile::exists(QDir(liveDir).filePath(QStringLiteral("manifest.json"))));
+    CHECK_FALSE(QFile::exists(quarantinedDir));
+    {
+        QSettings settings;
+        CHECK(settings.value(QStringLiteral("plugins/allowed/") + pluginId, false).toBool());
+    }
+
+    // And the consent survives a restart: the next launch-sweep keeps it.
+    {
+        PluginCatalogModel restarted(nullptr);
+        Q_UNUSED(restarted);
+    }
+    REQUIRE(QFile::exists(QDir(liveDir).filePath(QStringLiteral("manifest.json"))));
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// CR-01 guard on the restore path: a TAMPERED (Refused) manifest sitting in a
+// quarantined dir must never be restored by allowPlugin() — the manifest is
+// re-verified in place BEFORE the rename, so a Refused dir stays quarantined
+// and no consent key is written.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog allowPlugin refuses to restore tampered quarantined dir (CR-01)",
+          "[plugin-install][trust][security]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.restore-tampered");
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowUnsignedPlugins"), false);
+        settings.remove(QStringLiteral("plugins/allowed/") + pluginId);
+    }
+
+    // Build a tampered manifest (signed then byte-flipped -> Refused verdict).
+    QString const keysDir = tmp.filePath("keys-restore-tampered");
+    QDir().mkpath(keysDir);
+    REQUIRE(
+        runChild(
+            {"python3", verifierScript().string(), "keygen", "--out-dir", keysDir.toStdString()}) ==
+        0);
+    fs::path const rawManifest = fs::path{tmp.path().toStdString()} / "manifest_restore_tamp.json";
+    writeFile(rawManifest, kMinimalManifest);
+    REQUIRE(runChild({"python3",
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      rawManifest.string(),
+                      "--priv-key",
+                      (keysDir + "/priv.pem").toStdString()}) == 0);
+    auto blob = readFile(rawManifest);
+    auto const pos = blob.find("Fixture for");
+    REQUIRE(pos != std::string::npos);
+    blob[pos] = 'Z';
+
+    QString const liveDir = QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin"));
+    QString const quarantinedDir = liveDir + QStringLiteral(".disabled");
+    REQUIRE(QDir().mkpath(quarantinedDir));
+    writeFile(fs::path{quarantinedDir.toStdString()} / "manifest.json", blob);
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(false);
+
+    REQUIRE_FALSE(model.allowPlugin(pluginId));
+    // Not restored, still quarantined, and no consent key written.
+    CHECK_FALSE(QFile::exists(liveDir));
+    REQUIRE(QFile::exists(QDir(quarantinedDir).filePath(QStringLiteral("manifest.json"))));
+    {
+        QSettings settings;
+        CHECK_FALSE(settings.value(QStringLiteral("plugins/allowed/") + pluginId, false).toBool());
+    }
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
 // Regression CR-02: Refused plugin does not land in pluginsDir via any path
 //
 // This test exercises the staging-before-promote invariant: a Refused

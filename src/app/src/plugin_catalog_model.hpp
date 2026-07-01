@@ -528,6 +528,12 @@ public:
      * require re-consent. Then re-runs the install/promote path for the
      * plugin so it becomes immediately runnable.
      *
+     * If the plugin was quarantined by the launch-sweep
+     * (@c <uuid>.sdPlugin.disabled — an unsigned sideload found on disk
+     * without consent), explicit consent restores the directory to
+     * @c <uuid>.sdPlugin first, after re-verifying the quarantined
+     * manifest in place (a @c Refused manifest is never restored, CR-01).
+     *
      * CR-01: returns @c false immediately when the plugin row's trust level
      * is @c "tampered" — there is no UI consent path for an Ed25519-invalid
      * (attack) package. The per-plugin consent mechanism is ONLY for

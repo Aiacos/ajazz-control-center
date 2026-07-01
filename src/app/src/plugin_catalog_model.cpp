@@ -105,6 +105,15 @@ QString g_pluginsDirOverride{};
     return settings.value(QStringLiteral("plugins/allowed/") + uuid, false).toBool();
 }
 
+/// Suffix appended to an `<uuid>.sdPlugin` directory to quarantine it
+/// NON-DESTRUCTIVELY. A `*.sdPlugin.disabled` directory no longer matches the
+/// `*.sdPlugin` glob used by the launch-sweep, installedPlugins(), and
+/// PluginManager::discover(), so it is never verified, listed, or spawned —
+/// but the user's files stay on disk. The launch-sweep restores (renames back)
+/// a quarantined dir once consent exists (global toggle, env var, or
+/// per-plugin allow), and allowPlugin() restores it on explicit consent.
+constexpr QLatin1StringView kQuarantineSuffix(".disabled");
+
 /// #81: derive a safe install-directory name (`<UUID>.sdPlugin`) from a
 /// manifest's plugin UUID. The Stream Deck convention is that the install
 /// directory is named for the manifest UUID, and the action-owner match keys
@@ -283,7 +292,42 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     // left in a discoverable state for the Phase-18 PluginManager.
     // Seam: verify after the sweep; do NOT modify sdplugin_extractor internals.
     {
-        QDir const dir(pluginsDir);
+        QDir dir(pluginsDir); // non-const: QDir::rename() below is a mutator
+        // Restore pass: a previously-quarantined `*.sdPlugin.disabled` dir is
+        // renamed back once consent NOW exists (the user flipped the global
+        // toggle, set the env var, or recorded a per-plugin allow since the
+        // quarantine). The restored dir then flows through the verify loop
+        // below like any other entry, so CR-01 still holds: a tampered dir
+        // that somehow got restored is re-verified and removed as Refused.
+        QStringList const disabled =
+            dir.entryList(QStringList{QStringLiteral("*.sdPlugin") + kQuarantineSuffix},
+                          QDir::Dirs | QDir::NoDotAndDotDot);
+        for (QString const& entry : disabled) {
+            QString const original = entry.chopped(kQuarantineSuffix.size());
+            if (!consentToUnsigned() && !perPluginAllowed(original)) {
+                continue; // still no consent — stays quarantined, untouched
+            }
+            if (QFileInfo::exists(dir.filePath(original))) {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "launch-sweep restore: '{}' consented but '{}' already "
+                               "exists; leaving quarantined copy in place",
+                               entry.toStdString(),
+                               original.toStdString());
+                continue;
+            }
+            if (dir.rename(entry, original)) {
+                AJAZZ_LOG_INFO("plugin-catalog",
+                               "launch-sweep restore: '{}' -> '{}' (consent now present)",
+                               entry.toStdString(),
+                               original.toStdString());
+            } else {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "launch-sweep restore: rename '{}' -> '{}' failed",
+                               entry.toStdString(),
+                               original.toStdString());
+            }
+        }
+
         QStringList const entries = dir.entryList(QStringList{QStringLiteral("*.sdPlugin")},
                                                   QDir::Dirs | QDir::NoDotAndDotDot);
         for (QString const& entry : entries) {
@@ -309,12 +353,39 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
                                entry.toStdString(),
                                vout.reason.toStdString());
             } else if (vout.verdict == VerifyVerdict::Unsigned) {
-                // No consent — quarantine unsigned plugins at launch too.
-                AJAZZ_LOG_WARN("plugin-catalog",
-                               "launch-sweep verify: '{}' unsigned ({}); removing (no consent)",
-                               entry.toStdString(),
-                               vout.reason.toStdString());
-                QDir(dir.filePath(entry)).removeRecursively();
+                // No consent — quarantine NON-DESTRUCTIVELY by renaming the
+                // dir to `<entry>.disabled`. A manually-sideloaded plugin never
+                // passed through installFromFile()/allowPlugin(), so it has no
+                // consent key; silently DELETING the user's files at startup
+                // (the pre-fix behaviour) is hostile and unrecoverable. The
+                // rename keeps the files but removes them from the `*.sdPlugin`
+                // glob, so PluginManager::discover() still never spawns an
+                // unconsented plugin (the rediscover() trust invariant holds).
+                // Recovery: enable allowUnsignedPlugins (or per-plugin allow /
+                // AJAZZ_ALLOW_UNTRUSTED_PLUGINS) and restart — the restore
+                // pass above renames it back. Only if the rename fails do we
+                // fall back to removal, because leaving an unconsented dir
+                // discoverable would reopen the T-22 back door (fail-closed).
+                QString const quarantineName = entry + kQuarantineSuffix;
+                if (QFileInfo::exists(dir.filePath(quarantineName))) {
+                    QDir(dir.filePath(quarantineName)).removeRecursively(); // stale copy
+                }
+                if (dir.rename(entry, quarantineName)) {
+                    AJAZZ_LOG_WARN("plugin-catalog",
+                                   "launch-sweep verify: '{}' unsigned ({}); no consent -> "
+                                   "quarantined as '{}' (NOT deleted; enable allowUnsignedPlugins "
+                                   "or allowPlugin() to restore)",
+                                   entry.toStdString(),
+                                   vout.reason.toStdString(),
+                                   quarantineName.toStdString());
+                } else {
+                    AJAZZ_LOG_WARN("plugin-catalog",
+                                   "launch-sweep verify: '{}' unsigned ({}); quarantine "
+                                   "rename failed -> removing (fail-closed)",
+                                   entry.toStdString(),
+                                   vout.reason.toStdString());
+                    QDir(dir.filePath(entry)).removeRecursively();
+                }
             } else if (vout.verdict == VerifyVerdict::Refused) {
                 AJAZZ_LOG_WARN("plugin-catalog",
                                "launch-sweep verify: '{}' refused ({}); removing from plugins dir",
@@ -937,15 +1008,44 @@ bool PluginCatalogModel::allowPlugin(QString const& uuid) {
     // plugin's manifest to determine its trust level via the verify gate.
     // If the plugin dir doesn't exist or the manifest is tampered, return false.
     QString const pluginsDir = userPluginsDir();
-    QString const pluginDir = QDir(pluginsDir).filePath(uuid + QStringLiteral(".sdPlugin"));
+    QString const dirName = uuid + QStringLiteral(".sdPlugin");
+    QString const pluginDir = QDir(pluginsDir).filePath(dirName);
     QString const manifestPath = QDir(pluginDir).filePath(QStringLiteral("manifest.json"));
 
     if (!QFile::exists(manifestPath)) {
-        // Unknown UUID — no installed plugin with this id.
-        AJAZZ_LOG_WARN("plugin-catalog",
-                       "allowPlugin: '{}' not found in plugins dir; no-op",
-                       uuid.toStdString());
-        return false;
+        // Not in the live plugins dir — it may have been quarantined by the
+        // launch-sweep (`<uuid>.sdPlugin.disabled`). Explicit consent restores
+        // it, but ONLY after verifying the quarantined manifest in place:
+        // restoring first and verifying after would leave a Refused/tampered
+        // dir discoverable between the rename and the next sweep (CR-01).
+        QString const quarantinedManifest =
+            QDir(pluginsDir)
+                .filePath(dirName + kQuarantineSuffix + QStringLiteral("/manifest.json"));
+        if (QFile::exists(quarantinedManifest)) {
+            VerifyOutcome const qout = verifyStagedPlugin(quarantinedManifest);
+            if (qout.verdict == VerifyVerdict::Refused) {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "allowPlugin: quarantined '{}' is tampered (Refused); "
+                               "refusing restore + consent (CR-01)",
+                               uuid.toStdString());
+                return false;
+            }
+            if (!QDir(pluginsDir).rename(dirName + kQuarantineSuffix, dirName)) {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "allowPlugin: failed to restore quarantined '{}'; no-op",
+                               uuid.toStdString());
+                return false;
+            }
+            AJAZZ_LOG_INFO("plugin-catalog",
+                           "allowPlugin: restored '{}' from quarantine on explicit consent",
+                           uuid.toStdString());
+        } else {
+            // Unknown UUID — no installed plugin with this id.
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "allowPlugin: '{}' not found in plugins dir; no-op",
+                           uuid.toStdString());
+            return false;
+        }
     }
 
     // Verify the staged manifest to determine trust level.
