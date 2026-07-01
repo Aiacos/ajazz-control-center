@@ -751,6 +751,15 @@ Application::Application(QObject* parent)
                      m_pluginBridge.get(),
                      &PluginDeviceBridge::onPluginDisconnected);
 
+    // 3b. Live key visuals -> OpenDeck web UI. A plugin setImage/setTitle paints
+    //     the physical key via the bridge; this mirror pushes the same frame to
+    //     the SPA canvas as an "update_state" event so the on-screen key tracks
+    //     the hardware (without it the SPA shows only the bind-time icon).
+    QObject::connect(m_pluginBridge.get(),
+                     &PluginDeviceBridge::liveKeyVisual,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyLiveKeyVisual);
+
     // 3a-F3. Property Inspector second-connection model (canonical doc §5).
     //   The server resolves which plugin owns a PI's instance context via this
     //   resolver, backed by the bridge's ContextRegistry (the trusted

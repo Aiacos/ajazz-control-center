@@ -94,6 +94,18 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
 /// QSettings I/O that get_settings/set_settings wrap around it.
 [[nodiscard]] QJsonObject settingsWithDefaults(QJsonObject const& stored);
 
+/// Override the CURRENT state's image/text of an ActionInstance object in place
+/// with a live plugin visual (setImage data URI / setTitle text) — the payload
+/// half of the "update_state" event the web UI's Key component consumes. An
+/// empty @p imageDataUri leaves the image untouched; @p titleChanged=true
+/// applies @p title even when empty (title cleared). Returns false (instance
+/// untouched) when current_state is out of range. Pure so the override contract
+/// is unit-tested without the bridge QObjects.
+[[nodiscard]] bool overrideStateVisual(QJsonObject& instance,
+                                       QString const& imageDataUri,
+                                       QString const& title,
+                                       bool titleChanged);
+
 } // namespace opendeck_detail
 
 /**
@@ -135,6 +147,18 @@ public:
     /// signals in Application; safe to call when no web UI is attached.
     void notifyProfileChanged(); ///< -> "switch_profile" + "rerender_images"
     void notifyDevicesChanged(); ///< -> "devices" (the get_devices map)
+
+    /// Mirror a live plugin visual (setImage/setTitle on a Keypad key) into the
+    /// web UI: composes the bound ActionInstance for the slot with its state
+    /// image/text overridden by the live values and pushes the OpenDeck
+    /// "update_state" event the SPA's Key component subscribes to. Wired to
+    /// PluginDeviceBridge::liveKeyVisual in Application. No-op when the slot is
+    /// unbound or the active profile belongs to another device.
+    void notifyLiveKeyVisual(QString const& deviceId,
+                             int position,
+                             QString const& imageDataUri,
+                             QString const& title,
+                             bool titleChanged);
 
     // Bring QObject::event(QEvent*) into scope so the QWebChannel `event` signal
     // below does not "hide" the inherited virtual — AppleClang's

@@ -360,6 +360,27 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
     };
 }
 
+bool overrideStateVisual(QJsonObject& instance,
+                         QString const& imageDataUri,
+                         QString const& title,
+                         bool titleChanged) {
+    int const cs = instance.value(QStringLiteral("current_state")).toInt(0);
+    QJsonArray states = instance.value(QStringLiteral("states")).toArray();
+    if (cs < 0 || cs >= states.size()) {
+        return false;
+    }
+    QJsonObject state = states.at(cs).toObject();
+    if (!imageDataUri.isEmpty()) {
+        state.insert(QStringLiteral("image"), imageDataUri);
+    }
+    if (titleChanged) {
+        state.insert(QStringLiteral("text"), title);
+    }
+    states.replace(cs, state);
+    instance.insert(QStringLiteral("states"), states);
+    return true;
+}
+
 QJsonObject settingsWithDefaults(QJsonObject const& stored) {
     QJsonObject out{
         {QStringLiteral("language"), QStringLiteral("en")},

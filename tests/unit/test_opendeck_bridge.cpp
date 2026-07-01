@@ -234,3 +234,35 @@ TEST_CASE("jsonToString round-trips scalars and containers", "[opendeck]") {
     a.append(2);
     REQUIRE(jsonToString(a) == "[1,2]");
 }
+
+TEST_CASE("overrideStateVisual injects a live image/text into the current state", "[opendeck]") {
+    // A minimal two-state ActionInstance, current_state = 1.
+    QJsonArray states;
+    states.append(
+        QJsonObject{{"image", QStringLiteral("static-icon.png")}, {"text", QStringLiteral("old")}});
+    states.append(QJsonObject{{"image", QStringLiteral("static-icon-2.png")},
+                              {"text", QStringLiteral("old-2")}});
+    QJsonObject inst{{"current_state", 1}, {"states", states}};
+
+    // setImage: only the CURRENT state's image changes; text untouched.
+    QJsonObject a = inst;
+    REQUIRE(overrideStateVisual(a, QStringLiteral("data:image/png;base64,LIVE"), {}, false));
+    auto const aStates = a.value("states").toArray();
+    REQUIRE(aStates.at(1).toObject().value("image").toString() == "data:image/png;base64,LIVE");
+    REQUIRE(aStates.at(1).toObject().value("text").toString() == "old-2");
+    REQUIRE(aStates.at(0).toObject().value("image").toString() == "static-icon.png");
+
+    // setTitle with titleChanged=true applies EVEN an empty title (title cleared);
+    // an empty image leaves the image untouched.
+    QJsonObject b = inst;
+    REQUIRE(overrideStateVisual(b, {}, QString(), true));
+    REQUIRE(b.value("states").toArray().at(1).toObject().value("text").toString().isEmpty());
+    REQUIRE(b.value("states").toArray().at(1).toObject().value("image").toString() ==
+            "static-icon-2.png");
+
+    // Out-of-range current_state: refused, instance untouched.
+    QJsonObject c{{"current_state", 5}, {"states", states}};
+    QJsonObject const before = c;
+    REQUIRE_FALSE(overrideStateVisual(c, QStringLiteral("data:x"), {}, false));
+    REQUIRE(c == before);
+}

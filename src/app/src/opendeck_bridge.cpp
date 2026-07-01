@@ -429,7 +429,19 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             for (QVariant const& v : m_profiles->profilesForDevice(device)) {
                 QVariantMap const m = v.toMap();
                 if (m.value(QStringLiteral("name")).toString() == name) {
-                    m_profiles->loadProfileById(m.value(QStringLiteral("id")).toString());
+                    // Idempotence guard: selecting the already-active profile is a
+                    // no-op. Without it this command re-emits profileChanged, which
+                    // notifyProfileChanged() echoes back to the SPA as
+                    // "switch_profile", whose DeviceSelector listener calls
+                    // set_selected_profile again — a feedback loop that storms
+                    // willAppear/setImage at millisecond cadence (observed 480
+                    // set_selected_profile calls in 5 s once shim event dispatch
+                    // was fixed). Mirrors the idempotent-switch guard in the
+                    // per-app auto-switch path (resolved == activeProfileId -> skip).
+                    QString const id = m.value(QStringLiteral("id")).toString();
+                    if (id != m_profiles->activeProfileId()) {
+                        m_profiles->loadProfileById(id);
+                    }
                     break;
                 }
             }
@@ -664,6 +676,40 @@ void OpenDeckBridge::notifyProfileChanged() {
                               {QStringLiteral("profile"), m_profiles->activeProfileName()}};
     emit event(QStringLiteral("switch_profile"), opendeck_detail::jsonToString(payload));
     emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
+}
+
+void OpenDeckBridge::notifyLiveKeyVisual(QString const& deviceId,
+                                         int position,
+                                         QString const& imageDataUri,
+                                         QString const& title,
+                                         bool titleChanged) {
+    if (m_profiles == nullptr || position < 0) {
+        return;
+    }
+    core::Profile const& profile = m_profiles->activeProfile();
+    if (QString::fromStdString(profile.deviceCodename) != deviceId) {
+        return; // live paint for a device whose profile is not the active one
+    }
+    auto const it = profile.keys.find(static_cast<std::uint16_t>(position));
+    if (it == profile.keys.end()) {
+        return; // stale paint for an unbound slot
+    }
+    // Same context form the SPA's Key slots carry (profileJson: NAME as id).
+    QString const ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
+                        QStringLiteral(".Keypad.") + QString::number(position);
+    QJsonValue const instVal = enrichInstance(opendeck_detail::keyInstanceJson(it->second, ctx));
+    if (!instVal.isObject()) {
+        return;
+    }
+    QJsonObject contents = instVal.toObject();
+    if (!opendeck_detail::overrideStateVisual(contents, imageDataUri, title, titleChanged)) {
+        return; // current_state out of range — malformed instance, don't push
+    }
+    emit event(QStringLiteral("update_state"),
+               opendeck_detail::jsonToString(QJsonObject{
+                   {QStringLiteral("context"), ctx},
+                   {QStringLiteral("contents"), contents},
+               }));
 }
 
 void OpenDeckBridge::notifyDevicesChanged() {

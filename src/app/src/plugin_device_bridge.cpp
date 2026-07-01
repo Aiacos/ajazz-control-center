@@ -823,6 +823,12 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
     }
     // Re-apply a previously-set title over the new base (Elgato layering).
     reapplyTitle(keyIndex);
+
+    // Mirror the live frame into the OpenDeck web UI (update_state). Emitted
+    // after the device paint so the SPA never runs ahead of the hardware.
+    if (ctx.controller == QLatin1String("Keypad")) {
+        emit liveKeyVisual(ctx.deviceId, ctx.row * keyCols + ctx.column, dataUri, QString(), false);
+    }
 }
 
 void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
@@ -853,6 +859,11 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
                        "onSetTitle: assignKeyImage threw for key {}: {}",
                        static_cast<int>(keyIndex),
                        e.what());
+    }
+
+    // Mirror the title change into the OpenDeck web UI (update_state).
+    if (ctx.controller == QLatin1String("Keypad")) {
+        emit liveKeyVisual(ctx.deviceId, ctx.row * keyCols + ctx.column, QString(), title, true);
     }
 }
 
