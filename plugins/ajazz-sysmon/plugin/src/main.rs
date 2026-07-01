@@ -32,10 +32,22 @@ enum Metric {
 	Ram,
 	NetDown,
 	NetUp,
+	Gpu,
+	GpuTemp,
+	Vram,
 }
 
 impl Metric {
-	const ALL: [Metric; 5] = [Metric::Cpu, Metric::CpuTemp, Metric::Ram, Metric::NetDown, Metric::NetUp];
+	const ALL: [Metric; 8] = [
+		Metric::Cpu,
+		Metric::CpuTemp,
+		Metric::Ram,
+		Metric::NetDown,
+		Metric::NetUp,
+		Metric::Gpu,
+		Metric::GpuTemp,
+		Metric::Vram,
+	];
 
 	fn from_id(s: &str) -> Metric {
 		match s {
@@ -43,6 +55,9 @@ impl Metric {
 			"ram" => Metric::Ram,
 			"net_down" => Metric::NetDown,
 			"net_up" => Metric::NetUp,
+			"gpu" => Metric::Gpu,
+			"gpu_temp" => Metric::GpuTemp,
+			"vram" => Metric::Vram,
 			_ => Metric::Cpu,
 		}
 	}
@@ -54,15 +69,18 @@ impl Metric {
 			Metric::Ram => "RAM",
 			Metric::NetDown => "NET DN",
 			Metric::NetUp => "NET UP",
+			Metric::Gpu => "GPU",
+			Metric::GpuTemp => "GPU TMP",
+			Metric::Vram => "VRAM",
 		}
 	}
 
 	/// btop default-theme gradient stops (bottom/low -> mid -> top/high).
 	fn grad(self) -> [(u8, u8, u8); 3] {
 		match self {
-			Metric::Cpu => [(0x77, 0xca, 0x9b), (0xcb, 0xc0, 0x6c), (0xdc, 0x4c, 0x4c)],
-			Metric::CpuTemp => [(0x48, 0x97, 0xd4), (0x54, 0x74, 0xe8), (0xff, 0x40, 0xb6)],
-			Metric::Ram => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
+			Metric::Cpu | Metric::Gpu => [(0x77, 0xca, 0x9b), (0xcb, 0xc0, 0x6c), (0xdc, 0x4c, 0x4c)],
+			Metric::CpuTemp | Metric::GpuTemp => [(0x48, 0x97, 0xd4), (0x54, 0x74, 0xe8), (0xff, 0x40, 0xb6)],
+			Metric::Ram | Metric::Vram => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
 			Metric::NetDown => [(0x29, 0x1f, 0x75), (0x4f, 0x43, 0xa3), (0xb0, 0xa9, 0xde)],
 			Metric::NetUp => [(0x62, 0x06, 0x65), (0x7d, 0x41, 0x80), (0xdc, 0xaf, 0xde)],
 		}
@@ -71,7 +89,7 @@ impl Metric {
 	/// Fixed 0..scale for %/°C metrics; None = auto-range (network throughput).
 	fn scale_max(self) -> Option<f32> {
 		match self {
-			Metric::Cpu | Metric::Ram | Metric::CpuTemp => Some(100.0),
+			Metric::Cpu | Metric::Ram | Metric::CpuTemp | Metric::Gpu | Metric::GpuTemp | Metric::Vram => Some(100.0),
 			Metric::NetDown | Metric::NetUp => None,
 		}
 	}
@@ -81,14 +99,18 @@ impl Metric {
 		match self {
 			Metric::Cpu | Metric::Ram => Some((70.0, 90.0)),
 			Metric::CpuTemp => Some((70.0, 85.0)),
+			// 100% GPU utilisation is normal under load — no thresholds by default.
+			Metric::Gpu => None,
+			Metric::GpuTemp => Some((75.0, 90.0)),
+			Metric::Vram => Some((80.0, 95.0)),
 			Metric::NetDown | Metric::NetUp => None,
 		}
 	}
 
 	fn format(self, v: f32) -> String {
 		match self {
-			Metric::Cpu | Metric::Ram => format!("{v:.0}%"),
-			Metric::CpuTemp => format!("{v:.0}\u{00b0}C"),
+			Metric::Cpu | Metric::Ram | Metric::Gpu | Metric::Vram => format!("{v:.0}%"),
+			Metric::CpuTemp | Metric::GpuTemp => format!("{v:.0}\u{00b0}C"),
 			Metric::NetDown | Metric::NetUp => fmt_rate(v),
 		}
 	}
@@ -136,6 +158,9 @@ struct Snapshot {
 	cpu: CpuBlock,
 	mem: MemBlock,
 	net: NetBlock,
+	/// Absent on older helpers; empty when no GPU is detected.
+	#[serde(default)]
+	gpu: Vec<GpuBlock>,
 }
 #[derive(Deserialize)]
 struct CpuBlock {
@@ -150,6 +175,18 @@ struct MemBlock {
 struct NetBlock {
 	down_bytes_s: f64,
 	up_bytes_s: f64,
+}
+/// One GPU from the helper's `gpu` array. Extra fields ("name", "supported",
+/// clocks, …) are intentionally ignored; missing fields default to 0.
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct GpuBlock {
+	util_percent: f64,
+	temp_c: f64,
+	vram_used_bytes: f64,
+	vram_total_bytes: f64,
+	#[allow(dead_code)]
+	power_w: f64,
 }
 
 async fn run_helper() {
@@ -177,6 +214,17 @@ async fn run_helper() {
 			push_metric(&mut m, Metric::Ram, s.mem.percent as f32);
 			push_metric(&mut m, Metric::NetDown, s.net.down_bytes_s as f32);
 			push_metric(&mut m, Metric::NetUp, s.net.up_bytes_s as f32);
+			// Phase 3: first GPU only; multi-GPU selection is a later phase.
+			if let Some(g) = s.gpu.first() {
+				push_metric(&mut m, Metric::Gpu, g.util_percent as f32);
+				push_metric(&mut m, Metric::GpuTemp, g.temp_c as f32);
+				let vram_pct = if g.vram_total_bytes > 0.0 {
+					(g.vram_used_bytes / g.vram_total_bytes * 100.0) as f32
+				} else {
+					0.0
+				};
+				push_metric(&mut m, Metric::Vram, vram_pct);
+			}
 		}
 	}
 }
@@ -435,6 +483,56 @@ impl Action for MonitorAction {
 	}
 }
 
+/// The GPU preset: defaults to GPU utilisation but keeps the Property
+/// Inspector, so the metric (gpu / gpu_temp / vram) and thresholds stay
+/// overridable per instance.
+#[derive(Default)]
+struct GpuAction {
+	tasks: Tasks,
+}
+
+/// Settings with the metric defaulted to `default` when unset (preset actions
+/// that still honour their PI).
+fn settings_with_default(settings: &MonitorSettings, default: &str) -> MonitorSettings {
+	let mut s = settings.clone();
+	if s.metric.is_empty() {
+		s.metric = default.into();
+	}
+	s
+}
+
+#[async_trait]
+impl Action for GpuAction {
+	const UUID: ActionUuid = "com.ajazz.sysmon2.gpu";
+	type Settings = MonitorSettings;
+
+	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		let id = instance.instance_id.clone();
+		settings_map()
+			.lock()
+			.unwrap()
+			.insert(id.clone(), settings_with_default(settings, "gpu"));
+		if let Some(inst) = get_instance(id.clone()).await {
+			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
+		}
+		Ok(())
+	}
+
+	async fn did_receive_settings(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		settings_map()
+			.lock()
+			.unwrap()
+			.insert(instance.instance_id.clone(), settings_with_default(settings, "gpu"));
+		Ok(())
+	}
+
+	async fn will_disappear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+		self.tasks.remove(&instance.instance_id);
+		settings_map().lock().unwrap().remove(&instance.instance_id);
+		Ok(())
+	}
+}
+
 #[tokio::main]
 async fn main() -> OpenActionResult<()> {
 	// Dev aid: `--render-test <metric> <out.png>` renders a sample tile and exits.
@@ -446,7 +544,7 @@ async fn main() -> OpenActionResult<()> {
 		for i in 0..120 {
 			let t = i as f32 / 119.0;
 			let base = match metric {
-				Metric::CpuTemp => 45.0 + 40.0 * (t * 5.0).sin().abs(),
+				Metric::CpuTemp | Metric::GpuTemp => 45.0 + 40.0 * (t * 5.0).sin().abs(),
 				Metric::NetDown | Metric::NetUp => 200_000.0 * (t * 6.0).sin().abs() + 50_000.0 * t,
 				_ => 30.0 + 55.0 * (t * 6.0).sin().abs() + 10.0 * t,
 			};
@@ -464,5 +562,44 @@ async fn main() -> OpenActionResult<()> {
 	tokio::spawn(run_helper());
 	register_action(CpuAction::default()).await;
 	register_action(MonitorAction::default()).await;
+	register_action(GpuAction::default()).await;
 	run(std::env::args().collect()).await
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn snapshot_parses_with_gpu() {
+		let line = r#"{"cpu":{"percent":12.5,"temp_c":48.0},"mem":{"percent":40.2},
+			"net":{"down_bytes_s":1024.0,"up_bytes_s":256.0},
+			"gpu":[{"name":"Radeon","util_percent":33,"temp_c":61,"vram_used_bytes":2147483648,
+			"vram_total_bytes":8589934592,"power_w":95.5,"core_clock_mhz":2100,"mem_clock_mhz":1750,
+			"supported":{"util":true,"temp":true,"vram":true,"power":true,"core_clock":true,"mem_clock":true}}]}"#;
+		let s: Snapshot = serde_json::from_str(line).expect("gpu snapshot must parse");
+		let g = s.gpu.first().expect("one gpu");
+		assert_eq!(g.util_percent, 33.0);
+		assert_eq!(g.temp_c, 61.0);
+		assert_eq!(g.vram_used_bytes / g.vram_total_bytes * 100.0, 25.0);
+	}
+
+	#[test]
+	fn snapshot_parses_without_gpu() {
+		// Older helpers omit the "gpu" key entirely.
+		let line = r#"{"cpu":{"percent":12.5,"temp_c":48.0},"mem":{"percent":40.2},
+			"net":{"down_bytes_s":1024.0,"up_bytes_s":256.0}}"#;
+		let s: Snapshot = serde_json::from_str(line).expect("gpu-less snapshot must parse");
+		assert!(s.gpu.is_empty());
+	}
+
+	#[test]
+	fn snapshot_parses_with_sparse_gpu_fields() {
+		// "supported"/clock fields missing, partial metrics — must not fail.
+		let line = r#"{"cpu":{"percent":1,"temp_c":2},"mem":{"percent":3},
+			"net":{"down_bytes_s":4,"up_bytes_s":5},"gpu":[{"name":"x","util_percent":7}]}"#;
+		let s: Snapshot = serde_json::from_str(line).expect("sparse gpu must parse");
+		assert_eq!(s.gpu[0].util_percent, 7.0);
+		assert_eq!(s.gpu[0].vram_total_bytes, 0.0);
+	}
 }

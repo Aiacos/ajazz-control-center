@@ -63,6 +63,19 @@ int selected_pid = 0, start = 0, selected = 0, selected_depth = 0;
 string selected_name;
 } // namespace Proc
 
+#ifdef GPU_SUPPORT
+// Gpu box globals normally defined in btop_draw.cpp (btop_shared.cpp only defines
+// gpu_names / gpu_b_height_offsets / shared_gpu_percent / gpu_pwr_total_max).
+// `width` is load-bearing: Gpu::collect() caps each history deque at `width * 2`
+// samples (btop_collect.cpp ~2242-2264); width == 0 would take the "skip trimming"
+// branch and let the deques grow unbounded in streaming mode.
+namespace Gpu {
+int width = kHistoryWidth;
+int count = 0; // set by Shared::init()/Gpu::collect() to the enumerated device count
+int min_width = 0, min_height = 0; // inert (Term::get_min_size in btop_tools.cpp)
+} // namespace Gpu
+#endif
+
 // --- Fx::reset (terminal reset escape, normally in btop.cpp) ---
 namespace Fx {
 string reset = "\033[0m";

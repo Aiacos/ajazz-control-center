@@ -31,6 +31,15 @@
 			"Tooltip": "CPU usage, btop-styled",
 			"Controllers": ["Keypad", "Encoder"],
 			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		},
+		{
+			"UUID": "com.ajazz.sysmon2.gpu",
+			"Name": "GPU Monitor",
+			"Icon": "icon",
+			"Tooltip": "GPU monitor, btop-styled — utilisation, temperature or VRAM",
+			"Controllers": ["Keypad"],
+			"PropertyInspectorPath": "property-inspector.html",
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
 		}
 	]
 }
