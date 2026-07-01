@@ -209,10 +209,18 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                 if (icon.isEmpty()) {
                     icon = a.value(QStringLiteral("icon")).toString();
                 }
+                // `version` + `registered` feed OpenDeck's PluginManager
+                // subtitle + connected-state dot; without them the SPA renders
+                // "undefined" and a permanent disconnected warning. Everything
+                // list_plugins reports comes from installedActions(), which only
+                // lists plugins with a runnable action on this OS -> registered.
                 byPlugin.insert(id,
                                 QJsonObject{{QStringLiteral("id"), id},
                                             {QStringLiteral("name"),
                                              a.value(QStringLiteral("pluginName")).toString()},
+                                            {QStringLiteral("version"),
+                                             a.value(QStringLiteral("pluginVersion")).toString()},
+                                            {QStringLiteral("registered"), true},
                                             {QStringLiteral("icon"), icon}});
             }
         }

@@ -697,6 +697,7 @@ QVariantList PluginCatalogModel::installedActions() const {
 
             QVariantMap m;
             m.insert(QStringLiteral("pluginName"), parsed->name);
+            m.insert(QStringLiteral("pluginVersion"), parsed->version);
             m.insert(QStringLiteral("actionId"), action.uuid);
             m.insert(QStringLiteral("actionName"), action.name);
             m.insert(QStringLiteral("icon"), iconUrl);
