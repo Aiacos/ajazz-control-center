@@ -1,9 +1,14 @@
-// ajazz-sysmon — native cross-platform hardware monitor (Phase 1: CPU key).
+// ajazz-sysmon — native cross-platform hardware monitor.
+//
+// Phase 1: CPU key. Phase 2: parameterized "Monitor" action (metric picker via a
+// Property Inspector) + threshold colouring.
 //
 // Data: spawns the sibling `btop-metrics-helper` (which reuses btop's real
 // collectors) and reads its streaming JSON. Render: a btop-styled tile — a
-// gradient-filled area sparkline of recent CPU history + the current value,
-// coloured by btop's default-theme "cpu" gradient — pushed via set_image.
+// gradient-filled area sparkline of recent history + the current value — pushed
+// via set_image. The area graph keeps the metric's btop vertical gradient (the
+// aesthetic); the value text is coloured green/amber/red by threshold where
+// thresholds apply, else by the metric's value gradient.
 use openaction::*;
 
 use base64::Engine;
@@ -18,34 +23,135 @@ use tokio::task::JoinHandle;
 const FONT: &[u8] = include_bytes!("../assets/LiberationMono-Bold.ttf");
 const HISTORY: usize = 120;
 
-// btop default-theme "cpu" gradient stops (bottom -> mid -> top).
-const CPU_START: (u8, u8, u8) = (0x77, 0xca, 0x9b); // green (low)
-const CPU_MID: (u8, u8, u8) = (0xcb, 0xc0, 0x6c); // tan
-const CPU_END: (u8, u8, u8) = (0xdc, 0x4c, 0x4c); // red (high)
+// ---------------- metrics ----------------
+
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+enum Metric {
+	Cpu,
+	CpuTemp,
+	Ram,
+	NetDown,
+	NetUp,
+}
+
+impl Metric {
+	const ALL: [Metric; 5] = [Metric::Cpu, Metric::CpuTemp, Metric::Ram, Metric::NetDown, Metric::NetUp];
+
+	fn from_id(s: &str) -> Metric {
+		match s {
+			"cpu_temp" => Metric::CpuTemp,
+			"ram" => Metric::Ram,
+			"net_down" => Metric::NetDown,
+			"net_up" => Metric::NetUp,
+			_ => Metric::Cpu,
+		}
+	}
+
+	fn label(self) -> &'static str {
+		match self {
+			Metric::Cpu => "CPU",
+			Metric::CpuTemp => "TEMP",
+			Metric::Ram => "RAM",
+			Metric::NetDown => "NET DN",
+			Metric::NetUp => "NET UP",
+		}
+	}
+
+	/// btop default-theme gradient stops (bottom/low -> mid -> top/high).
+	fn grad(self) -> [(u8, u8, u8); 3] {
+		match self {
+			Metric::Cpu => [(0x77, 0xca, 0x9b), (0xcb, 0xc0, 0x6c), (0xdc, 0x4c, 0x4c)],
+			Metric::CpuTemp => [(0x48, 0x97, 0xd4), (0x54, 0x74, 0xe8), (0xff, 0x40, 0xb6)],
+			Metric::Ram => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
+			Metric::NetDown => [(0x29, 0x1f, 0x75), (0x4f, 0x43, 0xa3), (0xb0, 0xa9, 0xde)],
+			Metric::NetUp => [(0x62, 0x06, 0x65), (0x7d, 0x41, 0x80), (0xdc, 0xaf, 0xde)],
+		}
+	}
+
+	/// Fixed 0..scale for %/°C metrics; None = auto-range (network throughput).
+	fn scale_max(self) -> Option<f32> {
+		match self {
+			Metric::Cpu | Metric::Ram | Metric::CpuTemp => Some(100.0),
+			Metric::NetDown | Metric::NetUp => None,
+		}
+	}
+
+	/// Default (warn, crit) thresholds; None = thresholds not meaningful.
+	fn default_thresholds(self) -> Option<(f32, f32)> {
+		match self {
+			Metric::Cpu | Metric::Ram => Some((70.0, 90.0)),
+			Metric::CpuTemp => Some((70.0, 85.0)),
+			Metric::NetDown | Metric::NetUp => None,
+		}
+	}
+
+	fn format(self, v: f32) -> String {
+		match self {
+			Metric::Cpu | Metric::Ram => format!("{v:.0}%"),
+			Metric::CpuTemp => format!("{v:.0}\u{00b0}C"),
+			Metric::NetDown | Metric::NetUp => fmt_rate(v),
+		}
+	}
+}
+
+fn fmt_rate(bps: f32) -> String {
+	if bps >= 1_000_000.0 {
+		format!("{:.1}M", bps / 1_000_000.0)
+	} else if bps >= 1_000.0 {
+		format!("{:.0}K", bps / 1_000.0)
+	} else {
+		format!("{bps:.0}B")
+	}
+}
 
 // ---------------- shared metrics state ----------------
 
 #[derive(Default)]
 struct SharedMetrics {
-	cpu: f32,
-	history: VecDeque<f32>,
+	hist: HashMap<Metric, VecDeque<f32>>,
 }
 
-fn metrics() -> &'static Arc<Mutex<SharedMetrics>> {
-	static M: OnceLock<Arc<Mutex<SharedMetrics>>> = OnceLock::new();
-	M.get_or_init(|| Arc::new(Mutex::new(SharedMetrics::default())))
+fn metrics() -> &'static Mutex<SharedMetrics> {
+	static M: OnceLock<Mutex<SharedMetrics>> = OnceLock::new();
+	M.get_or_init(|| Mutex::new(SharedMetrics::default()))
+}
+
+fn push_metric(m: &mut SharedMetrics, k: Metric, v: f32) {
+	let dq = m.hist.entry(k).or_default();
+	dq.push_back(v);
+	while dq.len() > HISTORY {
+		dq.pop_front();
+	}
+}
+
+/// Latest value + a copy of the history for `metric`.
+fn metric_series(metric: Metric) -> (f32, VecDeque<f32>) {
+	let m = metrics().lock().unwrap();
+	let dq = m.hist.get(&metric).cloned().unwrap_or_default();
+	(dq.back().copied().unwrap_or(0.0), dq)
 }
 
 #[derive(Deserialize)]
 struct Snapshot {
 	cpu: CpuBlock,
+	mem: MemBlock,
+	net: NetBlock,
 }
 #[derive(Deserialize)]
 struct CpuBlock {
 	percent: f64,
+	temp_c: f64,
+}
+#[derive(Deserialize)]
+struct MemBlock {
+	percent: f64,
+}
+#[derive(Deserialize)]
+struct NetBlock {
+	down_bytes_s: f64,
+	up_bytes_s: f64,
 }
 
-/// Spawn the sibling metrics helper and pump its JSON stream into shared state.
 async fn run_helper() {
 	let helper = match std::env::current_exe()
 		.ok()
@@ -64,14 +170,13 @@ async fn run_helper() {
 	let Some(out) = child.stdout.take() else { return };
 	let mut lines = BufReader::new(out).lines();
 	while let Ok(Some(line)) = lines.next_line().await {
-		if let Ok(snap) = serde_json::from_str::<Snapshot>(&line) {
-			let cpu = snap.cpu.percent as f32;
+		if let Ok(s) = serde_json::from_str::<Snapshot>(&line) {
 			let mut m = metrics().lock().unwrap();
-			m.cpu = cpu;
-			m.history.push_back(cpu);
-			while m.history.len() > HISTORY {
-				m.history.pop_front();
-			}
+			push_metric(&mut m, Metric::Cpu, s.cpu.percent as f32);
+			push_metric(&mut m, Metric::CpuTemp, s.cpu.temp_c as f32);
+			push_metric(&mut m, Metric::Ram, s.mem.percent as f32);
+			push_metric(&mut m, Metric::NetDown, s.net.down_bytes_s as f32);
+			push_metric(&mut m, Metric::NetUp, s.net.up_bytes_s as f32);
 		}
 	}
 }
@@ -85,45 +190,55 @@ fn lerp(a: (u8, u8, u8), b: (u8, u8, u8), t: f32) -> (u8, u8, u8) {
 }
 
 /// Two-segment linear RGB interpolation, matching btop's `generateGradients()`.
-fn cpu_color(t: f32) -> (u8, u8, u8) {
+fn grad_at(stops: [(u8, u8, u8); 3], t: f32) -> (u8, u8, u8) {
 	if t < 0.5 {
-		lerp(CPU_START, CPU_MID, t * 2.0)
+		lerp(stops[0], stops[1], t * 2.0)
 	} else {
-		lerp(CPU_MID, CPU_END, (t - 0.5) * 2.0)
+		lerp(stops[1], stops[2], (t - 0.5) * 2.0)
 	}
 }
 
-fn render_cpu_tile(history: &VecDeque<f32>, value: f32) -> Option<Vec<u8>> {
+// Semantic threshold colours (btop cpu green / tan / red).
+const OK: (u8, u8, u8) = (0x77, 0xca, 0x9b);
+const WARN: (u8, u8, u8) = (0xcb, 0xc0, 0x6c);
+const CRIT: (u8, u8, u8) = (0xdc, 0x4c, 0x4c);
+
+fn render_tile(metric: Metric, history: &VecDeque<f32>, value: f32, warn: Option<f32>, crit: Option<f32>) -> Option<Vec<u8>> {
 	use tiny_skia::*;
 
 	let size = 144u32;
 	let (w, h) = (size as f32, size as f32);
 	let mut pm = Pixmap::new(size, size)?;
-	pm.fill(Color::from_rgba8(0, 0, 0, 255)); // btop near-black bg
+	pm.fill(Color::from_rgba8(0, 0, 0, 255));
 
-	// Gradient-filled area sparkline of the CPU history.
+	// Graph scale: fixed for %/°C, auto-range (peak of history) for network.
+	let scale = metric
+		.scale_max()
+		.unwrap_or_else(|| history.iter().cloned().fold(1.0_f32, f32::max));
+	let norm = |v: f32| (v / scale).clamp(0.0, 1.0);
+
+	let stops = metric.grad();
 	if history.len() >= 2 {
 		let n = history.len();
 		let mut pb = PathBuilder::new();
 		pb.move_to(0.0, h);
 		for (i, v) in history.iter().enumerate() {
 			let x = i as f32 / (n as f32 - 1.0) * w;
-			let y = h - ((*v).clamp(0.0, 100.0) / 100.0) * h;
+			let y = h - norm(*v) * h;
 			pb.line_to(x, y);
 		}
 		pb.line_to(w, h);
 		pb.close();
 		if let Some(path) = pb.finish() {
-			// Vertical wash: red at the top (y=0), green at the bottom (y=h).
-			let stops = vec![
-				GradientStop::new(0.0, Color::from_rgba8(CPU_END.0, CPU_END.1, CPU_END.2, 235)),
-				GradientStop::new(0.5, Color::from_rgba8(CPU_MID.0, CPU_MID.1, CPU_MID.2, 225)),
-				GradientStop::new(1.0, Color::from_rgba8(CPU_START.0, CPU_START.1, CPU_START.2, 215)),
+			let g = vec![
+				GradientStop::new(0.0, Color::from_rgba8(stops[2].0, stops[2].1, stops[2].2, 235)),
+				GradientStop::new(0.5, Color::from_rgba8(stops[1].0, stops[1].1, stops[1].2, 225)),
+				GradientStop::new(1.0, Color::from_rgba8(stops[0].0, stops[0].1, stops[0].2, 215)),
 			];
 			if let Some(shader) = LinearGradient::new(
 				Point::from_xy(0.0, 0.0),
 				Point::from_xy(0.0, h),
-				stops,
+				g,
 				SpreadMode::Pad,
 				Transform::identity(),
 			) {
@@ -135,16 +250,26 @@ fn render_cpu_tile(history: &VecDeque<f32>, value: f32) -> Option<Vec<u8>> {
 		}
 	}
 
-	// "CPU" label (btop main_fg) + the big value coloured by the cpu gradient.
-	draw_text(&mut pm, "CPU", 8.0, 30.0, 22.0, (0xcc, 0xcc, 0xcc));
-	let vcol = cpu_color(value / 100.0);
-	draw_text(&mut pm, &format!("{value:.0}%"), 8.0, h - 16.0, 44.0, vcol);
+	// Value colour: threshold bands where they apply, else the value gradient.
+	let vcol = match (warn, crit) {
+		(Some(wv), Some(cv)) => {
+			if value >= cv {
+				CRIT
+			} else if value >= wv {
+				WARN
+			} else {
+				OK
+			}
+		}
+		_ => grad_at(stops, norm(value)),
+	};
+
+	draw_text(&mut pm, metric.label(), 8.0, 30.0, 20.0, (0xcc, 0xcc, 0xcc));
+	draw_text(&mut pm, &metric.format(value), 8.0, h - 16.0, 40.0, vcol);
 
 	pm.encode_png().ok()
 }
 
-/// Draw `text` with baseline origin at (x, baseline), source-over onto the
-/// premultiplied RGBA pixmap buffer.
 fn draw_text(pm: &mut tiny_skia::Pixmap, text: &str, x: f32, baseline: f32, px: f32, col: (u8, u8, u8)) {
 	use ab_glyph::{Font, FontRef, PxScale, ScaleFont};
 
@@ -181,82 +306,163 @@ fn draw_text(pm: &mut tiny_skia::Pixmap, text: &str, x: f32, baseline: f32, px: 
 	}
 }
 
-// ---------------- openaction plumbing ----------------
+// ---------------- settings + render loop ----------------
 
-#[derive(Serialize, Deserialize, Default)]
-struct CpuSettings {}
+#[derive(Serialize, Deserialize, Clone, Default)]
+#[serde(default)]
+struct MonitorSettings {
+	metric: String,
+	warn: Option<f32>,
+	crit: Option<f32>,
+}
+
+impl MonitorSettings {
+	fn resolve(&self) -> (Metric, Option<f32>, Option<f32>) {
+		let m = Metric::from_id(&self.metric);
+		let dflt = m.default_thresholds();
+		let warn = self.warn.or(dflt.map(|d| d.0));
+		let crit = self.crit.or(dflt.map(|d| d.1));
+		(m, warn, crit)
+	}
+}
+
+/// Per-instance settings, shared with the render loop and updated by
+/// did_receive_settings so a metric change reflects live.
+fn settings_map() -> &'static Mutex<HashMap<InstanceId, MonitorSettings>> {
+	static S: OnceLock<Mutex<HashMap<InstanceId, MonitorSettings>>> = OnceLock::new();
+	S.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Spawn the 1 Hz render loop for one instance. `fixed` pins the metric (the CPU
+/// preset); otherwise the metric is read from the live per-instance settings.
+fn spawn_render(inst: Arc<Instance>, id: InstanceId, fixed: Option<Metric>) -> JoinHandle<()> {
+	tokio::spawn(async move {
+		loop {
+			let (metric, warn, crit) = match fixed {
+				Some(m) => (m, m.default_thresholds().map(|d| d.0), m.default_thresholds().map(|d| d.1)),
+				None => settings_map().lock().unwrap().get(&id).cloned().unwrap_or_default().resolve(),
+			};
+			let (val, hist) = metric_series(metric);
+			if let Some(png) = render_tile(metric, &hist, val, warn, crit) {
+				let uri = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png));
+				if inst.set_image(Some(uri), None).await.is_err() {
+					break;
+				}
+			}
+			tokio::time::sleep(Duration::from_millis(1000)).await;
+		}
+	})
+}
+
+// ---------------- actions ----------------
 
 #[derive(Default)]
+struct Tasks(Mutex<HashMap<InstanceId, JoinHandle<()>>>);
+
+impl Tasks {
+	fn insert(&self, id: InstanceId, task: JoinHandle<()>) {
+		if let Ok(mut m) = self.0.lock() {
+			if let Some(old) = m.insert(id, task) {
+				old.abort();
+			}
+		}
+	}
+	fn remove(&self, id: &str) {
+		if let Ok(mut m) = self.0.lock() {
+			if let Some(t) = m.remove(id) {
+				t.abort();
+			}
+		}
+	}
+}
+
+/// The CPU preset (metric fixed, no Property Inspector).
+#[derive(Default)]
 struct CpuAction {
-	tasks: Mutex<HashMap<InstanceId, JoinHandle<()>>>,
+	tasks: Tasks,
 }
 
 #[async_trait]
 impl Action for CpuAction {
 	const UUID: ActionUuid = "com.ajazz.sysmon2.cpu";
-	type Settings = CpuSettings;
+	type Settings = MonitorSettings;
 
 	async fn will_appear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
 		let id = instance.instance_id.clone();
-		let Some(inst) = get_instance(id.clone()).await else { return Ok(()) };
+		if let Some(inst) = get_instance(id.clone()).await {
+			self.tasks.insert(id.clone(), spawn_render(inst, id, Some(Metric::Cpu)));
+		}
+		Ok(())
+	}
+	async fn will_disappear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+		self.tasks.remove(&instance.instance_id);
+		Ok(())
+	}
+}
 
-		let task = tokio::spawn(async move {
-			loop {
-				let (val, hist) = {
-					let m = metrics().lock().unwrap();
-					(m.cpu, m.history.clone())
-				};
-				if let Some(png) = render_cpu_tile(&hist, val) {
-					let uri = format!(
-						"data:image/png;base64,{}",
-						base64::engine::general_purpose::STANDARD.encode(&png)
-					);
-					if inst.set_image(Some(uri), None).await.is_err() {
-						break;
-					}
-				}
-				tokio::time::sleep(Duration::from_millis(1000)).await;
-			}
-		});
+/// The parameterized Monitor action (metric picker + thresholds via the PI).
+#[derive(Default)]
+struct MonitorAction {
+	tasks: Tasks,
+}
 
-		if let Ok(mut map) = self.tasks.lock() {
-			if let Some(old) = map.insert(id, task) {
-				old.abort();
-			}
+#[async_trait]
+impl Action for MonitorAction {
+	const UUID: ActionUuid = "com.ajazz.sysmon2.monitor";
+	type Settings = MonitorSettings;
+
+	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		let id = instance.instance_id.clone();
+		settings_map().lock().unwrap().insert(id.clone(), settings.clone());
+		if let Some(inst) = get_instance(id.clone()).await {
+			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
 		}
 		Ok(())
 	}
 
+	async fn did_receive_settings(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		settings_map()
+			.lock()
+			.unwrap()
+			.insert(instance.instance_id.clone(), settings.clone());
+		Ok(())
+	}
+
 	async fn will_disappear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
-		if let Ok(mut map) = self.tasks.lock() {
-			if let Some(task) = map.remove(&instance.instance_id) {
-				task.abort();
-			}
-		}
+		self.tasks.remove(&instance.instance_id);
+		settings_map().lock().unwrap().remove(&instance.instance_id);
 		Ok(())
 	}
 }
 
 #[tokio::main]
 async fn main() -> OpenActionResult<()> {
-	// Dev aid: `--render-test <out.png>` renders a sample tile and exits, so the
-	// btop aesthetic can be eyeballed without the device pipeline.
+	// Dev aid: `--render-test <metric> <out.png>` renders a sample tile and exits.
 	let argv: Vec<String> = std::env::args().collect();
 	if argv.get(1).map(String::as_str) == Some("--render-test") {
+		let metric = Metric::from_id(argv.get(2).map(String::as_str).unwrap_or("cpu"));
+		let out = argv.get(3).cloned().unwrap_or_else(|| "/tmp/sysmon-tile.png".into());
 		let mut hist = VecDeque::new();
 		for i in 0..120 {
 			let t = i as f32 / 119.0;
-			hist.push_back((30.0 + 55.0 * (t * 6.0).sin().abs() + 10.0 * t).min(100.0));
+			let base = match metric {
+				Metric::CpuTemp => 45.0 + 40.0 * (t * 5.0).sin().abs(),
+				Metric::NetDown | Metric::NetUp => 200_000.0 * (t * 6.0).sin().abs() + 50_000.0 * t,
+				_ => 30.0 + 55.0 * (t * 6.0).sin().abs() + 10.0 * t,
+			};
+			hist.push_back(base);
 		}
-		let out = argv.get(2).cloned().unwrap_or_else(|| "/tmp/sysmon-tile.png".into());
-		if let Some(png) = render_cpu_tile(&hist, *hist.back().unwrap()) {
+		let (_, w, c) = MonitorSettings { metric: argv.get(2).cloned().unwrap_or_default(), warn: None, crit: None }.resolve();
+		if let Some(png) = render_tile(metric, &hist, *hist.back().unwrap(), w, c) {
 			std::fs::write(&out, png).ok();
 			eprintln!("wrote {out}");
 		}
+		let _ = Metric::ALL;
 		return Ok(());
 	}
 
 	tokio::spawn(run_helper());
 	register_action(CpuAction::default()).await;
+	register_action(MonitorAction::default()).await;
 	run(std::env::args().collect()).await
 }

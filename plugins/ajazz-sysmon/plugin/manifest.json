@@ -16,6 +16,15 @@
 	},
 	"Actions": [
 		{
+			"UUID": "com.ajazz.sysmon2.monitor",
+			"Name": "Monitor",
+			"Icon": "icon",
+			"Tooltip": "System monitor, btop-styled — pick a metric and thresholds",
+			"Controllers": ["Keypad", "Encoder"],
+			"PropertyInspectorPath": "property-inspector.html",
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		},
+		{
 			"UUID": "com.ajazz.sysmon2.cpu",
 			"Name": "CPU",
 			"Icon": "icon",
