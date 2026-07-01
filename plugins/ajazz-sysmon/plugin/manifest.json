@@ -1,0 +1,27 @@
+{
+	"UUID": "com.ajazz.sysmon2",
+	"Name": "System Monitor (btop)",
+	"Author": "AJAZZ Control Center",
+	"Version": "0.1.0",
+	"Description": "Native btop-powered hardware monitor with btop-styled tiles",
+	"Category": "System Monitor (btop)",
+	"Icon": "icon",
+	"SDKVersion": 2,
+	"Software": { "MinimumVersion": "0.0" },
+	"OS": [{ "Platform": "linux", "MinimumVersion": "0.0" }],
+	"CodePath": "ajazz-sysmon-x86_64-unknown-linux-gnu",
+	"CodePathLin": "ajazz-sysmon-x86_64-unknown-linux-gnu",
+	"CodePaths": {
+		"x86_64-unknown-linux-gnu": "ajazz-sysmon-x86_64-unknown-linux-gnu"
+	},
+	"Actions": [
+		{
+			"UUID": "com.ajazz.sysmon2.cpu",
+			"Name": "CPU",
+			"Icon": "icon",
+			"Tooltip": "CPU usage, btop-styled",
+			"Controllers": ["Keypad", "Encoder"],
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		}
+	]
+}
