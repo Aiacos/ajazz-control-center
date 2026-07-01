@@ -19,10 +19,85 @@ ______________________________________________________________________
 | Decision | Choice | Rationale |
 | --- | --- | --- |
 | **Delivery vehicle** | **Rust `.sdPlugin`** built on the `openaction` crate, **bundled with the app** | Proven cross-platform in this app today (`me.amankhanna.oasystem`, `com.amansprojects.starterpack` already run on Linux via per-target-triple binaries); out-of-process (never blocks the UI); `setFeedback` dial support already handled by `encoder_layout_renderer`. |
-| **Core sensor source** | Rust **`sysinfo`** crate | Covers CPU%, per-core, RAM/swap, disk usage+I/O, network, battery, uptime, load — and temperatures on Linux/macOS — cross-platform, steady-state-allocation-free. |
-| **Hard sensor source** | **btop / btop4win techniques** (Apache-2.0), reimplemented in Rust | `sysinfo` does NOT cover GPU, and Windows CPU-temp is a special case. btop is the reference-grade donor: NVML/ROCm/Intel for GPU, SMC/IOHID for macOS temps, LibreHardwareMonitor for Windows temps. |
+| **Sensor source** | **btop / btop4win collectors, reused directly** (both Apache-2.0), via a **standalone C++ `btop-metrics-helper` binary** that emits a unified JSON schema on stdout; the Rust plugin spawns it and reads the stream | User directive: "read directly from btop, it already does everything." btop covers everything `sysinfo` misses (GPU, temps) and is battle-tested per-OS. A separate helper process is a fault + privilege boundary (btop collectors `throw` + use global state; Windows LHM needs admin + a ring-0 driver — do not elevate the whole plugin). Matches the project's out-of-process house style. |
+| **Graphic style** | **btop's visual aesthetic**, rendered as raster key/dial images with **`tiny-skia`** + btop's gradient palette | User directive: "use a similar graphic style." Gradient-filled area sparklines + value colored by btop's default-theme gradients. |
 | **Action model** | **One parameterized "Monitor" action** + a few specialized ones | The market (HWiNFO, System Vitals) converged on a metric-picker action, not dozens of fixed actions. |
 | **Differentiators** | **Threshold colors + sparkline rendering**, and **first-class dial/touch-strip** | These are what users actually want and where incumbents are weakest. |
+
+## 1b. Finalized architecture (source-verified, 2026-07-01)
+
+```text
+Rust openaction plugin (ajazz-sysmon)
+  ├─ spawns → btop-metrics-helper (C++, btop/btop4win collectors, per-OS)
+  │             └─ emits one JSON object per line on stdout (unified schema)
+  ├─ parses JSON → per-metric ring buffers
+  └─ renders btop-style PNG (tiny-skia + btop gradient LUTs) → Instance.set_image()
+       + Instance.set_feedback() for dials
+```
+
+**Plugin shell — `openaction` v2.6.0** (`OpenActionAPI/rust`, needs Rust ≥ 1.85;
+we have 1.96). Verified API: implement the `Action` trait
+(`const UUID`, `type Settings`, async `will_appear`/`will_disappear`/`key_down`/
+`dial_rotate(ticks,pressed)`/`touch_tap(pos,hold)`/…). Outbound are methods on
+`&Instance`: `set_title(Option<..>, state)`, `set_image(Option<data-uri|path>,
+state)`, `set_feedback(&impl Serialize)`. `main()` = `register_action(a).await;
+run(std::env::args().collect()).await`. The crate parses `-port/-pluginUUID/…`
+itself. Lifecycle: one `tokio::spawn` poll task per visible instance, aborted on
+`will_disappear` (matches the pattern proven live for `oasystem`).
+
+**Metrics helper — reuse btop's collectors directly.** btop has NO API/JSON mode;
+"read directly from btop" = compile its collector translation units into our own
+tiny `main()`. The Linux collector is cleanly decoupled: **0 refs to
+`Term::`/`Draw::`/`Global::`**. Minimal build = `src/<os>/btop_collect.cpp` +
+`btop_shared.cpp` + `btop_config.cpp` + `btop_tools.cpp` + `btop_log.cpp` + a
+~15-line `shim.cpp` (defining the ~6 `Runner::`/`Global::` atomics/strings btop.cpp
+would provide) + **`fmt`** + **`-ldl`**. The one mandatory init is **`Shared::init()`**
+(Config uses compiled-in defaults — no config file needed). Collect funcs return
+references to deque histories (`.back()` = current); call **twice with a sleep**
+for %-based metrics (cpu/net deltas). Per-OS difficulty: **Linux easy**, **macOS
+moderate** (IOKit/CoreFoundation + `osx/smc.*` + `osx/sensors.*`), **Windows
+hardest** (separate `btop4win` tree; GPU/temp via the **LHM DLL, admin required**;
+GPU folded into `Cpu::` not `Gpu::`).
+
+**Unified JSON schema** (per-OS adapter normalizes into canonical units — bytes,
+°C, W, MHz, RPM, %):
+
+```jsonc
+{ "schema":1, "backend":"btop-linux|btop-macos|btop4win-lhm", "ts_ms":0,
+  "cpu": { "percent":0.0, "per_core":[0.0], "temp_c":0, "freq_mhz":0, "watts":0.0 },
+  "mem": { "used_bytes":0, "total_bytes":0, "percent":0.0,
+           "swap_used_bytes":0, "swap_total_bytes":0 },
+  "net": { "iface":"", "down_bytes_s":0, "up_bytes_s":0,
+           "down_total_bytes":0, "up_total_bytes":0 },
+  "gpu": [ { "name":"", "util_percent":0, "temp_c":0,
+             "vram_used_bytes":0, "vram_total_bytes":0, "power_w":0.0, "fan_rpm":0,
+             "core_clock_mhz":0, "mem_clock_mhz":0,
+             "supported": { "util":true,"temp":true,"vram":true,"power":true,
+                            "fan":false,"core_clock":true,"mem_clock":true } } ] }
+```
+
+Windows note: parse the **full** LHM sensor dump (`FetchLHMValues()`), not just
+what btop4win's TUI keeps — recovers GPU **power + fan** that btop4win discards.
+
+**Render — btop's aesthetic via `tiny-skia`** (pure-Rust AA path fill + native
+`LinearGradient`) + `ab_glyph` for the value text → PNG → `set_image`. Reproduce
+btop's *gradient-filled area sparkline*: bottom-anchored polygon, vertical
+`LinearGradient` using the metric's btop stops; big value colored by the same
+gradient at its magnitude; dark `#000` bg; slim rounded accent frame optional.
+**btop default-theme gradient stops** (start → mid → end), reused with attribution:
+
+| metric | start | mid | end |
+| --- | --- | --- | --- |
+| cpu | `#77ca9b` | `#cbc06c` | `#dc4c4c` |
+| temp | `#4897d4` | `#5474e8` | `#ff40b6` |
+| mem used | `#592b26` | `#d9626d` | `#ff4769` |
+| download | `#291f75` | `#4f43a3` | `#b0a9de` |
+| upload | `#620665` | `#7d4180` | `#dcafde` |
+
+Gradient = linear RGB lerp, two-segment when a mid stop exists; precompute a
+101-entry LUT (matches btop `generateGradients()`). Dials get a wide scrolling
+strip (and net = mirrored up/down dual graph). Render host-side with QPainter is a
+fallback, but plugin-side tiny-skia keeps the monitor self-contained.
 
 ## 2. The metric surface (80/20, from ecosystem survey)
 
@@ -132,13 +207,16 @@ btop/btop4win access code (Apache-2.0, with NOTICE attribution).
 
 ## 8. Phased plan (methodical; verify each phase live)
 
-- **Phase 0 — Scaffold & prove the pipe.** Rust `openaction` plugin skeleton,
-  one `CPU %` action, per-triple build, bundled + discovered. Live-verify via the
-  debug channel: bind → `willAppear` → live `setTitle`, render on the real AKP05E.
-  *(Reuses the exact flow already verified for `oasystem`.)*
-- **Phase 1 — Tier-1 metrics via `sysinfo`.** CPU%, RAM%, disk%, net up/down +
-  Linux/macOS CPU temp. The parameterized **System Monitor (key)** action + PI
-  metric picker.
+- **Phase 0 — `btop-metrics-helper` (Linux, highest-uncertainty first).** Compile
+  btop's Linux collectors into a standalone binary (5 btop TUs + shim + fmt + -ldl),
+  init `Shared::init()`, emit the unified JSON schema (CPU% first, then mem/net/gpu)
+  on stdout. Verify real numbers out. *This is the novel/risky piece — de-risk it
+  before anything downstream.*
+- **Phase 1 — Rust `openaction` plugin consuming the helper + btop-style render.**
+  Plugin skeleton (verified API), spawns the helper, one `CPU %` action rendering a
+  btop-style gradient sparkline PNG via tiny-skia, bundled + discovered. Live-verify
+  on the real AKP05E (bind → `willAppear` → live tile). Then the parameterized
+  **System Monitor (key)** action + PI metric picker over the Tier-1 set.
 - **Phase 2 — Rendering differentiators.** Threshold colors + sparkline; display
   modes text/sparkline/ring.
 - **Phase 3 — GPU (btop donor).** NVML/ROCm/Intel on Linux; the **GPU Monitor**
