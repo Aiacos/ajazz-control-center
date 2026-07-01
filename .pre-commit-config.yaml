@@ -118,6 +118,9 @@ repos:
     hooks:
       - id: shellcheck
         args: [--severity=warning]
+        # Vendored Spec Kit helper scripts are maintained upstream; don't gate
+        # our commits on their shellcheck warnings (SC2155/SC2221/...).
+        exclude: '^\.specify/'
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.10.0-2

@@ -11,6 +11,9 @@ extend-ignore-identifiers-re = [
 
 [default.extend-words]
 # Domain vocabulary that is NOT a typo.
+# "strategy" abbreviation (local bash var) in the vendored Spec Kit helper
+# scripts under .specify/scripts/; typos proposes start/strata.
+strat    = "strat"
 AJAZZ    = "AJAZZ"
 Mirabox  = "Mirabox"
 hidraw   = "hidraw"
