@@ -85,6 +85,14 @@
 		// Tauri event object shape: { event, id, payload }
 		Object.keys(ls).forEach(function (id) {
 			var fn = ls[id];
+			// The real @tauri-apps/api event plugin does NOT pass a function: it
+			// passes the numeric id minted by transformCallback (`handler: js(cb)`),
+			// expecting the host to route through the callback registry. Resolve
+			// numeric handlers via `callbacks` (hoisted var, same closure) —
+			// without this every SPA `listen()` was silently dropped and no
+			// backend push event (update_state, switch_profile, ...) ever
+			// reached a component.
+			if (typeof fn === "number") fn = callbacks[fn];
 			if (typeof fn === "function") {
 				try { fn({ event: name, id: Number(id), payload: payload }); }
 				catch (e) { console.error("[od-shim] listener error", name, e); }
