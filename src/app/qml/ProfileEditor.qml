@@ -94,6 +94,54 @@ Rectangle {
             title: qsTr("Select a device")
         }
 
+        // Device header (restored): product image + human model name on line 1,
+        // machine codename on line 2. Lost in the OpenDeck-embed refactor while
+        // the comment above survived (regression: keyboard/mouse pages showed
+        // no device identity at all).
+        RowLayout {
+            objectName: "deviceHeaderRow" // debug-channel addressable
+            Layout.fillWidth: true
+            visible: root.codename !== ""
+            spacing: Theme.spacingMd
+
+            // Product photo (bundled, per-codename) with per-family SVG fallback.
+            DeviceImage {
+                Layout.alignment: Qt.AlignVCenter
+                codename: root.codename
+                family: root._family
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.alignment: Qt.AlignVCenter
+                spacing: 2
+
+                // Line 1 — "Editing: <human model name>". Falls back to the
+                // codename when the capability map carries no model string.
+                Text {
+                    Layout.fillWidth: true
+                    text: qsTr("Editing: %1").arg(
+                        root.capabilities && root.capabilities.model
+                            ? root.capabilities.model
+                            : root.codename)
+                    color: Theme.fgPrimary
+                    font.pixelSize: Theme.fontXl
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+
+                // Line 2 — machine codename.
+                Text {
+                    Layout.fillWidth: true
+                    text: root.codename
+                    color: Theme.fgMuted
+                    font.pixelSize: Theme.fontSm
+                    wrapMode: Text.NoWrap
+                    elide: Text.ElideRight
+                }
+            }
+        }
+
         // Profile switcher bar (Workstream D) — device-scoped. Carries the
         // profile selector ("Default" dropdown) + New/Rename/Duplicate/Delete/
         // Export/Import actions. The profile dropdown belongs here (with the
