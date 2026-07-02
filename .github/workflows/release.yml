@@ -92,7 +92,9 @@ jobs:
     container:
       # kde-6.8: must match the manifest's runtime-version (Qt >= 6.8 needed by
       # the wayland PRIVATE_CODE codegen in src/app/CMakeLists.txt).
-      image: bilelmoussaoui/flatpak-github-actions:kde-6.8
+      # ghcr.io/flathub-infra is the maintained registry — the Docker Hub
+      # bilelmoussaoui/* mirror stopped publishing at kde-6.7.
+      image: ghcr.io/flathub-infra/flatpak-github-actions:kde-6.8
       options: --privileged
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
