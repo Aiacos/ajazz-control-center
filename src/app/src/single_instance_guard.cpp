@@ -47,7 +47,11 @@ SingleInstanceGuard::SingleInstanceGuard(QString name, QObject* parent)
             // Read whatever the secondary sends, up to a small timeout.
             if (sock->waitForReadyRead(kReadDeadlineMs)) {
                 QByteArray const data = sock->readAll();
-                if (data.contains("show")) {
+                if (data.startsWith("deeplink ")) {
+                    // "deeplink <url>" — a scheme-activated secondary handing
+                    // over its streamdeck:// URL (didReceiveDeepLink plumbing).
+                    emit deepLinkRequested(QString::fromUtf8(data.mid(9)).trimmed());
+                } else if (data.contains("show")) {
                     emit showRequested();
                 }
             }
@@ -64,6 +68,23 @@ bool SingleInstanceGuard::tryActivateExisting(QString const& name, int timeoutMs
         return false;
     }
     sock.write(kShowToken, static_cast<qint64>(std::char_traits<char>::length(kShowToken)));
+    sock.flush();
+    sock.waitForBytesWritten(timeoutMs);
+    sock.disconnectFromServer();
+    if (sock.state() != QLocalSocket::UnconnectedState) {
+        sock.waitForDisconnected(timeoutMs);
+    }
+    return true;
+}
+
+bool SingleInstanceGuard::forwardDeepLink(QString const& name, QString const& url, int timeoutMs) {
+    QLocalSocket sock;
+    sock.connectToServer(name);
+    if (!sock.waitForConnected(timeoutMs)) {
+        return false;
+    }
+    QByteArray const msg = QByteArrayLiteral("deeplink ") + url.toUtf8() + '\n';
+    sock.write(msg);
     sock.flush();
     sock.waitForBytesWritten(timeoutMs);
     sock.disconnectFromServer();

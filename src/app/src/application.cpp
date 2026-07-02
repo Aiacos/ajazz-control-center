@@ -1776,4 +1776,47 @@ void Application::onHotplug(core::HotplugEvent const& ev) {
     }
 }
 
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+void Application::handleDeepLink(QString const& url) {
+    // Contract: streamdeck://plugins/message/<PLUGIN_UUID>/<rest>. QUrl parses
+    // "plugins" as the host and "/message/<uuid>/<rest>" as the path.
+    QUrl const link(url);
+    if (link.scheme() != QStringLiteral("streamdeck") || link.host() != QStringLiteral("plugins")) {
+        AJAZZ_LOG_WARN("plugin", "deep link ignored (unknown shape): {}", url.toStdString());
+        return;
+    }
+    QString const path = link.path();
+    if (!path.startsWith(QStringLiteral("/message/"))) {
+        AJAZZ_LOG_WARN("plugin", "deep link ignored (not /message/): {}", url.toStdString());
+        return;
+    }
+    QString const tail = path.mid(9); // "<uuid>/<rest>" or "<uuid>"
+    qsizetype const slash = tail.indexOf(QLatin1Char('/'));
+    QString const pluginUuid = slash < 0 ? tail : tail.left(slash);
+    QString payloadUrl = slash < 0 ? QStringLiteral("/") : tail.mid(slash);
+    if (link.hasQuery()) {
+        payloadUrl += QLatin1Char('?') + link.query();
+    }
+    if (link.hasFragment()) {
+        payloadUrl += QLatin1Char('#') + link.fragment();
+    }
+    if (pluginUuid.isEmpty() || m_pluginServer == nullptr) {
+        return;
+    }
+    QJsonObject envelope{
+        {QStringLiteral("event"), QStringLiteral("didReceiveDeepLink")},
+        {QStringLiteral("payload"), QJsonObject{{QStringLiteral("url"), payloadUrl}}}};
+    if (m_pluginServer->sendEvent(pluginUuid, envelope)) {
+        AJAZZ_LOG_INFO("plugin",
+                       "didReceiveDeepLink -> {} (url '{}')",
+                       pluginUuid.toStdString(),
+                       payloadUrl.toStdString());
+    } else {
+        AJAZZ_LOG_WARN("plugin",
+                       "deep link for '{}' dropped (plugin not connected)",
+                       pluginUuid.toStdString());
+    }
+}
+#endif
+
 } // namespace ajazz::app

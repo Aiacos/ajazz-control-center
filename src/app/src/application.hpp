@@ -159,6 +159,18 @@ public:
     }
 #ifdef AJAZZ_HAVE_WEBSOCKETS
     [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
+    /**
+     * @brief Route a `streamdeck://` deep link to its plugin (didReceiveDeepLink).
+     *
+     * Elgato deep-link contract (production audit blocker 2):
+     * `streamdeck://plugins/message/<PLUGIN_UUID>/<path>?<query>` delivers
+     * `{"event":"didReceiveDeepLink","payload":{"url":"/<path>?<query>"}}` to
+     * the plugin registered as <PLUGIN_UUID>. Unknown shapes / plugins are
+     * logged and dropped (no crash). Called from main() at scheme-activated
+     * startup and from SingleInstanceGuard::deepLinkRequested when a running
+     * primary receives the hand-off.
+     */
+    void handleDeepLink(QString const& url);
     /// Live .sdPlugin discover/spawn manager (debug channel: plugin.rediscover).
     [[nodiscard]] PluginManager* pluginManager() const noexcept { return m_pluginManager.get(); }
     /// Device<->plugin event bridge (debug channel: plugin.simulatePiSettings).

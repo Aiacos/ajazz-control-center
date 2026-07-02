@@ -26,6 +26,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QTimer>
 #include <QWindow>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
@@ -175,7 +176,21 @@ int main(int argc, char* argv[]) {
     // they double-click the .desktop entry, the tray icon, or the autostart
     // hook fires while a manual launch is already up.
     auto const socketName = ajazz::app::SingleInstanceGuard::defaultSocketName();
-    if (ajazz::app::SingleInstanceGuard::tryActivateExisting(socketName)) {
+    // A streamdeck:// positional argument means the OS scheme handler spawned
+    // us for a plugin deep link (didReceiveDeepLink). When a primary already
+    // runs, hand the URL over instead of raising a second window.
+    QString deepLinkArg;
+    for (QString const& a : app.arguments().mid(1)) {
+        if (a.startsWith(QStringLiteral("streamdeck://"))) {
+            deepLinkArg = a;
+            break;
+        }
+    }
+    if (!deepLinkArg.isEmpty() &&
+        ajazz::app::SingleInstanceGuard::forwardDeepLink(socketName, deepLinkArg)) {
+        return 0;
+    }
+    if (deepLinkArg.isEmpty() && ajazz::app::SingleInstanceGuard::tryActivateExisting(socketName)) {
         return 0;
     }
     ajazz::app::SingleInstanceGuard instanceGuard(socketName);
@@ -253,6 +268,20 @@ int main(int argc, char* argv[]) {
     // Re-raise on subsequent launches (single-instance contract).
     QObject::connect(
         &instanceGuard, &ajazz::app::SingleInstanceGuard::showRequested, &app, showAllWindows);
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    // Deep links: forwarded by scheme-activated secondaries, or carried on our
+    // own argv when we ARE the scheme-activated launch (dispatched after the
+    // event loop starts so plugins have registered).
+    QObject::connect(&instanceGuard,
+                     &ajazz::app::SingleInstanceGuard::deepLinkRequested,
+                     &controller,
+                     &ajazz::app::Application::handleDeepLink);
+    if (!deepLinkArg.isEmpty()) {
+        QTimer::singleShot(3000, &controller, [&controller, deepLinkArg]() {
+            controller.handleDeepLink(deepLinkArg);
+        });
+    }
+#endif
 
     return app.exec();
 }
