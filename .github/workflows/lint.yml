@@ -129,6 +129,13 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # The webui CMake block (AJAZZ_BUILD_WEBUI, default ON) runs `npm ci`
+          # in the opendeck submodule at CONFIGURE time now that this runner's
+          # Qt includes qtwebengine — without the submodule the configure (and
+          # thus the compdb clang-tidy needs) hard-fails on a missing
+          # package.json.
+          submodules: recursive
       - name: Install toolchain
         # Qt is installed via install-qt-action below; here we only install
         # the system bits CMake / clang-tidy need to be able to configure
