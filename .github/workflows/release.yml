@@ -54,7 +54,12 @@ jobs:
       - name: Set up Rust (stable)
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - name: Configure
-        run: cmake --preset linux-release
+        # Packaging legs build with -Werror OFF: a compiler false positive
+        # (e.g. GCC 13 -Wnull-dereference at -O2, Release run 28620095630) must
+        # not block shipping artifacts. Warnings-as-errors is enforced by the
+        # per-PR CI matrix instead; the Flatpak manifest already does the same
+        # (-DAJAZZ_ENABLE_WERROR=OFF in config-opts).
+        run: cmake --preset linux-release -DAJAZZ_ENABLE_WERROR=OFF
       - name: Build
         run: cmake --build --preset linux-release
       - name: Package (deb + rpm)
@@ -141,7 +146,8 @@ jobs:
       - name: Set up Rust (stable)
         run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
       - name: Configure
-        run: cmake --preset windows-release
+        # Same -Werror rationale as the linux packaging leg above.
+        run: cmake --preset windows-release -DAJAZZ_ENABLE_WERROR=OFF
       - name: Build
         run: cmake --build --preset windows-release
 
@@ -321,7 +327,8 @@ jobs:
         run: |
           cmake -S . -B build/macos-release -G Ninja \
             -DCMAKE_BUILD_TYPE=RelWithDebInfo \
-            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64"
+            -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" \
+            -DAJAZZ_ENABLE_WERROR=OFF
       - name: Build
         run: cmake --build build/macos-release
 
