@@ -383,9 +383,16 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # verified against Ubuntu 25.04 "plucky", the first Ubuntu with Qt 6.8) and python3 for the
     # out-of-process plugin host. nodejs is only needed by node-based .sdPlugin bundles ->
     # Recommends, not Depends. The fully self-contained Linux artifact remains the Flatpak (org.kde
-    # 6.8 runtime bundles Qt + QML + sidecar + sysmon).
+    # 6.8 runtime bundles Qt + QML + sidecar + sysmon). NOTE (nightly .deb audit 2026-07-03):
+    # shlibdeps could not map the aqt-provisioned Qt sonames to Debian packages, so the generated
+    # Depends carried NO Qt at all. The qml6-module-* deps below transitively pull the
+    # QtQml/Quick/WebEngine runtime; the direct-linked Qt libs that no QML module implies
+    # (Widgets/Svg/WebSockets) are declared explicitly, with t64/legacy alternation for the time64
+    # renames.
     set(CPACK_DEBIAN_PACKAGE_DEPENDS
-        "python3 (>= 3.10), qml6-module-qtquick, qml6-module-qtquick-controls, \
+        "python3 (>= 3.10), libqt6widgets6t64 (>= 6.8) | libqt6widgets6 (>= 6.8), \
+libqt6svg6 (>= 6.8), libqt6websockets6 (>= 6.8), \
+qml6-module-qtquick, qml6-module-qtquick-controls, \
 qml6-module-qtquick-dialogs, qml6-module-qtquick-effects, qml6-module-qtquick-layouts, \
 qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, \
 qml6-module-qtwebengine, qml6-module-qtwebchannel"
@@ -406,7 +413,9 @@ qml6-module-qtwebengine, qml6-module-qtwebchannel"
     # modules + the python plugin host are runtime-loaded. Fedora ships every QtQuick QML module in
     # qt6-qtdeclarative.
     set(CPACK_RPM_PACKAGE_REQUIRES
-        "python3 >= 3.10, qt6-qtdeclarative >= 6.8, qt6-qtwebengine >= 6.8, qt6-qtwebchannel >= 6.8"
+        "python3 >= 3.10, qt6-qtbase >= 6.8, qt6-qtbase-gui >= 6.8, qt6-qtsvg >= 6.8, \
+qt6-qtwebsockets >= 6.8, qt6-qtdeclarative >= 6.8, qt6-qtwebengine >= 6.8, \
+qt6-qtwebchannel >= 6.8"
     )
     set(CPACK_RPM_PACKAGE_SUGGESTS "nodejs")
     # CPack's RPM generator ignores CPACK_PACKAGE_DESCRIPTION; the per-generator variable is
