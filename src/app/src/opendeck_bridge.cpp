@@ -183,7 +183,20 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             QString::fromUtf8(QJsonDocument(incoming).toJson(QJsonDocument::Compact)));
         return str(QJsonValue(QJsonValue::Null));
     }
-    if (command == QLatin1String("get_localisations") || command == QLatin1String("make_info")) {
+    if (command == QLatin1String("get_localisations")) {
+        return str(QJsonObject{});
+    }
+    if (command == QLatin1String("make_info")) {
+        // PI bootstrap Info (property_inspector.rs parity): stock Elgato PI
+        // libs read info.application.* before registering; {} made them throw
+        // (audit 5.3). Resolver -> PluginManager::infoJsonForPlugin.
+        if (m_infoJsonResolver) {
+            QString const plugin = args.value(QStringLiteral("plugin")).toString();
+            QString const info = m_infoJsonResolver(plugin);
+            if (!info.isEmpty()) {
+                return info; // already compact JSON
+            }
+        }
         return str(QJsonObject{});
     }
     if (command == QLatin1String("get_application_profiles")) {

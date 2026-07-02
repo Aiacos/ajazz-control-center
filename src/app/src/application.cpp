@@ -516,6 +516,11 @@ Application::Application(QObject* parent)
     // Same init-order reason: the input service is constructed after the bridge,
     // so inject it here for trigger_virtual_press' synthetic press path.
     m_openDeckBridge->setInputService(m_streamDockInput.get());
+    // make_info (PI bootstrap Info, audit 5.3): lazy m_pluginManager read —
+    // it is constructed later in startBackgroundServices.
+    m_openDeckBridge->setInfoJsonResolver([this](QString const& plugin) -> QString {
+        return m_pluginManager ? m_pluginManager->infoJsonForPlugin(plugin) : QString{};
+    });
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_openDeckBridge.get(),

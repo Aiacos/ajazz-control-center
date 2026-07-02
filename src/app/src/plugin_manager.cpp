@@ -963,6 +963,22 @@ void PluginManager::unloadPlugin(QString const& pluginId) {
 #endif
 }
 
+QString PluginManager::infoJsonForPlugin(QString const& pluginId) const {
+    auto it = m_live.find(pluginId);
+    if (it == m_live.end()) {
+        // Tolerate the registration PUUID spelling (make_info receives the
+        // `plugin` field the SPA carries on the instance, which is the
+        // install-dir name today but PUUID-shaped ids must not 404).
+        for (auto const& [key, live] : m_live) {
+            if (live.manifest.puuid == pluginId) {
+                return buildInfoJson(live.manifest);
+            }
+        }
+        return {};
+    }
+    return buildInfoJson(it->second.manifest);
+}
+
 // ---------------------------------------------------------------------------
 // lastNodeArgvForTesting()
 // ---------------------------------------------------------------------------

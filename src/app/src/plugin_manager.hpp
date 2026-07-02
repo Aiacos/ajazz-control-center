@@ -306,6 +306,13 @@ public:
      */
     void unloadPlugin(QString const& pluginId);
 
+    /// Full Elgato `-info` JSON for a LIVE plugin (by its install-dir key or
+    /// registration PUUID) — the same envelope spawn() hands the plugin child.
+    /// Backs the SPA's make_info (PI bootstrap): stock Elgato PI libs read
+    /// info.application.* before registering, and an empty object made them
+    /// throw (audit 5.3). Returns "" when the plugin is not live.
+    [[nodiscard]] QString infoJsonForPlugin(QString const& pluginId) const;
+
     /**
      * @brief Test seam: return the argv that would be passed to QProcess for @p uuid.
      *

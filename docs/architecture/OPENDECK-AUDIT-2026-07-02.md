@@ -63,7 +63,7 @@ contract) before being recorded. Status letters: **F** fixed, **O** open,
 |---|-----|---------|--------|
 | 5.1 | P2 | `backup/restore/open_config/open_log` unhandled → all four Settings buttons dead | F |
 | 5.2 | P2 | `set_settings` store-only: brightness/sleep sliders in OpenDeck Settings are inert | O |
-| 5.3 | P2 | `make_info` returns `{}` — stock Elgato PI libs reading `info.application.*` throw before registering | O |
+| 5.3 | P2 | `make_info` returns `{}` — stock Elgato PI libs reading `info.application.*` throw before registering | F |
 | 5.4 | P3 | `restart` / `reload_plugin` / `show_settings_interface` unhandled | O |
 | 5.5 | P3 | `get_build_info` plain string vs upstream HTML (OS-conditional UI never matches) | O |
 

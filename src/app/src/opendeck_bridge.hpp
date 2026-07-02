@@ -157,6 +157,14 @@ public:
     /// like setStreamDockControl). May be null in headless builds.
     void setInputService(StreamDockInputService* input) { m_input = input; }
 
+    /// Inject the plugin -info JSON resolver (PluginManager::infoJsonForPlugin).
+    /// Backs make_info: the SPA bootstraps every stock Elgato PI with this Info
+    /// object, and an empty {} made PI libs reading info.application.* throw
+    /// before registering (audit 5.3). Lazy null-guarded like the sibling seams.
+    void setInfoJsonResolver(std::function<QString(QString const&)> resolver) {
+        m_infoJsonResolver = std::move(resolver);
+    }
+
     /// Emit the OpenDeck events the web UI subscribes to. Wired to backend
     /// signals in Application; safe to call when no web UI is attached.
     void notifyProfileChanged(); ///< -> "switch_profile" + "rerender_images"
@@ -215,6 +223,7 @@ private:
     PluginCatalogModel* m_catalog;
     StreamDockControlService* m_control = nullptr;
     StreamDockInputService* m_input = nullptr;
+    std::function<QString(QString const&)> m_infoJsonResolver; // see setInfoJsonResolver
     QNetworkAccessManager* m_pluginDownloader = nullptr;
 };
 
