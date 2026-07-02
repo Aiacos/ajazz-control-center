@@ -405,17 +405,14 @@ memory `project_phase_tracking_vs_code_divergence`.
 
 ### Latent items (open, low-priority)
 
-- `tests/qml/ajazz_qml_tests` **link gap RESOLVED** — the target now compiles
-  `sidecar_stream_dock_device.cpp` + the bridge slots and builds/runs clean on Linux
-  and macOS (DeviceView geometry + drag-drop smoke gate). Two follow-ups remain:
-  - **Windows-only hang (open).** The first drag-drop case (`DeviceViewDragDrop`,
-    first to force the `ProfileController` QML singleton via `singletonInstance`)
-    stalls the offscreen process on windows-2022 until the 45-min job timeout —
-    most likely a crash parked behind Windows Error Reporting, not a clean failure.
-    The tests are therefore **built but not registered/run on Windows**
-    (`if(NOT WIN32)` around `catch_discover_tests` in `tests/qml/CMakeLists.txt`);
-    Linux + macOS keep them as the smoke gate. Needs a Windows box (or WER-disabled
-    CI) to root-cause. Pre-existing, unrelated to the sidecar migration.
+- `tests/qml/ajazz_qml_tests` — now a single load-time smoke test
+  (`test_qml_smoke.cpp`), registered **Linux-only**
+  (`if(NOT WIN32 AND NOT APPLE)` around `catch_discover_tests` in
+  `tests/qml/CMakeLists.txt`). The crash-prone `DeviceViewDragDrop` cases (and
+  the Windows offscreen hang they caused) were REMOVED together with the native
+  QML streamdeck editor when the OpenDeck SPA embed replaced it; re-opening the
+  remaining smoke test to macOS/Windows runners can be revisited now that those
+  cases are gone. One follow-up remains:
   - The harness leaks `world()` and uses a custom `main()` that `std::_Exit`s past
     Qt's racy exit-time global-destructor teardown (was an intermittent ubuntu
     SegFault after "All tests passed"). Run ctest with `-LE qml` to skip the label;

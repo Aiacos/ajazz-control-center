@@ -29,9 +29,15 @@ exclude: |
       dist/.*|
       \.venv/.*|
       docs/protocols/captures/.*|
+      src/app/webui/opendeck/.*|
+      plugins/.*|
       .*\.pcapng|
       .*\.min\.(js|css)
   )$
+# src/app/webui/opendeck is a PRISTINE git submodule (nekename/OpenDeck) and
+# plugins/ holds bundled-plugin build trees from feat/native-hardware-monitor:
+# formatter hooks (mdformat et al.) must never rewrite either (2026-07-02:
+# mdformat reflowed the submodule's .github templates + LICENSE.md).
 
 repos:
   # --------------------------------------------------------------------------
