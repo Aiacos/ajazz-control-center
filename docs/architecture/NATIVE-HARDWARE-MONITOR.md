@@ -207,26 +207,42 @@ btop/btop4win access code (Apache-2.0, with NOTICE attribution).
 
 ## 8. Phased plan (methodical; verify each phase live)
 
-- **Phase 0 — `btop-metrics-helper` (Linux, highest-uncertainty first).** Compile
-  btop's Linux collectors into a standalone binary (5 btop TUs + shim + fmt + -ldl),
-  init `Shared::init()`, emit the unified JSON schema (CPU% first, then mem/net/gpu)
-  on stdout. Verify real numbers out. *This is the novel/risky piece — de-risk it
-  before anything downstream.*
+- **Phase 0 — `btop-metrics-helper` (Linux, highest-uncertainty first).** ✅ DONE
+  (`98bc188f`). Compile btop's Linux collectors into a standalone binary (5 btop
+  TUs + shim + fmt + -ldl), init `Shared::init()`, emit the unified JSON schema
+  (CPU% first, then mem/net/gpu) on stdout. Verified real numbers out.
 - **Phase 1 — Rust `openaction` plugin consuming the helper + btop-style render.**
-  Plugin skeleton (verified API), spawns the helper, one `CPU %` action rendering a
-  btop-style gradient sparkline PNG via tiny-skia, bundled + discovered. Live-verify
-  on the real AKP05E (bind → `willAppear` → live tile). Then the parameterized
-  **System Monitor (key)** action + PI metric picker over the Tier-1 set.
-- **Phase 2 — Rendering differentiators.** Threshold colors + sparkline; display
-  modes text/sparkline/ring.
-- **Phase 3 — GPU (btop donor).** NVML/ROCm/Intel on Linux; the **GPU Monitor**
-  action. macOS Apple-Silicon best-effort.
-- **Phase 4 — Dial / touch-strip.** `setFeedback` layouts, rotate-to-switch,
-  press-to-cycle, strip sparkline.
-- **Phase 5 — Windows temp/GPU tier.** LHM DLL + elevation (advanced tier);
-  basic tier stays privilege-free.
-- **Phase 6 — Tier-2/3 + polish.** Network+ping, sensor picker, battery/uptime,
-  bundling into all three installers, docs, CI cross-compile matrix.
+  ✅ DONE (`47e0f95f`). Plugin skeleton (verified API), spawns the helper, one
+  `CPU %` action rendering a btop-style gradient sparkline PNG via tiny-skia,
+  bundled + discovered. Live-verified on the real AKP05E (bind → `willAppear` →
+  live tile), then the parameterized **Monitor** action + PI metric picker.
+- **Phase 2 — Rendering differentiators.** ✅ DONE (`62018958`). Threshold colors
+  + sparkline; per-metric gradients/scales/thresholds via the PI.
+- **Phase 3 — GPU (btop donor).** ✅ DONE (`b2727c2a`). NVML (dlopen) verified
+  exact vs nvidia-smi on an RTX 2080 SUPER; ROCm SMI + amdgpu-sysfs + Intel PMU
+  compiled in; **GPU Monitor** action + gpu/gpu_temp/vram picker metrics.
+  macOS Apple-Silicon best-effort remains open. NOTE: NVML v1
+  `nvmlDeviceGetMemoryInfo` counts driver-reserved VRAM (helper "used" ≈
+  nvidia-smi used + reserved — verified via `nvidia-smi -q -d MEMORY`).
+- **Phase 4 — Dial / touch-strip.** ✅ DONE (`bbf7e134` + app `ec36b878`).
+  Rotate-to-switch-metric, press-to-cycle, 128 px strip sparkline tile.
+  **Design deviation from this plan:** `openaction` (2.6.0, latest as of
+  2026-07-02) exposes NO `set_feedback` and does not route `touchTap`, so the
+  strip visual is the plugin's own tile pushed via `setImage` on the Encoder
+  instance; the host routes Encoder-context `setImage` to the dial's strip zone
+  (and mirrors it to the OpenDeck web UI slider). The host's `$A1/$B1/...`
+  feedback-layout renderer stays available for plugins that can emit
+  `setFeedback`; revisit when the crate grows the API.
+- **Phase 5 — Windows temp/GPU tier.** ⛔ HARDWARE-GATED (2026-07-02). LHM DLL +
+  elevation (advanced tier); basic tier stays privilege-free. Constitution
+  Principle V requires live verification and no Windows box is available to this
+  effort; the btop4win tree is also a separate vendor drop. Do NOT implement
+  blind — pick this up on a Windows machine (build btop4win collectors, parse
+  the FULL `FetchLHMValues()` dump, split basic/advanced tiers).
+- **Phase 6 — Tier-2/3 + polish.** ▶ IN PROGRESS. Tier-2 metrics (disk %,
+  GPU power) landing on Linux; still open: network+ping, sensor picker,
+  battery/uptime, bundling into all three installers, user docs, CI
+  cross-compile matrix.
 
 ## 9. Open decisions (for the owner)
 
