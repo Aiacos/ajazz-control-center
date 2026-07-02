@@ -20,6 +20,7 @@ import "components"
 
 Rectangle {
     id: root
+    objectName: "deviceList" // debug-channel addressing (device sidebar)
     color: Theme.bgSidebar
 
     /// Emitted when the user activates a device row; carries the device codename.

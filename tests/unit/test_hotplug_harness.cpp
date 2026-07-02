@@ -329,6 +329,84 @@ TEST_CASE("SC2: DeviceModel emits exactly one dataChanged({ConnectedRole}) per r
     REQUIRE(roles.contains(static_cast<int>(DeviceModel::ConnectedRole)));
 }
 
+// capabilitiesFor() is the contract the OpenDeck top-nav + per-device drawer
+// read (family/keyCount/hasClock/maturity/...). Audit 2026-06-05 found it had
+// zero coverage; this guards the key set and value mapping so a descriptor or
+// map-key rename can't silently feed the QML `undefined`.
+TEST_CASE("DeviceModel::capabilitiesFor exposes the full capability map",
+          "[device_model][capabilities]") {
+    qtApp();
+
+    MockHidEnumerator mock;
+    mock.setKeys({{0x1234, 0x5678}});
+    DeviceRegistry registry{mock.asEnumerator()};
+
+    DeviceDescriptor desc;
+    desc.vendorId = 0x1234;
+    desc.productId = 0x5678;
+    desc.family = DeviceFamily::StreamDeck;
+    desc.codename = "captest";
+    desc.model = "Cap Test Deck";
+    desc.keyCount = 10;
+    desc.gridColumns = 5;
+    desc.encoderCount = 4;
+    desc.keyRows = 2;
+    desc.touchZoneCount = 4;
+    desc.hasRgb = true;
+    desc.hasTouchStrip = true;
+    desc.hasClock = false;
+    desc.hasBattery = false;
+    desc.hasSettings = true;
+    registry.registerDevice(desc, [](DeviceDescriptor const& d, DeviceId id) -> DevicePtr {
+        return std::make_shared<StubDevice>(d, std::move(id));
+    });
+
+    DeviceModel model{registry};
+    model.refresh();
+
+    auto const caps = model.capabilitiesFor("captest");
+    REQUIRE_FALSE(caps.isEmpty());
+    REQUIRE(caps.value("model").toString() == "Cap Test Deck");
+    REQUIRE(caps.value("codename").toString() == "captest");
+    REQUIRE(caps.value("family").toInt() == static_cast<int>(DeviceFamily::StreamDeck));
+    REQUIRE(caps.value("keyCount").toInt() == 10);
+    REQUIRE(caps.value("gridColumns").toInt() == 5);
+    REQUIRE(caps.value("encoderCount").toInt() == 4);
+    REQUIRE(caps.value("keyRows").toInt() == 2);
+    REQUIRE(caps.value("touchZoneCount").toInt() == 4);
+    REQUIRE(caps.value("hasRgb").toBool());
+    REQUIRE(caps.value("hasTouchStrip").toBool());
+    REQUIRE_FALSE(caps.value("hasClock").toBool());
+    REQUIRE(caps.value("hasSettings").toBool());
+    REQUIRE(caps.value("maturity").toString() == "scaffolded"); // unknown codename -> default
+
+    // Every key the new top-nav / device drawer reads must be present so the
+    // QML never silently binds `undefined` (REQ-26 capability surface).
+    for (auto const* key : {"model",
+                            "codename",
+                            "family",
+                            "keyCount",
+                            "gridColumns",
+                            "encoderCount",
+                            "keyRows",
+                            "touchZoneCount",
+                            "mainScreenWidthPx",
+                            "mainScreenHeightPx",
+                            "dpiStageCount",
+                            "hasRgb",
+                            "hasTouchStrip",
+                            "hasClock",
+                            "hasBattery",
+                            "hasSettings",
+                            "maturity"}) {
+        INFO("missing capability key: " << key);
+        REQUIRE(caps.contains(QString::fromLatin1(key)));
+    }
+
+    // Unknown codename -> empty map (the QML capability guards rely on this).
+    REQUIRE(model.capabilitiesFor("does-not-exist").isEmpty());
+}
+
 // ----------------------------------------------------------------------------
 // SECTION 6: Disconnect-during-use scenario (the 2026-05-12/13 fix narrative -
 // HOTPLUG-07 cross-link).

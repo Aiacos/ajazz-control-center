@@ -1,0 +1,3 @@
+# Cargo build output. Cargo.lock IS tracked (this is an application, not a
+# library) for reproducible CI + offline Flatpak builds (cargo build --locked).
+/target

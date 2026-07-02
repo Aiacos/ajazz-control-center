@@ -41,10 +41,17 @@ option(AJAZZ_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 # Clang sanitizer runtime); the tests/CMakeLists.txt gate errors out at configure time if
 # AJAZZ_BUILD_FUZZ_TESTS=ON is paired with GCC/MSVC, surfacing the constraint up front.
 option(AJAZZ_BUILD_FUZZ_TESTS "Build libFuzzer harnesses (Clang only, opt-in)" OFF)
+# Phase 21-01 (PLUGIN-12): IInputSynthesizer native OS backends. ON by default so the built-in
+# system actions (e.g. the Volume dial: Linux uinput / Windows SendInput / macOS CGEvent) actually
+# drive the OS instead of the no-op recording stub. The per-OS TU still self-guards with the
+# platform #if, and the stub remains the fallback when this is OFF (hardware-free builds/tests, no
+# /dev/uinput, no OS Accessibility permission). Mirrors the AJAZZ_HAVE_WEBSOCKETS gating pattern.
+option(AJAZZ_FEATURE_INPUT_SYNTH "Build native OS input synthesis backends" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(Warnings)
 include(Sanitizers)
+include(StreamdockSidecar)
 
 # -----------------------------------------------------------------------------
 # Dependencies
@@ -166,9 +173,9 @@ if(AJAZZ_USE_SYSTEM_DEPS)
     # config provided when it is absent.
     if(NOT TARGET hidapi::hidapi)
         add_library(ajazz_hidapi_compat INTERFACE)
-        foreach(backend hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
-            if(TARGET ${backend})
-                target_link_libraries(ajazz_hidapi_compat INTERFACE ${backend})
+        foreach(hidapi_backend hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
+            if(TARGET ${hidapi_backend})
+                target_link_libraries(ajazz_hidapi_compat INTERFACE ${hidapi_backend})
             endif()
         endforeach()
         add_library(hidapi::hidapi ALIAS ajazz_hidapi_compat)
@@ -176,6 +183,10 @@ if(AJAZZ_USE_SYSTEM_DEPS)
     # nlohmann::json stays PRIVATE-linked to `ajazz_plugins` (COD-031); see
     # `src/plugins/CMakeLists.txt`. The config target is nlohmann_json::nlohmann_json.
     find_package(nlohmann_json 3.12 REQUIRED)
+    # zlib: raw DEFLATE inflate for the plugin-archive extractor (sdplugin_extractor.cpp). Provided
+    # by the Flatpak freedesktop runtime / distro under AJAZZ_USE_SYSTEM_DEPS; the config target is
+    # ZLIB::ZLIB.
+    find_package(ZLIB REQUIRED)
 else()
     # hidapi — vendored via FetchContent for reproducibility
     FetchContent_Declare(
@@ -210,6 +221,41 @@ else()
     set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
     set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
     FetchContent_MakeAvailable(nlohmann_json)
+
+    # zlib — vendored via FetchContent for reproducibility. The plugin-archive extractor
+    # (sdplugin_extractor.cpp) uses the raw <zlib.h> inflate API. `find_package(ZLIB)` cannot locate
+    # a zlib on the Windows CI runner (Qt bundles zlib but does not export it as a findable CMake
+    # package), so vendoring is the only platform-uniform path. Pinned to v1.3.1.
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+        GIT_SHALLOW TRUE
+    )
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Disable zlib examples" FORCE)
+    # zlib v1.3.1 targets cmake_minimum_required < 3.10; force a 3.10 policy floor for the
+    # subproject so CMake 4.x accepts it without the `Compatibility with CMake < 3.10` deprecation
+    # (same handling as hidapi above; violates our zero-warnings invariant otherwise).
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
+    FetchContent_MakeAvailable(zlib)
+    unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+    # zlib's headers (zlib.h) use constructs our strict warning wall rejects (-Wold-style-cast et
+    # al.). find_package(ZLIB) headers come in via -isystem (warnings suppressed); FetchContent
+    # propagates them as plain -I, so mark them SYSTEM explicitly or sdplugin_extractor.cpp fails
+    # under -Werror.
+    get_target_property(_ajazz_zlib_inc zlibstatic INTERFACE_INCLUDE_DIRECTORIES)
+    if(_ajazz_zlib_inc)
+        set_target_properties(
+            zlibstatic PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_ajazz_zlib_inc}"
+        )
+    endif()
+    # zlib's CMake exports `zlibstatic`/`zlib`, not the canonical `ZLIB::ZLIB` config target that
+    # the code links (and that find_package(ZLIB) would provide). Synthesise the alias from the
+    # static lib (no runtime DLL to deploy on Windows). The `zlibstatic` target carries include dirs
+    # for both the source tree and the generated zconf.h, so `#include <zlib.h>` resolves.
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -218,9 +264,14 @@ endif()
 add_subdirectory(src/core)
 add_subdirectory(src/devices)
 
-if(AJAZZ_BUILD_PYTHON_HOST)
-    add_subdirectory(src/plugins)
-endif()
+# ajazz::plugins is built UNCONDITIONALLY: the app links it unconditionally so the Ed25519
+# plugin-verify gate is always present (fail-closed — see Phase 22 note at src/app/CMakeLists.txt).
+# The library is Qt-free and pybind11-free (the out-of-process host execs python3 at runtime, no
+# compile-time Python dep), so it builds regardless of AJAZZ_BUILD_PYTHON_HOST; only the host
+# *runtime* defs in src/app are gated by that option. Guarding this subdir behind
+# AJAZZ_BUILD_PYTHON_HOST broke -DAJAZZ_BUILD_PYTHON_HOST=OFF builds (CodeQL) with "Target
+# ajazz-control-center links to ajazz::plugins but the target was not found".
+add_subdirectory(src/plugins)
 
 if(AJAZZ_BUILD_APP)
     add_subdirectory(src/app)
@@ -229,6 +280,12 @@ endif()
 if(AJAZZ_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# Bundled first-party plugins (ajazz-sysmon monitor; Linux-only for now).
+option(AJAZZ_BUNDLE_PLUGINS "Build + install the bundled first-party plugins" ON)
+if(AJAZZ_BUNDLE_PLUGINS)
+    add_subdirectory(plugins)
 endif()
 
 # -----------------------------------------------------------------------------

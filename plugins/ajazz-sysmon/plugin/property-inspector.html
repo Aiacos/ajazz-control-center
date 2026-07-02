@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8" />
+	<title>System Monitor (btop)</title>
+	<style>
+		body { font-family: system-ui, sans-serif; font-size: 13px; color: #dcdcdc;
+			background: #2d2d2d; margin: 0; padding: 12px; }
+		.row { display: flex; align-items: center; margin-bottom: 10px; }
+		.row label { width: 90px; color: #9a9a9a; }
+		select, input { flex: 1; background: #3d3d3d; color: #dcdcdc; border: 1px solid #555;
+			border-radius: 4px; padding: 5px; font-size: 13px; }
+		.hint { color: #7a7a7a; font-size: 11px; margin: 2px 0 12px 90px; }
+	</style>
+</head>
+<body>
+	<div class="row">
+		<label for="metric">Metric</label>
+		<select id="metric">
+			<option value="cpu">CPU usage</option>
+			<option value="cpu_temp">CPU temperature</option>
+			<option value="ram">RAM usage</option>
+			<option value="disk">Disk used</option>
+			<option value="net_down">Network download</option>
+			<option value="net_up">Network upload</option>
+			<option value="ping">Ping (TCP 1.1.1.1)</option>
+			<option value="battery">Battery %</option>
+			<option value="uptime">Uptime</option>
+			<option value="gpu">GPU usage</option>
+			<option value="gpu_temp">GPU temperature</option>
+			<option value="vram">VRAM used</option>
+			<option value="gpu_power">GPU power</option>
+		</select>
+	</div>
+	<div class="row"><label for="warn">Warn &ge;</label><input id="warn" type="number" step="1" placeholder="default" /></div>
+	<div class="row"><label for="crit">Crit &ge;</label><input id="crit" type="number" step="1" placeholder="default" /></div>
+	<div class="hint">Thresholds colour the value green / amber / red. Leave blank for per-metric defaults.</div>
+
+	<script>
+		let ws = null, uuid = null;
+		const $ = (id) => document.getElementById(id);
+
+		function apply(s) {
+			if (!s) return;
+			if (s.metric) $("metric").value = s.metric;
+			$("warn").value = (s.warn ?? "");
+			$("crit").value = (s.crit ?? "");
+		}
+
+		function send() {
+			if (!ws || ws.readyState !== 1) return;
+			const num = (v) => (v === "" || v === null ? null : Number(v));
+			const payload = { metric: $("metric").value, warn: num($("warn").value), crit: num($("crit").value) };
+			ws.send(JSON.stringify({ event: "setSettings", context: uuid, payload }));
+		}
+
+		["metric", "warn", "crit"].forEach((id) => {
+			$(id).addEventListener("change", send);
+			$(id).addEventListener("input", send);
+		});
+
+		// eslint-disable-next-line no-unused-vars
+		function connectElgatoStreamDeckSocket(inPort, inUUID, inRegisterEvent, inInfo, inActionInfo) {
+			uuid = inUUID;
+			ws = new WebSocket("ws://127.0.0.1:" + inPort);
+			ws.onopen = () => {
+				ws.send(JSON.stringify({ event: inRegisterEvent, uuid: inUUID }));
+				try {
+					const ai = JSON.parse(inActionInfo);
+					apply(ai && ai.payload && ai.payload.settings);
+				} catch (e) { /* no initial settings */ }
+			};
+			ws.onmessage = (e) => {
+				const j = JSON.parse(e.data);
+				if (j.event === "didReceiveSettings") apply(j.payload && j.payload.settings);
+			};
+		}
+	</script>
+</body>
+</html>

@@ -204,4 +204,35 @@ std::size_t DeviceRegistry::closeOpenDevicesInFamily(DeviceFamily family) const 
     return closed;
 }
 
+void DeviceRegistry::invalidateOpenDevice(DeviceId const& id) const {
+    std::pair<std::uint16_t, std::uint16_t> const key{id.vendorId, id.productId};
+    // Lift the live backend (if any) out under the lock and erase the slot, then
+    // close() OUTSIDE the lock (close() may block on HID I/O — same hygiene as
+    // closeOpenDevicesInFamily). Erasing the slot forces the next open() to be a
+    // cache MISS so a fresh backend resolves the post-replug node (VERIFY-OP-2).
+    DevicePtr stale;
+    {
+        std::lock_guard const cacheLock(m_open_mutex);
+        auto const it = m_open_devices.find(key);
+        if (it == m_open_devices.end()) {
+            return;
+        }
+        stale = it->second.lock();
+        m_open_devices.erase(it);
+    }
+    AJAZZ_LOG_INFO("registry",
+                   "invalidated open-device cache for VID={:04x} PID={:04x} (hot-plug evict)",
+                   id.vendorId,
+                   id.productId);
+    if (stale) {
+        try {
+            if (stale->isOpen()) {
+                stale->close();
+            }
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("registry", "invalidateOpenDevice close failed: {}", e.what());
+        }
+    }
+}
+
 } // namespace ajazz::core

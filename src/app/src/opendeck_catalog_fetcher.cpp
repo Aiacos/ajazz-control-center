@@ -100,6 +100,26 @@ std::optional<CatalogEntry> translateEntry(QJsonObject const& obj) {
     if (!iconUrl.isEmpty()) {
         entry.iconUrl = filterDeadIconHost(QUrl(iconUrl));
     }
+    // Direct download URL for in-app install. The OpenDeck/OpenAction catalogue
+    // ships a `download` field that is a full HTTPS URL to the `.streamDeckPlugin`
+    // archive (e.g. https://appstore.elgato.com/streamDeckPlugin/<id>/<ver>/<id>.streamDeckPlugin
+    // or a GitHub raw URL). Populating downloadUrl makes PluginCatalogModel::install
+    // perform a real in-app download+extract instead of falling back to the
+    // open-in-browser bridge. Only accept https (the install path rejects others).
+    // Accept both field spellings: amankhanna's catalogue uses `download`
+    // (full appstore.elgato.com URL); the OpenAction catalogue uses
+    // `download_url` (GitHub raw `.streamDeckPlugin` URL). Either is a direct
+    // archive URL.
+    QString downloadStr = obj.value(QStringLiteral("download")).toString().trimmed();
+    if (downloadStr.isEmpty()) {
+        downloadStr = obj.value(QStringLiteral("download_url")).toString().trimmed();
+    }
+    if (!downloadStr.isEmpty()) {
+        QUrl const downloadUrl{downloadStr};
+        if (downloadUrl.isValid() && downloadUrl.scheme().toLower() == QStringLiteral("https")) {
+            entry.downloadUrl = downloadUrl;
+        }
+    }
     entry.compatibility = QStringLiteral("opendeck");
     entry.source = QStringLiteral("opendeck");
     // OpenDeck plugins target Stream Deck families generically — we
@@ -132,6 +152,13 @@ std::vector<CatalogEntry> parseSnapshotEnvelope(QJsonObject const& envelope) {
         }
         e.compatibility = r.value(QStringLiteral("compatibility")).toString();
         e.source = r.value(QStringLiteral("source")).toString();
+        QString const dl = r.value(QStringLiteral("downloadUrl")).toString();
+        if (!dl.isEmpty()) {
+            QUrl const dlUrl{dl};
+            if (dlUrl.isValid() && dlUrl.scheme().toLower() == QStringLiteral("https")) {
+                e.downloadUrl = dlUrl;
+            }
+        }
         // tags / devices: optional in the cache shape; default empty.
         for (auto const& t : r.value(QStringLiteral("tags")).toArray()) {
             e.tags.append(t.toString());
@@ -157,6 +184,9 @@ QJsonObject encodeRow(CatalogEntry const& e) {
     obj.insert(QStringLiteral("iconUrl"), e.iconUrl.toString());
     obj.insert(QStringLiteral("compatibility"), e.compatibility);
     obj.insert(QStringLiteral("source"), e.source);
+    if (!e.downloadUrl.isEmpty()) {
+        obj.insert(QStringLiteral("downloadUrl"), e.downloadUrl.toString());
+    }
     QJsonArray tags;
     for (QString const& t : e.tags) {
         tags.append(t);

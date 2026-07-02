@@ -2,13 +2,16 @@
 //
 // ProfileEditor.qml — middle pane of the main window.
 //
-// Hosts a TabBar (Keys / RGB / Encoders / Mouse) and switches between the
-// matching panels. Each panel is wrapped in a Loader (F-28) so that only the
-// currently visible tab is instantiated.
+// Hosts a TabBar (Keys / RGB / Mouse / Settings / Firmware) and switches
+// between the matching panels. Each panel is wrapped in a Loader (F-28) so
+// that only the currently visible tab is instantiated.
+//
+// Encoders have no dedicated tab: they are edited in-place as the rotary dials
+// on the device canvas inside the Keys tab (DeviceCanvas Lane 3).
 //
 // Tabs are conditionally present based on the device's runtime capabilities
 // (F-22): a keyboard hides "Keys" (it is not an LCD-key device), a stream
-// deck hides "Mouse", an encoder-less stream deck hides "Encoders", etc.
+// deck hides "Mouse", a non-RGB device hides "RGB", etc.
 //
 // A sticky Apply / Revert footer (F-19, F-29) lives at the bottom and emits
 // signals that ProfileController can wire to.
@@ -42,8 +45,8 @@ Rectangle {
 
     // ---- Capability shortcuts ----------------------------------------------
     readonly property int  _keyCount:      capabilities && capabilities.keyCount      ? capabilities.keyCount      : 0
-    readonly property int  _gridColumns:   capabilities && capabilities.gridColumns   ? capabilities.gridColumns   : 5
     readonly property int  _encoderCount:  capabilities && capabilities.encoderCount  ? capabilities.encoderCount  : 0
+    readonly property int  _touchZoneCount: capabilities && capabilities.touchZoneCount ? capabilities.touchZoneCount : 0
     readonly property int  _dpiStageCount: capabilities && capabilities.dpiStageCount ? capabilities.dpiStageCount : 0
     readonly property bool _hasRgb:        capabilities && capabilities.hasRgb        ? capabilities.hasRgb        : false
     readonly property bool _hasSettings:   capabilities && capabilities.hasSettings   ? capabilities.hasSettings   : false
@@ -57,9 +60,7 @@ Rectangle {
     // the Firmware tab so it can resolve the FirmwareUpdate.Family.
     readonly property int  _family:        capabilities && capabilities.family !== undefined ? capabilities.family : 0
 
-    readonly property bool _showKeys:      _keyCount > 0
     readonly property bool _showRgb:       _hasRgb
-    readonly property bool _showEncoders:  _encoderCount > 0
     readonly property bool _showMouse:     _dpiStageCount > 0
     // The Settings tab hosts per-device Time-sync, the AK-series batch, AND the
     // device maturity tier. Maturity applies to every catalogued device, so the
@@ -68,10 +69,19 @@ Rectangle {
     // Every device has firmware, so the Firmware tab is always present.
     readonly property bool _showFirmware:  true
 
+    // Stream controllers (Stream Dock keys / encoders / touch strip) are edited
+    // in the embedded OpenDeck SPA (OpenDeckPane) instead of the native tabs;
+    // mice and keyboards keep the native tabs below. A device is a stream
+    // controller when it exposes any renderable key / encoder / touch surface.
+    readonly property bool _isStreamController: _keyCount > 0 || _encoderCount > 0 || _touchZoneCount > 0
+
+    // Native editor (mouse + keyboard tabs; also the "select a device" empty
+    // state). Hidden for stream controllers — the OpenDeck pane below takes over.
     ColumnLayout {
         anchors.fill: parent
         anchors.margins: Theme.spacingLg
         spacing: Theme.spacingMd
+        visible: !root._isStreamController
 
         // Header — restructured so the human model name sits on line 1 next to
         // the device's product image, with the machine codename on line 2.
@@ -81,15 +91,20 @@ Rectangle {
         PageHeader {
             Layout.fillWidth: true
             visible: root.codename === ""
-            title: qsTr("Select a device on the left")
+            title: qsTr("Select a device")
         }
 
+        // Device header (restored): product image + human model name on line 1,
+        // machine codename on line 2. Lost in the OpenDeck-embed refactor while
+        // the comment above survived (regression: keyboard/mouse pages showed
+        // no device identity at all).
         RowLayout {
+            objectName: "deviceHeaderRow" // debug-channel addressable
             Layout.fillWidth: true
             visible: root.codename !== ""
             spacing: Theme.spacingMd
 
-            // Product photo (remote, per-codename) with per-family SVG fallback.
+            // Product photo (bundled, per-codename) with per-family SVG fallback.
             DeviceImage {
                 Layout.alignment: Qt.AlignVCenter
                 codename: root.codename
@@ -101,30 +116,40 @@ Rectangle {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: 2
 
-                // Line 1 — the human product NAME, large. Falls back to the
+                // Line 1 — "Editing: <human model name>". Falls back to the
                 // codename when the capability map carries no model string.
                 Text {
                     Layout.fillWidth: true
-                    text: root.capabilities && root.capabilities.model
-                              ? root.capabilities.model
-                              : root.codename
+                    text: qsTr("Editing: %1").arg(
+                        root.capabilities && root.capabilities.model
+                            ? root.capabilities.model
+                            : root.codename)
                     color: Theme.fgPrimary
                     font.pixelSize: Theme.fontXl
-                    font.bold: true
                     wrapMode: Text.NoWrap
                     elide: Text.ElideRight
                 }
 
-                // Line 2 — "Editing: <machine codename>".
+                // Line 2 — machine codename.
                 Text {
                     Layout.fillWidth: true
-                    text: qsTr("Editing: %1").arg(root.codename)
+                    text: root.codename
                     color: Theme.fgMuted
                     font.pixelSize: Theme.fontSm
                     wrapMode: Text.NoWrap
                     elide: Text.ElideRight
                 }
             }
+        }
+
+        // Profile switcher bar (Workstream D) — device-scoped. Carries the
+        // profile selector ("Default" dropdown) + New/Rename/Duplicate/Delete/
+        // Export/Import actions. The profile dropdown belongs here (with the
+        // Stream Dock it configures), NOT in the global top bar.
+        ProfileBar {
+            Layout.fillWidth: true
+            visible: root.codename !== ""
+            deviceCodename: root.codename
         }
 
         // Empty state when nothing is selected -------------------------------
@@ -134,27 +159,20 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             title: qsTr("No device selected")
-            body: qsTr("Pick a device from the sidebar to see its keys, encoders, RGB, and pointer settings.")
+            body: qsTr("Pick a device from the top bar to see its keys, encoders, RGB, and pointer settings.")
         }
 
         // Tab strip + content ----------------------------------------------
         TabBar {
             id: tabs
+            objectName: "deviceEditorTabs" // debug-channel addressable (qml.set currentIndex)
             Layout.fillWidth: true
             visible: root.codename !== ""
-            TabButton {
-                text: qsTr("Keys")
-                visible: root._showKeys
-                width: visible ? implicitWidth : 0
-            }
+            // No "Keys" tab: stream controllers are edited in the embedded
+            // OpenDeck pane above, never in these native tabs (mouse/keyboard).
             TabButton {
                 text: qsTr("RGB")
                 visible: root._showRgb
-                width: visible ? implicitWidth : 0
-            }
-            TabButton {
-                text: qsTr("Encoders")
-                visible: root._showEncoders
                 width: visible ? implicitWidth : 0
             }
             TabButton {
@@ -184,27 +202,19 @@ Rectangle {
             currentIndex: tabs.currentIndex
 
             Loader {
-                active: stack.currentIndex === 0 && root._showKeys
-                sourceComponent: keyDesignerComp
-            }
-            Loader {
-                active: stack.currentIndex === 1 && root._showRgb
+                active: stack.currentIndex === 0 && root._showRgb
                 sourceComponent: rgbPickerComp
             }
             Loader {
-                active: stack.currentIndex === 2 && root._showEncoders
-                sourceComponent: encoderPanelComp
-            }
-            Loader {
-                active: stack.currentIndex === 3 && root._showMouse
+                active: stack.currentIndex === 1 && root._showMouse
                 sourceComponent: mousePanelComp
             }
             Loader {
-                active: stack.currentIndex === 4 && root._showSettings
+                active: stack.currentIndex === 2 && root._showSettings
                 sourceComponent: settingsRowComp
             }
             Loader {
-                active: stack.currentIndex === 5 && root._showFirmware
+                active: stack.currentIndex === 3 && root._showFirmware
                 sourceComponent: firmwarePanelComp
             }
         }
@@ -224,17 +234,20 @@ Rectangle {
                 spacing: Theme.spacingSm
 
                 SecondaryButton {
+                    objectName: "restoreDefaultsButton"
                     text: qsTr("Restore defaults")
                     onClicked: root.restoreDefaultsRequested()
                     accessibleDescription: qsTr("Reset every value on this tab to its factory default")
                 }
                 Item { Layout.fillWidth: true }
                 SecondaryButton {
+                    objectName: "revertButton"
                     text: qsTr("Revert")
                     onClicked: root.revertRequested()
                     accessibleDescription: qsTr("Discard unsaved changes and reload the last saved profile")
                 }
                 PrimaryButton {
+                    objectName: "applyButton"
                     text: qsTr("Apply")
                     onClicked: root.applyRequested()
                     accessibleDescription: qsTr("Persist the current changes and push them to the device")
@@ -243,10 +256,29 @@ Rectangle {
         }
     }
 
-    // ---- Component definitions for the Loaders ----------------------------
-    Component { id: keyDesignerComp; KeyDesigner  { keyCount: root._keyCount; gridColumns: root._gridColumns } }
+    // Embedded OpenDeck SPA — the streamdeck editor. Fills the whole pane and
+    // covers the native ColumnLayout (which is hidden for stream controllers).
+    // Loaded by string `source` so builds without Qt WebEngine (no OpenDeckPane
+    // in the module) don't fault on a missing type — they just log and show the
+    // native editor's empty area. The Loader stays alive across device switches
+    // so the SPA isn't reloaded every time; the OpenDeck top bar drives which
+    // Stream Dock is active when more than one is connected.
+    Loader {
+        id: openDeckLoader
+        anchors.fill: parent
+        active: root._isStreamController && root.codename !== ""
+        visible: active
+        source: active ? "OpenDeckPane.qml" : ""
+        onStatusChanged: {
+            if (status === Loader.Error)
+                console.error("ProfileEditor: failed to load OpenDeckPane.qml —",
+                              "is the app built with -DAJAZZ_BUILD_WEBUI=ON?")
+        }
+    }
+
+    // ---- Component definitions for the Loaders (mouse + keyboard tabs) -----
+
     Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
-    Component { id: encoderPanelComp; EncoderPanel { encoderCount: root._encoderCount } }
     Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
     Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename; hasSettings: root._hasSettings; hasClock: root._hasClock; deviceMaturity: root._maturity } }
     Component { id: firmwarePanelComp; FirmwarePanel { deviceCodename: root.codename; deviceFamily: root._family } }

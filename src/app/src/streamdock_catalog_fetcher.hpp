@@ -141,6 +141,26 @@ public:
     /// Helper used by @ref parseUpstreamJson; exposed for unit tests.
     [[nodiscard]] static QString deriveUuid(QString const& upstreamId, QString const& name);
 
+    /**
+     * @brief Per-product resolve endpoint (`.../user/productInfo/get/<id>`).
+     *
+     * The catalogue `/list` response only carries a RELATIVE `download` path
+     * (e.g. `/com.mirabox.streamdock.Weather.sdPlugin`); the absolute CDN URL
+     * (`https://cdn1.key123.vip/...`) is only returned by the per-product
+     * `get/<id>` endpoint. Derived from @ref defaultCatalogUrl by swapping the
+     * trailing `list` segment so it tracks any host change. Returns an invalid
+     * URL when @p productId is empty.
+     */
+    [[nodiscard]] static QUrl productGetUrl(QString const& productId);
+
+    /**
+     * @brief Extract the absolute https `.sdPlugin` archive URL from a
+     * `productInfo/get/<id>` response body. Pure; returns an empty/invalid URL
+     * when the body is malformed or carries no resolvable https download.
+     * Exposed static for unit tests.
+     */
+    [[nodiscard]] static QUrl parseProductDownloadUrl(QByteArray const& json);
+
     /// Last-known state. Updated on every fetch attempt.
     [[nodiscard]] State state() const noexcept { return m_state; }
 

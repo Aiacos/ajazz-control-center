@@ -842,6 +842,131 @@ ______________________________________________________________________
 v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
 workstreams.
 
+### Elgato-format plugin install + run from all sources (2026-05-30)
+
+> Goal: install + **use** Stream Dock (Elgato `.sdPlugin`/`.streamDeckPlugin`)
+> plugins from all sources; validate with System Monitor + Weather. RE-grounded
+> gap analysis done (see `docs/protocols/streamdeck/akp_plugin_sdk.md` §9 for the
+> wire-format/lifecycle reference). Two plugin ecosystems exist: the **Python OOP
+> host** (wired; AJAZZ Python plugins only) and **`PluginManager` +
+> `SdPluginServer`** (Elgato node/html/native — the path these plugins need),
+> which is **not wired at runtime**. Blocking work, in order:
+
+- [ ] **Wire `PluginManager` into `Application`.** It is unit-tested but never
+  constructed at runtime (`discover()`/`spawn()` never called; only a comment at
+  `application.cpp:777`). Construct after `m_pluginServer->start(0)` in
+  `startBackgroundServices` (pluginsDir = `<AppLocalDataLocation>/plugins`,
+  server, NodeProbe, PI controller); `discover()` → `spawn()` per runnable
+  manifest; `shutdown()` on teardown. Verify a **Node** plugin runs end-to-end.
+- [ ] **Implement the HTML plugin run-path** (currently stubbed in
+  `plugin_manager.cpp` ~L340–365: shim attached, "in-process WebEngine page-load
+  deferred to Phase 19/20"). Load the plugin `index.html` in a WebEngine page and
+  `runJavaScript("connectElgatoStreamDeckSocket(port,'uuid','registerPlugin', info)")` on loadFinished. Needed for the HTML test plugins (Counter, Weather).
+- [ ] **Rediscover-after-install (no restart).** Install-from-file/online extract
+  - verify + promote is wired in `PluginCatalogModel`, but nothing re-runs
+    discovery. Add `PluginManager::rediscover()` + connect the install-finished
+    signal to it. Optionally add debug-channel `plugin.installFromFile` +
+    `plugin.rediscover` to drive the loop from `scripts/ajazz-debug`.
+- [ ] **Install + verify the test plugins.** Counter (`com.elgato.counter`, HTML)
+  as the canonical fixture; **Weather** (`JaouherK/streamDeck-weatherPlugin`,
+  `com.jk.weather`, HTML); a System Monitor (most are Windows-native — pick a
+  Node/HTML one or accept install+register-only on Linux). Verify on the
+  device/preview via the debug channel + screenshot.
+- [ ] **Document Python-host vs PluginManager coexistence** (two ecosystems —
+  decide scope/boundary).
+- [ ] Do NOT auto-adopt the vendor store endpoints (`space.key123.vip` /
+  `47.106.243.57:8088` / `hotspot-oss-bucket` OSS) — anti-feature per
+  `akp05_vendor.md` §8; OpenDeck-style multi-source install (file / GitHub
+  release / URL) is the sanctioned model.
+
+### Out-of-process debug control channel (2026-05-29)
+
+> Shipped (`feat/streamdock`): an opt-in JSON-RPC control channel so an agent
+> can drive **and observe the whole app out-of-process** via the
+> `scripts/ajazz-debug` client (23 methods). Unified logs (tee stderr+file+ring
+>
+> - `qInstallMessageHandler` bridge so Qt `qCDebug` is captured too,
+>   `b3b0a0f`/`997c180`), a `QLocalServer` JSON-RPC server gated by
+>   `AJAZZ_DEBUG_CONTROL` (UDS, 0600) + `scripts/ajazz-debug` (`0ba3ece`),
+>   device/input/profile/plugin/`action.run` control (`bf881a1`), and
+>   `qml.tree/get/set/invoke/click` + `screenshot` (`e0319ea`). Drive a running
+>   instance: launch with `AJAZZ_DEBUG_CONTROL=1`, then
+>   `scripts/ajazz-debug <method> --params '{…}'`. Deferred:
+
+- [ ] **`raw.hidWrite`** is a not-implemented stub (honest error). `IDevice`
+  has no public raw-write seam and adding one crosses the "RE is source of
+  truth for wire format" hard rule — wire deliberately with an RE cross-check
+  only if a real need appears.
+- [x] **QML `objectName` coverage** (`028eeca`) + **visual-tree traversal**
+  (`f172e8b`). Header nav, Apply/Revert/Restore/Clear, brightness slider, each
+  `key_<index>`, and each `deviceRow_<codename>` are addressable; qml.tree/find
+  now union `QQuickItem::childItems()` so Repeater/ListView delegates are
+  reachable. Verified live (clicked navSettings + key_0). Add objectNames to
+  more controls as needed; `qml.tree` shows what's addressable.
+- [ ] **`qml.invoke` multi-arg.** Currently zero-arg only (covers
+  `clicked()`/triggers); richer calls need qml.set-then-invoke or an arg-coercing
+  `invokeMethod` path.
+- [ ] **Automated coverage for the live socket + facade.** The JSON-RPC
+  framing/dispatch is unit-tested (`test_debug_control_server.cpp`); the
+  QLocalServer round-trip and the facade handlers were verified live
+  (isolated offscreen instance) but lack a headless integration test.
+- [ ] **GCC 16 `-Werror=null-dereference`** false positive in
+  `profile_controller.cpp:619` (Qt `QHash` inlining). Unblocked locally only
+  (`-Wno-error=null-dereference` in the gitignored build cache); land a real
+  `fix(profiles):` before CI bumps to GCC 16.
+
+### Plugin + profile + debug epic — follow-ups (2026-05-29)
+
+> Shipped this session (`feat/streamdock`): online catalog on by default
+> (`32abda6`), plugin **action picker** in the editor (`39a551b`, `f4be70a`),
+> **Property Inspector** loads for a bound plugin action (`0307e4d`),
+> **multi-profile** library + device-scoped switcher (`977e369`, `42c6838`),
+> and a **plugin debug console** with protocol log + input/response simulation
+> (`2ca3a7f`). Remaining:
+
+- [ ] **Live click-through verification** of the Property Inspector + debug
+  console. Could not be self-verified in the dev environment (no Wayland
+  input-injection tool; the AKP05E demo unit's input path is unreachable).
+  Walk: drag *Toggle Demo* onto a key → click it → PI HTML renders in the
+  Inspector → type in the field → confirm it persists to
+  `AppDataLocation/plugins/com.test.demo.sdPlugin/settings/<context>.json`;
+  then **Debug** → *Key down* → confirm the transcript logs the routing.
+- [ ] **Reconcile PI settings vs. profile binding.** `PIBridge.setSettings`
+  persists to a per-context JSON file under the plugin dir (Stream Deck
+  model), but the key's `Action::settingsJson` in the profile is separate —
+  two stores for the same logical settings. Decide the source of truth and
+  sync (or document the split). `pi_bridge.cpp` + `profile_controller.cpp`.
+- [ ] **Encoder / touch-zone action binding + PI.** Only keys have a live
+  preview model + `actionId` readback (`DeviceView` bindings). The encoder
+  and touch-strip drop paths don't resolve a plugin action's PI, and the
+  dials/zones don't show a bound icon. Extend `actionInfo` resolution +
+  `EncoderDial`/`TouchStripLane` to match the key path.
+- [ ] **Debug console: log outbound host→plugin events.** The transcript taps
+  inbound (`SdPluginServer::actionReceived`) + device events, but
+  `sendEvent()` is a method (no signal) so host→plugin frames aren't logged.
+  Add a tap (signal or a `PluginDebug.record()` call inside `sendEvent`).
+- [ ] **Debug console test.** No automated coverage for
+  `PluginDebugService::simulateKey/...` → `PluginDeviceBridge::onDeviceEvent`
+  routing (skipped — would force linking the whole bridge/server chain).
+  Add a focused integration test once the bridge test fixture is cheaper.
+- [ ] **End-to-end with a *running* plugin.** The installed `com.test.demo`
+  plugin is signed but does not spawn a process; `keyDown` routing to a live
+  plugin (and its `setImage` repaint round-trip) is unverified on real input.
+- [ ] **Profile pages / folders UI.** `Profile::pages` + `OpenFolder` /
+  `BackToParent` actions exist in core; no UI to create/navigate folders.
+- [ ] **Profile import/export UI.** `profile_bundle.{hpp,cpp}` implements
+  `.ajazzprofile` ZIP import/export in core; wire a QML affordance into the
+  `ProfileBar`.
+- [ ] **Unsaved-changes guard on profile switch.** `ProfileBar` switching
+  calls `loadProfileById` immediately; unsaved edits are discarded silently.
+  Prompt (or auto-save) before switching.
+- [ ] **Remove the dev test plugin.** `com.test.demo.sdPlugin` was hand-
+  installed into `AppDataLocation/plugins/` to verify the PI; delete it once
+  a real plugin is available, or keep as a fixture and document it.
+- [ ] **Tray Switch-profile submenu.** `loadProfileById` now resolves via the
+  library index (was a stub, issue #24); confirm `TrayController:: rebuildProfileSubmenu` lists all profiles (it historically showed only the
+  active one) now that `knownProfileIds()` returns the full set.
+
 ### UI polish (incremental)
 
 - 🟡 **Material 3 expressive theming** beyond the basic style switch.

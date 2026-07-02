@@ -5,6 +5,8 @@
  */
 #include "loaded_plugins_model.hpp"
 
+#include "i_plugin_host2.hpp"
+
 #include <QQmlEngine>
 #include <QtGlobal>
 
@@ -85,6 +87,8 @@ QVariant LoadedPluginsModel::data(QModelIndex const& index, int role) const {
         return QString::fromStdString(info.publisher);
     case TrustLevelRole:
         return trustLevelOf(info);
+    case PlatformStatusRole:
+        return platformStatusOf(info);
     default:
         return {};
     }
@@ -100,6 +104,7 @@ QHash<int, QByteArray> LoadedPluginsModel::roleNames() const {
         {SignedRole, "isSigned"},
         {PublisherRole, "publisher"},
         {TrustLevelRole, "trustLevel"},
+        {PlatformStatusRole, "platformStatus"},
     };
 }
 
@@ -114,15 +119,23 @@ void LoadedPluginsModel::setPluginHost(plugins::IPluginHost* host) noexcept {
     m_host = host;
 }
 
+void LoadedPluginsModel::setPluginHost2(IPluginHost2* host) noexcept {
+    m_host2 = host;
+}
+
 void LoadedPluginsModel::refresh() {
-    if (m_host == nullptr) {
-        return;
-    }
     try {
-        // `IPluginHost::plugins` throws on a dead child / IPC timeout.
-        // Catch and keep the existing rows visible — a transient
-        // failure should not erase the UI; the user can retry.
-        setPlugins(m_host->plugins());
+        // Prefer the unified host (merged .sdPlugin + Python inventory — the
+        // only inventory carrying a real winClass for the WINPLG chip). Fall
+        // back to the STL host when no host2 is wired (e.g. a non-WebSockets
+        // build that only has the Python host). `plugins()` throws on a dead
+        // child / IPC timeout — catch and keep the existing rows visible so a
+        // transient failure does not erase the UI; the user can retry.
+        if (m_host2 != nullptr) {
+            setPlugins(m_host2->plugins());
+        } else if (m_host != nullptr) {
+            setPlugins(m_host->plugins());
+        }
     } catch (std::exception const& e) {
         qWarning("LoadedPluginsModel::refresh: %s", e.what());
     }
@@ -143,6 +156,28 @@ QString LoadedPluginsModel::trustLevelOf(plugins::PluginInfo const& info) {
         return QStringLiteral("self-signed");
     }
     return QStringLiteral("trusted");
+}
+
+QString LoadedPluginsModel::platformStatusOf(plugins::PluginInfo const& info) {
+    // WINPLG-03 (chip-only this phase). Mirror PluginInfo.winClass (the plain-int
+    // verdict stamped at scan time by WINPLG-01/02; mapping documented on the
+    // field): 0=NotWindowsOnly, 1=WsOnlyIpc, 2=VendorDll.
+    //
+    // DEFERRED: a real Wine launcher (WINPLG-03 launch) is out of scope this
+    // phase. `wineAvailable` is therefore hard-false here. The wine-vs-unsupported
+    // branch is kept EXPLICIT so a future hardware-gated phase flips this one
+    // input rather than reshaping the derive (and the unit test pins the shape).
+    constexpr bool kWineAvailable = false; // WINPLG-03 launch deferred — never bundle Wine.
+
+    switch (info.winClass) {
+    case 1: // WsOnlyIpc — runs natively on every platform (no Wine needed).
+        return QStringLiteral("native");
+    case 2: // VendorDll — needs Windows, or Wine (deferred).
+        return kWineAvailable ? QStringLiteral("wine") : QStringLiteral("unsupported");
+    case 0: // NotWindowsOnly — not a Windows-only plugin; no classification chip.
+    default:
+        return {};
+    }
 }
 
 } // namespace ajazz::app

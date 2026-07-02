@@ -6,9 +6,10 @@
  * Implements the protocol surface vendor Stream Dock SDLibrary1.dll exposes
  * via `SDPluginServer::startListen()` — see
  * docs/protocols/streamdeck/akp_plugin_sdk.md. The Elgato Stream Deck v6
- * protocol is implemented verbatim (13 standard events + 13 standard
- * actions); the 26 AJAZZ extensions (including the `setBG` per-key
- * background extension) land in follow-up commits.
+ * protocol is implemented verbatim (15 standard routed actions + 26 AJAZZ
+ * extension actions = 41 total routed, per spec §4.3). All plugin->host
+ * actions route via actionReceived; genuinely-unknown events still surface
+ * via unhandledEventReceived for forward-compat tracing.
  *
  * **Security delta from vendor**: vendor binds to `QHostAddress::Any`
  * (0.0.0.0 — any local interface, security regression). We bind to
@@ -17,24 +18,31 @@
  * `bindLoopbackOnly()` API. There is no opt-in to broaden the bind
  * address; future remote-control scenarios must use a separate transport.
  *
- * **Authentication**: vendor uses a `passHello`/`salt`/`challenge`
- * handshake on plugin spawn — see roadmap §3.16 + akp_plugin_sdk.md §6.
- * MVP scope here ships only the standard Elgato `registerPlugin`
- * handshake; the AJAZZ auth challenge lands once the plugin-process
- * spawn surface is implemented (which is deferred — see "Lifecycle"
- * below).
+ * **Authentication** (PLUGIN-05, 17-03):
+ *   After `registerPlugin`, the host sends `passHello` with a random
+ *   per-connection NESTED `authentication:{challenge, salt}` payload (per
+ *   CONTEXT.md — spec §4.5 top-level salt is superseded). When a password
+ *   is configured, the plugin replies `{event:"authentication", challenge:
+ *   sha256(password+salt)}`; the host verifies and closes the socket after
+ *   5 bad attempts (T-17-BRUTE). Default (no password) = accepted after
+ *   passHello. No TLS — loopback-only by design (accepted constraint).
+ *   A test-only `setPasswordForTesting()` setter enables the auth test cases.
  *
- * **Lifecycle** (MVP scope):
+ * **Lifecycle** (current scope):
  *   1. App creates one `SdPluginServer`, calls `start()` with port 0 (auto-assigned).
  *   2. Server creates `QWebSocketServer`, binds loopback, accepts connections.
  *   3. Each connecting `QWebSocket` runs through the JSON message dispatch.
  *   4. Server emits `pluginRegistered`/`pluginDisconnected`/`actionReceived`
  *      signals — the app layer wires these to the device backends.
  *
+ * **Host-to-plugin event sender**: `sendEvent(uuid, eventName, payload)` writes a
+ * compact JSON envelope to the named plugin's live socket (addressed by plugin uuid).
+ * This is the seam Phase 19 calls with real device input (an encoder turn becomes
+ * `sendEvent(uuid, "dialRotate", {...})`). The lookup re-resolves the live slot on
+ * each call — never caches a raw QWebSocket* (T-17-UAF, Pitfall 4).
+ *
  * **NOT YET IMPLEMENTED** (defer to follow-up commits):
  *   - Spawning plugin processes (QProcess child management for Node.js)
- *   - 26 AJAZZ extensions (`setBG`, `screenColorSent`, etc.)
- *   - passHello/salt/challenge auth handshake
  *   - Per-plugin Property Inspector WebView integration
  *   - Persistence (settings cache + global settings)
  *   - Plugin store catalogue parsing (P3.17 carry-over)
@@ -47,6 +55,7 @@
 #include <QString>
 
 #include <cstdint>
+#include <functional>
 #include <memory>
 
 QT_BEGIN_NAMESPACE
@@ -100,6 +109,98 @@ public:
     ///         see Elgato v6 protocol semantics.
     [[nodiscard]] int connectedPluginCount() const noexcept;
 
+    /// Send a host→plugin event to the registered plugin identified by
+    /// @p targetUuid (the UUID used in the `registerPlugin` handshake).
+    ///
+    /// Serialises @p eventName and @p payload into a compact JSON envelope
+    /// `{"event": eventName, "payload": payload}` (payload key omitted when
+    /// empty) and writes it as a WebSocket text frame to the plugin's live
+    /// socket.
+    ///
+    /// **Pitfall 4 / T-17-UAF guard**: the live socket is re-resolved on
+    /// every call via `socketForUuid()` — the raw pointer is NEVER cached
+    /// between calls. If the plugin disconnects between two calls (e.g.
+    /// after an auth rejection), the lookup returns nullptr and
+    /// this method returns false without crashing.
+    ///
+    /// This is the seam Phase 19 calls with real device input — e.g.
+    /// an encoder rotation becomes
+    /// `sendEvent(uuid, "dialRotate", {ticks, pressed, controller, …})`.
+    /// Context-addressing (per action-instance) is deferred to Phase 19/20.
+    ///
+    /// @param targetUuid  Registered plugin UUID (from pluginRegistered signal).
+    /// @param eventName   §4.4 event name, e.g. `"dialRotate"`, `"keyDown"`.
+    /// @param payload     Optional event payload; omitted from envelope when empty.
+    /// @return true if the frame was written; false if no live socket matches.
+    bool
+    sendEvent(QString const& targetUuid, QString const& eventName, QJsonObject const& payload = {});
+
+    /// **Full-envelope sender** for Elgato/OpenDeck-shaped events that carry
+    /// top-level `action` / `context` / `device` siblings to `event` (e.g.
+    /// willAppear, keyDown, dialRotate). The caller passes the COMPLETE event
+    /// object (must contain an `"event"` key); it is written verbatim. The
+    /// 3-arg overload above only emits `{event, payload}` and is kept for simple
+    /// events (deviceDidConnect, exitApp, sendToPlugin relay). Re-resolves the
+    /// socket on every call (Pitfall 4); returns false if no live socket matches.
+    ///
+    /// @param targetUuid  Registered plugin UUID (from pluginRegistered signal).
+    /// @param fullEvent   Complete event object including the `"event"` key.
+    /// @return true if the frame was written; false if no live socket matches.
+    bool sendEvent(QString const& targetUuid, QJsonObject const& fullEvent);
+
+    /// **Test-only**: configure a password for the passHello/challenge auth
+    /// handshake (PLUGIN-05 / T-17-BRUTE).
+    ///
+    /// Enables `PluginAuthTest::rejectsAfter5BadAttempts` — the test calls
+    /// this before `start()` to exercise the rejection path. Production
+    /// default is empty (no password = connection accepted after passHello).
+    ///
+    /// @warning Do NOT use in production code.  Call only from unit tests.
+    void setPasswordForTesting(QString const& password);
+
+    /// **F3 (Property Inspector routing)**: inject a resolver mapping an
+    /// action-instance `context` to its owning plugin UUID. A real Elgato
+    /// Property Inspector opens a SEPARATE WebSocket and registers with
+    /// `registerPropertyInspector` using the bound instance `context` as its
+    /// uuid (canonical doc §5). To route `sendToPlugin` from that PI to the
+    /// right plugin — and `propertyInspectorDidAppear`/`…DidDisappear` back to
+    /// it — the server must know which plugin owns the context. The server does
+    /// not own the context→plugin map (the device bridge's ContextRegistry
+    /// does), so the app wires it here (mirrors the bridge's actionOwnerResolver
+    /// / geometry-resolver injection pattern). Unset (default) ⇒ PI connections
+    /// still register but cannot route until a resolver is provided.
+    void setContextOwnerResolver(std::function<QString(QString const& context)> resolver);
+
+    /// Inject the context canonicalizer (SPA dot-form -> wire `#` id; identity
+    /// for already-canonical/unknown ids). Two verbatim relay seams need it
+    /// (audit 2.4): a PI's sendToPlugin carries the SPA context the plugin
+    /// cannot match against its willAppear ids, and a plugin's
+    /// sendToPropertyInspector carries the wire id that never exact-matches the
+    /// PI's SPA-form registration uuid. Wired to
+    /// PluginDeviceBridge::canonicalContextId. Unset => prior behaviour.
+    void setContextCanonicalizer(std::function<QString(QString const& context)> canonicalizer);
+
+    /// Registered uuids of live Property Inspector connections (each PI
+    /// registers with its instance context string as the uuid). Lets the
+    /// bridge address didReceive* notifications to the PI side (audit 2.1/2.3).
+    [[nodiscard]] QStringList propertyInspectorUuids() const;
+
+    /// Inject the device-info resolver used to populate the vendor
+    /// `passHello.deviceInfo` (B7). The server does not own device geometry (the
+    /// PluginDeviceBridge does), so the app wires this to
+    /// `PluginDeviceBridge::deviceInfoFor`. Unset ⇒ `deviceInfo` stays `{}` (the
+    /// prior behaviour), so the passHello handshake still completes.
+    void setDeviceInfoResolver(std::function<QJsonObject(QString const& deviceId)> resolver);
+
+    /// **Debug/simulation seam**: emit `actionReceived` as if a registered
+    /// plugin had sent @p action over the WebSocket. Lets the opt-in debug
+    /// channel (PluginDebugService::simulatePluginAction) drive the exact
+    /// production fan-out — every `actionReceived` consumer (the device bridge's
+    /// visual handler AND the host-level openUrl/logMessage handler) runs — so a
+    /// plugin→host action path can be verified without a live plugin socket.
+    /// Reachable only through the opt-in AJAZZ_DEBUG_CONTROL channel.
+    void injectAction(QString const& pluginUuid, QJsonObject const& action);
+
 signals:
     /// Server started successfully and is now accepting plugin connections.
     void started(std::uint16_t port);
@@ -114,6 +215,19 @@ signals:
     /// A previously-registered plugin disconnected.
     void pluginDisconnected(QString const& pluginUuid);
 
+    /// **F3**: a Property Inspector completed `registerPropertyInspector` on its
+    /// own WebSocket. @p context is the bound action-instance context (the PI's
+    /// registration uuid); @p ownerPluginUuid is the resolved owning plugin (may
+    /// be empty if no resolver is set or the context is unknown). The app routes
+    /// this to `sendEvent(ownerPluginUuid, "propertyInspectorDidAppear", …)`.
+    /// Distinct from pluginRegistered — a PI is NOT a plugin and must NOT be
+    /// wired to device backends.
+    void propertyInspectorRegistered(QString const& context, QString const& ownerPluginUuid);
+
+    /// **F3**: a previously-registered Property Inspector disconnected. The app
+    /// routes this to `sendEvent(ownerPluginUuid, "propertyInspectorDidDisappear", …)`.
+    void propertyInspectorDisconnected(QString const& context, QString const& ownerPluginUuid);
+
     /// A plugin sent an `action`-class message (setTitle / setImage / etc.).
     /// The app layer routes the action to the appropriate device backend.
     /// @param pluginUuid Sender UUID (matches earlier pluginRegistered emission).
@@ -123,6 +237,14 @@ signals:
     /// A plugin sent a raw event we don't yet handle. Surface for debugging
     /// / extensibility before the dispatch table grows to cover it.
     void unhandledEventReceived(QString const& pluginUuid, QString const& eventName);
+
+    /// A host->plugin event was just written to a live socket (sendEvent
+    /// succeeded). Surfaced so the debug console can record the OUTBOUND half of
+    /// the protocol (the inbound half is already captured via actionReceived).
+    /// @param targetUuid Recipient plugin UUID.
+    /// @param eventName  The event name (willAppear / keyDown / dialRotate / …).
+    /// @param payload    The payload object as sent (may be empty).
+    void eventSent(QString const& targetUuid, QString const& eventName, QJsonObject const& payload);
 
 private slots:
     void onNewConnection();
@@ -137,14 +259,54 @@ private:
     /// return an empty string if the client hasn't registered yet.
     [[nodiscard]] QString uuidForClient(QWebSocket* client) const;
 
+    /// Look up the live WebSocket for the plugin registered with @p uuid.
+    /// Returns nullptr when no matching live (non-null socket) slot exists.
+    /// Called on EVERY sendEvent invocation — never cache the result (Pitfall 4).
+    [[nodiscard]] QWebSocket* socketForUuid(QString const& uuid) const;
+
+    /// Returns true when @p uuid is a sentinel (pre-registration) UUID.
+    ///
+    /// Sentinel UUIDs are inserted on socket connect (HOST-02) and carry the
+    /// prefix "__pending__" to distinguish them from real plugin UUIDs. They are
+    /// rekeyed to the real UUID on registerPlugin, and they do NOT count toward
+    /// connectedPluginCount() or trigger pluginDisconnected signals.
+    [[nodiscard]] static bool isSentinelUuid(QString const& uuid) noexcept;
+
     std::unique_ptr<QWebSocketServer> m_server;
     // Plugin-UUID → connection map. Multiple plugins may register over the
     // same server lifetime; one WebSocket per plugin.
     struct PluginConnection {
         QString uuid;
         QWebSocket* socket{nullptr};
+        // Auth state (PLUGIN-05 / 17-03):
+        QString salt;              ///< Hex-encoded random per-connection salt.
+        int authAttempts{0};       ///< Bad-challenge counter; socket closed at kMaxAuthAttempts.
+        bool authenticated{false}; ///< True once the connection has passed auth (or no password).
+        // F3 (Property Inspector second-connection model):
+        bool isPropertyInspector{false}; ///< True for a registerPropertyInspector connection.
+        QString ownerPluginUuid; ///< For a PI: the resolved owning plugin (routes sendToPlugin).
     };
     std::vector<PluginConnection> m_connections;
+
+    /// Configured password for the passHello/challenge auth gate.
+    /// Empty (default) = no-password-accept: passHello is sent and the
+    /// connection is immediately treated as authenticated.
+    QString m_password;
+
+    /// F3: context→owning-plugin resolver for Property Inspector routing.
+    /// Unset by default; see setContextOwnerResolver().
+    std::function<QString(QString const&)> m_contextOwnerResolver;
+
+    /// Unset by default; see setContextCanonicalizer().
+    std::function<QString(QString const&)> m_contextCanonicalizer;
+
+    /// B7: device codename→Elgato deviceInfo resolver for passHello.deviceInfo.
+    /// Unset by default; see setDeviceInfoResolver().
+    std::function<QJsonObject(QString const&)> m_deviceInfoResolver;
+
+    /// F3: look up the live PI socket bound to @p context (a PI connection whose
+    /// uuid == context). Returns nullptr if no live WS PI is registered for it.
+    [[nodiscard]] QWebSocket* propertyInspectorSocketForContext(QString const& context) const;
 };
 
 } // namespace ajazz::app

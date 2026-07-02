@@ -1,0 +1,24 @@
+[package]
+name = "ajazz-sysmon"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+description = "Native cross-platform hardware monitor for AJAZZ Control Center (btop-backed, btop-styled)"
+license = "Apache-2.0"
+
+[[bin]]
+name = "ajazz-sysmon"
+path = "src/main.rs"
+
+[dependencies]
+openaction = "2.6"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "process", "io-util", "sync"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tiny-skia = "0.11"
+ab_glyph = "0.2"
+base64 = "0.22"
+
+[profile.release]
+opt-level = 2
+strip = true

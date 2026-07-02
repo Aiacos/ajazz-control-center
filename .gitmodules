@@ -1,0 +1,6 @@
+[submodule "src/app/webui/opendeck"]
+	path = src/app/webui/opendeck
+	url = https://github.com/nekename/OpenDeck.git
+[submodule "plugins/ajazz-sysmon/metrics-helper/third_party/btop"]
+	path = plugins/ajazz-sysmon/metrics-helper/third_party/btop
+	url = https://github.com/aristocratos/btop.git

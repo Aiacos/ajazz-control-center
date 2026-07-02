@@ -138,7 +138,9 @@ public:
      * to the appropriate codec before transmitting. Callers may pass any
      * resolution; the backend normalises it.
      *
-     * @param keyIndex Zero-based key index within the display grid.
+     * @param keyIndex 1-based key index within the display grid (1 .. keyCount).
+     *                 Every concrete backend enforces this via keyIndexInRange()
+     *                 which rejects 0. Pass 0xFF only via clearKey() (see below).
      * @param rgba     Tightly packed RGBA8 pixels, length == width * height * 4.
      * @param width    Source image width in pixels.
      * @param height   Source image height in pixels.
@@ -157,7 +159,7 @@ public:
      * Useful for placeholders and tests. Backends may internally synthesise
      * a minimal JPEG/PNG of the requested color.
      *
-     * @param keyIndex Zero-based key index.
+     * @param keyIndex 1-based key index (1 .. keyCount); same contract as setKeyImage().
      * @param color    Desired solid RGB fill color.
      */
     virtual void setKeyColor(std::uint8_t keyIndex, Rgb color) = 0;
@@ -165,7 +167,7 @@ public:
     /**
      * @brief Clear a single key or all keys.
      *
-     * @param keyIndex Zero-based key index; pass 0xFF to clear all keys.
+     * @param keyIndex 1-based key index (1 .. keyCount); pass 0xFF to clear all keys.
      */
     virtual void clearKey(std::uint8_t keyIndex) = 0;
 
@@ -194,6 +196,17 @@ public:
      * all pending image transfers.
      */
     virtual void flush() = 0;
+
+    /**
+     * @brief Periodic keep-alive tick to stop the display controller idling off.
+     *
+     * Default no-op. AKP05-class Stream Docks override this to emit a
+     * `CRT CONNECT` packet (the host calls it ~1 s while the device is active):
+     * without it the panel goes backlit-but-black after a short idle and only a
+     * physical replug recovers it (hardware-confirmed 2026-05-31 on the AKP05E).
+     * Best-effort — implementations must not throw on a transient write failure.
+     */
+    virtual void keepAlive() {}
 };
 
 // -----------------------------------------------------------------------------

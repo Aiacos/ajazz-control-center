@@ -241,3 +241,185 @@ TEST_CASE("extractSdPluginArchive rejects a zip-slip path-traversal entry",
     REQUIRE_FALSE(QDir(destDir + QStringLiteral("/.tmp_") + target).exists());
     REQUIRE_FALSE(QDir(destDir + QStringLiteral("/") + target).exists());
 }
+
+TEST_CASE("extractSdPluginArchive extracts a ZIP64 archive with real file contents",
+          "[plugin-store][zip64]") {
+    // Real `.streamDeckPlugin` packagers (Node `archiver`, many tools) emit
+    // ZIP64 entries — the 32-bit size fields are 0xFFFFFFFF sentinels and the
+    // true sizes live in the central-directory extra field (header 0x0001),
+    // often paired with a data-descriptor flag. Qt's QZipReader trusted the
+    // local-header sizes and extracted ZERO bytes for these, so manifests came
+    // out empty and every such plugin failed to install. The extractor now
+    // sources sizes from the central directory and raw-inflates via zlib.
+    // This fixture (built by Python's zipfile with force_zip64=True) carries a
+    // wrapper dir `com.test.zip64.sdPlugin/` with a real manifest.json + a code
+    // file; the test asserts both extract with their FULL contents.
+    static constexpr char kZip64B64[] =
+        "UEsDBC0AAAAIAAAAIQDRTAqo//////////8lABQAY29tLnRlc3QuemlwNjQuc2RQbHVnaW4v"
+        "bWFuaWZlc3QuanNvbgEAEABBAAAAAAAAAEMAAAAAAAAAq1YKDfV0UbJSSs7P1StJLS7Rq8os"
+        "MDNR0lHyS8xNVbJSilLSUQpLLSrOzM9TslIy1DNQ0lFyTC7JzM8rVrKKjq0FAFBLAwQtAAAA"
+        "CAAAACEAPe4jIP//////////JQAUAGNvbS50ZXN0LnppcDY0LnNkUGx1Z2luL2Jpbi9wbHVn"
+        "aW4uanMBABAADwAAAAAAAAARAAAAAAAAAEvOzyvOz0nVy8lP1zDUtAYAUEsBAi0DLQAAAAgA"
+        "AAAhANFMCqhDAAAAQQAAACUAAAAAAAAAAAAAAIABAAAAAGNvbS50ZXN0LnppcDY0LnNkUGx1"
+        "Z2luL21hbmlmZXN0Lmpzb25QSwECLQMtAAAACAAAACEAPe4jIBEAAAAPAAAAJQAAAAAAAAAA"
+        "AAAAgAGaAAAAY29tLnRlc3QuemlwNjQuc2RQbHVnaW4vYmluL3BsdWdpbi5qc1BLBQYAAAAA"
+        "AgACAKYAAAACAQAAAAA=";
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    QString const destDir = scratch.path();
+    QString const archive = destDir + QStringLiteral("/z64.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes =
+            QByteArray::fromBase64(QByteArray::fromRawData(kZip64B64, sizeof(kZip64B64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const target = QStringLiteral("com.test.zip64.sdPlugin");
+    REQUIRE(extractSdPluginArchive(archive, destDir, target));
+
+    // The wrapper dir was stripped; the manifest extracted with its REAL bytes
+    // (the regression: it used to be a 0-byte file).
+    QString const manifestPath =
+        destDir + QStringLiteral("/") + target + QStringLiteral("/manifest.json");
+    REQUIRE(QFileInfo::exists(manifestPath));
+    QFile mf(manifestPath);
+    REQUIRE(mf.open(QIODevice::ReadOnly));
+    QByteArray const manifest = mf.readAll();
+    mf.close();
+    REQUIRE(manifest.size() > 0);
+    REQUIRE(manifest.contains("com.test.zip64"));
+
+    // The nested code file also extracted with content.
+    QString const codePath =
+        destDir + QStringLiteral("/") + target + QStringLiteral("/bin/plugin.js");
+    REQUIRE(QFileInfo::exists(codePath));
+    QFile cf(codePath);
+    REQUIRE(cf.open(QIODevice::ReadOnly));
+    QByteArray const code = cf.readAll();
+    cf.close();
+    REQUIRE(code.contains("console.log"));
+}
+
+TEST_CASE("extractSdPluginArchive parses a ZIP64 archive structure (EOCD64 record + locator)",
+          "[plugin-store][zip64]") {
+    // Archive-level ZIP64 (audit 3.10): the EOCD64 record + locator precede
+    // the EOCD, whose entry-count/offset fields are 0xFFFF/0xFFFFFFFF
+    // sentinels. The parser must source the central-directory offset + entry
+    // count from the EOCD64 record. Fixture built by Python zipfile, then
+    // post-processed to insert the EOCD64 record/locator and sentinel-ise the
+    // EOCD (scratch script make_zip64_eocd_fixture.py).
+    static constexpr char kEocd64B64[] =
+        "UEsDBBQAAAAIACFu4lyqi3FQQQAAAD8AAAAmAAAAY29tLnRlc3QuZW9jZDY0LnNkUGx1Z2luL21h"
+        "bmlmZXN0Lmpzb26rVgoN9XRRslJKzs/VK0ktLtFLzU9OMTNR0lHyS8xNVbJScvV3djEzUXDLrCgp"
+        "LUpV0lFyTC7JzM8rVrKKjq0FAFBLAwQUAAAACAAhbuJcroqfNBUAAAATAAAAJgAAAGNvbS50ZXN0"
+        "LmVvY2Q2NC5zZFBsdWdpbi9iaW4vcGx1Z2luLmpzS87PK87PSdXLyU/XUMrIVNK05gIAUEsBAhQD"
+        "FAAAAAgAIW7iXKqLcVBBAAAAPwAAACYAAAAAAAAAAAAAAIABAAAAAGNvbS50ZXN0LmVvY2Q2NC5z"
+        "ZFBsdWdpbi9tYW5pZmVzdC5qc29uUEsBAhQDFAAAAAgAIW7iXK6KnzQVAAAAEwAAACYAAAAAAAAA"
+        "AAAAAIABhQAAAGNvbS50ZXN0LmVvY2Q2NC5zZFBsdWdpbi9iaW4vcGx1Z2luLmpzUEsGBiwAAAAA"
+        "AAAALQAtAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAKgAAAAAAAAA3gAAAAAAAABQSwYHAAAAAIYB"
+        "AAAAAAAAAQAAAFBLBQYAAAAA////////////////AAA=";
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    QString const destDir = scratch.path();
+    QString const archive = destDir + QStringLiteral("/eocd64.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes =
+            QByteArray::fromBase64(QByteArray::fromRawData(kEocd64B64, sizeof(kEocd64B64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const target = QStringLiteral("com.test.eocd64.sdPlugin");
+    REQUIRE(extractSdPluginArchive(archive, destDir, target));
+
+    QFile mf(destDir + QStringLiteral("/") + target + QStringLiteral("/manifest.json"));
+    REQUIRE(mf.open(QIODevice::ReadOnly));
+    REQUIRE(mf.readAll().contains("com.test.eocd64"));
+    REQUIRE(QFileInfo::exists(destDir + QStringLiteral("/") + target +
+                              QStringLiteral("/bin/plugin.js")));
+}
+
+TEST_CASE("extractSdPluginArchive rejects a wrapper directory with no manifest.json",
+          "[plugin-store][issue-62]") {
+    // Audit 3.11: a zip whose sole folder carries no manifest.json used to be
+    // promoted as a successful install that discovery could never find. The
+    // extractor must now fail and clean up instead.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    QString const archive = scratch.filePath(QStringLiteral("nomanifest.sdPlugin"));
+    {
+        QZipWriter zip(archive);
+        REQUIRE(zip.status() == QZipWriter::NoError);
+        zip.addFile(QStringLiteral("wrapper/readme.txt"), QByteArray("not a plugin"));
+        zip.close();
+        REQUIRE(zip.status() == QZipWriter::NoError);
+    }
+
+    QString const target = QStringLiteral("nomanifest.sdPlugin");
+    REQUIRE_FALSE(extractSdPluginArchive(archive, scratch.path(), target));
+    REQUIRE_FALSE(QDir(scratch.filePath(target)).exists());
+    REQUIRE_FALSE(QDir(scratch.filePath(QStringLiteral(".tmp_") + target)).exists());
+}
+
+TEST_CASE("extractSdPluginArchive unwraps a doubly-nested single-folder wrapper",
+          "[plugin-store][issue-62]") {
+    // Hand-zipped bundles often compress the PARENT of the plugin folder,
+    // producing outer/inner.sdPlugin/manifest.json. The wrapper descent must
+    // keep going until the level that holds the manifest.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    QString const archive = scratch.filePath(QStringLiteral("double.sdPlugin"));
+    buildSdPluginArchive(archive, QStringLiteral("outer/com.example.double.sdPlugin"));
+
+    QString const target = QStringLiteral("double.sdPlugin");
+    REQUIRE(extractSdPluginArchive(archive, scratch.path(), target));
+
+    QDir const out(scratch.filePath(target));
+    REQUIRE(QFileInfo::exists(out.filePath(QStringLiteral("manifest.json"))));
+    REQUIRE(QFileInfo::exists(out.filePath(QStringLiteral("Code/index.html"))));
+}
+
+TEST_CASE("extractSdPluginArchive rejects a hostile ZIP64 local-header offset (no over-read)",
+          "[plugin-store][security][zip64]") {
+    // Regression for a buffer over-read in the central-directory parser: a ZIP64
+    // central-directory entry whose local-header offset field is the 0xFFFFFFFF
+    // sentinel can carry an arbitrary 64-bit offset in its ZIP64 extra field
+    // (header 0x0001). Without a `localOffset >= bufferSize` guard, an offset
+    // near UINT64_MAX makes the `lo + 30 > n` bounds check WRAP to a small value
+    // that passes, then `rd32(buf + lo)` reads far past the buffer. This fixture
+    // (hand-built) sets localOffset to 0xFFFFFFFFFFFFFFF0; the extractor must
+    // reject it cleanly (return false), never over-read / crash.
+    static constexpr char kHostileZip64B64[] =
+        "UEsDBC0AAAAIAAAAAAAAAAAADgAAAAwAAAAfAAAAY29tLmV2aWwuc2RQbHVnaW4vbWFuaWZl"
+        "c3QuanNvbqtWCg31dFGyUqpQqgUAUEsBAi0ALQAAAAgAAAAAAAAAAAAOAAAADAAAAB8ADAAA"
+        "AAAAAAAAAAAA/////2NvbS5ldmlsLnNkUGx1Z2luL21hbmlmZXN0Lmpzb24BAAgA8P//////"
+        "//9QSwUGAAAAAAEAAQBZAAAASwAAAAAA";
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    QString const destDir = scratch.path();
+    QString const archive = destDir + QStringLiteral("/hostile.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes = QByteArray::fromBase64(
+            QByteArray::fromRawData(kHostileZip64B64, sizeof(kHostileZip64B64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const target = QStringLiteral("com.evil.sdPlugin");
+    // Must reject without crashing or extracting anything.
+    REQUIRE_FALSE(extractSdPluginArchive(archive, destDir, target));
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/") + target).exists());
+    REQUIRE_FALSE(QDir(destDir + QStringLiteral("/.tmp_") + target).exists());
+}

@@ -3,12 +3,14 @@
  * @file streamdeck.hpp
  * @brief Public API of the AJAZZ stream deck backend module.
  *
- * Declares the module bootstrap function and the concrete device factories
- * for all supported AKP-family decks. Normal application code only calls
- * registerAll(); the factories are exposed separately so unit tests and
- * plugin consumers can instantiate specific backends without a real device.
+ * Declares the module bootstrap function, the AKP815 device factory, and the
+ * descriptor list for the Stream Dock SKUs driven by the out-of-process
+ * mirajazz sidecar. Normal application code calls registerAll() (AKP815) and
+ * registers streamDockSidecarDescriptors() against the sidecar factory; the
+ * AKP815 factory is exposed separately so unit tests can instantiate it
+ * without a real device.
  *
- * @see DeviceRegistry::registerDevice, makeAkp153, makeAkp03, makeAkp05
+ * @see DeviceRegistry::registerDevice, makeAkp815, streamDockSidecarDescriptors
  */
 #pragma once
 
@@ -17,6 +19,7 @@
 #include "ajazz/core/transport.hpp"
 
 #include <memory>
+#include <vector>
 
 namespace ajazz::core {
 class DeviceRegistry;
@@ -38,68 +41,25 @@ namespace ajazz::streamdeck {
 void registerAll(core::DeviceRegistry& registry);
 
 /**
- * @brief Factory for the AJAZZ AKP153 / Mirabox HSV293S backend.
+ * @brief Descriptors for every Stream Dock SKU driven by the mirajazz sidecar
+ *        (AKP05/N4, AKP03/N3, AKP153/HSV293S). AKP815 is excluded — it is not a
+ *        mirajazz device and stays on its C++ backend via @ref registerAll.
  *
- * 15-key grid with 85×85 JPEG display per key. Implements IDisplayCapable
- * and IFirmwareCapable.
+ * The application registers these against its out-of-process sidecar factory
+ * (`makeSidecarStreamDock`), so the mirajazz backend — not the in-tree C++ wire
+ * code — drives these devices. Geometry is literal in the implementation, so
+ * the list is independent of the C++ protocol headers.
  *
- * @param d  Static descriptor from the registry.
- * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
- *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
- *         hand the same instance to subsequent open(id) calls for the
- *         same (vendorId, productId) until the last shared_ptr drops.
+ * @return One DeviceDescriptor per supported (vendorId, productId).
  */
-[[nodiscard]] core::DevicePtr makeAkp153(core::DeviceDescriptor const& d, core::DeviceId id);
-
-/**
- * @brief Factory for the AJAZZ AKP03 / Mirabox N3 backend.
- *
- * 6-key grid (72×72 PNG) plus one rotary encoder. Implements
- * IDisplayCapable and IEncoderCapable.
- *
- * @param d  Static descriptor from the registry.
- * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
- *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
- *         hand the same instance to subsequent open(id) calls for the
- *         same (vendorId, productId) until the last shared_ptr drops.
- */
-[[nodiscard]] core::DevicePtr makeAkp03(core::DeviceDescriptor const& d, core::DeviceId id);
-
-/**
- * @brief Factory for the AJAZZ AKP05 / AKP05E backend.
- *
- * 15-key grid (85×85 JPEG), 4 encoder LCDs, touch strip, and main LCD.
- * Implements IDisplayCapable and IEncoderCapable.
- *
- * @param d  Static descriptor from the registry.
- * @param id Runtime device identifier (VID/PID/serial).
- * @return Closed DevicePtr (shared_ptr alias per ARCH-03); call open()
- *         before I/O. The DeviceRegistry's flyweight cache (D-06) will
- *         hand the same instance to subsequent open(id) calls for the
- *         same (vendorId, productId) until the last shared_ptr drops.
- */
-[[nodiscard]] core::DevicePtr makeAkp05(core::DeviceDescriptor const& d, core::DeviceId id);
-
-/**
- * @brief Test-only factory: construct an AKP05 device with an injected
- *        @c ITransport. Parallels @ref ajazz::mouse::makeAjSeriesWithTransport.
- *
- * Production code uses @ref makeAkp05 above; tests use this overload to
- * substitute a mock that records every write for byte-level wire-format
- * assertions.
- */
-[[nodiscard]] core::DevicePtr makeAkp05WithTransport(core::DeviceDescriptor const& d,
-                                                     core::DeviceId id,
-                                                     core::TransportPtr transport);
+[[nodiscard]] std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors();
 
 /**
  * @brief Factory for the AJAZZ AKP815 backend.
  *
  * 15-key grid (5 rows × 3 columns) with 100×100 JPEG-encoded keys
- * (`Rot180`, no mirror) and an 854×480 LCD strip. Reuses the AKP153
- * wire protocol family at the framing level but with a different
+ * (`Rot180`, no mirror) and an 800×480 LCD strip. Drives the family v1-API
+ * framing via its own `akp815_wire.hpp` builders, with a different
  * `key_image_format` per `[ajazz-sdk]/info.rs::Kind::Akp815`.
  *
  * Implements IDisplayCapable and IFirmwareCapable.
@@ -112,5 +72,17 @@ void registerAll(core::DeviceRegistry& registry);
  *         same (vendorId, productId) until the last shared_ptr drops.
  */
 [[nodiscard]] core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id);
+
+/**
+ * @brief Test-only factory: construct an AKP815 device with an injected
+ *        @c ITransport (COD-026 DI seam).
+ *
+ * Production code uses @ref makeAkp815 above; tests use this overload to
+ * substitute a mock that records every write for byte-level wire-format
+ * assertions (CAPTURE-04 pattern, COD-026 DI seam).
+ */
+[[nodiscard]] core::DevicePtr makeAkp815WithTransport(core::DeviceDescriptor const& d,
+                                                      core::DeviceId id,
+                                                      core::TransportPtr transport);
 
 } // namespace ajazz::streamdeck

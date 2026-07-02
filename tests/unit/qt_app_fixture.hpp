@@ -59,7 +59,50 @@ namespace ajazz::tests {
 /// `Appearance/Mode` key and one would observe the other's value
 /// after its own `clearThemeSettings()` — a real flake we observed
 /// in the wild after the Toast polish landed.
+
+/// Pin the plugin-catalogue fetchers offline for this test process.
+///
+/// Constructing a `PluginCatalogModel` calls `reload()`, which — with the
+/// online catalogue ON by default (PLUGIN-14) — fires a live
+/// `QNetworkAccessManager` POST to the real Stream Dock / OpenDeck
+/// catalogue URLs. A unit test never spins the event loop, so that
+/// `QNetworkReply` is left in flight and torn down with the fetcher on
+/// process exit; on CI (ubuntu/macOS) that teardown SegFaults
+/// non-deterministically. (It passed on the dev box only because the
+/// reply never reached a crashing state there.) Unit tests must not depend
+/// on outbound network, so every fixture caller pins both fetchers to the
+/// documented `disabled` override — the same mechanism
+/// test_catalog_offline.cpp already uses explicitly. `overwrite = 0` lets a
+/// test that genuinely wants a mock URL set the env var itself first.
+inline void disableLiveCatalogs() {
+#ifdef _WIN32
+    // MSVC /W4 /WX rejects std::getenv (C4996); use the Annex K getenv_s to
+    // probe presence (buffer == nullptr / size 0 returns the required length,
+    // 0 == not set) so a test that set a mock URL first still wins.
+    auto setIfUnset = [](char const* name) {
+        size_t len = 0;
+        getenv_s(&len, nullptr, 0, name);
+        if (len == 0) {
+            _putenv_s(name, "disabled");
+        }
+    };
+    setIfUnset("ACC_STREAMDOCK_CATALOG_URL");
+    setIfUnset("ACC_OPENDECK_CATALOG_URL");
+    setIfUnset("ACC_MIRABOX_GITHUB_CATALOG_URL");
+#else
+    ::setenv("ACC_STREAMDOCK_CATALOG_URL", "disabled", /*overwrite*/ 0);
+    ::setenv("ACC_OPENDECK_CATALOG_URL", "disabled", /*overwrite*/ 0);
+    // The Mirabox-GitHub fetcher (added 2026-06-22) must be disabled in tests
+    // too: PluginCatalogModel's ctor reload() fires every fetcher, and a live
+    // QNetworkReply torn down at test exit SEGFAULTs (PR#80 root cause). Without
+    // this, PluginInstallFromFile tests crash on CI (timing-dependent — passes
+    // locally, segfaults on the runner).
+    ::setenv("ACC_MIRABOX_GITHUB_CATALOG_URL", "disabled", /*overwrite*/ 0);
+#endif
+}
+
 inline QCoreApplication& qtApp() {
+    disableLiveCatalogs();
     if (QCoreApplication::instance() == nullptr) {
         static int argc = 0;
         static std::array<char*, 1> argv{nullptr};

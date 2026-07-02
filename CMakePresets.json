@@ -98,13 +98,13 @@
         { "name": "coverage",        "configurePreset": "coverage"        }
     ],
     "testPresets": [
-        { "name": "linux-debug",     "configurePreset": "linux-debug",     "output": { "outputOnFailure": true } },
+        { "name": "linux-debug",     "configurePreset": "linux-debug",     "output": { "outputOnFailure": true }, "environment": { "LSAN_OPTIONS": "suppressions=${sourceDir}/.lsan-suppressions:print_suppressions=0" } },
         { "name": "linux-release",   "configurePreset": "linux-release",   "output": { "outputOnFailure": true } },
         { "name": "windows-debug",   "configurePreset": "windows-debug",   "output": { "outputOnFailure": true } },
         { "name": "windows-release", "configurePreset": "windows-release", "output": { "outputOnFailure": true } },
         { "name": "macos-debug",     "configurePreset": "macos-debug",     "output": { "outputOnFailure": true } },
         { "name": "macos-release",   "configurePreset": "macos-release",   "output": { "outputOnFailure": true } },
-        { "name": "dev",             "configurePreset": "dev",             "output": { "outputOnFailure": true } },
+        { "name": "dev",             "configurePreset": "dev",             "output": { "outputOnFailure": true }, "environment": { "LSAN_OPTIONS": "suppressions=${sourceDir}/.lsan-suppressions:print_suppressions=0" } },
         { "name": "release",         "configurePreset": "release",         "output": { "outputOnFailure": true } },
         { "name": "coverage",        "configurePreset": "coverage",        "output": { "outputOnFailure": true } }
     ]

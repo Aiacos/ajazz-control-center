@@ -3,21 +3,20 @@
  * @file akp_common_protocol.hpp
  * @brief Command words shared verbatim across the AJAZZ AKP Stream Dock family.
  *
- * The AKP03 / AKP05 / AKP153 backends share an identical packet framing — the
- * "CRT" prefix plus a set of 3-byte ASCII command words — confirmed
- * byte-for-byte across all three headers and against the SDLibrary1.dll Ghidra
- * audit (akp05_vendor.md §3, 2026-05-17). These constants used to be
- * copy-pasted into each per-device header; they now live here as the single
- * source of truth and are pulled into each device namespace with `using`
- * declarations.
+ * The AKP family backends share an identical packet framing — the "CRT" prefix
+ * plus a set of 3-byte ASCII command words — confirmed byte-for-byte against
+ * the SDLibrary1.dll Ghidra audit (akp05_vendor.md §3, 2026-05-17). These
+ * constants live here as the single source of truth and are pulled into each
+ * device namespace with `using` declarations. After the AKP03/AKP05/AKP153 C++
+ * wire backends were removed in favour of the mirajazz sidecar, the remaining
+ * in-tree consumer is the AKP815 carve-out (@ref akp815_wire.hpp).
  *
  * Device-SPECIFIC opcodes (image transfer, encoder/main-screen, secondary
- * touch strip, boot logo, display init, sleep, …) deliberately stay in their
- * respective per-device headers because they diverge across the family — e.g.
- * the image opcode is "BAT" on AKP03/AKP153 but split into key/encoder/main
- * variants on AKP05.
+ * touch strip, boot logo, …) live in the per-device wire header because they
+ * diverge across the family — e.g. the image opcode is "BAT" on the
+ * AKP153/AKP815 v1-API framing.
  *
- * @see akp03_protocol.hpp / akp05_protocol.hpp / akp153_protocol.hpp
+ * @see akp815_wire.hpp
  */
 #pragma once
 

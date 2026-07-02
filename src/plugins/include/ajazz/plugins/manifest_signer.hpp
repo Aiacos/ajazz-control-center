@@ -31,6 +31,7 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <string>
 #include <vector>
@@ -47,15 +48,44 @@ struct TrustedPublisher {
 };
 
 /**
+ * @brief Three-way classification of the signature block in a manifest.
+ *
+ * Distinguishes the security-relevant difference between "no signature"
+ * (unsigned developer sideload, opt-in installable with consent) and
+ * "signature present but cryptographically invalid" (tampered, must always
+ * be refused). This is the CR-01 invariant: a tampered package is an
+ * attack and must be quarantined even when the user has consented to
+ * unsigned installs.
+ *
+ *   - @c None    → manifest carries NO @c Ed25519Signature / @c Ed25519PublicKey
+ *                  fields. Safe to install with explicit user consent.
+ *   - @c Valid   → signature block present AND Ed25519 verification passed.
+ *   - @c Invalid → signature block present BUT Ed25519 verification FAILED
+ *                  (tampered, must always be quarantined).
+ */
+enum class SignatureState : std::uint8_t {
+    None,    ///< No signature block — unsigned manifest.
+    Valid,   ///< Signature block present and cryptographically valid.
+    Invalid, ///< Signature block present but Ed25519 verification failed (tampered).
+};
+
+/**
  * @brief Result of verifying one plugin manifest.
  *
- * Matches the semantics surfaced by @ref PluginInfo:
- *   - `valid == false`              → unsigned or tampered manifest.
- *   - `valid == true && publisher empty` → self-signed (key not in trust roots).
- *   - `valid == true && publisher set`   → key matches a trust-roots entry.
+ * Provides both the legacy @c valid boolean (backward compat) and the
+ * new three-way @c signatureState field (CR-01 invariant enforcement).
+ *
+ * Invariant: `valid == (signatureState == SignatureState::Valid)`
+ *
+ *   - `signatureState == None`    → unsigned; valid == false.
+ *   - `signatureState == Valid`   → verified; valid == true.
+ *   - `signatureState == Invalid` → tampered; valid == false.
+ *   - `valid == true && publisherName empty` → self-signed (key not in trust roots).
+ *   - `valid == true && publisherName set`   → key matches a trust-roots entry.
  */
 struct ManifestVerifyResult {
     bool valid{false};
+    SignatureState signatureState{SignatureState::None}; ///< Three-way signature classification.
     std::string publisherKeyB64; ///< From the manifest's `Ed25519PublicKey`.
     std::string publisherName;   ///< Looked up from trust roots, or empty.
 };

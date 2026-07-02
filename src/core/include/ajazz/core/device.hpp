@@ -84,6 +84,38 @@ struct DeviceDescriptor {
                              ///< per-device Settings tab so non-capable devices don't render
                              ///< empty fake-functional rows.
 
+    // ---- OpenDeck-pattern geometry (Phase 26) --------------------------------
+    // These fields enable the geometry-driven DeviceView editor introduced in
+    // Phase 26 to discriminate the three stacked row types: the key grid,
+    // the encoder-dial row, and the touch-strip-zone row. They are additive
+    // with zero defaults — existing aggregate-initialiser call sites compile
+    // unchanged. AKP815 intentionally stays at keyRows=0 (deferred sentinel
+    // per D-13: its 800x480 strip is one wide rect, not discrete zones).
+
+    /// Number of LCD-key rows. When 0, the editor falls back to inferring
+    /// rows from keyCount / gridColumns. Required for AKP815 (5x3 portrait)
+    /// vs AKP05 (2x5 landscape) discrimination — relying on accident is fragile.
+    /// AKP05/N4/AKP05E = 2; AKP153 family = 3; AKP03 family = 2;
+    /// AKP815 = 0 (deferred sentinel per D-13).
+    std::uint8_t keyRows{0};
+
+    /// Number of discrete touch-strip zones aligned to encoder positions.
+    /// 0 = no touch strip, or strip is a single wide rect (use mainScreenWidthPx).
+    /// >0 = N discrete touchpoints in Stream Deck Plus style.
+    /// AKP05/Mirabox N4/AKP05E = 4 (one zone per encoder);
+    /// AKP815 = 0 (its strip is one 800x480 addressable rect, not 4 zones).
+    std::uint8_t touchZoneCount{0};
+
+    /// Width in pixels of the main LCD strip for wide-rect-addressable devices
+    /// (e.g. AKP815's 800x480 strip). 0 if the device has no single-wide strip.
+    /// Mutually exclusive with touchZoneCount in practice: a device has either
+    /// per-encoder touch zones OR a single wide strip, not both.
+    std::uint16_t mainScreenWidthPx{0};
+
+    /// Height in pixels of the main LCD strip (companion to mainScreenWidthPx).
+    /// 0 if absent.
+    std::uint16_t mainScreenHeightPx{0};
+
     /// HID usage page of the vendor control interface, for composite devices
     /// that expose several HID interfaces/collections (0 = open the first
     /// matching interface, the default for single-interface devices). When
@@ -116,7 +148,9 @@ struct DeviceEvent {
         EncoderTurned,   ///< Encoder rotated; `index` = encoder number, `value` = signed delta.
         EncoderPressed,  ///< Encoder knob depressed; `index` = encoder number.
         EncoderReleased, ///< Encoder knob released; `index` = encoder number.
-        TouchStrip,      ///< Touch-strip gesture; `value` encodes gesture + X coordinate.
+        TouchDown,       ///< Touch-strip press began; `value` = X coordinate (0..255).
+        TouchMove,       ///< Touch-strip contact moved; `value` = X coordinate (0..255).
+        TouchUp,         ///< Touch-strip press ended;  `value` = X coordinate (0..255).
         Connected,       ///< Device became available on the bus.
         Disconnected,    ///< Device was removed or lost.
     };

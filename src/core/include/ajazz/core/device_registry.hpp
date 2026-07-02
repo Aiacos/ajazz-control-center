@@ -163,6 +163,29 @@ public:
      */
     std::size_t closeOpenDevicesInFamily(DeviceFamily family) const;
 
+    /**
+     * @brief Drop the flyweight cache slot for @p id so the next open() rebuilds it.
+     *
+     * Proactive eviction for hot-plug Removed (HOTPLUG / VERIFY-OP-2): the cache
+     * is keyed by (vid, pid) and holds a `weak_ptr`. While a consumer (e.g. the
+     * control service) still holds its `shared_ptr` across an unplug, that
+     * weak_ptr stays alive, so the post-replug `open()` returns the SAME backend
+     * whose transport is bound to the now-dead `/dev/hidrawN` node (the device
+     * re-enumerates on a different node). The render then silently goes nowhere.
+     *
+     * Calling this on Removed erases the cache entry (and best-effort `close()`s
+     * the stale backend if still live) so the next `open()` is a cache MISS →
+     * the factory builds a fresh backend whose HID open (vid/pid) resolves the
+     * current node. Consumers must re-resolve (setActiveDevice) to pick it up —
+     * the hot-plug Arrived path already does.
+     *
+     * Best-effort and thread-safe (takes `m_open_mutex`); `close()` runs outside
+     * the lock. No-op if no cache slot exists for @p id.
+     *
+     * @param id Device whose (vid, pid) cache slot should be evicted.
+     */
+    void invalidateOpenDevice(DeviceId const& id) const;
+
     DeviceRegistry(DeviceRegistry const&) = delete;
     DeviceRegistry& operator=(DeviceRegistry const&) = delete;
     DeviceRegistry(DeviceRegistry&&) = delete;
@@ -194,8 +217,10 @@ private:
     /// Keyed by `(vendorId, productId)` — `serial` is intentionally not in
     /// the key because the v1.1 contract is "one backend per device class
     /// per process". The `weak_ptr` lets a backend be reclaimed naturally
-    /// when the last consumer drops its `shared_ptr` (passive eviction —
-    /// no proactive invalidation on hot-plug Removed).
+    /// when the last consumer drops its `shared_ptr` (passive eviction).
+    /// Hot-plug Removed ALSO triggers proactive eviction via
+    /// invalidateOpenDevice() so a replug onto a new node is not shadowed by a
+    /// cached backend bound to the dead node (VERIFY-OP-2).
     mutable std::map<std::pair<std::uint16_t, std::uint16_t>, std::weak_ptr<IDevice>>
         m_open_devices;
 

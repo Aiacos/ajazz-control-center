@@ -1,5 +1,14 @@
 # Plugin system
 
+> ℹ️ **SCOPE BANNER (2026-06).** This document covers the **first-party Python
+> scripting host** (`OutOfProcessPluginHost`) — one of *two* plugin runtimes.
+> It is **not** the runtime that loads Elgato/OpenDeck `.sdPlugin` packages; that
+> is the Stream Deck WebSocket system (`SdPluginServer` + `PluginManager` +
+> `PluginDeviceBridge`), specified in
+> [`../protocols/streamdeck/elgato_plugin_protocol.md`](../protocols/streamdeck/elgato_plugin_protocol.md).
+> Both hosts are merged behind `UnifiedPluginHost` (`IPluginHost2`). When you read
+> "plugin" below, read "**first-party Python plugin**".
+
 AJAZZ Control Center spawns plugins in an isolated child process running the system `python3` interpreter. The host (C++) and the child (Python) talk over a pair of pipes using a line-delimited JSON wire protocol. Plugins are ordinary Python packages discovered in a per-user directory the host scans at startup.
 
 ## Why Python?

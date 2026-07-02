@@ -3,14 +3,21 @@
 #
 # Install once per clone:
 #   pipx install pre-commit        # or: pip install --user pre-commit
-#   pre-commit install             # sets up the git hook
-#   pre-commit install --hook-type commit-msg
+#   pre-commit install             # installs ALL hook types below
+#
+# (default_install_hook_types makes the single `pre-commit install` set up
+# the commit-msg hook for Conventional Commits AND the pre-push hook that
+# runs clang-tidy on changed files — previously each needed its own
+# `--hook-type` invocation, so most clones silently lacked pre-push tidy
+# and clang-tidy findings first surfaced in the Lint CI leg.)
 #
 # Run manually across the whole tree:
 #   pre-commit run --all-files
 #
 # `make bootstrap` already does `pre-commit install` for you.
 # ============================================================================
+
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 
 default_language_version:
   python: python3
@@ -22,9 +29,15 @@ exclude: |
       dist/.*|
       \.venv/.*|
       docs/protocols/captures/.*|
+      src/app/webui/opendeck/.*|
+      plugins/.*|
       .*\.pcapng|
       .*\.min\.(js|css)
   )$
+# src/app/webui/opendeck is a PRISTINE git submodule (nekename/OpenDeck) and
+# plugins/ holds bundled-plugin build trees from feat/native-hardware-monitor:
+# formatter hooks (mdformat et al.) must never rewrite either (2026-07-02:
+# mdformat reflowed the submodule's .github templates + LICENSE.md).
 
 repos:
   # --------------------------------------------------------------------------
@@ -62,6 +75,12 @@ repos:
       - id: clang-format
         types_or: [c++, c]
         args: [-i, --style=file]
+        # Objective-C++ (.mm) backends (e.g. the macOS active-window watcher) are
+        # classified by pre-commit as objective-c++ and fed to clang-format, but
+        # this project's .clang-format has no ObjC language block, so the hook
+        # exits 1 ("Configuration file(s) do(es) not support Objective-C"). Exclude
+        # .mm here; the few .mm TUs we ship are kept hand-formatted to match style.
+        exclude: '\.mm$'
 
   # clang-tidy: static analyser. Runs on `pre-commit run --hook-stage manual`
   # (or `make tidy`) for ad-hoc invocations, AND automatically on `git push`
@@ -118,6 +137,9 @@ repos:
     hooks:
       - id: shellcheck
         args: [--severity=warning]
+        # Vendored Spec Kit helper scripts are maintained upstream; don't gate
+        # our commits on their shellcheck warnings (SC2155/SC2221/...).
+        exclude: '^\.specify/'
 
   - repo: https://github.com/scop/pre-commit-shfmt
     rev: v3.10.0-2
@@ -243,6 +265,18 @@ repos:
         entry: python scripts/check_test_names_ascii.py
         language: python
         files: '^tests/.*\.cpp$'
+        pass_filenames: true
+
+      # Enforce CLAUDE.md "Cross-platform build strictness": MSVC /W4 /WX
+      # turns C4996 deprecations (std::getenv, sprintf, strcpy, ...) into
+      # hard errors, so shared code using them passes Linux/macOS and fails
+      # only the windows-2022 leg after a full build (PR #80 precedent:
+      # std::getenv -> getenv_s fix commit). Catch the class at commit time.
+      - id: check-msvc-fatal-apis
+        name: Ban MSVC-fatal APIs (C4996 class) in shared C++ code
+        entry: python scripts/check_msvc_fatal_apis.py
+        language: python
+        types_or: [c++, c]
         pass_filenames: true
 
   # --------------------------------------------------------------------------

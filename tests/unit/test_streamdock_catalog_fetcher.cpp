@@ -262,3 +262,44 @@ TEST_CASE("bundled fallback resource yields a non-empty snapshot", "[streamdock]
         REQUIRE_FALSE(row.devices.empty());
     }
 }
+
+TEST_CASE("productGetUrl derives the per-product resolve endpoint", "[streamdock][resolve]") {
+    qtApp();
+    // The `/list` collection segment is swapped for `get/<id>` so the per-product
+    // resolve tracks the catalogue host automatically.
+    QUrl const url = StreamdockCatalogFetcher::productGetUrl(QStringLiteral("178366994579014"));
+    REQUIRE(url.isValid());
+    REQUIRE(
+        url.toString() ==
+        QStringLiteral("https://space.key123.vip/interface/user/productInfo/get/178366994579014"));
+    // Empty id is not resolvable.
+    REQUIRE_FALSE(StreamdockCatalogFetcher::productGetUrl(QString{}).isValid());
+}
+
+TEST_CASE("parseProductDownloadUrl extracts the absolute https archive URL",
+          "[streamdock][resolve]") {
+    qtApp();
+    // The get/<id> response nests the absolute `download` URL under `data` (the
+    // /list rows only carry a relative path, which is why the resolve step exists).
+    QByteArray const ok = R"({"code":200,"message":"ok","data":{
+        "id":"178366994579014",
+        "download":"https://cdn1.key123.vip/marketplace/streamDock/plugin/product/x/y/com.mirabox.streamdock.Weather.sdPlugin"
+    }})";
+    QUrl const url = StreamdockCatalogFetcher::parseProductDownloadUrl(ok);
+    REQUIRE(url.isValid());
+    REQUIRE(url.host() == QStringLiteral("cdn1.key123.vip"));
+    REQUIRE(url.scheme() == QStringLiteral("https"));
+
+    // A relative `download` (the /list shape) is NOT a resolvable archive URL.
+    QByteArray const rel = R"({"data":{"download":"/com.mirabox.streamdock.Weather.sdPlugin"}})";
+    REQUIRE_FALSE(StreamdockCatalogFetcher::parseProductDownloadUrl(rel).isValid());
+
+    // Plain http is rejected (never install over cleartext).
+    QByteArray const http = R"({"data":{"download":"http://cdn1.key123.vip/x.sdPlugin"}})";
+    REQUIRE_FALSE(StreamdockCatalogFetcher::parseProductDownloadUrl(http).isValid());
+
+    // Missing field / malformed body → invalid URL, no crash.
+    REQUIRE_FALSE(StreamdockCatalogFetcher::parseProductDownloadUrl(R"({"data":{}})").isValid());
+    REQUIRE_FALSE(
+        StreamdockCatalogFetcher::parseProductDownloadUrl(QByteArray("not json")).isValid());
+}

@@ -143,6 +143,44 @@ QUrl StreamdockCatalogFetcher::defaultCatalogUrl() {
     return QUrl{QString::fromLatin1(kDefaultCatalogUrl)};
 }
 
+QUrl StreamdockCatalogFetcher::productGetUrl(QString const& productId) {
+    if (productId.isEmpty()) {
+        return {};
+    }
+    // Derive from the catalogue base so a host change tracks automatically:
+    // `.../user/productInfo/list` -> `.../user/productInfo/get/<id>`.
+    QUrl url = defaultCatalogUrl();
+    QString path = url.path();
+    if (path.endsWith(QStringLiteral("/list"))) {
+        path.chop(4); // drop "list", keep trailing slash
+    } else if (!path.endsWith(QLatin1Char('/'))) {
+        path += QLatin1Char('/');
+    }
+    path += QStringLiteral("get/") + productId;
+    url.setPath(path);
+    return url;
+}
+
+QUrl StreamdockCatalogFetcher::parseProductDownloadUrl(QByteArray const& json) {
+    QJsonParseError perr{};
+    QJsonDocument const doc = QJsonDocument::fromJson(json, &perr);
+    if (perr.error != QJsonParseError::NoError || !doc.isObject()) {
+        return {};
+    }
+    // `get/<id>` returns {code, message, data:{..., download: "https://cdn1.key123.vip/..."}}.
+    // Unlike the `/list` rows (relative `download`), this one is the absolute archive URL.
+    QJsonObject const data = doc.object().value(QStringLiteral("data")).toObject();
+    QString const dl = data.value(QStringLiteral("download")).toString().trimmed();
+    if (dl.isEmpty()) {
+        return {};
+    }
+    QUrl const url{dl};
+    if (url.isValid() && url.scheme().toLower() == QStringLiteral("https")) {
+        return url;
+    }
+    return {};
+}
+
 void StreamdockCatalogFetcher::setCacheDirOverride(QString const& dir) {
     m_cacheDirOverride = dir;
 }

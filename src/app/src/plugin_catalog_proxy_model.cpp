@@ -107,6 +107,12 @@ bool PluginCatalogProxyModel::filterAcceptsRow(int sourceRow,
             return false;
         }
         break;
+    case MiraboxGithubTab:
+        if (src->data(idx, PluginCatalogModel::SourceRole).toString() !=
+            QStringLiteral("mirabox-github")) {
+            return false;
+        }
+        break;
     default:
         break; // unknown tab — accept; matches QML's `default: break`.
     }

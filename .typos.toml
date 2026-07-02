@@ -1,5 +1,11 @@
 # typos configuration — spell-check code, comments and docs.
 [default]
+extend-ignore-re = [
+    # Base64-encoded binary test fixtures (e.g. ZIP archives embedded in the
+    # plugin extractor tests). typos parses inside the quoted string literal and
+    # "corrects" random base64 substrings, silently corrupting the fixture.
+    "\"[A-Za-z0-9+/]{40,}={0,2}\"",
+]
 extend-ignore-identifiers-re = [
     # Hex constants and 4-byte magic literals.
     "[0-9a-fA-F]{6,}",
@@ -11,6 +17,9 @@ extend-ignore-identifiers-re = [
 
 [default.extend-words]
 # Domain vocabulary that is NOT a typo.
+# "strategy" abbreviation (local bash var) in the vendored Spec Kit helper
+# scripts under .specify/scripts/; typos proposes start/strata.
+strat    = "strat"
 AJAZZ    = "AJAZZ"
 Mirabox  = "Mirabox"
 hidraw   = "hidraw"
@@ -41,6 +50,10 @@ Fulcio   = "Fulcio"
 Rekor    = "Rekor"
 bwrap    = "bwrap"
 bubblewrap = "bubblewrap"
+# Reverse-DNS author fragment in the HWiNFO plugin UUID
+# (com.exension.hwinfo — shayne/hwinfo-streamdeck). typos otherwise
+# "corrects" the real identifier "exension" to "extension".
+exension = "exension"
 OpenDeck = "OpenDeck"
 opendeck = "opendeck"
 streamdeck = "streamdeck"

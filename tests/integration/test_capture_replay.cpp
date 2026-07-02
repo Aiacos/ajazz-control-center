@@ -13,8 +13,14 @@
  * and described as such in their headers. They still serve their primary
  * purpose: locking the parser's happy path and rejection logic into the
  * regression suite.
+ *
+ * The fixtures under `akp153/` are v1-API HID input reports. The C++ AKP153
+ * backend was removed in favour of the mirajazz sidecar, but the v1-API input
+ * parser survives in-tree as the AKP815 carve-out's `akp815::parseInputReport`
+ * (byte-identical framing: 512-byte "CRT" packets, 1-based key index at byte 9,
+ * 1..15). These tests exercise that surviving shared parser.
  */
-#include "akp153_protocol.hpp"
+#include "akp815_wire.hpp"
 #include "hex_loader.hpp"
 
 #include <filesystem>
@@ -35,8 +41,9 @@ namespace {
 
 } // namespace
 
-TEST_CASE("AKP153 - real key press fixture (key 7)", "[integration][akp153]") {
-    using namespace ajazz::streamdeck::akp153;
+TEST_CASE("Stream Dock v1-API parser - real key press fixture (key 7)",
+          "[integration][streamdock-v1]") {
+    using namespace ajazz::streamdeck::akp815;
 
     auto const bytes = ajazz::tests::loadHexFixture(fixture("akp153/key_press_07.hex"));
     auto const ev = parseInputReport(bytes);
@@ -45,8 +52,8 @@ TEST_CASE("AKP153 - real key press fixture (key 7)", "[integration][akp153]") {
     REQUIRE(ev->pressed == true);
 }
 
-TEST_CASE("AKP153 - boundary key (key 15)", "[integration][akp153]") {
-    using namespace ajazz::streamdeck::akp153;
+TEST_CASE("Stream Dock v1-API parser - boundary key (key 15)", "[integration][streamdock-v1]") {
+    using namespace ajazz::streamdeck::akp815;
 
     auto const bytes = ajazz::tests::loadHexFixture(fixture("akp153/key_press_15.hex"));
     auto const ev = parseInputReport(bytes);
@@ -54,17 +61,18 @@ TEST_CASE("AKP153 - boundary key (key 15)", "[integration][akp153]") {
     REQUIRE(ev->keyIndex == 15);
 }
 
-TEST_CASE("AKP153 - ACK frames are silently ignored", "[integration][akp153]") {
-    using namespace ajazz::streamdeck::akp153;
+TEST_CASE("Stream Dock v1-API parser - ACK frames are silently ignored",
+          "[integration][streamdock-v1]") {
+    using namespace ajazz::streamdeck::akp815;
 
     auto const bytes = ajazz::tests::loadHexFixture(fixture("akp153/ack_frame.hex"));
     auto const ev = parseInputReport(bytes);
     REQUIRE_FALSE(ev.has_value());
 }
 
-TEST_CASE("AKP153 rejects malformed frames (SEC-007/008/009/010)",
-          "[integration][akp153][security]") {
-    using namespace ajazz::streamdeck::akp153;
+TEST_CASE("Stream Dock v1-API parser rejects malformed frames (SEC-007/008/009/010)",
+          "[integration][streamdock-v1][security]") {
+    using namespace ajazz::streamdeck::akp815;
 
     SECTION("truncated frame") {
         auto const bytes = ajazz::tests::loadHexFixture(fixture("malformed/short_frame.hex"));

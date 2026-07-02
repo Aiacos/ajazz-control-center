@@ -15,6 +15,7 @@
 #include "app_icon.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
+#include "opendeck_bridge.hpp"
 #include "single_instance_guard.hpp"
 #include "tray_controller.hpp"
 
@@ -23,13 +24,20 @@
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
 #include <QWindow>
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include <QtWebEngineQuick/QtWebEngineQuick>
+#ifdef AJAZZ_HAVE_WEBUI
+#include "opendeck_scheme_handler.hpp"
+
+#include <QWebEngineProfile>
+#endif
 #endif
 
+#include <csignal>
 #include <iostream>
 #include <optional>
 
@@ -44,6 +52,15 @@
 #endif
 
 int main(int argc, char* argv[]) {
+#ifndef _WIN32
+    // Ignore SIGPIPE process-wide. The out-of-process plugin host writes to a
+    // child via a pipe; if the child exits/crashes mid-IPC, the next ::write()
+    // to the closed read end raises SIGPIPE, whose default disposition kills
+    // the whole GUI app *before* the write()'s EPIPE return can be handled.
+    // Ignoring it lets ::write() return -1/EPIPE so the host's existing error
+    // path runs instead. Windows _write() returns EPIPE without a signal.
+    ::signal(SIGPIPE, SIG_IGN);
+#endif
 #ifdef AJAZZ_HAVE_WEBENGINE
     // Qt WebEngine requires its renderer-process initialiser to run BEFORE
     // any QGuiApplication / QApplication is constructed; otherwise the
@@ -52,6 +69,11 @@ int main(int argc, char* argv[]) {
     // (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`); minimal Qt installs and
     // headless CI builds compile this branch out and stay on the
     // schema-driven Property Inspector renderer at runtime.
+#ifdef AJAZZ_HAVE_WEBUI
+    // Register the custom scheme that serves the bundled OpenDeck SPA with a
+    // clean web origin (opendeck://app/). MUST precede QtWebEngine init.
+    ajazz::app::registerOpenDeckScheme();
+#endif
     QtWebEngineQuick::initialize();
 #endif
     // Use QApplication (not QGuiApplication) because TrayController relies on
@@ -168,7 +190,34 @@ int main(int argc, char* argv[]) {
 
     QQmlApplicationEngine engine;
     controller.exposeToQml(engine);
-    engine.loadFromModule("AjazzControlCenter", "Main");
+
+    // OpenDeck UI integration: the OpenDeck Svelte SPA is embedded as the
+    // STREAMDECK editor pane (qml/OpenDeckPane.qml, mounted by ProfileEditor when
+    // the active device is a stream controller). The native shell (Main.qml) is
+    // always the root and keeps the device sidebar + the mouse and keyboard
+    // editors. We therefore expose the bridge + the bundle flag unconditionally
+    // (gated only by the WebEngine/SPA compile-time availability) and serve the
+    // SPA over the custom opendeck://app/ scheme, regardless of which device is
+    // selected — ProfileEditor decides when to show the pane.
+#ifdef AJAZZ_HAVE_WEBUI
+    bool const webUiBundlePresent = true;
+#else
+    bool const webUiBundlePresent = false;
+#endif
+    engine.rootContext()->setContextProperty(QStringLiteral("AppHasWebUiBundle"),
+                                             webUiBundlePresent);
+#ifdef AJAZZ_HAVE_WEBENGINE
+    engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
+                                             controller.openDeckBridge());
+#ifdef AJAZZ_HAVE_WEBUI
+    // Serve the bundled SPA via the custom scheme so SvelteKit routes from a
+    // clean origin and Fetch works. Handler is parented to qApp.
+    QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
+        QByteArray(ajazz::app::kOpenDeckScheme), new ajazz::app::OpenDeckSchemeHandler(qApp));
+#endif
+#endif
+
+    engine.loadFromModule("AjazzControlCenter", QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }

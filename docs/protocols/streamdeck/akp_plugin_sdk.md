@@ -326,7 +326,7 @@ When a JS plugin calls `$SD.setImage(context, image, target)`:
    tuple from its in-memory action map.
 1. Host strips the `data:image/png;base64,` prefix, base64-decodes
    the rest, runs it through `QImage::loadFromData` then through a
-   QImage scaler to the device's per-key dimensions (e.g. 85×85 for
+   QImage scaler to the device's per-key dimensions (e.g. 112×112 for
    AKP05).
 1. Host re-encodes as JPEG (or PNG depending on device — see
    `DataFormatConversion` symbols), via `QImage::save` with format

@@ -6,6 +6,71 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **Elgato-parity plugin UI for keys & dials + one-click install** (feature 002, 2026-06-19):
+  - **Install replaces Open**: the Plugin Store row is now a single in-app action
+    (Install → Installing N% → Installed / disabled "Not installable in-app"). The
+    browser "Open page ↗" fallback is removed; a source without a resolvable https
+    package is shown disabled with a reason, never as a browser launch.
+  - **Dominant key preview**: selecting a plugin-bound key shows an Elgato-style
+    140px preview (action image + bottom title overlay, live `image://livekey`),
+    with a sensible placeholder when an action has no image/title.
+  - **Dial owns its touch-strip segment**: on Stream Deck + class devices the
+    segment above each dial mirrors that dial's bound action and a tap selects the
+    dial (one control = dial + segment, the Elgato model). The independent
+    touch-zone binding is retired for dial devices; legacy profiles carrying
+    `touchZones` still load losslessly (read-compat).
+  - Uninstalling a plugin now reverts any key/dial bound to its actions to unbound
+    (no stale reference, no crash).
+- **Built-in dial layouts (`$X1/$A0/$A1/$B1/$B2/$C1`) + `setFeedback`/`setFeedbackLayout`**
+  (2026-06-10): the encoder feedback surface (the touch-strip zone above each dial) now renders
+  the Stream Deck SDK built-in layouts — title/icon/value items, plain + gradient progress bars,
+  the `$C1` dual-bar mixer row — driven by the manifest `Encoder.layout`/`Encoder.Icon` at mount
+  and by `setFeedback` (item merge) / `setFeedbackLayout` (runtime switch) / `setText` (title
+  alias) at runtime. Replaces the long-standing "aux-surface rendering deferred to Phase 23"
+  stub. Live-verified on the AKP05E (dialRotate -> bar updates 42%->57%->72%).
+- **OpenDeck/Elgato plugin-protocol parity completion** (2026-06-09/10, verified live on the AKP05E
+  against a full OpenDeck source analysis): mount-time default state-image render
+  (`States[i].Image` with action-`Icon` fallback painted the moment an action lands on a key —
+  a plugin that never pushes `setImage`, e.g. `com.jk.weather`, now shows its icon instead of a
+  blank key); host-side **automatic state cycle** for 2-state actions on `keyUp` (honours
+  `DisableAutomaticStates`, paints the new state image, the `keyUp` envelope carries the new
+  state, `titleParametersDidChange` follows — also after inbound `setState`); manifest-level
+  `PropertyInspectorPath` now backfills actions that declare none (Elgato default-PI semantics).
+- `plugin.installFromCatalog {uuid}` debug RPC driving the PluginStore tile install from the
+  debug channel.
+
+### Fixed
+
+- **Plugin children no longer outlive the host** (`PR_SET_PDEATHSIG` on both spawn sites — the
+  graceful exitApp→terminate→kill protocol lives in the destructor and never ran on
+  SIGTERM/SIGKILL; 11 orphaned `node` processes had accumulated across killed sessions). A
+  clean exit (code 0) of a plugin child is now logged instead of being indistinguishable from
+  "never spawned".
+- **Action-picker gate unified with the spawn gate**: `installedActions()` compared
+  `Software.MinimumVersion` against the real app version (0.1.x) instead of the emulated
+  Stream Deck version (6.9), hiding actions of plugins that were running (observed live with
+  Weather); it also now mirrors the spawn step's effective-CodePath check so Windows-native
+  bundles don't surface bindable-but-dead actions on Linux.
+- **In-place rebind** (a different action dropped on the same key) now sends `willDisappear`
+  to the old plugin, clears the lingering frame + stale title overlay, paints the new action's
+  default image, and no longer inherits the old action's state index.
+- Canvas live-render mirror survives profile-model rebuilds (one-shot renders such as the
+  mount-time default icon vanished from the editor while staying on the device).
+- CI: `qtwayland` removed from `install-qt-action` modules (the 2026-06 Qt online-repo
+  restructure folded it into the base desktop install; requesting the old module name
+  hard-failed all three platform legs); first cross-platform exposure of the v2.0 phases fixed
+  three platform-specific failures (missing `override` under Apple Clang `-Werror`; exit-time
+  `QCoreApplication` destructor SEGFAULT on Qt 6.8.3; a `processEvents`-based test pump that
+  never actually waited on the windows-2022 runner).
+
+### Changed
+
+- UI palette polish: update banner re-skinned to the dark in-palette layer (was the only blue
+  element in the dark+red scheme), encoder dial rings reserve the accent for focus/selection,
+  empty-key index numbers muted.
+
 ## [0.1.1] - 2026-06-04
 
 ### Fixed

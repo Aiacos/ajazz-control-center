@@ -11,15 +11,24 @@
 # also pins it in-code) so it needs no display/GPU on CI.
 #
 # WebEngine is intentionally NOT enabled here: the harness exercises the
-# minimal-Qt fallback module (no PIWebView.qml, no QtWebEngine/QtWebChannel
-# dependency), which keeps the headless build self-contained. The HTML Property
-# Inspector path is covered separately by test_pi_bridge.cpp.
+# minimal-Qt fallback module (no QtWebEngine/QtWebChannel dependency, so
+# WebUiHost.qml / OpenDeckPane.qml are absent), which keeps the headless build
+# self-contained. The embedded OpenDeck SPA path is exercised live via the
+# debug-control channel on a WebEngine build instead.
 # ----------------------------------------------------------------------------
 
 if(NOT DEFINED ACC_QML_MODULE_SOURCES OR NOT DEFINED ACC_APP_SOURCE_DIR)
     message(FATAL_ERROR "tests/qml requires the app QML module lists exported from src/app "
                         "(ACC_QML_MODULE_SOURCES / ACC_APP_SOURCE_DIR). Was src/app configured?"
     )
+endif()
+
+# sdplugin_extractor.cpp (compiled into this target) links zlib directly. The root CMakeLists
+# provides ZLIB::ZLIB (vendored FetchContent alias by default, find_package under
+# AJAZZ_USE_SYSTEM_DEPS); only fall back to find_package when that target is not visible here. A
+# bare find_package(ZLIB) fails on the Windows CI runner, which has no findable system zlib.
+if(NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB REQUIRED)
 endif()
 
 # qt_add_qml_module's SOURCES / QML_FILES / RESOURCES are relative to the current source directory,
@@ -41,9 +50,13 @@ foreach(rel_qml IN LISTS ACC_QML_MODULE_QML_FILES)
     set_source_files_properties("${_abs}" PROPERTIES QT_RESOURCE_ALIAS "${_alias}")
 endforeach()
 
-# The Theme.qml singleton needs the same source-file property the app sets.
+# The Theme.qml + DragRelay.qml singletons need the same source-file property the app sets, or
+# qmlcachegen registers them as plain components.
 set_source_files_properties(
     "${ACC_APP_SOURCE_DIR}/qml/Theme.qml" PROPERTIES QT_QML_SINGLETON_TYPE TRUE
+)
+set_source_files_properties(
+    "${ACC_APP_SOURCE_DIR}/qml/DragRelay.qml" PROPERTIES QT_QML_SINGLETON_TYPE TRUE
 )
 
 qt_add_executable(
@@ -56,6 +69,8 @@ qt_add_executable(
     ${ACC_APP_SOURCE_DIR}/src/hotplug_debouncer.cpp
     ${ACC_APP_SOURCE_DIR}/src/streamdock_catalog_fetcher.cpp
     ${ACC_APP_SOURCE_DIR}/src/opendeck_catalog_fetcher.cpp
+    ${ACC_APP_SOURCE_DIR}/src/mirabox_github_catalog_fetcher.cpp
+    ${ACC_APP_SOURCE_DIR}/src/mirabox_github_installer.cpp
     ${ACC_APP_SOURCE_DIR}/src/sdplugin_extractor.cpp
     # FirmwareUpdateService is an Application member but is NOT in the QML module SOURCES list (it
     # has no QML_NAMED_ELEMENT export path via the module — it's registered manually). app_icon
@@ -67,6 +82,45 @@ qt_add_executable(
     # because it lives in the same target. We must do the same here or PluginStore.qml fails with
     # "PluginCatalogProxy is not a type".
     ${ACC_APP_SOURCE_DIR}/src/plugin_catalog_proxy_model.cpp
+    # Debug-control epic + plugin host: Application::run()/initPluginHost() reference these
+    # unconditionally-compiled app sources (they are NOT in ACC_QML_MODULE_SOURCES — they have no
+    # QML_NAMED_ELEMENT export). Recompile them here so application.cpp links; otherwise the smoke
+    # test fails with undefined references to DebugLogging::*, DebugControlServer::*,
+    # registerDebugControlMethods/registerQmlControlMethods, PluginDebugService::*,
+    # PluginManager::*. The WebSockets-gated symbols they touch (SdPluginServer /
+    # PluginDeviceBridge) are added in the AJAZZ_HAVE_WEBSOCKETS block below, mirroring the app
+    # target.
+    ${ACC_APP_SOURCE_DIR}/src/debug_logging.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_server.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_facade.cpp
+    ${ACC_APP_SOURCE_DIR}/src/debug_control_qml.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_debug_service.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_manager.cpp
+    ${ACC_APP_SOURCE_DIR}/src/plugin_crash_tracker.cpp
+    # The Stream Dock sidecar backend: application.cpp unconditionally references
+    # streamDockSidecarDescriptors() + makeSidecarStreamDock() (the AJAZZ_NO_SIDECAR guard is
+    # runtime, not compile-time), so these must be recompiled here too or the test fails to link
+    # with "undefined reference to makeSidecarStreamDock".
+    ${ACC_APP_SOURCE_DIR}/src/sidecar_protocol.cpp
+    ${ACC_APP_SOURCE_DIR}/src/sidecar_stream_dock_device.cpp
+    # Phase 30 added UnifiedPluginHost and made application.cpp construct it unconditionally; its TU
+    # must be compiled into this target too or linking fails with "undefined reference to
+    # UnifiedPluginHost::UnifiedPluginHost".
+    ${ACC_APP_SOURCE_DIR}/src/unified_plugin_host.cpp
+    # Phase 34 Plan 03 (APROF-01): application.cpp constructs the foreground-window watcher via
+    # app::makeActiveWindowWatcher(); its TU must be compiled here or linking fails with "undefined
+    # reference to makeActiveWindowWatcher". The harness does NOT define AJAZZ_FEATURE_ACTIVE_WINDOW
+    # (and omits the per-OS backend TUs), so the factory's #else branch returns the core recording
+    # stub — exactly the right headless behaviour for the offscreen QML smoke test.
+    ${ACC_APP_SOURCE_DIR}/src/active_window_watcher_factory.cpp
+    # OpenDeck-UI seam (commit 6bcf8199): application.cpp constructs OpenDeckBridge and calls
+    # notify{ProfileChanged,DevicesChanged}(); debug_control_facade.cpp calls
+    # OpenDeckBridge::handle() for the `opendeck.invoke` debug method — both UNCONDITIONAL (no
+    # AJAZZ_BUILD_WEBUI guard, since the bridge is plain Qt with no WebEngine dependency). Compile
+    # the bridge + its pure shaping TU here or the qml smoke target fails to link with "undefined
+    # reference to OpenDeckBridge::*".
+    ${ACC_APP_SOURCE_DIR}/src/opendeck_bridge.cpp
+    ${ACC_APP_SOURCE_DIR}/src/opendeck_shaping.cpp
 )
 
 set_target_properties(ajazz_qml_tests PROPERTIES AUTOMOC ON)
@@ -103,6 +157,12 @@ target_compile_definitions(
             AJAZZ_APP_ICON_QRC="${_qmlt_qrc_root}/branding/app.svg"
             AJAZZ_TRAY_ICON_QRC="${_qmlt_qrc_root}/branding/tray.svg"
             AJAZZ_THEME_QRC=":/qt/qml/AjazzControlCenter/branding/theme.json"
+            # Phase 22 Plan 22-01 (PLUGIN-14): verify gate needs the verifier/trust-root paths (same
+            # defs the app target carries) so plugin_verify_gate.cpp compiles correctly in this
+            # harness. Without them the gate falls back to fail-closed (safe), but the QML smoke
+            # test would never confirm a real verify path; pass them for completeness.
+            AJAZZ_PLUGIN_VERIFIER_SCRIPT="${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py"
+            AJAZZ_PLUGIN_TRUST_ROOTS="${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json"
 )
 
 target_include_directories(
@@ -116,8 +176,19 @@ target_link_libraries(
     ajazz_qml_tests
     PRIVATE ajazz::core
             ajazz::devices
+            # Phase 22 Plan 22-01 (PLUGIN-14): plugin_verify_gate.cpp (in ACC_QML_MODULE_SOURCES)
+            # calls ajazz::plugins::verifyManifest, so the full plugins library must be linked here
+            # — same reason the app target links it unconditionally after the un-gate.
+            ajazz::plugins
             ajazz::warnings
-            Catch2::Catch2WithMain
+            # Custom main() in test_qml_smoke.cpp (std::_Exit past Qt's racy exit-time
+            # global-destructor teardown) — link Catch2 WITHOUT its provided main to avoid a
+            # duplicate-symbol clash.
+            Catch2::Catch2
+            # sdplugin_extractor.cpp raw-inflates with zlib (inflateEnd/inflate); the app target
+            # links ZLIB::ZLIB for the same TU. Without it this target fails at link with "undefined
+            # reference to symbol 'inflateEnd' / DSO missing from command line".
+            ZLIB::ZLIB
             Qt6::Core
             Qt6::CorePrivate # QZipReader in sdplugin_extractor / plugin_catalog_model
             Qt6::Gui
@@ -125,10 +196,43 @@ target_link_libraries(
             Qt6::Qml
             Qt6::Quick
             Qt6::QuickControls2
+            # QTest::qWait drives the offscreen event loop so DeviceView layout / Repeater delegates
+            # / Flickable geometry settle for EDIT-01 scroll tests.
+            Qt6::Test
             Qt6::Svg
             # TrayController (an Application member) uses QSystemTrayIcon / QMenu.
             Qt6::Widgets
 )
+
+# Phase 19 (PLUGIN-10): PluginDeviceBridge + SdPluginServer are included via ACC_QML_MODULE_SOURCES
+# and reference Qt6::WebSockets symbols. When WebSockets is available (same condition as the app
+# target) we must add sd_plugin_server.cpp and link Qt6::WebSockets here to resolve those symbols;
+# without this the QML smoke test fails to link even though the e2e behaviour is disabled at runtime
+# in the headless harness.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/sd_plugin_server.cpp")
+    # Phase 34 Plan 34-04: application.cpp calls the host-event fan-out helpers
+    # (app_event_dispatch.cpp) under AJAZZ_HAVE_WEBSOCKETS; compile them here so the QML smoke
+    # target links.
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/app_event_dispatch.cpp")
+    # Phase 21 Plan 21-02 (PLUGIN-12): obs_client.hpp is included via ACC_QML_MODULE_SOURCES (for
+    # AUTOMOC) so its Q_OBJECT symbols must be resolved here — mirror the sd_plugin_server pattern
+    # above.
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/obs_client.cpp")
+    # Phase 19 Plan 19-01 (PLUGIN-10): PluginDeviceBridge .cpp was missing from this target, causing
+    # undefined-reference link errors for all PluginDeviceBridge::on* virtual methods. The .hpp is
+    # already in ACC_QML_MODULE_SOURCES for AUTOMOC; the .cpp must match (pre-existing latent issue
+    # fixed in Phase 26 Plan 26-05).
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_device_bridge.cpp")
+    # plugin_device_bridge.cpp composes the dial layout renderer (setFeedback path).
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/encoder_layout_renderer.cpp")
+    # plugin_device_bridge.cpp calls plugin_settings_store::{read,write}{Global,Context}; its
+    # definitions live in plugin_settings_store.cpp. Only needed when the bridge is compiled (i.e.
+    # under WebSockets), so it is scoped to this block.
+    target_sources(ajazz_qml_tests PRIVATE "${ACC_APP_SOURCE_DIR}/src/plugin_settings_store.cpp")
+    target_link_libraries(ajazz_qml_tests PRIVATE Qt6::WebSockets)
+    target_compile_definitions(ajazz_qml_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+endif()
 
 # qmlcachegen emits generated C++ that trips GCC/Clang -Werror (null-deref on the loader,
 # qsizetype->int conversions). We don't own those sources — relax warnings-as-error for the
@@ -174,6 +278,17 @@ endif()
 # through a real QQmlEngine, which SIGSEGVs under gcov coverage instrumentation (gcov x Qt-QML
 # interaction) while passing in every normal build. They add no logic coverage, so the coverage job
 # skips them and the release build matrix keeps them as the real smoke gate.
-catch_discover_tests(
-    ajazz_qml_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "qml"
-)
+#
+# WINDOWS/macOS: the executable is still BUILT on windows-2022 + macos-14 (MSVC/AppleClang compile
+# coverage of the QML module + recompiled app sources) but the tests are registered/run on Linux
+# ONLY. The DeviceView geometry/drag-drop cases that historically hung on Windows (offscreen process
+# stall behind Windows Error Reporting) and SegFaulted on macOS (offscreen QML window teardown) were
+# REMOVED with the native streamdeck editor (the streamdeck editor is now the embedded OpenDeck
+# SPA). The remaining load-time smoke test is platform-independent and is kept Linux-only
+# conservatively (the same offscreen-QML-teardown fragility class); opening it to the other runners
+# can be revisited now that the crash-prone DeviceView cases are gone. See CLAUDE.md latent items.
+if(NOT WIN32 AND NOT APPLE)
+    catch_discover_tests(
+        ajazz_qml_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "qml"
+    )
+endif()

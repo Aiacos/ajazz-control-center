@@ -1,0 +1,22 @@
+ajazz-sysmon — native cross-platform hardware monitor for AJAZZ Control Center
+
+This component reuses source code from the following projects:
+
+- btop++ (https://github.com/aristocratos/btop)
+  Copyright (c) 2021 Aristocratos (jakob@qvantnet.com)
+  Licensed under the Apache License, Version 2.0.
+  The metrics-helper links btop's collector translation units
+  (src/btop_shared.cpp, src/btop_config.cpp, src/btop_tools.cpp,
+  src/btop_log.cpp, src/linux/btop_collect.cpp) to read system/hardware
+  metrics. btop is vendored unmodified as a git submodule under
+  plugins/ajazz-sysmon/metrics-helper/third_party/btop. The helper adds its
+  own main() and a small link shim (src/shim_linux.cpp) for the TUI globals
+  btop's collectors reference; no btop source file is modified.
+
+- btop4win (https://github.com/aristocratos/btop4win) — Apache-2.0 — will be
+  vendored for the Windows backend (GPU/temperature via LibreHardwareMonitor,
+  MPL-2.0, bundled separately) in a later phase.
+
+A full copy of the Apache License 2.0 is available at
+https://www.apache.org/licenses/LICENSE-2.0 and in each submodule's LICENSE
+file.

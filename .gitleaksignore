@@ -1,0 +1,12 @@
+# gitleaks fingerprints to ignore (commit:file:rule:line).
+#
+# History is immutable: rewording a flagged string in a later commit does
+# not clear the finding on the ORIGINAL commit, and the Secret-scan
+# workflow checks out with fetch-depth 0 (full history), so each entry
+# here documents an already-triaged false positive that would otherwise
+# re-fail CI forever.
+
+# QSettings key "Battery/PollEnabled" (entropy 3.68 tripped generic-api-key).
+# The live code switched to a dotted lower-case key in a later commit --
+# see the comment block at src/app/src/battery_service.cpp:18.
+924e84bf6f2341a97331b0ac3d5c71c88578a123:src/app/src/battery_service.cpp:generic-api-key:18

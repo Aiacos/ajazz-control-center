@@ -1,5 +1,11 @@
 # Plugin Development Guide
 
+> ℹ️ **SCOPE BANNER (2026-06).** This guide is for writing **first-party Python
+> plugins**. To instead build or run an **Elgato/OpenDeck `.sdPlugin`** package
+> (the Stream Deck ecosystem format), see
+> [`../protocols/streamdeck/elgato_plugin_protocol.md`](../protocols/streamdeck/elgato_plugin_protocol.md)
+> — a different runtime (WebSocket, not pipes) and a different package format.
+
 AJAZZ Control Center runs user plugins inside an embedded Python 3 interpreter. Plugins are regular Python packages with one required entry point: a subclass of `ajazz_plugins.Plugin` named `Plugin` (or re-exported as `Plugin = YourClass`) in `plugin.py`.
 
 ## Plugin anatomy

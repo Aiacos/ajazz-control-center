@@ -46,6 +46,9 @@ jobs:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
           queries: +security-and-quality
+          # Result filter only (vendored _deps + moc autogen under build/);
+          # see the config for rationale.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Install Linux build dependencies
         if: matrix.language == 'cpp'
@@ -54,7 +57,8 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             build-essential ninja-build cmake \
             libusb-1.0-0-dev libhidapi-dev libudev-dev \
-            libgl1-mesa-dev libxkbcommon-dev
+            libgl1-mesa-dev libxkbcommon-dev \
+            libwayland-dev wayland-protocols
 
       - name: Install Qt
         if: matrix.language == 'cpp'
@@ -74,8 +78,11 @@ jobs:
 
       - name: Build (C++)
         if: matrix.language == 'cpp'
+        # AJAZZ_BUILD_SIDECAR=OFF: CodeQL analyses the C++ tree; the Rust sidecar
+        # is out of scope, so skip its cargo build during the manual build.
         run: |
-          cmake --preset dev -DAJAZZ_BUILD_PYTHON_HOST=OFF -DAJAZZ_BUILD_TESTS=OFF
+          cmake --preset dev -DAJAZZ_BUILD_PYTHON_HOST=OFF -DAJAZZ_BUILD_TESTS=OFF \
+            -DAJAZZ_BUILD_SIDECAR=OFF
           cmake --build --preset dev -j 2
 
       - name: Perform CodeQL Analysis

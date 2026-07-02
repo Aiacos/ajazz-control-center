@@ -89,6 +89,18 @@ protected:
 void setLogSink(std::shared_ptr<LogSink> sink) noexcept;
 
 /**
+ * @brief Construct a fresh instance of the default stderr sink.
+ *
+ * The default sink (installed at startup and restored by
+ * `setLogSink(nullptr)`) writes the legacy
+ * `[<ms-since-epoch>] [<LEVEL>] [<module>] <message>` format to stderr.
+ * Exposed so a composite @ref LogSink (e.g. a tee that also writes a file
+ * and an in-memory ring) can keep the stderr leg without re-implementing
+ * the formatting. Each call returns an independent, self-serialising sink.
+ */
+[[nodiscard]] std::shared_ptr<LogSink> makeStderrSink();
+
+/**
  * @brief Set the minimum log level accepted by log() / logf().
  *
  * Messages with a level below `level` are silently discarded. The

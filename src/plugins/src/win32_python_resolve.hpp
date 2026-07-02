@@ -21,7 +21,6 @@
 
 #include <cwctype>
 #include <string>
-#include <vector>
 
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -43,36 +42,61 @@ namespace ajazz::plugins::win32 {
     return lower.find(L"\\windowsapps\\") != std::wstring::npos;
 }
 
-/// True if the basename of @p name (case-insensitively) starts with "python".
-[[nodiscard]] inline bool isPythonName(std::wstring const& name) {
-    auto const slash = name.find_last_of(L"\\/");
-    std::wstring base = (slash == std::wstring::npos) ? name : name.substr(slash + 1);
-    for (wchar_t& c : base) {
-        c = static_cast<wchar_t>(std::towlower(c));
+/// True if @p name is a bare Python interpreter command — `python`,
+/// `python3`, `pythonX`, or `pythonX.Y` (case-insensitive, optional trailing
+/// `.exe`), with NO path separator. Only such a name may be upgraded to a
+/// concrete `python.exe` / `python3.exe`; an arbitrary configured program name
+/// must be returned unchanged so an unresolvable interpreter fails closed
+/// (CWE-426) instead of silently falling back to the system Python — the
+/// security contract pinned by `tests/unit/test_manifest_signer.cpp`.
+[[nodiscard]] inline bool isPythonCommandName(std::wstring const& name) {
+    if (name.empty() || name.find_first_of(L"\\/:") != std::wstring::npos) {
+        return false; // empty, or a path rather than a bare command name
     }
-    return base.rfind(L"python", 0) == 0;
+    std::wstring lower;
+    lower.reserve(name.size());
+    for (wchar_t const c : name) {
+        lower.push_back(static_cast<wchar_t>(std::towlower(c)));
+    }
+    if (lower.size() > 4 && lower.compare(lower.size() - 4, 4, L".exe") == 0) {
+        lower.erase(lower.size() - 4); // drop an optional trailing ".exe"
+    }
+    constexpr std::size_t kStemLen = 6; // length of "python"
+    if (lower.compare(0, kStemLen, L"python") != 0) {
+        return false;
+    }
+    // Any suffix after "python" must look like a version (digits and dots):
+    // "python3", "python3.11" — never "python-evil" or "pythonista".
+    for (std::size_t i = kStemLen; i < lower.size(); ++i) {
+        wchar_t const c = lower[i];
+        if ((c < L'0' || c > L'9') && c != L'.') {
+            return false;
+        }
+    }
+    return true;
 }
 
 /// Resolve a Python interpreter to a concrete path, skipping the Store stub.
 ///
 /// If @p preferred already names an existing file it is returned unchanged.
-/// Otherwise it is looked up on PATH via `SearchPathW`; the first hit NOT under
-/// `\\WindowsApps\\` wins. The `python.exe`/`python3.exe` aliases are tried as
-/// fallbacks ONLY when @p preferred is itself a python-ish name (so a default
-/// python.org install with no `python3.exe` still resolves past the Store
-/// stub). For any other name we resolve ONLY that exact name and NEVER
-/// silently substitute a different interpreter -- substituting python for an
-/// unrelated requested name would forge a "valid signature" verdict in the
-/// manifest verifier (CWE-426). If only a WindowsApps hit exists it is
-/// returned as a best-effort fallback; if nothing resolves, @p preferred is
-/// returned unchanged so the caller's spawn fails (and the verifier fails
-/// closed on the non-zero exit).
+/// Otherwise, ONLY when @p preferred is a bare Python command name (see
+/// @ref isPythonCommandName), candidates {preferred(.exe), python.exe,
+/// python3.exe} are looked up on PATH via `SearchPathW`; the first hit NOT
+/// under `\\WindowsApps\\` wins. If only a WindowsApps hit exists (a real
+/// Store-installed Python, or the not-installed stub) it is returned as a
+/// best-effort fallback. An arbitrary non-Python name that does not resolve to
+/// a concrete file is returned unchanged — it is NEVER upgraded to the system
+/// Python, so a misconfigured/unresolvable interpreter fails closed (CWE-426)
+/// rather than running an unintended program with a forged-valid verdict.
 [[nodiscard]] inline std::wstring resolveRealPythonW(std::wstring const& preferred) {
     if (!preferred.empty()) {
         DWORD const attrs = ::GetFileAttributesW(preferred.c_str());
         if (attrs != INVALID_FILE_ATTRIBUTES && (attrs & FILE_ATTRIBUTE_DIRECTORY) == 0) {
             return preferred; // caller passed a concrete interpreter path
         }
+    }
+    if (!isPythonCommandName(preferred)) {
+        return preferred; // do not substitute an arbitrary name (fail closed)
     }
     auto search = [](std::wstring name) -> std::wstring {
         if (name.empty()) {
@@ -85,13 +109,9 @@ namespace ajazz::plugins::win32 {
         DWORD const got = ::SearchPathW(nullptr, name.c_str(), nullptr, MAX_PATH, buf, nullptr);
         return (got > 0 && got < MAX_PATH) ? std::wstring{buf} : std::wstring{};
     };
-    std::vector<std::wstring> candidates{preferred};
-    if (isPythonName(preferred)) {
-        candidates.emplace_back(L"python.exe");
-        candidates.emplace_back(L"python3.exe");
-    }
     std::wstring fallback;
-    for (std::wstring const& name : candidates) {
+    for (std::wstring const& name :
+         {preferred, std::wstring{L"python.exe"}, std::wstring{L"python3.exe"}}) {
         std::wstring const hit = search(name);
         if (hit.empty()) {
             continue;

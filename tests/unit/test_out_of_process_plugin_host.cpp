@@ -33,6 +33,11 @@
  */
 #include "ajazz/plugins/out_of_process_plugin_host.hpp"
 
+// Host-private header (tests/unit adds src/plugins/src to the include
+// path, same as win32_env_block.hpp): the manifest-path containment
+// guard both backends apply to child-reported manifest_path strings.
+#include "manifest_path_guard.hpp"
+
 #ifndef _WIN32
 #include "ajazz/plugins/linux_bwrap_sandbox.hpp"
 #endif
@@ -42,6 +47,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <vector>
 
 #include <catch2/catch_test_macros.hpp>
 
@@ -297,3 +303,50 @@ TEST_CASE("OOP plugin host: spawn through LinuxBwrapSandbox round-trips end-to-e
 }
 
 #endif // !_WIN32
+
+TEST_CASE("manifest path guard only releases paths inside registered search roots",
+          "[plugins][oop][security]") {
+    namespace fs = std::filesystem;
+    using ajazz::plugins::detail::containedManifestPath;
+    using ajazz::plugins::detail::recordSearchRoot;
+
+    auto const base = fs::temp_directory_path() / "ajazz_manifest_guard_test";
+    fs::create_directories(base / "plugins" / "hello");
+    std::vector<fs::path> const roots{recordSearchRoot(base / "plugins")};
+
+    SECTION("manifest inside a root is accepted and canonicalised") {
+        auto const ok =
+            containedManifestPath((base / "plugins" / "hello" / "plugin.json").string(), roots);
+        REQUIRE(ok.has_value());
+    }
+
+    SECTION("embedded dot-dot escaping the root is rejected") {
+        // weakly_canonical collapses the `..`, so the lexical prefix
+        // trick of QZipReader-style attacks cannot smuggle the path out.
+        auto const escape = base / "plugins" / "hello" / ".." / ".." / "outside" / "plugin.json";
+        REQUIRE_FALSE(containedManifestPath(escape.string(), roots).has_value());
+    }
+
+    SECTION("unrelated absolute path is rejected") {
+        REQUIRE_FALSE(containedManifestPath((base / "elsewhere.json").string(), roots).has_value());
+    }
+
+    SECTION("sibling directory sharing the root as a string prefix is rejected") {
+        // Component-wise comparison, not string prefix: `plugins-evil`
+        // must not match the `plugins` root.
+        auto const sibling = base / "plugins-evil" / "plugin.json";
+        REQUIRE_FALSE(containedManifestPath(sibling.string(), roots).has_value());
+    }
+
+    SECTION("empty reported path is rejected") {
+        REQUIRE_FALSE(containedManifestPath("", roots).has_value());
+    }
+
+    SECTION("empty root never matches") {
+        std::vector<fs::path> const degenerate{fs::path{}};
+        REQUIRE_FALSE(
+            containedManifestPath((base / "plugins" / "x.json").string(), degenerate).has_value());
+    }
+
+    fs::remove_all(base);
+}

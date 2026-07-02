@@ -11,24 +11,41 @@
  */
 #pragma once
 
+#include "ajazz/core/action_engine.hpp"
+#include "ajazz/core/active_window_watcher.hpp"
 #include "ajazz/core/device_registry.hpp"
 #include "app_update_service.hpp"
 #include "autostart_service.hpp"
 #include "battery_service.hpp"
 #include "branding_service.hpp"
+#include "builtin_actions_service.hpp"
 #include "device_model.hpp"
 #include "firmware_update_service.hpp"
 #include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
+#include "opendeck_bridge.hpp"
 #include "plugin_catalog_model.hpp"
+#include "plugin_debug_service.hpp"
 #include "profile_controller.hpp"
-#include "property_inspector_controller.hpp"
+#include "qt_executor.hpp"
 #include "settings_service.hpp"
+#include "stream_dock_control_service.hpp"
+#include "stream_dock_input_service.hpp"
+
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+#include "app_event_dispatch.hpp"
+#include "pi_appear_gate.hpp"
+#include "plugin_device_bridge.hpp"
+#include "plugin_manager.hpp"
+#include "sd_plugin_server.hpp"
+#include "unified_plugin_host.hpp"
+#endif
 #include "theme_service.hpp"
 #include "time_sync_service.hpp"
 #include "tray_controller.hpp"
 
 #include <QObject>
+#include <QString>
 
 #include <memory>
 
@@ -37,10 +54,13 @@ class QQmlApplicationEngine;
 namespace ajazz::core {
 class HotplugMonitor;
 struct HotplugEvent;
+class RingBufferSink;
 } // namespace ajazz::core
 
 namespace ajazz::app {
 class HotplugDebouncer;
+class DebugControlServer;
+class PluginAssetServer;
 } // namespace ajazz::app
 
 #ifdef AJAZZ_PYTHON_HOST
@@ -104,6 +124,101 @@ public:
     /// replaced the previous Meyers-singleton with this owned instance.
     [[nodiscard]] core::DeviceRegistry& deviceRegistry() noexcept { return m_deviceRegistry; }
 
+    /// In-memory ring of the most recent log records from every source (the
+    /// project's AJAZZ_LOG_* and Qt's qDebug/qCDebug, unified in bootstrap()).
+    /// Backs the out-of-process debug log stream; valid and non-null after
+    /// bootstrap().
+    [[nodiscard]] core::RingBufferSink* logRing() const noexcept { return m_logRing.get(); }
+
+    /// Absolute path of the append-only log file written since bootstrap().
+    [[nodiscard]] QString const& logFilePath() const noexcept { return m_logFilePath; }
+
+    // ---- Subsystem accessors for the debug control facade ----------------
+    // Non-owning; valid for the Application lifetime. Used by
+    // registerDebugControlMethods() to expose control over each subsystem.
+    [[nodiscard]] StreamDockControlService* streamDockControl() const noexcept {
+        return m_streamDockControl.get();
+    }
+    [[nodiscard]] StreamDockInputService* streamDockInput() const noexcept {
+        return m_streamDockInput.get();
+    }
+    [[nodiscard]] PluginDebugService* pluginDebug() const noexcept { return m_pluginDebug.get(); }
+    [[nodiscard]] ProfileController* profileController() const noexcept {
+        return m_profileController.get();
+    }
+    [[nodiscard]] BuiltinActionsService* builtinActions() const noexcept {
+        return m_builtinActions.get();
+    }
+    /// Foreground-window watcher (Phase 34 APROF-01). Non-owning; valid for the
+    /// Application lifetime. The debug channel's window.setForeground RPC reaches
+    /// it (dynamic_cast to StubActiveWindowWatcher for the injectForeground seam).
+    /// Currently the recording stub (real backends + auto-switch wire land in
+    /// Plans 03/04); may be the platform backend once those land.
+    [[nodiscard]] core::IActiveWindowWatcher* activeWindowWatcher() const noexcept {
+        return m_activeWindowWatcher.get();
+    }
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    [[nodiscard]] SdPluginServer* pluginServer() const noexcept { return m_pluginServer.get(); }
+    /// Live .sdPlugin discover/spawn manager (debug channel: plugin.rediscover).
+    [[nodiscard]] PluginManager* pluginManager() const noexcept { return m_pluginManager.get(); }
+    /// Device<->plugin event bridge (debug channel: plugin.simulatePiSettings).
+    [[nodiscard]] PluginDeviceBridge* pluginBridge() const noexcept { return m_pluginBridge.get(); }
+    /// Unified IPluginHost2 surface (HOST-01): aggregates .sdPlugin (PluginManager) and
+    /// Python (OutOfProcessPluginHost) sub-hosts. pluginHost2()->dispatch() routes by UUID
+    /// internally so NO routing logic remains in Application. May be nullptr before
+    /// startBackgroundServices() completes.
+    [[nodiscard]] UnifiedPluginHost* pluginHost2() const noexcept { return m_pluginHost2.get(); }
+#endif
+    /// Plugin Store catalogue / install pipeline (debug channel:
+    /// plugin.installFromFile). Always present (unguarded).
+    [[nodiscard]] PluginCatalogModel* pluginCatalog() const noexcept {
+        return m_pluginCatalog.get();
+    }
+    /// OpenDeck IPC bridge (webui seam). Maps the OpenDeck command/event contract
+    /// to our backend; driven by the debug channel's opendeck.invoke and (Phase 1
+    /// part 2) the QWebChannel that the embedded OpenDeck web UI talks to.
+    [[nodiscard]] OpenDeckBridge* openDeckBridge() const noexcept { return m_openDeckBridge.get(); }
+
+public:
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    /**
+     * @brief Fan out @c systemDidWakeUp to every registered plugin (EVENT-03).
+     *
+     * The OS wake source (Linux logind @c PrepareForSleep, or a synthetic wake
+     * in tests / the debug channel) calls this; it iterates the bridge's
+     * registered-plugin set and emits @c sendEvent(uuid, "systemDidWakeUp", {})
+     * for each — never caching the socket (Pitfall 4 / re-resolved per call) and
+     * never broadcasting beyond registered plugins (V4). No-op when the server or
+     * bridge is unavailable. Exposed publicly as the injectable wake seam so the
+     * dispatch path is unit-testable without a real power event.
+     */
+    void dispatchSystemWake();
+
+    /**
+     * @brief Fan out @c applicationDidLaunch to registered plugins (APROF-04).
+     *
+     * Called from the foreground-watcher onChange when a new foreground app is
+     * seen. Delivers @c applicationDidLaunch with a length-bounded
+     * @c {application} payload (V5 — mirrors the logMessage 2048 cap) to every
+     * registered plugin only (V4 / T-34-04-02 — never broadcast). Empty @p appId
+     * or no registered plugins is a no-op. The terminate half is
+     * @ref dispatchApplicationTerminate.
+     */
+    void dispatchApplicationLaunch(QString const& appId);
+
+    /// Fan out @c applicationDidTerminate to registered plugins (APROF-04).
+    /// Same registered-only + length-bound contract as
+    /// @ref dispatchApplicationLaunch.
+    void dispatchApplicationTerminate(QString const& appId);
+
+private:
+    /// Build the per-plugin ApplicationsToMonitor delivery filter (WR-02) bound to
+    /// m_pluginManager. Returns an empty filter (deliver to all) when no manager.
+    [[nodiscard]] ajazz::app::PluginAppMonitorFilter appMonitorFilter() const;
+
+public:
+#endif
+
 private:
     /// Forwarded to DeviceModel when the hot-plug monitor sees a change.
     void onHotplug(core::HotplugEvent const& ev);
@@ -129,10 +244,16 @@ private:
     std::unique_ptr<ProfileController> m_profileController; ///< Profile load/save controller.
     std::unique_ptr<TrayController> m_trayController;       ///< System tray icon + menu.
     std::unique_ptr<PluginCatalogModel> m_pluginCatalog; ///< Plugin Store catalogue (mock for now).
+    /// OpenDeck IPC bridge — declared AFTER m_deviceModel/m_profileController/
+    /// m_pluginCatalog so it is constructed after the singletons it borrows.
+    std::unique_ptr<OpenDeckBridge> m_openDeckBridge;
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    /// Localhost asset webserver (getWebserverUrl base = portBase+2) serving
+    /// installed-plugin icons to the embedded OpenDeck SPA. WebEngine-only.
+    std::unique_ptr<PluginAssetServer> m_pluginAssetServer;
+#endif
     std::unique_ptr<LoadedPluginsModel>
         m_loadedPlugins; ///< Runtime loaded-plugins surface (SEC-003 #51).
-    std::unique_ptr<PropertyInspectorController>
-        m_propertyInspector; ///< Plugin HTML PI host (Qt WebEngine, optional).
     std::unique_ptr<TimeSyncService>
         m_timeSync; ///< Phase 5: per-row Sync time + auto-sync hook. Owns the
                     ///< DeviceLookup lambda that captures m_deviceRegistry by
@@ -174,6 +295,112 @@ private:
                           ///< delegate-only per docs/architecture/FIRMWARE-UPDATES.md;
                           ///< no in-app flashing. Declared after m_appUpdate to keep
                           ///< the init list in member-declaration order (-Wreorder).
+    std::unique_ptr<StreamDockControlService>
+        m_streamDockControl; ///< Phase 14: app-layer Stream Dock panel control
+                             ///< (DISPLAY-06/07/08, DOCK-01/02). Holds the active
+                             ///< AKP05E open for the session, lights the panel at
+                             ///< open (LIG), pushes key images via a coalesced QTimer
+                             ///< drain (BAT->chunks->ULEND, no manual flush), repaints
+                             ///< all keys on profileChanged, and surfaces the cached
+                             ///< firmware VER string. Declared after m_firmwareUpdate
+                             ///< to keep the init list in member-declaration order
+                             ///< (-Wreorder). Reuse surface for Phases 15/16/19.
+    // Phase 15 Plan 15-02 — ActionEngine + QtExecutor + StreamDockInputService.
+    // Declaration order matches the init-list construction order below; GCC
+    // -Wreorder is -Werror so these three members MUST stay in this sequence
+    // (qtExecutor -> actionEngine -> streamDockInput) and after m_streamDockControl
+    // so the input service can receive the control service's held handle on arrival.
+    //
+    // m_qtExecutor must outlive m_actionEngine (qt_executor.hpp lifetime note).
+    // m_actionEngine must outlive m_streamDockInput (the service calls engine->run()).
+    std::unique_ptr<QtExecutor>
+        m_qtExecutor; ///< Phase 15: non-blocking Executor for ActionEngine Sleep steps
+                      ///< (audit A2 — prevents Sleep from blocking the HID poll thread).
+                      ///< Owned here so it outlives m_actionEngine.
+    std::unique_ptr<core::ActionEngine>
+        m_actionEngine; ///< Phase 15: first ActionEngine instantiation in the app.
+                        ///< Constructed with the real app ActionExecutors (keyPress
+                        ///< stub / runCommand QProcess::startDetached / openUrl
+                        ///< QDesktopServices / plugin stub) and m_qtExecutor as the
+                        ///< Executor so Sleep defers via QTimer (T-15-04 mitigated).
+                        ///< Phase 19 replaces the plugin stub with the real bridge.
+    std::unique_ptr<StreamDockInputService>
+        m_streamDockInput; ///< Phase 15: app-layer input dispatch service (INPUT-03/04/05).
+                           ///< Holds the same shared_ptr<IDevice> as m_streamDockControl
+                           ///< (ARCH-03 single-handle invariant — no second open()). Pumps
+                           ///< poll() on an 8 ms QTimer and routes DeviceEvents to bound
+                           ///< ActionChains in the active Profile via m_actionEngine.
+    std::unique_ptr<BuiltinActionsService>
+        m_builtinActions; ///< Phase 21-03 (PLUGIN-12): built-in in-process action dispatcher.
+                          ///< Populates the BuiltinActionRegistry with the ~24 locked
+                          ///< com.hotspot.streamdock.* UUID handlers and replaces the Phase-15
+                          ///< plugin executor stub with the registry short-circuit (handles ->
+                          ///< dispatch; non-builtin UUIDs forward to the Phase-19 path).
+                          ///< Declared after m_streamDockInput to keep the init list in
+                          ///< member-declaration order (-Wreorder).
+    std::unique_ptr<core::IActiveWindowWatcher>
+        m_activeWindowWatcher; ///< Phase 34 (APROF-01): foreground-window watcher.
+                               ///< makeDefaultActiveWindowWatcher() — the per-OS backend on a
+                               ///< supported desktop, else the recording stub. onChange drives the
+                               ///< APROF-02 auto-switch + APROF-04 lifecycle fan-out (Plan 04).
+                               ///< The window.setForeground debug RPC injects through it.
+    /// Phase 34-04 (APROF-04): the app-id of the most recent foreground app, so a
+    /// foreground CHANGE can fan out applicationDidTerminate for the outgoing app
+    /// and applicationDidLaunch for the incoming one. Empty until the first
+    /// foreground event. Best-effort: the watcher reports focus, not process
+    /// lifetime, so terminate is "lost focus" rather than a true process exit.
+    QString m_lastForegroundApp;
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    std::unique_ptr<SdPluginServer>
+        m_pluginServer; ///< Phase 17: Elgato-compatible WebSocket plugin server (loopback-only).
+                        ///< Declared after m_streamDockInput to keep the init list in
+                        ///< member-declaration order (-Wreorder).
+    std::unique_ptr<PluginDeviceBridge>
+        m_pluginBridge; ///< Phase 19-02: bridge connecting SdPluginServer::actionReceived
+                        ///< to StreamDockControlService::assignKeyImage (setImage inbound
+                        ///< round-trip, PLUGIN-10). Declared after m_pluginServer to stay
+                        ///< in construction order (-Wreorder). Non-owning seam pointers
+                        ///< point at server/control/input (all Application members with
+                        ///< longer lifetimes per member-declaration order).
+    std::unique_ptr<PluginManager>
+        m_pluginManager; ///< Elgato .sdPlugin (node/html/native) discover + spawn +
+                         ///< crash lifecycle. Constructed in startBackgroundServices()
+                         ///< AFTER m_pluginServer is listening (spawn() reads its port).
+                         ///< Declared last so it is destroyed first (shutdown() sends
+                         ///< exitApp to children before the server/bridge tear down).
+    /// HOST-01 (Phase 30-03): UnifiedPluginHost aggregator — the single IPluginHost2
+    /// surface backed by both m_pluginManager (.sdPlugin) and m_pluginHost (Python).
+    /// Constructed in startBackgroundServices() AFTER m_pluginManager is ready.
+    /// Declared after m_pluginManager so it is destroyed BEFORE m_pluginManager
+    /// (destruction order: m_pluginHost2 first, then m_pluginManager, since the
+    /// aggregator holds a raw pointer to the manager). Non-owning sub-host pointers.
+    std::unique_ptr<UnifiedPluginHost> m_pluginHost2;
+    /// De-dup gate for propertyInspectorDidAppear/…DidDisappear. The embedded
+    /// OpenDeck SPA's Property Inspector registers over the plugin WebSocket
+    /// (SdPluginServer::propertyInspectorRegistered); this gate (keyed on the
+    /// instance context) ensures the host emits exactly one appear/disappear
+    /// per open (research D1, T023).
+    PiAppearGate m_piAppearGate;
+#endif
+    /// Developer debug console: logs plugin/device protocol traffic and injects
+    /// simulated device input + plugin->host actions. Always present (logging
+    /// works without WebSockets); declared after the plugin server/bridge so
+    /// its non-owning taps outlive nothing (destroyed before them).
+    std::unique_ptr<PluginDebugService> m_pluginDebug;
+
+    /// Unified log ring (stderr+file+ring tee installed in bootstrap()).
+    /// shared_ptr because the same instance is held by the active core
+    /// LogSink; this handle lets logRing() expose its tail to the debug
+    /// control channel. The accompanying file path is retained for reporting.
+    std::shared_ptr<core::RingBufferSink> m_logRing;
+    QString m_logFilePath;
+
+    /// Opt-in out-of-process control channel (Unix domain socket JSON-RPC).
+    /// Null unless AJAZZ_DEBUG_CONTROL was set at launch; constructed and
+    /// started last in startBackgroundServices() so its handlers can reach
+    /// every other subsystem.
+    std::unique_ptr<DebugControlServer> m_debugControl;
+
     std::unique_ptr<core::HotplugMonitor> m_hotplug; ///< USB arrival/removal watcher.
 
     /// Per-key 300ms trailing-edge debouncer for hot-plug events (D-05).

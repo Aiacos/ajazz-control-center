@@ -82,6 +82,13 @@ public:
                          ///< gate per-device visibility of the Fn-layer/sleep/response tab.
         MaturityRole,    ///< Maturity tier from devices.yaml:
                          ///< scaffolded/probed/partial/functional/verified (Phase 8 DEVICES-02).
+        // Phase 26 REQ-26-C geometry fields (WR-04: first-class roles for ListView delegates).
+        KeyRowsRole,            ///< Key row count in the LCD grid (DeviceDescriptor::keyRows).
+        TouchZoneCountRole,     ///< Touch-strip zone count (DeviceDescriptor::touchZoneCount).
+        MainScreenWidthPxRole,  ///< Main LCD strip width in px
+                                ///< (DeviceDescriptor::mainScreenWidthPx).
+        MainScreenHeightPxRole, ///< Main LCD strip height in px
+                                ///< (DeviceDescriptor::mainScreenHeightPx).
     };
 
     /**
@@ -152,6 +159,28 @@ public:
      * @invokable Callable from QML as `deviceModel.capabilitiesFor(codename)`.
      */
     [[nodiscard]] Q_INVOKABLE QVariantMap capabilitiesFor(QString const& codename) const;
+
+    /**
+     * @brief First currently-connected device codename, or empty if none.
+     *
+     * Lets Main.qml auto-select a device on startup so the editor opens to a
+     * real device instead of the empty "select a device" state (matching
+     * OpenDeck/Elgato, which always open to a connected device). Returns the
+     * first entry of @ref connectedCodenames() (model order: sorted by family
+     * then codename), or an empty string when nothing is connected.
+     *
+     * @invokable Callable from QML as `DeviceModel.firstConnectedCodename()`.
+     */
+    [[nodiscard]] Q_INVOKABLE QString firstConnectedCodename() const;
+
+    /**
+     * @brief Connected devices as a QVariantList of `{codename, name}` maps,
+     *        for the canvas-header device selector ComboBox.
+     *
+     * @invokable Callable from QML as `DeviceModel.connectedDevices()`.
+     * @return One map per currently-connected device (model order).
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList connectedDevices() const;
 
     /**
      * @brief Return the codenames of devices currently considered

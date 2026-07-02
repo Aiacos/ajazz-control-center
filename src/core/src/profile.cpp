@@ -18,6 +18,8 @@
 #include "ajazz/core/profile.hpp"
 
 #include <cstdint>
+#include <cstdio>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -41,8 +43,12 @@ void writeRgb(std::ostringstream& out, Rgb const& c) {
 /**
  * @brief Write a JSON-escaped quoted string.
  *
- * Handles the minimal set of escape sequences required by RFC 8259:
- * double-quote, backslash, newline, carriage-return, and horizontal tab.
+ * Handles the escape sequences required by RFC 8259: double-quote, backslash,
+ * the named controls (\b \f \n \r \t), and \u00XX for every remaining control
+ * character in U+0000..U+001F. Without the \u00XX fallback, raw control bytes
+ * (NUL, 0x01..0x1F) would be emitted verbatim, producing invalid JSON that any
+ * strict reader (or a NUL-truncating C-string consumer) would reject or mangle
+ * (WR-01).
  *
  * @param out Destination stream.
  * @param s   Input string; must be ASCII or UTF-8.
@@ -57,6 +63,12 @@ void escape(std::ostringstream& out, std::string_view s) {
         case '\\':
             out << "\\\\";
             break;
+        case '\b':
+            out << "\\b";
+            break;
+        case '\f':
+            out << "\\f";
+            break;
         case '\n':
             out << "\\n";
             break;
@@ -67,7 +79,18 @@ void escape(std::ostringstream& out, std::string_view s) {
             out << "\\t";
             break;
         default:
-            out << ch;
+            // char may be signed; test the unsigned value so 0x80..0xFF UTF-8
+            // continuation bytes are NOT mistaken for control characters.
+            if (static_cast<unsigned char>(ch) < 0x20U) {
+                char buf[7];
+                std::snprintf(buf,
+                              sizeof buf,
+                              "\\u%04x",
+                              static_cast<unsigned>(static_cast<unsigned char>(ch)));
+                out << buf;
+            } else {
+                out << ch;
+            }
             break;
         }
     }
@@ -186,6 +209,11 @@ void writeKeyState(std::ostringstream& out, KeyState const& s) {
     out << "}";
 }
 
+// Forward declaration: writeBinding / writeEncoderBinding emit an optional
+// instance via writeActionInstance, which is defined later (after the KeyState
+// helpers) to sit next to its readActionInstance counterpart.
+void writeActionInstance(std::ostringstream& out, ActionInstance const& inst);
+
 void writeBinding(std::ostringstream& out, Binding const& b) {
     out << "{";
     writeChain(out, "onPress", b.onPress);
@@ -196,6 +224,10 @@ void writeBinding(std::ostringstream& out, Binding const& b) {
     if (!keyStateIsDefault(b.state)) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
+    }
+    if (b.instance) {
+        out << ",\"instance\":";
+        writeActionInstance(out, *b.instance);
     }
     out << "}";
 }
@@ -208,10 +240,97 @@ void writeEncoderBinding(std::ostringstream& out, EncoderBinding const& b) {
     writeChain(out, "onCcw", b.onCcw);
     out << ",";
     writeChain(out, "onPress", b.onPress);
+    out << ",";
+    writeChain(out, "onRelease", b.onRelease);
     if (!keyStateIsDefault(b.state)) {
         out << ",\"state\":";
         writeKeyState(out, b.state);
     }
+    if (b.instance) {
+        out << ",\"instance\":";
+        writeActionInstance(out, *b.instance);
+    }
+    out << "}";
+}
+
+/// Serialise a TouchZoneBinding (onTap chain; Phase 26 D-11 / schema v2).
+/// Hand-rolled per COD-031: no nlohmann::json in ajazz_core.
+void writeTouchZoneBinding(std::ostringstream& out, TouchZoneBinding const& b) {
+    out << "{";
+    writeChain(out, "onTap", b.onTap);
+    if (!keyStateIsDefault(b.state)) {
+        out << ",\"state\":";
+        writeKeyState(out, b.state);
+    }
+    out << "}";
+}
+
+/// Serialise a single ActionState (Phase 31, BIND-01). A states[] element is
+/// ALWAYS emitted as a non-empty $defs.KeyState object (writeKeyState always
+/// emits fontSize), which is correct for an array element that must be present
+/// even when visually blank.
+void writeActionState(std::ostringstream& out, ActionState const& s) {
+    writeKeyState(out, s.visual);
+}
+
+/// Serialise an ActionInstance (Phase 31, BIND-01). The writer ALWAYS emits
+/// the `states` array form (never the legacy singular `state` — only the
+/// reader understands that, Pitfall 2). `id` and `settings` are emitted only
+/// when non-empty; `children` recurses.
+void writeActionInstance(std::ostringstream& out, ActionInstance const& inst) {
+    out << "{";
+    bool first = true;
+    auto const sep = [&] {
+        if (!first) {
+            out << ",";
+        }
+        first = false;
+    };
+    if (!inst.id.empty()) {
+        sep();
+        out << "\"id\":";
+        escape(out, inst.id);
+    }
+    sep();
+    out << "\"states\":[";
+    {
+        bool firstState = true;
+        for (auto const& st : inst.states) {
+            if (!firstState) {
+                out << ",";
+            }
+            writeActionState(out, st);
+            firstState = false;
+        }
+    }
+    out << "]";
+    sep();
+    out << "\"currentState\":" << inst.currentState;
+    // delayMs is additive (Phase 32, BIND-04): omit when zero for wire economy.
+    // The reader tolerates absence and defaults to 0, so an omitted key is the
+    // canonical "no delay" form -- keeping legacy v2 files byte-stable.
+    if (inst.delayMs != 0) {
+        sep();
+        out << "\"delayMs\":" << inst.delayMs;
+    }
+    if (!inst.settings.empty()) {
+        sep();
+        out << "\"settings\":";
+        escape(out, inst.settings);
+    }
+    sep();
+    out << "\"children\":[";
+    {
+        bool firstChild = true;
+        for (auto const& child : inst.children) {
+            if (!firstChild) {
+                out << ",";
+            }
+            writeActionInstance(out, child); // RECURSIVE (Multi Action nesting).
+            firstChild = false;
+        }
+    }
+    out << "]";
     out << "}";
 }
 
@@ -222,6 +341,10 @@ std::string profileToJson(Profile const& profile) {
     out << "{";
     out << "\"id\":";
     escape(out, profile.id);
+    // Schema version bump: v2 adds the touchZones map (Phase 26 D-12).
+    // Reader defaults to v1 (empty touchZones) when this field is absent,
+    // so existing v1 files remain readable without modification.
+    out << ",\"_schemaVersion\":2";
     out << ",";
     out << "\"name\":";
     escape(out, profile.name);
@@ -251,6 +374,23 @@ std::string profileToJson(Profile const& profile) {
         }
         out << "\"" << idx << "\":";
         writeEncoderBinding(out, eb);
+        first = false;
+    }
+    out << "}";
+
+    // Touch-strip zones (onTap chain; schema v2, Phase 26 D-11).
+    // Emitted as an empty object when no zones are configured so that
+    // round-trips on v2 profiles always include the key (T-26-07: unknown
+    // future _schemaVersion values are treated as v2 — read touchZones if
+    // present, skip unknown keys, never throw on forward-compat fields).
+    out << ",\"touchZones\":{";
+    first = true;
+    for (auto const& [idx, tz] : profile.touchZones) {
+        if (!first) {
+            out << ",";
+        }
+        out << "\"" << static_cast<unsigned>(idx) << "\":";
+        writeTouchZoneBinding(out, tz);
         first = false;
     }
     out << "}";
@@ -468,15 +608,25 @@ public:
             fail("expected integer");
         }
         std::string const tok{src_.substr(start, pos_ - start)};
+        // std::stoul returns unsigned long, which is 64-bit on LP64 platforms,
+        // so values in (UINT32_MAX, ULONG_MAX] parse without throwing and then
+        // truncate on the cast (e.g. "4294967296" -> 0). Range-check explicitly
+        // so an out-of-range delayMs fails loudly instead of becoming garbage.
+        unsigned long parsed = 0;
         try {
-            return static_cast<std::uint32_t>(std::stoul(tok));
+            parsed = std::stoul(tok);
         } catch (std::exception const&) {
             fail("integer out of range: " + tok);
         }
+        if (parsed > std::numeric_limits<std::uint32_t>::max()) {
+            fail("integer out of range: " + tok);
+        }
+        return static_cast<std::uint32_t>(parsed);
     }
 
     /// Skip a complete JSON value (string, number, array, object, true, false, null).
     void skipValue() {
+        DepthGuard guard{*this}; // CR-01: bound nested object/array descent.
         char const c = peek();
         if (c == '"') {
             (void)readString();
@@ -531,9 +681,38 @@ public:
         throw std::runtime_error(err.str());
     }
 
+    /// Maximum recursion depth for nested values. Deep enough for any
+    /// legitimate Multi Action `children` nesting, shallow enough that the C++
+    /// call stack can never overflow before the cap fires (CR-01). Both
+    /// recursion sites -- readActionInstance's children loop and skipValue's
+    /// nested object/array descent -- are bounded by this via @ref DepthGuard.
+    static constexpr int kMaxDepth = 64;
+
+    /// RAII recursion-depth tracker. Construct one at the top of every
+    /// recursive parse entry point; it increments the reader's depth and
+    /// fail()s past kMaxDepth (turning an unbounded stack-overflow SIGSEGV into
+    /// the parser's usual loud std::runtime_error), then decrements on scope
+    /// exit. Note: fail() throws, so the destructor of a guard that tripped the
+    /// cap never runs -- depth_ is left as-is, which is harmless because the
+    /// throw unwinds the entire parse.
+    struct DepthGuard {
+        JsonReader& r;
+        explicit DepthGuard(JsonReader& rr) : r(rr) {
+            if (++r.depth_ > kMaxDepth) {
+                r.fail("maximum nesting depth exceeded");
+            }
+        }
+        ~DepthGuard() { --r.depth_; }
+        DepthGuard(DepthGuard const&) = delete;
+        DepthGuard& operator=(DepthGuard const&) = delete;
+        DepthGuard(DepthGuard&&) = delete;
+        DepthGuard& operator=(DepthGuard&&) = delete;
+    };
+
 private:
     std::string_view src_;
     std::size_t pos_{0};
+    int depth_{0};
 };
 
 ActionKind actionKindFromString(std::string_view s) noexcept {
@@ -651,6 +830,100 @@ std::vector<Action> readActionArray(JsonReader& r) {
     return s;
 }
 
+/// Parse a single ActionState (Phase 31, BIND-01) — delegates to readKeyState.
+[[nodiscard]] ActionState readActionState(JsonReader& r) {
+    return ActionState{readKeyState(r)};
+}
+
+/// Parse an ActionInstance object (Phase 31, BIND-01/BIND-02).
+///
+/// Dispatches purely on key PRESENCE (never on a `_schemaVersion` field —
+/// Pitfall 1 / the CR-01/WR-06 anti-pattern). The reader accepts BOTH the new
+/// `states` array AND a legacy singular `state` object, folding the latter into
+/// a one-element vector (lazy v1->v2 migration, BIND-02). `children` recurses.
+/// After parsing, `currentState` is defensively clamped to 0 when out of range
+/// so a stale/hostile index never indexes out of bounds (T-31-01).
+[[nodiscard]] ActionInstance readActionInstance(JsonReader& r) {
+    JsonReader::DepthGuard guard{r}; // CR-01: bound recursive children nesting.
+    ActionInstance inst{};
+    // Precedence (WR-02): the v2 `states` array ALWAYS wins when its key is
+    // present, even if empty; the legacy singular `state` is folded into
+    // states[] ONLY when no `states` key was seen. Tracking PRESENCE (not
+    // emptiness) makes the fold order-independent and lossless -- a later
+    // `state` can never wipe an already-parsed (even empty) states[], and a
+    // later `states` always supersedes a previously folded legacy `state`.
+    bool sawStatesKey = false;
+    r.expect('{');
+    if (!r.tryConsume('}')) {
+        while (true) {
+            std::string const key = r.readString();
+            r.expect(':');
+            if (key == "states") {
+                // v2 wins: drop any legacy `state` already folded in, then take
+                // the array verbatim (idempotent if `states` somehow repeats).
+                inst.states.clear();
+                sawStatesKey = true;
+                r.expect('[');
+                if (!r.tryConsume(']')) {
+                    while (true) {
+                        inst.states.push_back(readActionState(r));
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect(']');
+                        break;
+                    }
+                }
+            } else if (key == "state") {
+                // LAZY v1->v2 FOLD: a legacy singular state becomes states[one]
+                // -- but ONLY if no `states` array was seen. If states[] is
+                // present (v2 wins), discard the legacy form without dropping
+                // already-parsed data.
+                if (!sawStatesKey) {
+                    inst.states.clear();
+                    inst.states.push_back(readActionState(r));
+                } else {
+                    (void)readActionState(r); // states[] wins; discard legacy.
+                }
+            } else if (key == "currentState") {
+                inst.currentState = r.readUInt();
+            } else if (key == "delayMs") {
+                // Additive (Phase 32, BIND-04): same uint idiom as currentState.
+                // Absent -> stays at the struct default 0 (reader-tolerant).
+                inst.delayMs = r.readUInt();
+            } else if (key == "settings") {
+                inst.settings = r.readString();
+            } else if (key == "children") {
+                r.expect('[');
+                if (!r.tryConsume(']')) {
+                    while (true) {
+                        inst.children.push_back(readActionInstance(r)); // RECURSIVE
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect(']');
+                        break;
+                    }
+                }
+            } else if (key == "id" || key == "uuid") {
+                inst.id = r.readString();
+            } else {
+                r.skipValue(); // forward-compat: skip unknown keys.
+            }
+            if (r.tryConsume(',')) {
+                continue;
+            }
+            r.expect('}');
+            break;
+        }
+    }
+    // Defensive clamp (CONTEXT lossless-load rule): never reject, never index OOB.
+    if (inst.states.empty() || inst.currentState >= inst.states.size()) {
+        inst.currentState = 0;
+    }
+    return inst;
+}
+
 Binding readBinding(JsonReader& r) {
     Binding b{};
     r.expect('{');
@@ -666,6 +939,8 @@ Binding readBinding(JsonReader& r) {
                 b.onLongPress = readActionArray(r);
             } else if (key == "state") {
                 b.state = readKeyState(r);
+            } else if (key == "instance") {
+                b.instance = readActionInstance(r);
             } else {
                 r.skipValue();
             }
@@ -692,8 +967,12 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
                 eb.onCcw = readActionArray(r);
             } else if (key == "onPress") {
                 eb.onPress = readActionArray(r);
+            } else if (key == "onRelease") {
+                eb.onRelease = readActionArray(r);
             } else if (key == "state") {
                 eb.state = readKeyState(r);
+            } else if (key == "instance") {
+                eb.instance = readActionInstance(r);
             } else {
                 r.skipValue();
             }
@@ -705,6 +984,32 @@ EncoderBinding readEncoderBinding(JsonReader& r) {
         }
     }
     return eb;
+}
+
+/// Parse a TouchZoneBinding object (schema v2, Phase 26 D-11).
+/// Absent fields default-construct, so a minimal {"onTap":[]} round-trips cleanly.
+TouchZoneBinding readTouchZoneBinding(JsonReader& r) {
+    TouchZoneBinding tz{};
+    r.expect('{');
+    if (!r.tryConsume('}')) {
+        while (true) {
+            std::string const key = r.readString();
+            r.expect(':');
+            if (key == "onTap") {
+                tz.onTap = readActionArray(r);
+            } else if (key == "state") {
+                tz.state = readKeyState(r);
+            } else {
+                r.skipValue();
+            }
+            if (r.tryConsume(',')) {
+                continue;
+            }
+            r.expect('}');
+            break;
+        }
+    }
+    return tz;
 }
 
 /// Read a `{"<uint>":<value>, ...}` map; @p readValue consumes one value.
@@ -720,7 +1025,11 @@ void readUintKeyedMap(JsonReader& r,
         std::string const idxStr = r.readString();
         std::uint16_t idx = 0;
         try {
-            idx = static_cast<std::uint16_t>(std::stoul(idxStr));
+            unsigned long const parsed = std::stoul(idxStr);
+            if (parsed > std::numeric_limits<std::uint16_t>::max()) {
+                throw std::out_of_range(idxStr); // key index would truncate; reject
+            }
+            idx = static_cast<std::uint16_t>(parsed);
         } catch (std::exception const&) {
             std::ostringstream err;
             err << "profileFromJson: invalid uint16 map key \"" << idxStr << "\"";
@@ -782,10 +1091,19 @@ Profile profileFromJson(std::string_view json) {
     if (r.tryConsume('}')) {
         return profile;
     }
+    // Parse _schemaVersion for future dispatch (CR-01 fix: no longer used to guard
+    // touchZones — see the touchZones branch below). Marked maybe_unused so the
+    // compiler does not warn when the value is consumed only by readUInt() and not
+    // subsequently read (the field must still be consumed from the stream).
+    // Future schema versions > 2 that require different read semantics can re-arm
+    // this variable.
+    [[maybe_unused]] int schemaVersion = 1;
     while (true) {
         std::string const key = r.readString();
         r.expect(':');
-        if (key == "id") {
+        if (key == "_schemaVersion") {
+            schemaVersion = static_cast<int>(r.readUInt());
+        } else if (key == "id") {
             profile.id = r.readString();
         } else if (key == "name") {
             profile.name = r.readString();
@@ -797,6 +1115,47 @@ Profile profileFromJson(std::string_view json) {
         } else if (key == "encoders") {
             readUintKeyedMap(
                 r, profile.encoders, [](JsonReader& rr) { return readEncoderBinding(rr); });
+        } else if (key == "touchZones") {
+            // Parse unconditionally when the key is present: a file that carries a
+            // "touchZones" object is implicitly v2 regardless of where "_schemaVersion"
+            // appears in the JSON object. RFC 8259 does not guarantee key ordering, so
+            // guarding on schemaVersion here would silently discard all touch-zone data
+            // whenever an external tool or hand-edit emits "touchZones" before
+            // "_schemaVersion" (CR-01 / WR-06 ordering-dependency fix).
+            //
+            // Safety on genuine v1 profiles: v1 files contain no "touchZones" key at
+            // all, so this branch is never reached for them — the default empty map is
+            // correctly preserved (D-12 backward compat holds).
+            {
+                r.expect('{');
+                if (!r.tryConsume('}')) {
+                    while (true) {
+                        std::string const idxStr = r.readString();
+                        std::uint8_t idx = 0;
+                        try {
+                            unsigned long const parsed = std::stoul(idxStr);
+                            // The old `& 0xFFu` mask silently folded e.g. "256" -> 0;
+                            // reject anything that would not fit a uint8 instead.
+                            if (parsed > std::numeric_limits<std::uint8_t>::max()) {
+                                throw std::out_of_range(idxStr);
+                            }
+                            idx = static_cast<std::uint8_t>(parsed);
+                        } catch (std::exception const&) {
+                            std::ostringstream err;
+                            err << "profileFromJson: invalid uint8 touchZone key \"" << idxStr
+                                << "\"";
+                            throw std::runtime_error(err.str());
+                        }
+                        r.expect(':');
+                        profile.touchZones.emplace(idx, readTouchZoneBinding(r));
+                        if (r.tryConsume(',')) {
+                            continue;
+                        }
+                        r.expect('}');
+                        break;
+                    }
+                }
+            }
         } else if (key == "mouseButtons") {
             // String-keyed (button name) map of key-style Bindings. Wire key
             // "mouseButtons" per PROFILE_SCHEMA.md. Mirrors the pages reader's
