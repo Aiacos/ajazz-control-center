@@ -1954,10 +1954,21 @@ bool PluginCatalogModel::install(QString const& uuid) {
                         PluginCatalogModel::tr("Plugin has no downloadable archive."));
                     return;
                 }
-                // Cache the resolved URL on the row and re-enter install(): downloadUrl
-                // is now populated, so this branch is skipped and the standard
-                // download+extract+verify path runs.
+            // Cache the resolved URL on the row and re-enter install(): downloadUrl
+            // is now populated, so this branch is skipped and the standard
+            // download+extract+verify path runs.
+#if defined(__GNUC__) && !defined(__clang__)
+            // GCC 13 -O2 FP: inlining vector::operator[] into the queued Qt
+            // functor trips -Wnull-dereference even though findRow() just
+            // proved r indexes a live row (ubuntu-24.04 packaging leg,
+            // Release run 28620095630). Clang and GCC >= 14 are clean.
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wnull-dereference"
+#endif
                 self->m_rows[static_cast<std::size_t>(r)].downloadUrl = resolved;
+#if defined(__GNUC__) && !defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
                 self->install(uuidCopy);
             });
         return true;
