@@ -128,6 +128,15 @@ std::optional<ActionContext> ContextRegistry::byCoord(QString const& deviceId,
     return *ctxIt;
 }
 
+bool ContextRegistry::hasAction(QString const& actionUuid) const {
+    for (auto const& ctx : m_byContext) {
+        if (ctx.actionUUID == actionUuid) {
+            return true;
+        }
+    }
+    return false;
+}
+
 void ContextRegistry::retire(QString const& context) {
     auto it = m_byContext.find(context);
     if (it == m_byContext.end()) {

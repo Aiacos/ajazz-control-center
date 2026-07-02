@@ -450,13 +450,59 @@ Application::Application(QObject* parent)
           },
           // ActionEngine*: the engine owned by m_streamDockInput (moved-in; always non-null).
           m_streamDockInput ? m_streamDockInput->engine() : nullptr,
-          // ActionEngine plugin executor (Phase 19+): plugin actions are dispatched
-          // by PluginDeviceBridge via the deviceEvent signal path, NOT by the
-          // ActionEngine directly. The engine executor is therefore a deliberate
-          // no-op: the bridge handles routing after dispatch() emits deviceEvent.
-          // Prior stale log "ignored (plugin host arrives Phase 19)" removed — Phase 19
-          // has shipped; the no-op is correct behaviour, not a future TODO.
-          [](std::string_view /*id*/, std::string_view /*settingsJson*/) {},
+          // Fallback for NON-builtin plugin uuids reaching the ActionEngine —
+          // i.e. plugin actions running as Multi Action children (production
+          // audit blocker 4; direct key presses still route via the bridge's
+          // deviceEvent path). Deliver Elgato-shaped keyDown+keyUp to the
+          // owning plugin with isInMultiAction=true. Captures `this` (same
+          // safety argument as execs.plugin above: only called from the event
+          // loop, after construction). userDesiredState needs a per-child
+          // state field in the profile model — deferred.
+          [this](std::string_view id, std::string_view settingsJson) {
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+              if (!m_pluginServer || !m_pluginManager) {
+                  return;
+              }
+              QString const actionId =
+                  QString::fromUtf8(id.data(), static_cast<qsizetype>(id.size()));
+              // A MOUNTED action (live context at some coordinate) gets its
+              // key events from the bridge's deviceEvent path — synthesising
+              // here too would double-fire every directly-bound plugin action.
+              if (m_pluginBridge && m_pluginBridge->registry().hasAction(actionId)) {
+                  return;
+              }
+              QString const owner = m_pluginManager->ownerForAction(actionId);
+              if (owner.isEmpty()) {
+                  AJAZZ_LOG_WARN("plugin",
+                                 "multi-action child '{}' has no live owning plugin — skipped",
+                                 actionId.toStdString());
+                  return;
+              }
+              QJsonObject const settings =
+                  QJsonDocument::fromJson(
+                      QByteArray(settingsJson.data(), static_cast<qsizetype>(settingsJson.size())))
+                      .object();
+              QJsonObject const payload{{QStringLiteral("settings"), settings},
+                                        {QStringLiteral("isInMultiAction"), true},
+                                        {QStringLiteral("state"), 0}};
+              auto envelope = [&](char const* event) {
+                  return QJsonObject{
+                      {QStringLiteral("event"), QLatin1String(event)},
+                      {QStringLiteral("action"), actionId},
+                      {QStringLiteral("context"), QStringLiteral("multiaction/") + actionId},
+                      {QStringLiteral("payload"), payload}};
+              };
+              m_pluginServer->sendEvent(owner, envelope("keyDown"));
+              m_pluginServer->sendEvent(owner, envelope("keyUp"));
+              AJAZZ_LOG_INFO("plugin",
+                             "multi-action child '{}' -> keyDown/keyUp to {} (isInMultiAction)",
+                             actionId.toStdString(),
+                             owner.toStdString());
+#else
+              (void)id;
+              (void)settingsJson;
+#endif
+          },
           this)),
       // Phase 34 (APROF-01): foreground-window watcher. Plan 03 wired the real per-OS
       // backends behind app::makeActiveWindowWatcher(), which selects the Wayland (wlr-

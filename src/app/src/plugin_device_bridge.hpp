@@ -160,6 +160,12 @@ public:
      */
     [[nodiscard]] std::optional<ActionContext> byContext(QString const& context) const;
 
+    /// True when ANY mounted context carries @p actionUuid. Used to tell a
+    /// directly-bound plugin action (bridge delivers its key events) from a
+    /// Multi Action child (no mounted instance — the engine fallback
+    /// synthesises keyDown/keyUp; audit blocker 4).
+    [[nodiscard]] bool hasAction(QString const& actionUuid) const;
+
     /**
      * @brief Look up the opaque context string for a given device + controller + coords.
      *
