@@ -2,8 +2,9 @@
 // metrics JSON schema, one object per line on stdout. CPU/mem/net since
 // Phase 0; GPU (GPU_SUPPORT: nvml/rocm-smi/amdgpu-sysfs/intel) since Phase 3.
 //
-//   --once    emit a single primed snapshot and exit
-//   (default) stream one line per second
+//   --once             emit a single primed snapshot and exit
+//   --interval-ms <N>  streaming cadence in ms (default 1000, clamp 250..60000)
+//   (default)          stream one line per second
 //
 // The point of this helper is "read directly from btop": it links btop's real
 // collector translation units (see CMakeLists.txt) plus a small shim
@@ -11,9 +12,11 @@
 // would otherwise define. No sensor logic is reimplemented here.
 #include "btop_shared.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <deque>
 #include <string>
 #include <thread>
@@ -129,6 +132,18 @@ static void emit_snapshot() {
 int main(int argc, char** argv) {
     const bool once = argc > 1 && string(argv[1]) == "--once";
 
+    // --interval-ms <N>: snapshot emission cadence for the streaming mode.
+    // Clamped to 250..60000 so a bad caller can neither busy-spin the
+    // collectors nor starve the plugin's history. Default keeps the
+    // historical 1 Hz behaviour.
+    long interval_ms = 1000;
+    for (int i = 1; i + 1 < argc; ++i) {
+        if (string(argv[i]) == "--interval-ms") {
+            interval_ms = std::strtol(argv[i + 1], nullptr, 10);
+        }
+    }
+    interval_ms = std::clamp(interval_ms, 250L, 60000L);
+
     Shared::init(); // mandatory; probes hardware and primes Cpu/Mem deltas
 
     if (once) {
@@ -145,6 +160,6 @@ int main(int argc, char** argv) {
 
     for (;;) {
         emit_snapshot();
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(std::chrono::milliseconds(interval_ms));
     }
 }

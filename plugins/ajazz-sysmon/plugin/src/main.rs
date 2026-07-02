@@ -272,17 +272,48 @@ async fn run_helper() {
 		Some(h) => h,
 		None => return,
 	};
-	let mut child = match Command::new(&helper).stdout(std::process::Stdio::piped()).spawn() {
-		Ok(c) => c,
-		Err(e) => {
-			eprintln!("ajazz-sysmon: cannot start helper {helper:?}: {e}");
+	// Outer respawn loop: when apply_sample_interval() detects a cadence
+	// change it pokes helper_notify(); we kill the child and respawn it with
+	// the new --interval-ms so the user's "Sample every" applies immediately.
+	loop {
+		let interval = sample_interval_ms().load(std::sync::atomic::Ordering::Relaxed);
+		let mut child = match Command::new(&helper)
+			.arg("--interval-ms")
+			.arg(interval.to_string())
+			.stdout(std::process::Stdio::piped())
+			.spawn()
+		{
+			Ok(c) => c,
+			Err(e) => {
+				eprintln!("ajazz-sysmon: cannot start helper {helper:?}: {e}");
+				return;
+			}
+		};
+		let Some(out) = child.stdout.take() else { return };
+		let mut lines = BufReader::new(out).lines();
+		let restart = loop {
+			tokio::select! {
+				line = lines.next_line() => match line {
+					Ok(Some(line)) => consume_snapshot(&line),
+					// Helper stream ended (crash/EOF): stop for good — the
+					// pre-interval behaviour, no blind respawn storm.
+					_ => break false,
+				},
+				_ = helper_notify().notified() => break true,
+			}
+		};
+		let _ = child.kill().await;
+		if !restart {
 			return;
 		}
-	};
-	let Some(out) = child.stdout.take() else { return };
-	let mut lines = BufReader::new(out).lines();
-	while let Ok(Some(line)) = lines.next_line().await {
-		if let Ok(s) = serde_json::from_str::<Snapshot>(&line) {
+	}
+}
+
+/// Parse one helper stdout line and push every metric into the shared
+/// history (split out of run_helper so the respawn loop stays readable).
+fn consume_snapshot(line: &str) {
+	{
+		if let Ok(s) = serde_json::from_str::<Snapshot>(line) {
 			let mut m = metrics().lock().unwrap();
 			push_metric(&mut m, Metric::Cpu, s.cpu.percent as f32);
 			push_metric(&mut m, Metric::CpuTemp, s.cpu.temp_c as f32);
@@ -505,6 +536,19 @@ struct MonitorSettings {
 	metric: String,
 	warn: Option<f32>,
 	crit: Option<f32>,
+	/// Sampling/refresh cadence in SECONDS (PI "Sample every"). None = 1 s.
+	/// Drives this instance's render loop; the helper's collection cadence
+	/// follows the MINIMUM across all live instances (one shared process).
+	interval: Option<f32>,
+}
+
+/// Clamp an instance interval to something sane (0.25 s .. 60 s).
+fn clamp_interval_s(v: f32) -> f32 {
+	if v.is_finite() {
+		v.clamp(0.25, 60.0)
+	} else {
+		1.0
+	}
 }
 
 impl MonitorSettings {
@@ -522,6 +566,63 @@ impl MonitorSettings {
 fn settings_map() -> &'static Mutex<HashMap<InstanceId, MonitorSettings>> {
 	static S: OnceLock<Mutex<HashMap<InstanceId, MonitorSettings>>> = OnceLock::new();
 	S.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Helper sampling cadence in ms — the MINIMUM interval across instances (a
+/// 1 s tile must not be starved because another tile asked for 30 s).
+fn sample_interval_ms() -> &'static std::sync::atomic::AtomicU64 {
+	static A: OnceLock<std::sync::atomic::AtomicU64> = OnceLock::new();
+	A.get_or_init(|| std::sync::atomic::AtomicU64::new(1000))
+}
+
+/// Wakes run_helper() to respawn the helper with a new --interval-ms.
+fn helper_notify() -> &'static tokio::sync::Notify {
+	static N: OnceLock<tokio::sync::Notify> = OnceLock::new();
+	N.get_or_init(tokio::sync::Notify::new)
+}
+
+/// Recompute the effective helper cadence from the live settings map; on a
+/// change, poke run_helper() so it respawns the helper with the new flag.
+/// Call after every settings write (will_appear / did_receive_settings /
+/// cycle_metric).
+/// will_appear-side settings upsert: MERGE instead of replace. The host
+/// re-emits willAppear on repaint waves and those envelopes can carry EMPTY
+/// settings (the profile-side mirror does not persist plugin-instance
+/// settings yet), which would clobber a live PI edit — seen 2026-07-02 as
+/// the "Sample every" value silently reverting. did_receive_settings (a real
+/// PI edit) stays an authoritative REPLACE so clearing a field still works.
+fn merge_settings(id: &InstanceId, incoming: &MonitorSettings, default: &str) {
+	let mut map = settings_map().lock().unwrap();
+	let entry = map.entry(id.clone()).or_default();
+	if !incoming.metric.is_empty() {
+		entry.metric = incoming.metric.clone();
+	}
+	if entry.metric.is_empty() {
+		entry.metric = default.into();
+	}
+	if incoming.warn.is_some() {
+		entry.warn = incoming.warn;
+	}
+	if incoming.crit.is_some() {
+		entry.crit = incoming.crit;
+	}
+	if incoming.interval.is_some() {
+		entry.interval = incoming.interval;
+	}
+}
+
+fn apply_sample_interval() {
+	let min_s = settings_map()
+		.lock()
+		.unwrap()
+		.values()
+		.map(|s| clamp_interval_s(s.interval.unwrap_or(1.0)))
+		.fold(f32::INFINITY, f32::min);
+	let ms = if min_s.is_finite() { (min_s * 1000.0) as u64 } else { 1000 };
+	use std::sync::atomic::Ordering;
+	if sample_interval_ms().swap(ms, Ordering::Relaxed) != ms {
+		helper_notify().notify_one();
+	}
 }
 
 /// Render one frame for `inst` and push it via set_image: 144 px key tile, or
@@ -544,15 +645,21 @@ async fn render_once(inst: &Instance, id: &InstanceId, fixed: Option<Metric>) ->
 	true
 }
 
-/// Spawn the 1 Hz render loop for one instance. `fixed` pins the metric;
-/// otherwise the metric is read from the live per-instance settings.
+/// Spawn the render loop for one instance. `fixed` pins the metric;
+/// otherwise the metric is read from the live per-instance settings. The
+/// cadence follows the instance's "Sample every" setting (default 1 s),
+/// re-read every frame so a PI change applies without respawning the task.
 fn spawn_render(inst: Arc<Instance>, id: InstanceId, fixed: Option<Metric>) -> JoinHandle<()> {
 	tokio::spawn(async move {
 		loop {
 			if !render_once(&inst, &id, fixed).await {
 				break;
 			}
-			tokio::time::sleep(Duration::from_millis(1000)).await;
+			let secs = {
+				let map = settings_map().lock().unwrap();
+				clamp_interval_s(map.get(&id).and_then(|s| s.interval).unwrap_or(1.0))
+			};
+			tokio::time::sleep(Duration::from_millis((secs * 1000.0) as u64)).await;
 		}
 	})
 }
@@ -576,7 +683,11 @@ async fn cycle_metric(instance: &Instance, ticks: i16, default: &str) {
 	};
 	let idx = Metric::ALL.iter().position(|m| *m == current).unwrap_or(0);
 	let next = Metric::ALL[cycled_index(idx, ticks, Metric::ALL.len())];
-	let settings = MonitorSettings { metric: next.id().into(), warn: None, crit: None };
+	// Thresholds reset to the new metric's defaults by design; the sampling
+	// interval is metric-independent and must survive the cycle.
+	let prev_interval = settings_map().lock().unwrap().get(&id).and_then(|s| s.interval);
+	let settings =
+		MonitorSettings { metric: next.id().into(), warn: None, crit: None, interval: prev_interval };
 	settings_map().lock().unwrap().insert(id.clone(), settings.clone());
 	let _ = instance.set_settings(&settings).await;
 	render_once(instance, &id, None).await;
@@ -618,10 +729,8 @@ impl Action for CpuAction {
 
 	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
 		let id = instance.instance_id.clone();
-		settings_map()
-			.lock()
-			.unwrap()
-			.insert(id.clone(), settings_with_default(settings, "cpu"));
+		merge_settings(&id, settings, "cpu");
+		apply_sample_interval();
 		if let Some(inst) = get_instance(id.clone()).await {
 			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
 		}
@@ -633,6 +742,7 @@ impl Action for CpuAction {
 			.lock()
 			.unwrap()
 			.insert(instance.instance_id.clone(), settings_with_default(settings, "cpu"));
+		apply_sample_interval();
 		Ok(())
 	}
 
@@ -668,7 +778,8 @@ impl Action for MonitorAction {
 
 	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
 		let id = instance.instance_id.clone();
-		settings_map().lock().unwrap().insert(id.clone(), settings.clone());
+		merge_settings(&id, settings, "cpu");
+		apply_sample_interval();
 		if let Some(inst) = get_instance(id.clone()).await {
 			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
 		}
@@ -680,6 +791,7 @@ impl Action for MonitorAction {
 			.lock()
 			.unwrap()
 			.insert(instance.instance_id.clone(), settings.clone());
+		apply_sample_interval();
 		Ok(())
 	}
 
@@ -727,10 +839,8 @@ impl Action for GpuAction {
 
 	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
 		let id = instance.instance_id.clone();
-		settings_map()
-			.lock()
-			.unwrap()
-			.insert(id.clone(), settings_with_default(settings, "gpu"));
+		merge_settings(&id, settings, "gpu");
+		apply_sample_interval();
 		if let Some(inst) = get_instance(id.clone()).await {
 			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
 		}
@@ -742,6 +852,7 @@ impl Action for GpuAction {
 			.lock()
 			.unwrap()
 			.insert(instance.instance_id.clone(), settings_with_default(settings, "gpu"));
+		apply_sample_interval();
 		Ok(())
 	}
 
@@ -783,7 +894,7 @@ async fn main() -> OpenActionResult<()> {
 			};
 			hist.push_back(base);
 		}
-		let (_, w, c) = MonitorSettings { metric: argv.get(2).cloned().unwrap_or_default(), warn: None, crit: None }.resolve();
+		let (_, w, c) = MonitorSettings { metric: argv.get(2).cloned().unwrap_or_default(), ..Default::default() }.resolve();
 		if let Some(png) = render_tile(metric, &hist, *hist.back().unwrap(), w, c, size) {
 			std::fs::write(&out, png).ok();
 			eprintln!("wrote {out}");

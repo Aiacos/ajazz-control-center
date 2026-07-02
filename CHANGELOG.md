@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **System Monitor: configurable sample interval** (2026-07-02): every sysmon tile's Property
+  Inspector gains a "Sample every (s)" field (0.25–60 s, default 1 s). The tile's render loop
+  follows its own interval; the shared btop-metrics-helper is respawned with `--interval-ms`
+  set to the fastest interval across live tiles, so slowing all tiles genuinely reduces
+  collection frequency. willAppear settings are now merged (not replaced) plugin-side so
+  host repaint waves carrying empty settings can no longer revert a live PI edit.
+  Live-verified: helper respawns 1000→5000 ms and back; tile cadence follows the setting.
+
 ### Fixed
 
 - **Dial actions: Switch Profile / Device Brightness now work** (2026-07-02, found live on the

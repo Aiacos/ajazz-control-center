@@ -34,7 +34,8 @@
 	</div>
 	<div class="row"><label for="warn">Warn &ge;</label><input id="warn" type="number" step="1" placeholder="default" /></div>
 	<div class="row"><label for="crit">Crit &ge;</label><input id="crit" type="number" step="1" placeholder="default" /></div>
-	<div class="hint">Thresholds colour the value green / amber / red. Leave blank for per-metric defaults.</div>
+	<div class="row"><label for="interval">Sample every (s)</label><input id="interval" type="number" step="0.5" min="0.25" max="60" placeholder="1" /></div>
+	<div class="hint">Thresholds colour the value green / amber / red. Leave blank for per-metric defaults. Sample interval sets how often this tile refreshes (0.25&ndash;60&nbsp;s; data collection follows the fastest tile).</div>
 
 	<script>
 		let ws = null, uuid = null;
@@ -45,16 +46,17 @@
 			if (s.metric) $("metric").value = s.metric;
 			$("warn").value = (s.warn ?? "");
 			$("crit").value = (s.crit ?? "");
+			$("interval").value = (s.interval ?? "");
 		}
 
 		function send() {
 			if (!ws || ws.readyState !== 1) return;
 			const num = (v) => (v === "" || v === null ? null : Number(v));
-			const payload = { metric: $("metric").value, warn: num($("warn").value), crit: num($("crit").value) };
+			const payload = { metric: $("metric").value, warn: num($("warn").value), crit: num($("crit").value), interval: num($("interval").value) };
 			ws.send(JSON.stringify({ event: "setSettings", context: uuid, payload }));
 		}
 
-		["metric", "warn", "crit"].forEach((id) => {
+		["metric", "warn", "crit", "interval"].forEach((id) => {
 			$(id).addEventListener("change", send);
 			$(id).addEventListener("input", send);
 		});
