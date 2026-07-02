@@ -248,6 +248,10 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Build-path parity with the build matrix (webui/bundle blocks are
+          # exercised, not silently skipped). See the build job note.
+          submodules: recursive
       - name: Install deps
         run: |
           sudo apt-get update
@@ -381,6 +385,10 @@ jobs:
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Build-path parity with the build matrix (webui/bundle blocks are
+          # exercised, not silently skipped). See the build job note.
+          submodules: recursive
       - name: Install deps
         run: |
           sudo apt-get update

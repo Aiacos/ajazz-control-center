@@ -723,7 +723,18 @@ if(AJAZZ_BUILD_WEBUI)
         )
     else()
         find_program(AJAZZ_NPM_EXECUTABLE npm)
-        if(NOT AJAZZ_NPM_EXECUTABLE)
+        if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/webui/opendeck/package.json")
+            # Same degrade-to-skip as the missing-npm branch: a clone without `git submodule update
+            # --init` has an EMPTY webui/opendeck dir and build-webui.sh dies inside npm with an
+            # opaque ENOENT (CI coverage leg, run 28624317269). Packaging jobs check out submodules
+            # and gate on the SPA actually shipping, so a skip here cannot leak into a release
+            # artifact.
+            message(
+                WARNING "AJAZZ_BUILD_WEBUI=ON but the OpenDeck submodule is not checked out "
+                        "(src/app/webui/opendeck/package.json missing). Skipping the SPA bundle; "
+                        "run: git submodule update --init --recursive"
+            )
+        elseif(NOT AJAZZ_NPM_EXECUTABLE)
             message(
                 WARNING
                     "AJAZZ_BUILD_WEBUI=ON but npm/Node.js (>= 20) was not found. "
