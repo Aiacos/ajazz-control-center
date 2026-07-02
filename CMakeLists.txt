@@ -282,6 +282,12 @@ if(AJAZZ_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
+# Bundled first-party plugins (ajazz-sysmon monitor; Linux-only for now).
+option(AJAZZ_BUNDLE_PLUGINS "Build + install the bundled first-party plugins" ON)
+if(AJAZZ_BUNDLE_PLUGINS)
+    add_subdirectory(plugins)
+endif()
+
 # -----------------------------------------------------------------------------
 # Install (shared resources: udev, desktop entry, icon, AppStream)
 # -----------------------------------------------------------------------------

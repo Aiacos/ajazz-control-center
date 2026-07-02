@@ -1,26 +1,16 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change: (template / unversioned) → 1.0.0
-Bump rationale: MAJOR — initial ratification; first concrete constitution replacing the
-  placeholder template. Establishes nine governing principles plus constraint and workflow
-  sections.
+Version change: 1.0.0 → 1.1.0
+Bump rationale: MINOR — one new principle added (X. Disciplined Subagent Use); no existing
+  principle removed or redefined. Quality-gate checklist extended with a subagent-verification
+  gate; the agent-concurrency limit moved from a bare platform constraint to a governed
+  principle (the constraint bullet now defers to Principle X).
 
-Modified principles: none (initial adoption)
+Modified principles: none renamed; none redefined.
 Added principles:
-  I.    Code Quality & Architectural Boundaries
-  II.   Testing Standards (NON-NEGOTIABLE)
-  III.  User Experience Consistency
-  IV.   Performance Discipline
-  V.    Auto Debug & Live Validation (NON-NEGOTIABLE)
-  VI.   Research-Backed Implementation
-  VII.  Documentation Currency
-  VIII. Repository Hygiene
-  IX.   Consistent, Useful CI/CD
-Added sections:
-  - Platform & Technology Constraints
-  - Development Workflow & Quality Gates
-
+  X.    Disciplined Subagent Use
+Added sections: none
 Removed sections: none
 
 Templates requiring updates:
@@ -29,9 +19,12 @@ Templates requiring updates:
   ✅ .specify/templates/spec-template.md — no constitution references. No edit needed.
   ✅ .specify/templates/tasks-template.md — phase categories are story-driven and principle-agnostic.
      No edit needed.
-  ✅ CLAUDE.md — existing project conventions are consistent with and feed these principles.
+  ⚠ CLAUDE.md (branch feat/opendeck-ui-submodule and any branch carrying the Spec Kit intro) —
+     the preamble says "nine NON-NEGOTIABLE principles"; update to "ten" when this amendment
+     reaches that branch. The CLAUDE.md on the amending branch (feat/native-hardware-monitor)
+     predates that wording and needs no edit.
 
-Follow-up TODOs: none. Ratification date set to first adoption (2026-06-18).
+Follow-up TODOs: none. Ratified 2026-06-18; this amendment 2026-07-02.
 -->
 
 # AJAZZ Control Center Constitution
@@ -191,6 +184,28 @@ absence. A red pipeline is a stop-the-line event, not a mergeable state.
 **Rationale**: A trustworthy, fast pipeline is what lets the team move quickly; flaky or
 decorative CI erodes that trust and lets regressions through.
 
+### X. Disciplined Subagent Use
+
+Subagents are a tool for scale, not a way around the gates. Delegation MUST match the task
+shape: broad, parallelizable, read-only work (codebase recon, RE-doc sweeps, multi-file
+audits, research) goes to subagents; synthesis, decisions, and the final claim of "done"
+stay with the orchestrating session. Protocol/wire/device work SHOULD use a dedicated
+sub-agent sweep of the RE corpus so family-wide implications are not missed (Principle VI).
+
+Concurrency is bounded: at most **2 concurrent execute (write-capable) agents** in autonomous
+runs — three or more have caused atomic-commit splits and forced `--no-verify` workarounds.
+Read-only recon agents may fan out wider, but their outputs are **unverified input**: any
+subagent-reported file path, line number, symbol, or "finding" MUST be grep/build-verified
+in the primary session before it is acted on, committed, or propagated into docs. A subagent
+MUST NOT be used to bypass any gate in this constitution (hooks, tests, live verification,
+atomic commits); every commit an executing subagent produces is held to the same standard as
+one authored directly.
+
+**Rationale**: Subagent parallelism has already cost this project real damage when
+undisciplined (commit splits at 3+ concurrent executors) and real time when trusted blindly
+(hallucinated file:line findings retracted only after grep). Bounding concurrency and
+verification-gating their output keeps the speedup without the failure modes.
+
 ## Platform & Technology Constraints
 
 - **Language/UI**: C++20, Qt 6.7+, QML. Build with CMake + Ninja via presets.
@@ -201,8 +216,9 @@ decorative CI erodes that trust and lets regressions through.
   MUST sort before `73-seat-late.rules` (the project uses `70-ajazz.rules`).
 - **Cross-platform**: Linux primary; Windows and macOS supported and gated in CI. Platform-
   specific code belongs in platform-named files (`*_win32.cpp`, `*linux*`, `*macos*`, `.mm`).
-- **Concurrency limit**: autonomous execution agents are capped at 2 concurrent; three or more
-  have caused atomic-commit splits and forced `--no-verify` workarounds.
+- **Concurrency limit**: autonomous execution agents are capped at 2 concurrent, per
+  Principle X (three or more have caused atomic-commit splits and forced `--no-verify`
+  workarounds).
 
 ## Development Workflow & Quality Gates
 
@@ -217,6 +233,8 @@ A change is "done" only when ALL of the following hold:
 1. Pre-commit / commit-msg / pre-push hooks pass without bypass (Principles I, IX).
 1. Protocol/wire/device changes are cross-checked against the RE corpus, and any hardware
    disagreement is resolved in hardware's favor with the doc updated (Principles VI, VII).
+1. Any subagent-sourced finding that the change relies on has been grep/build-verified in the
+   primary session, and no more than 2 execute agents ran concurrently (Principle X).
 
 Code review and `ctest` are necessary but not sufficient: every gate above that can be
 verified at runtime MUST be verified at runtime.
@@ -242,4 +260,4 @@ Compliance is verified at PR review and at audit time. The quality gates in the 
 are the operational checklist; reviewers MUST confirm them. Complexity that violates a
 principle MUST be justified in writing or removed.
 
-**Version**: 1.0.0 | **Ratified**: 2026-06-18 | **Last Amended**: 2026-06-18
+**Version**: 1.1.0 | **Ratified**: 2026-06-18 | **Last Amended**: 2026-07-02

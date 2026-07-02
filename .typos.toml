@@ -50,6 +50,10 @@ Fulcio   = "Fulcio"
 Rekor    = "Rekor"
 bwrap    = "bwrap"
 bubblewrap = "bubblewrap"
+# Reverse-DNS author fragment in the HWiNFO plugin UUID
+# (com.exension.hwinfo — shayne/hwinfo-streamdeck). typos otherwise
+# "corrects" the real identifier "exension" to "extension".
+exension = "exension"
 OpenDeck = "OpenDeck"
 opendeck = "opendeck"
 streamdeck = "streamdeck"
