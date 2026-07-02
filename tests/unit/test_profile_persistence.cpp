@@ -175,6 +175,118 @@ TEST_CASE("ProfileController: commitKeyBinding mutates keys and emits profileCha
     CHECK(binding.onPress[0].settingsJson == std::string{"{\"url\":\"https://x\"}"});
 }
 
+TEST_CASE("ProfileController: transferBinding moves a key binding (retain=false)",
+          "[profile-persistence][move-instance]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+    ctrl.commitKeyBinding(2,
+                          QStringLiteral("/tmp/i.png"),
+                          QStringLiteral("K"),
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{\"a\":1}"),
+                          QStringLiteral("com.x.plug.action1"));
+
+    REQUIRE(ctrl.transferBinding(QStringLiteral("Keypad"), 2, QStringLiteral("Keypad"), 5, false));
+
+    auto const& p = ctrl.activeProfile();
+    CHECK(p.keys.find(2) == p.keys.end()); // source cleared
+    auto const it = p.keys.find(5);
+    REQUIRE(it != p.keys.end());
+    REQUIRE(it->second.onPress.size() == 1);
+    CHECK(it->second.onPress[0].id == std::string{"com.x.plug.action1"});
+    CHECK(it->second.state.text == std::optional<std::string>{"K"});
+}
+
+TEST_CASE("ProfileController: transferBinding copies a key binding (retain=true)",
+          "[profile-persistence][move-instance]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+    ctrl.commitKeyBinding(1,
+                          {},
+                          {},
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{}"),
+                          QStringLiteral("com.x.plug.action1"));
+
+    REQUIRE(ctrl.transferBinding(QStringLiteral("Keypad"), 1, QStringLiteral("Keypad"), 3, true));
+
+    auto const& p = ctrl.activeProfile();
+    REQUIRE(p.keys.find(1) != p.keys.end()); // source kept
+    auto const it = p.keys.find(3);
+    REQUIRE(it != p.keys.end());
+    REQUIRE(it->second.onPress.size() == 1);
+    CHECK(it->second.onPress[0].id == std::string{"com.x.plug.action1"});
+}
+
+TEST_CASE("ProfileController: transferBinding converts across controllers",
+          "[profile-persistence][move-instance]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+    ctrl.commitKeyBinding(0,
+                          {},
+                          QStringLiteral("Dial me"),
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{}"),
+                          QStringLiteral("com.x.plug.dial"));
+
+    // Keypad -> Encoder: onPress chain + KeyState carried over.
+    REQUIRE(ctrl.transferBinding(QStringLiteral("Keypad"), 0, QStringLiteral("Encoder"), 1, false));
+    {
+        auto const& p = ctrl.activeProfile();
+        CHECK(p.keys.find(0) == p.keys.end());
+        auto const it = p.encoders.find(1);
+        REQUIRE(it != p.encoders.end());
+        REQUIRE(it->second.onPress.size() == 1);
+        CHECK(it->second.onPress[0].id == std::string{"com.x.plug.dial"});
+        CHECK(it->second.state.text == std::optional<std::string>{"Dial me"});
+    }
+
+    // Encoder -> TouchZone: onPress becomes onTap.
+    REQUIRE(
+        ctrl.transferBinding(QStringLiteral("Encoder"), 1, QStringLiteral("TouchZone"), 2, false));
+    {
+        auto const& p = ctrl.activeProfile();
+        CHECK(p.encoders.find(1) == p.encoders.end());
+        auto const it = p.touchZones.find(2);
+        REQUIRE(it != p.touchZones.end());
+        REQUIRE(it->second.onTap.size() == 1);
+        CHECK(it->second.onTap[0].id == std::string{"com.x.plug.dial"});
+    }
+
+    // TouchZone -> Keypad: onTap becomes onPress.
+    REQUIRE(
+        ctrl.transferBinding(QStringLiteral("TouchZone"), 2, QStringLiteral("Keypad"), 4, false));
+    {
+        auto const& p = ctrl.activeProfile();
+        CHECK(p.touchZones.find(2) == p.touchZones.end());
+        auto const it = p.keys.find(4);
+        REQUIRE(it != p.keys.end());
+        REQUIRE(it->second.onPress.size() == 1);
+        CHECK(it->second.onPress[0].id == std::string{"com.x.plug.dial"});
+    }
+}
+
+TEST_CASE("ProfileController: transferBinding rejects empty source and bad controllers",
+          "[profile-persistence][move-instance]") {
+    ajazz::tests::qtApp();
+    app::ProfileController ctrl(nullptr);
+
+    CHECK_FALSE(
+        ctrl.transferBinding(QStringLiteral("Keypad"), 7, QStringLiteral("Keypad"), 8, false));
+    CHECK_FALSE(
+        ctrl.transferBinding(QStringLiteral("Bogus"), 0, QStringLiteral("Keypad"), 1, false));
+    CHECK_FALSE(
+        ctrl.transferBinding(QStringLiteral("Keypad"), -1, QStringLiteral("Keypad"), 1, false));
+    // Self-transfer is a tolerated no-op, not an error.
+    ctrl.commitKeyBinding(0,
+                          {},
+                          {},
+                          static_cast<int>(core::ActionKind::Plugin),
+                          QStringLiteral("{}"),
+                          QStringLiteral("com.x.p.a"));
+    CHECK(ctrl.transferBinding(QStringLiteral("Keypad"), 0, QStringLiteral("Keypad"), 0, true));
+}
+
 TEST_CASE("ProfileController: commitKeyBinding persists the plugin actionId into Action::id",
           "[profile-persistence][PROFILE-01]") {
     ajazz::tests::qtApp();

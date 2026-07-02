@@ -699,6 +699,40 @@ public:
     Q_INVOKABLE void swapTouchZoneBindings(int srcIndex, int dstIndex);
 
     /**
+     * @brief Move or copy a binding between slots, including across controllers.
+     *
+     * Backs the OpenDeck SPA's `move_instance` command in FULL: drag-move
+     * (retain=false — source cleared) and copy/paste (retain=true — source
+     * kept). The destination slot is OVERWRITTEN (SPA semantics: it assigns the
+     * returned instance into the slot unconditionally).
+     *
+     * Controllers: "Keypad" (active-page key map), "Encoder", "TouchZone".
+     * Same-controller transfers copy the whole binding struct (multi-action
+     * chains, per-event chains, state, instance all survive). Cross-controller
+     * transfers map the primary action chain (Keypad.onPress <-> Encoder.onPress
+     * <-> TouchZone.onTap) plus the visual KeyState; fields with no counterpart
+     * (Encoder onCw/onCcw, TouchZone-bound instance) are dropped — a lossy but
+     * user-initiated conversion, mirroring upstream OpenDeck.
+     *
+     * Persists via saveActiveProfile() and emits profileChanged() on success.
+     *
+     * @param srcController "Keypad" | "Encoder" | "TouchZone".
+     * @param srcIndex      0-based slot in the source collection.
+     * @param dstController "Keypad" | "Encoder" | "TouchZone".
+     * @param dstIndex      0-based slot in the destination collection.
+     * @param retain        true = copy (keep source), false = move (clear source).
+     * @return              true on success; false when the source slot is empty,
+     *                      a controller name is unknown, or an index is invalid.
+     *
+     * @invokable Callable from QML as ProfileController.transferBinding(...).
+     */
+    Q_INVOKABLE bool transferBinding(QString const& srcController,
+                                     int srcIndex,
+                                     QString const& dstController,
+                                     int dstIndex,
+                                     bool retain);
+
+    /**
      * @brief Save the active profile to its default path.
      *
      * Resolves defaultProfilePath(m_profile.id), creates the parent directory

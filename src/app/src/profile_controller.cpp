@@ -1645,6 +1645,165 @@ void ProfileController::swapTouchZoneBindings(int srcIndex, int dstIndex) {
     emit profileChanged();
 }
 
+bool ProfileController::transferBinding(QString const& srcController,
+                                        int srcIndex,
+                                        QString const& dstController,
+                                        int dstIndex,
+                                        bool retain) {
+    // Controller kinds: 0=Keypad, 1=Encoder, 2=TouchZone; -1 = unknown.
+    auto const kindOf = [](QString const& c) -> int {
+        if (c == QLatin1String("Keypad")) {
+            return 0;
+        }
+        if (c == QLatin1String("Encoder")) {
+            return 1;
+        }
+        if (c == QLatin1String("TouchZone")) {
+            return 2;
+        }
+        return -1;
+    };
+    int const srcKind = kindOf(srcController);
+    int const dstKind = kindOf(dstController);
+    // Index caps per collection key type (uint16_t maps; touch zones uint8_t).
+    auto const maxIdx = [](int kind) { return kind == 2 ? 255 : 65534; };
+    if (srcKind < 0 || dstKind < 0 || srcIndex < 0 || dstIndex < 0 || srcIndex > maxIdx(srcKind) ||
+        dstIndex > maxIdx(dstKind)) {
+        AJAZZ_LOG_WARN("profile-controller",
+                       "transferBinding: invalid args ({}[{}] -> {}[{}])",
+                       srcController.toStdString(),
+                       srcIndex,
+                       dstController.toStdString(),
+                       dstIndex);
+        return false;
+    }
+    if (srcKind == dstKind && srcIndex == dstIndex) {
+        return true; // self-move / self-paste: nothing to do, but not an error
+    }
+
+    if (srcKind == dstKind) {
+        // Same collection: whole-struct copy preserves EVERY field (multi-action
+        // chains, per-event chains, KeyState, instance). Copy BEFORE any map
+        // mutation — operator[] insertion may rehash and invalidate iterators.
+        switch (srcKind) {
+        case 0: {
+            auto& map = activeKeyMap();
+            auto const it = map.find(static_cast<std::uint16_t>(srcIndex));
+            if (it == map.end()) {
+                return false;
+            }
+            core::Binding copy = it->second;
+            map[static_cast<std::uint16_t>(dstIndex)] = std::move(copy);
+            if (!retain) {
+                map.erase(static_cast<std::uint16_t>(srcIndex));
+            }
+            break;
+        }
+        case 1: {
+            auto const it = m_profile.encoders.find(static_cast<std::uint16_t>(srcIndex));
+            if (it == m_profile.encoders.end()) {
+                return false;
+            }
+            core::EncoderBinding copy = it->second;
+            m_profile.encoders[static_cast<std::uint16_t>(dstIndex)] = std::move(copy);
+            if (!retain) {
+                m_profile.encoders.erase(static_cast<std::uint16_t>(srcIndex));
+            }
+            break;
+        }
+        default: {
+            auto const it = m_profile.touchZones.find(static_cast<std::uint8_t>(srcIndex));
+            if (it == m_profile.touchZones.end()) {
+                return false;
+            }
+            core::TouchZoneBinding copy = it->second;
+            m_profile.touchZones[static_cast<std::uint8_t>(dstIndex)] = std::move(copy);
+            if (!retain) {
+                m_profile.touchZones.erase(static_cast<std::uint8_t>(srcIndex));
+            }
+            break;
+        }
+        }
+    } else {
+        // Cross-collection: carry the primary action chain + visual state.
+        // (Keypad.onPress <-> Encoder.onPress <-> TouchZone.onTap; instance
+        // survives Keypad<->Encoder, TouchZoneBinding declares none.)
+        std::vector<core::Action> chain;
+        core::KeyState state;
+        std::optional<core::ActionInstance> instance;
+        switch (srcKind) {
+        case 0: {
+            auto& map = activeKeyMap();
+            auto const it = map.find(static_cast<std::uint16_t>(srcIndex));
+            if (it == map.end()) {
+                return false;
+            }
+            chain = it->second.onPress;
+            state = it->second.state;
+            instance = it->second.instance;
+            if (!retain) {
+                map.erase(static_cast<std::uint16_t>(srcIndex));
+            }
+            break;
+        }
+        case 1: {
+            auto const it = m_profile.encoders.find(static_cast<std::uint16_t>(srcIndex));
+            if (it == m_profile.encoders.end()) {
+                return false;
+            }
+            chain = it->second.onPress;
+            state = it->second.state;
+            instance = it->second.instance;
+            if (!retain) {
+                m_profile.encoders.erase(static_cast<std::uint16_t>(srcIndex));
+            }
+            break;
+        }
+        default: {
+            auto const it = m_profile.touchZones.find(static_cast<std::uint8_t>(srcIndex));
+            if (it == m_profile.touchZones.end()) {
+                return false;
+            }
+            chain = it->second.onTap;
+            state = it->second.state;
+            if (!retain) {
+                m_profile.touchZones.erase(static_cast<std::uint8_t>(srcIndex));
+            }
+            break;
+        }
+        }
+        switch (dstKind) {
+        case 0: {
+            core::Binding b{};
+            b.onPress = std::move(chain);
+            b.state = std::move(state);
+            b.instance = std::move(instance);
+            activeKeyMap()[static_cast<std::uint16_t>(dstIndex)] = std::move(b);
+            break;
+        }
+        case 1: {
+            core::EncoderBinding e{};
+            e.onPress = std::move(chain);
+            e.state = std::move(state);
+            e.instance = std::move(instance);
+            m_profile.encoders[static_cast<std::uint16_t>(dstIndex)] = std::move(e);
+            break;
+        }
+        default: {
+            core::TouchZoneBinding t{};
+            t.onTap = std::move(chain);
+            t.state = std::move(state);
+            m_profile.touchZones[static_cast<std::uint8_t>(dstIndex)] = std::move(t);
+            break;
+        }
+        }
+    }
+
+    saveActiveProfile();
+    emit profileChanged();
+    return true;
+}
+
 void ProfileController::saveActiveProfile() {
     QString const id =
         m_profile.id.empty() ? QStringLiteral("default") : QString::fromStdString(m_profile.id);
