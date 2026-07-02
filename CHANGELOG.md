@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Production-readiness audit** (2026-07-03): feature-by-feature comparison against the official
+  Elgato SDK docs + live UI tour with per-surface screenshot verification + packaging-artifact
+  inspection. Results and the remaining blockers live in
+  `docs/architecture/PRODUCTION-READINESS.md`. Fixed on the spot: per-state `setImage`/`setTitle`
+  with `target` routing (blocker 3), editor now follows debug-RPC/hot-plug device activation,
+  installedActions log spam de-duplicated, deb/rpm runtime dependencies declared (the published
+  nightly .deb had NO Qt dependencies at all — shlibdeps cannot map aqt-provisioned Qt).
 - **System Monitor: configurable sample interval** (2026-07-02): every sysmon tile's Property
   Inspector gains a "Sample every (s)" field (0.25–60 s, default 1 s). The tile's render loop
   follows its own interval; the shared btop-metrics-helper is respawned with `--interval-ms`
