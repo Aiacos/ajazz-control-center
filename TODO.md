@@ -92,7 +92,7 @@ ______________________________________________________________________
       Layout-managed items in SettingsPage / ProfileEditor /
       RgbPicker → switched to `Layout.preferredWidth/Height`.
 
-- [ ] Replace all undefined Qt.tint calls in Theme.qml with Qt.lighter/darker or a custom tint helper to avoid runtime errors on all platforms
+- [x] ~~Replace all undefined Qt.tint calls in Theme.qml~~ **CLOSED 2026-07-03: premise invalid** (see validation note below; Qt.tint is a documented QML global, in use and warning-free). Original text: Replace all undefined Qt.tint calls in Theme.qml with Qt.lighter/darker or a custom tint helper to avoid runtime errors on all platforms
   — **VALIDATION 2026-05-20: premise looks INVALID.** `Qt.tint(color, tint)` is a documented Qt 6 QML global, used 10× in `Theme.qml`, and the shipped light-theme contrast fix relies on it (it cleared the zero-`qmllint`-warnings bar and the 105/105 test run). No evidence of a runtime error. Close unless a concrete failure is reproduced.
 
 - [ ] Implement a timeout or explicit reset for the syncGlyphState property in DeviceRow.qml after a successful sync to prevent stale success icons persisting in the UI
@@ -119,7 +119,7 @@ ______________________________________________________________________
 
 ### Medium-effort fixes (1–4 hours)
 
-- [ ] **AKP05 (Stream Dock) image upload silently fails on Linux/hidraw —
+- [x] **RESOLVED 2026-07-03 — superseded by the mirajazz sidecar** (Slice D, 2026-06-01): the AKP05 families render live on Fedora through streamdock-host (key tiles + strip zones verified daily on the AKP05E; see CLAUDE.md glossary). The C++ hidraw wire path this item patched was removed. Original: **AKP05 (Stream Dock) image upload silently fails on Linux/hidraw —
   HID Report-ID framing.** 🐧 **Platform-specific; needs Fedora hardware to
   fix+verify.**
 
@@ -427,7 +427,7 @@ ______________________________________________________________________
   geometric placeholder. Either ask AJAZZ for a square logo or design a
   custom monogram inspired by the wordmark.
 
-- [ ] **profile-buttons — wire Apply / Revert / Restore defaults to real
+- [x] **RESOLVED (Phase 16-02, PROFILE-01)**: Apply→saveActiveProfile / Revert→loadActiveProfile / RestoreDefaults are wired to the atomic core writer (see src/app/qml/Main.qml ProfileEditor comment); profile persistence live-verified 2026-07-02. Original: **profile-buttons — wire Apply / Revert / Restore defaults to real
   paths** (surfaced by source-level `TODO(profile-buttons)` at
   `src/app/qml/Main.qml:111`). Today the three ProfileEditor buttons
   toast `"not implemented yet"` because `ProfileController` lacks the
