@@ -15,12 +15,18 @@ OUT="${1:-$HERE/dist}"
 BUNDLE="$OUT/com.ajazz.sysmon2.sdPlugin"
 TRIPLE="x86_64-unknown-linux-gnu"
 
+# No stdout suppression: CMake prints usage errors (bad -S/-B, generator not
+# found) to STDOUT, so `>/dev/null` turned real CI failures into a silent
+# exit-1 with only the echo above in the ninja log (Release run 28618367640).
+# `set -x` makes the failing command line explicit in packaging-job logs.
+set -x
 echo "==> building btop-metrics-helper"
-cmake -S "$HERE/metrics-helper" -B "$HERE/metrics-helper/build" -G Ninja >/dev/null
-cmake --build "$HERE/metrics-helper/build" >/dev/null
+cmake -S "$HERE/metrics-helper" -B "$HERE/metrics-helper/build" -G Ninja \
+    -DCMAKE_BUILD_TYPE=Release
+cmake --build "$HERE/metrics-helper/build"
 
 echo "==> building ajazz-sysmon plugin"
-cargo build --release --manifest-path "$HERE/plugin/Cargo.toml" >/dev/null
+cargo build --release --manifest-path "$HERE/plugin/Cargo.toml"
 
 echo "==> assembling $BUNDLE"
 rm -rf "$BUNDLE"
