@@ -32,6 +32,11 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
+          # and the bundled sysmon plugin (btop submodule) — without this the
+          # webui/bundle CMake blocks silently skip and ship a bare app.
+          submodules: recursive
       - name: Install deps
         run: |
           sudo apt-get update
@@ -55,6 +60,20 @@ jobs:
         run: |
           cpack -G DEB
           cpack -G RPM
+      - name: Verify SPA + bundled sysmon shipped
+        working-directory: build/linux-release
+        # The webui/bundle CMake blocks degrade to a SKIP when their inputs are
+        # missing (submodule / node / cargo) — fail LOUD here instead of
+        # shipping a package without the OpenDeck editor or the first-party
+        # plugin (mirrors the Windows "Verify Qt runtime bundled" gate).
+        run: |
+          set -euo pipefail
+          test -f bundled-plugins/com.ajazz.sysmon2.sdPlugin/manifest.json \
+            || { echo "::error::sysmon bundle missing from build tree"; exit 1; }
+          dpkg-deb -c ./*.deb | grep -q "bundled-plugins/com.ajazz.sysmon2.sdPlugin/manifest.json" \
+            || { echo "::error::sysmon bundle missing from the .deb payload"; exit 1; }
+          strings src/app/ajazz-control-center | grep -q "opendeck/index.html" \
+            || { echo "::error::OpenDeck SPA not bundled into the binary"; exit 1; }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: linux-packages
@@ -74,6 +93,11 @@ jobs:
       options: --privileged
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
+          # and the bundled sysmon plugin (btop submodule) — without this the
+          # webui/bundle CMake blocks silently skip and ship a bare app.
+          submodules: recursive
       - uses: flatpak/flatpak-github-actions/flatpak-builder@10a3c29f0162516f0f68006be14c92f34bd4fa6c  # v6.5
         with:
           bundle: ajazz-control-center.flatpak
@@ -98,6 +122,11 @@ jobs:
       WIN_CERT_PASSWORD: ${{ secrets.WIN_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
+          # and the bundled sysmon plugin (btop submodule) — without this the
+          # webui/bundle CMake blocks silently skip and ship a bare app.
+          submodules: recursive
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756  # v1.13.0
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version:  6.8.3, cache: true, modules: qtwebsockets }
@@ -236,6 +265,11 @@ jobs:
       APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
+          # and the bundled sysmon plugin (btop submodule) — without this the
+          # webui/bundle CMake blocks silently skip and ship a bare app.
+          submodules: recursive
       - name: Install deps
         run: brew install ninja create-dmg
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
@@ -365,6 +399,11 @@ jobs:
       attestations: write       # for actions/attest-build-provenance
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
+          # and the bundled sysmon plugin (btop submodule) — without this the
+          # webui/bundle CMake blocks silently skip and ship a bare app.
+          submodules: recursive
         # Needed so the release-notes template (.github/RELEASE_NOTES_TEMPLATE.md)
         # is on disk for body_path below.
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c  # v8.0.1
