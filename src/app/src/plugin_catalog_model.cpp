@@ -1117,6 +1117,16 @@ void PluginCatalogModel::seedBundledPlugins(QString const& pluginsDir) {
     roots << QStandardPaths::locateAll(QStandardPaths::GenericDataLocation,
                                        QStringLiteral("ajazz-control-center/bundled-plugins"),
                                        QStandardPaths::LocateDirectory);
+#ifdef AJAZZ_BUNDLED_PLUGINS_FALLBACK
+    // Dev-build fallback (same pattern as AJAZZ_PLUGIN_TRUST_ROOTS): the
+    // assembled bundle lives in the build tree, which is not on
+    // GenericDataLocation — without this, first-party plugins (sysmon) only
+    // seed from PACKAGED installs and a dev profile never gets them.
+    if (QString const devRoot = QStringLiteral(AJAZZ_BUNDLED_PLUGINS_FALLBACK);
+        QDir(devRoot).exists()) {
+        roots << devRoot;
+    }
+#endif
     if (roots.isEmpty()) {
         return;
     }

@@ -860,6 +860,10 @@ target_compile_definitions(
     ajazz-control-center
     PRIVATE AJAZZ_PLUGIN_VERIFIER_SCRIPT="${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py"
             AJAZZ_PLUGIN_TRUST_ROOTS="${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json"
+            # Dev-run seeding fallback: the assembled first-party bundle (plugins/CMakeLists.txt)
+            # lands in the build tree, which is not on GenericDataLocation — without this a dev
+            # profile never seeds com.ajazz.sysmon2 (packaged installs use install(DIRECTORY)).
+            AJAZZ_BUNDLED_PLUGINS_FALLBACK="${CMAKE_BINARY_DIR}/bundled-plugins"
 )
 
 if(AJAZZ_BUILD_PYTHON_HOST)
