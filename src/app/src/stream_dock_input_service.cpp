@@ -311,7 +311,14 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
                 m_engine->run(it->second.onRelease);
             }
         }
-        break;
+        // Do NOT fall through to the deviceEvent tap below: the synthesised
+        // release at press time already delivered the plugin-facing `dialUp`
+        // (see synthesiseEncoderRelease). Forwarding the real wire release too
+        // would double-fire dialUp on AKP03 v3. Hold-duration (dialDown..dialUp
+        // gap) semantics are knowingly sacrificed until EncoderBinding grows an
+        // onRelease/hold model — starterpack-style dial actions key off dialUp
+        // alone, which is what this guarantees on ALL families.
+        return;
 
     // ---- Touch strip (INPUT-05): raw down/move/up -> synthesised tap/swipe ----
     // The AKP05 firmware emits only down/move/up + a single-byte X
@@ -421,6 +428,21 @@ void StreamDockInputService::drainCoalescedRotation() {
 void StreamDockInputService::synthesiseEncoderRelease(std::uint16_t encIndex) {
     // Emit the observable signal (for tests + any future listener).
     emit encoderReleaseSynthesised(encIndex);
+    // Deliver the plugin-facing release too: PluginDeviceBridge maps
+    // EncoderReleased -> `dialUp`, which starterpack-style dial actions
+    // (switch_profile.rs dial_up, device_brightness.rs) act on. Without this
+    // the bridge only ever saw dialDown on press-only families (AKP05E) and
+    // every dial_up-driven plugin action was dead (found live 2026-07-02:
+    // Switch Profile dial pressed -> no dialUp -> no switchProfile event).
+    // The real wire EncoderReleased (AKP03 v3) is deliberately NOT forwarded
+    // to the bridge (dispatch() returns early) so dialUp fires exactly once
+    // per press on every family. Emitted directly — NOT via dispatch() — so
+    // the binding's onRelease chain still only runs on a real wire release.
+    core::DeviceEvent rel{};
+    rel.kind = core::DeviceEvent::Kind::EncoderReleased;
+    rel.index = encIndex;
+    rel.value = 0;
+    emit deviceEvent(m_activeDeviceId, rel);
     // Note: EncoderBinding has no onRelease field as of profile.hpp:113-118.
     // If a Phase-16 onRelease is added, run it here.
 }
