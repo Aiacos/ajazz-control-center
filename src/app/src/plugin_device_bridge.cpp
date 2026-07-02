@@ -794,11 +794,22 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
     // show_alert/show_ok) BEFORE the control-service guard, so the on-screen
     // key flashes even with no physical device attached.
     if (event == QStringLiteral("showAlert") || event == QStringLiteral("showOk")) {
-        std::uint8_t const cols = geometryForDevice(ctx.deviceId).keyCols;
-        int const spaPos =
-            ctx.controller == QLatin1String("Encoder") ? ctx.column : ctx.row * cols + ctx.column;
+        auto const geo = geometryForDevice(ctx.deviceId);
+        QString spaController = ctx.controller;
+        int spaPos = 0;
+        if (ctx.controller == QLatin1String("Encoder") && ctx.row == 1) {
+            // audit 6.2/6.3: a touch-zone context (row 1) maps to the SPA
+            // "Keypad" slot appended after the key grid.
+            int const keyCount = geo.keyCount > 0 ? geo.keyCount : geo.keyCols * geo.keyRows;
+            spaController = QStringLiteral("Keypad");
+            spaPos = keyCount + ctx.column;
+        } else if (ctx.controller == QLatin1String("Encoder")) {
+            spaPos = ctx.column;
+        } else {
+            spaPos = ctx.row * geo.keyCols + ctx.column;
+        }
         emit instanceFeedback(
-            ctx.deviceId, ctx.controller, spaPos, event == QStringLiteral("showOk"));
+            ctx.deviceId, spaController, spaPos, event == QStringLiteral("showOk"));
     }
 
     // Guard: if m_control is null (test shim without a real control service) we
@@ -965,12 +976,26 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
                            ctx.column,
                            e.what());
         }
-        emit liveInstanceVisual(ctx.deviceId,
-                                QStringLiteral("Encoder"),
-                                ctx.column,
-                                mirrorSafeDataUri(dataUri),
-                                QString(),
-                                false);
+        // audit 6.3: a touch-zone context (row 1) mirrors to its SPA slot —
+        // the "Keypad" position appended after the key grid — NOT the dial
+        // slot, which it used to overwrite.
+        if (ctx.row == 1) {
+            auto const geo = geometryForDevice(ctx.deviceId);
+            int const keyCount = geo.keyCount > 0 ? geo.keyCount : geo.keyCols * geo.keyRows;
+            emit liveInstanceVisual(ctx.deviceId,
+                                    QStringLiteral("Keypad"),
+                                    keyCount + ctx.column,
+                                    mirrorSafeDataUri(dataUri),
+                                    QString(),
+                                    false);
+        } else {
+            emit liveInstanceVisual(ctx.deviceId,
+                                    QStringLiteral("Encoder"),
+                                    ctx.column,
+                                    mirrorSafeDataUri(dataUri),
+                                    QString(),
+                                    false);
+        }
         return;
     }
 
@@ -1016,8 +1041,20 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
     // the title to the SPA slot and stop; the keypad keyIndex/composite math
     // below would target a wrong key.
     if (ctx.controller == QLatin1String("Encoder")) {
-        emit liveInstanceVisual(
-            ctx.deviceId, QStringLiteral("Encoder"), ctx.column, QString(), title, true);
+        // audit 6.3: touch-zone titles (row 1) mirror to the SPA touch slot.
+        if (ctx.row == 1) {
+            auto const geo = geometryForDevice(ctx.deviceId);
+            int const keyCount = geo.keyCount > 0 ? geo.keyCount : geo.keyCols * geo.keyRows;
+            emit liveInstanceVisual(ctx.deviceId,
+                                    QStringLiteral("Keypad"),
+                                    keyCount + ctx.column,
+                                    QString(),
+                                    title,
+                                    true);
+        } else {
+            emit liveInstanceVisual(
+                ctx.deviceId, QStringLiteral("Encoder"), ctx.column, QString(), title, true);
+        }
         return;
     }
 
@@ -1464,8 +1501,13 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         int const zone =
             std::min(static_cast<int>((x * kEncoderCount) / kTouchStripRangeX), kEncoderCount - 1);
 
-        // CR-02 / WR-04: scope lookup to this device.
-        auto const ctxOpt = m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, zone);
+        // CR-02 / WR-04: scope lookup to this device. audit 6.2: a dedicated
+        // touch-zone binding registers at row 1; fall back to the dial context
+        // (row 0) on AKP05-class devices where the dial owns its strip segment.
+        auto ctxOpt = m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 1, zone);
+        if (!ctxOpt.has_value()) {
+            ctxOpt = m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, zone);
+        }
         if (!ctxOpt.has_value()) {
             return;
         }
@@ -1771,8 +1813,15 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             // Mount-time dial layout render: paint the manifest layout/icon the
             // moment the dial action lands (the plugin's setFeedback, when it
             // comes, updates items on top). On an in-place rebind drop the old
-            // action's accumulated feedback first.
+            // action's accumulated feedback first, and tell the DISPLACED
+            // plugin its instance is gone (audit 6.13 — keypad parity;
+            // without willDisappear the old plugin keeps streaming
+            // setFeedback/setImage for a dial it no longer owns).
             if (encActionChanged) {
+                m_server->sendEvent(priorEnc->pluginUuid,
+                                    eventEnvelope(QStringLiteral("willDisappear"),
+                                                  *priorEnc,
+                                                  instancePayload(*priorEnc)));
                 m_encoderFeedback.erase(ctxId);
                 m_encoderLayoutOverride.erase(ctxId);
             }
@@ -1791,11 +1840,15 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
 
     // Enumerate touch-zone bindings (0-based zone index in Profile::touchZones).
     //
-    // CONVENTION LOCK (A2 / Pitfall 5): touch-zone contexts are registered under
-    // controller="Encoder", row=0, column=zoneIndex.  This MUST match the locked
-    // TouchUp lookup in onDeviceEvent (~line 628):
-    //     m_registry.byCoord(deviceId, "Encoder", 0, zone)
-    // Do NOT change this registration convention without also changing that lookup.
+    // CONVENTION LOCK (A2 / Pitfall 5, revised for audit 6.2): touch-zone
+    // contexts are registered under controller="Encoder", row=1,
+    // column=zoneIndex — row 1 so they no longer COLLIDE with encoder i
+    // (controller="Encoder", row=0, column=i): with both bound, the identical
+    // tuple made dial events carry the touch action's uuid and vice versa.
+    // This MUST match the TouchUp lookup in onDeviceEvent, which tries
+    //     m_registry.byCoord(deviceId, "Encoder", 1, zone)   [touch binding]
+    // and falls back to row 0 (the dial owns its strip segment on AKP05-class
+    // devices). Do NOT change either side without the other.
     for (auto const& [zoneIdx, tzBinding] : prof.touchZones) {
         for (auto const& action : tzBinding.onTap) {
             if (action.kind != core::ActionKind::Plugin) {
@@ -1813,11 +1866,12 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 continue;
             }
 
-            // Register under controller="Encoder", row=0, column=zoneIndex.
+            // Register under controller="Encoder", row=1, column=zoneIndex
+            // (row 1 = touch zone; row 0 = the dial itself — audit 6.2).
             ActionContext ctx;
             ctx.deviceId = deviceId;
             ctx.pageId = pageId;
-            ctx.row = 0;
+            ctx.row = 1;
             ctx.column = static_cast<int>(zoneIdx);
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
@@ -1829,6 +1883,16 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
             // audit 6.8 (TouchZoneBinding carries no OpenDeck-shaped instance).
             ctx.title = titleFromBinding(std::nullopt, tzBinding.state);
+
+            // audit 6.13: in-place rebind parity — tell the displaced plugin
+            // its touch instance is gone (same as the keypad/encoder loops).
+            auto const priorTz = m_registry.byContext(ContextRegistry::deriveContextId(ctx));
+            if (priorTz.has_value() && priorTz->actionUUID != ctx.actionUUID) {
+                m_server->sendEvent(priorTz->pluginUuid,
+                                    eventEnvelope(QStringLiteral("willDisappear"),
+                                                  *priorTz,
+                                                  instancePayload(*priorTz)));
+            }
 
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);
@@ -2097,11 +2161,18 @@ PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) co
             keyCols = 5; // AKP05E default, matches geometryForDevice's fallback
         }
         // SPA touch slots are the "Keypad" row appended after the key grid, but
-        // the bridge registers touch contexts under ("Encoder", 0, zone) — the
+        // the bridge registers touch contexts under ("Encoder", 1, zone) — the
         // Keypad row/col math missed them and every PI set/getSettings for a
-        // touch action was silently dropped (audit 6.5).
+        // touch action was silently dropped (audit 6.5; row moved 0 -> 1 by
+        // audit 6.2 to stop colliding with the dial context).
         int const keyCount = geo.keyCount > 0 ? geo.keyCount : keyCols * geo.keyRows;
         if (keyCount > 0 && position >= keyCount) {
+            // Dedicated touch-zone binding first; dial-owns-segment fallback.
+            auto const touchCtx =
+                m_registry.byCoord(device, QStringLiteral("Encoder"), 1, position - keyCount);
+            if (touchCtx.has_value()) {
+                return touchCtx;
+            }
             effectiveController = QStringLiteral("Encoder");
             row = 0;
             column = position - keyCount;

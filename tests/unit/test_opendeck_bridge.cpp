@@ -173,7 +173,8 @@ TEST_CASE("profileJson lays out keys/sliders with null for empty slots", "[opend
     REQUIRE(keys.at(1).isNull());
     REQUIRE(keys.at(2).isNull());
     QJsonObject const inst = keys.at(0).toObject();
-    REQUIRE(inst.value("context").toString() == "akp05e.Default.Keypad.0");
+    // 5-segment context (audit 4.3): trailing ".0" = Multi Action child index.
+    REQUIRE(inst.value("context").toString() == "akp05e.Default.Keypad.0.0");
     REQUIRE(inst.value("action").toObject().value("uuid").toString() == "com.ajazz.sysmon.cpu");
     REQUIRE(inst.value("states").toArray().size() == 1);
     REQUIRE(inst.value("states").toArray().at(0).toObject().value("text").toString() == "ON");
@@ -201,7 +202,7 @@ TEST_CASE("profileJson appends touch-strip zones after the keypad in keys[]", "[
     REQUIRE(keys.at(0).isNull());
     // ...and the first touch zone (position 10) is the bound instance.
     QJsonObject const touch = keys.at(10).toObject();
-    REQUIRE(touch.value("context").toString() == "akp05e.Default.Keypad.10");
+    REQUIRE(touch.value("context").toString() == "akp05e.Default.Keypad.10.0");
     REQUIRE(touch.value("states").toArray().at(0).toObject().value("text").toString() == "Vol");
     REQUIRE(keys.at(11).isNull());
 }

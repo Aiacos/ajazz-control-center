@@ -43,6 +43,14 @@ namespace opendeck_detail {
 /// Serialise any QJsonValue (object/array/scalar) to a compact JSON string.
 [[nodiscard]] QString jsonToString(QJsonValue const& value);
 
+/// Build the SPA instance-context string. Upstream OpenDeck contexts carry
+/// FIVE segments — "device.profile.controller.position.index" — where the
+/// trailing index is the Multi Action child index (0 = top-level). The SPA's
+/// PropertyInspectorView reads split[4] as isInMultiAction, so the 4-segment
+/// form made EVERY PI believe it was inside a Multi Action (audit 4.3).
+[[nodiscard]] QString
+spaContext(QString const& device, QString const& profile, QString const& controller, int position);
+
 /// Map a DeviceModel::capabilitiesFor() map (+ codename) to an OpenDeck
 /// DeviceInfo object {id,name,rows,columns,encoders,touchpoints,type}.
 [[nodiscard]] QJsonObject deviceInfoJson(QString const& codename, QVariantMap const& caps);

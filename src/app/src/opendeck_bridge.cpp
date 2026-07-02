@@ -94,6 +94,10 @@ struct Ctx {
 
 /// Parse a context STRING. Parsed from the right (position last, controller
 /// second-last, device first) so a profile name containing '.' is tolerated.
+/// Accepts BOTH the legacy 4-segment form and the upstream 5-segment form
+/// "device.profile.controller.position.index" (audit 4.3): when the segment
+/// in controller position is itself numeric, the trailing segment is the
+/// Multi Action child index and is dropped.
 Ctx parseCtxString(QString const& s) {
     Ctx c;
     QStringList parts = s.split(QLatin1Char('.'));
@@ -103,6 +107,13 @@ Ctx parseCtxString(QString const& s) {
     bool ok = false;
     c.position = parts.takeLast().toInt(&ok);
     c.controller = parts.takeLast();
+    bool controllerIsNumeric = false;
+    c.controller.toInt(&controllerIsNumeric);
+    if (parts.size() >= 3 && ok && controllerIsNumeric) {
+        // 5-segment form: what we read as position was the child index.
+        c.position = c.controller.toInt(&ok);
+        c.controller = parts.takeLast();
+    }
     c.device = parts.takeFirst();
     c.profile = parts.join(QLatin1Char('.'));
     c.valid = ok && c.position >= 0 && !c.controller.isEmpty();
@@ -527,8 +538,7 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         // Shape the freshly-committed binding back as the ActionInstance the SPA
         // assigns into its slot.
         core::Profile const& p = m_profiles->activeProfile();
-        QString const ctx = c.device + QStringLiteral(".") + c.profile + QStringLiteral(".") +
-                            c.controller + QStringLiteral(".") + QString::number(c.position);
+        QString const ctx = spaContext(c.device, c.profile, c.controller, c.position);
         if (c.controller == QLatin1String("Encoder")) {
             auto const it = p.encoders.find(static_cast<std::uint16_t>(c.position));
             return str(it != p.encoders.end() ? enrichInstance(encoderInstanceJson(it->second, ctx))
@@ -725,8 +735,7 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
         // Return the ActionInstance now at the destination (the SPA slots it in).
         core::Profile const& p = m_profiles->activeProfile();
-        QString const ctx = dst.device + QStringLiteral(".") + dst.profile + QStringLiteral(".") +
-                            dst.controller + QStringLiteral(".") + QString::number(dst.position);
+        QString const ctx = spaContext(dst.device, dst.profile, dst.controller, dst.position);
         if (dst.controller == QLatin1String("Encoder")) {
             auto const it = p.encoders.find(static_cast<std::uint16_t>(dst.position));
             return str(it != p.encoders.end() ? enrichInstance(encoderInstanceJson(it->second, ctx))
@@ -1014,28 +1023,35 @@ void OpenDeckBridge::notifyLiveInstanceVisual(QString const& deviceId,
     if (QString::fromStdString(profile.deviceCodename) != deviceId) {
         return; // live paint for a device whose profile is not the active one
     }
-    // Resolve the bound instance for the slot; keys and encoders live in
-    // different profile maps but share the ActionInstance JSON shape (the SPA
-    // renders sliders with the same Key component, context
-    // device.profileName.Encoder.N — same form profileJson emits).
+    // Resolve the bound instance for the slot; keys, encoders and touch zones
+    // live in different profile maps but share the ActionInstance JSON shape
+    // (the SPA renders sliders with the same Key component; touch zones are the
+    // "Keypad" positions appended after the key grid — profileJson convention).
+    QString const profileName = QString::fromStdString(profile.name);
+    int const keyCount =
+        m_devices != nullptr
+            ? m_devices->capabilitiesFor(deviceId).value(QStringLiteral("keyCount")).toInt()
+            : 0;
     QJsonValue instVal;
-    QString ctx;
+    QString const ctx = opendeck_detail::spaContext(deviceId, profileName, controller, position);
     if (controller == QLatin1String("Encoder")) {
         auto const it = profile.encoders.find(static_cast<std::uint16_t>(position));
         if (it == profile.encoders.end()) {
             return; // stale paint for an unbound dial
         }
-        ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
-              QStringLiteral(".Encoder.") + QString::number(position);
         instVal = enrichInstance(opendeck_detail::encoderInstanceJson(it->second, ctx));
+    } else if (keyCount > 0 && position >= keyCount) {
+        // audit 6.3: touch-zone visuals resolve profile.touchZones, not keys.
+        auto const it = profile.touchZones.find(static_cast<std::uint8_t>(position - keyCount));
+        if (it == profile.touchZones.end()) {
+            return; // stale paint for an unbound touch zone
+        }
+        instVal = enrichInstance(opendeck_detail::touchInstanceJson(it->second, ctx));
     } else {
         auto const it = profile.keys.find(static_cast<std::uint16_t>(position));
         if (it == profile.keys.end()) {
             return; // stale paint for an unbound slot
         }
-        // Same context form the SPA's Key slots carry (profileJson: NAME as id).
-        ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
-              QStringLiteral(".Keypad.") + QString::number(position);
         instVal = enrichInstance(opendeck_detail::keyInstanceJson(it->second, ctx));
     }
     if (!instVal.isObject()) {
@@ -1064,9 +1080,8 @@ void OpenDeckBridge::notifyInstanceFeedback(QString const& deviceId,
         return; // feedback for a device whose profile is not the active one
     }
     // Same SPA context form the Key slots carry (see notifyLiveInstanceVisual).
-    QString const ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
-                        QStringLiteral(".") + controller + QStringLiteral(".") +
-                        QString::number(position);
+    QString const ctx = opendeck_detail::spaContext(
+        deviceId, QString::fromStdString(profile.name), controller, position);
     emit event(ok ? QStringLiteral("show_ok") : QStringLiteral("show_alert"),
                opendeck_detail::jsonToString(QJsonValue(ctx)));
 }

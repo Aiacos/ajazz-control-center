@@ -2208,13 +2208,18 @@ TEST_CASE("PluginDeviceBridge populateContexts registers touch zone as Encoder c
 
     pump19(500);
 
-    // Touch zone at index 1 must be registered under controller="Encoder", row=0, col=1.
-    // This matches the LOCKED onDeviceEvent TouchUp lookup:
-    //   m_registry.byCoord(deviceId, "Encoder", 0, zone)  (~line 628)
-    // Do NOT change that lookup — only feed it the registration it expects.
+    // Touch zone at index 1 must be registered under controller="Encoder",
+    // row=1, col=1 (audit 6.2: row 1 so a touch zone no longer collides with
+    // encoder 1). This matches the onDeviceEvent TouchUp lookup, which tries
+    //   m_registry.byCoord(deviceId, "Encoder", 1, zone)
+    // first and falls back to row 0 (dial-owns-segment). Keep both in sync.
     auto const ctxOpt =
-        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 0, 1);
+        bridge->registry().byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 1, 1);
     CHECK(ctxOpt.has_value());
+    // ...and must NOT shadow the dial slot at row 0.
+    CHECK_FALSE(bridge->registry()
+                    .byCoord(QStringLiteral("akp05e"), QStringLiteral("Encoder"), 0, 1)
+                    .has_value());
 
     // willAppear must have been emitted to the client.
     auto const names = receivedEventNames(msgSpy);

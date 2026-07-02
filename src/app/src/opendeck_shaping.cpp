@@ -24,6 +24,15 @@
 
 namespace ajazz::app::opendeck_detail {
 
+QString
+spaContext(QString const& device, QString const& profile, QString const& controller, int position) {
+    // Five segments (upstream Context::to_string): the trailing ".0" is the
+    // Multi Action child index — 0 for every top-level instance. Without it
+    // the SPA read split[4]=undefined => isInMultiAction always true (4.3).
+    return device + QLatin1Char('.') + profile + QLatin1Char('.') + controller + QLatin1Char('.') +
+           QString::number(position) + QStringLiteral(".0");
+}
+
 namespace {
 
 QString rgbHex(core::Rgb const& c) {
@@ -332,8 +341,7 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
     QJsonArray keys;
     for (int i = 0; i < keyCount; ++i) {
         auto const it = profile.keys.find(static_cast<std::uint16_t>(i));
-        QString const ctx =
-            device + QStringLiteral(".") + id + QStringLiteral(".Keypad.") + QString::number(i);
+        QString const ctx = spaContext(device, id, QStringLiteral("Keypad"), i);
         keys.append(it != profile.keys.end() ? keyInstanceJson(it->second, ctx)
                                              : QJsonValue(QJsonValue::Null));
     }
@@ -342,17 +350,14 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
     // OpenDeck's DeviceView reads them (`profile.keys[(rows*cols)+i]`).
     for (int i = 0; i < touchCount; ++i) {
         auto const it = profile.touchZones.find(static_cast<std::uint8_t>(i));
-        int const pos = keyCount + i;
-        QString const ctx =
-            device + QStringLiteral(".") + id + QStringLiteral(".Keypad.") + QString::number(pos);
+        QString const ctx = spaContext(device, id, QStringLiteral("Keypad"), keyCount + i);
         keys.append(it != profile.touchZones.end() ? touchInstanceJson(it->second, ctx)
                                                    : QJsonValue(QJsonValue::Null));
     }
     QJsonArray sliders;
     for (int i = 0; i < encoderCount; ++i) {
         auto const it = profile.encoders.find(static_cast<std::uint16_t>(i));
-        QString const ctx =
-            device + QStringLiteral(".") + id + QStringLiteral(".Encoder.") + QString::number(i);
+        QString const ctx = spaContext(device, id, QStringLiteral("Encoder"), i);
         sliders.append(it != profile.encoders.end() ? encoderInstanceJson(it->second, ctx)
                                                     : QJsonValue(QJsonValue::Null));
     }
