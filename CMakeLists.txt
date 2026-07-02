@@ -376,6 +376,21 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # .deb
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lorenzo Argentieri <uni.lorenzo.a@gmail.com>")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    # SHLIBDEPS only sees LINKED sonames (it yields the versioned libqt6* deps, including the Qt >=
+    # 6.8 floor the binary is built against — installs fail cleanly on older distros instead of
+    # shipping a broken app). Everything loaded at RUNTIME must be declared by hand: the QML modules
+    # the app imports (QtQuick/Controls/Dialogs/Effects/Layouts/WebEngine/WebChannel — names
+    # verified against Ubuntu 25.04 "plucky", the first Ubuntu with Qt 6.8) and python3 for the
+    # out-of-process plugin host. nodejs is only needed by node-based .sdPlugin bundles ->
+    # Recommends, not Depends. The fully self-contained Linux artifact remains the Flatpak (org.kde
+    # 6.8 runtime bundles Qt + QML + sidecar + sysmon).
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "python3 (>= 3.10), qml6-module-qtquick, qml6-module-qtquick-controls, \
+qml6-module-qtquick-dialogs, qml6-module-qtquick-effects, qml6-module-qtquick-layouts, \
+qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, \
+qml6-module-qtwebengine, qml6-module-qtwebchannel"
+    )
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "nodejs (>= 18)")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${PROJECT_HOMEPAGE_URL}")
     set(_pkg "${CMAKE_SOURCE_DIR}/packaging/linux")
@@ -387,6 +402,13 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
     set(CPACK_RPM_PACKAGE_URL "${PROJECT_HOMEPAGE_URL}")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
+    # Same runtime-vs-linked split as the .deb block above: AUTOREQ covers the linked libs; QML
+    # modules + the python plugin host are runtime-loaded. Fedora ships every QtQuick QML module in
+    # qt6-qtdeclarative.
+    set(CPACK_RPM_PACKAGE_REQUIRES
+        "python3 >= 3.10, qt6-qtdeclarative >= 6.8, qt6-qtwebengine >= 6.8, qt6-qtwebchannel >= 6.8"
+    )
+    set(CPACK_RPM_PACKAGE_SUGGESTS "nodejs")
     # CPack's RPM generator ignores CPACK_PACKAGE_DESCRIPTION; the per-generator variable is
     # required to populate the spec %description block. Build the prose with string(APPEND) so each
     # source line stays under cmake-lint's 100-column ceiling without splitting the runtime value.
