@@ -678,22 +678,12 @@ if(AJAZZ_HAVE_WEBENGINE)
     target_link_libraries(
         ajazz-control-center PRIVATE Qt6::WebEngineQuick Qt6::WebChannelQuick Qt6::WebEngineCore
     )
-    # Qt6::WebEngineQuickPrivate exposes the private include path required by plugin_manager.cpp to
-    # call profile->userScripts()->insert(...). QQuickWebEngineScriptCollection is only
-    # forward-declared in the public qquickwebengineprofile.h; its complete definition lives in the
-    # private header qquickwebenginescriptcollection_p.h. The symbols already live in
-    # Qt6::WebEngineQuick (already linked above) — WebEngineQuickPrivate only adds the include path.
-    find_package(Qt6 QUIET COMPONENTS WebEngineQuickPrivate)
-    if(Qt6WebEngineQuickPrivate_FOUND)
-        target_link_libraries(ajazz-control-center PRIVATE Qt6::WebEngineQuickPrivate)
-    else()
-        # Fallback: splice the private include dir directly for older/slimmer Qt installs.
-        set(_we_priv "${Qt6WebEngineQuick_INCLUDE_DIRS}/QtWebEngineQuick"
-                     "/${Qt6WebEngineQuick_VERSION}/QtWebEngineQuick/private"
-        )
-        string(CONCAT _we_priv_path ${_we_priv})
-        target_include_directories(ajazz-control-center PRIVATE "${_we_priv_path}")
-    endif()
+    # NO WebEngineQuick PRIVATE headers: the HTML-plugin shim injection uses the public
+    # WebEngineCore API (QWebEngineProfile::scripts()). The former Qt6::WebEngineQuickPrivate link
+    # existed only for a dead include of qquickwebenginescriptcollection_p.h in plugin_manager.cpp —
+    # and aqt-provisioned CI/packaging Qt installs ship the *Private CMake package but NOT the
+    # private headers, so every packaging leg broke (Release run 28623566703). Do not reintroduce
+    # private WebEngine headers without checking aqt actually ships them.
     target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBENGINE=1)
     # OpenDeckPane.qml is the embeddable OpenDeck SPA host (WebEngineView + QWebChannel) that
     # ProfileEditor mounts as the streamdeck editor area. It imports QtWebEngine/QtWebChannel which

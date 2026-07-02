@@ -63,16 +63,14 @@
 #include <QtWebEngineCore/QWebEngineProfile>
 #include <QtWebEngineCore/QWebEngineScriptCollection>
 #include <QUrl>
-// MAINTAINER NOTE (WR-01): QQuickWebEngineScriptCollection is only forward-declared in the
-// public qquickwebengineprofile.h header; its complete type definition lives in the private
-// header below. There is no public-API alternative in Qt 6.7 that lets callers call
-// userScripts()->insert() without the private header. This is a known Qt API gap.
-// If this include fails after a Qt minor-version bump, verify the private header path
-// has not moved and update Qt6::WebEngineQuickPrivate in CMakeLists.txt accordingly.
-// Tracked against Qt bug tracker for a public QQuickWebEngineScriptCollection declaration.
-static_assert(QT_VERSION >= QT_VERSION_CHECK(6, 7, 0),
-              "qquickwebenginescriptcollection_p.h layout may have changed; verify include path");
-#include <QtWebEngineQuick/private/qquickwebenginescriptcollection_p.h>
+// NOTE: no QtWebEngineQuick PRIVATE headers here. The HTML-plugin shim is
+// injected through the PUBLIC WebEngineCore API (m_htmlProfile->scripts() —
+// QWebEngineProfile::scripts() returns the public QWebEngineScriptCollection).
+// A leftover include of qquickwebenginescriptcollection_p.h — needed only for
+// the QML-side QQuickWebEngineProfile::userScripts(), which nothing calls —
+// broke every aqt-provisioned CI/packaging leg (Release run 28623566703): aqt's
+// qtwebengine module ships the Qt6WebEngineQuickPrivate CMake package but NOT
+// the private headers themselves.
 #endif
 
 namespace ajazz::app {
