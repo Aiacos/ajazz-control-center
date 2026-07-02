@@ -566,7 +566,18 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
             owner = m_contextOwnerResolver(senderIt->uuid);
         }
         if (!owner.isEmpty()) {
-            sendEvent(owner, msg); // full-envelope overload
+            // Canonicalize the context before forwarding: the PI addresses its
+            // instance in the SPA dot form, but the plugin only ever saw the
+            // wire `#` id in willAppear — a verbatim forward can't be matched
+            // by the standard `this.actions[ev.context]` SDK pattern (audit 2.4).
+            QJsonObject forwarded = msg;
+            if (m_contextCanonicalizer) {
+                QString const canonical = m_contextCanonicalizer(senderIt->uuid);
+                if (!canonical.isEmpty()) {
+                    forwarded[QStringLiteral("context")] = canonical;
+                }
+            }
+            sendEvent(owner, forwarded); // full-envelope overload
         } else {
             AJAZZ_LOG_WARN("plugin-server",
                            "sendToPlugin from PI context={} but no owner plugin resolved; dropping",
@@ -662,13 +673,47 @@ void SdPluginServer::setDeviceInfoResolver(std::function<QJsonObject(QString con
     m_deviceInfoResolver = std::move(resolver);
 }
 
+void SdPluginServer::setContextCanonicalizer(std::function<QString(QString const&)> canonicalizer) {
+    m_contextCanonicalizer = std::move(canonicalizer);
+}
+
+QStringList SdPluginServer::propertyInspectorUuids() const {
+    QStringList out;
+    for (auto const& c : m_connections) {
+        if (c.isPropertyInspector && c.socket != nullptr && !c.uuid.isEmpty()) {
+            out.append(c.uuid);
+        }
+    }
+    return out;
+}
+
 QWebSocket* SdPluginServer::propertyInspectorSocketForContext(QString const& context) const {
     // F3: a PI connection is keyed by the instance context in its uuid slot and
     // flagged isPropertyInspector. Only live (non-null) sockets are returned.
     auto it = std::find_if(m_connections.begin(), m_connections.end(), [&context](auto const& c) {
         return c.isPropertyInspector && c.uuid == context && c.socket != nullptr;
     });
-    return (it == m_connections.end()) ? nullptr : it->socket;
+    if (it != m_connections.end()) {
+        return it->socket;
+    }
+    // Cross-namespace fallback (audit 2.4): plugins address
+    // sendToPropertyInspector with the wire `#` id, while the PI registered
+    // with the SPA dot form — exact match never hits. Compare both through the
+    // canonicalizer when wired.
+    if (m_contextCanonicalizer) {
+        QString const wanted = m_contextCanonicalizer(context);
+        if (!wanted.isEmpty()) {
+            auto it2 = std::find_if(
+                m_connections.begin(), m_connections.end(), [this, &wanted](auto const& c) {
+                    return c.isPropertyInspector && c.socket != nullptr &&
+                           m_contextCanonicalizer(c.uuid) == wanted;
+                });
+            if (it2 != m_connections.end()) {
+                return it2->socket;
+            }
+        }
+    }
+    return nullptr;
 }
 
 void SdPluginServer::injectAction(QString const& pluginUuid, QJsonObject const& action) {

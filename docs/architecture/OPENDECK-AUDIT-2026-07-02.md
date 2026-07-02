@@ -18,11 +18,11 @@ contract) before being recorded. Status letters: **F** fixed, **O** open,
 
 | # | Sev | Finding | Status |
 |---|-----|---------|--------|
-| 2.1 | P1 | `didReceiveSettings` always echoed to the plugin, never to a WS PI; `setSettings` self-echo can loop plugins that setSettings inside didReceiveSettings | O |
-| 2.2 | P1 | `set/getGlobalSettings` from a WS PI key the store on the PI's context string, not the owning plugin — PI-saved globals unreadable by the plugin | O |
-| 2.3 | P1 | `setGlobalSettings` never emits `didReceiveGlobalSettings` to the other party (spec: notify plugin + all its PIs) | O |
-| 2.4 | P2 | Two context namespaces: PI registers/talks SPA dot-form, plugin sees wire `#` form; `sendToPlugin` forwarded verbatim → plugin can't match instance; `sendToPropertyInspector` exact-uuid match never hits the PI | O |
-| 2.5 | P2 | `get*Settings` optional `id` correlator never echoed on `didReceive*` (modern Elgato SDK promise helper breaks) | O |
+| 2.1 | P1 | `didReceiveSettings` always echoed to the plugin, never to a WS PI; `setSettings` self-echo can loop plugins that setSettings inside didReceiveSettings | F |
+| 2.2 | P1 | `set/getGlobalSettings` from a WS PI key the store on the PI's context string, not the owning plugin — PI-saved globals unreadable by the plugin | F |
+| 2.3 | P1 | `setGlobalSettings` never emits `didReceiveGlobalSettings` to the other party (spec: notify plugin + all its PIs) | F |
+| 2.4 | P2 | Two context namespaces: PI registers/talks SPA dot-form, plugin sees wire `#` form; `sendToPlugin` forwarded verbatim → plugin can't match instance; `sendToPropertyInspector` exact-uuid match never hits the PI | F |
+| 2.5 | P2 | `get*Settings` optional `id` correlator never echoed on `didReceive*` (modern Elgato SDK promise helper breaks) | F |
 
 ## Cluster 3 — plugin lifecycle (plugin_manager + catalog)
 

@@ -549,6 +549,12 @@ public slots:
      */
     [[nodiscard]] std::optional<ActionContext> lookupContext(QString const& contextId) const;
 
+    /// Canonical wire id for @p contextId (accepts both wire and SPA forms via
+    /// lookupContext); returns the input unchanged when unresolved. Wired into
+    /// SdPluginServer::setContextCanonicalizer so the PI<->plugin relays speak
+    /// one context namespace (audit 2.4).
+    [[nodiscard]] QString canonicalContextId(QString const& contextId) const;
+
     /**
      * @brief Resolve a Property Inspector context to a registered ActionContext.
      *

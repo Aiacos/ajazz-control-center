@@ -1777,17 +1777,13 @@ TEST_CASE("PluginDeviceBridgeE2E plugin setSettings persists and getSettings ech
                                   QJsonObject{{QStringLiteral("city"), QStringLiteral("Rome")}}}});
     pump19(200);
 
-    // setSettings echoes didReceiveSettings carrying the saved settings.
+    // Spec / settings.rs: setSettings notifies the OPPOSITE party only. The
+    // sender is the plugin and no PI is connected -> NO self-echo (the old
+    // echo made setSettings-inside-didReceiveSettings plugins loop; audit 2.1).
     auto const ev1 = firstEventForEvent(msgSpy, QStringLiteral("didReceiveSettings"));
-    REQUIRE_FALSE(ev1.isEmpty());
-    CHECK(ev1.value(QStringLiteral("payload"))
-              .toObject()
-              .value(QStringLiteral("settings"))
-              .toObject()
-              .value(QStringLiteral("city"))
-              .toString() == QStringLiteral("Rome"));
+    CHECK(ev1.isEmpty());
 
-    // getSettings returns the persisted settings.
+    // getSettings replies to the REQUESTER with the persisted settings.
     msgSpy.clear();
     bridge->onAction(QStringLiteral("com.test.plug"),
                      QJsonObject{{QStringLiteral("event"), QStringLiteral("getSettings")},

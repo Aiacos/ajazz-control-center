@@ -171,6 +171,20 @@ public:
     /// still register but cannot route until a resolver is provided.
     void setContextOwnerResolver(std::function<QString(QString const& context)> resolver);
 
+    /// Inject the context canonicalizer (SPA dot-form -> wire `#` id; identity
+    /// for already-canonical/unknown ids). Two verbatim relay seams need it
+    /// (audit 2.4): a PI's sendToPlugin carries the SPA context the plugin
+    /// cannot match against its willAppear ids, and a plugin's
+    /// sendToPropertyInspector carries the wire id that never exact-matches the
+    /// PI's SPA-form registration uuid. Wired to
+    /// PluginDeviceBridge::canonicalContextId. Unset => prior behaviour.
+    void setContextCanonicalizer(std::function<QString(QString const& context)> canonicalizer);
+
+    /// Registered uuids of live Property Inspector connections (each PI
+    /// registers with its instance context string as the uuid). Lets the
+    /// bridge address didReceive* notifications to the PI side (audit 2.1/2.3).
+    [[nodiscard]] QStringList propertyInspectorUuids() const;
+
     /// Inject the device-info resolver used to populate the vendor
     /// `passHello.deviceInfo` (B7). The server does not own device geometry (the
     /// PluginDeviceBridge does), so the app wires this to
@@ -282,6 +296,9 @@ private:
     /// F3: context→owning-plugin resolver for Property Inspector routing.
     /// Unset by default; see setContextOwnerResolver().
     std::function<QString(QString const&)> m_contextOwnerResolver;
+
+    /// Unset by default; see setContextCanonicalizer().
+    std::function<QString(QString const&)> m_contextCanonicalizer;
 
     /// B7: device codename→Elgato deviceInfo resolver for passHello.deviceInfo.
     /// Unset by default; see setDeviceInfoResolver().

@@ -774,6 +774,11 @@ Application::Application(QObject* parent)
     //   resolver, backed by the bridge's ContextRegistry (the trusted
     //   context→plugin map). It routes sendToPlugin from a stock PI to the owner
     //   and lets us forward propertyInspectorDidAppear/…DidDisappear back.
+    // Audit 2.4: one context namespace on the PI<->plugin relays — the server
+    // canonicalizes SPA dot-form contexts to the wire `#` id via the bridge.
+    m_pluginServer->setContextCanonicalizer([this](QString const& context) -> QString {
+        return m_pluginBridge ? m_pluginBridge->canonicalContextId(context) : context;
+    });
     m_pluginServer->setContextOwnerResolver([this](QString const& context) -> QString {
         // Accept the SPA "device.profile.controller.position" context the PI
         // registers with, not only the bridge wire id — otherwise the PI's owner
@@ -809,7 +814,10 @@ Application::Application(QObject* parent)
             }
             QJsonObject const ev{
                 {QStringLiteral("action"), ctx->actionUUID},
-                {QStringLiteral("context"), context},
+                // Canonical wire id: the PI registered with the SPA dot form,
+                // which the plugin cannot match against its willAppear
+                // contexts (audit 2.4).
+                {QStringLiteral("context"), ajazz::app::ContextRegistry::deriveContextId(*ctx)},
                 {QStringLiteral("device"), ctx->deviceId},
                 {QStringLiteral("event"), eventName},
             };

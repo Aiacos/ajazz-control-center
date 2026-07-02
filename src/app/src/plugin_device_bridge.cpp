@@ -578,24 +578,60 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
         return false;
     }
 
-    // --- Plugin-wide (global) settings: keyed by pluginUuid only, no context. ---
-    if (event == QStringLiteral("setGlobalSettings")) {
-        QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
-        QString const json =
-            QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
-        if (!plugin_settings_store::writeGlobal(pluginUuid, json)) {
-            AJAZZ_LOG_WARN("plugin-bridge",
-                           "setGlobalSettings: write rejected for '{}'",
-                           pluginUuid.toStdString());
+    // --- Plugin-wide (global) settings: keyed by the OWNING plugin uuid. ---
+    // A WS Property Inspector registers with its instance CONTEXT string as
+    // its uuid; keying the store on the raw sender uuid parked PI-saved
+    // globals in a context-named bucket the plugin never reads (audit 2.2).
+    // Resolve the effective owner: sender-is-PI => the context's plugin.
+    if (event == QStringLiteral("setGlobalSettings") ||
+        event == QStringLiteral("getGlobalSettings")) {
+        QString globalOwner = pluginUuid;
+        bool senderIsPi = false;
+        if (auto const senderCtx = lookupContext(pluginUuid);
+            senderCtx.has_value() && !senderCtx->pluginUuid.isEmpty()) {
+            globalOwner = senderCtx->pluginUuid;
+            senderIsPi = (globalOwner != pluginUuid);
         }
-        return true;
-    }
-    if (event == QStringLiteral("getGlobalSettings")) {
-        QString const stored = plugin_settings_store::readGlobal(pluginUuid);
+        if (event == QStringLiteral("setGlobalSettings")) {
+            QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
+            QString const json =
+                QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+            if (!plugin_settings_store::writeGlobal(globalOwner, json)) {
+                AJAZZ_LOG_WARN("plugin-bridge",
+                               "setGlobalSettings: write rejected for '{}'",
+                               globalOwner.toStdString());
+                return true;
+            }
+            // Spec §5.2 / settings.rs: notify the OPPOSITE party. Sender is the
+            // plugin -> all of its open PIs; sender is a PI -> the plugin
+            // (audit 2.3 — nothing was ever notified).
+            QJsonObject const note{
+                {QStringLiteral("event"), QStringLiteral("didReceiveGlobalSettings")},
+                {QStringLiteral("payload"), QJsonObject{{QStringLiteral("settings"), settings}}}};
+            if (senderIsPi) {
+                m_server->sendEvent(globalOwner, note);
+            } else {
+                for (QString const& piUuid : m_server->propertyInspectorUuids()) {
+                    auto const piCtx = lookupContext(piUuid);
+                    if (piCtx.has_value() && piCtx->pluginUuid == globalOwner) {
+                        m_server->sendEvent(piUuid, note);
+                    }
+                }
+            }
+            return true;
+        }
+        // getGlobalSettings: reply to the REQUESTER (spec §4 — the reply goes
+        // back on the requesting connection, PI or plugin). Echo the optional
+        // `id` correlator (audit 2.5 — the modern SDK promise helper keys on it).
+        QString const stored = plugin_settings_store::readGlobal(globalOwner);
         QJsonObject const settings = QJsonDocument::fromJson(stored.toUtf8()).object();
-        m_server->sendEvent(pluginUuid,
-                            QStringLiteral("didReceiveGlobalSettings"),
-                            QJsonObject{{QStringLiteral("settings"), settings}});
+        QJsonObject reply{
+            {QStringLiteral("event"), QStringLiteral("didReceiveGlobalSettings")},
+            {QStringLiteral("payload"), QJsonObject{{QStringLiteral("settings"), settings}}}};
+        if (action.contains(QStringLiteral("id"))) {
+            reply.insert(QStringLiteral("id"), action.value(QStringLiteral("id")));
+        }
+        m_server->sendEvent(pluginUuid, reply);
         return true;
     }
 
@@ -638,6 +674,11 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
             return true;
         }
 
+        // Sender identity: the second authorisation branch fired iff the sender
+        // uuid resolved to this context but is not the owning plugin — i.e. the
+        // instance's Property Inspector.
+        bool const senderIsPi = (owner != pluginUuid);
+
         if (event == QStringLiteral("setSettings")) {
             QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
             QString const json =
@@ -646,16 +687,40 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
                 ctx.settingsJson = json;
                 m_registry.updateSettings(wireId, json); // keep keyDown/willAppear fresh
             }
-        } else {
-            // getSettings: reflect the persisted record (falls back to the in-ctx value).
-            QString const stored = plugin_settings_store::readContext(owner, wireId);
-            if (stored != QStringLiteral("{}") || ctx.settingsJson.isEmpty()) {
-                ctx.settingsJson = stored;
+            // Spec / settings.rs: setSettings notifies the OPPOSITE party — a
+            // self-echo made plugins that setSettings inside their
+            // didReceiveSettings handler loop forever (audit 2.1).
+            if (senderIsPi) {
+                m_server->sendEvent(
+                    owner,
+                    eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
+            } else {
+                for (QString const& piUuid : m_server->propertyInspectorUuids()) {
+                    auto const piCtx = lookupContext(piUuid);
+                    if (piCtx.has_value() && ContextRegistry::deriveContextId(*piCtx) == wireId) {
+                        m_server->sendEvent(piUuid,
+                                            eventEnvelope(QStringLiteral("didReceiveSettings"),
+                                                          ctx,
+                                                          instancePayload(ctx)));
+                    }
+                }
             }
+            return true;
         }
-        // Echo didReceiveSettings to the owning plugin (full Elgato envelope).
-        m_server->sendEvent(
-            owner, eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx)));
+        // getSettings: reflect the persisted record (falls back to the in-ctx
+        // value) and reply to the REQUESTER — the reply used to go to the
+        // plugin even when the PI asked, leaving PI forms blank (audit 2.1).
+        QString const stored = plugin_settings_store::readContext(owner, wireId);
+        if (stored != QStringLiteral("{}") || ctx.settingsJson.isEmpty()) {
+            ctx.settingsJson = stored;
+        }
+        QJsonObject reply =
+            eventEnvelope(QStringLiteral("didReceiveSettings"), ctx, instancePayload(ctx));
+        if (action.contains(QStringLiteral("id"))) {
+            reply.insert(QStringLiteral("id"),
+                         action.value(QStringLiteral("id"))); // audit 2.5 correlator
+        }
+        m_server->sendEvent(pluginUuid, reply);
         return true;
     }
 
@@ -1912,6 +1977,11 @@ std::optional<ActionContext> PluginDeviceBridge::lookupContext(QString const& co
         return exact;
     }
     return resolvePropertyInspectorContext(contextId);
+}
+
+QString PluginDeviceBridge::canonicalContextId(QString const& contextId) const {
+    auto const ctx = lookupContext(contextId);
+    return ctx.has_value() ? ContextRegistry::deriveContextId(*ctx) : contextId;
 }
 
 std::optional<ActionContext>
