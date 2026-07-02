@@ -90,7 +90,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     container:
-      image: bilelmoussaoui/flatpak-github-actions:kde-6.7
+      # kde-6.8: must match the manifest's runtime-version (Qt >= 6.8 needed by
+      # the wayland PRIVATE_CODE codegen in src/app/CMakeLists.txt).
+      image: bilelmoussaoui/flatpak-github-actions:kde-6.8
       options: --privileged
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2

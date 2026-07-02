@@ -1,6 +1,10 @@
 app-id: io.github.Aiacos.AjazzControlCenter
 runtime: org.kde.Platform
-runtime-version: '6.7'
+# 6.8 floor: the Phase 34 wayland codegen passes PRIVATE_CODE to
+# qt_generate_wayland_protocol_client_sources, which Qt < 6.8 rejects at
+# configure ("Unknown arguments"). Keep in lockstep with packaging/flathub and
+# the kde-<ver> container tag in .github/workflows/release.yml.
+runtime-version: '6.8'
 sdk: org.kde.Sdk
 # Rust toolchain for the out-of-process mirajazz Stream Dock sidecar
 # (streamdock-host). org.kde.Sdk is based on org.freedesktop.Sdk, so the
