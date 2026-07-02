@@ -285,6 +285,17 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
     QString const pluginsDir = userPluginsDir();
     extractStandalonePluginArchives(pluginsDir);
 
+    // Bundled first-party plugins (Phase 6c): seed any `<uuid>.sdPlugin`
+    // shipped in the install payload (share/ajazz-control-center/
+    // bundled-plugins/ on GenericDataLocation, or $AJAZZ_BUNDLED_PLUGINS_DIR
+    // for dev/test runs) into the user plugins dir on first run. A dir that
+    // already exists — or that the user quarantined (`.disabled`) or removed
+    // after a previous seed (the seed marker records that) — is left alone,
+    // so the user stays in control. Seeded plugins are first-party: persist
+    // the same per-plugin consent installFromCatalog records, so the
+    // unsigned-verify gate below admits them without the global toggle.
+    seedBundledPlugins(pluginsDir);
+
     // PLUGIN-14 verify gate (T-22-backdoor): scan every freshly-extracted
     // (or pre-existing) `.sdPlugin` directory and quarantine any whose
     // manifest fails Ed25519 verification. This closes the launch-sweep
@@ -1002,6 +1013,78 @@ bool PluginCatalogModel::consentToUnsigned() const {
     // This predicate is the single source of truth for unsigned consent.
     return m_allowUnsignedPlugins ||
            !qEnvironmentVariable("AJAZZ_ALLOW_UNTRUSTED_PLUGINS").isEmpty();
+}
+
+namespace {
+/// Recursive directory copy for the bundled-plugin seed. QFile::copy keeps
+/// permission bits, so the plugin/helper executables stay executable.
+bool copyDirRecursively(QString const& srcPath, QString const& dstPath) {
+    QDir const src(srcPath);
+    if (!src.exists() || !QDir().mkpath(dstPath)) {
+        return false;
+    }
+    for (QFileInfo const& info :
+         src.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+        QString const dst = dstPath + QLatin1Char('/') + info.fileName();
+        if (info.isDir()) {
+            if (!copyDirRecursively(info.absoluteFilePath(), dst)) {
+                return false;
+            }
+        } else if (!QFile::copy(info.absoluteFilePath(), dst)) {
+            return false;
+        }
+    }
+    return true;
+}
+} // namespace
+
+void PluginCatalogModel::seedBundledPlugins(QString const& pluginsDir) {
+    QStringList roots;
+    QString const envDir = qEnvironmentVariable("AJAZZ_BUNDLED_PLUGINS_DIR");
+    if (!envDir.isEmpty()) {
+        roots << envDir;
+    }
+    roots << QStandardPaths::locateAll(QStandardPaths::GenericDataLocation,
+                                       QStringLiteral("ajazz-control-center/bundled-plugins"),
+                                       QStandardPaths::LocateDirectory);
+    if (roots.isEmpty()) {
+        return;
+    }
+    QSettings settings;
+    for (QString const& root : roots) {
+        QDir const bundleRoot(root);
+        for (QString const& entry : bundleRoot.entryList({QStringLiteral("*.sdPlugin")},
+                                                         QDir::Dirs | QDir::NoDotAndDotDot)) {
+            QString const uuid = entry.chopped(9); // strip ".sdPlugin"
+            QString const seededKey = QStringLiteral("plugins/seeded/") + uuid;
+            QString const dst = QDir(pluginsDir).filePath(entry);
+            // Present (live or quarantined): nothing to do, but record the
+            // seed so a later user DELETE is respected on the next launch.
+            if (QDir(dst).exists() || QDir(dst + QStringLiteral(".disabled")).exists()) {
+                settings.setValue(seededKey, true);
+                continue;
+            }
+            if (settings.value(seededKey, false).toBool()) {
+                continue; // seeded before and user removed it — stay removed
+            }
+            if (!copyDirRecursively(bundleRoot.filePath(entry), dst)) {
+                AJAZZ_LOG_WARN("plugin-catalog",
+                               "bundled seed: copy '{}' -> '{}' failed",
+                               bundleRoot.filePath(entry).toStdString(),
+                               dst.toStdString());
+                continue;
+            }
+            settings.setValue(seededKey, true);
+            // First-party bundle: persist per-plugin consent (same key
+            // installFromCatalog writes) so the unsigned-verify sweep below
+            // keeps it without the global allow-unsigned toggle.
+            settings.setValue(QStringLiteral("plugins/allowed/") + uuid, true);
+            AJAZZ_LOG_INFO("plugin-catalog",
+                           "bundled seed: '{}' -> '{}' (consent persisted)",
+                           entry.toStdString(),
+                           pluginsDir.toStdString());
+        }
+    }
 }
 
 bool PluginCatalogModel::allowPlugin(QString const& uuid) {

@@ -20,9 +20,13 @@
 #include "plugin_catalog_model.hpp"
 #include "qt_app_fixture.hpp"
 
+#include <QDir>
+#include <QFile>
+#include <QSettings>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QUrl>
+#include <QUuid>
 #include <QVariant>
 
 #include <vector>
@@ -167,4 +171,56 @@ TEST_CASE("PluginCatalogInstall non-installable row install is a no-op false (no
     CHECK_FALSE(args.at(2).toString().isEmpty()); // a non-empty reason
 
     PluginCatalogModel::setPluginsDirOverride(QString{});
+}
+
+TEST_CASE("Bundled plugin seeding: first-run copy, consent persist, delete respected",
+          "[catalog-install]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    EnvGuard sdGuard("ACC_STREAMDOCK_CATALOG_URL", "disabled");
+    EnvGuard odGuard("ACC_OPENDECK_CATALOG_URL", "disabled");
+
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+
+    // Unique uuid per run so the QSettings seed marker from a previous test
+    // run (dev boxes share the org settings file) can never leak in.
+    QString const uuid = QStringLiteral("com.test.seed.") +
+                         QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    QString const dirName = uuid + QStringLiteral(".sdPlugin");
+
+    // Fake bundled payload: bundled/<uuid>.sdPlugin/manifest.json.
+    QString const bundledRoot = tmp.filePath(QStringLiteral("bundled"));
+    REQUIRE(QDir().mkpath(bundledRoot + QLatin1Char('/') + dirName));
+    {
+        QFile f(bundledRoot + QLatin1Char('/') + dirName + QStringLiteral("/manifest.json"));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write("{}");
+    }
+    EnvGuard bundleGuard("AJAZZ_BUNDLED_PLUGINS_DIR", bundledRoot);
+
+    QString const pluginsDir = tmp.filePath(QStringLiteral("plugins"));
+    PluginCatalogModel::setPluginsDirOverride(pluginsDir);
+
+    // First construction seeds the bundle and persists per-plugin consent.
+    {
+        PluginCatalogModel model(nullptr);
+        REQUIRE(QFile::exists(pluginsDir + QLatin1Char('/') + dirName +
+                              QStringLiteral("/manifest.json")));
+        QSettings settings;
+        REQUIRE(settings.value(QStringLiteral("plugins/allowed/") + uuid, false).toBool());
+        REQUIRE(settings.value(QStringLiteral("plugins/seeded/") + uuid, false).toBool());
+    }
+
+    // The user deletes the seeded plugin: the marker must prevent a re-seed.
+    REQUIRE(QDir(pluginsDir + QLatin1Char('/') + dirName).removeRecursively());
+    {
+        PluginCatalogModel model(nullptr);
+        REQUIRE_FALSE(QDir(pluginsDir + QLatin1Char('/') + dirName).exists());
+    }
+
+    // Cleanup the settings keys this test wrote.
+    QSettings settings;
+    settings.remove(QStringLiteral("plugins/allowed/") + uuid);
+    settings.remove(QStringLiteral("plugins/seeded/") + uuid);
 }

@@ -689,6 +689,17 @@ private:
     /// Never call it for @c VerifyVerdict::Refused (tampered).
     [[nodiscard]] bool consentToUnsigned() const;
 
+    /// Phase 6c: seed bundled first-party plugins (install payload under
+    /// `share/ajazz-control-center/bundled-plugins/` on GenericDataLocation,
+    /// or `$AJAZZ_BUNDLED_PLUGINS_DIR` for dev/test) into @p pluginsDir on
+    /// first run. Skips dirs that already exist or are quarantined; a
+    /// `plugins/seeded/<uuid>` QSettings marker records every seed so a
+    /// plugin the user later DELETES is never re-seeded. Persists the
+    /// per-plugin consent key (`plugins/allowed/<uuid>`) for what it copies —
+    /// bundled plugins are first-party, so they must survive the
+    /// unsigned-verify launch sweep without the global toggle.
+    void seedBundledPlugins(QString const& pluginsDir);
+
     /// Replace the Streamdock-sourced rows with @p rows, emitting the
     /// minimal `dataChanged` / model reset surface required.
     void replaceStreamdockRows(std::vector<CatalogEntry> rows);
