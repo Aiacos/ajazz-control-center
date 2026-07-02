@@ -22,10 +22,15 @@ use tokio::task::JoinHandle;
 
 const FONT: &[u8] = include_bytes!("../assets/LiberationMono-Bold.ttf");
 const HISTORY: usize = 120;
+/// Tile edge for a key surface.
+const KEY_TILE: u32 = 144;
+/// Tile edge for a dial's touch-strip zone (the host routes an Encoder
+/// set_image to the 128x128 strip zone above the dial).
+const STRIP_TILE: u32 = 128;
 
 // ---------------- metrics ----------------
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 enum Metric {
 	Cpu,
 	CpuTemp,
@@ -59,6 +64,21 @@ impl Metric {
 			"gpu_temp" => Metric::GpuTemp,
 			"vram" => Metric::Vram,
 			_ => Metric::Cpu,
+		}
+	}
+
+	/// Settings-id string for this metric — the exact inverse of `from_id`,
+	/// matching the Property Inspector option values.
+	fn id(self) -> &'static str {
+		match self {
+			Metric::Cpu => "cpu",
+			Metric::CpuTemp => "cpu_temp",
+			Metric::Ram => "ram",
+			Metric::NetDown => "net_down",
+			Metric::NetUp => "net_up",
+			Metric::Gpu => "gpu",
+			Metric::GpuTemp => "gpu_temp",
+			Metric::Vram => "vram",
 		}
 	}
 
@@ -251,11 +271,19 @@ const OK: (u8, u8, u8) = (0x77, 0xca, 0x9b);
 const WARN: (u8, u8, u8) = (0xcb, 0xc0, 0x6c);
 const CRIT: (u8, u8, u8) = (0xdc, 0x4c, 0x4c);
 
-fn render_tile(metric: Metric, history: &VecDeque<f32>, value: f32, warn: Option<f32>, crit: Option<f32>) -> Option<Vec<u8>> {
+fn render_tile(
+	metric: Metric,
+	history: &VecDeque<f32>,
+	value: f32,
+	warn: Option<f32>,
+	crit: Option<f32>,
+	size: u32,
+) -> Option<Vec<u8>> {
 	use tiny_skia::*;
 
-	let size = 144u32;
 	let (w, h) = (size as f32, size as f32);
+	// Proportional typography: 1.0 at the 144 px key tile, ~0.89 at the 128 px strip.
+	let f = size as f32 / KEY_TILE as f32;
 	let mut pm = Pixmap::new(size, size)?;
 	pm.fill(Color::from_rgba8(0, 0, 0, 255));
 
@@ -312,8 +340,8 @@ fn render_tile(metric: Metric, history: &VecDeque<f32>, value: f32, warn: Option
 		_ => grad_at(stops, norm(value)),
 	};
 
-	draw_text(&mut pm, metric.label(), 8.0, 30.0, 20.0, (0xcc, 0xcc, 0xcc));
-	draw_text(&mut pm, &metric.format(value), 8.0, h - 16.0, 40.0, vcol);
+	draw_text(&mut pm, metric.label(), 8.0 * f, 30.0 * f, 20.0 * f, (0xcc, 0xcc, 0xcc));
+	draw_text(&mut pm, &metric.format(value), 8.0 * f, h - 16.0 * f, 40.0 * f, vcol);
 
 	pm.encode_png().ok()
 }
@@ -381,25 +409,62 @@ fn settings_map() -> &'static Mutex<HashMap<InstanceId, MonitorSettings>> {
 	S.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
-/// Spawn the 1 Hz render loop for one instance. `fixed` pins the metric (the CPU
-/// preset); otherwise the metric is read from the live per-instance settings.
+/// Render one frame for `inst` and push it via set_image: 144 px key tile, or
+/// a 128 px strip tile when the instance is bound to an Encoder (the host
+/// routes it to the dial's touch-strip zone). Returns false when the push
+/// failed (instance gone) so the render loop can stop.
+async fn render_once(inst: &Instance, id: &InstanceId, fixed: Option<Metric>) -> bool {
+	let size = if inst.controller == "Encoder" { STRIP_TILE } else { KEY_TILE };
+	let (metric, warn, crit) = match fixed {
+		Some(m) => (m, m.default_thresholds().map(|d| d.0), m.default_thresholds().map(|d| d.1)),
+		None => settings_map().lock().unwrap().get(id).cloned().unwrap_or_default().resolve(),
+	};
+	let (val, hist) = metric_series(metric);
+	if let Some(png) = render_tile(metric, &hist, val, warn, crit, size) {
+		let uri = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png));
+		if inst.set_image(Some(uri), None).await.is_err() {
+			return false;
+		}
+	}
+	true
+}
+
+/// Spawn the 1 Hz render loop for one instance. `fixed` pins the metric;
+/// otherwise the metric is read from the live per-instance settings.
 fn spawn_render(inst: Arc<Instance>, id: InstanceId, fixed: Option<Metric>) -> JoinHandle<()> {
 	tokio::spawn(async move {
 		loop {
-			let (metric, warn, crit) = match fixed {
-				Some(m) => (m, m.default_thresholds().map(|d| d.0), m.default_thresholds().map(|d| d.1)),
-				None => settings_map().lock().unwrap().get(&id).cloned().unwrap_or_default().resolve(),
-			};
-			let (val, hist) = metric_series(metric);
-			if let Some(png) = render_tile(metric, &hist, val, warn, crit) {
-				let uri = format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&png));
-				if inst.set_image(Some(uri), None).await.is_err() {
-					break;
-				}
+			if !render_once(&inst, &id, fixed).await {
+				break;
 			}
 			tokio::time::sleep(Duration::from_millis(1000)).await;
 		}
 	})
+}
+
+/// Wrapping metric-index advance: `(idx + ticks) mod len`, negative-safe.
+fn cycled_index(idx: usize, ticks: i16, len: usize) -> usize {
+	(idx as i32 + ticks as i32).rem_euclid(len as i32) as usize
+}
+
+/// Dial rotate/press handler shared by all actions: advance the instance's
+/// metric by `ticks` steps (wrapping over `Metric::ALL`), persist the choice —
+/// thresholds reset to the new metric's defaults — and repaint immediately so
+/// the dial feels snappy. `default` is the action's preset metric id, used
+/// when the instance has no stored metric yet.
+async fn cycle_metric(instance: &Instance, ticks: i16, default: &str) {
+	let id = instance.instance_id.clone();
+	let current = {
+		let map = settings_map().lock().unwrap();
+		let s = map.get(&id).cloned().unwrap_or_default();
+		Metric::from_id(if s.metric.is_empty() { default } else { &s.metric })
+	};
+	let idx = Metric::ALL.iter().position(|m| *m == current).unwrap_or(0);
+	let next = Metric::ALL[cycled_index(idx, ticks, Metric::ALL.len())];
+	let settings = MonitorSettings { metric: next.id().into(), warn: None, crit: None };
+	settings_map().lock().unwrap().insert(id.clone(), settings.clone());
+	let _ = instance.set_settings(&settings).await;
+	render_once(instance, &id, None).await;
 }
 
 // ---------------- actions ----------------
@@ -424,7 +489,8 @@ impl Tasks {
 	}
 }
 
-/// The CPU preset (metric fixed, no Property Inspector).
+/// The CPU preset (defaults to CPU usage, no Property Inspector). Seeds the
+/// live settings map so dial rotate/press can still cycle the metric.
 #[derive(Default)]
 struct CpuAction {
 	tasks: Tasks,
@@ -435,15 +501,41 @@ impl Action for CpuAction {
 	const UUID: ActionUuid = "com.ajazz.sysmon2.cpu";
 	type Settings = MonitorSettings;
 
-	async fn will_appear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+	async fn will_appear(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
 		let id = instance.instance_id.clone();
+		settings_map()
+			.lock()
+			.unwrap()
+			.insert(id.clone(), settings_with_default(settings, "cpu"));
 		if let Some(inst) = get_instance(id.clone()).await {
-			self.tasks.insert(id.clone(), spawn_render(inst, id, Some(Metric::Cpu)));
+			self.tasks.insert(id.clone(), spawn_render(inst, id, None));
 		}
 		Ok(())
 	}
+
+	async fn did_receive_settings(&self, instance: &Instance, settings: &Self::Settings) -> OpenActionResult<()> {
+		settings_map()
+			.lock()
+			.unwrap()
+			.insert(instance.instance_id.clone(), settings_with_default(settings, "cpu"));
+		Ok(())
+	}
+
+	async fn dial_rotate(&self, instance: &Instance, _s: &Self::Settings, ticks: i16, _pressed: bool) -> OpenActionResult<()> {
+		cycle_metric(instance, ticks, "cpu").await;
+		Ok(())
+	}
+
+	/// Press-to-cycle: a dial press advances one metric (dial_up stays the
+	/// trait's no-op default).
+	async fn dial_down(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+		cycle_metric(instance, 1, "cpu").await;
+		Ok(())
+	}
+
 	async fn will_disappear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
 		self.tasks.remove(&instance.instance_id);
+		settings_map().lock().unwrap().remove(&instance.instance_id);
 		Ok(())
 	}
 }
@@ -473,6 +565,18 @@ impl Action for MonitorAction {
 			.lock()
 			.unwrap()
 			.insert(instance.instance_id.clone(), settings.clone());
+		Ok(())
+	}
+
+	async fn dial_rotate(&self, instance: &Instance, _s: &Self::Settings, ticks: i16, _pressed: bool) -> OpenActionResult<()> {
+		cycle_metric(instance, ticks, "cpu").await;
+		Ok(())
+	}
+
+	/// Press-to-cycle: a dial press advances one metric (dial_up stays the
+	/// trait's no-op default).
+	async fn dial_down(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+		cycle_metric(instance, 1, "cpu").await;
 		Ok(())
 	}
 
@@ -526,6 +630,18 @@ impl Action for GpuAction {
 		Ok(())
 	}
 
+	async fn dial_rotate(&self, instance: &Instance, _s: &Self::Settings, ticks: i16, _pressed: bool) -> OpenActionResult<()> {
+		cycle_metric(instance, ticks, "gpu").await;
+		Ok(())
+	}
+
+	/// Press-to-cycle: a dial press advances one metric (dial_up stays the
+	/// trait's no-op default).
+	async fn dial_down(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
+		cycle_metric(instance, 1, "gpu").await;
+		Ok(())
+	}
+
 	async fn will_disappear(&self, instance: &Instance, _s: &Self::Settings) -> OpenActionResult<()> {
 		self.tasks.remove(&instance.instance_id);
 		settings_map().lock().unwrap().remove(&instance.instance_id);
@@ -535,11 +651,13 @@ impl Action for GpuAction {
 
 #[tokio::main]
 async fn main() -> OpenActionResult<()> {
-	// Dev aid: `--render-test <metric> <out.png>` renders a sample tile and exits.
+	// Dev aid: `--render-test <metric> <out.png> [size]` renders a sample tile
+	// (144 key by default, 128 = strip) and exits.
 	let argv: Vec<String> = std::env::args().collect();
 	if argv.get(1).map(String::as_str) == Some("--render-test") {
 		let metric = Metric::from_id(argv.get(2).map(String::as_str).unwrap_or("cpu"));
 		let out = argv.get(3).cloned().unwrap_or_else(|| "/tmp/sysmon-tile.png".into());
+		let size: u32 = argv.get(4).and_then(|s| s.parse().ok()).unwrap_or(KEY_TILE);
 		let mut hist = VecDeque::new();
 		for i in 0..120 {
 			let t = i as f32 / 119.0;
@@ -551,11 +669,10 @@ async fn main() -> OpenActionResult<()> {
 			hist.push_back(base);
 		}
 		let (_, w, c) = MonitorSettings { metric: argv.get(2).cloned().unwrap_or_default(), warn: None, crit: None }.resolve();
-		if let Some(png) = render_tile(metric, &hist, *hist.back().unwrap(), w, c) {
+		if let Some(png) = render_tile(metric, &hist, *hist.back().unwrap(), w, c, size) {
 			std::fs::write(&out, png).ok();
 			eprintln!("wrote {out}");
 		}
-		let _ = Metric::ALL;
 		return Ok(());
 	}
 
@@ -601,5 +718,24 @@ mod tests {
 		let s: Snapshot = serde_json::from_str(line).expect("sparse gpu must parse");
 		assert_eq!(s.gpu[0].util_percent, 7.0);
 		assert_eq!(s.gpu[0].vram_total_bytes, 0.0);
+	}
+
+	#[test]
+	fn metric_cycle_wraps_both_directions() {
+		let n = Metric::ALL.len();
+		assert_eq!(cycled_index(0, 1, n), 1);
+		assert_eq!(cycled_index(n - 1, 1, n), 0); // forward wrap
+		assert_eq!(cycled_index(0, -1, n), n - 1); // backward wrap
+		assert_eq!(cycled_index(n - 2, 3, n), 1); // +3 across the boundary
+		assert_eq!(cycled_index(1, -2, n), n - 1); // -2 across the boundary
+		assert_eq!(cycled_index(3, -19, n), 0); // |ticks| > len stays in range
+		assert_eq!(cycled_index(3, 16, n), 3); // full laps land back home
+	}
+
+	#[test]
+	fn metric_id_from_id_round_trip() {
+		for m in Metric::ALL {
+			assert_eq!(Metric::from_id(m.id()), m);
+		}
 	}
 }

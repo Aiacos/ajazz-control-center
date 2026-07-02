@@ -21,6 +21,10 @@
 			"Icon": "icon",
 			"Tooltip": "System monitor, btop-styled — pick a metric and thresholds",
 			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
 			"PropertyInspectorPath": "property-inspector.html",
 			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
 		},
@@ -30,6 +34,10 @@
 			"Icon": "icon",
 			"Tooltip": "CPU usage, btop-styled",
 			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
 			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
 		},
 		{
@@ -37,7 +45,11 @@
 			"Name": "GPU Monitor",
 			"Icon": "icon",
 			"Tooltip": "GPU monitor, btop-styled — utilisation, temperature or VRAM",
-			"Controllers": ["Keypad"],
+			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
 			"PropertyInspectorPath": "property-inspector.html",
 			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
 		}
