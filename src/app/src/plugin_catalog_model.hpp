@@ -36,6 +36,7 @@
 class QNetworkAccessManager;
 
 #include <memory>
+#include <set>
 #include <type_traits>
 #include <vector>
 
@@ -672,6 +673,12 @@ signals:
     void pluginWillBeReplaced(QString const& installDirName);
 
 private:
+    /// One-shot log guard for installedActions() skip messages: the method is
+    /// polled continuously by the UI, so per-scan INFO logging of the same
+    /// skipped plugin floods the log (UI-tour audit 2026-07-03). Keyed by
+    /// "<plugin name>/<reason>"; mutable because installedActions() is const.
+    mutable std::set<QString> m_loggedSkips;
+
     /// Test seam: grants unit tests access to the private row-injection
     /// internals (@ref replaceStreamdockRows) so the install-availability and
     /// install() no-op logic can be exercised deterministically WITHOUT

@@ -673,13 +673,20 @@ QVariantList PluginCatalogModel::installedActions() const {
             ++parseFailureCount;
             continue; // unparsable / missing required keys (T-18-MANIFEST)
         }
+        // installedActions() is polled continuously by the UI, so a skipped
+        // plugin logged at INFO on every scan floods the log (~96% of a live
+        // session tail was these two lines — UI-tour audit 2026-07-03). Log
+        // each skip ONCE per plugin per session; counters still update.
         if (!manifestRunnableHere(*parsed, platform, appVer)) {
             ++osVersionSkipCount;
-            AJAZZ_LOG_INFO("plugin-catalog",
-                           "installedActions: skipped plugin '{}' (not runnable on {}, appVer={})",
-                           parsed->name.toStdString(),
-                           platform.toStdString(),
-                           appVer.toStdString());
+            if (m_loggedSkips.insert(parsed->name + QStringLiteral("/osver")).second) {
+                AJAZZ_LOG_INFO(
+                    "plugin-catalog",
+                    "installedActions: skipped plugin '{}' (not runnable on {}, appVer={})",
+                    parsed->name.toStdString(),
+                    platform.toStdString(),
+                    appVer.toStdString());
+            }
             continue; // not for this OS / below software minimum version
         }
         // Mirror the spawn step's "real gate" (LOCKED Linux OS-accept policy):
@@ -689,11 +696,13 @@ QVariantList PluginCatalogModel::installedActions() const {
         // bindable-but-dead keys. Same resolution PluginManager::spawn applies.
         if (resolveEffectiveCodePath(*parsed).isEmpty()) {
             ++osVersionSkipCount;
-            AJAZZ_LOG_INFO("plugin-catalog",
-                           "installedActions: skipped plugin '{}' (no code path for {} — "
-                           "cannot run on this platform)",
-                           parsed->name.toStdString(),
-                           platform.toStdString());
+            if (m_loggedSkips.insert(parsed->name + QStringLiteral("/codepath")).second) {
+                AJAZZ_LOG_INFO("plugin-catalog",
+                               "installedActions: skipped plugin '{}' (no code path for {} — "
+                               "cannot run on this platform)",
+                               parsed->name.toStdString(),
+                               platform.toStdString());
+            }
             continue; // nothing the spawn step could ever launch here
         }
 
