@@ -176,6 +176,22 @@ ApplicationWindow {
                 model: DeviceModel
                 onDeviceSelected: codename => {
                     StreamDockControlService.setActiveDevice(codename); // REQ-26-A, closes GAP-25A
+                    // Unconditional editor rebind: deviceActivated (below) only
+                    // fires for display-capable devices, so keyboards/mice rely
+                    // on this direct path.
+                    editor.codename = codename;
+                    editor.capabilities = DeviceModel.capabilitiesFor(codename);
+                }
+            }
+
+            Connections {
+                target: StreamDockControlService
+                // Editor follows EVERY successful device activation — sidebar
+                // click, debug-RPC device.setActiveDevice, hot-plug auto-select.
+                // (UI-tour audit 2026-07-03: the RPC switched the device but the
+                // editor kept showing the previous one.) Display devices only;
+                // keyboards/mice go through the sidebar's direct path above.
+                function onDeviceActivated(codename) {
                     editor.codename = codename;
                     editor.capabilities = DeviceModel.capabilitiesFor(codename);
                 }
