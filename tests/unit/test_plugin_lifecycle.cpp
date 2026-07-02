@@ -966,3 +966,45 @@ TEST_CASE("PluginManagerTest buildInfoJson prefers PUUID for plugin.uuid",
     // Unset provider => empty devices[] (graceful default).
     CHECK(info.value(QStringLiteral("devices")).toArray().isEmpty());
 }
+
+TEST_CASE("PluginManagerTest buildInfoJson derives plugin.uuid from the action namespace",
+          "[plugin-manager][mirabox-sdvuesdk]") {
+    // MiraBox SDVueSDK bundles gate every inbound frame on
+    // `info.plugin.uuid + ".actionN"`. Our StreamDock-CDN installer names the
+    // dir by the numeric catalogue id, so the dir-name fallback must yield to
+    // the actions' common reverse-DNS namespace (RE 2026-07-02,
+    // docs/protocols/streamdeck/mirabox_html_plugin_contract.md).
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    PluginManager mgr(scratch.path(), nullptr, {});
+
+    PluginManifest manifest;
+    manifest.name = QStringLiteral("Time Calendar");
+    manifest.version = QStringLiteral("2.0.1");
+    manifest.sourceDir = QStringLiteral("/plugins/20250308000340.sdPlugin");
+    PluginAction a1;
+    a1.uuid = QStringLiteral("com.mirabox.streamdock.timeClock.action1");
+    manifest.actions.push_back(a1);
+
+    QJsonObject info = QJsonDocument::fromJson(mgr.buildInfoJson(manifest).toUtf8()).object();
+    CHECK(
+        info.value(QStringLiteral("plugin")).toObject().value(QStringLiteral("uuid")).toString() ==
+        QStringLiteral("com.mirabox.streamdock.timeClock"));
+
+    // A dir name that IS the namespace stays untouched (Elgato convention).
+    manifest.sourceDir = QStringLiteral("/plugins/com.mirabox.streamdock.timeClock.sdPlugin");
+    info = QJsonDocument::fromJson(mgr.buildInfoJson(manifest).toUtf8()).object();
+    CHECK(
+        info.value(QStringLiteral("plugin")).toObject().value(QStringLiteral("uuid")).toString() ==
+        QStringLiteral("com.mirabox.streamdock.timeClock"));
+
+    // Actions with DIVERGENT namespaces: keep the dir-derived uuid (no guess).
+    PluginAction a2;
+    a2.uuid = QStringLiteral("com.other.vendor.thing");
+    manifest.actions.push_back(a2);
+    manifest.sourceDir = QStringLiteral("/plugins/20250308000340.sdPlugin");
+    info = QJsonDocument::fromJson(mgr.buildInfoJson(manifest).toUtf8()).object();
+    CHECK(
+        info.value(QStringLiteral("plugin")).toObject().value(QStringLiteral("uuid")).toString() ==
+        QStringLiteral("20250308000340"));
+}

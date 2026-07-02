@@ -42,6 +42,7 @@
 #include <QSysInfo>
 #include <QTimer>
 
+#include <algorithm>
 #include <utility>
 
 #if defined(Q_OS_LINUX)
@@ -246,6 +247,39 @@ QString PluginManager::buildInfoJson(PluginManifest const& manifest) const {
             }
         } else {
             pluginUuid = manifest.name;
+        }
+        // MiraBox SDVueSDK compatibility (RE 2026-07-02, docs/protocols/
+        // streamdeck/mirabox_html_plugin_contract.md): SDVueSDK bundles compute
+        // each action's dispatch gate as `info.plugin.uuid + ".actionN"` and
+        // silently DROP every inbound frame whose `action` doesn't match. In
+        // the vendor ecosystem the install dir IS the reverse-DNS namespace,
+        // but our StreamDock-CDN installer names dirs by the numeric catalogue
+        // id, so the fallback above would gate on "20250308000340.action1"
+        // while real events carry "com.mirabox.streamdock.timeClock.action1" —
+        // the plugin runs but never draws. When the dir-derived uuid is not a
+        // dot-prefix of the declared actions, use the actions' common
+        // namespace instead (first UUID minus its last segment, only when ALL
+        // actions share it). registration uuid / routing are unaffected.
+        if (!manifest.actions.empty()) {
+            QString const dirPrefix = pluginUuid + QLatin1Char('.');
+            bool const dirIsNamespace =
+                std::all_of(manifest.actions.begin(),
+                            manifest.actions.end(),
+                            [&](PluginAction const& a) { return a.uuid.startsWith(dirPrefix); });
+            if (!dirIsNamespace) {
+                qsizetype const lastDot = manifest.actions.front().uuid.lastIndexOf(u'.');
+                if (lastDot > 0) {
+                    QString const ns = manifest.actions.front().uuid.left(lastDot);
+                    QString const nsPrefix = ns + QLatin1Char('.');
+                    bool const shared = std::all_of(
+                        manifest.actions.begin(),
+                        manifest.actions.end(),
+                        [&](PluginAction const& a) { return a.uuid.startsWith(nsPrefix); });
+                    if (shared) {
+                        pluginUuid = ns;
+                    }
+                }
+            }
         }
     }
     QJsonObject const plugin{
