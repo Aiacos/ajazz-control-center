@@ -304,6 +304,90 @@ TEST_CASE("extractSdPluginArchive extracts a ZIP64 archive with real file conten
     REQUIRE(code.contains("console.log"));
 }
 
+TEST_CASE("extractSdPluginArchive parses a ZIP64 archive structure (EOCD64 record + locator)",
+          "[plugin-store][zip64]") {
+    // Archive-level ZIP64 (audit 3.10): the EOCD64 record + locator precede
+    // the EOCD, whose entry-count/offset fields are 0xFFFF/0xFFFFFFFF
+    // sentinels. The parser must source the central-directory offset + entry
+    // count from the EOCD64 record. Fixture built by Python zipfile, then
+    // post-processed to insert the EOCD64 record/locator and sentinel-ise the
+    // EOCD (scratch script make_zip64_eocd_fixture.py).
+    static constexpr char kEocd64B64[] =
+        "UEsDBBQAAAAIACFu4lyqi3FQQQAAAD8AAAAmAAAAY29tLnRlc3QuZW9jZDY0LnNkUGx1Z2luL21h"
+        "bmlmZXN0Lmpzb26rVgoN9XRRslJKzs/VK0ktLtFLzU9OMTNR0lHyS8xNVbJScvV3djEzUXDLrCgp"
+        "LUpV0lFyTC7JzM8rVrKKjq0FAFBLAwQUAAAACAAhbuJcroqfNBUAAAATAAAAJgAAAGNvbS50ZXN0"
+        "LmVvY2Q2NC5zZFBsdWdpbi9iaW4vcGx1Z2luLmpzS87PK87PSdXLyU/XUMrIVNK05gIAUEsBAhQD"
+        "FAAAAAgAIW7iXKqLcVBBAAAAPwAAACYAAAAAAAAAAAAAAIABAAAAAGNvbS50ZXN0LmVvY2Q2NC5z"
+        "ZFBsdWdpbi9tYW5pZmVzdC5qc29uUEsBAhQDFAAAAAgAIW7iXK6KnzQVAAAAEwAAACYAAAAAAAAA"
+        "AAAAAIABhQAAAGNvbS50ZXN0LmVvY2Q2NC5zZFBsdWdpbi9iaW4vcGx1Z2luLmpzUEsGBiwAAAAA"
+        "AAAALQAtAAAAAAAAAAAAAgAAAAAAAAACAAAAAAAAAKgAAAAAAAAA3gAAAAAAAABQSwYHAAAAAIYB"
+        "AAAAAAAAAQAAAFBLBQYAAAAA////////////////AAA=";
+
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+    QString const destDir = scratch.path();
+    QString const archive = destDir + QStringLiteral("/eocd64.sdPlugin");
+    {
+        QFile f(archive);
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        QByteArray const bytes =
+            QByteArray::fromBase64(QByteArray::fromRawData(kEocd64B64, sizeof(kEocd64B64) - 1));
+        REQUIRE(f.write(bytes) == bytes.size());
+        f.close();
+    }
+
+    QString const target = QStringLiteral("com.test.eocd64.sdPlugin");
+    REQUIRE(extractSdPluginArchive(archive, destDir, target));
+
+    QFile mf(destDir + QStringLiteral("/") + target + QStringLiteral("/manifest.json"));
+    REQUIRE(mf.open(QIODevice::ReadOnly));
+    REQUIRE(mf.readAll().contains("com.test.eocd64"));
+    REQUIRE(QFileInfo::exists(destDir + QStringLiteral("/") + target +
+                              QStringLiteral("/bin/plugin.js")));
+}
+
+TEST_CASE("extractSdPluginArchive rejects a wrapper directory with no manifest.json",
+          "[plugin-store][issue-62]") {
+    // Audit 3.11: a zip whose sole folder carries no manifest.json used to be
+    // promoted as a successful install that discovery could never find. The
+    // extractor must now fail and clean up instead.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    QString const archive = scratch.filePath(QStringLiteral("nomanifest.sdPlugin"));
+    {
+        QZipWriter zip(archive);
+        REQUIRE(zip.status() == QZipWriter::NoError);
+        zip.addFile(QStringLiteral("wrapper/readme.txt"), QByteArray("not a plugin"));
+        zip.close();
+        REQUIRE(zip.status() == QZipWriter::NoError);
+    }
+
+    QString const target = QStringLiteral("nomanifest.sdPlugin");
+    REQUIRE_FALSE(extractSdPluginArchive(archive, scratch.path(), target));
+    REQUIRE_FALSE(QDir(scratch.filePath(target)).exists());
+    REQUIRE_FALSE(QDir(scratch.filePath(QStringLiteral(".tmp_") + target)).exists());
+}
+
+TEST_CASE("extractSdPluginArchive unwraps a doubly-nested single-folder wrapper",
+          "[plugin-store][issue-62]") {
+    // Hand-zipped bundles often compress the PARENT of the plugin folder,
+    // producing outer/inner.sdPlugin/manifest.json. The wrapper descent must
+    // keep going until the level that holds the manifest.
+    QTemporaryDir scratch;
+    REQUIRE(scratch.isValid());
+
+    QString const archive = scratch.filePath(QStringLiteral("double.sdPlugin"));
+    buildSdPluginArchive(archive, QStringLiteral("outer/com.example.double.sdPlugin"));
+
+    QString const target = QStringLiteral("double.sdPlugin");
+    REQUIRE(extractSdPluginArchive(archive, scratch.path(), target));
+
+    QDir const out(scratch.filePath(target));
+    REQUIRE(QFileInfo::exists(out.filePath(QStringLiteral("manifest.json"))));
+    REQUIRE(QFileInfo::exists(out.filePath(QStringLiteral("Code/index.html"))));
+}
+
 TEST_CASE("extractSdPluginArchive rejects a hostile ZIP64 local-header offset (no over-read)",
           "[plugin-store][security][zip64]") {
     // Regression for a buffer over-read in the central-directory parser: a ZIP64

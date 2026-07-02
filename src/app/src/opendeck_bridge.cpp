@@ -353,6 +353,22 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         }
         return str(QJsonValue(QJsonValue::Null));
     }
+    if (command == QLatin1String("allow_plugin")) {
+        // audit 3.8: per-plugin quarantine recovery — records consent for ONE
+        // unsigned plugin and restores its `<uuid>.sdPlugin.disabled` dir
+        // (PluginCatalogModel::allowPlugin was previously caller-less, leaving
+        // the global allowUnsignedPlugins toggle as the only recovery).
+        QString const id = args.value(QStringLiteral("id")).toString();
+        bool allowed = false;
+        if (m_catalog != nullptr && !id.isEmpty()) {
+            QString base = id;
+            if (base.endsWith(QStringLiteral(".sdPlugin"), Qt::CaseInsensitive)) {
+                base.chop(9);
+            }
+            allowed = m_catalog->allowPlugin(base);
+        }
+        return str(QJsonValue(allowed));
+    }
     if (command == QLatin1String("install_plugin")) {
         // A local file / file:// path installs synchronously here; an http(s) URL
         // is downloaded asynchronously in invoke() (handled before this seam).

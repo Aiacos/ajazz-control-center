@@ -1488,3 +1488,107 @@ TEST_CASE("PluginInstallFromFile CR-02 Refused never lands in pluginsDir",
     REQUIRE(spy.count() == 1);
     REQUIRE(spy.at(0).at(1).toBool() == false);
 }
+
+// ---------------------------------------------------------------------------
+// audit 3.3: a fresh install retires a duplicate of the same plugin that was
+// installed under a DIFFERENT directory name (CDN installs are named by
+// numeric product id, file installs by manifest UUID — the same plugin could
+// exist twice, both copies spawning).
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginInstallFromFile retires a duplicate install under another dir name",
+          "[plugin-install][audit-3-3]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    QString const pluginId = QStringLiteral("com.example.dedupe-owner");
+    QByteArray const manifestBytes = manifestWithUuid(pluginId);
+
+    // Simulate a prior CDN install: SAME manifest, dir named by a numeric
+    // product id. Give it a consent key too (the CDN path persists one).
+    QString const cdnDir = QDir(pluginsDir).filePath(QStringLiteral("20250308000340.sdPlugin"));
+    QDir().mkpath(cdnDir);
+    {
+        QFile f(QDir(cdnDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifestBytes);
+    }
+    {
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowed/20250308000340"), true);
+    }
+
+    PluginCatalogModel model(nullptr);
+    model.setAllowUnsignedPlugins(false);
+
+    QString const archivePath = buildSdPluginArchive(tmp.path(), manifestBytes, pluginId);
+    REQUIRE_FALSE(archivePath.isEmpty());
+    REQUIRE(model.installFromFile(archivePath, /*userConfirmedUnsigned=*/true));
+
+    // Canonical install present; the product-id duplicate is retired and its
+    // consent key cleared.
+    REQUIRE(QFile::exists(
+        QDir(pluginsDir).filePath(pluginId + QStringLiteral(".sdPlugin/manifest.json"))));
+    REQUIRE_FALSE(QDir(cdnDir).exists());
+    {
+        QSettings settings;
+        REQUIRE_FALSE(
+            settings.value(QStringLiteral("plugins/allowed/20250308000340"), false).toBool());
+    }
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// audit 3.9: a case-variant `.SDPlugin` directory must be visible to the
+// launch-sweep. PluginManager::discover matches the suffix case-insensitively
+// (so the dir would SPAWN), but the sweep used a case-sensitive `*.sdPlugin`
+// glob and never verified/quarantined it.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginCatalog launch-sweep quarantines a case-variant SDPlugin dir",
+          "[plugin-install][trust][audit-3-9]") {
+    auto& app = qtApp();
+    Q_UNUSED(app);
+    QStandardPaths::setTestModeEnabled(true);
+    QTemporaryDir tmp;
+    REQUIRE(tmp.isValid());
+    QString const pluginsDir = tmp.filePath("plugins");
+    QDir().mkpath(pluginsDir);
+    PluginsDirGuard guard(pluginsDir);
+    qunsetenv("AJAZZ_ALLOW_UNTRUSTED_PLUGINS");
+
+    // Unsigned plugin under an UPPERCASE suffix, no consent recorded.
+    QString const variantDir =
+        QDir(pluginsDir).filePath(QStringLiteral("com.example.case-variant.SDPlugin"));
+    QDir().mkpath(variantDir);
+    {
+        QFile f(QDir(variantDir).filePath(QStringLiteral("manifest.json")));
+        REQUIRE(f.open(QIODevice::WriteOnly));
+        f.write(manifestWithUuid(QStringLiteral("com.example.case-variant")));
+    }
+    {
+        // Global toggle OFF + no per-plugin consent -> the sweep must quarantine.
+        QSettings settings;
+        settings.setValue(QStringLiteral("plugins/allowUnsignedPlugins"), false);
+        settings.remove(QStringLiteral("plugins/allowed/com.example.case-variant"));
+    }
+
+    {
+        PluginCatalogModel model(nullptr); // ctor runs the launch-sweep
+        Q_UNUSED(model);
+    }
+
+    // Quarantined non-destructively: original name gone, .disabled twin present.
+    REQUIRE_FALSE(QDir(variantDir).exists());
+    REQUIRE(QDir(variantDir + QStringLiteral(".disabled")).exists());
+
+    QStandardPaths::setTestModeEnabled(false);
+}

@@ -925,6 +925,27 @@ void registerDebugControlMethods(DebugControlServer& server, Application& app) {
                               return QJsonObject{{"started", started}, {"uuid", uuid}};
                           });
 
+    // plugin.allow {uuid} -> {allowed} — per-plugin quarantine recovery
+    // (audit 3.8): records consent for ONE unsigned plugin and restores its
+    // quarantined `<uuid>.sdPlugin.disabled` dir without flipping the global
+    // allowUnsignedPlugins toggle. allowPlugin() emits installFinished(ok=true)
+    // on restore, which is already wired to PluginManager::rediscover(), so the
+    // restored plugin spawns with no restart.
+    server.registerMethod("plugin.allow", [&app](QJsonObject const& params, QString& err) {
+        auto* cat = app.pluginCatalog();
+        if (cat == nullptr) {
+            err = QStringLiteral("plugin catalog unavailable");
+            return QJsonObject{};
+        }
+        QString const uuid = params.value("uuid").toString();
+        if (uuid.isEmpty()) {
+            err = QStringLiteral("require 'uuid'");
+            return QJsonObject{};
+        }
+        bool const allowed = cat->allowPlugin(uuid);
+        return QJsonObject{{"allowed", allowed}, {"uuid", uuid}};
+    });
+
     // plugin.rediscover {} -> {rediscovered, connectedCount} — idempotent
     // re-scan that spawns only newly-installed .sdPlugin plugins with no app
     // restart. connectedCount is sampled immediately; the WS register handshake

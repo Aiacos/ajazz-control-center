@@ -734,6 +734,15 @@ private:
                                   QString const& stagingDir,
                                   QString const& destDir);
 
+    /// audit 3.3: after a successful install landing at @p keepDirName, remove
+    /// any OTHER installed directory whose manifest resolves to the same
+    /// plugin-owner UUID (CDN installs are named by numeric product id, file
+    /// installs by manifest UUID — the same plugin could exist twice).
+    /// Emits pluginWillBeReplaced for each duplicate so the running old copy
+    /// is torn down; the user's bindings are preserved (the owner UUID stays
+    /// installed under @p keepDirName).
+    void dedupeDuplicateInstalls(QString const& keepDirName);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 

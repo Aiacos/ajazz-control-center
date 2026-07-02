@@ -84,7 +84,8 @@ QByteArray rawInflate(QByteArray const& comp, std::uint64_t uncompSize) {
 }
 
 /// Parse the central directory of @p buf into @p out. Returns false on a
-/// malformed / unsupported (zip64, encrypted) archive.
+/// malformed / unsupported (encrypted) archive. ZIP64 is supported both at
+/// entry level (0x0001 extra fields) and at archive level (EOCD64 record).
 bool readZipCentralDirectory(QByteArray const& buf, std::vector<ZipEntry>& out) {
     qsizetype const n = buf.size();
     if (n < 22) {
@@ -105,11 +106,29 @@ bool readZipCentralDirectory(QByteArray const& buf, std::vector<ZipEntry>& out) 
     if (eocd < 0) {
         return false;
     }
-    std::uint16_t const total = rd16(d + eocd + 10);
-    std::uint32_t const cdOffset = rd32(d + eocd + 16);
-    std::uint32_t p = cdOffset;
-    for (std::uint16_t i = 0; i < total; ++i) {
-        if (p + 46 > static_cast<std::uint32_t>(n) || rd32(d + p) != 0x02014b50u) {
+    std::uint64_t total = rd16(d + eocd + 10);
+    std::uint64_t cdOffset = rd32(d + eocd + 16);
+    // ZIP64 archive structure: when present, the EOCD64 locator (sig
+    // 0x07064b50, 20 bytes) sits immediately before the EOCD and points at the
+    // EOCD64 record (sig 0x06064b50), which carries the authoritative 64-bit
+    // entry count + central-directory offset. Writers that emit it usually set
+    // the EOCD fields to 0xFFFF/0xFFFFFFFF sentinels, but the locator is the
+    // reliable signal, so honour it whenever it is present.
+    if (eocd >= 20 && rd32(d + eocd - 20) == 0x07064b50u) {
+        std::uint64_t const rec = rd64(d + eocd - 20 + 8);
+        // `rec` is attacker-controlled: check `rec >= n` FIRST so the `+ 56`
+        // bounds arithmetic below cannot wrap (mirrors the local-header guard
+        // in readZipEntryData).
+        if (rec >= static_cast<std::uint64_t>(n) || rec + 56 > static_cast<std::uint64_t>(n) ||
+            rd32(d + rec) != 0x06064b50u) {
+            return false; // locator present but record missing/out of bounds
+        }
+        total = rd64(d + rec + 32);
+        cdOffset = rd64(d + rec + 48);
+    }
+    std::uint64_t p = cdOffset;
+    for (std::uint64_t i = 0; i < total; ++i) {
+        if (p + 46 > static_cast<std::uint64_t>(n) || rd32(d + p) != 0x02014b50u) {
             return false;
         }
         ZipEntry e;
@@ -123,10 +142,10 @@ bool readZipCentralDirectory(QByteArray const& buf, std::vector<ZipEntry>& out) 
         e.compSize = comp32;
         e.uncompSize = unc32;
         e.localOffset = lo32;
-        if (p + 46u + fnLen + exLen > static_cast<std::uint32_t>(n)) {
+        if (p + 46u + fnLen + exLen > static_cast<std::uint64_t>(n)) {
             return false;
         }
-        e.name = QString::fromUtf8(buf.constData() + p + 46, fnLen);
+        e.name = QString::fromUtf8(buf.constData() + static_cast<qsizetype>(p) + 46, fnLen);
         e.isDir = e.name.endsWith(QLatin1Char('/'));
         // ZIP64: a 0xFFFFFFFF field is a sentinel; the real 64-bit value lives in
         // the extra field (header id 0x0001), present in this fixed order for
@@ -134,8 +153,8 @@ bool readZipCentralDirectory(QByteArray const& buf, std::vector<ZipEntry>& out) 
         // Modern streaming packagers (Node `archiver`) emit this even for tiny
         // files, so it must be handled — not bailed on.
         if (comp32 == 0xFFFFFFFFu || unc32 == 0xFFFFFFFFu || lo32 == 0xFFFFFFFFu) {
-            std::uint32_t ep = p + 46u + fnLen; // start of extra field
-            std::uint32_t const eend = ep + exLen;
+            std::uint64_t ep = p + 46u + fnLen; // start of extra field
+            std::uint64_t const eend = ep + exLen;
             bool z64ok = false;
             while (ep + 4 <= eend) {
                 std::uint16_t const hid = rd16(d + ep);
@@ -144,8 +163,8 @@ bool readZipCentralDirectory(QByteArray const& buf, std::vector<ZipEntry>& out) 
                     break;
                 }
                 if (hid == 0x0001u) {
-                    std::uint32_t fp = ep + 4;
-                    std::uint32_t const fend = ep + 4u + hsz;
+                    std::uint64_t fp = ep + 4;
+                    std::uint64_t const fend = ep + 4u + hsz;
                     if (unc32 == 0xFFFFFFFFu && fp + 8 <= fend) {
                         e.uncompSize = rd64(d + fp);
                         fp += 8;
@@ -312,19 +331,39 @@ bool extractSdPluginArchive(QString const& archivePath,
         return false;
     }
 
-    // Detect single-folder wrapper. If yes, the wrapper itself becomes
-    // the source of the rename and the tmp shell is wiped after.
-    QDir const tmpDir(tmpPath);
-    QStringList const topEntries =
-        tmpDir.entryList(QDir::NoDotAndDotDot | QDir::Dirs | QDir::Files);
+    // Detect single-folder wrappers. Hand-zipped bundles often wrap the plugin
+    // one (or more) folders deep — descend while the current root is a lone
+    // directory that does NOT yet hold the manifest. If yes, the innermost
+    // wrapper becomes the source of the rename and the tmp shell is wiped
+    // after. The final root MUST carry manifest.json: promoting a
+    // manifest-less directory would report success for an install the
+    // discovery scan can never find (audit 3.11).
     QString sourcePath = tmpPath;
     bool stripWrapper = false;
-    if (topEntries.size() == 1) {
-        QString const sole = tmpDir.filePath(topEntries.first());
-        if (QFileInfo(sole).isDir()) {
-            sourcePath = sole;
-            stripWrapper = true;
+    for (int depth = 0; depth < 4; ++depth) {
+        if (QFileInfo::exists(sourcePath + QStringLiteral("/manifest.json"))) {
+            break;
         }
+        QDir const level(sourcePath);
+        QStringList const levelEntries =
+            level.entryList(QDir::NoDotAndDotDot | QDir::Dirs | QDir::Files);
+        if (levelEntries.size() != 1) {
+            break;
+        }
+        QString const sole = level.filePath(levelEntries.first());
+        if (!QFileInfo(sole).isDir()) {
+            break;
+        }
+        sourcePath = sole;
+        stripWrapper = true;
+    }
+    if (!QFileInfo::exists(sourcePath + QStringLiteral("/manifest.json"))) {
+        AJAZZ_LOG_WARN("plugin-catalog",
+                       "extract '{}': no manifest.json at the archive root — refusing to "
+                       "promote a manifest-less directory",
+                       archivePath.toStdString());
+        QDir(tmpPath).removeRecursively();
+        return false;
     }
 
     QString const finalPath = destDir + QStringLiteral("/") + targetSubdir;

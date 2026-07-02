@@ -98,7 +98,7 @@ QString g_pluginsDirOverride{};
 /// package (allowPlugin() refuses to even write the key for tampered rows, but
 /// the verdict gate at every read site is the load-bearing invariant).
 [[nodiscard]] bool perPluginAllowed(QString const& pluginDirName) {
-    QString const uuid = pluginDirName.endsWith(QStringLiteral(".sdPlugin"))
+    QString const uuid = pluginDirName.endsWith(QStringLiteral(".sdPlugin"), Qt::CaseInsensitive)
                              ? pluginDirName.chopped(9)
                              : pluginDirName;
     QSettings settings;
@@ -113,6 +113,59 @@ QString g_pluginsDirOverride{};
 /// a quarantined dir once consent exists (global toggle, env var, or
 /// per-plugin allow), and allowPlugin() restores it on explicit consent.
 constexpr QLatin1StringView kQuarantineSuffix(".disabled");
+
+/// List subdirectories of @p dir whose name ends with @p suffix, compared
+/// CASE-INSENSITIVELY. QDir glob name-filters are case-sensitive on Unix, so a
+/// hand-named `Foo.SDPlugin` dir would spawn (PluginManager::discover matches
+/// the suffix case-insensitively) yet stay invisible to the launch-sweep /
+/// installedPlugins() / verify passes that used the `*.sdPlugin` glob
+/// (audit 3.9). Every pass over the user plugins dir must share this filter.
+[[nodiscard]] QStringList listDirsWithSuffixCi(QDir const& dir, QString const& suffix) {
+    QStringList out;
+    QStringList const all = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+    for (QString const& entry : all) {
+        if (entry.endsWith(suffix, Qt::CaseInsensitive)) {
+            out.append(entry);
+        }
+    }
+    return out;
+}
+
+/// Resolve the plugin-owner UUID of an installed dir from its manifest.
+/// Prefers the AJAZZ PUUID extension; Elgato manifests carry no top-level
+/// plugin UUID, so fall back to the longest reverse-DNS prefix shared by the
+/// action UUIDs (e.g. actions com.foo.bar.{a,b} -> owner com.foo.bar).
+/// Returns an empty string when the manifest is missing or unusable.
+[[nodiscard]] QString resolveOwnerUuidFromManifest(QString const& pluginDirPath) {
+    QFile mf(QDir(pluginDirPath).filePath(QStringLiteral("manifest.json")));
+    if (!mf.open(QIODevice::ReadOnly)) {
+        return {};
+    }
+    auto const parsed = parsePluginManifest(mf.readAll());
+    if (!parsed) {
+        return {};
+    }
+    if (!parsed->puuid.isEmpty()) {
+        return parsed->puuid;
+    }
+    auto const commonDottedPrefix = [](QString const& a, QString const& b) {
+        QStringList const as = a.split(QLatin1Char('.'));
+        QStringList const bs = b.split(QLatin1Char('.'));
+        QStringList out;
+        for (int i = 0; i < as.size() && i < bs.size() && as[i] == bs[i]; ++i) {
+            out << as[i];
+        }
+        return out.join(QLatin1Char('.'));
+    };
+    QString owner;
+    for (PluginAction const& a : parsed->actions) {
+        if (a.uuid.isEmpty()) {
+            continue;
+        }
+        owner = owner.isEmpty() ? a.uuid : commonDottedPrefix(owner, a.uuid);
+    }
+    return owner;
+}
 
 /// #81: derive a safe install-directory name (`<UUID>.sdPlugin`) from a
 /// manifest's plugin UUID. The Stream Deck convention is that the install
@@ -311,8 +364,7 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
         // below like any other entry, so CR-01 still holds: a tampered dir
         // that somehow got restored is re-verified and removed as Refused.
         QStringList const disabled =
-            dir.entryList(QStringList{QStringLiteral("*.sdPlugin") + kQuarantineSuffix},
-                          QDir::Dirs | QDir::NoDotAndDotDot);
+            listDirsWithSuffixCi(dir, QStringLiteral(".sdPlugin") + kQuarantineSuffix);
         for (QString const& entry : disabled) {
             QString const original = entry.chopped(kQuarantineSuffix.size());
             if (!consentToUnsigned() && !perPluginAllowed(original)) {
@@ -339,8 +391,7 @@ PluginCatalogModel::PluginCatalogModel(QObject* parent)
             }
         }
 
-        QStringList const entries = dir.entryList(QStringList{QStringLiteral("*.sdPlugin")},
-                                                  QDir::Dirs | QDir::NoDotAndDotDot);
+        QStringList const entries = listDirsWithSuffixCi(dir, QStringLiteral(".sdPlugin"));
         for (QString const& entry : entries) {
             QString const manifestPath = dir.filePath(entry + QStringLiteral("/manifest.json"));
             if (!QFile::exists(manifestPath)) {
@@ -606,8 +657,7 @@ QVariantList PluginCatalogModel::installedActions() const {
     // happily running — observed live with com.jk.weather (MinimumVersion 4.1):
     // registered over the WebSocket yet invisible in the action picker.
     QString const appVer = emulatedStreamDeckVersion();
-    QStringList const entries =
-        dir.entryList(QStringList{QStringLiteral("*.sdPlugin")}, QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList const entries = listDirsWithSuffixCi(dir, QStringLiteral(".sdPlugin"));
 
     for (QString const& entry : entries) {
         QString const pluginDir = dir.filePath(entry);
@@ -827,8 +877,7 @@ QVariantList PluginCatalogModel::installedUnsupportedPlugins() const {
 
     QString const platform = currentPlatformString();
     QString const appVer = emulatedStreamDeckVersion();
-    QStringList const entries =
-        dir.entryList(QStringList{QStringLiteral("*.sdPlugin")}, QDir::Dirs | QDir::NoDotAndDotDot);
+    QStringList const entries = listDirsWithSuffixCi(dir, QStringLiteral(".sdPlugin"));
 
     for (QString const& entry : entries) {
         QString const pluginDir = dir.filePath(entry);
@@ -1616,6 +1665,10 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     // Clean up staging parent if empty.
     QDir(stagingParent).removeRecursively();
 
+    // audit 3.3: retire any duplicate of this plugin installed under a
+    // different directory name (CDN installs use the numeric product id).
+    dedupeDuplicateInstalls(installName);
+
     // Flip install state and emit signals (same pattern as network install()).
     // WR-03 fix: key by UUID (not by localPath) so m_install stays bounded.
     // The localPath key was never cleaned up by reload()/uninstall() and caused
@@ -1717,6 +1770,10 @@ void PluginCatalogModel::finalizeAssembledInstall(QString const& uuid,
             uuid, false, QStringLiteral("Failed to promote plugin to install dir."));
         return;
     }
+
+    // audit 3.3: retire any duplicate of this plugin installed under a
+    // different directory name.
+    dedupeDuplicateInstalls(installName);
 
     int const r = findRow(m_rows, uuid);
     if (r >= 0) {
@@ -2066,6 +2123,10 @@ bool PluginCatalogModel::install(QString const& uuid) {
             }
         }
 
+        // audit 3.3: retire any duplicate of this plugin installed under a
+        // different directory name (file installs use the manifest UUID).
+        self->dedupeDuplicateInstalls(archiveName);
+
         int const r = findRow(self->m_rows, uuidCopy);
         if (r >= 0) {
             auto& s = self->m_install[uuidCopy];
@@ -2083,6 +2144,52 @@ bool PluginCatalogModel::install(QString const& uuid) {
         emit self->installFinished(uuidCopy, true, QString{});
     });
     return true;
+}
+
+void PluginCatalogModel::dedupeDuplicateInstalls(QString const& keepDirName) {
+    // audit 3.3: CDN installs are named by numeric product id, file installs by
+    // manifest UUID — the SAME plugin could exist under two directory names,
+    // with both copies spawning and racing each other's contexts. After any
+    // successful install, sweep the plugins dir for OTHER directories whose
+    // manifest resolves to the same owner UUID and retire them: the fresh
+    // install is the user's intent. pluginWillBeReplaced (NOT
+    // pluginUninstalled) tears down the running old copy while PRESERVING the
+    // user's bindings — the owner UUID stays installed under keepDirName.
+    QDir const dir(userPluginsDir());
+    QString const keepUuid = resolveOwnerUuidFromManifest(dir.filePath(keepDirName));
+    if (keepUuid.isEmpty()) {
+        return;
+    }
+    QStringList const entries = listDirsWithSuffixCi(dir, QStringLiteral(".sdPlugin"));
+    for (QString const& entry : entries) {
+        if (entry.compare(keepDirName, Qt::CaseInsensitive) == 0) {
+            continue;
+        }
+        if (resolveOwnerUuidFromManifest(dir.filePath(entry)) != keepUuid) {
+            continue;
+        }
+        emit pluginWillBeReplaced(entry);
+        if (!QDir(dir.filePath(entry)).removeRecursively()) {
+            AJAZZ_LOG_WARN("plugin-catalog",
+                           "dedupe: failed to remove duplicate install '{}' (owner '{}')",
+                           entry.toStdString(),
+                           keepUuid.toStdString());
+            continue;
+        }
+        // The duplicate's consent key must not outlive its dir (same rule as
+        // removeInstalledPlugin, audit 3.13).
+        QString consentBase = entry;
+        if (consentBase.endsWith(QStringLiteral(".sdPlugin"), Qt::CaseInsensitive)) {
+            consentBase.chop(9);
+        }
+        QSettings settings;
+        settings.remove(QStringLiteral("plugins/allowed/") + consentBase);
+        AJAZZ_LOG_INFO("plugin-catalog",
+                       "dedupe: removed duplicate install '{}' of owner '{}' (kept '{}')",
+                       entry.toStdString(),
+                       keepUuid.toStdString(),
+                       keepDirName.toStdString());
+    }
 }
 
 bool PluginCatalogModel::uninstall(QString const& uuid) {
@@ -2147,38 +2254,7 @@ bool PluginCatalogModel::removeInstalledPlugin(QString const& installDirName) {
     // Resolve the plugin-owner UUID BEFORE deletion so we can clear the bindings
     // the plugin owns. clearBindingsForPlugin matches an owner uuid plus its
     // dotted action children (NOT the catalogue uuid or the install-dir name).
-    // Prefer the AJAZZ PUUID extension; Elgato manifests carry no top-level
-    // plugin UUID, so fall back to the longest reverse-DNS prefix shared by the
-    // action UUIDs (e.g. actions com.foo.bar.{a,b} -> owner com.foo.bar).
-    QString manifestUuid;
-    {
-        QFile mf(QDir(targetInfo.filePath()).filePath(QStringLiteral("manifest.json")));
-        if (mf.open(QIODevice::ReadOnly)) {
-            if (auto const parsed = parsePluginManifest(mf.readAll())) {
-                if (!parsed->puuid.isEmpty()) {
-                    manifestUuid = parsed->puuid;
-                } else {
-                    auto const commonDottedPrefix = [](QString const& a, QString const& b) {
-                        QStringList const as = a.split(QLatin1Char('.'));
-                        QStringList const bs = b.split(QLatin1Char('.'));
-                        QStringList out;
-                        for (int i = 0; i < as.size() && i < bs.size() && as[i] == bs[i]; ++i) {
-                            out << as[i];
-                        }
-                        return out.join(QLatin1Char('.'));
-                    };
-                    for (PluginAction const& a : parsed->actions) {
-                        if (a.uuid.isEmpty()) {
-                            continue;
-                        }
-                        manifestUuid = manifestUuid.isEmpty()
-                                           ? a.uuid
-                                           : commonDottedPrefix(manifestUuid, a.uuid);
-                    }
-                }
-            }
-        }
-    }
+    QString const manifestUuid = resolveOwnerUuidFromManifest(targetInfo.filePath());
 
     if (!QDir(targetInfo.filePath()).removeRecursively()) {
         AJAZZ_LOG_WARN("plugin-catalog",
