@@ -233,12 +233,18 @@ else()
         GIT_SHALLOW TRUE
     )
     set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Disable zlib examples" FORCE)
+    # Suppress zlib's install() rules: they run during `cpack` and install headers + libs to the
+    # absolute prefix baked at configure (e.g. /usr/local/lib), which breaks packaging (macOS
+    # DragNDrop: EACCES on /usr/local; Windows WIX: install-tree error) and would pollute deb/rpm
+    # payloads. We link zlibstatic PRIVATE-only — nothing of zlib belongs in the installed package.
+    set(SKIP_INSTALL_ALL ON)
     # zlib v1.3.1 targets cmake_minimum_required < 3.10; force a 3.10 policy floor for the
     # subproject so CMake 4.x accepts it without the `Compatibility with CMake < 3.10` deprecation
     # (same handling as hidapi above; violates our zero-warnings invariant otherwise).
     set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
     FetchContent_MakeAvailable(zlib)
     unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+    unset(SKIP_INSTALL_ALL)
     # zlib's headers (zlib.h) use constructs our strict warning wall rejects (-Wold-style-cast et
     # al.). find_package(ZLIB) headers come in via -isystem (warnings suppressed); FetchContent
     # propagates them as plain -I, so mark them SYSTEM explicitly or sdplugin_extractor.cpp fails
