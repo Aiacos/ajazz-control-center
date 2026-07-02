@@ -558,6 +558,13 @@ public slots:
     /// one context namespace (audit 2.4).
     [[nodiscard]] QString canonicalContextId(QString const& contextId) const;
 
+    /// Live settings JSON for @p contextId (accepts both wire and SPA forms) —
+    /// the registry copy kept fresh by setSettings/PI writes/populate. Empty
+    /// when the context has no mounted instance. Backs the OpenDeck bridge's
+    /// instance-settings overlay (audit 6.4) so a reopened Property Inspector
+    /// shows the values the plugin actually runs on.
+    [[nodiscard]] QString settingsJsonForContext(QString const& contextId) const;
+
     /**
      * @brief Resolve a Property Inspector context to a registered ActionContext.
      *

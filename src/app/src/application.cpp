@@ -535,6 +535,18 @@ Application::Application(QObject* parent)
     m_openDeckBridge->setPluginEventSender([this](QString const& plugin, QJsonObject const& ev) {
         return m_pluginServer ? m_pluginServer->sendEvent(plugin, ev) : false;
     });
+    // "Start at login" (audit 5.2): the SPA settings checkbox drives the OS
+    // autolaunch through the same AutostartService the native QML page uses.
+    m_openDeckBridge->setAutolaunchSetter([this](bool on) {
+        if (m_autostart) {
+            m_autostart->setLaunchOnLogin(on);
+        }
+    });
+    // Reopened-PI settings (audit 6.4): overlay each instance's settings with
+    // the live bridge-registry record so the PI shows what the plugin runs on.
+    m_openDeckBridge->setInstanceSettingsResolver([this](QString const& ctx) -> QString {
+        return m_pluginBridge ? m_pluginBridge->settingsJsonForContext(ctx) : QString{};
+    });
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_openDeckBridge.get(),

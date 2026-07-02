@@ -2132,6 +2132,11 @@ QString PluginDeviceBridge::canonicalContextId(QString const& contextId) const {
     return ctx.has_value() ? ContextRegistry::deriveContextId(*ctx) : contextId;
 }
 
+QString PluginDeviceBridge::settingsJsonForContext(QString const& contextId) const {
+    auto const ctx = lookupContext(contextId);
+    return ctx.has_value() ? ctx->settingsJson : QString{};
+}
+
 std::optional<ActionContext>
 PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) const {
     // SPA context: "device.profile.controller.position" (profile may contain

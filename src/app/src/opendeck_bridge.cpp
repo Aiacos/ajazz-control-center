@@ -3,6 +3,7 @@
 
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
+#include "ajazz/core/profile_io.hpp"
 #include "device_model.hpp"
 #include "plugin_catalog_model.hpp"
 #include "profile_controller.hpp"
@@ -32,6 +33,7 @@
 #include <QUrl>
 
 #include <algorithm>
+#include <filesystem>
 
 namespace ajazz::app {
 
@@ -214,6 +216,13 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                 m_control->setBrightness(codename,
                                          incoming.value(QStringLiteral("brightness")).toInt(50));
             }
+        }
+        // audit 5.2: "Start at login" — upstream toggles the OS autolaunch on
+        // every save (settings.rs autolaunch enable/disable). Wired to
+        // AutostartService in Application; `sleep` stays open (needs a
+        // display-sleep timer, device_sleep.rs analogue).
+        if (m_autolaunchSetter && incoming.contains(QStringLiteral("autolaunch"))) {
+            m_autolaunchSetter(incoming.value(QStringLiteral("autolaunch")).toBool());
         }
         return str(QJsonValue(QJsonValue::Null));
     }
@@ -486,6 +495,32 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         int const keyCount = caps.value(QStringLiteral("keyCount")).toInt();
         int const encoderCount = caps.value(QStringLiteral("encoderCount")).toInt();
         int const touchCount = caps.value(QStringLiteral("touchZoneCount")).toInt();
+        // audit 1.3: the app holds ONE active profile, but the SPA tracks a
+        // selected profile PER DEVICE — asking for device B while device A's
+        // profile is active used to return A's bindings dressed in B's
+        // geometry. For a non-active device, shape that device's remembered
+        // selection (recorded by set_selected_profile; first library profile
+        // as the fallback) from disk WITHOUT activating it.
+        if (device != QString::fromStdString(profile.deviceCodename)) {
+            QSettings settings;
+            QString const remembered =
+                settings.value(QStringLiteral("opendeck/selectedProfile/") + device).toString();
+            QString path;
+            for (QVariant const& v : m_profiles->profilesForDevice(device)) {
+                QVariantMap const m = v.toMap();
+                if (path.isEmpty() || m.value(QStringLiteral("name")).toString() == remembered) {
+                    path = m.value(QStringLiteral("path")).toString();
+                }
+            }
+            if (path.isEmpty()) {
+                return str(QJsonValue(QJsonValue::Null)); // no profile for this device yet
+            }
+            core::Profile const other =
+                core::readProfileFromDisk(std::filesystem::path(path.toStdString()));
+            QJsonObject prof = profileJson(other, keyCount, encoderCount, touchCount);
+            markOrphanedInstances(prof);
+            return str(prof);
+        }
         QJsonObject prof = profileJson(profile, keyCount, encoderCount, touchCount);
         markOrphanedInstances(prof);
         return str(prof);
@@ -582,6 +617,17 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         if (m_control == nullptr || !c.valid) {
             return str(QJsonValue(QJsonValue::Null));
         }
+        // audit 4.4 (device/profile gate): the SPA re-renders keys for
+        // WHATEVER profile/device it is browsing; only frames belonging to
+        // the ACTIVE profile may reach the hardware, or browsing another
+        // device's profile paints the wrong panel.
+        if (m_profiles != nullptr) {
+            core::Profile const& active = m_profiles->activeProfile();
+            if (c.device != QString::fromStdString(active.deviceCodename) ||
+                (!c.profile.isEmpty() && c.profile != QString::fromStdString(active.name))) {
+                return str(QJsonValue(QJsonValue::Null));
+            }
+        }
         int const keyCount = keyCountOf(c.device);
         QJsonValue const imgVal = args.value(QStringLiteral("image"));
         if (imgVal.isNull() || imgVal.toString().isEmpty()) {
@@ -624,6 +670,13 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         if (m_profiles != nullptr) {
             QString const device = args.value(QStringLiteral("device")).toString();
             QString const name = args.value(QStringLiteral("id")).toString();
+            // audit 1.3: remember the per-device selection so
+            // get_selected_profile(device) answers correctly for a device
+            // whose profile is not the globally-active one.
+            if (!device.isEmpty() && !name.isEmpty()) {
+                QSettings settings;
+                settings.setValue(QStringLiteral("opendeck/selectedProfile/") + device, name);
+            }
             bool found = false;
             for (QVariant const& v : m_profiles->profilesForDevice(device)) {
                 QVariantMap const m = v.toMap();
@@ -1157,7 +1210,7 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
         }
     }
 
-    auto annotate = [&known, &meta](QJsonArray const& in) {
+    auto annotate = [this, &known, &meta](QJsonArray const& in) {
         QJsonArray out;
         for (QJsonValue const& slotV : in) {
             if (!slotV.isObject()) {
@@ -1178,6 +1231,17 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
                 action[QStringLiteral("name")] =
                     QStringLiteral("%1 (plugin not installed)").arg(name.isEmpty() ? uuid : name);
                 slot[QStringLiteral("action")] = action;
+            }
+            // audit 6.4: the PI reads instance.settings from this object, but
+            // the PLUGIN runs on the bridge-registry/store record — overlay the
+            // live value so a reopened PI shows what the plugin actually uses.
+            if (m_instanceSettingsResolver) {
+                QString const live =
+                    m_instanceSettingsResolver(slot.value(QStringLiteral("context")).toString());
+                if (!live.isEmpty()) {
+                    slot[QStringLiteral("settings")] =
+                        QJsonDocument::fromJson(live.toUtf8()).object();
+                }
             }
             out.append(slot);
         }

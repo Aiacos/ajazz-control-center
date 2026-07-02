@@ -227,6 +227,21 @@ public:
         m_pluginEventSender = std::move(sender);
     }
 
+    /// Inject the OS autolaunch toggle (audit 5.2: the SPA "Start at login"
+    /// checkbox). Wired in Application to AutostartService::setLaunchOnLogin.
+    void setAutolaunchSetter(std::function<void(bool)> setter) {
+        m_autolaunchSetter = std::move(setter);
+    }
+
+    /// Inject the live per-instance settings resolver (audit 6.4): maps an SPA
+    /// context string to the settings JSON the PLUGIN is actually running on
+    /// (the bridge registry / persisted store), so a reopened Property
+    /// Inspector shows the real values instead of the binding's stale
+    /// defaults. Wired in Application to PluginDeviceBridge.
+    void setInstanceSettingsResolver(std::function<QString(QString const&)> resolver) {
+        m_instanceSettingsResolver = std::move(resolver);
+    }
+
     // Bring QObject::event(QEvent*) into scope so the QWebChannel `event` signal
     // below does not "hide" the inherited virtual — AppleClang's
     // -Werror=overloaded-virtual (and MSVC /W4) otherwise fail the build, while
@@ -269,7 +284,10 @@ private:
     std::function<QString(QString const&)> m_infoJsonResolver; // see setInfoJsonResolver
     std::function<void(QString const&)> m_pluginReloader;      // see setPluginReloader
     std::function<bool(QString const&, QJsonObject const&)>
-        m_pluginEventSender; // see setPluginEventSender
+        m_pluginEventSender;                      // see setPluginEventSender
+    std::function<void(bool)> m_autolaunchSetter; // see setAutolaunchSetter
+    std::function<QString(QString const&)>
+        m_instanceSettingsResolver; // see setInstanceSettingsResolver
     QNetworkAccessManager* m_pluginDownloader = nullptr;
 };
 
