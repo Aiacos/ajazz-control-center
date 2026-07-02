@@ -36,7 +36,9 @@ inline constexpr long long kMaxSettingsBytes = 1LL << 20;
 /// and PI-supplied ids are untrusted.
 [[nodiscard]] bool isSafeComponent(QString const& s);
 
-/// Read the per-context settings record. Returns "{}" on any error / first load.
+/// Read the per-context settings record. Returns "" when NO record exists
+/// (first load) so callers can distinguish "never saved" from an explicit
+/// stored "{}" clear (audit 6.10); returns "{}" on read errors.
 [[nodiscard]] QString readContext(QString const& pluginUuid, QString const& contextId);
 
 /// Persist the per-context settings record (json must already parse + be capped).

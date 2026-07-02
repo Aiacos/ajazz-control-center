@@ -127,6 +127,10 @@ struct PluginManifest {
     // --- AJAZZ extension flags ---
     bool runAsAdministrator{false}; ///< RunAsAdministrator
     bool isK1Pro{false};            ///< IsK1Pro (top-level; per-action IsK1Pro is in PluginAction)
+    /// HasSettingsInterface (OpenDeck extension): the plugin accepts a
+    /// `showSettingsInterface` event; gates the SPA's per-plugin Settings
+    /// button (audit 4.8).
+    bool hasSettingsInterface{false};
 
     // --- Application monitoring (Elgato ApplicationsToMonitor) ---
     /// ApplicationsToMonitor — the apps this plugin asks to be told about via

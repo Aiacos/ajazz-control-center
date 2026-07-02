@@ -776,6 +776,19 @@ QVariantList PluginCatalogModel::installedActions() const {
             m.insert(QStringLiteral("defaultSettings"),
                      QString::fromStdString(action.defaultSettings));
             m.insert(QStringLiteral("encoderLayout"), action.encoderBlock.layout);
+            // audit 4.8: plugin-level flags for the SPA PluginManager —
+            // `builtin` = seeded from the app bundle (hides the trash icon);
+            // `has_settings_interface` = manifest HasSettingsInterface.
+            {
+                QString base = entry;
+                if (base.endsWith(QStringLiteral(".sdPlugin"), Qt::CaseInsensitive)) {
+                    base.chop(9);
+                }
+                QSettings settings;
+                m.insert(QStringLiteral("pluginBuiltin"),
+                         settings.value(QStringLiteral("plugins/seeded/") + base, false).toBool());
+            }
+            m.insert(QStringLiteral("pluginHasSettingsInterface"), parsed->hasSettingsInterface);
             out.append(m);
         }
     }

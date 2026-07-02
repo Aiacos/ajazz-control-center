@@ -181,7 +181,15 @@ bool isSafeComponent(QString const& s) {
 }
 
 QString readContext(QString const& pluginUuid, QString const& contextId) {
-    return readJsonOrEmpty(perContextPath(pluginUuid, contextId), QStringLiteral("readContext"));
+    // audit 6.10: an ABSENT record must be distinguishable from a stored "{}"
+    // (a plugin's explicit setSettings({}) clear). Return "" on first load so
+    // willAppear's settingsForContext falls back to the binding/manifest
+    // defaults ONLY when nothing was ever saved for this context.
+    QString const path = perContextPath(pluginUuid, contextId);
+    if (path.isEmpty() || !QFile::exists(path)) {
+        return {};
+    }
+    return readJsonOrEmpty(path, QStringLiteral("readContext"));
 }
 
 bool writeContext(QString const& pluginUuid, QString const& contextId, QString const& json) {

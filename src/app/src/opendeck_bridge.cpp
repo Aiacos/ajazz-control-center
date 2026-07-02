@@ -323,14 +323,23 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                 // "undefined" and a permanent disconnected warning. Everything
                 // list_plugins reports comes from installedActions(), which only
                 // lists plugins with a runnable action on this OS -> registered.
-                byPlugin.insert(id,
-                                QJsonObject{{QStringLiteral("id"), id},
-                                            {QStringLiteral("name"),
-                                             a.value(QStringLiteral("pluginName")).toString()},
-                                            {QStringLiteral("version"),
-                                             a.value(QStringLiteral("pluginVersion")).toString()},
-                                            {QStringLiteral("registered"), true},
-                                            {QStringLiteral("icon"), icon}});
+                // `builtin` hides the SPA trash affordance for plugins we seed
+                // from the app bundle; `has_settings_interface` gates the
+                // per-plugin Settings button (manifest HasSettingsInterface,
+                // OpenDeck extension) — audit 4.8.
+                byPlugin.insert(
+                    id,
+                    QJsonObject{
+                        {QStringLiteral("id"), id},
+                        {QStringLiteral("name"), a.value(QStringLiteral("pluginName")).toString()},
+                        {QStringLiteral("version"),
+                         a.value(QStringLiteral("pluginVersion")).toString()},
+                        {QStringLiteral("registered"), true},
+                        {QStringLiteral("builtin"),
+                         a.value(QStringLiteral("pluginBuiltin")).toBool()},
+                        {QStringLiteral("has_settings_interface"),
+                         a.value(QStringLiteral("pluginHasSettingsInterface")).toBool()},
+                        {QStringLiteral("icon"), icon}});
             }
         }
         QJsonArray out;
@@ -350,6 +359,30 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             // Payload = the plugin id string (PropertyInspectorView refreshes
             // matching PI iframes on it; "{}" matched nothing — audit 4.7).
             emit event(QStringLiteral("plugin_reloaded"), jsonToString(QJsonValue(id)));
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+    if (command == QLatin1String("reload_plugin")) {
+        // audit 5.4: developer-mode "Reload" in the SPA PluginManager — tear
+        // down the running plugin and respawn it from disk (upstream
+        // plugins.rs::reload_plugin). willAppear replay follows automatically:
+        // the respawned plugin re-registers and onPluginRegistered repopulates
+        // its contexts. plugin_reloaded refreshes any open PI iframes.
+        QString const id = args.value(QStringLiteral("id")).toString();
+        if (m_pluginReloader && !id.isEmpty()) {
+            m_pluginReloader(id);
+            emit event(QStringLiteral("plugin_reloaded"), jsonToString(QJsonValue(id)));
+        }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+    if (command == QLatin1String("show_settings_interface")) {
+        // audit 5.4: the SPA's per-plugin "Settings" button — deliver the
+        // OpenDeck `showSettingsInterface` event to the plugin (settings.rs).
+        QString const plugin = args.value(QStringLiteral("plugin")).toString();
+        if (m_pluginEventSender && !plugin.isEmpty()) {
+            m_pluginEventSender(
+                plugin,
+                QJsonObject{{QStringLiteral("event"), QStringLiteral("showSettingsInterface")}});
         }
         return str(QJsonValue(QJsonValue::Null));
     }
@@ -1016,6 +1049,59 @@ void OpenDeckBridge::notifyLiveInstanceVisual(QString const& deviceId,
                opendeck_detail::jsonToString(QJsonObject{
                    {QStringLiteral("context"), ctx},
                    {QStringLiteral("contents"), contents},
+               }));
+}
+
+void OpenDeckBridge::notifyInstanceFeedback(QString const& deviceId,
+                                            QString const& controller,
+                                            int position,
+                                            bool ok) {
+    if (m_profiles == nullptr || position < 0) {
+        return;
+    }
+    core::Profile const& profile = m_profiles->activeProfile();
+    if (QString::fromStdString(profile.deviceCodename) != deviceId) {
+        return; // feedback for a device whose profile is not the active one
+    }
+    // Same SPA context form the Key slots carry (see notifyLiveInstanceVisual).
+    QString const ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
+                        QStringLiteral(".") + controller + QStringLiteral(".") +
+                        QString::number(position);
+    emit event(ok ? QStringLiteral("show_ok") : QStringLiteral("show_alert"),
+               opendeck_detail::jsonToString(QJsonValue(ctx)));
+}
+
+void OpenDeckBridge::notifyKeyPress(QString const& deviceId,
+                                    QString const& controller,
+                                    int position,
+                                    bool pressed) {
+    if (m_profiles == nullptr || position < 0) {
+        return;
+    }
+    core::Profile const& profile = m_profiles->activeProfile();
+    if (QString::fromStdString(profile.deviceCodename) != deviceId) {
+        return;
+    }
+    // Key.svelte matches the context via JSON.stringify equality against its
+    // own literal {device, profile, controller, position} — QJsonObject sorts
+    // keys alphabetically and would NEVER match, so serialise by hand in the
+    // SPA's literal key order (each string escaped via jsonToString).
+    QString const payload =
+        QStringLiteral("{\"context\":{\"device\":%1,\"profile\":%2,\"controller\":%3,"
+                       "\"position\":%4},\"pressed\":%5}")
+            .arg(opendeck_detail::jsonToString(QJsonValue(deviceId)),
+                 opendeck_detail::jsonToString(QJsonValue(QString::fromStdString(profile.name))),
+                 opendeck_detail::jsonToString(QJsonValue(controller)),
+                 QString::number(position),
+                 pressed ? QStringLiteral("true") : QStringLiteral("false"));
+    emit event(QStringLiteral("key_moved"), payload);
+}
+
+void OpenDeckBridge::notifyDeviceBrightness(QString const& action, int value) {
+    emit event(QStringLiteral("device_brightness"),
+               opendeck_detail::jsonToString(QJsonObject{
+                   {QStringLiteral("action"), action},
+                   {QStringLiteral("value"), value},
                }));
 }
 

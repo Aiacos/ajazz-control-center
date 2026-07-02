@@ -303,6 +303,8 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
     // AJAZZ extension flags (§2.1)
     m.runAsAdministrator = root.value(QStringLiteral("RunAsAdministrator")).toBool(false);
     m.isK1Pro = root.value(QStringLiteral("IsK1Pro")).toBool(false);
+    // OpenDeck extension (manifest.rs HasSettingsInterface) — audit 4.8.
+    m.hasSettingsInterface = root.value(QStringLiteral("HasSettingsInterface")).toBool(false);
 
     // Nodejs.Version — §2 Nodejs object (optional)
     QJsonValue const nodejsVal = root.value(QStringLiteral("Nodejs"));

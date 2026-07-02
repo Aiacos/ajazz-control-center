@@ -521,6 +521,20 @@ Application::Application(QObject* parent)
     m_openDeckBridge->setInfoJsonResolver([this](QString const& plugin) -> QString {
         return m_pluginManager ? m_pluginManager->infoJsonForPlugin(plugin) : QString{};
     });
+    // reload_plugin (audit 5.4): developer-mode Reload in the SPA — tear down
+    // the running plugin, then respawn it from disk. Same lazy-null pattern as
+    // the resolver above (m_pluginManager comes up in startBackgroundServices).
+    m_openDeckBridge->setPluginReloader([this](QString const& id) {
+        if (m_pluginManager) {
+            m_pluginManager->unloadPlugin(id);
+            m_pluginManager->rediscover();
+        }
+    });
+    // show_settings_interface (audit 5.4): deliver the OpenDeck
+    // `showSettingsInterface` event to the plugin over its WebSocket.
+    m_openDeckBridge->setPluginEventSender([this](QString const& plugin, QJsonObject const& ev) {
+        return m_pluginServer ? m_pluginServer->sendEvent(plugin, ev) : false;
+    });
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_openDeckBridge.get(),
@@ -773,6 +787,22 @@ Application::Application(QObject* parent)
                      &PluginDeviceBridge::liveInstanceVisual,
                      m_openDeckBridge.get(),
                      &OpenDeckBridge::notifyLiveInstanceVisual);
+
+    // 3c. audit 4.9: the remaining SPA event mirrors — showAlert/showOk feedback
+    //     glyphs ("show_alert"/"show_ok"), physical press state ("key_moved"),
+    //     and the plugin deviceBrightness extension ("device_brightness").
+    QObject::connect(m_pluginBridge.get(),
+                     &PluginDeviceBridge::instanceFeedback,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyInstanceFeedback);
+    QObject::connect(m_pluginBridge.get(),
+                     &PluginDeviceBridge::keyPressMirror,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyKeyPress);
+    QObject::connect(m_pluginBridge.get(),
+                     &PluginDeviceBridge::deviceBrightnessRequested,
+                     m_openDeckBridge.get(),
+                     &OpenDeckBridge::notifyDeviceBrightness);
 
     // 3a-F3. Property Inspector second-connection model (canonical doc §5).
     //   The server resolves which plugin owns a PI's instance context via this

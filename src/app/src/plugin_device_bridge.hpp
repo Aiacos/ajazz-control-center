@@ -85,6 +85,8 @@ struct ActionContext {
     QString pluginUuid;   ///< Owning plugin uuid, e.g. com.vendor.plugin.
     int stateIndex{0};    ///< Current 0-based action state (Elgato setState; §4.4 `state`).
     QString settingsJson; ///< Per-instance settings JSON (Elgato payload.settings); "" => {}.
+    QString title;        ///< User-set label from the binding's current state (audit 6.8):
+                          ///< delivered via titleParametersDidChange.title; "" when unset.
 };
 
 // ---------------------------------------------------------------------------
@@ -680,6 +682,25 @@ signals:
                                    QString const& contextId,
                                    QJsonObject const& descriptions);
 
+    /// Emitted when a plugin sends showAlert/showOk so the SPA canvas can flash
+    /// the same feedback glyph on the on-screen key (audit 4.9 — Key.svelte
+    /// listens for "show_alert"/"show_ok"). @p position is the 0-based SPA slot
+    /// (same convention as liveInstanceVisual); @p ok distinguishes showOk.
+    void
+    instanceFeedback(QString const& deviceId, QString const& controller, int position, bool ok);
+
+    /// Emitted on a physical key / dial press+release so the SPA can render the
+    /// pressed state on the on-screen control (audit 4.9 — "key_moved").
+    /// @p controller is "Keypad" or "Encoder"; @p position the 0-based SPA slot.
+    void
+    keyPressMirror(QString const& deviceId, QString const& controller, int position, bool pressed);
+
+    /// Emitted when a plugin sends the OpenDeck `deviceBrightness` extension
+    /// event ({action: set|increase|decrease, value}) — mirrored to the SPA
+    /// settings slider (audit 4.9 — "device_brightness"). The hardware write
+    /// follows via the SPA settings round-trip, matching upstream OpenDeck.
+    void deviceBrightnessRequested(QString const& action, int value);
+
 private:
     /// Handle the inbound settings + PI-relay family (setSettings / getSettings /
     /// setGlobalSettings / getGlobalSettings / sendToPropertyInspector) that the
@@ -752,6 +773,10 @@ private:
     /// Set of currently registered plugin UUIDs (from pluginRegistered signal).
     /// Used for owner resolution and lifecycle gating (T-19-owner).
     QSet<QString> m_registeredPlugins;
+    /// Devices currently connected (audit 6.9): onPluginRegistered replays
+    /// deviceDidConnect for each so a late-registering plugin still learns
+    /// about devices that connected before its WS handshake completed.
+    QSet<QString> m_connectedDevices;
 
     /// Most-recently-connected device codename. Updated by onDeviceConnected /
     /// onDeviceDisconnected. Used by onPluginRegistered / onPluginDisconnected as

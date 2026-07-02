@@ -380,11 +380,12 @@ QJsonObject instancePayload(ActionContext const& ctx, bool isInMultiAction = fal
 /// Mirrors instancePayload() for the shared instance keys (settings/coordinates/
 /// controller/state) and ADDS the title surface a plugin renders from at appear time.
 ///
-/// `title` is sourced from the binding label on ctx; ActionContext carries no label
-/// today, so it resolves to "" (an empty title is a valid SDK-2 value). The
-/// titleParameters defaults are the SDK-2 shape — [ASSUMED] exact values (research
-/// A1/A2); the Catch2 completeness test LOCKS the chosen shape and the end-of-phase
-/// human-verify confirms the values if a real plugin reads them.
+/// `title` is the user-set label carried on ctx.title (sourced from the binding's
+/// current state at populate time — audit 6.8; "" when unset is a valid SDK-2
+/// value). The titleParameters defaults are the SDK-2 shape — [ASSUMED] exact
+/// values (research A1/A2); the Catch2 completeness test LOCKS the chosen shape
+/// and the end-of-phase human-verify confirms the values if a real plugin reads
+/// them.
 QJsonObject titlePayload(ActionContext const& ctx) {
     QJsonObject settings;
     if (!ctx.settingsJson.isEmpty()) {
@@ -400,7 +401,7 @@ QJsonObject titlePayload(ActionContext const& ctx) {
          QJsonObject{{QStringLiteral("row"), ctx.row}, {QStringLiteral("column"), ctx.column}}},
         {QStringLiteral("controller"), ctx.controller},
         {QStringLiteral("state"), ctx.stateIndex},
-        {QStringLiteral("title"), QString{}},
+        {QStringLiteral("title"), ctx.title},
         {QStringLiteral("titleParameters"),
          QJsonObject{
              {QStringLiteral("fontFamily"), QString{}},
@@ -439,8 +440,11 @@ QString settingsForContext(QString const& pluginUuid,
                            QString const& contextId,
                            QString const& bindingDefault,
                            QString const& manifestDefault = {}) {
+    // audit 6.10: an EXPLICIT stored "{}" is an intentional clear (a plugin/PI
+    // setSettings({})) and must win over the defaults — readContext returns
+    // "" (not "{}") when no record exists, so the two cases are distinct.
     QString const stored = plugin_settings_store::readContext(pluginUuid, contextId);
-    if (!stored.isEmpty() && stored != QStringLiteral("{}")) {
+    if (!stored.isEmpty()) {
         return stored;
     }
     if (!bindingDefault.isEmpty() && bindingDefault != QStringLiteral("{}")) {
@@ -710,8 +714,10 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
         // getSettings: reflect the persisted record (falls back to the in-ctx
         // value) and reply to the REQUESTER — the reply used to go to the
         // plugin even when the PI asked, leaving PI forms blank (audit 2.1).
+        // audit 6.10: a persisted "{}" is an intentional clear and is
+        // reflected as-is; only a MISSING record ("") keeps the in-ctx value.
         QString const stored = plugin_settings_store::readContext(owner, wireId);
-        if (stored != QStringLiteral("{}") || ctx.settingsJson.isEmpty()) {
+        if (!stored.isEmpty()) {
             ctx.settingsJson = stored;
         }
         QJsonObject reply =
@@ -752,6 +758,20 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
         return;
     }
 
+    // OpenDeck `deviceBrightness` extension (audit 4.9): {action, value} at the
+    // envelope top level (inbound/misc.rs DeviceBrightnessEvent). Mirror-only:
+    // the SPA adjusts its settings slider and the hardware write follows via
+    // the settings round-trip, exactly like upstream.
+    if (event == QStringLiteral("deviceBrightness")) {
+        QString brightnessAction = action.value(QStringLiteral("action")).toString();
+        int const value = action.value(QStringLiteral("value")).toInt(0);
+        if (brightnessAction.isEmpty()) {
+            brightnessAction = QStringLiteral("set");
+        }
+        emit deviceBrightnessRequested(brightnessAction, value);
+        return;
+    }
+
     if (!isVisualAction(event)) {
         return; // no-op for other non-visual actions (handled in later phases)
     }
@@ -768,6 +788,17 @@ void PluginDeviceBridge::onAction(QString const& pluginUuid, QJsonObject const& 
     // bound action it owns (ctx.pluginUuid must match the sending pluginUuid).
     if (ctx.pluginUuid != pluginUuid) {
         return; // cross-plugin denial: no paint, no crash
+    }
+
+    // audit 4.9: mirror transient feedback to the SPA canvas (Key.svelte
+    // show_alert/show_ok) BEFORE the control-service guard, so the on-screen
+    // key flashes even with no physical device attached.
+    if (event == QStringLiteral("showAlert") || event == QStringLiteral("showOk")) {
+        std::uint8_t const cols = geometryForDevice(ctx.deviceId).keyCols;
+        int const spaPos =
+            ctx.controller == QLatin1String("Encoder") ? ctx.column : ctx.row * cols + ctx.column;
+        emit instanceFeedback(
+            ctx.deviceId, ctx.controller, spaPos, event == QStringLiteral("showOk"));
     }
 
     // Guard: if m_control is null (test shim without a real control service) we
@@ -1322,6 +1353,10 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         }
 
         QString const eventName = isRelease ? QStringLiteral("keyUp") : QStringLiteral("keyDown");
+        // audit 4.9: mirror the press state to the SPA ("key_moved") so the
+        // on-screen key renders pressed/released like upstream keypad.rs.
+        emit keyPressMirror(
+            deviceId, QStringLiteral("Keypad"), gc.row * keyCols + gc.column, !isRelease);
         // Full Elgato envelope: top-level action/context/device + GenericInstancePayload.
         // sendEvent returns false safely if socket is closed (T-19-sock).
         m_server->sendEvent(ctx.pluginUuid, eventEnvelope(eventName, ctx, instancePayload(ctx)));
@@ -1373,6 +1408,9 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return;
         }
         ActionContext const& ctx = *ctxOpt;
+        // audit 4.9: upstream mirrors dialDown/dialUp as key_moved too
+        // (encoder.rs:85).
+        emit keyPressMirror(deviceId, QStringLiteral("Encoder"), static_cast<int>(ev.index), true);
         QJsonObject const payload = instancePayload(ctx);
         m_server->sendEvent(ctx.pluginUuid,
                             eventEnvelope(QStringLiteral("dialDown"), ctx, payload));
@@ -1394,6 +1432,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
             return;
         }
         ActionContext const& ctx = *ctxOpt;
+        emit keyPressMirror(deviceId, QStringLiteral("Encoder"), static_cast<int>(ev.index), false);
         QJsonObject const payload = instancePayload(ctx);
         m_server->sendEvent(ctx.pluginUuid, eventEnvelope(QStringLiteral("dialUp"), ctx, payload));
         m_server->sendEvent(ctx.pluginUuid,
@@ -1554,6 +1593,21 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
     std::uint8_t const keyCols = geometryForDevice(deviceId).keyCols; // F2
     QString const pageId = QStringLiteral("root");
 
+    // audit 6.8: resolve the user-set label for a binding so
+    // titleParametersDidChange delivers it (ctx.title). The OpenDeck-shaped
+    // instance's current state wins; the legacy KeyState label is the fallback.
+    auto const titleFromBinding = [](std::optional<core::ActionInstance> const& inst,
+                                     core::KeyState const& legacy) -> QString {
+        if (inst.has_value() && !inst->states.empty()) {
+            std::size_t const idx =
+                std::min<std::size_t>(inst->currentState, inst->states.size() - 1);
+            if (inst->states[idx].visual.text.has_value()) {
+                return QString::fromStdString(*inst->states[idx].visual.text);
+            }
+        }
+        return legacy.text.has_value() ? QString::fromStdString(*legacy.text) : QString{};
+    };
+
     // RECONCILE (PLUGIN-move parity, mirrors OpenDeck move_instance): collect the
     // set of context ids that SHOULD be live for this device/page given the current
     // profile. After the willAppear pass we diff this against the registry snapshot
@@ -1608,6 +1662,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 ContextRegistry::deriveContextId(ctx),
                 QString::fromStdString(action.settingsJson),
                 m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
+            ctx.title = titleFromBinding(binding.instance, binding.state); // audit 6.8
 
             // Track newness BEFORE registering: a brand-new context gets the
             // manifest default render below; an idempotent re-registration must
@@ -1700,6 +1755,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 ContextRegistry::deriveContextId(ctx),
                 QString::fromStdString(action.settingsJson),
                 m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
+            ctx.title = titleFromBinding(encBinding.instance, encBinding.state); // audit 6.8
 
             // Same newness/in-place-rebind semantics as the Keypad loop above.
             auto const priorEnc = m_registry.byContext(ContextRegistry::deriveContextId(ctx));
@@ -1771,6 +1827,8 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 ContextRegistry::deriveContextId(ctx),
                 QString::fromStdString(action.settingsJson),
                 m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
+            // audit 6.8 (TouchZoneBinding carries no OpenDeck-shaped instance).
+            ctx.title = titleFromBinding(std::nullopt, tzBinding.state);
 
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);
@@ -1861,6 +1919,20 @@ void PluginDeviceBridge::purgeContextVisualCaches(ActionContext const& ctx, QStr
 
 void PluginDeviceBridge::onPluginRegistered(QString const& pluginUuid) {
     m_registeredPlugins.insert(pluginUuid);
+    // audit 6.9: replay deviceDidConnect for every device that connected BEFORE
+    // this plugin finished its WS handshake — without it a late-registering
+    // plugin never learns a device exists (Elgato plugins commonly wait for
+    // deviceDidConnect before doing any work).
+    if (m_server != nullptr) {
+        for (QString const& connected : m_connectedDevices) {
+            m_server->sendEvent(pluginUuid,
+                                QJsonObject{
+                                    {QStringLiteral("event"), QStringLiteral("deviceDidConnect")},
+                                    {QStringLiteral("device"), connected},
+                                    {QStringLiteral("deviceInfo"), deviceInfoFor(connected)},
+                                });
+        }
+    }
     // WR-03: use the actual active device codename maintained by onDeviceConnected /
     // onDeviceDisconnected. Fall back to "akp05e" only when no device has yet
     // connected (test shim path or startup race). This removes the hardcoded
@@ -1890,6 +1962,7 @@ void PluginDeviceBridge::onDeviceConnected(QString const& deviceId) {
         m_titleByKey.clear();
     }
     m_activeDeviceId = deviceId;
+    m_connectedDevices.insert(deviceId); // audit 6.9: replay set
 
     // Populate contexts for the active page.
     populateContextsForActivePage(deviceId);
@@ -1919,6 +1992,7 @@ void PluginDeviceBridge::onDeviceDisconnected(QString const& deviceId) {
     if (m_activeDeviceId == deviceId) {
         m_activeDeviceId.clear();
     }
+    m_connectedDevices.remove(deviceId); // audit 6.9: replay set
     // WR-01: send willDisappear for every visible action context on this device
     // before retiring them. This matches the Elgato SDK spec (§4.4) requirement
     // that willDisappear is sent per context when a device disappears, and mirrors

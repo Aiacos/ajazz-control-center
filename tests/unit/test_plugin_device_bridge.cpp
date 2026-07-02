@@ -25,6 +25,7 @@
  * CLAUDE.md: ASCII-only TEST_CASE names/tags.
  */
 #include "plugin_device_bridge.hpp"
+#include "plugin_settings_store.hpp" // audit 6.10 clear-settings regression
 
 // 19-02 e2e: needs SdPluginServer + StreamDockControlService + device fixture.
 #ifdef AJAZZ_HAVE_WEBSOCKETS
@@ -1602,6 +1603,101 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear seeds manifest default Settings on f
     REQUIRE(settings.value(QStringLiteral("checkboxGroup")).isArray());
     CHECK(settings.value(QStringLiteral("checkboxGroup")).toArray().first().toString() ==
           QStringLiteral("showHour12"));
+}
+
+// ---------------------------------------------------------------------------
+// audit 6.10: an explicit stored "{}" (a plugin's setSettings({}) clear) must
+// survive willAppear — it used to be treated as "no record" and clobbered by
+// the binding/manifest defaults, so a plugin could never clear its settings.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E willAppear honours an explicit empty-settings clear",
+          "[plugin-device-bridge][e2e][lifecycle][audit-6-10]") {
+    ensureQCoreApp();
+    QStandardPaths::setTestModeEnabled(true);
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-clear";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.clear.action1";
+    act.settingsJson = R"({"leftover":"binding-default"})";
+    binding.onPress.push_back(act);
+    prof.keys[2] = std::move(binding);
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+    bridge->setDefaultSettingsResolver(
+        [](QString const&) -> QString { return QStringLiteral(R"({"seed":"manifest"})"); });
+
+    // The explicit clear: a persisted "{}" record for this context (key 2 =
+    // 1-based key 3 = {row 0, col 2} on the 5-column default geometry).
+    REQUIRE(
+        ajazz::app::plugin_settings_store::writeContext(QStringLiteral("com.test.clear"),
+                                                        QStringLiteral("akp05e#root#Keypad#0#2"),
+                                                        QStringLiteral("{}")));
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.clear"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.clear"));
+    pump19(500);
+
+    auto const event = firstEventForEvent(msgSpy, QStringLiteral("willAppear"));
+    auto const settings = event.value(QStringLiteral("payload"))
+                              .toObject()
+                              .value(QStringLiteral("settings"))
+                              .toObject();
+    // The stored clear wins: neither the binding default nor the manifest seed
+    // may resurrect.
+    CHECK(settings.isEmpty());
+
+    QStandardPaths::setTestModeEnabled(false);
+}
+
+// ---------------------------------------------------------------------------
+// audit 6.9: a plugin that registers AFTER a device connected must still
+// receive deviceDidConnect (replay) — Elgato plugins commonly gate all work on
+// it, so without the replay a late-registering plugin never starts.
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginDeviceBridgeE2E deviceDidConnect replayed to a late-registering plugin",
+          "[plugin-device-bridge][e2e][lifecycle][audit-6-9]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-replay";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Device connects FIRST — no plugin is registered yet.
+    bridge->onDeviceConnected(QStringLiteral("akp05e"));
+
+    // The plugin registers afterwards (slow spawn / late WS handshake).
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.late"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.late"));
+    pump19(500);
+
+    auto const names = receivedEventNames(msgSpy);
+    CHECK(names.contains(QStringLiteral("deviceDidConnect")));
+    auto const event = firstEventForEvent(msgSpy, QStringLiteral("deviceDidConnect"));
+    CHECK(event.value(QStringLiteral("device")).toString() == QStringLiteral("akp05e"));
+    CHECK(event.value(QStringLiteral("deviceInfo")).isObject());
 }
 
 // ---------------------------------------------------------------------------

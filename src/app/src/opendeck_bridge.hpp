@@ -184,6 +184,41 @@ public:
                                   QString const& title,
                                   bool titleChanged);
 
+    /// Mirror a plugin showAlert/showOk to the SPA canvas (audit 4.9): emits
+    /// "show_alert"/"show_ok" whose payload is the SPA context STRING of the
+    /// bound slot (Key.svelte compares it against slot.context). No-op when the
+    /// active profile belongs to another device or the slot is unbound.
+    void notifyInstanceFeedback(QString const& deviceId,
+                                QString const& controller,
+                                int position,
+                                bool ok);
+
+    /// Mirror a physical key/dial press to the SPA (audit 4.9): emits
+    /// "key_moved" {context, pressed}. The context is serialised as an ORDERED
+    /// object {device,profile,controller,position} because Key.svelte matches
+    /// it via JSON.stringify equality against its own literal (same key order).
+    void
+    notifyKeyPress(QString const& deviceId, QString const& controller, int position, bool pressed);
+
+    /// Mirror a plugin `deviceBrightness` request to the SPA settings slider
+    /// (audit 4.9): emits "device_brightness" {action, value}; the hardware
+    /// write follows via the SPA settings round-trip, matching upstream.
+    void notifyDeviceBrightness(QString const& action, int value);
+
+    /// Inject the plugin reloader (audit 5.4 reload_plugin): tears down the
+    /// running plugin and respawns it from disk. Wired in Application to
+    /// PluginManager unloadPlugin + rediscover. Lazy null-guarded.
+    void setPluginReloader(std::function<void(QString const&)> reloader) {
+        m_pluginReloader = std::move(reloader);
+    }
+
+    /// Inject a raw plugin-event sender (audit 5.4 show_settings_interface):
+    /// delivers one JSON event envelope to a running plugin's WebSocket. Wired
+    /// in Application to SdPluginServer::sendEvent. Lazy null-guarded.
+    void setPluginEventSender(std::function<bool(QString const&, QJsonObject const&)> sender) {
+        m_pluginEventSender = std::move(sender);
+    }
+
     // Bring QObject::event(QEvent*) into scope so the QWebChannel `event` signal
     // below does not "hide" the inherited virtual — AppleClang's
     // -Werror=overloaded-virtual (and MSVC /W4) otherwise fail the build, while
@@ -224,6 +259,9 @@ private:
     StreamDockControlService* m_control = nullptr;
     StreamDockInputService* m_input = nullptr;
     std::function<QString(QString const&)> m_infoJsonResolver; // see setInfoJsonResolver
+    std::function<void(QString const&)> m_pluginReloader;      // see setPluginReloader
+    std::function<bool(QString const&, QJsonObject const&)>
+        m_pluginEventSender; // see setPluginEventSender
     QNetworkAccessManager* m_pluginDownloader = nullptr;
 };
 
