@@ -628,19 +628,21 @@ signals:
                                   QString const& contextId,
                                   QJsonObject const& payload);
 
-    /// Emitted after a plugin-driven visual lands on a Keypad key (setImage /
-    /// setTitle), so the OpenDeck web UI can mirror the live key surface via its
+    /// Emitted after a plugin-driven visual lands on a control (setImage /
+    /// setTitle), so the OpenDeck web UI can mirror the live surface via its
     /// "update_state" event (Application wires this to
-    /// OpenDeckBridge::notifyLiveKeyVisual). Without it the SPA canvas shows only
-    /// the static bind-time icon while the physical key streams live frames.
-    /// @p position is the 0-based SPA key slot (row * keyCols + column).
+    /// OpenDeckBridge::notifyLiveInstanceVisual). Without it the SPA canvas
+    /// shows only the static bind-time icon while the hardware streams live
+    /// frames. @p controller is "Keypad" or "Encoder"; @p position is the
+    /// 0-based SPA slot (keys: row * keyCols + column; encoders: dial index).
     /// @p imageDataUri is empty when only the title changed; @p titleChanged
     /// distinguishes "title cleared" (true, empty title) from "no title change".
-    void liveKeyVisual(QString const& deviceId,
-                       int position,
-                       QString const& imageDataUri,
-                       QString const& title,
-                       bool titleChanged);
+    void liveInstanceVisual(QString const& deviceId,
+                            QString const& controller,
+                            int position,
+                            QString const& imageDataUri,
+                            QString const& title,
+                            bool titleChanged);
 
     /// Emitted when a plugin sends setTriggerDescription (SD+ dial interaction
     /// hints: rotate/push/touch/longTouch). Non-visual — the host records the

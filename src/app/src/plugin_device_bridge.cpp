@@ -804,6 +804,26 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
         return;
     }
 
+    // Encoder context: setImage paints the dial's touch-strip zone (vendor
+    // extension mirroring the SPA's update_image Encoder routing). openaction
+    // plugins have no set_feedback API as of v2.6, so a self-rendered strip
+    // tile via setImage is their only feedback channel; ctx.column is the
+    // 0-based encoder index. The keyIndexForCoords math below is keypad-only —
+    // running it for an encoder would paint a wrong key.
+    if (ctx.controller == QLatin1String("Encoder")) {
+        try {
+            m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), decoded.image);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "onSetImage: assignEncoderImage threw for encoder {}: {}",
+                           ctx.column,
+                           e.what());
+        }
+        emit liveInstanceVisual(
+            ctx.deviceId, QStringLiteral("Encoder"), ctx.column, dataUri, QString(), false);
+        return;
+    }
+
     // Compute the 1-based device keyIndex from the 0-based Elgato coordinates.
     // keyIndexForCoords: Pitfall 2 — single named converter from 0-based to 1-based.
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
@@ -826,9 +846,12 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
 
     // Mirror the live frame into the OpenDeck web UI (update_state). Emitted
     // after the device paint so the SPA never runs ahead of the hardware.
-    if (ctx.controller == QLatin1String("Keypad")) {
-        emit liveKeyVisual(ctx.deviceId, ctx.row * keyCols + ctx.column, dataUri, QString(), false);
-    }
+    emit liveInstanceVisual(ctx.deviceId,
+                            QStringLiteral("Keypad"),
+                            ctx.row * keyCols + ctx.column,
+                            dataUri,
+                            QString(),
+                            false);
 }
 
 void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
@@ -837,6 +860,16 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
                                     std::uint8_t keyCols) {
     QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
     QString const title = payload.value(QStringLiteral("title")).toString();
+
+    // Encoder context: there is no per-key title layer for strip zones — the
+    // feedback layout (or the plugin's own strip tile) owns all text. Mirror
+    // the title to the SPA slot and stop; the keypad keyIndex/composite math
+    // below would target a wrong key.
+    if (ctx.controller == QLatin1String("Encoder")) {
+        emit liveInstanceVisual(
+            ctx.deviceId, QStringLiteral("Encoder"), ctx.column, QString(), title, true);
+        return;
+    }
 
     // Track the title as an independent layer per key, then composite it over the
     // BASE image (the action surface set by setImage/setState/setBG) — not over
@@ -862,9 +895,12 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
     }
 
     // Mirror the title change into the OpenDeck web UI (update_state).
-    if (ctx.controller == QLatin1String("Keypad")) {
-        emit liveKeyVisual(ctx.deviceId, ctx.row * keyCols + ctx.column, QString(), title, true);
-    }
+    emit liveInstanceVisual(ctx.deviceId,
+                            QStringLiteral("Keypad"),
+                            ctx.row * keyCols + ctx.column,
+                            QString(),
+                            title,
+                            true);
 }
 
 void PluginDeviceBridge::reapplyTitle(std::uint8_t keyIndex) {

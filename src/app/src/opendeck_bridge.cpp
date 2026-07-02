@@ -678,11 +678,12 @@ void OpenDeckBridge::notifyProfileChanged() {
     emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
 }
 
-void OpenDeckBridge::notifyLiveKeyVisual(QString const& deviceId,
-                                         int position,
-                                         QString const& imageDataUri,
-                                         QString const& title,
-                                         bool titleChanged) {
+void OpenDeckBridge::notifyLiveInstanceVisual(QString const& deviceId,
+                                              QString const& controller,
+                                              int position,
+                                              QString const& imageDataUri,
+                                              QString const& title,
+                                              bool titleChanged) {
     if (m_profiles == nullptr || position < 0) {
         return;
     }
@@ -690,14 +691,30 @@ void OpenDeckBridge::notifyLiveKeyVisual(QString const& deviceId,
     if (QString::fromStdString(profile.deviceCodename) != deviceId) {
         return; // live paint for a device whose profile is not the active one
     }
-    auto const it = profile.keys.find(static_cast<std::uint16_t>(position));
-    if (it == profile.keys.end()) {
-        return; // stale paint for an unbound slot
+    // Resolve the bound instance for the slot; keys and encoders live in
+    // different profile maps but share the ActionInstance JSON shape (the SPA
+    // renders sliders with the same Key component, context
+    // device.profileName.Encoder.N — same form profileJson emits).
+    QJsonValue instVal;
+    QString ctx;
+    if (controller == QLatin1String("Encoder")) {
+        auto const it = profile.encoders.find(static_cast<std::uint16_t>(position));
+        if (it == profile.encoders.end()) {
+            return; // stale paint for an unbound dial
+        }
+        ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
+              QStringLiteral(".Encoder.") + QString::number(position);
+        instVal = enrichInstance(opendeck_detail::encoderInstanceJson(it->second, ctx));
+    } else {
+        auto const it = profile.keys.find(static_cast<std::uint16_t>(position));
+        if (it == profile.keys.end()) {
+            return; // stale paint for an unbound slot
+        }
+        // Same context form the SPA's Key slots carry (profileJson: NAME as id).
+        ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
+              QStringLiteral(".Keypad.") + QString::number(position);
+        instVal = enrichInstance(opendeck_detail::keyInstanceJson(it->second, ctx));
     }
-    // Same context form the SPA's Key slots carry (profileJson: NAME as id).
-    QString const ctx = deviceId + QStringLiteral(".") + QString::fromStdString(profile.name) +
-                        QStringLiteral(".Keypad.") + QString::number(position);
-    QJsonValue const instVal = enrichInstance(opendeck_detail::keyInstanceJson(it->second, ctx));
     if (!instVal.isObject()) {
         return;
     }

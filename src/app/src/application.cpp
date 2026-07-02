@@ -756,9 +756,9 @@ Application::Application(QObject* parent)
     //     the SPA canvas as an "update_state" event so the on-screen key tracks
     //     the hardware (without it the SPA shows only the bind-time icon).
     QObject::connect(m_pluginBridge.get(),
-                     &PluginDeviceBridge::liveKeyVisual,
+                     &PluginDeviceBridge::liveInstanceVisual,
                      m_openDeckBridge.get(),
-                     &OpenDeckBridge::notifyLiveKeyVisual);
+                     &OpenDeckBridge::notifyLiveInstanceVisual);
 
     // 3a-F3. Property Inspector second-connection model (canonical doc §5).
     //   The server resolves which plugin owns a PI's instance context via this

@@ -148,17 +148,19 @@ public:
     void notifyProfileChanged(); ///< -> "switch_profile" + "rerender_images"
     void notifyDevicesChanged(); ///< -> "devices" (the get_devices map)
 
-    /// Mirror a live plugin visual (setImage/setTitle on a Keypad key) into the
-    /// web UI: composes the bound ActionInstance for the slot with its state
-    /// image/text overridden by the live values and pushes the OpenDeck
-    /// "update_state" event the SPA's Key component subscribes to. Wired to
-    /// PluginDeviceBridge::liveKeyVisual in Application. No-op when the slot is
-    /// unbound or the active profile belongs to another device.
-    void notifyLiveKeyVisual(QString const& deviceId,
-                             int position,
-                             QString const& imageDataUri,
-                             QString const& title,
-                             bool titleChanged);
+    /// Mirror a live plugin visual (setImage/setTitle on a key or dial) into
+    /// the web UI: composes the bound ActionInstance for the slot with its
+    /// state image/text overridden by the live values and pushes the OpenDeck
+    /// "update_state" event the SPA's Key component subscribes to (sliders use
+    /// the same component, context device.profileName.Encoder.N). Wired to
+    /// PluginDeviceBridge::liveInstanceVisual in Application. No-op when the
+    /// slot is unbound or the active profile belongs to another device.
+    void notifyLiveInstanceVisual(QString const& deviceId,
+                                  QString const& controller,
+                                  int position,
+                                  QString const& imageDataUri,
+                                  QString const& title,
+                                  bool titleChanged);
 
     // Bring QObject::event(QEvent*) into scope so the QWebChannel `event` signal
     // below does not "hide" the inherited virtual — AppleClang's
