@@ -242,8 +242,17 @@ target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_FEATURE_ACTIVE_WIN
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_package(Qt6 REQUIRED COMPONENTS WaylandClient)
+    # PRIVATE_CODE (hidden-visibility generated bindings) only exists on Qt >= 6.8 — older
+    # qt6_generate_wayland_protocol_client_sources hard-errors on the unknown keyword. The project
+    # floor is Qt 6.7, so degrade gracefully: the generated code is then default-visibility, which
+    # is harmless for an app target (nothing installs these headers). Generated file paths are
+    # identical either way (<build>/qwayland-<basename>.cpp).
+    set(_ajazz_wayland_private_code PRIVATE_CODE)
+    if(Qt6_VERSION VERSION_LESS 6.8)
+        set(_ajazz_wayland_private_code "")
+    endif()
     qt_generate_wayland_protocol_client_sources(
-        ajazz-control-center PRIVATE_CODE FILES
+        ajazz-control-center ${_ajazz_wayland_private_code} FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/wayland/wlr-foreign-toplevel-management-unstable-v1.xml
     )
     target_link_libraries(ajazz-control-center PRIVATE Qt6::WaylandClient)
