@@ -30,7 +30,7 @@ and the OS/version manifest gates.
 | 1 | Manifest `Profiles[]` ignored — bundled `.streamDeckProfile` never installed; `switchToProfile` without a profile name ("back to previous") rejects | Plugins that ship device profiles (Spotify, game integrations) silently lose their headline feature | `plugin_manifest.cpp` (no `Profiles` read); `application.cpp` switchToProfile handler |
 | 2 | ~~No `streamdeck://` deep-link~~ | Linux DONE (handler + single-instance hand-off + x-scheme-handler); Windows/macOS scheme REGISTRATION still to package | **FIXED (Linux) 2026-07-03** — `Application::handleDeepLink` |
 | 3 | ~~`setImage`/`setTitle` `state`/`target` ignored~~ | — | **FIXED 2026-07-03** (`plugin_device_bridge.cpp`, per-state override maps) |
-| 4 | Multi-Action cannot host plugin actions — `isInMultiAction` always false, no `userDesiredState` | Plugin actions inside a Multi Action misbehave | `plugin_device_bridge.cpp:instancePayload`; multi-action engine |
+| 4 | ~~Multi-Action cannot host plugin actions~~ | userDesiredState still needs a per-child state field | **FIXED (core) 2026-07-03** — engine fallback delivers keyDown/keyUp with `isInMultiAction:true` to the owning plugin; mounted-action double-fire guard |
 | 5 | ~~Custom JSON encoder layouts not loaded~~ | — | **FIXED 2026-07-03** (`renderCustomEncoderLayout`, cached file loader in the bridge) |
 
 Degradations that are acceptable to document rather than fix: `touchTap.hold`
