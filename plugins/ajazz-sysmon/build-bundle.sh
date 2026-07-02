@@ -30,6 +30,9 @@ cp "$HERE/plugin/property-inspector.html" "$BUNDLE/property-inspector.html"
 cp "$HERE/plugin/target/release/ajazz-sysmon" "$BUNDLE/ajazz-sysmon-$TRIPLE"
 cp "$HERE/metrics-helper/build/btop-metrics-helper" "$BUNDLE/btop-metrics-helper"
 chmod +x "$BUNDLE/ajazz-sysmon-$TRIPLE" "$BUNDLE/btop-metrics-helper"
-"$BUNDLE/ajazz-sysmon-$TRIPLE" --render-test "$BUNDLE/icon.png" 2>/dev/null || true
+# --render-test <metric> <out.png>: argv[2] is the METRIC, argv[3] the output —
+# passing the path as argv[2] silently rendered to /tmp/sysmon-tile.png and the
+# bundle shipped with no icon at all (blank entry in the SPA plugin list).
+"$BUNDLE/ajazz-sysmon-$TRIPLE" --render-test cpu "$BUNDLE/icon.png" 2>/dev/null || true
 
 echo "==> done: $BUNDLE"

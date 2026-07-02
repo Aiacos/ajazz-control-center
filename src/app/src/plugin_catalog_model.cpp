@@ -754,10 +754,18 @@ namespace {
         return {};
     }
     QString const base = QDir(pluginDir).filePath(rel);
+    // Same probe list as PluginManager::stateImagePath — MiraBox bundles ship
+    // .jpg icons (timeClock: Icon "images/icon" + images/icon.jpg on disk),
+    // which the shorter png/svg-only list silently missed (blank icon in the
+    // SPA plugin list, 2026-07-02).
     for (QString const& cand : {base,
                                 base + QStringLiteral(".png"),
                                 base + QStringLiteral("@2x.png"),
-                                base + QStringLiteral(".svg")}) {
+                                base + QStringLiteral(".jpg"),
+                                base + QStringLiteral(".jpeg"),
+                                base + QStringLiteral(".svg"),
+                                base + QStringLiteral(".gif"),
+                                base + QStringLiteral(".bmp")}) {
         if (QFileInfo::exists(cand)) {
             return cand;
         }
