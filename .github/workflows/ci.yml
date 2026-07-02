@@ -133,13 +133,17 @@ jobs:
           # tolerates its absence (find_package(... QUIET) sets
           # AJAZZ_HAVE_WEBSOCKETS=OFF), but for CI we want the .cpp
           # actually compiled so the integration is exercised.
+          # qtwebengine (+qtwebchannel/qtpositioning deps): required for the
+          # OpenDeck SPA embed — without it the webui block silently builds
+          # the native QML fallback and the WebEngine TUs are never compiled
+          # in the PR matrix (packaging parity; see release.yml).
           # qtwayland (Qt6::WaylandClient + qtwaylandscanner, Phase 34 APROF-01
           # watcher) is NO LONGER a separate module: the 2026-06 restructure of
           # the Qt online repo folded the qtwayland archive into the BASE
           # desktop install (only qtwaylandcompositor remains an addon), and
           # requesting the old module name now hard-fails aqtinstall on every
           # platform ("packages ['qtwayland'] were not found").
-          modules: qtshadertools qtwebsockets
+          modules: qtshadertools qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # ---- Python ---------------------------------------------------------
       - name: Set up Python
@@ -258,7 +262,8 @@ jobs:
           cache: true
           # qtwayland ships in the BASE desktop install since the 2026-06 Qt
           # repo restructure (see the build job note) — do not list it here.
-          modules: qtwebsockets
+          # qtwebengine et al.: packaging parity, see the build job note.
+          modules: qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # Same rationale as the `build` job: the C++ test_manifest_signer.cpp
       # cases exec `python3 sign-plugin-manifest.py` which imports
@@ -396,7 +401,7 @@ jobs:
           # desktop install (only qtwaylandcompositor remains an addon), and
           # requesting the old module name now hard-fails aqtinstall on every
           # platform ("packages ['qtwayland'] were not found").
-          modules: qtshadertools qtwebsockets
+          modules: qtshadertools qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # Same rationale as the `build` job: ctest runs the manifest verifier
       # tests which exec `python3 sign-plugin-manifest.py`, importing
