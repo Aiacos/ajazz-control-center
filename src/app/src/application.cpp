@@ -968,12 +968,27 @@ Application::Application(QObject* parent)
                     deviceToken =
                         action.value(QStringLiteral("device")).toString().left(kMaxTokenChars);
                 }
+                // Elgato semantics: an EMPTY profile means "switch back to the
+                // profile that was active before this plugin's last switch"
+                // (production audit blocker 1, partial). The pre-switch id is
+                // remembered per plugin below; with nothing remembered the old
+                // reject path stands.
+                static QHash<QString, QString> s_prevProfileByPlugin;
                 if (profileToken.trimmed().isEmpty()) {
-                    AJAZZ_LOG_WARN("plugin",
-                                   "switchToProfile: rejected empty/blank profile token from "
-                                   "plugin {}",
-                                   pluginUuid.toStdString());
-                    return; // reject: no crash, no activation
+                    QString const prev = s_prevProfileByPlugin.take(pluginUuid);
+                    if (prev.isEmpty()) {
+                        AJAZZ_LOG_WARN("plugin",
+                                       "switchToProfile: empty profile token from plugin {} and "
+                                       "no previous profile remembered — ignored",
+                                       pluginUuid.toStdString());
+                        return; // reject: no crash, no activation
+                    }
+                    AJAZZ_LOG_INFO("plugin",
+                                   "switchToProfile: plugin {} -> back to previous profile '{}'",
+                                   pluginUuid.toStdString(),
+                                   prev.toStdString());
+                    m_profileController->loadProfileById(prev);
+                    return;
                 }
                 // Resolve the token to a known profile id (exact id, then name
                 // scoped to the device — RESEARCH Open Q3). Unresolvable -> reject.
@@ -991,6 +1006,12 @@ Application::Application(QObject* parent)
                                "switchToProfile: plugin {} -> profile '{}'",
                                pluginUuid.toStdString(),
                                resolvedId.toStdString());
+                // Remember what was active BEFORE this plugin's switch so an
+                // empty-profile call can restore it (Elgato "back" semantics).
+                QString const activeBefore = m_profileController->activeProfileId();
+                if (!activeBefore.isEmpty() && activeBefore != resolvedId) {
+                    s_prevProfileByPlugin[pluginUuid] = activeBefore;
+                }
                 m_profileController->loadProfileById(resolvedId);
                 return;
             }
