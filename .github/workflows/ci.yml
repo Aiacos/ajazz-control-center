@@ -44,6 +44,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        with:
+          # Release/nightly packaging checks out submodules (OpenDeck SPA +
+          # btop for the sysmon bundle) — the PR matrix must exercise the SAME
+          # build paths or packaging-only breakage ships silently to the
+          # release workflow (runs 28618367640/28619135595: sysmon bundle
+          # compile + wayland deps failed only at release time).
+          submodules: recursive
 
       # ---- Pitfall 11 invariant: `hid_open` must stay inside hid_transport.cpp
       # Runs only on Linux (the source tree is identical across runners — one
@@ -104,6 +111,7 @@ jobs:
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
               libwayland-dev wayland-protocols libx11-dev \
+              g++-14 \
               python3-dev python3-pip
 
       - name: Install macOS deps
