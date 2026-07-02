@@ -48,6 +48,7 @@ jobs:
               libudev-dev libusb-1.0-0-dev libhidapi-dev \
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
+              libwayland-dev wayland-protocols libx11-dev \
               python3-dev rpm file
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with: { version:  6.8.3, cache: true, modules: qtwebsockets }
