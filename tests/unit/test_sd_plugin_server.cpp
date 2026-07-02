@@ -340,8 +340,12 @@ TEST_CASE("SdPluginProtocolTest all routed actions route none unhandled",
         "startAudioCapture",
         "stopAudioCapture",
         "sendUserInfo",
+        // OpenDeck extensions (2) — starterpack switch_profile.rs /
+        // device_brightness.rs envelopes (fields at top level, no context):
+        "switchProfile",
+        "deviceBrightness",
     };
-    // kAllRoutedNames.size() == 41 (currently); must equal kRoutedActions.size() in source.
+    // kAllRoutedNames.size() == 43 (currently); must equal kRoutedActions.size() in source.
     constexpr int kExpectedCount =
         static_cast<int>(sizeof(kAllRoutedNames) / sizeof(kAllRoutedNames[0]));
 

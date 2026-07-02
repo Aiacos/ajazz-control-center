@@ -463,7 +463,7 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
     }
 
     // Full routed-action set per akp_plugin_sdk.md §4.3 (spec 4.3 table).
-    // 15 standard Elgato routed + 26 AJAZZ-only = 41 total.
+    // 15 standard Elgato routed + 26 AJAZZ-only + 2 OpenDeck extensions = 43 total.
     // The array is intentionally SIZELESS (CTAD) so the count is derived from
     // the literal and can never drift out of sync with the list.
     // NOTE: registerPlugin / registerPropertyInspector are NOT here — they are
@@ -516,6 +516,12 @@ void SdPluginServer::dispatchClientMessage(QWebSocket* client, QJsonObject const
         "startAudioCapture",
         "stopAudioCapture",
         "sendUserInfo",
+        // --- OpenDeck extensions (2) — sent by the starterpack plugin
+        //     (switch_profile.rs / device_brightness.rs) with the fields at the
+        //     ENVELOPE top level, no context. Upstream routes them in
+        //     events/inbound/mod.rs (SwitchProfile / DeviceBrightness).
+        "switchProfile",    // {event, device, profile}
+        "deviceBrightness", // {event, action, value}
     };
     // --- CR-01: pre-auth gate for routed actions (T-17-PREAUTH extension) ---
     // A connection that has completed registerPlugin but has NOT yet sent a

@@ -943,18 +943,31 @@ Application::Application(QObject* parent)
         [this](QString const& pluginUuid, QJsonObject const& action) {
             QString const event = action.value(QStringLiteral("event")).toString();
             QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
-            if (event == QStringLiteral("switchToProfile")) {
+            if (event == QStringLiteral("switchToProfile") ||
+                event == QStringLiteral("switchProfile")) {
                 // EVENT-03: inbound host command — a plugin asks the host to
-                // activate a profile. The payload "profile" token is UNTRUSTED
-                // (T-34-04-03 tampering): treat it purely as a lookup key, never
-                // evaluated/shelled, and V5-bound its length before use so a
-                // hostile plugin cannot smuggle a huge or malformed token. The
-                // optional "device" scopes resolution to that device's profiles.
+                // activate a profile. Two wire shapes reach here:
+                //   - Elgato "switchToProfile": profile/device inside "payload"
+                //   - OpenDeck "switchProfile" (starterpack switch_profile.rs):
+                //     profile/device at the ENVELOPE top level
+                // The "profile" token is UNTRUSTED (T-34-04-03 tampering): treat
+                // it purely as a lookup key, never evaluated/shelled, and
+                // V5-bound its length before use so a hostile plugin cannot
+                // smuggle a huge or malformed token. The optional "device"
+                // scopes resolution to that device's profiles.
                 constexpr int kMaxTokenChars = 256; // V5 payload bound
-                QString const profileToken =
+                QString profileToken =
                     payload.value(QStringLiteral("profile")).toString().left(kMaxTokenChars);
-                QString const deviceToken =
+                if (profileToken.isEmpty()) {
+                    profileToken =
+                        action.value(QStringLiteral("profile")).toString().left(kMaxTokenChars);
+                }
+                QString deviceToken =
                     payload.value(QStringLiteral("device")).toString().left(kMaxTokenChars);
+                if (deviceToken.isEmpty()) {
+                    deviceToken =
+                        action.value(QStringLiteral("device")).toString().left(kMaxTokenChars);
+                }
                 if (profileToken.trimmed().isEmpty()) {
                     AJAZZ_LOG_WARN("plugin",
                                    "switchToProfile: rejected empty/blank profile token from "
