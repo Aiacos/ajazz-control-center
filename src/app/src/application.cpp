@@ -1145,6 +1145,29 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
         &PluginCatalogModel::pluginUninstalled,
         m_profileController.get(),
         [this](QString const& uuid) { m_profileController->clearBindingsForPlugin(uuid); });
+    // Audit 3.1: an uninstall must also STOP the running plugin (exitApp ->
+    // kill -> m_live erase) — before this, a "removed" plugin kept painting the
+    // device and the stale m_live key blocked any re-install until restart.
+    // Audit 3.2: a re-install/update REPLACES the dir; tear the old copy down
+    // first (bindings preserved — pluginWillBeReplaced is NOT pluginUninstalled)
+    // so the post-install rediscover() respawns the fresh code. m_pluginManager
+    // is created later (startBackgroundServices), hence the lazy null guard.
+    QObject::connect(m_pluginCatalog.get(),
+                     &PluginCatalogModel::pluginUninstalled,
+                     this,
+                     [this](QString const& uuid) {
+                         if (m_pluginManager) {
+                             m_pluginManager->unloadPlugin(uuid);
+                         }
+                     });
+    QObject::connect(m_pluginCatalog.get(),
+                     &PluginCatalogModel::pluginWillBeReplaced,
+                     this,
+                     [this](QString const& dirName) {
+                         if (m_pluginManager) {
+                             m_pluginManager->unloadPlugin(dirName);
+                         }
+                     });
     PluginDebugService::registerInstance(m_pluginDebug.get());
     LoadedPluginsModel::registerInstance(m_loadedPlugins.get());
     TimeSyncService::registerInstance(m_timeSync.get());

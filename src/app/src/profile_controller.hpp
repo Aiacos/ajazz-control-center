@@ -191,6 +191,14 @@ public:
     /// Rename the active profile and persist. Emits profilesChanged().
     Q_INVOKABLE void renameActiveProfile(QString const& newName);
 
+    /// Rename a profile BY ID (active or not) and persist. The OpenDeck SPA's
+    /// ProfileManager renames arbitrary non-selected profiles; routing its
+    /// rename_profile through renameActiveProfile() renamed the wrong profile
+    /// (audit 1.1, 2026-07-02). Active id -> renameActiveProfile(); otherwise
+    /// read-modify-write the library entry on disk. Emits profilesChanged().
+    /// @return true when a profile was renamed.
+    Q_INVOKABLE bool renameProfile(QString const& profileId, QString const& newName);
+
     /// Delete a profile by id (removes the file + index entry). If the active
     /// profile is deleted, activates another profile for the same device, or a
     /// fresh "Default" if none remain. Emits profilesChanged() (and
@@ -640,6 +648,25 @@ public:
      * @invokable Callable as ProfileController.setInstanceCurrentState(...).
      */
     Q_INVOKABLE void setInstanceCurrentState(QString const& controller, int index, int stateIndex);
+
+    /**
+     * @brief Persist an edited per-state visual (OpenDeck set_state contract).
+     *
+     * The SPA's InstanceEditor fires `set_state {context, index, state}` with
+     * the FULL edited ActionState on every edit; upstream writes
+     * `states[index] = state` and never touches current_state. Writes
+     * @p visual into the binding's instance states[@p stateIndex] (creating
+     * the instance/states slots as needed), or into the legacy single
+     * KeyState for controllers without instances ("TouchZone"). Persists via
+     * saveActiveProfile(). NOT invokable from QML (core::KeyState parameter);
+     * called by OpenDeckBridge.
+     *
+     * @return true when a binding was found and updated.
+     */
+    bool setInstanceStateVisual(QString const& controller,
+                                int index,
+                                int stateIndex,
+                                ajazz::core::KeyState const& visual);
 
     /**
      * @brief Atomically swap two encoder bindings.

@@ -920,29 +920,47 @@ void PluginManager::setPluginEnabled(QString const& pluginId, bool enabled) {
         qInfo("PluginManager: user-disabled plugin '%s' (QSettings written)", qPrintable(pluginId));
 
         // Tear down the live plugin if present (mirror the crash-path teardown).
-        auto it = m_live.find(pluginId);
-        if (it != m_live.end()) {
+        unloadPlugin(pluginId);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// unloadPlugin() — full live-plugin teardown WITHOUT persisting disable intent
+// ---------------------------------------------------------------------------
+
+void PluginManager::unloadPlugin(QString const& pluginId) {
+    auto it = m_live.find(pluginId);
+    if (it == m_live.end()) {
+        return;
+    }
+    // The child registered with -pluginUUID = manifest PUUID when present (see
+    // spawn()); addressing exitApp to the m_live dir-name key silently missed
+    // those plugins' state-flush (audit 3.14).
+    QString const regUuid =
+        it->second.manifest.puuid.isEmpty() ? pluginId : it->second.manifest.puuid;
 #if defined(AJAZZ_HAVE_WEBSOCKETS)
-            // Step 1: allow the plugin to flush its state.
-            if (m_server) {
-                m_server->sendEvent(pluginId, QStringLiteral("exitApp"));
-            }
+    // Step 1: allow the plugin to flush its state.
+    if (m_server) {
+        m_server->sendEvent(regUuid, QStringLiteral("exitApp"));
+    }
 #endif
-            // Step 2 + 3: terminate (1 s grace), then kill.
-            if (it->second.process) {
-                it->second.process->terminate();
-                if (!it->second.process->waitForFinished(1000)) {
-                    it->second.process->kill();
-                }
-            }
-            m_live.erase(it);
-#if defined(AJAZZ_HAVE_WEBENGINE)
-            // B6: an HTML plugin has no process; tear its in-process page down
-            // here so a disabled HTML plugin does not leak its QWebEnginePage.
-            m_htmlPages.erase(pluginId);
-#endif
+    // Step 2 + 3: terminate (1 s grace), then kill.
+    if (it->second.process) {
+        it->second.process->terminate();
+        if (!it->second.process->waitForFinished(1000)) {
+            it->second.process->kill();
         }
     }
+    m_live.erase(it);
+#if defined(AJAZZ_HAVE_WEBENGINE)
+    // B6: an HTML plugin has no process; tear its in-process page down here so
+    // it does not leak its QWebEnginePage. Pages are keyed by the REGISTRATION
+    // uuid (PUUID preferred) — erase both spellings (audit 3.4).
+    m_htmlPages.erase(pluginId);
+    if (regUuid != pluginId) {
+        m_htmlPages.erase(regUuid);
+    }
+#endif
 }
 
 // ---------------------------------------------------------------------------

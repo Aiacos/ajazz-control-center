@@ -106,6 +106,20 @@ profileJson(core::Profile const& profile, int keyCount, int encoderCount, int to
                                        QString const& title,
                                        bool titleChanged);
 
+/// Inverse of actionStateJson for the fields KeyState models: map an SPA
+/// ActionState object ({image,text,colour,background_colour,size,…}) back to a
+/// core::KeyState. Fields with no KeyState home (family/style/alignment/
+/// stroke/underline/show) are dropped — partial persistence, documented in the
+/// audit (4.1). Empty strings map to nullopt (device default).
+[[nodiscard]] ajazz::core::KeyState keyStateFromActionStateJson(QJsonObject const& state);
+
+/// Recursively copy @p srcDir into @p dstDir (created if missing), overwriting
+/// existing files. Backs the SettingsView backup/restore_config_directory
+/// commands (upstream zips the config dir; we have no zip writer in-tree, and a
+/// plain dated folder restores just as well). Returns false on the first
+/// failed mkdir/copy.
+[[nodiscard]] bool copyDirRecursively(QString const& srcDir, QString const& dstDir);
+
 } // namespace opendeck_detail
 
 /**

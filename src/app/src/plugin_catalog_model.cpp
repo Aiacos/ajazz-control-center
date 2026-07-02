@@ -1549,8 +1549,12 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
     QString const promotedDir = QDir(pluginsDir).filePath(installName);
 
     // Remove any existing install at the target path before rename
-    // (idempotent re-install case).
+    // (idempotent re-install case). Announce the replacement first so the
+    // wiring tears down the RUNNING old copy (unloadPlugin) before its dir
+    // vanishes — otherwise the stale m_live key makes rediscover() skip the
+    // fresh install forever (audit 3.1/3.2).
     if (QDir(promotedDir).exists()) {
+        emit pluginWillBeReplaced(installName);
         QDir(promotedDir).removeRecursively();
     }
 
@@ -1717,6 +1721,8 @@ void PluginCatalogModel::finalizeAssembledInstall(QString const& uuid,
     // (same filesystem — staging lives inside destDir). Replace any prior copy.
     QString const promoted = QDir(destDir).filePath(installName);
     if (QDir(promoted).exists()) {
+        // Same replace-announcement as installFromFile's promote (audit 3.2).
+        emit pluginWillBeReplaced(installName);
         QDir(promoted).removeRecursively();
     }
     if (!QDir().rename(stagingDir, promoted)) {

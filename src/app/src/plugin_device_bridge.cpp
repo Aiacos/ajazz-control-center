@@ -308,7 +308,10 @@ QString mirrorSafeDataUri(QString const& dataUri) {
     if (trimmed.startsWith("<svg")) {
         qsizetype const svgPos = body.indexOf("<svg");
         qsizetype const tagEnd = body.indexOf('>', svgPos);
-        if (tagEnd > svgPos && !body.mid(svgPos, tagEnd - svgPos).contains("xmlns")) {
+        // Probe for the DEFAULT namespace declaration specifically: a bare
+        // "xmlns" also matches xmlns:xlink and would skip the injection
+        // Chromium still needs (audit 6.11).
+        if (tagEnd > svgPos && !body.mid(svgPos, tagEnd - svgPos).contains("xmlns=")) {
             body.insert(svgPos + 4, " xmlns=\"http://www.w3.org/2000/svg\"");
         }
     }
@@ -1730,6 +1733,7 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
         m_server->sendEvent(
             ctx.pluginUuid,
             eventEnvelope(QStringLiteral("willDisappear"), ctx, instancePayload(ctx)));
+        purgeContextVisualCaches(ctx, ctxId);
         m_registry.retire(ctxId);
     }
 }
@@ -1758,7 +1762,21 @@ void PluginDeviceBridge::retirePageContexts(QString const& deviceId,
         m_server->sendEvent(
             ctx.pluginUuid,
             eventEnvelope(QStringLiteral("willDisappear"), ctx, instancePayload(ctx)));
+        purgeContextVisualCaches(ctx, ctxId);
         m_registry.retire(ctxId);
+    }
+}
+
+void PluginDeviceBridge::purgeContextVisualCaches(ActionContext const& ctx, QString const& ctxId) {
+    // A retired context must take its cached visual layers with it: the title
+    // overlay and encoder feedback bag otherwise survive and composite the OLD
+    // action's title/icon onto the NEXT action bound to the same control
+    // (audit 6.1 -- "CPU 11%" painted over Weather's icon).
+    m_encoderFeedback.erase(ctxId);
+    m_encoderLayoutOverride.erase(ctxId);
+    if (ctx.controller == QLatin1String("Keypad")) {
+        auto const keyCols = geometryForDevice(ctx.deviceId).keyCols;
+        m_titleByKey.erase(keyIndexForCoords(ctx.row, ctx.column, keyCols));
     }
 }
 

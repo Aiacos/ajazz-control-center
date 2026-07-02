@@ -659,6 +659,18 @@ signals:
      */
     void pluginUninstalled(QString const& uuid);
 
+    /**
+     * @brief A promote path is about to REPLACE an existing install dir
+     *        (re-install / store update).
+     *
+     * Wired in application.cpp to PluginManager::unloadPlugin so the RUNNING
+     * old copy is torn down (exitApp -> kill -> m_live erase) before its dir
+     * vanishes; the post-install rediscover() then respawns the fresh copy
+     * (audit 3.2). Deliberately DISTINCT from pluginUninstalled: that one also
+     * clears the user's bindings, which an update must preserve.
+     */
+    void pluginWillBeReplaced(QString const& installDirName);
+
 private:
     /// Test seam: grants unit tests access to the private row-injection
     /// internals (@ref replaceStreamdockRows) so the install-availability and

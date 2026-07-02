@@ -293,6 +293,20 @@ public:
     void setPluginEnabled(QString const& pluginId, bool enabled);
 
     /**
+     * @brief Tear down a live plugin (exitApp -> terminate -> kill -> forget)
+     *        WITHOUT persisting any enable/disable intent.
+     *
+     * The uninstall/update seam: `remove_plugin` used to delete the on-disk dir
+     * while the process (or HTML page) kept running and painting, and the stale
+     * `m_live` key made rediscover() skip a re-install forever (audit 3.1/3.2).
+     * Wire this before dir deletion/replacement; a subsequent rediscover()
+     * respawns from the fresh dir. No-op for an unknown/not-live @p pluginId.
+     *
+     * @param pluginId  The `.sdPlugin` install-dir name (the m_live key).
+     */
+    void unloadPlugin(QString const& pluginId);
+
+    /**
      * @brief Test seam: return the argv that would be passed to QProcess for @p uuid.
      *
      * Returns the QStringList from `buildNodeArgv(...)` that was stored when

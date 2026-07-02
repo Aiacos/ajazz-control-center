@@ -11,9 +11,11 @@
 
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QDate>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -24,9 +26,12 @@
 #include <QNetworkRequest>
 #include <QSet>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryFile>
 #include <QUrl>
+
+#include <algorithm>
 
 namespace ajazz::app {
 
@@ -306,7 +311,9 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         QString const id = args.value(QStringLiteral("id")).toString();
         if (m_catalog != nullptr && !id.isEmpty()) {
             m_catalog->removeInstalledPlugin(id);
-            emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
+            // Payload = the plugin id string (PropertyInspectorView refreshes
+            // matching PI iframes on it; "{}" matched nothing — audit 4.7).
+            emit event(QStringLiteral("plugin_reloaded"), jsonToString(QJsonValue(id)));
         }
         return str(QJsonValue(QJsonValue::Null));
     }
@@ -319,7 +326,13 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                              : url.startsWith(QLatin1String("file:")) ? url
                                                                       : QString{};
         if (m_catalog != nullptr && !path.isEmpty()) {
-            m_catalog->installFromFile(path, /*userConfirmedUnsigned=*/true);
+            // Honor the result: a refused/tampered/corrupt archive used to look
+            // exactly like success in the Plugins tab (audit 3.12). The catalog
+            // emits installFinished(ok=false, error) either way; surfacing the
+            // failure here lets the SPA's dialog path report it.
+            if (!m_catalog->installFromFile(path, /*userConfirmedUnsigned=*/true)) {
+                return str(QJsonValue(QJsonValue::Null));
+            }
             emit event(QStringLiteral("plugin_reloaded"), QStringLiteral("{}"));
         }
         return str(QJsonValue(QJsonValue::Null));
@@ -404,6 +417,17 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                                      : actionVal.toString();
         if (!c.valid || actionId.isEmpty()) {
             return str(QJsonValue(QJsonValue::Null));
+        }
+        // Controllers guard (instances.rs parity): a Keypad-only action must
+        // not be bindable to a dial and vice versa (audit 4.5). Touch slots
+        // arrive as controller "Keypad" so the manifest's "Keypad" gate covers
+        // them. An absent/empty controllers list means "no restriction".
+        if (actionVal.isObject()) {
+            QJsonArray const ctrls =
+                actionVal.toObject().value(QStringLiteral("controllers")).toArray();
+            if (!ctrls.isEmpty() && !ctrls.contains(QJsonValue(c.controller))) {
+                return str(QJsonValue(QJsonValue::Null));
+            }
         }
         int const keyCount = keyCountOf(c.device);
         // ActionKind::Plugin == 0; library actions are committed as plugin steps.
@@ -494,6 +518,7 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         if (m_profiles != nullptr) {
             QString const device = args.value(QStringLiteral("device")).toString();
             QString const name = args.value(QStringLiteral("id")).toString();
+            bool found = false;
             for (QVariant const& v : m_profiles->profilesForDevice(device)) {
                 QVariantMap const m = v.toMap();
                 if (m.value(QStringLiteral("name")).toString() == name) {
@@ -510,16 +535,44 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                     if (id != m_profiles->activeProfileId()) {
                         m_profiles->loadProfileById(id);
                     }
+                    found = true;
                     break;
                 }
+            }
+            // Upstream contract (profiles.rs): set_selected_profile CREATES the
+            // profile when it does not exist — the SPA's "Create profile" button
+            // is literally setProfile(newName). Without this the new profile
+            // showed in the dropdown but never existed (audit 1.2).
+            if (!found && !name.isEmpty()) {
+                m_profiles->createProfile(name, device);
             }
         }
         return str(QJsonValue(QJsonValue::Null));
     }
 
     if (command == QLatin1String("rename_profile")) {
+        // SPA sends {device, oldId, newId, retain}: retain=false -> rename the
+        // profile NAMED oldId (any profile, not the active one — the SPA only
+        // offers Rename on non-selected rows); retain=true -> DUPLICATE oldId
+        // under newId. The old handler renamed the ACTIVE profile whatever
+        // oldId said, making "Duplicate" destructive (audit 1.1).
         if (m_profiles != nullptr) {
-            m_profiles->renameActiveProfile(args.value(QStringLiteral("newId")).toString());
+            QString const device = args.value(QStringLiteral("device")).toString();
+            QString const oldName = args.value(QStringLiteral("oldId")).toString();
+            QString const newName = args.value(QStringLiteral("newId")).toString();
+            bool const retain = args.value(QStringLiteral("retain")).toBool();
+            for (QVariant const& v : m_profiles->profilesForDevice(device)) {
+                QVariantMap const m = v.toMap();
+                if (m.value(QStringLiteral("name")).toString() == oldName) {
+                    QString const id = m.value(QStringLiteral("id")).toString();
+                    if (retain) {
+                        m_profiles->duplicateProfile(id, newName);
+                    } else {
+                        m_profiles->renameProfile(id, newName);
+                    }
+                    break;
+                }
+            }
         }
         return str(QJsonValue(QJsonValue::Null));
     }
@@ -596,12 +649,28 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
     // set_state: the InstanceEditor selected which state of a multi-state action
     // is live ({context, index}); make it current + persist + repaint.
     if (command == QLatin1String("set_state")) {
+        // InstanceEditor contract (instances.rs): `state` is the FULL edited
+        // ActionState to PERSIST at states[index]; current_state is untouched
+        // (only the PLUGIN's WS setState switches it). The old handler
+        // discarded the payload and switched current_state instead — every
+        // editor edit reverted on the next repaint and browsing states flipped
+        // the live state (audit 4.1).
         if (m_profiles != nullptr) {
             Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
             if (c.valid) {
-                m_profiles->setInstanceCurrentState(
-                    c.controller, c.position, args.value(QStringLiteral("index")).toInt());
-                emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
+                QString ctl = c.controller;
+                int pos = c.position;
+                int const keyCount = keyCountOf(c.device);
+                if (ctl != QLatin1String("Encoder") && pos >= keyCount) {
+                    ctl = QStringLiteral("TouchZone"); // touch row appended after keys
+                    pos -= keyCount;
+                }
+                auto const visual =
+                    keyStateFromActionStateJson(args.value(QStringLiteral("state")).toObject());
+                if (m_profiles->setInstanceStateVisual(
+                        ctl, pos, args.value(QStringLiteral("index")).toInt(), visual)) {
+                    emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
+                }
             }
         }
         return str(QJsonValue(QJsonValue::Null));
@@ -615,6 +684,7 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         Ctx const c = parseCtxValue(args.value(QStringLiteral("context")));
         if (m_input != nullptr && c.valid) {
             bool const isEncoder = c.controller == QLatin1String("Encoder");
+            int const keyCount = keyCountOf(c.device);
             core::DeviceEvent down{};
             core::DeviceEvent up{};
             if (isEncoder) {
@@ -622,14 +692,40 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                 down.kind = core::DeviceEvent::Kind::EncoderPressed;
                 up.kind = core::DeviceEvent::Kind::EncoderReleased;
                 down.index = up.index = static_cast<std::uint16_t>(c.position);
+                m_input->injectSyntheticEvent(down);
+                m_input->injectSyntheticEvent(up);
+            } else if (c.position >= keyCount) {
+                // Touch-strip slot (Keypad row appended after the keys): a key
+                // press at keyCount+zone+1 hit a nonexistent key (audit 4.6) —
+                // dispatch the strip tap the slot actually models. TouchUp
+                // carries the X coordinate in `value` (zone derived from X) and
+                // the input service requires a preceding TouchDown at the same
+                // X to classify a tap (not a swipe).
+                int const zone = c.position - keyCount;
+                int encoders = m_devices != nullptr ? m_devices->capabilitiesFor(c.device)
+                                                          .value(QStringLiteral("encoderCount"))
+                                                          .toInt()
+                                                    : 0;
+                if (encoders <= 0) {
+                    encoders = 4; // AKP05E default strip layout
+                }
+                int const x = std::clamp((zone * 256 + 128) / encoders, 0, 255);
+                core::DeviceEvent touchDown{};
+                touchDown.kind = core::DeviceEvent::Kind::TouchDown;
+                touchDown.value = x;
+                core::DeviceEvent touchUp{};
+                touchUp.kind = core::DeviceEvent::Kind::TouchUp;
+                touchUp.value = x;
+                m_input->injectSyntheticEvent(touchDown);
+                m_input->injectSyntheticEvent(touchUp);
             } else {
                 // DeviceEvent key indices are 1-based; the context position is 0-based.
                 down.kind = core::DeviceEvent::Kind::KeyPressed;
                 up.kind = core::DeviceEvent::Kind::KeyReleased;
                 down.index = up.index = static_cast<std::uint16_t>(c.position + 1);
+                m_input->injectSyntheticEvent(down);
+                m_input->injectSyntheticEvent(up);
             }
-            m_input->injectSyntheticEvent(down);
-            m_input->injectSyntheticEvent(up);
         }
         return str(QJsonValue(QJsonValue::Null));
     }
@@ -648,6 +744,61 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         if (!url.isEmpty()) {
             QDesktopServices::openUrl(QUrl(url));
         }
+        return str(QJsonValue(QJsonValue::Null));
+    }
+
+    // SettingsView.svelte footer buttons. Upstream (settings.rs) opens the
+    // config/log dir in the file manager and zips/unzips the config dir for
+    // backup/restore; these four were UNHANDLED here, so all four buttons were
+    // silent no-ops (2026-07-02 visual sweep). Config dir = AppDataLocation
+    // (profiles/ + plugins/ + logs/ live under it). Backup/restore use a plain
+    // recursive directory copy — there is no zip WRITER in-tree (the extractor
+    // is read-only) and a dated folder restores just as well.
+    if (command == QLatin1String("open_config_directory") ||
+        command == QLatin1String("open_log_directory")) {
+        QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        if (command == QLatin1String("open_log_directory")) {
+            dir += QStringLiteral("/logs");
+        }
+        QDesktopServices::openUrl(QUrl::fromLocalFile(dir));
+        return str(QJsonValue(QJsonValue::Null));
+    }
+    if (command == QLatin1String("backup_config_directory")) {
+        QString const srcDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QString const destParent = QFileDialog::getExistingDirectory(
+            nullptr, QStringLiteral("Choose a folder for the config backup"));
+        if (destParent.isEmpty()) {
+            return str(false); // user cancelled — the SPA shows no toast (upstream parity)
+        }
+        QString appSlug = QCoreApplication::applicationName();
+        appSlug.replace(QLatin1Char(' '), QLatin1Char('-'));
+        QString const dest = destParent + QLatin1Char('/') + appSlug + QStringLiteral("_config_") +
+                             QDate::currentDate().toString(QStringLiteral("yyyyMMdd"));
+        return str(copyDirRecursively(srcDir, dest));
+    }
+    if (command == QLatin1String("restore_config_directory")) {
+        QString const backup = QFileDialog::getExistingDirectory(
+            nullptr, QStringLiteral("Choose a config backup folder to restore"));
+        if (backup.isEmpty()) {
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        // Sanity gate: a backup made by us contains profiles/ — never restore an
+        // arbitrary folder over the data dir.
+        if (!QDir(backup).exists(QStringLiteral("profiles"))) {
+            QMessageBox::warning(nullptr,
+                                 QStringLiteral("Restore config"),
+                                 QStringLiteral("The selected folder does not look like an AJAZZ "
+                                                "Control Center config backup (missing "
+                                                "profiles/)."));
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        QString const dst = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        bool const ok = copyDirRecursively(backup, dst);
+        QMessageBox::information(nullptr,
+                                 QStringLiteral("Restore config"),
+                                 ok ? QStringLiteral("Config restored. Restart the app for the "
+                                                     "restored profiles to take effect.")
+                                    : QStringLiteral("Restore failed - see the log."));
         return str(QJsonValue(QJsonValue::Null));
     }
 

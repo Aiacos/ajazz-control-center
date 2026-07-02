@@ -11,9 +11,16 @@
 #include "opendeck_bridge.hpp"
 
 #include <QByteArray>
+#include <QDir>
+#include <QDirIterator>
+#include <QFile>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStringList>
+
+#include <algorithm>
+#include <optional>
 
 namespace ajazz::app::opendeck_detail {
 
@@ -247,16 +254,11 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
         builtins.append(makeActionJson(
             name, uuid, QStringLiteral("opendeck"), tooltip, icon, QString{}, controllers));
     };
-    addBuiltin(QStringLiteral("Multi Action"),
-               QStringLiteral("opendeck.multiaction"),
-               QStringLiteral("Run several actions in sequence"),
-               QStringLiteral("opendeck/multi-action.png"),
-               {QStringLiteral("Keypad")});
-    addBuiltin(QStringLiteral("Toggle Action"),
-               QStringLiteral("opendeck.toggleaction"),
-               QStringLiteral("Toggle between actions"),
-               QStringLiteral("opendeck/toggle-action.png"),
-               {QStringLiteral("Keypad")});
+    // Multi Action / Toggle Action are NOT advertised until the children
+    // pipeline exists: instanceJson always emits children:null, so a bound
+    // multi-action key makes ParentActionView dereference `children!` (throws)
+    // and a drop into the parent OVERWRITES the parent via create_instance
+    // (audit 4.2). Re-add together with real ActionInstance::children support.
     if (!starterpackInstalled) {
         addBuiltin(QStringLiteral("Run Command"),
                    QStringLiteral("opendeck.runcommand"),
@@ -282,7 +284,9 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
     // OpenDeck's ActionList expects each category VALUE to be an object
     // `{ icon?, actions: Action[] }` (it destructures `{ actions }` and reads
     // `actions.length`), NOT a bare Action[]. Wrap every group accordingly.
-    categories[QStringLiteral("OpenDeck")] = QJsonObject{{QStringLiteral("actions"), builtins}};
+    if (!builtins.isEmpty()) {
+        categories[QStringLiteral("OpenDeck")] = QJsonObject{{QStringLiteral("actions"), builtins}};
+    }
 
     for (QVariant const& v : installedActions) {
         QVariantMap const entry = v.toMap();
@@ -391,6 +395,74 @@ QJsonObject settingsWithDefaults(QJsonObject const& stored) {
         out.insert(it.key(), it.value());
     }
     return out;
+}
+
+core::KeyState keyStateFromActionStateJson(QJsonObject const& state) {
+    core::KeyState out;
+    auto const parseHex = [](QString const& hex) -> std::optional<core::Rgb> {
+        if (hex.size() != 7 || !hex.startsWith(QLatin1Char('#'))) {
+            return std::nullopt;
+        }
+        bool okR = false;
+        bool okG = false;
+        bool okB = false;
+        core::Rgb rgb{};
+        rgb.r = static_cast<std::uint8_t>(hex.mid(1, 2).toUInt(&okR, 16));
+        rgb.g = static_cast<std::uint8_t>(hex.mid(3, 2).toUInt(&okG, 16));
+        rgb.b = static_cast<std::uint8_t>(hex.mid(5, 2).toUInt(&okB, 16));
+        if (!okR || !okG || !okB) {
+            return std::nullopt;
+        }
+        return rgb;
+    };
+    QString const image = state.value(QStringLiteral("image")).toString();
+    if (!image.isEmpty()) {
+        out.imagePath = image.toStdString();
+    }
+    QString const text = state.value(QStringLiteral("text")).toString();
+    if (!text.isEmpty()) {
+        out.text = text.toStdString();
+    }
+    out.background = parseHex(state.value(QStringLiteral("background_colour")).toString());
+    out.foreground = parseHex(state.value(QStringLiteral("colour")).toString());
+    int const size = state.value(QStringLiteral("size")).toInt(14);
+    out.fontSize = static_cast<std::uint8_t>(std::clamp(size, 1, 255));
+    return out;
+}
+
+bool copyDirRecursively(QString const& srcDir, QString const& dstDir) {
+    QDir const src(srcDir);
+    if (!src.exists()) {
+        return false;
+    }
+    if (!QDir().mkpath(dstDir)) {
+        return false;
+    }
+    QDirIterator it(
+        srcDir, QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        QString const from = it.next();
+        QString const rel = src.relativeFilePath(from);
+        QString const to = dstDir + QLatin1Char('/') + rel;
+        if (it.fileInfo().isDir()) {
+            if (!QDir().mkpath(to)) {
+                return false;
+            }
+            continue;
+        }
+        if (!QDir().mkpath(QFileInfo(to).absolutePath())) {
+            return false;
+        }
+        // Overwrite semantics: QFile::copy refuses to clobber, so drop any
+        // pre-existing destination file first (restore over a live data dir).
+        if (QFileInfo::exists(to) && !QFile::remove(to)) {
+            return false;
+        }
+        if (!QFile::copy(from, to)) {
+            return false;
+        }
+    }
+    return true;
 }
 
 } // namespace ajazz::app::opendeck_detail

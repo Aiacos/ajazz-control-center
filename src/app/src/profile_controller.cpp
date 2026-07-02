@@ -215,6 +215,36 @@ void ProfileController::renameActiveProfile(QString const& newName) {
     emit profilesChanged();
 }
 
+bool ProfileController::renameProfile(QString const& profileId, QString const& newName) {
+    if (profileId.isEmpty() || newName.isEmpty()) {
+        return false;
+    }
+    if (QString::fromStdString(m_profile.id) == profileId) {
+        renameActiveProfile(newName);
+        return true;
+    }
+    // Non-active profile: read-modify-write via the library index (same disk
+    // pattern as add/removeAppProfileMapping).
+    auto const it = m_library.constFind(profileId);
+    if (it == m_library.constEnd()) {
+        AJAZZ_LOG_WARN("profile-controller", "renameProfile: unknown profile id");
+        return false;
+    }
+    QString const path = it->path;
+    try {
+        ajazz::core::Profile p =
+            ajazz::core::readProfileFromDisk(std::filesystem::path{path.toStdString()});
+        p.name = newName.toStdString();
+        ajazz::core::writeProfileToDisk(std::filesystem::path{path.toStdString()}, p);
+    } catch (std::exception const& ex) {
+        AJAZZ_LOG_WARN("profile-controller", "renameProfile: I/O error: {}", ex.what());
+        return false;
+    }
+    rescanLibrary();
+    emit profilesChanged();
+    return true;
+}
+
 void ProfileController::deleteProfile(QString const& profileId) {
     auto const it = m_library.find(profileId);
     QString const path = (it != m_library.end()) ? it->path : defaultProfilePath(profileId);
@@ -1147,12 +1177,24 @@ int ProfileController::clearBindingsForPlugin(QString const& pluginUuid) {
             ++it;
         }
     }
+    // Touch zones carry onTap and no instance — the generic lambda above does
+    // not apply; without this sweep an uninstall left orphan touch bindings
+    // enumerated forever (audit 6.12).
+    for (auto it = m_profile.touchZones.begin(); it != m_profile.touchZones.end();) {
+        if (!it->second.onTap.empty() && owns(it->second.onTap.front().id)) {
+            it = m_profile.touchZones.erase(it);
+            ++cleared;
+        } else {
+            ++it;
+        }
+    }
 
     if (cleared > 0) {
         AJAZZ_LOG_INFO("profile-controller",
                        "clearBindingsForPlugin: '{}' -> cleared {} binding(s) (plugin uninstalled)",
                        pluginUuid.toStdString(),
                        cleared);
+        saveActiveProfile(); // un-persisted clears resurrected at restart
         emit profileChanged();
     }
     return cleared;
@@ -1477,6 +1519,78 @@ void ProfileController::setInstanceCurrentState(QString const& controller,
     }
     saveActiveProfile();
     emit profileChanged();
+}
+
+bool ProfileController::setInstanceStateVisual(QString const& controller,
+                                               int index,
+                                               int stateIndex,
+                                               ajazz::core::KeyState const& visual) {
+    constexpr int kMaxIdx = static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1);
+    if (index < 0 || index > kMaxIdx || stateIndex < 0 || stateIndex > 255) {
+        return false;
+    }
+    auto const idx = static_cast<std::uint16_t>(index);
+
+    // TouchZone bindings carry no ActionInstance — write the single legacy
+    // visual (the SPA edits "State 1" only for them anyway).
+    if (controller.compare(QStringLiteral("TouchZone"), Qt::CaseInsensitive) == 0) {
+        if (index > 255) {
+            return false;
+        }
+        auto const it = m_profile.touchZones.find(static_cast<std::uint8_t>(index));
+        if (it == m_profile.touchZones.end()) {
+            return false;
+        }
+        it->second.state = visual;
+        saveActiveProfile();
+        emit profileChanged();
+        return true;
+    }
+
+    std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
+    ajazz::core::KeyState* visualSlot = nullptr;
+    std::vector<ajazz::core::Action>* chain = nullptr;
+    if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
+        auto& keyMap = activeKeyMap();
+        if (auto it = keyMap.find(idx); it != keyMap.end()) {
+            instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
+            chain = &it->second.onPress;
+        }
+    } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
+        if (auto it = m_profile.encoders.find(idx); it != m_profile.encoders.end()) {
+            instanceSlot = &it->second.instance;
+            visualSlot = &it->second.state;
+            chain = &it->second.onPress;
+        }
+    } else {
+        return false;
+    }
+    if (instanceSlot == nullptr) {
+        return false; // no binding at this slot
+    }
+    // Materialise the instance/states slot on first edit (bindings created via
+    // commit*Binding carry no instance).
+    if (!instanceSlot->has_value()) {
+        ajazz::core::ActionInstance fresh{};
+        if (chain != nullptr && !chain->empty()) {
+            fresh.id = chain->front().id;
+        }
+        *instanceSlot = std::move(fresh);
+    }
+    auto& inst = **instanceSlot;
+    if (static_cast<std::size_t>(stateIndex) >= inst.states.size()) {
+        inst.states.resize(static_cast<std::size_t>(stateIndex) + 1);
+    }
+    inst.states[static_cast<std::size_t>(stateIndex)].visual = visual;
+    // Keep the legacy single-visual mirror in sync when editing the CURRENT
+    // state, so pre-instance render paths (device repaint) follow the edit.
+    if (visualSlot != nullptr && inst.currentState == static_cast<std::uint32_t>(stateIndex)) {
+        *visualSlot = visual;
+    }
+    saveActiveProfile();
+    emit profileChanged();
+    return true;
 }
 
 // ---------------------------------------------------------------------------

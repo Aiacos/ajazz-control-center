@@ -730,6 +730,12 @@ private:
                             QString const& pageId,
                             QString const& pluginUuid = {});
 
+    /// Drop the cached visual layers a retiring context owns (title overlay,
+    /// encoder feedback bag, layout override) so they cannot composite onto the
+    /// NEXT action bound to the same control (audit 6.1). Called at both
+    /// retire sites (reconcile pass + retirePageContexts).
+    void purgeContextVisualCaches(ActionContext const& ctx, QString const& ctxId);
+
     SdPluginServer* m_server{nullptr};            // Phase 17 seam
     StreamDockControlService* m_control{nullptr}; // Phase 14 seam
     StreamDockInputService* m_input{nullptr};     // Phase 15 seam (used in 19-03)

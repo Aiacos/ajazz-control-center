@@ -52,18 +52,21 @@ TEST_CASE("deviceInfoJson picks Mini/XL/standard types by key count", "[opendeck
     REQUIRE(deviceInfoJson(QStringLiteral("akp153"), std15).value("type").toInt() == 0);
 }
 
-TEST_CASE("categoriesJson always includes the six OpenDeck built-ins", "[opendeck]") {
+TEST_CASE("categoriesJson includes the four working OpenDeck built-ins", "[opendeck]") {
     QJsonObject const cats = categoriesJson(QVariantList{});
     REQUIRE(cats.contains("OpenDeck"));
     // Category value is an object { actions: Action[] } (ActionList contract).
     QJsonArray const builtins = cats.value("OpenDeck").toObject().value("actions").toArray();
-    REQUIRE(builtins.size() == 6);
+    // Multi Action / Toggle Action are NOT advertised until the children
+    // pipeline exists (audit 4.2: instanceJson emits children:null and
+    // ParentActionView throws on it).
+    REQUIRE(builtins.size() == 4);
     QStringList uuids;
     for (QJsonValue const& v : builtins) {
         uuids.append(v.toObject().value("uuid").toString());
     }
-    REQUIRE(uuids.contains("opendeck.multiaction"));
-    REQUIRE(uuids.contains("opendeck.toggleaction"));
+    REQUIRE_FALSE(uuids.contains("opendeck.multiaction"));
+    REQUIRE_FALSE(uuids.contains("opendeck.toggleaction"));
     REQUIRE(uuids.contains("opendeck.brightness"));
     // full Action shape on a built-in
     QJsonObject const first = builtins.at(0).toObject();
