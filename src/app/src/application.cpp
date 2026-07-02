@@ -547,6 +547,29 @@ Application::Application(QObject* parent)
     m_openDeckBridge->setInstanceSettingsResolver([this](QString const& ctx) -> QString {
         return m_pluginBridge ? m_pluginBridge->settingsJsonForContext(ctx) : QString{};
     });
+    // opendeck.switchprofile / profile.switch (builtin parity audit): resolve
+    // the target NAME against the active device's library and activate it —
+    // the same lookup set_selected_profile performs for the SPA dropdown.
+    if (m_builtinActions && m_profileController) {
+        m_builtinActions->setProfileSwitcher([this](QString const& name) {
+            QString const device =
+                QString::fromStdString(m_profileController->activeProfile().deviceCodename);
+            for (QVariant const& v : m_profileController->profilesForDevice(device)) {
+                QVariantMap const m = v.toMap();
+                if (m.value(QStringLiteral("name")).toString() == name) {
+                    QString const id = m.value(QStringLiteral("id")).toString();
+                    if (id != m_profileController->activeProfileId()) {
+                        m_profileController->loadProfileById(id);
+                    }
+                    return;
+                }
+            }
+            AJAZZ_LOG_WARN("builtin",
+                           "profile.switch: no profile named '{}' for device '{}'",
+                           name.toStdString(),
+                           device.toStdString());
+        });
+    }
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
                      m_openDeckBridge.get(),

@@ -215,9 +215,34 @@ void BuiltinActionsService::setSynthesizer(std::unique_ptr<core::IInputSynthesiz
     m_synth = std::move(synth);
 }
 
+std::string BuiltinActionsService::canonicalBuiltinId(std::string_view id) {
+    // The SPA's fallback "OpenDeck" category (opendeck_shaping.cpp) advertises
+    // these ids; the registry keys on kBuiltinPrefix, so translate here.
+    if (id == "opendeck.runcommand") {
+        return "com.hotspot.streamdock.runcommand";
+    }
+    if (id == "opendeck.openurl") {
+        return "com.hotspot.streamdock.browser"; // same {"url"} contract
+    }
+    if (id == "opendeck.switchprofile") {
+        return "com.hotspot.streamdock.profile.switch";
+    }
+    if (id == "opendeck.brightness") {
+        return "com.hotspot.streamdock.device.brightness";
+    }
+    if (id == "opendeck.multiaction") {
+        return std::string{core::BuiltinActionRegistry::kMultiActionId};
+    }
+    if (id == "opendeck.toggleaction") {
+        return std::string{core::BuiltinActionRegistry::kToggleActionId};
+    }
+    return std::string{id};
+}
+
 void BuiltinActionsService::onPluginAction(std::string_view id, std::string_view settingsJson) {
-    if (m_registry.handles(id)) {
-        m_registry.dispatch(id, settingsJson);
+    std::string const canonical = canonicalBuiltinId(id);
+    if (m_registry.handles(canonical)) {
+        m_registry.dispatch(canonical, settingsJson);
         return;
     }
     if (m_fallback) {
@@ -342,13 +367,69 @@ void BuiltinActionsService::populate() {
     // ---- Device controls ----
 
     // device.brightness: parse {"level": N} -> clamp(0..100) -> BrightnessSink.
+    // Also accepts {"value": N} (the opendeck.brightness alias convention).
     m_registry.registerAction(
         "com.hotspot.streamdock.device.brightness", [this](std::string_view settingsJson) {
             auto const obj = parseSettings(settingsJson, "device.brightness"sv);
-            int const raw = obj.value(QStringLiteral("level")).toInt(80);
+            int const raw = obj.contains(QStringLiteral("level"))
+                                ? obj.value(QStringLiteral("level")).toInt(80)
+                                : obj.value(QStringLiteral("value")).toInt(80);
             int const level = clamp0to100(raw);
             if (m_brightness) {
                 m_brightness(level);
+            }
+        });
+
+    // runcommand (opendeck.runcommand alias target): run a user-authored local
+    // command through the SAME ActionEngine RunCommand executor the legacy
+    // chain path uses (argv form {"program","args"} — no shell). The OpenDeck
+    // convention is a single {"command": "..."} string: normalise it to a
+    // shell invocation, matching upstream starterpack semantics (the command
+    // is the user's own automation, typed by the user for the user).
+    m_registry.registerAction(
+        "com.hotspot.streamdock.runcommand", [this](std::string_view settingsJson) {
+            auto const obj = parseSettings(settingsJson, "runcommand"sv);
+            QJsonObject normalised = obj;
+            if (!obj.contains(QStringLiteral("program"))) {
+                auto const command = obj.value(QStringLiteral("command")).toString();
+                if (command.isEmpty()) {
+                    AJAZZ_LOG_WARN("builtin", "runcommand: no 'command'/'program' in settings");
+                    return;
+                }
+#ifdef Q_OS_WIN
+                normalised = QJsonObject{
+                    {QStringLiteral("program"), QStringLiteral("cmd")},
+                    {QStringLiteral("args"), QJsonArray{QStringLiteral("/C"), command}}};
+#else
+                normalised = QJsonObject{
+                    {QStringLiteral("program"), QStringLiteral("/bin/sh")},
+                    {QStringLiteral("args"), QJsonArray{QStringLiteral("-c"), command}}};
+#endif
+            }
+            if (m_engine) {
+                core::Action step;
+                step.kind = core::ActionKind::RunCommand;
+                step.settingsJson =
+                    QJsonDocument(normalised).toJson(QJsonDocument::Compact).toStdString();
+                m_engine->run(core::ActionChain{step});
+            }
+        });
+
+    // profile.switch (opendeck.switchprofile alias target): activate the named
+    // profile via the injected switcher ({"profile": "<name>"}; "name" alias).
+    m_registry.registerAction(
+        "com.hotspot.streamdock.profile.switch", [this](std::string_view settingsJson) {
+            auto const obj = parseSettings(settingsJson, "profile.switch"sv);
+            QString name = obj.value(QStringLiteral("profile")).toString();
+            if (name.isEmpty()) {
+                name = obj.value(QStringLiteral("name")).toString();
+            }
+            if (name.isEmpty()) {
+                AJAZZ_LOG_WARN("builtin", "profile.switch: no 'profile' in settings");
+                return;
+            }
+            if (m_profileSwitch) {
+                m_profileSwitch(name);
             }
         });
 

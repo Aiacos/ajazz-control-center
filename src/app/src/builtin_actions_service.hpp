@@ -147,6 +147,24 @@ public:
      */
     void onPluginAction(std::string_view id, std::string_view settingsJson);
 
+    /// Called for @c profile.switch / @c opendeck.switchprofile: receives the
+    /// target profile NAME (the OpenDeck-facing id). The Application wiring
+    /// resolves it against the active device's library and activates it.
+    using ProfileSwitchFn = std::function<void(QString const& profileName)>;
+
+    /// Inject the profile-switch executor (opendeck.switchprofile / the
+    /// canonical profile.switch). Lazy null-guarded like the other sinks.
+    void setProfileSwitcher(ProfileSwitchFn switcher) { m_profileSwitch = std::move(switcher); }
+
+    /// Map an OpenDeck SPA builtin alias ("opendeck.runcommand", ".openurl",
+    /// ".switchprofile", ".brightness", ".multiaction", ".toggleaction") to the
+    /// canonical `com.hotspot.streamdock.*` dispatch id. Non-alias ids pass
+    /// through unchanged. The SPA's fallback "OpenDeck" category advertises the
+    /// opendeck.* ids, but BuiltinActionRegistry::handles() only accepts the
+    /// canonical prefix — every advertised builtin was a silent no-op at press
+    /// time without this translation (builtin parity audit 2026-07-02).
+    [[nodiscard]] static std::string canonicalBuiltinId(std::string_view id);
+
     /**
      * @brief Reset LunBo per-key cursors (call on profile change).
      *
@@ -198,6 +216,7 @@ private:
     OpenUrlFn m_openUrl;
     core::ActionEngine* m_engine{nullptr};
     PluginFallback m_fallback;
+    ProfileSwitchFn m_profileSwitch; // see setProfileSwitcher
 
     // ---- Owned collaborators ----
     core::BuiltinActionRegistry m_registry;

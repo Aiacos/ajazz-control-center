@@ -63,7 +63,10 @@ inline constexpr std::uint16_t kTouchStripRangeX = 256;
 /// lock-step with BuiltinActionRegistry::handles(); no SKU / codename is
 /// consulted (BIND-06 invariant).
 [[nodiscard]] bool isMultiAction(std::optional<core::ActionInstance> const& instance) {
-    return instance.has_value() && instance->id == core::BuiltinActionRegistry::kMultiActionId;
+    // Accept the OpenDeck SPA alias too (builtin parity audit 2026-07-02): an
+    // instance bound from the SPA's fallback category carries "opendeck.*".
+    return instance.has_value() && (instance->id == core::BuiltinActionRegistry::kMultiActionId ||
+                                    instance->id == "opendeck.multiaction");
 }
 
 /// A firing binding is a Toggle Action when it carries an @ref ActionInstance
@@ -74,7 +77,9 @@ inline constexpr std::uint16_t kTouchStripRangeX = 256;
 /// (com.hotspot.streamdock.toggleaction); no SKU / codename is consulted
 /// (BIND-06 invariant).
 [[nodiscard]] bool isToggleAction(std::optional<core::ActionInstance> const& instance) {
-    return instance.has_value() && instance->id == core::BuiltinActionRegistry::kToggleActionId;
+    // Same SPA-alias acceptance as isMultiAction above.
+    return instance.has_value() && (instance->id == core::BuiltinActionRegistry::kToggleActionId ||
+                                    instance->id == "opendeck.toggleaction");
 }
 
 /// Run a press binding: if it is a Multi Action, flatten its children into the

@@ -146,6 +146,9 @@ struct TestHarness {
             recExecs.openUrl = [this](std::string_view s) {
                 engineLog.push_back("url:" + std::string{s});
             };
+            recExecs.runCommand = [this](std::string_view s) {
+                engineLog.push_back("run:" + std::string{s});
+            };
             ownedEngine = std::make_unique<ActionEngine>(recExecs);
             engine = ownedEngine.get();
         }
@@ -691,4 +694,74 @@ TEST_CASE("BuiltinActionsService - page.indicator is a no-op (display-only hint)
     REQUIRE_NOTHROW(h.service->onPluginAction("com.hotspot.streamdock.page.indicator", "{}"));
     REQUIRE(h.navigateLog.empty());
     REQUIRE(h.brightnessLog.empty());
+}
+
+// ---- OpenDeck SPA builtin aliases (builtin parity audit 2026-07-02) ----
+//
+// The SPA's fallback "OpenDeck" category advertises `opendeck.*` ids while the
+// registry keys on `com.hotspot.streamdock.*` — every advertised builtin was a
+// silent no-op at press time. onPluginAction now canonicalises the alias.
+
+TEST_CASE("BuiltinActionsService - opendeck.brightness alias routes to BrightnessSink",
+          "[builtin-actions][opendeck-alias]") {
+    TestHarness h;
+    QJsonObject s;
+    s[QStringLiteral("value")] = 65; // the alias convention uses "value"
+    h.service->onPluginAction("opendeck.brightness", toJson(s));
+    REQUIRE(h.brightnessLog.size() == 1);
+    REQUIRE(h.brightnessLog[0] == 65);
+}
+
+TEST_CASE("BuiltinActionsService - opendeck.openurl alias routes to openUrl with WR-01 gate",
+          "[builtin-actions][opendeck-alias]") {
+    TestHarness h;
+    QJsonObject ok;
+    ok[QStringLiteral("url")] = QStringLiteral("https://example.org");
+    h.service->onPluginAction("opendeck.openurl", toJson(ok));
+    REQUIRE(h.openUrlLog.size() == 1);
+    REQUIRE(h.openUrlLog[0] == "https://example.org");
+
+    QJsonObject bad;
+    bad[QStringLiteral("url")] = QStringLiteral("file:///etc/shadow");
+    h.service->onPluginAction("opendeck.openurl", toJson(bad));
+    REQUIRE(h.openUrlLog.size() == 1); // rejected, not forwarded
+}
+
+TEST_CASE("BuiltinActionsService - opendeck.switchprofile alias calls the profile switcher",
+          "[builtin-actions][opendeck-alias]") {
+    TestHarness h;
+    std::vector<QString> switched;
+    h.service->setProfileSwitcher([&switched](QString const& name) { switched.push_back(name); });
+    QJsonObject s;
+    s[QStringLiteral("profile")] = QStringLiteral("Streaming");
+    h.service->onPluginAction("opendeck.switchprofile", toJson(s));
+    REQUIRE(switched.size() == 1);
+    REQUIRE(switched[0] == QStringLiteral("Streaming"));
+}
+
+TEST_CASE("BuiltinActionsService - opendeck.runcommand alias runs via the engine executor",
+          "[builtin-actions][opendeck-alias]") {
+    TestHarness h;
+    QJsonObject s;
+    s[QStringLiteral("command")] = QStringLiteral("true");
+    h.service->onPluginAction("opendeck.runcommand", toJson(s));
+    // The handler normalises {"command"} to the argv form and runs it through
+    // the shared ActionEngine RunCommand executor (harness spy). Windows
+    // normalises to `cmd /C`; POSIX to `/bin/sh -c`.
+    REQUIRE(h.engineLog.size() == 1);
+    REQUIRE(h.engineLog[0].rfind("run:", 0) == 0);
+#ifdef _WIN32
+    REQUIRE(h.engineLog[0].find("cmd") != std::string::npos);
+#else
+    REQUIRE(h.engineLog[0].find("/bin/sh") != std::string::npos);
+#endif
+    REQUIRE(h.engineLog[0].find("true") != std::string::npos);
+}
+
+TEST_CASE("BuiltinActionsService - non-alias third-party UUID still reaches the fallback",
+          "[builtin-actions][opendeck-alias]") {
+    TestHarness h;
+    h.service->onPluginAction("com.example.thirdparty.action", "{}");
+    REQUIRE(h.fallbackLog.size() == 1);
+    REQUIRE(h.fallbackLog[0].rfind("com.example.thirdparty.action:", 0) == 0);
 }
