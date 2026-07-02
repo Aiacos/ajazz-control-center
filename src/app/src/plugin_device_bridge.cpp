@@ -1353,7 +1353,10 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
         ActionContext const& ctx = *ctxOpt;
         QJsonObject payload = instancePayload(ctx);
         payload.insert(QStringLiteral("ticks"), ev.value); // signed (int32) preserved
-        payload.insert(QStringLiteral("pressed"), false);
+        // audit 6.6: real pressed state (press-and-turn actions) tracked from
+        // EncoderPressed/Released instead of a hardcoded false.
+        payload.insert(QStringLiteral("pressed"),
+                       m_pressedEncoders.count(static_cast<int>(ev.index)) > 0);
         m_server->sendEvent(ctx.pluginUuid,
                             eventEnvelope(QStringLiteral("dialRotate"), ctx, payload));
         break;
@@ -1363,6 +1366,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     // Encoder pressed -> dialDown + legacy keyDownCord alias
     // ------------------------------------------------------------------
     case Kind::EncoderPressed: {
+        m_pressedEncoders.insert(static_cast<int>(ev.index));
         auto const ctxOpt =
             m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
         if (!ctxOpt.has_value()) {
@@ -1382,6 +1386,7 @@ void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEven
     // Encoder released -> dialUp + legacy keyUpCord alias
     // ------------------------------------------------------------------
     case Kind::EncoderReleased: {
+        m_pressedEncoders.erase(static_cast<int>(ev.index));
         // Synthesised release from Phase 15's synthesiseEncoderRelease hook.
         auto const ctxOpt =
             m_registry.byCoord(deviceId, QStringLiteral("Encoder"), 0, static_cast<int>(ev.index));
@@ -1579,6 +1584,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
                 continue;
             }
             // Profile::keys use 0-based uint16_t index; device uses 1-based.
+            // audit 6.14: the uint8_t cast wraps at 255 — skip out-of-range
+            // slots instead of registering/painting the wrong key.
+            if (keyIdx0 >= 255) {
+                continue;
+            }
             std::uint8_t const keyIdx1 = static_cast<std::uint8_t>(keyIdx0 + 1);
             auto const gc = coordsForKeyIndex(keyIdx1, keyCols);
 
@@ -2003,17 +2013,30 @@ PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) co
     }
     int row = 0;
     int column = 0;
+    QString effectiveController = controller;
     if (controller == QStringLiteral("Encoder")) {
         column = position; // encoders are a single row indexed by column
     } else {
-        std::uint8_t keyCols = geometryForDevice(device).keyCols;
+        auto const geo = geometryForDevice(device);
+        std::uint8_t keyCols = geo.keyCols;
         if (keyCols == 0) {
             keyCols = 5; // AKP05E default, matches geometryForDevice's fallback
         }
-        row = position / keyCols;
-        column = position % keyCols;
+        // SPA touch slots are the "Keypad" row appended after the key grid, but
+        // the bridge registers touch contexts under ("Encoder", 0, zone) — the
+        // Keypad row/col math missed them and every PI set/getSettings for a
+        // touch action was silently dropped (audit 6.5).
+        int const keyCount = geo.keyCount > 0 ? geo.keyCount : keyCols * geo.keyRows;
+        if (keyCount > 0 && position >= keyCount) {
+            effectiveController = QStringLiteral("Encoder");
+            row = 0;
+            column = position - keyCount;
+        } else {
+            row = position / keyCols;
+            column = position % keyCols;
+        }
     }
-    return m_registry.byCoord(device, controller, row, column);
+    return m_registry.byCoord(device, effectiveController, row, column);
 }
 
 } // namespace ajazz::app

@@ -1068,8 +1068,12 @@ void PluginCatalogModel::seedBundledPlugins(QString const& pluginsDir) {
             QString const dst = QDir(pluginsDir).filePath(entry);
             // Present (live or quarantined): nothing to do, but record the
             // seed so a later user DELETE is respected on the next launch.
+            // audit 3.5: RE-ASSERT the per-plugin consent too — a bundled dir
+            // present without it (QSettings reset, manual copy, pre-f14b494f
+            // seed) was quarantined as Unsigned by this constructor's sweep.
             if (QDir(dst).exists() || QDir(dst + QStringLiteral(".disabled")).exists()) {
                 settings.setValue(seededKey, true);
+                settings.setValue(QStringLiteral("plugins/allowed/") + uuid, true);
                 continue;
             }
             if (settings.value(seededKey, false).toBool()) {
@@ -1080,6 +1084,10 @@ void PluginCatalogModel::seedBundledPlugins(QString const& pluginsDir) {
                                "bundled seed: copy '{}' -> '{}' failed",
                                bundleRoot.filePath(entry).toStdString(),
                                dst.toStdString());
+                // audit 3.6: remove the partial tree — leaving it made the
+                // dst-exists branch above mark it seeded on the next launch,
+                // permanently locking in a broken install.
+                QDir(dst).removeRecursively();
                 continue;
             }
             settings.setValue(seededKey, true);
@@ -1570,38 +1578,11 @@ bool PluginCatalogModel::installFromFile(QString const& localPathOrUrl,
                        "installFromFile '{}': rename failed (cross-fs?); "
                        "falling back to copy of staged dir",
                        localPath.toStdString());
-        QDir().mkpath(promotedDir);
-        bool copyOk = true;
-        {
-            QDir const srcDir(stagedDir);
-            QStringList const entries =
-                srcDir.entryList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
-            for (QString const& entry : entries) {
-                QString const srcPath = srcDir.filePath(entry);
-                QString const dstPath = QDir(promotedDir).filePath(entry);
-                QFileInfo const info(srcPath);
-                if (info.isDir()) {
-                    QDir().mkpath(dstPath);
-                    // Recurse one level (manifest + Code/ sub-directory is the
-                    // typical sdPlugin layout; deep trees are unusual).
-                    QDir const subSrc(srcPath);
-                    for (QString const& sub :
-                         subSrc.entryList(QDir::Files | QDir::NoDotAndDotDot)) {
-                        if (!QFile::copy(subSrc.filePath(sub), QDir(dstPath).filePath(sub))) {
-                            copyOk = false;
-                            break;
-                        }
-                    }
-                } else {
-                    if (!QFile::copy(srcPath, dstPath)) {
-                        copyOk = false;
-                    }
-                }
-                if (!copyOk) {
-                    break;
-                }
-            }
-        }
+        // audit 3.7: the old hand-rolled walk recursed exactly ONE level and
+        // silently dropped deeper trees (bin/<triple>/, pi/assets/ are common
+        // in real bundles) with copyOk still true — a truncated plugin was
+        // promoted as success. Reuse the full-depth seed helper.
+        bool const copyOk = copyDirRecursively(stagedDir, promotedDir);
         if (!copyOk) {
             QDir(promotedDir).removeRecursively();
             QDir(stagedDir).removeRecursively();
@@ -2129,7 +2110,11 @@ bool PluginCatalogModel::removeInstalledPlugin(QString const& installDirName) {
     // C++ boundary (list_plugins -> remove_plugin) and is therefore untrusted.
     // It must be a bare `<...>.sdPlugin` leaf — reject anything that could
     // escape userPluginsDir() before we removeRecursively() a directory.
-    if (installDirName.isEmpty() || !installDirName.endsWith(QStringLiteral(".sdPlugin")) ||
+    // audit 3.13: quarantined dirs (`<x>.sdPlugin.disabled`) are removable too.
+    bool const quarantined =
+        installDirName.endsWith(QStringLiteral(".sdPlugin") + kQuarantineSuffix);
+    if (installDirName.isEmpty() ||
+        (!installDirName.endsWith(QStringLiteral(".sdPlugin")) && !quarantined) ||
         installDirName.startsWith(QLatin1Char('.')) || installDirName.contains(QLatin1Char('/')) ||
         installDirName.contains(QLatin1Char('\\')) ||
         installDirName.contains(QStringLiteral(".."))) {
@@ -2229,6 +2214,19 @@ bool PluginCatalogModel::removeInstalledPlugin(QString const& installDirName) {
 
     // Clear any key/dial binding owned by the now-gone plugin (T037 contract).
     if (!manifestUuid.isEmpty()) {
+        // audit 3.13: consent must not outlive the install — a future unsigned
+        // plugin landing under the same dir name inherited it silently.
+        {
+            QSettings settings;
+            QString consentBase = installDirName;
+            if (consentBase.endsWith(kQuarantineSuffix)) {
+                consentBase.chop(kQuarantineSuffix.size());
+            }
+            if (consentBase.endsWith(QStringLiteral(".sdPlugin"))) {
+                consentBase.chop(9);
+            }
+            settings.remove(QStringLiteral("plugins/allowed/") + consentBase);
+        }
         emit pluginUninstalled(manifestUuid);
     }
     emit installedCountChanged(); // re-queries the disk-backed installedActions()

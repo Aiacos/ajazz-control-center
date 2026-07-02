@@ -141,8 +141,20 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
 
     // --- bootstrap / static -------------------------------------------------
     if (command == QLatin1String("get_build_info")) {
-        return str(QStringLiteral("%1 %2").arg(QCoreApplication::applicationName(),
-                                               QCoreApplication::applicationVersion()));
+        // Upstream shape (settings.rs get_build_info): HTML with the build
+        // TARGET inside — SettingsView/DeviceSelector grep it for
+        // OS-conditional UI, so a plain string never matched (audit 5.5).
+#if defined(Q_OS_WIN)
+        auto const target = QStringLiteral("x86_64-pc-windows-msvc");
+#elif defined(Q_OS_MACOS)
+        auto const target = QStringLiteral("universal-apple-darwin");
+#else
+        auto const target = QStringLiteral("x86_64-unknown-linux-gnu");
+#endif
+        return str(QStringLiteral("<details><summary> %1 v%2 on %3 </summary></details>")
+                       .arg(QCoreApplication::applicationName(),
+                            QCoreApplication::applicationVersion(),
+                            target));
     }
     if (command == QLatin1String("get_port_base")) {
         // 57116 is the PINNED plugin-server base port — a contract, not a
@@ -181,6 +193,17 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         settings.setValue(
             QStringLiteral("opendeck/settings"),
             QString::fromUtf8(QJsonDocument(incoming).toJson(QJsonDocument::Compact)));
+        // Upstream applies the device knobs on every save (settings.rs); our
+        // store-only handler left the SPA brightness slider inert (audit 5.2).
+        if (m_control != nullptr && m_profiles != nullptr &&
+            incoming.contains(QStringLiteral("brightness"))) {
+            QString const codename =
+                QString::fromStdString(m_profiles->activeProfile().deviceCodename);
+            if (!codename.isEmpty()) {
+                m_control->setBrightness(codename,
+                                         incoming.value(QStringLiteral("brightness")).toInt(50));
+            }
+        }
         return str(QJsonValue(QJsonValue::Null));
     }
     if (command == QLatin1String("get_localisations")) {
@@ -505,6 +528,17 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         if (imgVal.isNull() || imgVal.toString().isEmpty()) {
             if (c.controller == QLatin1String("Keypad") && c.position < keyCount) {
                 m_control->clearKeyImage(static_cast<std::uint8_t>(c.position + 1));
+            } else {
+                // Encoder/touch slot emptied (audit 4.4): there is no
+                // clearEncoderImage primitive, so paint the zone black — the
+                // strip otherwise kept showing the removed action's frame.
+                int const zone =
+                    (c.controller == QLatin1String("Encoder")) ? c.position : c.position - keyCount;
+                if (zone >= 0 && zone <= 255) {
+                    QImage black(128, 128, QImage::Format_ARGB32);
+                    black.fill(Qt::black);
+                    m_control->assignEncoderImage(static_cast<std::uint8_t>(zone), black);
+                }
             }
             return str(QJsonValue(QJsonValue::Null));
         }

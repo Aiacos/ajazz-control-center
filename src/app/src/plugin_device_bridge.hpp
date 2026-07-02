@@ -47,6 +47,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <utility>
 
 // AJAZZ_HAVE_WEBSOCKETS gate: the whole PluginDeviceBridge surface compiles away when the
@@ -836,6 +837,10 @@ private:
     /// setTitle, re-applied by reapplyTitle() after a base-changing paint so the
     /// title persists across a later setImage. Cleared on device (re)connect.
     std::map<std::uint8_t, QString> m_titleByKey;
+
+    /// 0-based indexes of encoders currently held down (EncoderPressed seen,
+    /// no EncoderReleased yet) — feeds dialRotate's `pressed` flag (audit 6.6).
+    std::set<int> m_pressedEncoders;
 
 public:
     /**
