@@ -247,9 +247,13 @@ btop/btop4win access code (Apache-2.0, with NOTICE attribution).
   one) and **uptime** (/proc/uptime, compact "3d 4h" label) — all in the
   Metric enum + PI picker, live-verified on the AKP05E (2026-07-02).
   Bundling into the app build/installers shipped as Phase 6c
-  (plugins/CMakeLists.txt + seedBundledPlugins). Still open: per-sensor
-  picker (which GPU / which NIC / which temp probe), user docs, CI
-  cross-compile matrix.
+  (plugins/CMakeLists.txt + seedBundledPlugins); the Linux CI leg builds the
+  bundle implicitly (AJAZZ_BUNDLE_PLUGINS=ON + cargo on ubuntu runners), and a
+  cross-compile matrix is DEFERRED WITH PHASE 5 (the helper is Linux-only by
+  design until the Windows/macOS sensor backends exist — there is nothing to
+  cross-compile yet). User docs: `docs/plugins/system-monitor.md`. Still open
+  (Tier-3): per-sensor picker (which GPU / which NIC / which temp probe) —
+  needs per-instance metric histories, today history is global per metric.
 
 ## 9. Open decisions (for the owner)
 
