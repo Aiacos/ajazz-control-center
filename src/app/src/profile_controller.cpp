@@ -1018,6 +1018,10 @@ void ProfileController::commitKeyBinding(int keyIndex,
     act.settingsJson = settingsJson.toStdString();
     binding.onPress = {std::move(act)};
 
+    // Persist immediately: the SPA create_instance path has no other save hook,
+    // so an unsaved commit dies with the process (bindings-lost-at-restart,
+    // live-verified 2026-07-02).
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1062,6 +1066,10 @@ void ProfileController::commitEncoderBinding(int encoderIndex,
     act.settingsJson = settingsJson.toStdString();
     binding.onPress = {std::move(act)};
 
+    // Persist immediately: the SPA create_instance path has no other save hook,
+    // so an unsaved commit dies with the process (bindings-lost-at-restart,
+    // live-verified 2026-07-02).
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1095,6 +1103,7 @@ void ProfileController::commitEncoderVolume(int encoderIndex) {
     binding.state.imagePath = std::nullopt; // segment falls back to label + glyph
 
     AJAZZ_LOG_INFO("profile-controller", "commitEncoderVolume: dial {} -> system volume", idx);
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1188,6 +1197,7 @@ void ProfileController::commitTouchZoneBinding(int zoneIndex,
     act.settingsJson = settingsJson.toStdString();
     binding.onTap = {std::move(act)};
 
+    saveActiveProfile(); // SPA create_instance has no other save hook (see commitKeyBinding)
     emit profileChanged();
 }
 
@@ -1226,6 +1236,7 @@ void ProfileController::appendKeyAction(int keyIndex,
     act.settingsJson = settingsJson.toStdString();
     binding.onPress.push_back(std::move(act)); // additive — does NOT clear existing actions
 
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1275,6 +1286,7 @@ void ProfileController::reorderKeyAction(int keyIndex, int fromPos, int toPos) {
             onPress.begin() + toPos, onPress.begin() + fromPos, onPress.begin() + fromPos + 1);
     }
 
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1310,6 +1322,7 @@ void ProfileController::removeKeyActionAt(int keyIndex, int pos) {
     onPress.erase(onPress.begin() + pos);
     // Removing the last action leaves onPress empty — key reads as cleared.
 
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1578,6 +1591,7 @@ void ProfileController::swapEncoderBindings(int srcIndex, int dstIndex) {
     auto src_copy = m_profile.encoders[s];
     m_profile.encoders[s] = m_profile.encoders[d];
     m_profile.encoders[d] = std::move(src_copy);
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1605,6 +1619,7 @@ void ProfileController::swapKeyBindings(int srcIndex, int dstIndex) {
     auto src_copy = keyMap[s];
     keyMap[s] = keyMap[d];
     keyMap[d] = std::move(src_copy);
+    saveActiveProfile();
     emit profileChanged();
 }
 
@@ -1626,6 +1641,7 @@ void ProfileController::swapTouchZoneBindings(int srcIndex, int dstIndex) {
     auto src_copy = m_profile.touchZones[s];
     m_profile.touchZones[s] = m_profile.touchZones[d];
     m_profile.touchZones[d] = std::move(src_copy);
+    saveActiveProfile();
     emit profileChanged();
 }
 
