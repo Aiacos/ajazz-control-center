@@ -42,10 +42,13 @@ enum Metric {
 	GpuTemp,
 	Vram,
 	GpuPower,
+	Ping,
+	Battery,
+	Uptime,
 }
 
 impl Metric {
-	const ALL: [Metric; 10] = [
+	const ALL: [Metric; 13] = [
 		Metric::Cpu,
 		Metric::CpuTemp,
 		Metric::Ram,
@@ -56,6 +59,9 @@ impl Metric {
 		Metric::GpuTemp,
 		Metric::Vram,
 		Metric::GpuPower,
+		Metric::Ping,
+		Metric::Battery,
+		Metric::Uptime,
 	];
 
 	fn from_id(s: &str) -> Metric {
@@ -69,6 +75,9 @@ impl Metric {
 			"gpu_temp" => Metric::GpuTemp,
 			"vram" => Metric::Vram,
 			"gpu_power" => Metric::GpuPower,
+			"ping" => Metric::Ping,
+			"battery" => Metric::Battery,
+			"uptime" => Metric::Uptime,
 			_ => Metric::Cpu,
 		}
 	}
@@ -87,6 +96,9 @@ impl Metric {
 			Metric::GpuTemp => "gpu_temp",
 			Metric::Vram => "vram",
 			Metric::GpuPower => "gpu_power",
+			Metric::Ping => "ping",
+			Metric::Battery => "battery",
+			Metric::Uptime => "uptime",
 		}
 	}
 
@@ -102,6 +114,9 @@ impl Metric {
 			Metric::GpuTemp => "GPU TMP",
 			Metric::Vram => "VRAM",
 			Metric::GpuPower => "GPU PWR",
+			Metric::Ping => "PING",
+			Metric::Battery => "BAT",
+			Metric::Uptime => "UP",
 		}
 	}
 
@@ -113,6 +128,10 @@ impl Metric {
 			Metric::Ram | Metric::Vram | Metric::Disk => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
 			Metric::NetDown => [(0x29, 0x1f, 0x75), (0x4f, 0x43, 0xa3), (0xb0, 0xa9, 0xde)],
 			Metric::NetUp => [(0x62, 0x06, 0x65), (0x7d, 0x41, 0x80), (0xdc, 0xaf, 0xde)],
+			// Ping: green (low) -> amber -> red (high latency), matching the CPU ramp.
+			Metric::Ping => [(0x77, 0xca, 0x9b), (0xcb, 0xc0, 0x6c), (0xdc, 0x4c, 0x4c)],
+			// Battery/uptime: neutral teal ramp (no danger semantics in the bar itself).
+			Metric::Battery | Metric::Uptime => [(0x2b, 0x59, 0x4f), (0x4f, 0xa3, 0x8c), (0xa9, 0xde, 0xcf)],
 		}
 	}
 
@@ -120,10 +139,10 @@ impl Metric {
 	/// GPU power draw).
 	fn scale_max(self) -> Option<f32> {
 		match self {
-			Metric::Cpu | Metric::Ram | Metric::Disk | Metric::CpuTemp | Metric::Gpu | Metric::GpuTemp | Metric::Vram => {
+			Metric::Cpu | Metric::Ram | Metric::Disk | Metric::CpuTemp | Metric::Gpu | Metric::GpuTemp | Metric::Vram | Metric::Battery => {
 				Some(100.0)
 			}
-			Metric::NetDown | Metric::NetUp | Metric::GpuPower => None,
+			Metric::NetDown | Metric::NetUp | Metric::GpuPower | Metric::Ping | Metric::Uptime => None,
 		}
 	}
 
@@ -137,8 +156,10 @@ impl Metric {
 			Metric::GpuTemp => Some((75.0, 90.0)),
 			Metric::Vram => Some((80.0, 95.0)),
 			Metric::Disk => Some((85.0, 95.0)),
+			// High latency IS the signal for ping (warn 60 ms, crit 150 ms).
+			Metric::Ping => Some((60.0, 150.0)),
 			// Power draw varies wildly per card — no meaningful default bands.
-			Metric::NetDown | Metric::NetUp | Metric::GpuPower => None,
+			Metric::NetDown | Metric::NetUp | Metric::GpuPower | Metric::Battery | Metric::Uptime => None,
 		}
 	}
 
@@ -148,7 +169,23 @@ impl Metric {
 			Metric::CpuTemp | Metric::GpuTemp => format!("{v:.0}\u{00b0}C"),
 			Metric::NetDown | Metric::NetUp => fmt_rate(v),
 			Metric::GpuPower => format!("{v:.1}W"),
+			Metric::Ping => format!("{v:.0}ms"),
+			Metric::Battery => format!("{v:.0}%"),
+			Metric::Uptime => fmt_uptime(v),
 		}
+	}
+}
+
+/// Seconds -> compact "3d 4h" / "4h05" / "12m" uptime label.
+fn fmt_uptime(secs: f32) -> String {
+	let s = secs.max(0.0) as u64;
+	let (d, h, m) = (s / 86_400, (s % 86_400) / 3_600, (s % 3_600) / 60);
+	if d > 0 {
+		format!("{d}d {h}h")
+	} else if h > 0 {
+		format!("{h}h{m:02}")
+	} else {
+		format!("{m}m")
 	}
 }
 
@@ -265,7 +302,65 @@ async fn run_helper() {
 				};
 				push_metric(&mut m, Metric::Vram, vram_pct);
 			}
+			// Tier-2 (Phase 6): battery + uptime are plain sysfs/procfs reads —
+			// no btop collector needed. Pushed on the helper's 1 Hz beat so all
+			// metrics share one history cadence. Battery is skipped (flat tile)
+			// on desktops without a power_supply battery.
+			if let Some(pct) = read_battery_percent() {
+				push_metric(&mut m, Metric::Battery, pct);
+			}
+			if let Some(up) = read_uptime_secs() {
+				push_metric(&mut m, Metric::Uptime, up);
+			}
 		}
+	}
+}
+
+/// First /sys/class/power_supply/*/capacity whose type is Battery (Linux).
+fn read_battery_percent() -> Option<f32> {
+	let dir = std::fs::read_dir("/sys/class/power_supply").ok()?;
+	for entry in dir.flatten() {
+		let path = entry.path();
+		let is_battery = std::fs::read_to_string(path.join("type"))
+			.map(|t| t.trim() == "Battery")
+			.unwrap_or(false);
+		if !is_battery {
+			continue;
+		}
+		if let Ok(cap) = std::fs::read_to_string(path.join("capacity")) {
+			if let Ok(v) = cap.trim().parse::<f32>() {
+				return Some(v);
+			}
+		}
+	}
+	None
+}
+
+/// /proc/uptime first field (seconds since boot).
+fn read_uptime_secs() -> Option<f32> {
+	let raw = std::fs::read_to_string("/proc/uptime").ok()?;
+	raw.split_whitespace().next()?.parse::<f32>().ok()
+}
+
+/// Latency sampler (Phase 6 "ping"): a TCP connect round-trip to a public
+/// resolver every 2 s. TCP SYN/ACK timing tracks ICMP closely enough for a
+/// tile trend and needs no raw-socket privilege. Timeout counts as the
+/// 1500 ms ceiling so outages spike the graph instead of freezing it.
+async fn run_ping_sampler() {
+	const TARGET: &str = "1.1.1.1:443";
+	const TIMEOUT_MS: u64 = 1_500;
+	loop {
+		let started = std::time::Instant::now();
+		let connect = tokio::net::TcpStream::connect(TARGET);
+		let ms = match tokio::time::timeout(std::time::Duration::from_millis(TIMEOUT_MS), connect).await {
+			Ok(Ok(_)) => started.elapsed().as_secs_f32() * 1_000.0,
+			_ => TIMEOUT_MS as f32,
+		};
+		{
+			let mut m = metrics().lock().unwrap();
+			push_metric(&mut m, Metric::Ping, ms);
+		}
+		tokio::time::sleep(std::time::Duration::from_secs(2)).await;
 	}
 }
 
@@ -697,6 +792,7 @@ async fn main() -> OpenActionResult<()> {
 	}
 
 	tokio::spawn(run_helper());
+	tokio::spawn(run_ping_sampler());
 	register_action(CpuAction::default()).await;
 	register_action(MonitorAction::default()).await;
 	register_action(GpuAction::default()).await;

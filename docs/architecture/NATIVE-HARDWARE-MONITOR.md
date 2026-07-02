@@ -239,9 +239,16 @@ btop/btop4win access code (Apache-2.0, with NOTICE attribution).
   effort; the btop4win tree is also a separate vendor drop. Do NOT implement
   blind — pick this up on a Windows machine (build btop4win collectors, parse
   the FULL `FetchLHMValues()` dump, split basic/advanced tiers).
-- **Phase 6 — Tier-2/3 + polish.** ▶ IN PROGRESS. Tier-2 metrics (disk %,
-  GPU power) landing on Linux; still open: network+ping, sensor picker,
-  battery/uptime, bundling into all three installers, user docs, CI
+- **Phase 6 — Tier-2/3 + polish.** ▶ IN PROGRESS. Done: Tier-2 metrics
+  (disk %, GPU power), network up/down (btop `Net::collect` in the helper),
+  **ping** (TCP connect-time to 1.1.1.1:443 sampled every 2 s in the plugin —
+  SYN/ACK timing, no raw-socket privilege; timeout pins 1500 ms so outages
+  spike the graph), **battery %** (/sys/class/power_supply, skipped without
+  one) and **uptime** (/proc/uptime, compact "3d 4h" label) — all in the
+  Metric enum + PI picker, live-verified on the AKP05E (2026-07-02).
+  Bundling into the app build/installers shipped as Phase 6c
+  (plugins/CMakeLists.txt + seedBundledPlugins). Still open: per-sensor
+  picker (which GPU / which NIC / which temp probe), user docs, CI
   cross-compile matrix.
 
 ## 9. Open decisions (for the owner)
