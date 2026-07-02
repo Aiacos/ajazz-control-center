@@ -31,7 +31,7 @@ and the OS/version manifest gates.
 | 2 | No `streamdeck://` deep-link → no `didReceiveDeepLink` | Every OAuth-callback flow (Spotify, Twitch, Hue) never returns to the plugin | no scheme handler anywhere in `src/` |
 | 3 | ~~`setImage`/`setTitle` `state`/`target` ignored~~ | — | **FIXED 2026-07-03** (`plugin_device_bridge.cpp`, per-state override maps) |
 | 4 | Multi-Action cannot host plugin actions — `isInMultiAction` always false, no `userDesiredState` | Plugin actions inside a Multi Action misbehave | `plugin_device_bridge.cpp:instancePayload`; multi-action engine |
-| 5 | Custom JSON encoder layouts not loaded (`Encoder.layout` path → `$X1` fallback) | SD+ dial plugins with bespoke layouts render wrong/unreadable feedback | `encoder_layout_renderer.cpp` |
+| 5 | ~~Custom JSON encoder layouts not loaded~~ | — | **FIXED 2026-07-03** (`renderCustomEncoderLayout`, cached file loader in the bridge) |
 
 Degradations that are acceptable to document rather than fix: `touchTap.hold`
 always false; `titleParametersDidChange` carries defaults instead of the
