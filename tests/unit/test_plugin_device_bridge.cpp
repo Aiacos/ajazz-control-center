@@ -35,6 +35,7 @@
 #include "stream_dock_control_service.hpp"
 #include "stream_dock_input_service.hpp" // GAP-28B regression tests
 
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -285,6 +286,116 @@ TEST_CASE("PluginDeviceBridge decodeDataUriImage rejects oversize base64 body T-
     // Must be rejected without OOM/crash (T-19-img size bound).
     CHECK(result.ok == false);
     CHECK(result.image.isNull());
+}
+
+TEST_CASE("PluginDeviceBridge decodeDataUriImage decodes non-base64 plain SVG body",
+          "[plugin-device-bridge][decode]") {
+    ensureQCoreApp();
+
+    // Elgato setImage SVG form (MiraBox SDVueSDK emits exactly this): the
+    // header has no ";base64" marker and the body is the SVG text verbatim.
+    QString const uri =
+        QStringLiteral("data:image/svg+xml;charset=utf8,"
+                       "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"128\" height=\"128\">"
+                       "<rect width=\"128\" height=\"128\" fill=\"red\"/></svg>");
+    DecodedImage const result = decodeDataUriImage(uri);
+
+    CHECK(result.ok == true);
+    CHECK_FALSE(result.image.isNull());
+    CHECK(result.image.width() == 128);
+    CHECK(result.image.height() == 128);
+}
+
+TEST_CASE("PluginDeviceBridge decodeDataUriImage decodes percent-encoded SVG body",
+          "[plugin-device-bridge][decode]") {
+    ensureQCoreApp();
+
+    // Same SVG but percent-encoded (the other legal non-base64 spelling).
+    QString const uri = QStringLiteral(
+        "data:image/svg+xml;charset=utf8,"
+        "%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2264%22 height=%2264%22%3E"
+        "%3Crect width=%2264%22 height=%2264%22 fill=%22blue%22/%3E%3C/svg%3E");
+    DecodedImage const result = decodeDataUriImage(uri);
+
+    CHECK(result.ok == true);
+    CHECK_FALSE(result.image.isNull());
+    CHECK(result.image.width() == 64);
+    CHECK(result.image.height() == 64);
+}
+
+TEST_CASE("PluginDeviceBridge decodeDataUriImage rejects non-base64 non-image body",
+          "[plugin-device-bridge][decode]") {
+    ensureQCoreApp();
+
+    // Non-base64 header with a body no image plugin can parse: {ok:false}.
+    DecodedImage const result = decodeDataUriImage(
+        QStringLiteral("data:image/svg+xml;charset=utf8,this is not an svg at all"));
+    CHECK(result.ok == false);
+    CHECK(result.image.isNull());
+}
+
+TEST_CASE("PluginDeviceBridge mirrorSafeDataUri percent-encodes non-base64 body with hash",
+          "[plugin-device-bridge][decode][mirror]") {
+    ensureQCoreApp();
+
+    QString const uri = QStringLiteral(
+        "data:image/svg+xml;charset=utf8,<svg><line style=\"stroke:#cccccc\"/></svg>");
+    QString const safe = ajazz::app::mirrorSafeDataUri(uri);
+
+    // The body must contain no raw '#' (fragment delimiter) and must round-trip
+    // back to the original SVG via percent-decoding.
+    qsizetype const comma = safe.indexOf(QLatin1Char(','));
+    REQUIRE(comma > 0);
+    QString const body = safe.mid(comma + 1);
+    CHECK_FALSE(body.contains(QLatin1Char('#')));
+    // Chromium needs the SVG namespace on a standalone document; MiraBox SVGs
+    // omit it, so the helper injects it into the root tag.
+    CHECK(QString::fromUtf8(QByteArray::fromPercentEncoding(body.toUtf8())) ==
+          QStringLiteral("<svg xmlns=\"http://www.w3.org/2000/svg\">"
+                         "<line style=\"stroke:#cccccc\"/></svg>"));
+    // And it must still be a decodable image URI shape (header preserved).
+    CHECK(safe.startsWith(QStringLiteral("data:image/svg+xml;charset=utf8,")));
+}
+
+TEST_CASE("PluginDeviceBridge mirrorSafeDataUri keeps an existing svg xmlns untouched",
+          "[plugin-device-bridge][decode][mirror]") {
+    ensureQCoreApp();
+
+    QString const uri =
+        QStringLiteral("data:image/svg+xml;charset=utf8,"
+                       "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"/>");
+    QString const safe = ajazz::app::mirrorSafeDataUri(uri);
+    qsizetype const comma = safe.indexOf(QLatin1Char(','));
+    QString const decoded =
+        QString::fromUtf8(QByteArray::fromPercentEncoding(safe.mid(comma + 1).toUtf8()));
+    CHECK(decoded ==
+          QStringLiteral("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"8\" height=\"8\"/>"));
+    CHECK(decoded.count(QStringLiteral("xmlns")) == 1); // no double injection
+}
+
+TEST_CASE("PluginDeviceBridge mirrorSafeDataUri passes base64 URIs through verbatim",
+          "[plugin-device-bridge][decode][mirror]") {
+    ensureQCoreApp();
+
+    QString const uri = make1x1PngDataUri();
+    CHECK(ajazz::app::mirrorSafeDataUri(uri) == uri);
+    // Raw base64 body without header: also untouched.
+    QString const raw = make1x1PngRawBase64();
+    CHECK(ajazz::app::mirrorSafeDataUri(raw) == raw);
+}
+
+TEST_CASE("PluginDeviceBridge mirrorSafeDataUri is idempotent on already-encoded body",
+          "[plugin-device-bridge][decode][mirror]") {
+    ensureQCoreApp();
+
+    QString const uri =
+        QStringLiteral("data:image/svg+xml;charset=utf8,%3Csvg%3E%23notfragment%3C/svg%3E");
+    QString const once = ajazz::app::mirrorSafeDataUri(uri);
+    QString const twice = ajazz::app::mirrorSafeDataUri(once);
+    CHECK(once == twice);
+    qsizetype const comma = once.indexOf(QLatin1Char(','));
+    CHECK(QString::fromUtf8(QByteArray::fromPercentEncoding(once.mid(comma + 1).toUtf8())) ==
+          QStringLiteral("<svg xmlns=\"http://www.w3.org/2000/svg\">#notfragment</svg>"));
 }
 
 // ==========================================================================
@@ -1439,6 +1550,58 @@ TEST_CASE("PluginDeviceBridgeE2E willAppear sent on plugin registration with bou
     CHECK(coords.value(QStringLiteral("column")).toInt() == 2);
     CHECK(payload.value(QStringLiteral("controller")).toString() == QStringLiteral("Keypad"));
     CHECK(payload.contains(QStringLiteral("settings")));
+}
+
+TEST_CASE("PluginDeviceBridgeE2E willAppear seeds manifest default Settings on first run",
+          "[plugin-device-bridge][e2e][lifecycle][mirabox-defaults]") {
+    ensureQCoreApp();
+
+    ajazz::app::SdPluginServer server;
+    QSignalSpy registeredSpy(&server, &ajazz::app::SdPluginServer::pluginRegistered);
+    REQUIRE(server.start(0));
+
+    auto bridge = std::make_unique<ajazz::app::PluginDeviceBridge>(&server, nullptr, nullptr);
+
+    // Key bound to a plugin action with NO binding default settings — the
+    // MiraBox first-run shape (SPA create_instance sends settings {}).
+    ajazz::core::Profile prof;
+    prof.id = "test-profile-defaults";
+    prof.name = "Test";
+    prof.deviceCodename = "akp05e";
+    ajazz::core::Binding binding;
+    ajazz::core::Action act;
+    act.kind = ajazz::core::ActionKind::Plugin;
+    act.id = "com.test.defaults.action1";
+    binding.onPress.push_back(act);
+    prof.keys[2] = std::move(binding);
+
+    bridge->setProfileAccessor([&prof]() -> ajazz::core::Profile const& { return prof; });
+
+    // Manifest default-Settings resolver (PluginManager::defaultSettingsForAction
+    // stand-in): the vendor host seeds a NEW instance with this block.
+    bridge->setDefaultSettingsResolver([](QString const& actionUuid) -> QString {
+        if (actionUuid == QStringLiteral("com.test.defaults.action1")) {
+            return QStringLiteral(R"({"select":"analog01","checkboxGroup":["showHour12"]})");
+        }
+        return {};
+    });
+
+    QWebSocket client;
+    QSignalSpy msgSpy(&client, &QWebSocket::textMessageReceived);
+    REQUIRE(connectAndRegister(client, server, QStringLiteral("com.test.defaults"), registeredSpy));
+    bridge->onPluginRegistered(QStringLiteral("com.test.defaults"));
+    pump19(500);
+
+    auto const event = firstEventForEvent(msgSpy, QStringLiteral("willAppear"));
+    auto const settings = event.value(QStringLiteral("payload"))
+                              .toObject()
+                              .value(QStringLiteral("settings"))
+                              .toObject();
+    // First run + empty binding default => the manifest defaults MUST appear.
+    CHECK(settings.value(QStringLiteral("select")).toString() == QStringLiteral("analog01"));
+    REQUIRE(settings.value(QStringLiteral("checkboxGroup")).isArray());
+    CHECK(settings.value(QStringLiteral("checkboxGroup")).toArray().first().toString() ==
+          QStringLiteral("showHour12"));
 }
 
 // ---------------------------------------------------------------------------

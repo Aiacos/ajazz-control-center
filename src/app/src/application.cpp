@@ -613,6 +613,15 @@ Application::Application(QObject* parent)
         return m_pluginManager ? m_pluginManager->ownerForAction(actionUuid) : QString{};
     });
 
+    // 1a-ter. Inject the manifest default-Settings resolver so a first-run
+    //     instance appears with the manifest action's `Settings` defaults
+    //     (vendor StreamDock parity — MiraBox SDVueSDK draw code throws on
+    //     empty settings and the 1 Hz repaint never starts). Same lazy
+    //     m_pluginManager read + null-guard as the resolvers above.
+    m_pluginBridge->setDefaultSettingsResolver([this](QString const& actionUuid) -> QString {
+        return m_pluginManager ? m_pluginManager->defaultSettingsForAction(actionUuid) : QString{};
+    });
+
     // 1a-quinquies. Inject the device-geometry resolver (PLUGIN-GAP-ANALYSIS F2)
     //     so the bridge sources key columns/rows, the Elgato DeviceType, and the
     //     model name from the connected device's own core::DeviceDescriptor

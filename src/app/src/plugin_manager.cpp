@@ -1058,6 +1058,18 @@ QString PluginManager::stateImagePath(QString const& actionUuid, int stateIndex)
     return {};
 }
 
+QString PluginManager::defaultSettingsForAction(QString const& actionUuid) const {
+    for (auto const& [key, live] : m_live) {
+        for (PluginAction const& action : live.manifest.actions) {
+            if (action.uuid != actionUuid) {
+                continue;
+            }
+            return QString::fromStdString(action.defaultSettings);
+        }
+    }
+    return {};
+}
+
 std::pair<QString, QString> PluginManager::encoderLayoutInfo(QString const& actionUuid) const {
     for (auto const& [key, live] : m_live) {
         for (PluginAction const& action : live.manifest.actions) {

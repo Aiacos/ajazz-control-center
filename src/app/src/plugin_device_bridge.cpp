@@ -228,17 +228,18 @@ DecodedImage decodeDataUriImage(QString const& dataUri) {
         return {false, {}};
     }
 
-    // Find the first comma: everything after it is the base64 body.
-    // If no comma is present, treat the whole string as the base64 body
+    // Find the first comma: everything after it is the body.
+    // If no comma is present, treat the whole string as a base64 body
     // (tolerates a raw body without the "data:" prefix).
     qsizetype const commaPos = dataUri.indexOf(QLatin1Char(','));
+    QString const header = (commaPos >= 0) ? dataUri.left(commaPos) : QString{};
     QString const bodyStr = (commaPos >= 0) ? dataUri.mid(commaPos + 1) : dataUri;
 
     if (bodyStr.isEmpty()) {
         return {false, {}};
     }
 
-    // T-19-img: cap base64 body length before any allocation (ARCH-04 / security
+    // T-19-img: cap body length before any allocation (ARCH-04 / security
     // checklist). 512 KB of base64 encodes at most ~384 KB of raw bytes, which is
     // comfortably above any real key icon (85x85 RGBA = 28,900 bytes). A malicious
     // plugin on the loopback interface cannot allocate more than this via a data: URI.
@@ -247,11 +248,20 @@ DecodedImage decodeDataUriImage(QString const& dataUri) {
         return {false, {}};
     }
 
-    // Decode base64. fromBase64 with the default IgnoreBase64DecodingErrors flag
+    // Elgato setImage also accepts a NON-base64 body — the documented SVG form is
+    // `data:image/svg+xml;charset=utf8,<svg …>` (plain or percent-encoded text;
+    // MiraBox SDVueSDK plugins emit exactly this). A header without ";base64"
+    // therefore carries the body verbatim: percent-decode and hand it to
+    // loadFromData (the qsvg imageformat plugin renders it).
+    bool const isBase64 =
+        header.isEmpty() || header.contains(QLatin1String(";base64"), Qt::CaseInsensitive);
+
+    // Base64 path: fromBase64 with the default IgnoreBase64DecodingErrors flag
     // silently ignores non-base64 characters rather than returning empty bytes.
     // An empty result indicates an all-whitespace or zero-length input.
     // loadFromData is the actual rejection gate for any garbage payload.
-    QByteArray const raw = QByteArray::fromBase64(bodyStr.toUtf8());
+    QByteArray const raw = isBase64 ? QByteArray::fromBase64(bodyStr.toUtf8())
+                                    : QByteArray::fromPercentEncoding(bodyStr.toUtf8());
     if (raw.isEmpty()) {
         return {false, {}};
     }
@@ -273,6 +283,36 @@ DecodedImage decodeDataUriImage(QString const& dataUri) {
     }
 
     return {true, img};
+}
+
+QString mirrorSafeDataUri(QString const& dataUri) {
+    qsizetype const commaPos = dataUri.indexOf(QLatin1Char(','));
+    if (commaPos < 0) {
+        return dataUri; // raw base64 body without a header — nothing to escape
+    }
+    QString const header = dataUri.left(commaPos);
+    if (header.contains(QLatin1String(";base64"), Qt::CaseInsensitive)) {
+        return dataUri; // base64 alphabet never collides with URI delimiters
+    }
+    // Non-base64 body (the Elgato SVG form): raw '#' (e.g. stroke:#cccccc) is a
+    // fragment delimiter, so Chromium truncates the URI there and the SPA canvas
+    // falls back to its alert placeholder. Percent-decode first (tolerates an
+    // already-encoded body), then re-encode the whole body.
+    QByteArray body = QByteArray::fromPercentEncoding(dataUri.mid(commaPos + 1).toUtf8());
+
+    // Chromium (unlike Qt SVG) REJECTS a standalone image/svg+xml document whose
+    // root tag lacks the SVG namespace — and MiraBox plugins emit exactly that
+    // (`<svg height="128" …>`, no xmlns; live-verified 2026-07-02: Image() onerror
+    // without, onload with). Inject it into the root tag when missing.
+    QByteArray const trimmed = body.trimmed();
+    if (trimmed.startsWith("<svg")) {
+        qsizetype const svgPos = body.indexOf("<svg");
+        qsizetype const tagEnd = body.indexOf('>', svgPos);
+        if (tagEnd > svgPos && !body.mid(svgPos, tagEnd - svgPos).contains("xmlns")) {
+            body.insert(svgPos + 4, " xmlns=\"http://www.w3.org/2000/svg\"");
+        }
+    }
+    return header + QLatin1Char(',') + QString::fromUtf8(body.toPercentEncoding());
 }
 
 // ---------------------------------------------------------------------------
@@ -388,15 +428,22 @@ eventEnvelope(QString const& event, ActionContext const& ctx, QJsonObject const&
 
 /// Resolve the settings JSON for a context at willAppear time: the persisted
 /// store record (set by the plugin or its PI) wins over the binding default,
-/// falling back to the default on first run (empty/"{}" store).
+/// which wins over the manifest action's declared `Settings` defaults (the
+/// vendor StreamDock host seeds a NEW instance with those; MiraBox SDVueSDK
+/// draw code dereferences the default keys unguarded, so a first-run instance
+/// appearing with {} throws before its first setImage — timeClock 2026-07-02).
 QString settingsForContext(QString const& pluginUuid,
                            QString const& contextId,
-                           QString const& bindingDefault) {
+                           QString const& bindingDefault,
+                           QString const& manifestDefault = {}) {
     QString const stored = plugin_settings_store::readContext(pluginUuid, contextId);
     if (!stored.isEmpty() && stored != QStringLiteral("{}")) {
         return stored;
     }
-    return bindingDefault;
+    if (!bindingDefault.isEmpty() && bindingDefault != QStringLiteral("{}")) {
+        return bindingDefault;
+    }
+    return manifestDefault.isEmpty() ? bindingDefault : manifestDefault;
 }
 
 } // namespace
@@ -819,8 +866,12 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
                            ctx.column,
                            e.what());
         }
-        emit liveInstanceVisual(
-            ctx.deviceId, QStringLiteral("Encoder"), ctx.column, dataUri, QString(), false);
+        emit liveInstanceVisual(ctx.deviceId,
+                                QStringLiteral("Encoder"),
+                                ctx.column,
+                                mirrorSafeDataUri(dataUri),
+                                QString(),
+                                false);
         return;
     }
 
@@ -849,7 +900,7 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
     emit liveInstanceVisual(ctx.deviceId,
                             QStringLiteral("Keypad"),
                             ctx.row * keyCols + ctx.column,
-                            dataUri,
+                            mirrorSafeDataUri(dataUri),
                             QString(),
                             false);
 }
@@ -986,6 +1037,11 @@ void PluginDeviceBridge::setStateImageResolver(
 
 void PluginDeviceBridge::setActionOwnerResolver(std::function<QString(QString const&)> resolver) {
     m_actionOwnerResolver = std::move(resolver);
+}
+
+void PluginDeviceBridge::setDefaultSettingsResolver(
+    std::function<QString(QString const&)> resolver) {
+    m_defaultSettingsResolver = std::move(resolver);
 }
 
 void PluginDeviceBridge::setDeviceGeometryResolver(
@@ -1469,9 +1525,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             // Settings precedence: persisted store record (set by the plugin/PI)
             // wins over the binding's default settingsJson, so willAppear delivers
             // the live config. Falls back to the binding default on first run.
-            ctx.settingsJson = settingsForContext(owner,
-                                                  ContextRegistry::deriveContextId(ctx),
-                                                  QString::fromStdString(action.settingsJson));
+            ctx.settingsJson = settingsForContext(
+                owner,
+                ContextRegistry::deriveContextId(ctx),
+                QString::fromStdString(action.settingsJson),
+                m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
 
             // Track newness BEFORE registering: a brand-new context gets the
             // manifest default render below; an idempotent re-registration must
@@ -1559,9 +1617,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
-            ctx.settingsJson = settingsForContext(owner,
-                                                  ContextRegistry::deriveContextId(ctx),
-                                                  QString::fromStdString(action.settingsJson));
+            ctx.settingsJson = settingsForContext(
+                owner,
+                ContextRegistry::deriveContextId(ctx),
+                QString::fromStdString(action.settingsJson),
+                m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
 
             // Same newness/in-place-rebind semantics as the Keypad loop above.
             auto const priorEnc = m_registry.byContext(ContextRegistry::deriveContextId(ctx));
@@ -1628,9 +1688,11 @@ void PluginDeviceBridge::populateContextsForActivePage(QString const& deviceId,
             ctx.controller = QStringLiteral("Encoder");
             ctx.actionUUID = actionId;
             ctx.pluginUuid = owner;
-            ctx.settingsJson = settingsForContext(owner,
-                                                  ContextRegistry::deriveContextId(ctx),
-                                                  QString::fromStdString(action.settingsJson));
+            ctx.settingsJson = settingsForContext(
+                owner,
+                ContextRegistry::deriveContextId(ctx),
+                QString::fromStdString(action.settingsJson),
+                m_defaultSettingsResolver ? m_defaultSettingsResolver(actionId) : QString{});
 
             QString const ctxId = m_registry.registerContext(ctx);
             desired.insert(ctxId);

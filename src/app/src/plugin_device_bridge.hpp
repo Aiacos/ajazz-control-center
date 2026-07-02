@@ -320,13 +320,17 @@ struct DecodedImage {
 };
 
 /**
- * @brief Decode a `data:image/...;base64,...` URI into a QImage.
+ * @brief Decode a `data:image/...` URI into a QImage.
  *
- * Uses Qt's validated `QByteArray::fromBase64` + `QImage::loadFromData` —
- * no hand-rolled base64 or image decoder (Don't Hand-Roll, Pitfall 6).
+ * Uses Qt's validated `QByteArray::fromBase64` / `fromPercentEncoding` +
+ * `QImage::loadFromData` — no hand-rolled decoding (Don't Hand-Roll, Pitfall 6).
  *
  * Behaviour:
- *   - If a comma is present, everything after it is treated as the base64 body.
+ *   - If a comma is present, everything after it is the body. A header
+ *     containing `;base64` (or an absent header) marks a base64 body; any
+ *     other header (e.g. `data:image/svg+xml;charset=utf8` — the Elgato
+ *     setImage SVG form MiraBox plugins emit) carries the body as plain or
+ *     percent-encoded text, handed to loadFromData verbatim after decoding.
  *   - If no comma is present, the whole string is treated as the base64 body
  *     (tolerates a raw base64 body without the `data:` prefix).
  *   - An empty body, malformed base64, or data that `QImage::loadFromData`
@@ -342,6 +346,23 @@ struct DecodedImage {
  * @return         DecodedImage with ok==true on success.
  */
 [[nodiscard]] DecodedImage decodeDataUriImage(QString const& dataUri);
+
+/**
+ * @brief Re-encode a plugin-supplied data URI so a web view can load it.
+ *
+ * Non-base64 bodies (the Elgato setImage SVG form,
+ * `data:image/svg+xml;charset=utf8,<svg …>`) may contain raw `#` (colour
+ * literals), which URI parsers treat as the fragment delimiter — Chromium
+ * truncates the image there and the OpenDeck SPA canvas paints its alert
+ * placeholder. This helper percent-encodes such bodies (idempotent: an
+ * already-encoded body is decoded first); base64 bodies pass through verbatim.
+ * Used on the update_state mirror path only — the device path decodes the raw
+ * URI directly via decodeDataUriImage().
+ *
+ * @param dataUri  The plugin-supplied `image` field value. Untrusted.
+ * @return         A URI safe for `<img src>` / CanvasImage consumption.
+ */
+[[nodiscard]] QString mirrorSafeDataUri(QString const& dataUri);
 
 /**
  * @brief Resolve a dotted action UUID to the owning registered plugin UUID.
@@ -742,6 +763,14 @@ private:
     /// action UUID is not a dotted prefix of its plugin UUID.
     std::function<QString(QString const&)> m_actionOwnerResolver;
 
+    /// Resolver: actionUuid -> manifest-declared default Settings (compact JSON,
+    /// "" if none). Injected from Application (PluginManager::defaultSettingsForAction).
+    /// Last fallback when composing willAppear settings: MiraBox SDVueSDK draw
+    /// code dereferences default-settings keys unguarded (timeClock:
+    /// `settings.checkboxGroup.includes` -> TypeError on {}), so a first-run
+    /// instance must appear with the manifest defaults, as the vendor host does.
+    std::function<QString(QString const&)> m_defaultSettingsResolver;
+
     /// Resolver: device codename -> physical DeviceGeometry. Injected from
     /// Application (over core::DeviceRegistry / streamDockSidecarDescriptors).
     /// Drives every 0-based{row,column} <-> 1-based keyIndex conversion and the
@@ -832,6 +861,21 @@ public:
      * @param resolver  actionUuid -> owning plugin UUID, or "" if unknown.
      */
     void setActionOwnerResolver(std::function<QString(QString const&)> resolver);
+
+    /**
+     * @brief Inject the manifest default-Settings resolver
+     *        (PluginManager::defaultSettingsForAction).
+     *
+     * When set, willAppear settings composition gains a LAST fallback: persisted
+     * store record -> binding default -> manifest action `Settings` block. This
+     * mirrors the vendor StreamDock host, which seeds a brand-new instance with
+     * the manifest defaults; MiraBox SDVueSDK plugins rely on it (their draw
+     * path dereferences default keys unguarded and throws on empty settings,
+     * so the 1 Hz repaint never starts). Unset => prior behaviour.
+     *
+     * @param resolver  actionUuid -> compact Settings JSON, or "" if none.
+     */
+    void setDefaultSettingsResolver(std::function<QString(QString const&)> resolver);
 
     /**
      * @brief Inject the device-geometry resolver (codename -> DeviceGeometry).

@@ -364,6 +364,22 @@ public:
     [[nodiscard]] QString stateImagePath(QString const& actionUuid, int stateIndex) const;
 
     /**
+     * @brief Manifest-declared default Settings for an action, as compact JSON.
+     *
+     * MiraBox manifests may carry a per-action `Settings` object holding the
+     * complete default configuration the vendor host seeds a NEW instance with.
+     * SDVueSDK draw code dereferences these keys unguarded (e.g.
+     * `settings.checkboxGroup.includes(...)` in timeClock), so an instance that
+     * appears with empty settings throws before its first setImage. The bridge
+     * uses this as the last fallback when composing willAppear settings.
+     *
+     * @param actionUuid  Dotted action id, e.g. com.vendor.plugin.action.
+     * @return            Compact JSON object string, or "" when the manifest
+     *                    declares no Settings (Elgato manifests never do).
+     */
+    [[nodiscard]] QString defaultSettingsForAction(QString const& actionUuid) const;
+
+    /**
      * @brief State metadata for an action: {state count, DisableAutomaticStates}.
      *
      * Drives the host-side automatic state cycle (Elgato/OpenDeck keyUp
