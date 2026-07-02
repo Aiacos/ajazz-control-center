@@ -77,9 +77,15 @@ jobs:
           set -euo pipefail
           test -f bundled-plugins/com.ajazz.sysmon2.sdPlugin/manifest.json \
             || { echo "::error::sysmon bundle missing from build tree"; exit 1; }
-          dpkg-deb -c ./*.deb | grep -q "bundled-plugins/com.ajazz.sysmon2.sdPlugin/manifest.json" \
+          # Don't pipe into `grep -q` under pipefail: grep's early exit on the
+          # first match SIGPIPEs the producer (dpkg-deb's tar child returned 2,
+          # run 28621191730) and the gate false-negatives on a GOOD package.
+          # List to a file, then grep the file.
+          dpkg-deb -c ./*.deb > /tmp/deb-contents.txt
+          grep -q "bundled-plugins/com.ajazz.sysmon2.sdPlugin/manifest.json" /tmp/deb-contents.txt \
             || { echo "::error::sysmon bundle missing from the .deb payload"; exit 1; }
-          strings src/app/ajazz-control-center | grep -q "opendeck/index.html" \
+          strings src/app/ajazz-control-center > /tmp/app-strings.txt
+          grep -q "opendeck/index.html" /tmp/app-strings.txt \
             || { echo "::error::OpenDeck SPA not bundled into the binary"; exit 1; }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
