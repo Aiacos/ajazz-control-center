@@ -35,34 +35,40 @@ enum Metric {
 	Cpu,
 	CpuTemp,
 	Ram,
+	Disk,
 	NetDown,
 	NetUp,
 	Gpu,
 	GpuTemp,
 	Vram,
+	GpuPower,
 }
 
 impl Metric {
-	const ALL: [Metric; 8] = [
+	const ALL: [Metric; 10] = [
 		Metric::Cpu,
 		Metric::CpuTemp,
 		Metric::Ram,
+		Metric::Disk,
 		Metric::NetDown,
 		Metric::NetUp,
 		Metric::Gpu,
 		Metric::GpuTemp,
 		Metric::Vram,
+		Metric::GpuPower,
 	];
 
 	fn from_id(s: &str) -> Metric {
 		match s {
 			"cpu_temp" => Metric::CpuTemp,
 			"ram" => Metric::Ram,
+			"disk" => Metric::Disk,
 			"net_down" => Metric::NetDown,
 			"net_up" => Metric::NetUp,
 			"gpu" => Metric::Gpu,
 			"gpu_temp" => Metric::GpuTemp,
 			"vram" => Metric::Vram,
+			"gpu_power" => Metric::GpuPower,
 			_ => Metric::Cpu,
 		}
 	}
@@ -74,11 +80,13 @@ impl Metric {
 			Metric::Cpu => "cpu",
 			Metric::CpuTemp => "cpu_temp",
 			Metric::Ram => "ram",
+			Metric::Disk => "disk",
 			Metric::NetDown => "net_down",
 			Metric::NetUp => "net_up",
 			Metric::Gpu => "gpu",
 			Metric::GpuTemp => "gpu_temp",
 			Metric::Vram => "vram",
+			Metric::GpuPower => "gpu_power",
 		}
 	}
 
@@ -87,11 +95,13 @@ impl Metric {
 			Metric::Cpu => "CPU",
 			Metric::CpuTemp => "TEMP",
 			Metric::Ram => "RAM",
+			Metric::Disk => "DISK",
 			Metric::NetDown => "NET DN",
 			Metric::NetUp => "NET UP",
 			Metric::Gpu => "GPU",
 			Metric::GpuTemp => "GPU TMP",
 			Metric::Vram => "VRAM",
+			Metric::GpuPower => "GPU PWR",
 		}
 	}
 
@@ -99,18 +109,21 @@ impl Metric {
 	fn grad(self) -> [(u8, u8, u8); 3] {
 		match self {
 			Metric::Cpu | Metric::Gpu => [(0x77, 0xca, 0x9b), (0xcb, 0xc0, 0x6c), (0xdc, 0x4c, 0x4c)],
-			Metric::CpuTemp | Metric::GpuTemp => [(0x48, 0x97, 0xd4), (0x54, 0x74, 0xe8), (0xff, 0x40, 0xb6)],
-			Metric::Ram | Metric::Vram => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
+			Metric::CpuTemp | Metric::GpuTemp | Metric::GpuPower => [(0x48, 0x97, 0xd4), (0x54, 0x74, 0xe8), (0xff, 0x40, 0xb6)],
+			Metric::Ram | Metric::Vram | Metric::Disk => [(0x59, 0x2b, 0x26), (0xd9, 0x62, 0x6d), (0xff, 0x47, 0x69)],
 			Metric::NetDown => [(0x29, 0x1f, 0x75), (0x4f, 0x43, 0xa3), (0xb0, 0xa9, 0xde)],
 			Metric::NetUp => [(0x62, 0x06, 0x65), (0x7d, 0x41, 0x80), (0xdc, 0xaf, 0xde)],
 		}
 	}
 
-	/// Fixed 0..scale for %/°C metrics; None = auto-range (network throughput).
+	/// Fixed 0..scale for %/°C metrics; None = auto-range (network throughput,
+	/// GPU power draw).
 	fn scale_max(self) -> Option<f32> {
 		match self {
-			Metric::Cpu | Metric::Ram | Metric::CpuTemp | Metric::Gpu | Metric::GpuTemp | Metric::Vram => Some(100.0),
-			Metric::NetDown | Metric::NetUp => None,
+			Metric::Cpu | Metric::Ram | Metric::Disk | Metric::CpuTemp | Metric::Gpu | Metric::GpuTemp | Metric::Vram => {
+				Some(100.0)
+			}
+			Metric::NetDown | Metric::NetUp | Metric::GpuPower => None,
 		}
 	}
 
@@ -123,15 +136,18 @@ impl Metric {
 			Metric::Gpu => None,
 			Metric::GpuTemp => Some((75.0, 90.0)),
 			Metric::Vram => Some((80.0, 95.0)),
-			Metric::NetDown | Metric::NetUp => None,
+			Metric::Disk => Some((85.0, 95.0)),
+			// Power draw varies wildly per card — no meaningful default bands.
+			Metric::NetDown | Metric::NetUp | Metric::GpuPower => None,
 		}
 	}
 
 	fn format(self, v: f32) -> String {
 		match self {
-			Metric::Cpu | Metric::Ram | Metric::Gpu | Metric::Vram => format!("{v:.0}%"),
+			Metric::Cpu | Metric::Ram | Metric::Disk | Metric::Gpu | Metric::Vram => format!("{v:.0}%"),
 			Metric::CpuTemp | Metric::GpuTemp => format!("{v:.0}\u{00b0}C"),
 			Metric::NetDown | Metric::NetUp => fmt_rate(v),
+			Metric::GpuPower => format!("{v:.1}W"),
 		}
 	}
 }
@@ -190,6 +206,9 @@ struct CpuBlock {
 #[derive(Deserialize)]
 struct MemBlock {
 	percent: f64,
+	/// Root-filesystem used % — absent on older helpers, defaults to 0.
+	#[serde(default)]
+	disk_percent: f64,
 }
 #[derive(Deserialize)]
 struct NetBlock {
@@ -205,7 +224,6 @@ struct GpuBlock {
 	temp_c: f64,
 	vram_used_bytes: f64,
 	vram_total_bytes: f64,
-	#[allow(dead_code)]
 	power_w: f64,
 }
 
@@ -232,12 +250,14 @@ async fn run_helper() {
 			push_metric(&mut m, Metric::Cpu, s.cpu.percent as f32);
 			push_metric(&mut m, Metric::CpuTemp, s.cpu.temp_c as f32);
 			push_metric(&mut m, Metric::Ram, s.mem.percent as f32);
+			push_metric(&mut m, Metric::Disk, s.mem.disk_percent as f32);
 			push_metric(&mut m, Metric::NetDown, s.net.down_bytes_s as f32);
 			push_metric(&mut m, Metric::NetUp, s.net.up_bytes_s as f32);
 			// Phase 3: first GPU only; multi-GPU selection is a later phase.
 			if let Some(g) = s.gpu.first() {
 				push_metric(&mut m, Metric::Gpu, g.util_percent as f32);
 				push_metric(&mut m, Metric::GpuTemp, g.temp_c as f32);
+				push_metric(&mut m, Metric::GpuPower, g.power_w as f32);
 				let vram_pct = if g.vram_total_bytes > 0.0 {
 					(g.vram_used_bytes / g.vram_total_bytes * 100.0) as f32
 				} else {
@@ -702,6 +722,23 @@ mod tests {
 	}
 
 	#[test]
+	fn snapshot_parses_with_disk_percent() {
+		let line = r#"{"cpu":{"percent":12.5,"temp_c":48.0},"mem":{"percent":40.2,"disk_percent":63},
+			"net":{"down_bytes_s":1024.0,"up_bytes_s":256.0},"gpu":[]}"#;
+		let s: Snapshot = serde_json::from_str(line).expect("disk snapshot must parse");
+		assert_eq!(s.mem.disk_percent, 63.0);
+	}
+
+	#[test]
+	fn snapshot_parses_without_disk_percent() {
+		// Older helpers omit "disk_percent" — must default to 0, not fail.
+		let line = r#"{"cpu":{"percent":12.5,"temp_c":48.0},"mem":{"percent":40.2},
+			"net":{"down_bytes_s":1024.0,"up_bytes_s":256.0}}"#;
+		let s: Snapshot = serde_json::from_str(line).expect("disk-less snapshot must parse");
+		assert_eq!(s.mem.disk_percent, 0.0);
+	}
+
+	#[test]
 	fn snapshot_parses_without_gpu() {
 		// Older helpers omit the "gpu" key entirely.
 		let line = r#"{"cpu":{"percent":12.5,"temp_c":48.0},"mem":{"percent":40.2},
@@ -728,8 +765,8 @@ mod tests {
 		assert_eq!(cycled_index(0, -1, n), n - 1); // backward wrap
 		assert_eq!(cycled_index(n - 2, 3, n), 1); // +3 across the boundary
 		assert_eq!(cycled_index(1, -2, n), n - 1); // -2 across the boundary
-		assert_eq!(cycled_index(3, -19, n), 0); // |ticks| > len stays in range
-		assert_eq!(cycled_index(3, 16, n), 3); // full laps land back home
+		assert_eq!(cycled_index(3, -(2 * n as i16 + 3), n), 0); // |ticks| > len stays in range
+		assert_eq!(cycled_index(3, 2 * n as i16, n), 3); // full laps land back home
 	}
 
 	#[test]

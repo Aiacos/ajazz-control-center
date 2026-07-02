@@ -64,15 +64,30 @@ static void emit_snapshot() {
     const std::uint64_t net_down = net.stat.count("download") ? net.stat.at("download").speed : 0;
     const std::uint64_t net_up = net.stat.count("upload") ? net.stat.at("upload").speed : 0;
 
+    // Root filesystem usage. Disk collection is on by default ("show_disks"
+    // defaults to true, btop_config.cpp:345) and mem.disks is keyed by
+    // mountpoint, so no Config::set is needed. Fall back to the first entry
+    // of disks_order when "/" is absent; 0 when nothing was collected.
+    int disk_pct = 0;
+    if (const auto root = mem.disks.find("/"); root != mem.disks.end()) {
+        disk_pct = root->second.used_percent;
+    } else if (!mem.disks_order.empty()) {
+        const auto first = mem.disks.find(mem.disks_order.front());
+        if (first != mem.disks.end())
+            disk_pct = first->second.used_percent;
+    }
+
     std::printf("{\"schema\":1,\"backend\":\"btop-linux\",");
     std::printf("\"cpu\":{\"percent\":%lld,\"per_core\":[", cpu_pct);
     for (size_t i = 0; i < cpu.core_percent.size(); ++i)
         std::printf("%s%lld", i ? "," : "", back(cpu.core_percent[i]));
     std::printf("],\"temp_c\":%lld},", cpu_temp);
-    std::printf("\"mem\":{\"used_bytes\":%llu,\"total_bytes\":%llu,\"percent\":%lld},",
-                static_cast<unsigned long long>(mem_used),
-                static_cast<unsigned long long>(mem_total),
-                mem_pct);
+    std::printf(
+        "\"mem\":{\"used_bytes\":%llu,\"total_bytes\":%llu,\"percent\":%lld,\"disk_percent\":%d},",
+        static_cast<unsigned long long>(mem_used),
+        static_cast<unsigned long long>(mem_total),
+        mem_pct,
+        disk_pct);
     std::printf("\"net\":{\"down_bytes_s\":%llu,\"up_bytes_s\":%llu},",
                 static_cast<unsigned long long>(net_down),
                 static_cast<unsigned long long>(net_up));
