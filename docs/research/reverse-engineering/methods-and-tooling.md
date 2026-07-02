@@ -26,18 +26,18 @@ vendor source.
 attach to the running vendor process and hook `hid.dll!HidD_SetFeature` /
 `HidD_GetFeature` (Frida 17 API: `Module.getGlobalExportByName`,
 `ptr.readByteArray`). This is what **hardware-confirmed** the keyboard time-sync
-+ battery and caught the mouse `0x28` clock packet (with the required `0xD7`
-marker that static analysis alone missed). Do NOT hook `WriteFile` globally — it
-crashes the session.
 
-- Keyboard vendor process: `DeviceDriver.exe`.
-- Mouse vendor stack: Electron `AJAZZ Driver（R）.exe` + native `iot_driver_v193.exe`
+- battery and caught the mouse `0x28` clock packet (with the required `0xD7`
+  marker that static analysis alone missed). Do NOT hook `WriteFile` globally — it
+  crashes the session.
+
+* Keyboard vendor process: `DeviceDriver.exe`.
+* Mouse vendor stack: Electron `AJAZZ Driver（R）.exe` + native `iot_driver_v193.exe`
   (Rust `tonic` gRPC at `127.0.0.1:3814`). Hook `iot_driver`, not the Electron app.
 
 ## 3. Direct hardware probes (no vendor driver needed — work on Linux)
 
-- `scripts/ak980_tft_probe.py` — keyboard: `--enumerate`, `--settime HH:MM
-  [--delay --readback]`, `--battery`, TFT upload modes.
+- `scripts/ak980_tft_probe.py` — keyboard: `--enumerate`, `--settime HH:MM [--delay --readback]`, `--battery`, TFT upload modes.
 - `scripts/aj_mouse_probe.py` — mouse: `--enumerate`, `--clock HH:MM`,
   `--battery`, `--battery-watch SECS` (re-acquires across a replug).
 

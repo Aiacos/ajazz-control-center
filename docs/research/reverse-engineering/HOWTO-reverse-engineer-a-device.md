@@ -18,7 +18,7 @@ internal knowledge beyond what's in this repo + the device + its vendor driver.
 > hardware wins.** Treat every decompile-derived value as a hypothesis until a
 > live device confirms it.
 
----
+______________________________________________________________________
 
 ## TL;DR loop
 
@@ -32,7 +32,7 @@ Most features need only: HID enumeration + a Frida hook of the vendor while you
 click the button + a direct hidapi replay. Ghidra/USB-capture are the heavy
 artillery for the parts Frida can't reach.
 
----
+______________________________________________________________________
 
 ## Step 0 — Identify the device & its interfaces
 
@@ -40,7 +40,7 @@ artillery for the parts Frida can't reach.
    AJAZZ VID prefixes seen so far: `0x0c45` (Microdia — AK980 PRO keyboard),
    `0x3151` (SONiX — VIA keyboards + AJ mice), `0x0300`/`0x6602`/`0x6603`/`0x5548`
    (Mirabox/Stream Dock), `0x3554`/`0x248A`/`0x249A` (AJ199/legacy mice).
-2. **Enumerate the HID collections** and find the **vendor control collection**
+1. **Enumerate the HID collections** and find the **vendor control collection**
    (it is almost never the boot keyboard/mouse). Use a 10-line hidapi probe:
    ```python
    import hid
@@ -52,7 +52,7 @@ artillery for the parts Frida can't reach.
    `0xFFFF` on AJ mice, `0xFFA0` on AKP05E). **Gotcha:** several collections can
    share one usage page (the AJ mouse has two `0xFFFF`; control is usage `0x02`)
    — record both `usage_page` AND `usage`.
-3. **Report length & report-id.** Note `featureReportByteLength` /
+1. **Report length & report-id.** Note `featureReportByteLength` /
    `output_report_length`. The HID report id is byte 0 of every buffer (0x00 for
    unnumbered). Many AJAZZ devices put a `0x04` *frame byte* at byte 1 and the
    real opcode at byte 2 — that `0x04` is data, NOT the report id (a classic
@@ -60,7 +60,7 @@ artillery for the parts Frida can't reach.
 
 Template: `scripts/ak980_tft_probe.py --enumerate`, `scripts/aj_mouse_probe.py --enumerate`.
 
----
+______________________________________________________________________
 
 ## Step 1 — Get & classify the vendor software
 
@@ -78,48 +78,48 @@ it, and **classify**:
 Identify the HID transport library: `libusb-1.0.dll` (vendor uses libusb),
 `hid.dll` imports (`HidD_SetFeature`/`GetFeature`), or a Rust `hidapi`.
 
----
+______________________________________________________________________
 
 ## Step 2a — Static analysis: native binaries (Ghidra)
 
 1. Ghidra headless import the binary (+ its `.pdb` if present — hugely helps).
-2. Find the **HID call sites**: search imports/calls for `HidD_SetFeature`,
+1. Find the **HID call sites**: search imports/calls for `HidD_SetFeature`,
    `HidD_GetFeature`, `WriteFile`, `ReadFile`, `DeviceIoControl`,
    `hid_write`/`hid_send_feature_report`. A GhidraScript that dumps every call
    site + the calling function is the fastest start (we used
    `ExtractHidCalls.java` / `FindHidCallers.java` / `DumpFunctionsByAddr.java`).
-3. Decompile the **transport wrappers** (the functions that build a buffer and
+1. Decompile the **transport wrappers** (the functions that build a buffer and
    call the HID primitive). Read off: report size (`0x21`=33, `0x41`=65,
    `0x1001`=4097), where the opcode lands, where the checksum is stamped, whether
    there's a readback after the write.
-4. Decompile the **per-command builders** — each UI action sets specific byte
+1. Decompile the **per-command builders** — each UI action sets specific byte
    offsets. Record opcode + sub-opcode + every field offset.
-5. Cite functions by name (`FUN_xxxxxxxx` / PDB symbol) in your notes; **never
+1. Cite functions by name (`FUN_xxxxxxxx` / PDB symbol) in your notes; **never
    paste decompiled bodies into the repo.**
 
 What this WON'T give you: values computed in a separate DLL not in your dump
 (e.g. `mui.dll::GetImageRGB565Data` byte order), and runtime-only state. Those go
 to Frida/hardware.
 
----
+______________________________________________________________________
 
 ## Step 2b — Static analysis: Electron / JS drivers
 
 1. Extract: if `resources/app.asar` exists, `npx asar extract app.asar out/`;
    often AJAZZ ships it **unpacked** under `resources/app/`. Look for
    `*_beautified.js` (someone already beautified it) or run `js-beautify`.
-2. The **main process** JS (`main_dist/main.js`) holds the device I/O; the
+1. The **main process** JS (`main_dist/main.js`) holds the device I/O; the
    **renderer** (`dist/static/js/main.js`) holds the UI + opcode enums.
-3. Grep for the protocol: `FEA_CMD_`, `usagePage`, `featureReportByteLength`,
+1. Grep for the protocol: `FEA_CMD_`, `usagePage`, `featureReportByteLength`,
    `writeFeature`, `sendFeature`, `report`, `checksum`, `0x` opcodes, and the
    command builder functions (`setXxx`, `buildXxx`). Enum tables (e.g.
    `_RateToNum`, `FEA_CMD_SET_OLEDCLOCK = 40`) are gold.
-4. If the JS hands bytes to a **native helper** over gRPC/IPC (AJ mouse →
+1. If the JS hands bytes to a **native helper** over gRPC/IPC (AJ mouse →
    `iot_driver` at `127.0.0.1:3814`), the JS builds the *body* (opcode at byte 0)
    but the helper prepends the report id + checksum — so the report-id VALUE and
    the checksum algorithm are NOT in the JS. Get them from Frida/Ghidra-of-the-helper.
 
----
+______________________________________________________________________
 
 ## Step 3 — Dynamic capture (the decisive step)
 
@@ -148,6 +148,7 @@ marker** that static analysis alone missed.
 
 Cross-platform reference: `docs/protocols/CAPTURING.md` (Wireshark + usbmon +
 dumpcap) and the recon runbooks `docs/research/vendor-recon-runbook-{fedora,windows}.md`.
+
 - **Linux:** `sudo modprobe usbmon`, capture on `usbmonN` with Wireshark/tshark.
 - **Windows:** USBPcap (ships with Wireshark) — but note USBPcap 1.5.4 does NOT
   bind xHCI/USB4 root hubs on modern PCs; use **usbipd-win + WSL2** instead.
@@ -165,7 +166,7 @@ probes (`scripts/ak980_tft_probe.py`, `scripts/aj_mouse_probe.py`) are templates
 — copy one, set the VID/PID + control usage page/usage, and add a `--yourcmd`
 mode that builds your packet.
 
----
+______________________________________________________________________
 
 ## Step 4 — Decode the wire format (recurring AJAZZ patterns)
 
@@ -194,13 +195,12 @@ Things to determine, and the patterns we've seen:
   per packet. Back-to-back writes can be a **silent no-op** — the AK980 time-sync
   needed a ~30 ms inter-packet delay + a GET readback. If a sequence "succeeds"
   but nothing happens, add the delay + readback.
-- **Envelopes:** config commits are often multi-packet: `START(0x18) → DATA →
-  SAVE(0x02) → FINISH(0xF0)`. Capture the whole sequence, not just the data packet.
+- **Envelopes:** config commits are often multi-packet: `START(0x18) → DATA → SAVE(0x02) → FINISH(0xF0)`. Capture the whole sequence, not just the data packet.
 - **Chunked uploads:** images/macros split into N fixed-size chunks + a header
   with the total count + a commit sentinel (e.g. `ULEND`). Watch the chunk-index
   encoding (it may be split across bytes with a marker bit).
 
----
+______________________________________________________________________
 
 ## Step 5 — Confirm on real hardware (the part people skip)
 
@@ -220,7 +220,7 @@ number — packets that start with data at byte 0 (Stream Dock `CRT`) need a `0x
 prepend on Linux/macOS that Windows omits; and `hid_enumerate` may not populate
 `usage` for non-primary collections (fall back to usage-page matching).
 
----
+______________________________________________________________________
 
 ## Step 6 — Turn findings into code
 
@@ -228,22 +228,22 @@ prepend on Linux/macOS that Windows omits; and `hid_enumerate` may not populate
    named constant; each command a pure function returning a fixed-size
    `std::array` with byte-exact field placement and the checksum stamped last.
    Pure = no I/O, unit-testable in isolation.
-2. **Transport selection:** set `controlUsagePage` (+ `controlUsage` if the
+1. **Transport selection:** set `controlUsagePage` (+ `controlUsage` if the
    device has multiple collections on one page) in `register.cpp`, threaded to
    `makeHidTransport`. Use `writeFeature()` vs `write()` per the captured transport.
-3. **Device backend** implements the capability interface (`IClockCapable`,
+1. **Device backend** implements the capability interface (`IClockCapable`,
    `IBatteryCapable`, …). Add the per-packet handshake (delay + best-effort
    readback) if the vendor used one.
-4. **Byte-pinned Catch2 tests** via the `MockTransport` DI seam
+1. **Byte-pinned Catch2 tests** via the `MockTransport` DI seam
    (`makeXxxWithTransport`): assert every field offset of every packet. These are
    the regression guard that stops a future transposition (we shipped a
    self-consistent-but-wrong TFT layout once exactly because the test agreed with
    the bug).
-5. **Honest capability (D-02/D-05):** if you can't confirm a feature, return
+1. **Honest capability (D-02/D-05):** if you can't confirm a feature, return
    `NotImplemented` / `nullopt` — never a fake success toast. Mark the maturity
    `scaffolded`/`partial`/`functional` honestly in `docs/_data/devices.yaml`.
 
----
+______________________________________________________________________
 
 ## Step 7 — Document
 
@@ -254,19 +254,19 @@ prepend on Linux/macOS that Windows omits; and `hid_enumerate` may not populate
 - Fill the **confidence matrix** (hardware-confirmed / decompile / provisional)
   and the **unexplored** list — be honest about what you didn't verify.
 
----
+______________________________________________________________________
 
 ## Consolidated gotcha checklist
 
 - [ ] Opened the **vendor control collection** (usage page + usage), not the boot
-      interface.
+  interface.
 - [ ] Right **transport** (feature vs output report) — they're not interchangeable.
 - [ ] Correct **report id** at byte 0 (0x00 unnumbered); not confusing the `0x04`
-      frame byte for the report id.
+  frame byte for the report id.
 - [ ] **GET buffer ≥ device FeatureReportByteLength** (a 64-byte buffer for a
-      65-byte report makes `hid_get_feature_report` fail on Windows).
+  65-byte report makes `hid_get_feature_report` fail on Windows).
 - [ ] hidapi GET returns the reply **with** the report-id byte at index 0
-      (offsets shift by 1 vs a decompile that strips it).
+  (offsets shift by 1 vs a decompile that strips it).
 - [ ] Required **marker/magic bytes** present (`0x5A`, `0xD7`, …).
 - [ ] **Endianness** per field (don't assume).
 - [ ] **Checksum** algorithm + position (or none) — and whether the firmware checks it.
@@ -277,6 +277,7 @@ prepend on Linux/macOS that Windows omits; and `hid_enumerate` may not populate
 - [ ] **No vendor source, binaries, decompiles, or raw pcap in the repo.**
 
 ## Tooling reference
+
 - Probes/capture templates: `scripts/ak980_tft_probe.py`,
   `scripts/aj_mouse_probe.py`, `scripts/aj_mouse_frida_capture.py`.
 - Capture runbooks: `docs/protocols/CAPTURING.md`,
