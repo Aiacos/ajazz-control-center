@@ -140,7 +140,10 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
                                                QCoreApplication::applicationVersion()));
     }
     if (command == QLatin1String("get_port_base")) {
-        return str(57116); // TODO(phase): real plugin server base port once wired
+        // 57116 is the PINNED plugin-server base port — a contract, not a
+        // placeholder: Application::startBackgroundServices binds SdPluginServer
+        // to it and PIs/plugins resolve ws://127.0.0.1:<base> from this value.
+        return str(57116);
     }
     if (command == QLatin1String("get_fonts")) {
         QJsonArray fonts;
@@ -175,14 +178,79 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             QString::fromUtf8(QJsonDocument(incoming).toJson(QJsonDocument::Compact)));
         return str(QJsonValue(QJsonValue::Null));
     }
-    if (command == QLatin1String("get_localisations") || command == QLatin1String("make_info") ||
-        command == QLatin1String("get_application_profiles")) {
+    if (command == QLatin1String("get_localisations") || command == QLatin1String("make_info")) {
         return str(QJsonObject{});
     }
+    if (command == QLatin1String("get_application_profiles")) {
+        // SPA shape {appName: {deviceCodename: profileName}}, reshaped from the
+        // native per-profile Profile::applicationHints rows (the backing store
+        // that resolveProfileForApp() switches on at foreground change).
+        QJsonObject out;
+        if (m_profiles != nullptr) {
+            for (QVariant const& v : m_profiles->appProfileMappings()) {
+                QVariantMap const m = v.toMap();
+                QString const app = m.value(QStringLiteral("appName")).toString();
+                QJsonObject devices = out.value(app).toObject();
+                devices.insert(m.value(QStringLiteral("deviceCodename")).toString(),
+                               m.value(QStringLiteral("profileName")).toString());
+                out.insert(app, devices);
+            }
+        }
+        return str(out);
+    }
     if (command == QLatin1String("set_application_profiles")) {
-        // TODO(opendeck-ui): no per-app profile backing yet — accept + ignore so
-        // the SPA's app-profile writes don't trip the unhandled-command warning.
-        // Pairs with the get_application_profiles {} stub above.
+        // Reconcile the SPA's {app: {device: profileName}} against the native
+        // applicationHints rows via the add/remove primitives (both are
+        // idempotent no-ops on duplicates, so the SPA's reactive echo — it
+        // re-sends the map right after get — never rewrites disk).
+        if (m_profiles == nullptr) {
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        QJsonObject const incoming = args.value(QStringLiteral("value")).toObject();
+        // Current rows: app -> device -> {profileId, profileName}.
+        struct CurrentRow {
+            QString id;
+            QString name;
+        };
+        QMap<QString, QMap<QString, CurrentRow>> current;
+        for (QVariant const& v : m_profiles->appProfileMappings()) {
+            QVariantMap const m = v.toMap();
+            current[m.value(QStringLiteral("appName")).toString()]
+                   [m.value(QStringLiteral("deviceCodename")).toString()] =
+                       CurrentRow{m.value(QStringLiteral("profileId")).toString(),
+                                  m.value(QStringLiteral("profileName")).toString()};
+        }
+        // Removals / retargets: any current row the incoming map no longer wants.
+        for (auto appIt = current.constBegin(); appIt != current.constEnd(); ++appIt) {
+            QJsonObject const wantDevices = incoming.value(appIt.key()).toObject();
+            for (auto devIt = appIt.value().constBegin(); devIt != appIt.value().constEnd();
+                 ++devIt) {
+                if (wantDevices.value(devIt.key()).toString() != devIt.value().name) {
+                    m_profiles->removeAppProfileMapping(devIt.value().id, appIt.key());
+                }
+            }
+        }
+        // Additions: incoming rows with no matching current row. The SPA keys
+        // profiles by NAME (get_profiles returns names), so resolve the id via
+        // the per-device library index.
+        for (auto appIt = incoming.constBegin(); appIt != incoming.constEnd(); ++appIt) {
+            QJsonObject const devices = appIt.value().toObject();
+            for (auto devIt = devices.constBegin(); devIt != devices.constEnd(); ++devIt) {
+                QString const wantName = devIt.value().toString();
+                if (wantName.isEmpty() ||
+                    current.value(appIt.key()).value(devIt.key()).name == wantName) {
+                    continue;
+                }
+                for (QVariant const& v : m_profiles->profilesForDevice(devIt.key())) {
+                    QVariantMap const m = v.toMap();
+                    if (m.value(QStringLiteral("name")).toString() == wantName) {
+                        m_profiles->addAppProfileMapping(m.value(QStringLiteral("id")).toString(),
+                                                         appIt.key());
+                        break;
+                    }
+                }
+            }
+        }
         return str(QJsonValue(QJsonValue::Null));
     }
     if (command == QLatin1String("get_applications")) {
@@ -478,25 +546,33 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
         Ctx const src = parseCtxValue(args.value(QStringLiteral("source")));
         Ctx const dst = parseCtxValue(args.value(QStringLiteral("destination")));
         bool const retain = args.value(QStringLiteral("retain")).toBool();
-        // The SPA only issues a move onto an EMPTY destination (it early-returns
-        // on an occupied slot), so a swap with the empty dst is a full-fidelity
-        // move (src binding -> dst, src cleared). retain=true (copy/paste) has no
-        // faithful primitive yet -> deferred (return null; the SPA no-ops on null).
-        if (!src.valid || !dst.valid || retain || src.controller != dst.controller) {
+        if (!src.valid || !dst.valid) {
+            return str(QJsonValue(QJsonValue::Null));
+        }
+        // Map the SPA context to ProfileController's controller space: "Keypad"
+        // positions >= keyCount are the touch-strip row appended after the
+        // keypad in keys[] (profileJson convention).
+        auto const mapCtl = [&keyCountOf](Ctx const& c) -> std::pair<QString, int> {
+            if (c.controller == QLatin1String("Encoder")) {
+                return {QStringLiteral("Encoder"), c.position};
+            }
+            int const keyCount = keyCountOf(c.device);
+            if (c.position >= keyCount) {
+                return {QStringLiteral("TouchZone"), c.position - keyCount};
+            }
+            return {QStringLiteral("Keypad"), c.position};
+        };
+        auto const [srcCtl, srcIdx] = mapCtl(src);
+        auto const [dstCtl, dstIdx] = mapCtl(dst);
+        // transferBinding handles move AND copy (retain), same- and
+        // cross-controller (chain + visual state carried over); false = empty
+        // source / bad args -> null, which the SPA treats as "nothing happened".
+        if (!m_profiles->transferBinding(srcCtl, srcIdx, dstCtl, dstIdx, retain)) {
             return str(QJsonValue(QJsonValue::Null));
         }
         int const keyCount = keyCountOf(dst.device);
-        bool const srcTouch = src.position >= keyCount;
-        bool const dstTouch = dst.position >= keyCount;
-        if (src.controller == QLatin1String("Encoder")) {
-            m_profiles->swapEncoderBindings(src.position, dst.position);
-        } else if (srcTouch && dstTouch) {
-            m_profiles->swapTouchZoneBindings(src.position - keyCount, dst.position - keyCount);
-        } else if (!srcTouch && !dstTouch) {
-            m_profiles->swapKeyBindings(src.position, dst.position);
-        } else {
-            return str(QJsonValue(QJsonValue::Null)); // keypad<->touch moves unsupported
-        }
+        bool const dstTouch =
+            dst.controller != QLatin1String("Encoder") && dst.position >= keyCount;
         emit event(QStringLiteral("rerender_images"), QStringLiteral("{}"));
         // Return the ActionInstance now at the destination (the SPA slots it in).
         core::Profile const& p = m_profiles->activeProfile();
