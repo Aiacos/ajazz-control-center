@@ -42,6 +42,9 @@
 #include <QByteArray>
 #include <QColor>
 #include <QCoreApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QFont>
 #include <QGuiApplication>
 #include <QImage>
@@ -1319,10 +1322,12 @@ void PluginDeviceBridge::renderEncoderFeedback(ActionContext const& ctx) {
 
     // Layout precedence: runtime setFeedbackLayout > manifest Encoder.layout > $X1.
     QString layoutId;
+    QString manifestLayout;
     QString manifestIcon;
     if (m_encoderLayoutResolver) {
         auto const [mlayout, micon] = m_encoderLayoutResolver(ctx.actionUUID);
         layoutId = mlayout;
+        manifestLayout = mlayout;
         manifestIcon = micon;
     }
     if (auto const it = m_encoderLayoutOverride.find(ctxId); it != m_encoderLayoutOverride.end()) {
@@ -1341,7 +1346,46 @@ void PluginDeviceBridge::renderEncoderFeedback(ActionContext const& ctx) {
 
     // AKP05 strip zone is square 128x128 (hardware-pinned 2026-05-31); the
     // renderer lays out proportionally so other geometries can be passed later.
-    QImage const img = renderEncoderLayout(layoutId, fb, QSize(128, 128));
+    //
+    // Custom JSON layouts (production audit blocker 5): a non-"$" layout id is
+    // a layout FILE. The manifest path arrives absolute (encoderLayoutInfo
+    // resolves it); a setFeedbackLayout override may be plugin-relative and is
+    // resolved against the manifest layout/icon directory. Parsed files are
+    // cached; a missing/invalid file degrades to the $X1 built-in as before.
+    QImage img;
+    if (!layoutId.isEmpty() && !layoutId.startsWith(QLatin1Char('$'))) {
+        QString path = layoutId;
+        if (QFileInfo(path).isRelative()) {
+            QString const anchor =
+                (!manifestLayout.isEmpty() && !manifestLayout.startsWith(QLatin1Char('$')) &&
+                 QFileInfo(manifestLayout).isAbsolute())
+                    ? manifestLayout
+                    : manifestIcon;
+            if (!anchor.isEmpty()) {
+                path = QFileInfo(anchor).dir().absoluteFilePath(path);
+            }
+        }
+        auto cacheIt = m_customLayoutCache.find(path);
+        if (cacheIt == m_customLayoutCache.end()) {
+            QJsonObject def;
+            QFile f(path);
+            if (f.open(QIODevice::ReadOnly)) {
+                def = QJsonDocument::fromJson(f.readAll()).object();
+            } else {
+                AJAZZ_LOG_WARN("plugin-bridge",
+                               "renderEncoderFeedback: custom layout '{}' unreadable — "
+                               "falling back to $X1",
+                               path.toStdString());
+            }
+            cacheIt = m_customLayoutCache.emplace(path, def).first;
+        }
+        if (!cacheIt->second.value(QStringLiteral("items")).toArray().isEmpty()) {
+            img = renderCustomEncoderLayout(cacheIt->second, fb, QSize(128, 128));
+        }
+    }
+    if (img.isNull()) {
+        img = renderEncoderLayout(layoutId, fb, QSize(128, 128));
+    }
     try {
         m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), img);
     } catch (std::exception const& e) {

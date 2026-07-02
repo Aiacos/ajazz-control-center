@@ -10,6 +10,7 @@
 
 #include <QBuffer>
 #include <QImage>
+#include <QJsonArray>
 #include <QJsonObject>
 
 #include <catch2/catch_test_macros.hpp>
@@ -133,4 +134,35 @@ TEST_CASE("encoder_layout_renderer C1 renders two independent bars", "[encoder-l
         ajazz::app::renderEncoderLayout(QStringLiteral("$C1"), onlyFirst, QSize(128, 128));
     CHECK(redDominantInBand(one, 0, 64) > 0);
     CHECK(redDominantInBand(one, 64, 128) == 0);
+}
+
+TEST_CASE("encoder_layout_renderer custom JSON layout renders bar + pixmap items",
+          "[encoder-layout]") {
+    // Minimal SD+ custom layout: full-width bar in the lower half (rects are
+    // in the SDK's 200x100 reference canvas) + a pixmap item fed by the bag.
+    QJsonObject bar;
+    bar.insert(QStringLiteral("key"), QStringLiteral("indicator"));
+    bar.insert(QStringLiteral("type"), QStringLiteral("bar"));
+    bar.insert(QStringLiteral("rect"), QJsonArray() << 0 << 60 << 200 << 30);
+    QJsonObject pix;
+    pix.insert(QStringLiteral("key"), QStringLiteral("icon"));
+    pix.insert(QStringLiteral("type"), QStringLiteral("pixmap"));
+    pix.insert(QStringLiteral("rect"), QJsonArray() << 0 << 0 << 200 << 50);
+    QJsonObject def;
+    def.insert(QStringLiteral("id"), QStringLiteral("custom"));
+    def.insert(QStringLiteral("items"), QJsonArray() << bar << pix);
+
+    QJsonObject fb;
+    fb.insert(QStringLiteral("indicator"), 100);
+    fb.insert(QStringLiteral("icon"), greenIconDataUri());
+    QImage const img = ajazz::app::renderCustomEncoderLayout(def, fb, QSize(128, 128));
+    // Bar fill (red) lives in the scaled lower band; the icon (green) above it.
+    CHECK(redDominantInBand(img, 70, 128) > 0);
+    CHECK(greenishCount(img) > 200);
+
+    // A disabled item draws nothing.
+    bar.insert(QStringLiteral("enabled"), false);
+    def.insert(QStringLiteral("items"), QJsonArray() << bar);
+    QImage const off = ajazz::app::renderCustomEncoderLayout(def, fb, QSize(128, 128));
+    CHECK(redDominantInBand(off, 70, 128) == 0);
 }

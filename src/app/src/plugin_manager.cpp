@@ -1128,7 +1128,22 @@ std::pair<QString, QString> PluginManager::encoderLayoutInfo(QString const& acti
                     }
                 }
             }
-            return {action.encoderBlock.layout, iconAbs};
+            // A non-"$" layout is a plugin-relative JSON layout file (Elgato
+            // SD+ custom layouts — production audit blocker 5). Resolve it to
+            // an absolute path here, where sourceDir is known, so the bridge
+            // can just load the file. Unresolvable paths fall through verbatim
+            // (the renderer then degrades to $X1 as before).
+            QString layout = action.encoderBlock.layout;
+            if (!layout.isEmpty() && !layout.startsWith(QLatin1Char('$'))) {
+                QDir const base(live.manifest.sourceDir);
+                QString const asDeclared = base.absoluteFilePath(layout);
+                if (QFileInfo::exists(asDeclared)) {
+                    layout = asDeclared;
+                } else if (QFileInfo::exists(asDeclared + QLatin1String(".json"))) {
+                    layout = asDeclared + QLatin1String(".json");
+                }
+            }
+            return {layout, iconAbs};
         }
     }
     return {{}, {}};

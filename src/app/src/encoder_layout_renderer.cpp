@@ -12,6 +12,7 @@
 #include <QFont>
 #include <QFontDatabase>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonValue>
 #include <QLinearGradient>
 #include <QPainter>
@@ -245,6 +246,117 @@ QImage renderEncoderLayout(QString const& layoutId, QJsonObject const& fb, QSize
                        valuePx,
                        Qt::AlignHCenter | Qt::AlignVCenter);
         }
+    }
+
+    p.end();
+    return img;
+}
+
+QImage
+renderCustomEncoderLayout(QJsonObject const& layoutDef, QJsonObject const& fb, QSize target) {
+    if (target.isEmpty()) {
+        target = QSize(128, 128);
+    }
+    QImage img(target, QImage::Format_RGBA8888);
+    img.fill(QColor(kBackground));
+    QPainter p(&img);
+    p.setRenderHint(QPainter::Antialiasing, true);
+    p.setRenderHint(QPainter::SmoothPixmapTransform, true);
+    p.setRenderHint(QPainter::TextAntialiasing, true);
+
+    // SDK reference canvas for SD+ layout rects is 200x100; scale to target.
+    double const sx = target.width() / 200.0;
+    double const sy = target.height() / 100.0;
+
+    for (QJsonValue const& itemV : layoutDef.value(QStringLiteral("items")).toArray()) {
+        if (!itemV.isObject()) {
+            continue;
+        }
+        QJsonObject const item = itemV.toObject();
+        QString const key = item.value(QStringLiteral("key")).toString();
+        QString const type = item.value(QStringLiteral("type")).toString();
+        QJsonValue const fbV = fb.value(key);
+        QJsonObject const fbObj = fbV.isObject() ? fbV.toObject() : QJsonObject{};
+
+        // enabled: item default, overridable per-frame through the feedback bag.
+        bool enabled = item.value(QStringLiteral("enabled")).toBool(true);
+        if (fbObj.contains(QStringLiteral("enabled"))) {
+            enabled = fbObj.value(QStringLiteral("enabled")).toBool(true);
+        }
+        QJsonArray const r = item.value(QStringLiteral("rect")).toArray();
+        if (!enabled || r.size() != 4) {
+            continue;
+        }
+        QRect const rect(static_cast<int>(r.at(0).toDouble() * sx),
+                         static_cast<int>(r.at(1).toDouble() * sy),
+                         static_cast<int>(r.at(2).toDouble() * sx),
+                         static_cast<int>(r.at(3).toDouble() * sy));
+        double opacity = item.value(QStringLiteral("opacity")).toDouble(1.0);
+        if (fbObj.contains(QStringLiteral("opacity"))) {
+            opacity = fbObj.value(QStringLiteral("opacity")).toDouble(1.0);
+        }
+        p.setOpacity(std::clamp(opacity, 0.0, 1.0));
+
+        // Item value: feedback bag first (textOf handles bare + {"value":..}
+        // shapes), else the layout's static "value".
+        QString text = textOf(fb, key);
+        if (text.isEmpty()) {
+            text = item.value(QStringLiteral("value")).toVariant().toString();
+        }
+
+        if (type == QStringLiteral("text")) {
+            QString const align = item.value(QStringLiteral("alignment")).toString();
+            Qt::Alignment const flags =
+                Qt::AlignVCenter | (align == QLatin1String("left")    ? Qt::AlignLeft
+                                    : align == QLatin1String("right") ? Qt::AlignRight
+                                                                      : Qt::AlignHCenter);
+            int px = std::max(6, rect.height() * 2 / 3);
+            QJsonObject const font = item.value(QStringLiteral("font")).toObject();
+            if (font.contains(QStringLiteral("size"))) {
+                px = static_cast<int>(font.value(QStringLiteral("size")).toDouble(16) * sy);
+            }
+            QColor const c(item.value(QStringLiteral("color")).toString());
+            if (canDrawText() && !text.isEmpty()) {
+                QFont f = p.font();
+                f.setPixelSize(std::max(6, px));
+                f.setBold(true);
+                p.setFont(f);
+                p.setPen(c.isValid() ? c : QColor(kTextColor));
+                p.drawText(rect, static_cast<int>(flags.toInt()), text);
+            }
+        } else if (type == QStringLiteral("pixmap")) {
+            drawIconIn(p, rect, iconOf(fb.contains(key) ? fb : QJsonObject{{key, text}}, key));
+        } else if (type == QStringLiteral("bar") || type == QStringLiteral("gbar")) {
+            double v = numOf(fb, key);
+            if (v < 0) {
+                v = item.value(QStringLiteral("value")).toDouble(-1.0);
+            }
+            if (v >= 0) {
+                // Optional range {min,max} normalised to the 0..100 the bar
+                // painter expects.
+                QJsonObject const range = item.value(QStringLiteral("range")).toObject();
+                double const lo = range.value(QStringLiteral("min")).toDouble(0.0);
+                double const hi = range.value(QStringLiteral("max")).toDouble(100.0);
+                if (hi > lo) {
+                    v = (v - lo) * 100.0 / (hi - lo);
+                }
+                auto barColor = [&](char const* sub, QRgb fallback) {
+                    QColor c = colorOf(fb, key, QString::fromLatin1(sub), QColor());
+                    if (!c.isValid()) {
+                        c = QColor(item.value(QString::fromLatin1(sub)).toString());
+                    }
+                    return c.isValid() ? c : QColor(fallback);
+                };
+                drawBarIn(p,
+                          rect,
+                          v,
+                          type == QStringLiteral("gbar"),
+                          barColor("bar_fill_c", kBarFill),
+                          barColor("bar_bg_c", kBarBackground),
+                          barColor("bar_border_c", kBarBorder));
+            }
+        }
+        p.setOpacity(1.0);
     }
 
     p.end();

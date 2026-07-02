@@ -863,6 +863,11 @@ private:
     std::map<QString, std::map<int, QString>> m_stateImageOverride;
     std::map<QString, std::map<int, QString>> m_stateTitleOverride;
 
+    /// Parsed custom encoder-layout files (Elgato SD+ JSON layouts — audit
+    /// blocker 5), keyed by absolute path. An unreadable/invalid file caches
+    /// an empty object so the warning fires once, not per frame.
+    std::map<QString, QJsonObject> m_customLayoutCache;
+
     /// Resolver: actionUuid -> {manifest Encoder.layout id, resolved absolute
     /// Encoder.Icon path}. Injected from Application
     /// (PluginManager::encoderLayoutInfo). Unset/empty -> $X1 with no icon.

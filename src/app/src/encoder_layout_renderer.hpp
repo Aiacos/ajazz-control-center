@@ -52,4 +52,18 @@ namespace ajazz::app {
 [[nodiscard]] QImage
 renderEncoderLayout(QString const& layoutId, QJsonObject const& feedback, QSize target);
 
+/**
+ * @brief Render a CUSTOM (plugin-supplied JSON) encoder layout.
+ *
+ * Elgato SD+ custom layouts (production audit blocker 5): @p layoutDef is the
+ * parsed layout file — `{"id": ..., "items": [{"key","type","rect",...}]}`.
+ * Item rects are in the SDK's 200x100 reference canvas and are scaled to
+ * @p target. Supported item types: "text", "pixmap", "bar", "gbar". Per-item
+ * feedback objects (fb[key] = {"value":..,"enabled":..,"bar_fill_c":..,
+ * "opacity":..}) override the item's static defaults, matching setFeedback.
+ * An empty/absent items array yields the plain dark background.
+ */
+[[nodiscard]] QImage
+renderCustomEncoderLayout(QJsonObject const& layoutDef, QJsonObject const& feedback, QSize target);
+
 } // namespace ajazz::app
