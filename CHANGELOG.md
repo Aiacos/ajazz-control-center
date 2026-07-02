@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- **Dial actions: Switch Profile / Device Brightness now work** (2026-07-02, found live on the
+  AKP05E): the starterpack's OpenDeck-extension events `switchProfile` and `deviceBrightness`
+  were not in the plugin server's routed-action set and died as "unhandled event"; and on
+  press-only encoder hardware (AKP05E) plugins never received `dialUp` at all — the synthesised
+  encoder release only fired a test signal, so every `dial_up`-driven plugin action (profile
+  switch, OBS scene commit) was a no-op. Both routed/delivered now; dialUp fires exactly once
+  per press on every family. Live-verified: dial press/rotation switches the active profile,
+  brightness rotation reaches the host handler, the StreamDock OBS plugin's scene dial commits
+  `SetCurrentProgramScene` on press.
+- **Release packaging pipeline green-up** (2026-07-02, runs 28602454635 → 28621191730): wayland/x11
+  dev packages on the linux deb+rpm legs; Flatpak builder image moved to the maintained
+  `ghcr.io/flathub-infra` registry with the org.kde 6.8 runtime (Qt ≥ 6.8 wayland `PRIVATE_CODE`
+  codegen; the CMake side now also degrades gracefully on Qt 6.7); vendored zlib install rules
+  suppressed (`SKIP_INSTALL_ALL`) so cpack no longer tries to install into `/usr/local`
+  (macOS DMG EACCES / Windows WIX failure); sysmon bundle helper builds with g++ ≥ 14
+  (btop needs `std::ranges::to`); packaging legs configure with `-DAJAZZ_ENABLE_WERROR=OFF`
+  (a GCC 13 `-Wnull-dereference` false positive must not block shipping — the per-PR CI matrix
+  keeps warnings-as-errors); per-PR CI now checks out submodules and installs g++-14 so the
+  packaging build paths are exercised before merge.
+
 ### Added
 
 - **Elgato-parity plugin UI for keys & dials + one-click install** (feature 002, 2026-06-19):
