@@ -193,6 +193,43 @@ void PluginAssetServer::onNewConnection() {
                 piMode = PiMode::Inspector;
                 reqPath.chop(kPiMarker.size());
             }
+            // Builtin Property Inspectors: `/__builtinpi__/<file>` serves the
+            // in-tree PI pages for the fallback OpenDeck builtins from the
+            // bundled :/builtinpi resource tree (flat namespace — any path
+            // separator or traversal is rejected). The PI marker handling
+            // above applies to them exactly like plugin PIs, so the SPA's
+            // connect bootstrap shim is injected the same way.
+            QString const kBuiltinPrefix = QStringLiteral("/__builtinpi__/");
+            if (reqPath.startsWith(kBuiltinPrefix)) {
+                QString const name = reqPath.mid(kBuiltinPrefix.size());
+                if (name.isEmpty() || name.contains(QLatin1Char('/')) ||
+                    name.contains(QStringLiteral(".."))) {
+                    sendStatus(sock, "404 Not Found");
+                    finish();
+                    return;
+                }
+                QFile res(QStringLiteral(":/builtinpi/") + name);
+                if (!res.open(QIODevice::ReadOnly)) {
+                    sendStatus(sock, "404 Not Found");
+                    finish();
+                    return;
+                }
+                QByteArray body = res.readAll();
+                res.close();
+                if (piMode == PiMode::Inspector) {
+                    body += piInspectorShim();
+                    sendBody(sock, QByteArrayLiteral("text/html"), body);
+                    finish();
+                    return;
+                }
+                QByteArray ctype = QMimeDatabase().mimeTypeForFile(name).name().toUtf8();
+                if (ctype.isEmpty()) {
+                    ctype = QByteArrayLiteral("application/octet-stream");
+                }
+                sendBody(sock, ctype, body);
+                finish();
+                return;
+            }
             // Only the plugin-asset namespace is served; reject anything else and
             // any traversal attempt outright.
             QString const kPrefix = QStringLiteral("/__pluginasset__/");

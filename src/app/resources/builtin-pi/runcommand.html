@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Run Command" action (opendeck.runcommand).
+     Settings contract: {"command": "<shell command line>"} — executed via
+     /bin/sh -c (cmd /C on Windows) by the com.hotspot.streamdock.runcommand
+     handler in builtin_actions_service.cpp. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="command">Command</label>
+    <input type="text" id="command" placeholder="e.g. notify-send 'hello'" spellcheck="false">
+    <div class="hint">Runs in your shell when the key is pressed.</div>
+    <script>
+        "use strict";
+        const commandEl = document.getElementById("command");
+        function applySettings(s) {
+            if (typeof s.command === "string") {
+                commandEl.value = s.command;
+            }
+        }
+        commandEl.addEventListener("change", () => save({ command: commandEl.value }));
+    </script>
+</body>
+</html>

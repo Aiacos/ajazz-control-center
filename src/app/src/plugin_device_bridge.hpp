@@ -558,6 +558,12 @@ public slots:
     /// one context namespace (audit 2.4).
     [[nodiscard]] QString canonicalContextId(QString const& contextId) const;
 
+    /// Map @p ctx to ProfileController controller space and emit
+    /// bindingSettingsPersisted. Keypad -> ("Keypad", row*cols+col); Encoder
+    /// row 0 -> ("Encoder", col); Encoder row 1 (touch zone) -> ("TouchZone",
+    /// col). Shared by handleSettingsAction and onPropertyInspectorSettings.
+    void emitBindingSettingsPersisted(ActionContext const& ctx, QString const& json);
+
     /// Live settings JSON for @p contextId (accepts both wire and SPA forms) —
     /// the registry copy kept fresh by setSettings/PI writes/populate. Empty
     /// when the context has no mounted instance. Backs the OpenDeck bridge's
@@ -707,6 +713,18 @@ signals:
     /// settings slider (audit 4.9 — "device_brightness"). The hardware write
     /// follows via the SPA settings round-trip, matching upstream OpenDeck.
     void deviceBrightnessRequested(QString const& action, int value);
+
+    /// Emitted after a per-context setSettings persisted to the settings
+    /// store, so the Application can mirror the value into the PROFILE
+    /// binding (ProfileController::updateBindingSettings). This is what makes
+    /// PI edits (a) survive restarts through the profile and (b) reach the
+    /// press-time chain of BUILTIN actions, which executes on the binding's
+    /// settingsJson, not the store. @p controller is ProfileController space
+    /// ("Keypad" | "Encoder" | "TouchZone"); @p index the 0-based slot.
+    void bindingSettingsPersisted(QString const& deviceId,
+                                  QString const& controller,
+                                  int index,
+                                  QString const& settingsJson);
 
 private:
     /// Handle the inbound settings + PI-relay family (setSettings / getSettings /

@@ -839,6 +839,26 @@ Application::Application(QObject* parent)
                      m_openDeckBridge.get(),
                      &OpenDeckBridge::notifyDeviceBrightness);
 
+    // 3d. PI settings -> profile binding mirror: a Property Inspector
+    //     setSettings persists to the plugin settings store AND into the
+    //     binding, so builtin actions (which execute on the binding's
+    //     settingsJson) pick up PI edits, and the value survives restarts in
+    //     the profile. Gated on the active profile's device.
+    QObject::connect(
+        m_pluginBridge.get(),
+        &PluginDeviceBridge::bindingSettingsPersisted,
+        m_profileController.get(),
+        [this](QString const& deviceId,
+               QString const& controller,
+               int index,
+               QString const& settingsJson) {
+            if (QString::fromStdString(m_profileController->activeProfile().deviceCodename) !=
+                deviceId) {
+                return;
+            }
+            m_profileController->updateBindingSettings(controller, index, settingsJson);
+        });
+
     // 3a-F3. Property Inspector second-connection model (canonical doc §5).
     //   The server resolves which plugin owns a PI's instance context via this
     //   resolver, backed by the bridge's ContextRegistry (the trusted

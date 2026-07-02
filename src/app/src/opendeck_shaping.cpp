@@ -255,40 +255,30 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
     // dedicated icons ship in the bundled starterpack plugin's asset dir. CMake
     // copies those PNGs into :/opendeck alongside the SPA (see AJAZZ_BUILD_WEBUI),
     // so the same `opendeck/<file>.png` form resolves them via OpenDeckSchemeHandler.
-    auto addBuiltin = [&](QString const& name,
-                          QString const& uuid,
-                          QString const& tooltip,
-                          QString const& icon,
-                          QStringList const& controllers) {
-        builtins.append(makeActionJson(
-            name, uuid, QStringLiteral("opendeck"), tooltip, icon, QString{}, controllers));
-    };
     // Multi Action / Toggle Action are NOT advertised until the children
     // pipeline exists: instanceJson always emits children:null, so a bound
     // multi-action key makes ParentActionView dereference `children!` (throws)
     // and a drop into the parent OVERWRITES the parent via create_instance
     // (audit 4.2). Re-add together with real ActionInstance::children support.
     if (!starterpackInstalled) {
-        addBuiltin(QStringLiteral("Run Command"),
-                   QStringLiteral("opendeck.runcommand"),
-                   QStringLiteral("Run a shell command"),
-                   QStringLiteral("opendeck/runCommand.png"),
-                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
-        addBuiltin(QStringLiteral("Open URL"),
-                   QStringLiteral("opendeck.openurl"),
-                   QStringLiteral("Open a URL in the browser"),
-                   QStringLiteral("opendeck/openUrl.png"),
-                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
-        addBuiltin(QStringLiteral("Switch Profile"),
-                   QStringLiteral("opendeck.switchprofile"),
-                   QStringLiteral("Switch the active profile"),
-                   QStringLiteral("opendeck/switchProfile.png"),
-                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
-        addBuiltin(QStringLiteral("Device Brightness"),
-                   QStringLiteral("opendeck.brightness"),
-                   QStringLiteral("Set the device brightness"),
-                   QStringLiteral("opendeck/deviceBrightness.png"),
-                   {QStringLiteral("Keypad"), QStringLiteral("Encoder")});
+        for (QString const& uuid : {QStringLiteral("opendeck.runcommand"),
+                                    QStringLiteral("opendeck.openurl"),
+                                    QStringLiteral("opendeck.switchprofile"),
+                                    QStringLiteral("opendeck.brightness")}) {
+            QJsonObject const meta = builtinActionMeta(uuid);
+            QStringList controllers;
+            for (QJsonValue const& c : meta.value(QStringLiteral("controllers")).toArray()) {
+                controllers << c.toString();
+            }
+            builtins.append(
+                makeActionJson(meta.value(QStringLiteral("name")).toString(),
+                               uuid,
+                               QStringLiteral("opendeck"),
+                               meta.value(QStringLiteral("tooltip")).toString(),
+                               meta.value(QStringLiteral("icon")).toString(),
+                               meta.value(QStringLiteral("property_inspector")).toString(),
+                               controllers));
+        }
     }
     // OpenDeck's ActionList expects each category VALUE to be an object
     // `{ icon?, actions: Action[] }` (it destructures `{ actions }` and reads
@@ -309,6 +299,49 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
         categories[group] = QJsonObject{{QStringLiteral("actions"), arr}};
     }
     return categories;
+}
+
+QJsonObject builtinActionMeta(QString const& uuid) {
+    // Icon strings use the `opendeck/<path>` form (resolved by
+    // OpenDeckSchemeHandler against :/opendeck); property_inspector paths use
+    // the `__builtinpi__/<file>` namespace served by PluginAssetServer from
+    // the bundled :/builtinpi resource tree.
+    auto const meta =
+        [](QString const& name, QString const& tooltip, QString const& icon, QString const& pi) {
+            return QJsonObject{
+                {QStringLiteral("name"), name},
+                {QStringLiteral("tooltip"), tooltip},
+                {QStringLiteral("icon"), QStringLiteral("opendeck/") + icon},
+                {QStringLiteral("property_inspector"), QStringLiteral("__builtinpi__/") + pi},
+                {QStringLiteral("controllers"),
+                 QJsonArray{QStringLiteral("Keypad"), QStringLiteral("Encoder")}},
+            };
+        };
+    if (uuid == QLatin1String("opendeck.runcommand")) {
+        return meta(QStringLiteral("Run Command"),
+                    QStringLiteral("Run a shell command"),
+                    QStringLiteral("runCommand.png"),
+                    QStringLiteral("runcommand.html"));
+    }
+    if (uuid == QLatin1String("opendeck.openurl")) {
+        return meta(QStringLiteral("Open URL"),
+                    QStringLiteral("Open a URL in the browser"),
+                    QStringLiteral("openUrl.png"),
+                    QStringLiteral("openurl.html"));
+    }
+    if (uuid == QLatin1String("opendeck.switchprofile")) {
+        return meta(QStringLiteral("Switch Profile"),
+                    QStringLiteral("Switch the active profile"),
+                    QStringLiteral("switchProfile.png"),
+                    QStringLiteral("switchprofile.html"));
+    }
+    if (uuid == QLatin1String("opendeck.brightness")) {
+        return meta(QStringLiteral("Device Brightness"),
+                    QStringLiteral("Set the device brightness"),
+                    QStringLiteral("deviceBrightness.png"),
+                    QStringLiteral("brightness.html"));
+    }
+    return {};
 }
 
 QJsonValue keyInstanceJson(core::Binding const& binding, QString const& context) {

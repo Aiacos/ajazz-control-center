@@ -1521,6 +1521,61 @@ void ProfileController::setInstanceCurrentState(QString const& controller,
     emit profileChanged();
 }
 
+bool ProfileController::updateBindingSettings(QString const& controller,
+                                              int index,
+                                              QString const& settingsJson) {
+    constexpr int kMaxIdx = static_cast<int>(std::numeric_limits<std::uint16_t>::max() - 1);
+    if (index < 0 || index > kMaxIdx) {
+        return false;
+    }
+    auto const idx = static_cast<std::uint16_t>(index);
+    auto const applyToChain = [&settingsJson](std::vector<ajazz::core::Action>& chain) {
+        for (ajazz::core::Action& step : chain) {
+            if (step.kind == ajazz::core::ActionKind::Plugin) {
+                step.settingsJson = settingsJson.toStdString();
+            }
+        }
+    };
+    bool found = false;
+    std::optional<ajazz::core::ActionInstance>* instanceSlot = nullptr;
+    if (controller.compare(QStringLiteral("Keypad"), Qt::CaseInsensitive) == 0) {
+        auto& keyMap = activeKeyMap();
+        if (auto it = keyMap.find(idx); it != keyMap.end()) {
+            applyToChain(it->second.onPress);
+            applyToChain(it->second.onRelease);
+            applyToChain(it->second.onLongPress);
+            instanceSlot = &it->second.instance;
+            found = true;
+        }
+    } else if (controller.compare(QStringLiteral("Encoder"), Qt::CaseInsensitive) == 0) {
+        if (auto it = m_profile.encoders.find(idx); it != m_profile.encoders.end()) {
+            applyToChain(it->second.onCw);
+            applyToChain(it->second.onCcw);
+            applyToChain(it->second.onPress);
+            applyToChain(it->second.onRelease);
+            instanceSlot = &it->second.instance;
+            found = true;
+        }
+    } else if (controller.compare(QStringLiteral("TouchZone"), Qt::CaseInsensitive) == 0) {
+        if (index <= 255) {
+            auto const zoneIdx = static_cast<std::uint8_t>(index);
+            if (auto it = m_profile.touchZones.find(zoneIdx); it != m_profile.touchZones.end()) {
+                applyToChain(it->second.onTap);
+                found = true;
+            }
+        }
+    }
+    if (!found) {
+        return false;
+    }
+    if (instanceSlot != nullptr && instanceSlot->has_value()) {
+        (*instanceSlot)->settings = settingsJson.toStdString();
+    }
+    saveActiveProfile();
+    emit profileChanged();
+    return true;
+}
+
 bool ProfileController::setInstanceStateVisual(QString const& controller,
                                                int index,
                                                int stateIndex,

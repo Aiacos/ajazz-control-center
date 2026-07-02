@@ -765,6 +765,22 @@ if(AJAZZ_BUILD_WEBUI)
             target_compile_definitions(ajazz-control-center PRIVATE AJAZZ_HAVE_WEBUI=1)
             message(STATUS "AJAZZ_BUILD_WEBUI: bundled OpenDeck SPA into :/opendeck")
 
+            # Minimal in-tree Property Inspectors for the builtin fallback actions (Run Command /
+            # Open URL / Switch Profile / Device Brightness). Served by PluginAssetServer under
+            # /__builtinpi__/<file> from the :/builtinpi resource tree; without a PI these actions
+            # were bindable but not configurable from the SPA.
+            file(GLOB _builtin_pi_files "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin-pi/*")
+            qt_add_resources(
+                ajazz-control-center
+                "opendeck_builtin_pi"
+                PREFIX
+                "/builtinpi"
+                BASE
+                "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin-pi"
+                FILES
+                ${_builtin_pi_files}
+            )
+
             # The built-in "OpenDeck" category surfaces the upstream starterpack actions (Run
             # Command / Open URL / Switch Profile / Device Brightness). Their real icons ship in the
             # bundled (pristine) starterpack plugin's asset dir, which SvelteKit does NOT copy into

@@ -1,0 +1,44 @@
+/* Minimal sdpi-flavoured styling shared by the builtin Property Inspectors —
+   matches the SPA's dark neutral palette so the iframe blends in. */
+:root {
+    color-scheme: dark;
+}
+body {
+    margin: 0;
+    padding: 10px 12px;
+    background: #2d2d2d;
+    color: #d8d8d8;
+    font: 13px/1.5 system-ui, sans-serif;
+}
+label {
+    display: block;
+    margin: 8px 0 4px;
+    color: #969696;
+    font-size: 12px;
+}
+input[type="text"],
+textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: #3d3d3d;
+    color: #d8d8d8;
+    border: 1px solid #555;
+    border-radius: 4px;
+    padding: 6px 8px;
+    font: inherit;
+}
+input[type="range"] {
+    width: calc(100% - 48px);
+    vertical-align: middle;
+}
+output {
+    display: inline-block;
+    width: 40px;
+    text-align: right;
+    color: #d8d8d8;
+}
+.hint {
+    margin-top: 6px;
+    color: #7a7a7a;
+    font-size: 11px;
+}

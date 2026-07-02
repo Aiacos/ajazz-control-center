@@ -687,9 +687,16 @@ bool PluginDeviceBridge::handleSettingsAction(QString const& pluginUuid,
             QJsonObject const settings = action.value(QStringLiteral("payload")).toObject();
             QString const json =
                 QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact));
+            bool const changed = (ctx.settingsJson != json);
             if (plugin_settings_store::writeContext(owner, wireId, json)) {
                 ctx.settingsJson = json;
                 m_registry.updateSettings(wireId, json); // keep keyDown/willAppear fresh
+                if (changed) {
+                    // Mirror into the profile binding only on a REAL change —
+                    // a plugin re-asserting identical settings must not cost a
+                    // profile save + repaint per call.
+                    emitBindingSettingsPersisted(ctx, json);
+                }
             }
             // Spec / settings.rs: setSettings notifies the OPPOSITE party — a
             // self-echo made plugins that setSettings inside their
@@ -1119,6 +1126,20 @@ void PluginDeviceBridge::onSetBG(QString const& /*pluginUuid*/,
     QImage img(kKeySize, kKeySize, QImage::Format_RGBA8888);
     img.fill(color);
 
+    // Encoder/touch context: same guard as onSetImage/onSetTitle — the keypad
+    // index math would paint the wrong physical key (review find 2026-07-02).
+    if (ctx.controller == QLatin1String("Encoder")) {
+        try {
+            m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), img);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "onSetBG: assignEncoderImage threw for zone {}: {}",
+                           ctx.column,
+                           e.what());
+        }
+        return;
+    }
+
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
     try {
         m_control->assignKeyImage(keyIndex, img);
@@ -1138,6 +1159,21 @@ void PluginDeviceBridge::paintPlaceholder(ActionContext const& ctx, std::uint8_t
     constexpr int kKeySize = 85;
     QImage placeholder(kKeySize, kKeySize, QImage::Format_RGBA8888);
     placeholder.fill(QColor(50, 50, 50)); // neutral dark grey placeholder
+
+    // Encoder/touch context: the keypad row/column math below would target a
+    // WRONG physical key (row 1 touch -> bottom key row). Paint the strip
+    // zone instead (review find 2026-07-02).
+    if (ctx.controller == QLatin1String("Encoder")) {
+        try {
+            m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), placeholder);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "paintPlaceholder: assignEncoderImage threw for zone {}: {}",
+                           ctx.column,
+                           e.what());
+        }
+        return;
+    }
 
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
     try {
@@ -1321,6 +1357,20 @@ void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::
     reapplyTitle(keyIndex); // keep any plugin-set title over the new base image
 }
 
+namespace {
+/// Synthetic owner uuid for builtin-action contexts (no WS client ever
+/// registers with it — sendEvent to it is a silent DEBUG-level no-op).
+/// Registering builtin bindings in the context registry is what lets their
+/// in-tree Property Inspectors resolve the context for get/setSettings.
+constexpr QLatin1StringView kBuiltinOwnerUuid("opendeck.builtin");
+
+/// True for the builtin action namespaces (SPA aliases + canonical ids).
+[[nodiscard]] bool isBuiltinActionId(QString const& id) {
+    return id.startsWith(QLatin1String("opendeck.")) ||
+           id.startsWith(QLatin1String("com.hotspot.streamdock."));
+}
+} // namespace
+
 QString PluginDeviceBridge::resolveOwner(QString const& actionUuid) const {
     // Stored-owner map first (OpenDeck model): the manifest that declares this
     // action UUID names its owner explicitly, so the action UUID need not be a
@@ -1332,7 +1382,17 @@ QString PluginDeviceBridge::resolveOwner(QString const& actionUuid) const {
             return owner;
         }
     }
-    return ownerForActionUuid(actionUuid, m_registeredPlugins);
+    QString const owner = ownerForActionUuid(actionUuid, m_registeredPlugins);
+    if (!owner.isEmpty()) {
+        return owner;
+    }
+    // Builtin actions have no plugin owner — register them under the synthetic
+    // builtin owner so their contexts exist in the registry and the in-tree
+    // Property Inspectors can address them (get/setSettings resolution).
+    if (isBuiltinActionId(actionUuid)) {
+        return QString{kBuiltinOwnerUuid};
+    }
+    return {};
 }
 
 void PluginDeviceBridge::onDeviceEvent(QString const& deviceId, core::DeviceEvent const& ev) {
@@ -2110,8 +2170,12 @@ void PluginDeviceBridge::onPropertyInspectorSettings(QString const& pluginUuid,
     QString const wireId = ContextRegistry::deriveContextId(ctx);
     // Keep the registry's cached settings in sync so a subsequent willAppear /
     // keyDown for this context carries the just-edited value, not the stale one.
+    bool const piChanged = (ctx.settingsJson != json);
     m_registry.updateSettings(wireId, json);
     ctx.settingsJson = json;
+    if (piChanged) {
+        emitBindingSettingsPersisted(ctx, json); // mirror into the profile binding
+    }
     // Prefer the bridge-known owner; fall back to the PI-supplied uuid if the
     // registry entry has none (defensive — registration always sets it).
     QString const owner = ctx.pluginUuid.isEmpty() ? pluginUuid : ctx.pluginUuid;
@@ -2137,6 +2201,18 @@ QString PluginDeviceBridge::settingsJsonForContext(QString const& contextId) con
     return ctx.has_value() ? ctx->settingsJson : QString{};
 }
 
+void PluginDeviceBridge::emitBindingSettingsPersisted(ActionContext const& ctx,
+                                                      QString const& json) {
+    QString controller = ctx.controller;
+    int index = ctx.column;
+    if (ctx.controller == QLatin1String("Keypad")) {
+        index = ctx.row * geometryForDevice(ctx.deviceId).keyCols + ctx.column;
+    } else if (ctx.row == 1) {
+        controller = QStringLiteral("TouchZone"); // audit 6.2 convention
+    }
+    emit bindingSettingsPersisted(ctx.deviceId, controller, index, json);
+}
+
 std::optional<ActionContext>
 PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) const {
     // SPA context: "device.profile.controller.position" (profile may contain
@@ -2148,9 +2224,22 @@ PluginDeviceBridge::resolvePropertyInspectorContext(QString const& contextId) co
         return std::nullopt;
     }
     QString const device = parts.first();
-    QString const controller = parts.at(parts.size() - 2);
+    QString controller = parts.at(parts.size() - 2);
     bool ok = false;
-    int const position = parts.at(parts.size() - 1).toInt(&ok);
+    int position = parts.at(parts.size() - 1).toInt(&ok);
+    // Upstream 5-segment form "device.profile.controller.position.index": when
+    // the segment in controller position is itself numeric, the trailing
+    // segment is the Multi Action child index — shift left (same
+    // disambiguation as opendeck_detail::parseCtxString, audit 4.3). Without
+    // it every PI registered with a 5-segment context resolved to
+    // controller="<position>" and was silently unresolved (live find,
+    // 2026-07-02: PI owner=<unresolved> for akp05e.Default.Keypad.2.0).
+    bool controllerIsNumeric = false;
+    controller.toInt(&controllerIsNumeric);
+    if (parts.size() >= 5 && ok && controllerIsNumeric) {
+        position = controller.toInt(&ok);
+        controller = parts.at(parts.size() - 3);
+    }
     if (!ok || position < 0 || device.isEmpty()) {
         return std::nullopt;
     }

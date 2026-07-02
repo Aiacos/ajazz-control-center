@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Switch Profile" action
+     (opendeck.switchprofile). Settings contract: {"profile": "<name>"} —
+     resolved against the ACTIVE device's profile library by the
+     profile.switch handler (Application::setProfileSwitcher wiring). -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="profile">Profile name</label>
+    <input type="text" id="profile" placeholder="e.g. Default" spellcheck="false">
+    <div class="hint">Exact name of a profile of the current device (as shown in the profile dropdown).</div>
+    <script>
+        "use strict";
+        const profileEl = document.getElementById("profile");
+        function applySettings(s) {
+            if (typeof s.profile === "string") {
+                profileEl.value = s.profile;
+            }
+        }
+        profileEl.addEventListener("change", () => save({ profile: profileEl.value }));
+    </script>
+</body>
+</html>

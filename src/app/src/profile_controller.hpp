@@ -669,6 +669,21 @@ public:
                                 ajazz::core::KeyState const& visual);
 
     /**
+     * @brief Mirror a Property-Inspector settings write into the binding.
+     *
+     * Sets @p settingsJson on EVERY Plugin-kind step of the addressed
+     * binding's chains (all of them — a dial builtin replicates its action
+     * across onCw/onCcw/onPress) and on the OpenDeck instance's settings,
+     * then persists. This is what makes PI edits reach the press-time chain
+     * of BUILTIN actions (which run on the binding's settingsJson, not the
+     * plugin settings store) and survive restarts in the profile.
+     * @p controller is "Keypad" | "Encoder" | "TouchZone".
+     *
+     * @return true when a binding was found and updated.
+     */
+    bool updateBindingSettings(QString const& controller, int index, QString const& settingsJson);
+
+    /**
      * @brief Atomically swap two encoder bindings.
      *
      * Fixes the Phase 26 UI-REVIEW.md data-loss bug where

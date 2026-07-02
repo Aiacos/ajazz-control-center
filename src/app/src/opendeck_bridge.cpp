@@ -85,6 +85,45 @@ void applyActionMeta(QJsonObject& action, QVariantMap const& entry) {
     }
 }
 
+/// Apply the fallback-builtin metadata (icon / property_inspector /
+/// controllers / name / states image seed) onto a bound instance's `action`
+/// object — the builtin analogue of applyActionMeta above, so a bound
+/// Run Command / Open URL / Switch Profile / Brightness key opens its
+/// in-tree Property Inspector and renders its icon. Returns false when
+/// @p uuid is not a fallback builtin.
+bool applyBuiltinActionMeta(QJsonObject& action, QString const& uuid) {
+    QJsonObject const meta = opendeck_detail::builtinActionMeta(uuid);
+    if (meta.isEmpty()) {
+        return false;
+    }
+    QString const icon = meta.value(QStringLiteral("icon")).toString();
+    action[QStringLiteral("plugin")] = QStringLiteral("opendeck");
+    action[QStringLiteral("icon")] = icon;
+    action[QStringLiteral("property_inspector")] =
+        meta.value(QStringLiteral("property_inspector")).toString();
+    action[QStringLiteral("controllers")] = meta.value(QStringLiteral("controllers")).toArray();
+    if (action.value(QStringLiteral("name")).toString().isEmpty()) {
+        action[QStringLiteral("name")] = meta.value(QStringLiteral("name")).toString();
+    }
+    // Same empty-state image seeding rationale as applyActionMeta: JS `??`
+    // treats "" as set, so the SPA never falls back to action.icon on its own.
+    if (!icon.isEmpty()) {
+        QJsonArray states = action.value(QStringLiteral("states")).toArray();
+        if (states.isEmpty()) {
+            states.append(QJsonObject{});
+        }
+        for (qsizetype i = 0; i < states.size(); ++i) {
+            QJsonObject state = states.at(i).toObject();
+            if (state.value(QStringLiteral("image")).toString().isEmpty()) {
+                state[QStringLiteral("image")] = icon;
+            }
+            states[i] = state;
+        }
+        action[QStringLiteral("states")] = states;
+    }
+    return true;
+}
+
 /// Parsed OpenDeck context (`device.profile.controller.position`).
 struct Ctx {
     QString device;
@@ -515,11 +554,21 @@ QString OpenDeckBridge::handle(QString const& command, QString const& argsJson) 
             if (path.isEmpty()) {
                 return str(QJsonValue(QJsonValue::Null)); // no profile for this device yet
             }
-            core::Profile const other =
-                core::readProfileFromDisk(std::filesystem::path(path.toStdString()));
-            QJsonObject prof = profileJson(other, keyCount, encoderCount, touchCount);
-            markOrphanedInstances(prof);
-            return str(prof);
+            // readProfileFromDisk throws ProfileIoError on a missing/corrupt
+            // file; handle() runs under the QWebChannel with no exception
+            // boundary above it (review find 2026-07-02) — degrade to null
+            // like the empty-path branch above.
+            try {
+                core::Profile const other =
+                    core::readProfileFromDisk(std::filesystem::path(path.toStdString()));
+                QJsonObject prof = profileJson(other, keyCount, encoderCount, touchCount);
+                markOrphanedInstances(prof);
+                return str(prof);
+            } catch (core::ProfileIoError const& e) {
+                qCWarning(lcBridge)
+                    << "get_selected_profile: cannot read" << path << ":" << e.what();
+                return str(QJsonValue(QJsonValue::Null));
+            }
         }
         QJsonObject prof = profileJson(profile, keyCount, encoderCount, touchCount);
         markOrphanedInstances(prof);
@@ -1226,6 +1275,9 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
                 // bound slot renders its icon and opens its Property Inspector.
                 applyActionMeta(action, metaIt.value());
                 slot[QStringLiteral("action")] = action;
+            } else if (applyBuiltinActionMeta(action, uuid)) {
+                // Fallback builtin: attach its in-tree PI + icon (same reason).
+                slot[QStringLiteral("action")] = action;
             } else if (!uuid.isEmpty() && !known.contains(uuid)) {
                 QString const name = action.value(QStringLiteral("name")).toString();
                 action[QStringLiteral("name")] =
@@ -1269,6 +1321,12 @@ QJsonValue OpenDeckBridge::enrichInstance(QJsonValue const& instance) const {
             continue;
         }
         applyActionMeta(action, e);
+        inst[QStringLiteral("action")] = action;
+        return inst;
+    }
+    // Fallback builtin (opendeck.*): attach the in-tree PI + icon so a
+    // freshly-dropped builtin is immediately configurable.
+    if (applyBuiltinActionMeta(action, uuid)) {
         inst[QStringLiteral("action")] = action;
         return inst;
     }

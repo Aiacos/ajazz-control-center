@@ -21,6 +21,18 @@ if(NOT AJAZZ_CARGO)
     message(STATUS "bundled-plugins: cargo not found — skipping ajazz-sysmon bundle")
     return()
 endif()
+# CI checks out without submodules; the metrics-helper hard-errors when the
+# btop tree is absent, which failed the whole ubuntu leg (develop 2026-07-02).
+# Degrade to a skip like the cargo/host guards above — packaging jobs that must
+# ship the bundle check out with `submodules: recursive`.
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/ajazz-sysmon/metrics-helper/third_party/btop/src/btop_shared.cpp")
+    message(
+        WARNING
+            "bundled-plugins: btop submodule missing — skipping ajazz-sysmon bundle. "
+            "Run: git submodule update --init --recursive"
+    )
+    return()
+endif()
 
 set(_sysmon_src "${CMAKE_CURRENT_SOURCE_DIR}/ajazz-sysmon")
 set(_sysmon_out "${CMAKE_BINARY_DIR}/bundled-plugins")

@@ -270,3 +270,21 @@ TEST_CASE("overrideStateVisual injects a live image/text into the current state"
     REQUIRE_FALSE(overrideStateVisual(c, QStringLiteral("data:x"), {}, false));
     REQUIRE(c == before);
 }
+
+TEST_CASE("builtinActionMeta carries the in-tree PI path for the four fallback builtins",
+          "[opendeck][builtin-pi]") {
+    for (auto const& [uuid, pi] : {std::pair{QStringLiteral("opendeck.runcommand"),
+                                             QStringLiteral("__builtinpi__/runcommand.html")},
+                                   std::pair{QStringLiteral("opendeck.openurl"),
+                                             QStringLiteral("__builtinpi__/openurl.html")},
+                                   std::pair{QStringLiteral("opendeck.switchprofile"),
+                                             QStringLiteral("__builtinpi__/switchprofile.html")},
+                                   std::pair{QStringLiteral("opendeck.brightness"),
+                                             QStringLiteral("__builtinpi__/brightness.html")}}) {
+        QJsonObject const meta = builtinActionMeta(uuid);
+        REQUIRE_FALSE(meta.isEmpty());
+        REQUIRE(meta.value("property_inspector").toString() == pi);
+        REQUIRE(meta.value("controllers").toArray().contains(QJsonValue("Keypad")));
+    }
+    REQUIRE(builtinActionMeta(QStringLiteral("com.example.notbuiltin")).isEmpty());
+}

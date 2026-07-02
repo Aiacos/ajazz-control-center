@@ -67,6 +67,14 @@ spaContext(QString const& device, QString const& profile, QString const& control
 /// Map one PluginCatalogModel::installedActions() entry to an OpenDeck Action.
 [[nodiscard]] QJsonObject actionFromCatalogEntry(QVariantMap const& entry);
 
+/// Metadata for one fallback builtin action (name / icon / property_inspector
+/// / controllers), keyed by the SPA-facing `opendeck.*` uuid. Returns an empty
+/// object for non-builtin uuids. Single source of truth shared by
+/// categoriesJson (the Action Library tiles) and the bridge's instance
+/// enrichment, so a BOUND builtin also carries its in-tree PI page
+/// (`__builtinpi__/<file>` served by PluginAssetServer).
+[[nodiscard]] QJsonObject builtinActionMeta(QString const& uuid);
+
 /// Group installed actions by plugin name and prepend the built-in "OpenDeck"
 /// category. Returns {category: Action[]}.
 [[nodiscard]] QJsonObject categoriesJson(QVariantList const& installedActions);
