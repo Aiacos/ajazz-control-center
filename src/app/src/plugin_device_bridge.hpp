@@ -853,6 +853,16 @@ private:
     std::map<QString, QJsonObject> m_encoderFeedback;
     std::map<QString, QString> m_encoderLayoutOverride;
 
+    /// Per-context, per-state visual overrides pushed via setImage/setTitle
+    /// with a `state` field in the payload (Elgato: the visual belongs to THAT
+    /// state only and is shown when the context enters it — production audit
+    /// blocker 3, 2026-07-03). contextId -> state -> image data URI / title
+    /// text. A stateless setImage/setTitle clears the context's slots (the
+    /// visual then applies to every state, matching Elgato). Cleared with the
+    /// other visual layers in purgeContextVisualCaches().
+    std::map<QString, std::map<int, QString>> m_stateImageOverride;
+    std::map<QString, std::map<int, QString>> m_stateTitleOverride;
+
     /// Resolver: actionUuid -> {manifest Encoder.layout id, resolved absolute
     /// Encoder.Icon path}. Injected from Application
     /// (PluginManager::encoderLayoutInfo). Unset/empty -> $X1 with no icon.

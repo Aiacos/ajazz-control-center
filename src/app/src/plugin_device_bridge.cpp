@@ -955,10 +955,25 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
     // T-19-input: read payload keys defensively.
     QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
     QString const dataUri = payload.value(QStringLiteral("image")).toString();
-    // target: 0=hw+sw (default), 1=hw-only, 2=sw-only.
-    // Phase 19: treat 1 and 2 as equivalent to 0 (paint the physical key).
-    // The sw-only mirror surface is a later refinement (note in SUMMARY).
-    // int const target = payload.value(QStringLiteral("target")).toInt(0);
+    // Elgato semantics (production audit blocker 3, 2026-07-03):
+    // - `state`: the image belongs to THAT state only. Stash it in the
+    //   per-state override map; paint only when it is the context's CURRENT
+    //   state (state changes repaint from the stash via
+    //   paintDeclaredStateImage's override lookup). A stateless setImage
+    //   clears the stash — the image then covers every state.
+    // - `target`: 0=hw+sw (default), 1=hw-only, 2=sw-only. Gate the hardware
+    //   paint on target != 2 and the SPA mirror on target != 1.
+    int const target = payload.value(QStringLiteral("target")).toInt(0);
+    QString const ctxId = ContextRegistry::deriveContextId(ctx);
+    if (payload.contains(QStringLiteral("state"))) {
+        int const forState = payload.value(QStringLiteral("state")).toInt(0);
+        m_stateImageOverride[ctxId][forState] = dataUri;
+        if (forState != ctx.stateIndex) {
+            return; // stashed for a non-live state — nothing to paint now
+        }
+    } else {
+        m_stateImageOverride.erase(ctxId);
+    }
 
     // Decode the data-URI (T-19-img: returns {ok:false} on any failure — no crash).
     DecodedImage const decoded = decodeDataUriImage(dataUri);
@@ -975,13 +990,18 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
     // 0-based encoder index. The keyIndexForCoords math below is keypad-only —
     // running it for an encoder would paint a wrong key.
     if (ctx.controller == QLatin1String("Encoder")) {
-        try {
-            m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), decoded.image);
-        } catch (std::exception const& e) {
-            AJAZZ_LOG_WARN("plugin-bridge",
-                           "onSetImage: assignEncoderImage threw for encoder {}: {}",
-                           ctx.column,
-                           e.what());
+        if (target != 2) {
+            try {
+                m_control->assignEncoderImage(static_cast<std::uint8_t>(ctx.column), decoded.image);
+            } catch (std::exception const& e) {
+                AJAZZ_LOG_WARN("plugin-bridge",
+                               "onSetImage: assignEncoderImage threw for encoder {}: {}",
+                               ctx.column,
+                               e.what());
+            }
+        }
+        if (target == 1) {
+            return; // hw-only: skip the SPA mirror below
         }
         // audit 6.3: a touch-zone context (row 1) mirrors to its SPA slot —
         // the "Keypad" position appended after the key grid — NOT the dial
@@ -1010,21 +1030,26 @@ void PluginDeviceBridge::onSetImage(QString const& /*pluginUuid*/,
     // keyIndexForCoords: Pitfall 2 — single named converter from 0-based to 1-based.
     std::uint8_t const keyIndex = keyIndexForCoords(ctx.row, ctx.column, keyCols);
 
-    // Hand the QImage to assignKeyImage — the backend + image_pipeline do the
-    // scale + RGBA8 conversion + JPEG q85 encode + BAT->chunks->ULEND burst.
-    // ARCH-04: the bridge NEVER calls encodeForDevice / QImageWriter / QImage::save.
-    try {
-        m_control->assignKeyImage(keyIndex, decoded.image);
-    } catch (std::exception const& e) {
-        // Device yank during paint (T-14b-01 Phase-14 yank guard). Log and skip;
-        // the control service will re-try on the next hot-plug arrival.
-        AJAZZ_LOG_WARN("plugin-bridge",
-                       "onSetImage: assignKeyImage threw for key {}: {}",
-                       static_cast<int>(keyIndex),
-                       e.what());
+    if (target != 2) {
+        // Hand the QImage to assignKeyImage — the backend + image_pipeline do the
+        // scale + RGBA8 conversion + JPEG q85 encode + BAT->chunks->ULEND burst.
+        // ARCH-04: the bridge NEVER calls encodeForDevice / QImageWriter / QImage::save.
+        try {
+            m_control->assignKeyImage(keyIndex, decoded.image);
+        } catch (std::exception const& e) {
+            // Device yank during paint (T-14b-01 Phase-14 yank guard). Log and skip;
+            // the control service will re-try on the next hot-plug arrival.
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "onSetImage: assignKeyImage threw for key {}: {}",
+                           static_cast<int>(keyIndex),
+                           e.what());
+        }
+        // Re-apply a previously-set title over the new base (Elgato layering).
+        reapplyTitle(keyIndex);
     }
-    // Re-apply a previously-set title over the new base (Elgato layering).
-    reapplyTitle(keyIndex);
+    if (target == 1) {
+        return; // hw-only: skip the SPA mirror
+    }
 
     // Mirror the live frame into the OpenDeck web UI (update_state). Emitted
     // after the device paint so the SPA never runs ahead of the hardware.
@@ -1042,12 +1067,33 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
                                     std::uint8_t keyCols) {
     QJsonObject const payload = action.value(QStringLiteral("payload")).toObject();
     QString const title = payload.value(QStringLiteral("title")).toString();
+    // Same Elgato `state`/`target` semantics as onSetImage (audit blocker 3):
+    // a per-state title is stashed and applied only when its state is live;
+    // target 2 skips the hardware composite, target 1 skips the SPA mirror.
+    int const target = payload.value(QStringLiteral("target")).toInt(0);
+    QString const ctxId = ContextRegistry::deriveContextId(ctx);
+    if (payload.contains(QStringLiteral("state"))) {
+        int const forState = payload.value(QStringLiteral("state")).toInt(0);
+        if (title.isEmpty()) {
+            m_stateTitleOverride[ctxId].erase(forState);
+        } else {
+            m_stateTitleOverride[ctxId][forState] = title;
+        }
+        if (forState != ctx.stateIndex) {
+            return; // stashed for a non-live state
+        }
+    } else {
+        m_stateTitleOverride.erase(ctxId);
+    }
 
     // Encoder context: there is no per-key title layer for strip zones — the
     // feedback layout (or the plugin's own strip tile) owns all text. Mirror
     // the title to the SPA slot and stop; the keypad keyIndex/composite math
     // below would target a wrong key.
     if (ctx.controller == QLatin1String("Encoder")) {
+        if (target == 1) {
+            return; // hw-only: the encoder title path is mirror-only
+        }
         // audit 6.3: touch-zone titles (row 1) mirror to the SPA touch slot.
         if (ctx.row == 1) {
             auto const geo = geometryForDevice(ctx.deviceId);
@@ -1077,15 +1123,20 @@ void PluginDeviceBridge::onSetTitle(QString const& /*pluginUuid*/,
         m_titleByKey[keyIndex] = title;
     }
 
-    QImage const base = m_control->baseKeyImage(keyIndex);
-    QImage const composited = compositeTitle(base, title);
-    try {
-        m_control->assignKeyImage(keyIndex, composited, /*updateBase=*/false);
-    } catch (std::exception const& e) {
-        AJAZZ_LOG_WARN("plugin-bridge",
-                       "onSetTitle: assignKeyImage threw for key {}: {}",
-                       static_cast<int>(keyIndex),
-                       e.what());
+    if (target != 2) {
+        QImage const base = m_control->baseKeyImage(keyIndex);
+        QImage const composited = compositeTitle(base, title);
+        try {
+            m_control->assignKeyImage(keyIndex, composited, /*updateBase=*/false);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "onSetTitle: assignKeyImage threw for key {}: {}",
+                           static_cast<int>(keyIndex),
+                           e.what());
+        }
+    }
+    if (target == 1) {
+        return; // hw-only: skip the SPA mirror
     }
 
     // Mirror the title change into the OpenDeck web UI (update_state).
@@ -1308,28 +1359,60 @@ void PluginDeviceBridge::paintDeclaredStateImage(ActionContext const& ctx, std::
     // renderEncoderFeedback() uses.) Other controllers (e.g. bare touch) no-op.
     bool const isKeypad = ctx.controller == QStringLiteral("Keypad");
     bool const isEncoder = ctx.controller == QStringLiteral("Encoder");
-    if (!m_stateImageResolver || m_control == nullptr || (!isKeypad && !isEncoder)) {
+    if (m_control == nullptr || (!isKeypad && !isEncoder)) {
         return;
     }
-    QString const imgPath = m_stateImageResolver(ctx.actionUUID, ctx.stateIndex);
-    if (imgPath.isEmpty()) {
-        AJAZZ_LOG_DEBUG("plugin-bridge",
-                        "paintDeclaredStateImage: no declared image for action '{}' state {}",
-                        ctx.actionUUID.toStdString(),
-                        ctx.stateIndex);
-        return;
+    QString const ctxId = ContextRegistry::deriveContextId(ctx);
+    // A per-state title pushed via setTitle with `state` follows the state:
+    // update the tracked title layer BEFORE the paint so the reapply below
+    // composites the new state's text (audit blocker 3).
+    if (isKeypad) {
+        auto const tOv = m_stateTitleOverride.find(ctxId);
+        if (tOv != m_stateTitleOverride.end()) {
+            std::uint8_t const keyIdx = keyIndexForCoords(ctx.row, ctx.column, keyCols);
+            auto const tIt = tOv->second.find(ctx.stateIndex);
+            if (tIt != tOv->second.end()) {
+                m_titleByKey[keyIdx] = tIt->second;
+            } else {
+                m_titleByKey.erase(keyIdx);
+            }
+        }
     }
-    AJAZZ_LOG_INFO("plugin-bridge",
-                   "paintDeclaredStateImage: painting '{}' for action '{}' state {}",
-                   imgPath.toStdString(),
-                   ctx.actionUUID.toStdString(),
-                   ctx.stateIndex);
-    QImage const stateImg(imgPath);
+    // Image source precedence: a plugin-pushed per-state image (setImage with
+    // `state` — audit blocker 3) outranks the manifest-declared States[].Image.
+    QImage stateImg;
+    if (auto const iOv = m_stateImageOverride.find(ctxId); iOv != m_stateImageOverride.end()) {
+        if (auto const iIt = iOv->second.find(ctx.stateIndex); iIt != iOv->second.end()) {
+            DecodedImage const decoded = decodeDataUriImage(iIt->second);
+            if (decoded.ok) {
+                stateImg = decoded.image;
+            }
+        }
+    }
     if (stateImg.isNull()) {
-        AJAZZ_LOG_WARN("plugin-bridge",
-                       "paintDeclaredStateImage: image failed to load: {}",
-                       imgPath.toStdString());
-        return;
+        if (!m_stateImageResolver) {
+            return;
+        }
+        QString const imgPath = m_stateImageResolver(ctx.actionUUID, ctx.stateIndex);
+        if (imgPath.isEmpty()) {
+            AJAZZ_LOG_DEBUG("plugin-bridge",
+                            "paintDeclaredStateImage: no declared image for action '{}' state {}",
+                            ctx.actionUUID.toStdString(),
+                            ctx.stateIndex);
+            return;
+        }
+        AJAZZ_LOG_INFO("plugin-bridge",
+                       "paintDeclaredStateImage: painting '{}' for action '{}' state {}",
+                       imgPath.toStdString(),
+                       ctx.actionUUID.toStdString(),
+                       ctx.stateIndex);
+        stateImg = QImage(imgPath);
+        if (stateImg.isNull()) {
+            AJAZZ_LOG_WARN("plugin-bridge",
+                           "paintDeclaredStateImage: image failed to load: {}",
+                           imgPath.toStdString());
+            return;
+        }
     }
     if (isEncoder) {
         // ctx.column is the 0-based encoder/strip-zone index; encoders carry no
@@ -2031,6 +2114,8 @@ void PluginDeviceBridge::purgeContextVisualCaches(ActionContext const& ctx, QStr
     // (audit 6.1 -- "CPU 11%" painted over Weather's icon).
     m_encoderFeedback.erase(ctxId);
     m_encoderLayoutOverride.erase(ctxId);
+    m_stateImageOverride.erase(ctxId);
+    m_stateTitleOverride.erase(ctxId);
     if (ctx.controller == QLatin1String("Keypad")) {
         auto const keyCols = geometryForDevice(ctx.deviceId).keyCols;
         m_titleByKey.erase(keyIndexForCoords(ctx.row, ctx.column, keyCols));
