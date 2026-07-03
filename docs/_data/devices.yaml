@@ -285,6 +285,42 @@ devices:
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "White-label demo AKP05E ('Ajazz HOTSPOTEKUSB HID DEMO' dev string; briefly mis-filed as 6-key 'akp03_variant_3004'). Live CRT VER 2026-05-20 returned 'V3.AKP05E.01.007' — AKP05E, protocol_version 3 (1024-byte packets), 10 keys (2x5) + 4 encoders + LCD touch strip. Output FULLY works (2026-05-31): keys + the 4 strip zones render via BAT (wire 6..15 keys, 1..4 strip zones), Rot180; brightness live. Input (key/encoder/touch) UNREACHABLE on this demo SKU -> maturity 'partial'. See docs/protocols/streamdeck/akp05.md. Driven by the out-of-process mirajazz sidecar (the C++ wire backend was removed in experiment/mirajazz Slice D)."
 
+  - codename: akp05e_pro
+    family: streamdeck
+    name: "AJAZZ AKP05E Pro"
+    vid: "0x0300"
+    pid: "0x3013"
+    keys: 10
+    encoders: 4
+    maturity: scaffolded
+    capabilities: [display, encoder, touch, macros]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "Retail Pro variant (user request, issue #85). PID mirrored from upstream opendeck-akp05 mappings.rs; protocol 3, same image formats as the AKP05E. PROVISIONAL until hardware-confirmed — unlike the 0x3004 demo unit, retail Pro units report WORKING INPUT upstream (opendeck-akp05 issue #15). Driven by the mirajazz sidecar."
+
+  - codename: akp05cn_pro
+    family: streamdeck
+    name: "AJAZZ AKP05CN Pro"
+    vid: "0x0300"
+    pid: "0x3014"
+    keys: 10
+    encoders: 4
+    maturity: scaffolded
+    capabilities: [display, encoder, touch, macros]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "Chinese-market Pro variant; PID added upstream in opendeck-akp05 v0.10.2. Same provisional status as akp05e_pro."
+
+  - codename: akp05_retail
+    family: streamdeck
+    name: "AJAZZ AKP05 (retail)"
+    vid: "0x0300"
+    pid: "0x3006"
+    keys: 10
+    encoders: 4
+    maturity: scaffolded
+    capabilities: [display, encoder, touch, macros]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "Retail non-E AKP05; PID mirrored from upstream opendeck-akp05. Same provisional status as akp05e_pro. Supersedes the 0x5001 placeholder as the likely real retail PID."
+
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
     family: keyboard

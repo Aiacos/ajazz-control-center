@@ -52,11 +52,14 @@ struct SidecarContract {
 
 /// Mirror of streamdock-host/src/kind.rs::params_for, restricted to the fields the
 /// app descriptor must agree with. Edit IN LOCKSTEP with kind.rs.
-constexpr std::array<SidecarContract, 16> kSidecarContract = {{
+constexpr std::array<SidecarContract, 19> kSidecarContract = {{
     // --- AKP05 / N4 (pv3): 10 keys + 4 zones + 1 dead = 15 wire slots, 4 encoders.
     {0x0300, 0x3004, 15, 4, 1}, // Ajazz AKP05E (hardware-confirmed)
     {0x0300, 0x5001, 15, 4, 1}, // Ajazz AKP05 (provisional)
     {0x6603, 0x1007, 15, 4, 1}, // Mirabox N4
+    {0x0300, 0x3013, 15, 4, 1}, // Ajazz AKP05E Pro (provisional, issue #85)
+    {0x0300, 0x3014, 15, 4, 1}, // Ajazz AKP05CN Pro (provisional)
+    {0x0300, 0x3006, 15, 4, 1}, // Ajazz AKP05 retail (provisional)
     // --- AKP03 / N3 (pv2): 6 LCD keys + 3 side buttons = 9 wire slots, 3 encoders.
     {0x0300, 0x3001, 9, 3, 3}, // Ajazz AKP03 (legacy)
     {0x0300, 0x3002, 9, 3, 3}, // Ajazz AKP03E

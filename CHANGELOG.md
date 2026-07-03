@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **AKP05 Pro/retail SKUs registered** (2026-07-03, issue #85): `0x0300:0x3013` (AKP05E Pro),
+  `0x3014` (AKP05CN Pro) and `0x3006` (AKP05 retail) are now recognised by the sidecar and the
+  device registry — PIDs and protocol (v3, AKP05E image formats) mirrored from the upstream
+  `opendeck-akp05` mappings. PROVISIONAL until hardware-confirmed; unlike the `0x3004` demo
+  unit (whose firmware ships with input disabled — re-confirmed live 2026-07-03 with a raw
+  hidraw capture: zero bytes while pressing/rotating), retail Pro units report working input
+  upstream.
 - **"System" builtin actions are now bindable from the editor** (2026-07-03, user report: no
   volume control, no way to rotate profiles/pages): Volume (media key up/down/mute), Media
   Control (play-pause/stop/next/previous), Next/Previous Page and Rotate Profiles now appear in

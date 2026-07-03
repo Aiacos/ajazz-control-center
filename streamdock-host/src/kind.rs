@@ -45,6 +45,13 @@ pub fn params_for(vid: u16, pid: u16) -> Option<DeviceParams> {
         // --- AKP05 / N4 (pv3, 10 keys + 4 enc; 15 mirajazz surfaces) ---
         // hardware-confirmed on 0x0300:0x3004.
         (0x0300, 0x3004) => p(Family::Akp05, 3, 15, 4, "Ajazz AKP05E"),
+        // Pro/retail AKP05 variants — PIDs mirrored from the upstream
+        // opendeck-akp05 mappings.rs (all protocol 3, same 112x112/176x112
+        // image formats as the AKP05E). PROVISIONAL: no local hardware yet;
+        // input reportedly works on these retail units (upstream issue #15).
+        (0x0300, 0x3013) => p(Family::Akp05, 3, 15, 4, "Ajazz AKP05E Pro"),
+        (0x0300, 0x3014) => p(Family::Akp05, 3, 15, 4, "Ajazz AKP05CN Pro"),
+        (0x0300, 0x3006) => p(Family::Akp05, 3, 15, 4, "Ajazz AKP05"),
         (0x0300, 0x5001) => p(Family::Akp05, 3, 15, 4, "Ajazz AKP05 (provisional)"),
         (0x6603, 0x1007) => p(Family::Akp05, 3, 15, 4, "Mirabox N4"),
         // --- AKP03 / N3 (pv2, 9 buttons + 3 enc) — PROVISIONAL, no hardware ---
@@ -117,6 +124,10 @@ mod tests {
     #[test]
     fn n4_shares_akp05_family() {
         assert_eq!(params_for(0x6603, 0x1007).unwrap().family, Family::Akp05);
+        // Pro/retail variants ride the same family params (issue #85).
+        assert_eq!(params_for(0x0300, 0x3013).unwrap().family, Family::Akp05);
+        assert_eq!(params_for(0x0300, 0x3014).unwrap().family, Family::Akp05);
+        assert_eq!(params_for(0x0300, 0x3006).unwrap().family, Family::Akp05);
     }
 
     #[test]

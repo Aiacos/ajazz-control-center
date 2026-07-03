@@ -110,6 +110,13 @@ std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors() {
     out.push_back(akp05(0x0300, 0x5001, "AJAZZ AKP05 (provisional)", "akp05"));
     out.push_back(akp05(0x6603, 0x1007, "Mirabox N4 / AJAZZ AKP05 family", "mirabox_n4"));
     out.push_back(akp05(0x0300, 0x3004, "AJAZZ AKP05E (Stream Dock Plus)", "akp05e"));
+    // Pro/retail AKP05 variants (issue #85; PIDs mirrored from the upstream
+    // opendeck-akp05 mappings.rs, all protocol 3 with the AKP05E's image
+    // formats). PROVISIONAL until hardware-confirmed — but unlike the
+    // 0x3004 demo unit, retail units report working INPUT upstream.
+    out.push_back(akp05(0x0300, 0x3013, "AJAZZ AKP05E Pro", "akp05e_pro"));
+    out.push_back(akp05(0x0300, 0x3014, "AJAZZ AKP05CN Pro", "akp05cn_pro"));
+    out.push_back(akp05(0x0300, 0x3006, "AJAZZ AKP05 (retail)", "akp05_retail"));
 
     return out;
 }
