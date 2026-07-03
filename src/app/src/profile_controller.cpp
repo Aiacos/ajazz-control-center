@@ -174,6 +174,12 @@ QVariantList ProfileController::profilesForDevice(QString const& deviceCodename)
         QVariantMap m;
         m.insert(QStringLiteral("id"), meta.id);
         m.insert(QStringLiteral("name"), meta.name);
+        // On-disk path: OpenDeckBridge::get_selected_profile shapes a
+        // NON-active device's profile from disk via this key. It was missing,
+        // so that branch always saw an empty path and returned null — a blank
+        // editor canvas whenever the active profile belonged to another
+        // device (found live 2026-07-03).
+        m.insert(QStringLiteral("path"), meta.path);
         out.append(m);
     }
     return out;
@@ -1572,7 +1578,11 @@ bool ProfileController::updateBindingSettings(QString const& controller,
         (*instanceSlot)->settings = settingsJson.toStdString();
     }
     saveActiveProfile();
-    emit profileChanged();
+    // NOT profileChanged(): a settings-only write must not trigger the SPA
+    // profile reload — that remounted the PI iframe per keystroke (see the
+    // bindingSettingsUpdated signal doc). Device key images are plugin-driven
+    // and unaffected by binding settings, so no repaint is needed either.
+    emit bindingSettingsUpdated();
     return true;
 }
 

@@ -901,6 +901,20 @@ signals:
     void profileChanged();
 
     /**
+     * @signal bindingSettingsUpdated
+     * @brief A binding's plugin settings changed (PI edit round-trip) — the
+     *        profile structure is UNCHANGED.
+     *
+     * Deliberately distinct from profileChanged(): mirroring a per-keystroke
+     * PI settings write as a full profile reload made the SPA remount the
+     * Property Inspector iframe on every character typed, wiping the field
+     * (found live 2026-07-03 on the starterpack Run Command PI). Consumers
+     * that only cache settings may listen here; the SPA bridge must NOT
+     * resend the profile for it.
+     */
+    void bindingSettingsUpdated();
+
+    /**
      * @signal loadFailed
      * @brief A profile load operation failed; UI should toast the message.
      * @param message Human-readable, possibly developer-facing error string.
