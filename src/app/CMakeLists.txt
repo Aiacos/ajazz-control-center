@@ -303,6 +303,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
                        MACOSX_BUNDLE_GUI_IDENTIFIER io.github.Aiacos.AjazzControlCenter
                        MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
                        MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION}
+                       # Custom plist template = stock CMake template +
+                       # CFBundleURLTypes for streamdeck:// (deep links).
+                       MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/resources/macos/Info.plist.in"
         )
     endif()
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")

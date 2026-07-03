@@ -29,6 +29,14 @@
 #include <QTimer>
 #include <QWindow>
 
+#ifdef Q_OS_WIN
+#include <QDir>
+#include <QSettings>
+#endif
+#ifdef Q_OS_MACOS
+#include <QFileOpenEvent>
+#endif
+
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include <QtWebEngineQuick/QtWebEngineQuick>
 #ifdef AJAZZ_HAVE_WEBUI
@@ -54,6 +62,56 @@
 #ifndef AJAZZ_APP_VERSION
 #define AJAZZ_APP_VERSION "0.0.0"
 #endif
+
+namespace {
+
+#ifdef Q_OS_WIN
+/// Register the streamdeck:// URL scheme for the current user (idempotent).
+/// HKCU\Software\Classes needs no elevation and covers both the MSI and the
+/// portable ZIP install (production audit blocker 2, Windows leg). The shell
+/// command re-launches us with the URL as argv[1]; the existing single-instance
+/// hand-off in main() then forwards it to the primary instance.
+void registerStreamdeckSchemeWindows() {
+    QString const exe = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    QSettings cls(QStringLiteral("HKEY_CURRENT_USER\\Software\\Classes\\streamdeck"),
+                  QSettings::NativeFormat);
+    cls.setValue(QStringLiteral("."), QStringLiteral("URL:Stream Deck deep link"));
+    cls.setValue(QStringLiteral("URL Protocol"), QString{});
+    cls.setValue(QStringLiteral("shell/open/command/."),
+                 QStringLiteral("\"%1\" \"%2\"").arg(exe, QStringLiteral("%1")));
+}
+#endif
+
+#ifdef Q_OS_MACOS
+/// macOS delivers URL-scheme activations as QFileOpenEvent to the running
+/// application object (LaunchServices re-activates the bundle instead of
+/// spawning a second process, so the argv path never fires). Route the URL to
+/// Application::handleDeepLink. CFBundleURLTypes lives in resources/macos/
+/// Info.plist.in.
+class DeepLinkOpenFilter final : public QObject {
+public:
+    explicit DeepLinkOpenFilter(ajazz::app::Application& controller, QObject* parent)
+        : QObject(parent), m_controller(controller) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::FileOpen) {
+            auto const* openEvent = static_cast<QFileOpenEvent*>(event);
+            QString const url = openEvent->url().toString();
+            if (url.startsWith(QStringLiteral("streamdeck://"))) {
+                m_controller.handleDeepLink(url);
+                return true;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    ajazz::app::Application& m_controller;
+};
+#endif
+
+} // anonymous namespace
 
 int main(int argc, char* argv[]) {
 #ifndef _WIN32
@@ -102,6 +160,13 @@ int main(int argc, char* argv[]) {
     QApplication::setQuitOnLastWindowClosed(false);
 
     QApplication app(argc, argv);
+#ifdef Q_OS_WIN
+    // streamdeck:// scheme registration (per-user, idempotent) — production
+    // audit blocker 2: Linux registers via the .desktop x-scheme-handler,
+    // Windows needs the HKCU\Software\Classes key written by the app itself so
+    // the ZIP install is covered too.
+    registerStreamdeckSchemeWindows();
+#endif
     // Window icon shown in the taskbar, alt-tab list and X11 _NET_WM_ICON.
     // Window icon resolution mirrors the tray (see tray_controller.cpp): the
     // theme name "ajazz-control-center" tells xdg / Wayland compositors and
@@ -207,6 +272,12 @@ int main(int argc, char* argv[]) {
 
     ajazz::app::Application controller;
     controller.bootstrap();
+#ifdef Q_OS_MACOS
+    // Deep links arrive as QFileOpenEvent on macOS (LaunchServices activates
+    // the running bundle; no second process, no argv). Parent = app: the
+    // filter dies before `controller` (both outlive the event loop).
+    app.installEventFilter(new DeepLinkOpenFilter(controller, &app));
+#endif
 
     QQmlApplicationEngine engine;
     controller.exposeToQml(engine);
