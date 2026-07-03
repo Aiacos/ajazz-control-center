@@ -44,6 +44,7 @@
 #include "ajazz/core/device.hpp"
 #include "ajazz/core/profile.hpp"
 
+#include <QHash>
 #include <QImage>
 #include <QObject>
 #include <QString>
@@ -397,6 +398,16 @@ public:
     Q_INVOKABLE void setBrightness(QString const& codename, int percent);
 
     /**
+     * @brief Last brightness level written for @p codename (0..100).
+     *
+     * Backing state for relative brightness changes (the OpenDeck
+     * `deviceBrightness` "adjust" action needs a current level to add its
+     * delta to). Returns the open()-time default (80) until the first
+     * setBrightness() for that codename succeeds.
+     */
+    [[nodiscard]] Q_INVOKABLE int brightnessLevel(QString const& codename) const;
+
+    /**
      * @brief Clear all keys on the named device (DISPLAY-09).
      *
      * Resolves the device, dynamic_cast<IDisplayCapable*> with null-check,
@@ -507,6 +518,9 @@ private:
     /// Default brightness sent at open (DISPLAY-06 / Assumption A4).
     /// Phase 16 replaces this with a user-persisted slider value.
     static constexpr std::uint8_t kDefaultBrightnessPercent = 80;
+
+    /// Last successfully-written brightness per codename (brightnessLevel()).
+    QHash<QString, int> m_lastBrightness;
 };
 
 // Pitfall 4 build-break lock -- mirrors LightingService.

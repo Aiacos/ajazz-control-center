@@ -288,3 +288,42 @@ TEST_CASE("builtinActionMeta carries the in-tree PI path for the four fallback b
     }
     REQUIRE(builtinActionMeta(QStringLiteral("com.example.notbuiltin")).isEmpty());
 }
+
+TEST_CASE("categoriesJson always advertises the System builtins", "[opendeck][builtin-pi]") {
+    // Executors for volume / media / page-nav / profile-rotate exist since
+    // Phase 21 but were never advertised, making them unbindable from the SPA
+    // (user report 2026-07-03). They must show regardless of starterpack.
+    QVariantMap starterpack;
+    starterpack["actionId"] = QStringLiteral("com.amansprojects.starterpack.runcommand");
+    starterpack["actionName"] = QStringLiteral("Run Command");
+    starterpack["pluginName"] = QStringLiteral("OpenDeck Starter Pack");
+    starterpack["pluginUuid"] = QStringLiteral("com.amansprojects.starterpack");
+    starterpack["controllers"] = QVariantList{QStringLiteral("Keypad")};
+
+    for (QVariantList const& installed : {QVariantList{}, QVariantList{starterpack}}) {
+        QJsonObject const cats = categoriesJson(installed);
+        QJsonArray const sys = cats.value("System").toObject().value("actions").toArray();
+        REQUIRE(sys.size() == 5);
+        QStringList uuids;
+        for (QJsonValue const& v : sys) {
+            uuids << v.toObject().value("uuid").toString();
+        }
+        REQUIRE(uuids.contains("opendeck.volume"));
+        REQUIRE(uuids.contains("opendeck.multimedia"));
+        REQUIRE(uuids.contains("opendeck.pagenext"));
+        REQUIRE(uuids.contains("opendeck.pageprevious"));
+        REQUIRE(uuids.contains("opendeck.profilerotate"));
+    }
+
+    // Configurable ones carry an in-tree PI; the parameterless ones carry none.
+    REQUIRE(builtinActionMeta(QStringLiteral("opendeck.volume"))
+                .value("property_inspector")
+                .toString() == "__builtinpi__/volume.html");
+    REQUIRE(builtinActionMeta(QStringLiteral("opendeck.multimedia"))
+                .value("property_inspector")
+                .toString() == "__builtinpi__/multimedia.html");
+    REQUIRE(builtinActionMeta(QStringLiteral("opendeck.profilerotate"))
+                .value("property_inspector")
+                .toString()
+                .isEmpty());
+}

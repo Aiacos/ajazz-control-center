@@ -625,12 +625,19 @@ void StreamDockControlService::setBrightness(QString const& codename, int percen
     // CR-01 (inherited from Phase 14): setBrightness can throw on device yank.
     try {
         disp->setBrightness(safe);
+        // Remember the level so relative changes (deviceBrightness "adjust")
+        // have a base to add their delta to (brightnessLevel()).
+        m_lastBrightness.insert(codename, static_cast<int>(safe));
     } catch (std::exception const& e) {
         AJAZZ_LOG_WARN("stream-dock-control",
                        "setBrightness: write failed for '{}': {}",
                        codename.toStdString(),
                        e.what());
     }
+}
+
+int StreamDockControlService::brightnessLevel(QString const& codename) const {
+    return m_lastBrightness.value(codename, static_cast<int>(kDefaultBrightnessPercent));
 }
 
 void StreamDockControlService::clearAll(QString const& codename) {

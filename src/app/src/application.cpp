@@ -44,6 +44,8 @@
 #include <QTimer>
 #include <QUrl>
 
+#include <algorithm>
+
 #if defined(AJAZZ_HAVE_WEBENGINE)
 #include "plugin_asset_server.hpp"
 #endif
@@ -615,6 +617,31 @@ Application::Application(QObject* parent)
                            name.toStdString(),
                            device.toStdString());
         });
+        // profile.rotate: cycle to the next profile registered for the active
+        // device (wrap-around; no-op with a single profile). Closes the 21-03
+        // deferral — the executor existed but only logged.
+        m_builtinActions->setProfileRotator([this]() {
+            QString const device =
+                QString::fromStdString(m_profileController->activeProfile().deviceCodename);
+            QVariantList const profiles = m_profileController->profilesForDevice(device);
+            if (profiles.size() < 2) {
+                return; // nothing to rotate to
+            }
+            QString const activeId = m_profileController->activeProfileId();
+            for (qsizetype i = 0; i < profiles.size(); ++i) {
+                if (profiles[i].toMap().value(QStringLiteral("id")).toString() == activeId) {
+                    QString const nextId = profiles[(i + 1) % profiles.size()]
+                                               .toMap()
+                                               .value(QStringLiteral("id"))
+                                               .toString();
+                    m_profileController->loadProfileById(nextId);
+                    return;
+                }
+            }
+            // Active profile not in the device list (fresh install): load the first.
+            m_profileController->loadProfileById(
+                profiles.first().toMap().value(QStringLiteral("id")).toString());
+        });
     }
     QObject::connect(m_profileController.get(),
                      &ProfileController::profileChanged,
@@ -884,6 +911,39 @@ Application::Application(QObject* parent)
                      &PluginDeviceBridge::deviceBrightnessRequested,
                      m_openDeckBridge.get(),
                      &OpenDeckBridge::notifyDeviceBrightness);
+    // 3c-bis. deviceBrightness must ALSO write the hardware here. The SPA
+    //     mirror above lands in SettingsView.svelte, which our embed never
+    //     mounts (only the editor pane is shown), so upstream's "the slider
+    //     round-trips to set_brightness" contract silently never fired — the
+    //     starterpack Device Brightness dial was a no-op on the panel (user
+    //     report 2026-07-03). "set" writes the absolute value; "adjust" adds
+    //     its delta to the last level written for the active device.
+    QObject::connect(m_pluginBridge.get(),
+                     &PluginDeviceBridge::deviceBrightnessRequested,
+                     this,
+                     [this](QString const& brightnessAction, int value) {
+                         if (!m_streamDockControl) {
+                             return;
+                         }
+                         QString const codename = m_streamDockInput
+                                                      ? m_streamDockInput->activeDeviceCodename()
+                                                      : QString{};
+                         if (codename.isEmpty()) {
+                             return;
+                         }
+                         int const level =
+                             brightnessAction == QStringLiteral("adjust")
+                                 ? m_streamDockControl->brightnessLevel(codename) + value
+                                 : value;
+                         int const clamped = std::clamp(level, 0, 100);
+                         AJAZZ_LOG_INFO("plugin",
+                                        "deviceBrightness: {} {} -> {}% on {}",
+                                        brightnessAction.toStdString(),
+                                        value,
+                                        clamped,
+                                        codename.toStdString());
+                         m_streamDockControl->setBrightness(codename, clamped);
+                     });
 
     // 3d. PI settings -> profile binding mirror: a Property Inspector
     //     setSettings persists to the plugin settings store AND into the

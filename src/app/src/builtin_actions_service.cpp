@@ -215,6 +215,10 @@ void BuiltinActionsService::setSynthesizer(std::unique_ptr<core::IInputSynthesiz
     m_synth = std::move(synth);
 }
 
+void BuiltinActionsService::setProfileRotator(ProfileRotateFn rotate) {
+    m_profileRotate = std::move(rotate);
+}
+
 std::string BuiltinActionsService::canonicalBuiltinId(std::string_view id) {
     // The SPA's fallback "OpenDeck" category (opendeck_shaping.cpp) advertises
     // these ids; the registry keys on kBuiltinPrefix, so translate here.
@@ -235,6 +239,24 @@ std::string BuiltinActionsService::canonicalBuiltinId(std::string_view id) {
     }
     if (id == "opendeck.toggleaction") {
         return std::string{core::BuiltinActionRegistry::kToggleActionId};
+    }
+    // "System" category aliases (2026-07-03): executors existed for volume /
+    // media / page-nav / profile-rotate but the SPA never advertised them, so
+    // they were unbindable from the UI.
+    if (id == "opendeck.volume") {
+        return "com.hotspot.streamdock.system.volume";
+    }
+    if (id == "opendeck.multimedia") {
+        return "com.hotspot.streamdock.system.multimedia";
+    }
+    if (id == "opendeck.pagenext") {
+        return "com.hotspot.streamdock.page.next";
+    }
+    if (id == "opendeck.pageprevious") {
+        return "com.hotspot.streamdock.page.previous";
+    }
+    if (id == "opendeck.profilerotate") {
+        return "com.hotspot.streamdock.profile.rotate";
     }
     return std::string{id};
 }
@@ -358,10 +380,14 @@ void BuiltinActionsService::populate() {
     // current injection seam set. Log a documented deferral rather than inventing a new seam.
     // A future phase that exposes a ProfileRotateFn injection seam will implement this fully.
     m_registry.registerAction("com.hotspot.streamdock.profile.rotate",
-                              [](std::string_view /*settings*/) {
+                              [this](std::string_view /*settings*/) {
+                                  if (m_profileRotate) {
+                                      m_profileRotate();
+                                      return;
+                                  }
                                   AJAZZ_LOG_WARN("builtin",
-                                                 "profile.rotate: deferred (no ProfileController "
-                                                 "rotate seam in 21-03; future phase)");
+                                                 "profile.rotate: no rotator wired "
+                                                 "(setProfileRotator not called)");
                               });
 
     // ---- Device controls ----

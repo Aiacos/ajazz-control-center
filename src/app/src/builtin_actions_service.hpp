@@ -96,6 +96,9 @@ public:
     /// Phase-19 fallback: invoked for third-party UUIDs the registry does not handle.
     using PluginFallback = std::function<void(std::string_view id, std::string_view settingsJson)>;
 
+    /// Called for @c profile.rotate: cycle to the next profile of the active device.
+    using ProfileRotateFn = std::function<void()>;
+
     /**
      * @brief Construct the service with all injection seams.
      *
@@ -125,6 +128,15 @@ public:
      * @param synth  Unique ownership transferred to the service.
      */
     void setSynthesizer(std::unique_ptr<core::IInputSynthesizer> synth);
+
+    /**
+     * @brief Wire the profile.rotate executor (same late-injection pattern as
+     *        setSynthesizer). Until called, profile.rotate logs a deferral.
+     *
+     * Application wires this to a ProfileController lambda that loads the next
+     * profile registered for the active device (wrap-around).
+     */
+    void setProfileRotator(ProfileRotateFn rotate);
 
     /**
      * @brief Plugin-executor entry: short-circuits built-in UUIDs, forwards the rest.
@@ -213,6 +225,7 @@ private:
     // ---- Dependency-injected sinks ----
     BrightnessSink m_brightness;
     NavigateSink m_navigate;
+    ProfileRotateFn m_profileRotate; ///< profile.rotate executor (setProfileRotator).
     OpenUrlFn m_openUrl;
     core::ActionEngine* m_engine{nullptr};
     PluginFallback m_fallback;

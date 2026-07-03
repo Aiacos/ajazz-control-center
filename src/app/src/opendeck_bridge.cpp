@@ -1278,7 +1278,10 @@ void OpenDeckBridge::markOrphanedInstances(QJsonObject& profile) const {
             } else if (applyBuiltinActionMeta(action, uuid)) {
                 // Fallback builtin: attach its in-tree PI + icon (same reason).
                 slot[QStringLiteral("action")] = action;
-            } else if (!uuid.isEmpty() && !known.contains(uuid)) {
+            } else if (!uuid.isEmpty() && !known.contains(uuid) &&
+                       !uuid.startsWith(QLatin1String("com.hotspot.streamdock."))) {
+                // com.hotspot.streamdock.* are the in-process builtins — always
+                // executable, never "not installed" (registry-backed).
                 QString const name = action.value(QStringLiteral("name")).toString();
                 action[QStringLiteral("name")] =
                     QStringLiteral("%1 (plugin not installed)").arg(name.isEmpty() ? uuid : name);

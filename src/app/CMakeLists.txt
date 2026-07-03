@@ -825,6 +825,22 @@ if(AJAZZ_BUILD_WEBUI)
                     ${_builtin_icon_files}
                 )
                 message(STATUS "AJAZZ_BUILD_WEBUI: bundled built-in action icons into :/opendeck")
+                # In-tree icons for the "System" builtin category (volume / media / page-nav /
+                # profile-rotate) — these have no starterpack counterpart, so the PNGs live in
+                # resources/builtin-icons.
+                file(GLOB _system_icon_files
+                     "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin-icons/*.png"
+                )
+                qt_add_resources(
+                    ajazz-control-center
+                    "opendeck_system_icons"
+                    PREFIX
+                    "/opendeck"
+                    BASE
+                    "${CMAKE_CURRENT_SOURCE_DIR}/resources/builtin-icons"
+                    FILES
+                    ${_system_icon_files}
+                )
             else()
                 message(WARNING "AJAZZ_BUILD_WEBUI: starterpack action icons missing under "
                                 "${_starterpack_icons}; built-in actions fall back to cube.png. "

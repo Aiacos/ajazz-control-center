@@ -15,6 +15,7 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QStringList>
@@ -287,6 +288,33 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
         categories[QStringLiteral("OpenDeck")] = QJsonObject{{QStringLiteral("actions"), builtins}};
     }
 
+    // "System" builtins (2026-07-03): volume / media keys / page navigation /
+    // profile rotation. Their executors have existed since Phase 21
+    // (BuiltinActionsService) but nothing ever advertised them to the SPA, so
+    // they were unbindable from the UI (user report: no volume control, no way
+    // to rotate profiles/pages). Always shown — starterpack has no equivalents.
+    QJsonArray systemActions;
+    for (QString const& uuid : {QStringLiteral("opendeck.volume"),
+                                QStringLiteral("opendeck.multimedia"),
+                                QStringLiteral("opendeck.pagenext"),
+                                QStringLiteral("opendeck.pageprevious"),
+                                QStringLiteral("opendeck.profilerotate")}) {
+        QJsonObject const meta = builtinActionMeta(uuid);
+        QStringList controllers;
+        for (QJsonValue const& c : meta.value(QStringLiteral("controllers")).toArray()) {
+            controllers << c.toString();
+        }
+        systemActions.append(
+            makeActionJson(meta.value(QStringLiteral("name")).toString(),
+                           uuid,
+                           QStringLiteral("opendeck"),
+                           meta.value(QStringLiteral("tooltip")).toString(),
+                           meta.value(QStringLiteral("icon")).toString(),
+                           meta.value(QStringLiteral("property_inspector")).toString(),
+                           controllers));
+    }
+    categories[QStringLiteral("System")] = QJsonObject{{QStringLiteral("actions"), systemActions}};
+
     for (QVariant const& v : installedActions) {
         QVariantMap const entry = v.toMap();
         QString group = entry.value(QStringLiteral("pluginName")).toString();
@@ -302,6 +330,30 @@ QJsonObject categoriesJson(QVariantList const& installedActions) {
 }
 
 QJsonObject builtinActionMeta(QString const& uuid) {
+    // Accept the CANONICAL builtin ids too (profiles store
+    // com.hotspot.streamdock.* — e.g. a Volume dial bound before the alias
+    // existed, or imported vendor profiles). Without this the editor marked
+    // such bindings "(plugin not installed)" (found live 2026-07-03).
+    static QHash<QString, QString> const canonicalToAlias{
+        {QStringLiteral("com.hotspot.streamdock.runcommand"),
+         QStringLiteral("opendeck.runcommand")},
+        {QStringLiteral("com.hotspot.streamdock.browser"), QStringLiteral("opendeck.openurl")},
+        {QStringLiteral("com.hotspot.streamdock.profile.switch"),
+         QStringLiteral("opendeck.switchprofile")},
+        {QStringLiteral("com.hotspot.streamdock.device.brightness"),
+         QStringLiteral("opendeck.brightness")},
+        {QStringLiteral("com.hotspot.streamdock.system.volume"), QStringLiteral("opendeck.volume")},
+        {QStringLiteral("com.hotspot.streamdock.system.multimedia"),
+         QStringLiteral("opendeck.multimedia")},
+        {QStringLiteral("com.hotspot.streamdock.page.next"), QStringLiteral("opendeck.pagenext")},
+        {QStringLiteral("com.hotspot.streamdock.page.previous"),
+         QStringLiteral("opendeck.pageprevious")},
+        {QStringLiteral("com.hotspot.streamdock.profile.rotate"),
+         QStringLiteral("opendeck.profilerotate")},
+    };
+    if (auto const it = canonicalToAlias.constFind(uuid); it != canonicalToAlias.constEnd()) {
+        return builtinActionMeta(it.value());
+    }
     // Icon strings use the `opendeck/<path>` form (resolved by
     // OpenDeckSchemeHandler against :/opendeck); property_inspector paths use
     // the `__builtinpi__/<file>` namespace served by PluginAssetServer from
@@ -340,6 +392,45 @@ QJsonObject builtinActionMeta(QString const& uuid) {
                     QStringLiteral("Set the device brightness"),
                     QStringLiteral("deviceBrightness.png"),
                     QStringLiteral("brightness.html"));
+    }
+    // "System" category (2026-07-03). Actions without settings carry an empty
+    // property_inspector so the SPA shows no inspector pane for them.
+    auto const metaNoPi = [](QString const& name, QString const& tooltip, QString const& icon) {
+        return QJsonObject{
+            {QStringLiteral("name"), name},
+            {QStringLiteral("tooltip"), tooltip},
+            {QStringLiteral("icon"), QStringLiteral("opendeck/") + icon},
+            {QStringLiteral("property_inspector"), QString{}},
+            {QStringLiteral("controllers"),
+             QJsonArray{QStringLiteral("Keypad"), QStringLiteral("Encoder")}},
+        };
+    };
+    if (uuid == QLatin1String("opendeck.volume")) {
+        return meta(QStringLiteral("Volume"),
+                    QStringLiteral("Volume up / down / mute (media key)"),
+                    QStringLiteral("volume.png"),
+                    QStringLiteral("volume.html"));
+    }
+    if (uuid == QLatin1String("opendeck.multimedia")) {
+        return meta(QStringLiteral("Media Control"),
+                    QStringLiteral("Play/Pause, Stop, Next or Previous track"),
+                    QStringLiteral("multimedia.png"),
+                    QStringLiteral("multimedia.html"));
+    }
+    if (uuid == QLatin1String("opendeck.pagenext")) {
+        return metaNoPi(QStringLiteral("Next Page"),
+                        QStringLiteral("Go to the next profile page"),
+                        QStringLiteral("pageNext.png"));
+    }
+    if (uuid == QLatin1String("opendeck.pageprevious")) {
+        return metaNoPi(QStringLiteral("Previous Page"),
+                        QStringLiteral("Go to the previous profile page"),
+                        QStringLiteral("pagePrevious.png"));
+    }
+    if (uuid == QLatin1String("opendeck.profilerotate")) {
+        return metaNoPi(QStringLiteral("Rotate Profiles"),
+                        QStringLiteral("Cycle to the next profile for this device"),
+                        QStringLiteral("profileRotate.png"));
     }
     return {};
 }
