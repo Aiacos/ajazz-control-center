@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 project(
     ajazz-control-center
-    VERSION 0.1.1
+    VERSION 2.0.0
     DESCRIPTION "Cross-platform control center for AJAZZ devices"
     HOMEPAGE_URL "https://github.com/Aiacos/ajazz-control-center"
     LANGUAGES CXX C
@@ -197,6 +197,13 @@ else()
     )
     set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
     set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
+    # Link hidapi statically. Upstream defaults BUILD_SHARED_LIBS to ON, which made the app depend
+    # on a hidapi.dll / libhidapi-hidraw.so that the Windows MSI/ZIP never shipped (issue #88:
+    # "hidapi.dll missing" on first launch). Our own libraries are static already (BUILD_SHARED_LIBS
+    # was previously unset = OFF), so forcing the cache value only affects the vendored hidapi. Must
+    # be CACHE FORCE: hidapi's policy floor keeps CMP0077 at OLD, so a plain normal-variable set()
+    # would be clobbered by its option() call.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     # hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under
     # libusb/. CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x
     # emits `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored
@@ -470,6 +477,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(_ajazz_wix_license "${CMAKE_BINARY_DIR}/LICENSE.txt")
     configure_file("${CMAKE_SOURCE_DIR}/LICENSE" "${_ajazz_wix_license}" COPYONLY)
     set(CPACK_RESOURCE_FILE_LICENSE "${_ajazz_wix_license}")
+    # Start Menu shortcut (issue #88: the MSI installed no launcher at all). CPack's WiX generator
+    # only emits shortcuts for entries listed in CPACK_PACKAGE_EXECUTABLES.
+    set(CPACK_PACKAGE_EXECUTABLES "ajazz-control-center" "AJAZZ Control Center")
+    set(CPACK_WIX_PROGRAM_MENU_FOLDER "AJAZZ Control Center")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CPACK_GENERATOR "DragNDrop;TGZ")
     set(CPACK_DMG_VOLUME_NAME "AJAZZ Control Center")

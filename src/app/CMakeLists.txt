@@ -852,6 +852,7 @@ target_compile_definitions(
     PRIVATE AJAZZ_PRODUCT_NAME="${AJAZZ_PRODUCT_NAME}"
             AJAZZ_VENDOR_NAME="${AJAZZ_VENDOR_NAME}"
             AJAZZ_APP_ID="${AJAZZ_APP_ID}"
+            AJAZZ_APP_VERSION="${PROJECT_VERSION}"
             AJAZZ_APP_ICON_QRC="${_ajazz_qrc_root}/branding/app.svg"
             AJAZZ_TRAY_ICON_QRC="${_ajazz_qrc_root}/branding/tray.svg"
             AJAZZ_THEME_QRC=":/qt/qml/AjazzControlCenter/branding/theme.json"

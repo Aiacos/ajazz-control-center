@@ -51,6 +51,9 @@
 #ifndef AJAZZ_APP_ID
 #define AJAZZ_APP_ID "io.github.Aiacos.AjazzControlCenter"
 #endif
+#ifndef AJAZZ_APP_VERSION
+#define AJAZZ_APP_VERSION "0.0.0"
+#endif
 
 int main(int argc, char* argv[]) {
 #ifndef _WIN32
@@ -83,7 +86,9 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationDomain("github.com/Aiacos/ajazz-control-center");
     QApplication::setApplicationName(AJAZZ_PRODUCT_NAME);
     QApplication::setApplicationDisplayName(AJAZZ_PRODUCT_NAME);
-    QApplication::setApplicationVersion("0.1.0");
+    // Single-source of truth: CMake's project(VERSION) via AJAZZ_APP_VERSION. A hardcoded
+    // literal here shipped "0.1.0" in every release regardless of the actual tag (issue #88).
+    QApplication::setApplicationVersion(QStringLiteral(AJAZZ_APP_VERSION));
     // setDesktopFileName must match the actual basename of the installed
     // .desktop file, *not* the reverse-DNS app id. Linux distros install us
     // as `share/applications/ajazz-control-center.desktop` (see
