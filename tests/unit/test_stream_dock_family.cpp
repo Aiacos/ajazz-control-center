@@ -215,7 +215,8 @@ TEST_CASE("StreamDockFamily: AKP815 key press fires chain; encoderCount=0 path i
     auto engine = std::make_unique<ActionEngine>(std::move(spies));
 
     Profile prof;
-    prof.keys[10].onPress = {Action{.kind = ActionKind::KeyPress}};
+    // Wire key 10 (1-based, device.hpp contract) = profile key 9 (0-based map).
+    prof.keys[9].onPress = {Action{.kind = ActionKind::KeyPress}};
 
     StreamDockInputService svc(
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);

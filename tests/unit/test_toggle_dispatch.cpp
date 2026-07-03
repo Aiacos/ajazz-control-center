@@ -249,11 +249,11 @@ TEST_CASE("BIND-07: a key bound to a Toggle cycles + renders + emits willAppear 
     svc.setActiveDevice(fake);
 
     // Press 1: 0 -> 1
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 3, 1));
     // Press 2: 1 -> 2
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 3, 1));
     // Press 3: 2 -> 0 (wrap)
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 3, 1));
 
     REQUIRE(cycleCalls == 3);
     REQUIRE(renders.size() == 3);
@@ -342,7 +342,7 @@ TEST_CASE("BIND-07: a Multi Action key does NOT trigger the toggle seam (no regr
         [&](QString const&, int, core::ActionInstance const&) { ++renderCalls; });
     svc.setActiveDevice(fake);
 
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 0, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
 
     REQUIRE(cycleCalls == 0);
     REQUIRE(renderCalls == 0);

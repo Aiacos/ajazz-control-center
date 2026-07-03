@@ -251,14 +251,27 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
     switch (ev.kind) {
 
     // ---- Key events (INPUT-03) -------------------------------------------
+    // ev.index is the 1-BASED key number (device.hpp DeviceEvent contract;
+    // wire 1..10 per akp05_input_corrections.md §2 — the sidecar and the
+    // AKP815 backend both pass the wire byte through verbatim). The profile
+    // key map is 0-BASED (SPA drops land at row*cols+col). Convert here,
+    // once: looking the map up with the raw 1-based value ran the NEXT key's
+    // chain on real hardware — every builtin / Toggle / Multi Action bound
+    // to a physical key was off by one (found live 2026-07-03; plugin
+    // actions were unaffected because the bridge does its own 1-based ->
+    // {row,col} conversion in coordsForKeyIndex).
     case core::DeviceEvent::Kind::KeyPressed:
-        if (auto it = prof.keys.find(ev.index); it != prof.keys.end()) {
+        if (ev.index == 0) {
+            break; // defensive: 0 is not a valid 1-based key number
+        }
+        if (auto it = prof.keys.find(static_cast<std::uint16_t>(ev.index - 1));
+            it != prof.keys.end()) {
             if (isToggleAction(it->second.instance)) {
                 // BIND-05/07: a Toggle Action cycles currentState + renders the
                 // new state + emits a state-change willAppear (it does NOT run an
                 // action chain). Resolved here where the binding identity + index
                 // are in scope (the BuiltinHandler cannot see them -- Finding 3).
-                dispatchToggle(QStringLiteral("Keypad"), ev.index);
+                dispatchToggle(QStringLiteral("Keypad"), static_cast<std::uint16_t>(ev.index - 1));
             } else {
                 // BIND-04/05: a Multi Action instance runs its children sequentially
                 // via the shared engine; otherwise the legacy onPress chain fires.
@@ -268,7 +281,11 @@ void StreamDockInputService::dispatch(core::DeviceEvent const& ev) {
         break;
 
     case core::DeviceEvent::Kind::KeyReleased:
-        if (auto it = prof.keys.find(ev.index); it != prof.keys.end()) {
+        if (ev.index == 0) {
+            break; // defensive: 0 is not a valid 1-based key number
+        }
+        if (auto it = prof.keys.find(static_cast<std::uint16_t>(ev.index - 1));
+            it != prof.keys.end()) {
             m_engine->run(it->second.onRelease);
         }
         break;

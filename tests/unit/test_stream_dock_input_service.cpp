@@ -104,12 +104,12 @@ TEST_CASE("INPUT-03: key press fires onPress chain via ActionEngine", "[stream-d
     svc.setActiveDevice(fake);
 
     SECTION("press fires onPress (keyPress), not onRelease") {
-        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 3, 1));
+        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 4, 1));
         REQUIRE(keyPressCount == 1);
         REQUIRE(runCommandCount == 0);
     }
     SECTION("release fires onRelease (runCommand), not onPress") {
-        fake->injectEvent(ev(DeviceEvent::Kind::KeyReleased, 3, 0));
+        fake->injectEvent(ev(DeviceEvent::Kind::KeyReleased, 4, 0));
         REQUIRE(runCommandCount == 1);
         REQUIRE(keyPressCount == 0);
     }
@@ -318,7 +318,7 @@ TEST_CASE("Sleep non-block: chain with leading Sleep defers KeyPress via QtExecu
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(fake);
 
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
 
     // The leading Sleep defers the KeyPress via QtExecutor -- it has not fired yet.
     REQUIRE(keyPressCount.load() == 0);
@@ -369,18 +369,18 @@ TEST_CASE("IN-01: setActiveDevice(nullptr) stops dispatch; the input service doe
 
     SECTION("injected event dispatches while device is active") {
         svc.setActiveDevice(fake);
-        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
+        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
         REQUIRE(keyPressCount == 1);
     }
 
     SECTION("after setActiveDevice(nullptr) the callback is cleared and nothing dispatches") {
         svc.setActiveDevice(fake);
-        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
+        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
         REQUIRE(keyPressCount == 1);
 
         svc.setActiveDevice(nullptr); // device removal
 
-        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
+        fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
         REQUIRE(keyPressCount == 1); // still 1 — callback was deregistered
     }
 
@@ -441,7 +441,7 @@ TEST_CASE("BIND-04: key bound to a Multi Action runs its children in order",
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(fake);
 
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 2, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 3, 1));
 
     REQUIRE(fired.size() == 3);
     REQUIRE(fired[0] == "A");
@@ -470,7 +470,7 @@ TEST_CASE("BIND-05: Multi Action child delayMs is honored (deferred, not dropped
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(fake);
 
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 4, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 5, 1));
 
     REQUIRE(fired.size() == 2);
     REQUIRE(fired[0] == "first");
@@ -526,8 +526,37 @@ TEST_CASE("BIND-04: a key with NO instance still runs its legacy onPress chain",
         [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
     svc.setActiveDevice(fake);
 
-    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 5, 1));
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 6, 1));
 
     REQUIRE(keyPressCount == 1); // legacy onPress fired
     REQUIRE(pluginCount == 0);   // no Multi Action children
+}
+
+TEST_CASE("StreamDockInputService: key events use the 1-based wire index", "[stream-dock-input]") {
+    // device.hpp contract: KeyPressed/KeyReleased carry the 1-BASED key
+    // number (wire 1..10, akp05_input_corrections.md 2); the profile map is
+    // 0-based. dispatch() must convert -- looking up with the raw value ran
+    // the NEXT key's chain on real hardware (found live 2026-07-03).
+    ajazz::tests::qtApp();
+    auto fake = makeFake();
+
+    int fired = 0;
+    ActionExecutors spies;
+    spies.keyPress = [&](std::string_view) { ++fired; };
+    auto engine = std::make_unique<ActionEngine>(std::move(spies));
+
+    Profile prof;
+    prof.keys[0].onPress = {Action{.kind = ActionKind::KeyPress}}; // first key (A1)
+
+    StreamDockInputService svc(
+        [&]() -> Profile const& { return prof; }, std::move(engine), nullptr);
+    svc.setActiveDevice(fake);
+
+    // wire key 1 -> profile key 0
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 1, 1));
+    REQUIRE(fired == 1);
+
+    // 0 is invalid on a 1-based wire: must be ignored, not treated as key 0
+    fake->injectEvent(ev(DeviceEvent::Kind::KeyPressed, 0, 1));
+    REQUIRE(fired == 1);
 }

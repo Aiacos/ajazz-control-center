@@ -57,6 +57,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Physical key presses ran the NEIGHBOURING key's builtin/Toggle/Multi-Action chain**
+  (2026-07-03, found while cross-checking the vendor RE input conventions): the wire key index
+  is 1-based (`device.hpp` contract, `akp05_input_corrections.md` §2 — confirmed against the
+  official StreamDock app's `report[9]` handling) but the profile binding map is 0-based, and
+  `StreamDockInputService::dispatch()` looked bindings up with the raw wire value. Plugin
+  actions were unaffected (the bridge converts correctly), which is why this survived every
+  plugin-focused live pass. Fixed with a single conversion at dispatch; unit tests that had
+  codified the off-by-one (0-based injections) were realigned to the wire convention and a
+  regression test pins it. Live-verified: wire key 7 fires the key-B2 binding, wire 6 fires B1.
 - **Editor canvas could go permanently blank** (2026-07-03, found live): when the active profile
   belonged to a different device, the SPA's `get_selected_profile` non-active-device branch
   always returned null because `ProfileController::profilesForDevice` entries carried no on-disk
