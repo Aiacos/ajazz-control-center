@@ -32,6 +32,9 @@ ItemDelegate {
     property string modelName: ""
     property string deviceCodename: ""
     property bool deviceConnected: false
+    // Stable handle for the out-of-process debug control channel
+    // (qml.click on "deviceRow_<codename>"). Empty until the codename binds.
+    objectName: deviceCodename !== "" ? "deviceRow_" + deviceCodename : ""
     // Core DeviceFamily int (0=Unknown, 1=StreamDeck, 2=Keyboard, 3=Mouse — see
     // src/core/include/ajazz/core/device.hpp). Drives the per-family leading icon.
     // Named `deviceFamily` (NOT `family`) to dodge the QML self-binding trap: if it

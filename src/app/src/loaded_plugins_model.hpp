@@ -42,6 +42,8 @@ class QQmlEngine;
 
 namespace ajazz::app {
 
+class IPluginHost2;
+
 /**
  * @class LoadedPluginsModel
  * @brief Read-only list of currently-loaded plugins for QML.
@@ -89,6 +91,7 @@ public:
         SignedRole,                ///< Bool — manifest signature verified.
         PublisherRole,             ///< Trust roots match name, "self-signed", or empty.
         TrustLevelRole,            ///< Derived enum string (see class doc).
+        PlatformStatusRole, ///< Derived WINPLG classification string (see @ref platformStatusOf).
     };
 
     // No default on `parent`: see BrandingService — a default-constructible
@@ -131,11 +134,26 @@ public:
     void setPluginHost(plugins::IPluginHost* host) noexcept;
 
     /**
+     * @brief Wire the unified (app-layer) plugin host for reloads.
+     *
+     * Preferred over @ref setPluginHost: an @ref IPluginHost2 returns the
+     * MERGED .sdPlugin + Python inventory (the only inventory that carries a
+     * real @c winClass for the WINPLG chip), whereas the STL @ref
+     * ajazz::plugins::IPluginHost only sees the Python plugins. When a host2
+     * is wired, @ref refresh re-pulls through it; the legacy @c m_host is used
+     * only as a fallback when no host2 is set (e.g. a non-WebSockets build).
+     * The pointer is non-owning — Application keeps the host alive for the
+     * application's lifetime. Pass @c nullptr to detach.
+     */
+    void setPluginHost2(IPluginHost2* host) noexcept;
+
+    /**
      * @brief Re-pull the plugin inventory from the wired host.
      *
-     * No-op when no host is wired. On IPC failure (host died, child
-     * crashed) the call leaves the model untouched and logs a
-     * warning — the existing rows stay visible so the UI never
+     * No-op when no host is wired. Prefers the unified @ref IPluginHost2
+     * (merged inventory) when set, else falls back to the STL host. On IPC
+     * failure (host died, child crashed) the call leaves the model untouched
+     * and logs a warning — the existing rows stay visible so the UI never
      * "disappears" on a transient error.
      */
     Q_INVOKABLE void refresh();
@@ -151,6 +169,21 @@ private:
     /// it without constructing a model instance.
     [[nodiscard]] static QString trustLevelOf(plugins::PluginInfo const& info);
 
+    /// Mirror @ref ajazz::plugins::PluginInfo::winClass (0/1/2, stamped at
+    /// scan time by WINPLG-01/02) into the chip's classification string:
+    ///   - @c "native"      — WsOnlyIpc (1): runs without Wine on any OS.
+    ///   - @c "wine"        — VendorDll (2) when a Wine launcher is available
+    ///                        (DEFERRED — the @c wineAvailable input is
+    ///                        hard-false this phase; the branch is retained so
+    ///                        a future WINPLG-03 launch phase flips one input,
+    ///                        not the derive shape).
+    ///   - @c "unsupported" — VendorDll (2) with no Wine (the case this phase).
+    ///   - @c ""            — NotWindowsOnly (0): no Windows chip (hidden).
+    /// Static + private (same rationale as @ref trustLevelOf): the rule is
+    /// fixed by the @ref PluginInfo contract and the QML side only sees the
+    /// resulting string.
+    [[nodiscard]] static QString platformStatusOf(plugins::PluginInfo const& info);
+
     std::vector<plugins::PluginInfo> m_plugins;
     /// Non-owning pointer to the plugin host. The host is owned by
     /// @c Application and outlives the model. Null until
@@ -158,6 +191,11 @@ private:
     /// @c AJAZZ_PYTHON_HOST the model stays detached and
     /// @ref refresh is a no-op).
     plugins::IPluginHost* m_host{nullptr};
+    /// Non-owning pointer to the unified (app-layer) plugin host. When set,
+    /// @ref refresh prefers this over @ref m_host because @ref IPluginHost2
+    /// returns the merged .sdPlugin + Python inventory (the one carrying a
+    /// real @c winClass for the WINPLG chip). Owned by @c Application.
+    IPluginHost2* m_host2{nullptr};
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.

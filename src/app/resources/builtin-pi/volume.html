@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Volume" action (opendeck.volume ->
+     com.hotspot.streamdock.system.volume). Settings contract:
+     {"key": "VolumeUp" | "VolumeDown" | "Mute"} — sent as a media key. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="key">Action</label>
+    <select id="key">
+        <option value="VolumeUp">Volume up</option>
+        <option value="VolumeDown">Volume down</option>
+        <option value="Mute">Mute / unmute</option>
+    </select>
+    <div class="hint">Sent as a system media key on press (or dial press).</div>
+    <script>
+        "use strict";
+        const keyEl = document.getElementById("key");
+        function applySettings(s) {
+            if (typeof s.key === "string" && s.key !== "") {
+                keyEl.value = s.key;
+            }
+        }
+        keyEl.addEventListener("change", () => save({ key: keyEl.value }));
+    </script>
+</body>
+</html>

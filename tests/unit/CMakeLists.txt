@@ -1,10 +1,22 @@
 add_executable(
     ajazz_unit_tests
+    # OpenDeck UI integration: pure our-types -> OpenDeck-JSON shaping
+    # (opendeck_shaping.cpp links against only Qt JSON + header-only core types,
+    # so the bridge contract is tested without the heavy backend QObjects).
+    test_opendeck_bridge.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_shaping.cpp
     test_logger.cpp
+    # Debug epic Phase 1: tee / ring-buffer / file LogSink building blocks.
+    test_log_sinks.cpp
+    # Debug epic Phase 1: pure Qt->core log mapping + level parsing (the
+    # install()/Qt-handler side effects are not exercised here).
+    test_debug_logging.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/debug_logging.cpp
+    # Debug epic Phase 2: JSON-RPC framing + dispatch of the control channel
+    # (processRequestLine; the QLocalServer transport is runtime glue).
+    test_debug_control_server.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/debug_control_server.cpp
     test_device_registry.cpp
-    test_akp153_protocol.cpp
-    test_akp03_protocol.cpp
-    test_akp05_protocol.cpp
     # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline. Locks JPEG/PNG magic bytes,
     # rotation/mirror transforms (AKP153 Rot90+mirror, AKP815 Rot180), and validation
     # contracts (zero-area, dim mismatch).
@@ -65,21 +77,98 @@ add_executable(
     # switch at 60, 5 named flag bits across bytes 12..13) plus clamping
     # + cache normalisation contract.
     test_aj_series_omnibus_settings.cpp
-    # 2026-05-18 capability-mixin pair: AJ-series IFactoryResettable
-    # (opcode 0x02 / FEA_CMD_SET_RESERT per aj_series_opcode_table.md sec
-    # 3.2 - no-payload BIT7-checksummed packet) and AKP05 IBootLogoCapable
-    # (CRT LOG opcode per akp05_vendor.md sec 2 row 188 - BE16 size header
-    # plus 512-byte JPEG chunks plus ULEND commit sentinel). Both pin the
-    # exact wire-byte layout end-to-end via MockTransport.
-    test_factory_reset_and_logo.cpp
-    # 2026-05-18 ITouchStripDisplayCapable: byte-level tests for the public
-    # AKP05 touch-strip capability mixin over the existing "DRA" rect-
-    # addressable strip-update path (akp05_vendor.md sec 3 row 190). Pins
-    # touchStripInfo() (800x480, 4 zones), setTouchStripImage() envelope
-    # (DRA header + BE32 size + location + BE16 width/height/x/y + chunks +
-    # ULEND), out-of-range location refusal (zero writes), and
-    # clearTouchStrip() full-panel black-fill envelope.
-    test_akp05_touch_strip.cpp
+    # 2026-05-18: AJ-series IFactoryResettable (opcode 0x02 / FEA_CMD_SET_RESERT
+    # per aj_series_opcode_table.md sec 3.2 - no-payload BIT7-checksummed packet),
+    # pinned end-to-end via MockTransport. (The former AKP05 IBootLogoCapable half
+    # was removed with the C++ AKP05 wire backend in experiment/mirajazz Slice D.)
+    test_factory_reset.cpp
+    # DEVICES-11 / ARCH-05 (Phase 14, Plan 14-01): descriptor honesty pin for
+    # akp05e (0x0300:0x3004). Asserts hasClock==false on the akp05e descriptor
+    # after ajazz::streamdeck::registerAll() so the phantom Sync-button
+    # affordance cannot silently regress. Also guards against an over-broad
+    # flip by asserting mirabox_n4 still has hasClock==true.
+    test_register_akp05e_clock.cpp
+    # Phase 26 Plan 26-02 (REQ-26-D): geometry-field regression test. Iterates
+    # the StreamDeck registry after registerAll() and asserts that every non-deferred
+    # LCD-key descriptor has keyRows > 0. AKP815 is in the kDeferredLcdSkus allow-list
+    # (D-13 sentinel; 800x480 wide strip deferred). Also asserts the aux-surface
+    # invariant: any descriptor with hasTouchStrip or encoderCount > 0 must declare
+    # touchZoneCount > 0 OR (mainScreenWidthPx > 0 AND mainScreenHeightPx > 0).
+    test_streamdeck_register_geometry.cpp
+    # Phase 4 (opendeck-ui) app<->sidecar geometry cross-check: asserts every
+    # DeviceDescriptor from streamDockSidecarDescriptors() agrees with the mirajazz
+    # sidecar wire model (streamdock-host/src/kind.rs) -- encoderCount matches exactly
+    # and wire-slot count == keyCount + touchZoneCount + per-family non-render slots.
+    # Closes the device.hpp "DRIFT WARNING" gap across the app/sidecar boundary.
+    test_streamdeck_sidecar_geometry_contract.cpp
+    # Phase 14 Plan 14-02 (DISPLAY-06/07/08, DOCK-01/02): MockTransport-based
+    # wire assertions for StreamDockControlService. Proves the panel lights at
+    # open (LIG, DISPLAY-06), key images arrive via BAT->chunks->ULEND without
+    # explicit flush (DISPLAY-07, DOCK-02), profileChanged repaints all bound
+    # keys (DISPLAY-08), firmwareVersionFor returns the seeded VER string (DOCK-01),
+    # and the transport is opened only once across multiple assigns (Pitfall 2).
+    # experiment/mirajazz Slice 3a: pure encode/decode for the streamdock-host
+    # sidecar wire protocol — no process spawned, encode/decode functions only.
+    test_sidecar_protocol.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_protocol.cpp
+    # WR-05 / keep-alive: first dedicated unit test for the app-side sidecar proxy
+    # SidecarStreamDockDevice (previously only compiled by the QML smoke target). Process-free
+    # surface: construction, capability interfaces, descriptor-driven geometry, crash-safe
+    # closed-state output incl. the formerly-no-op keepAlive().
+    test_sidecar_stream_dock_device.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/sidecar_stream_dock_device.cpp
+    # experiment/mirajazz Slice B: in-process FakeStreamDockDevice fixture
+    # (header-only) self-test — backs the app-behavior assertions once the C++
+    # AKP05 wire fixture (makeAkp05WithTransport) is removed.
+    test_fake_stream_dock_device.cpp
+    test_stream_dock_control_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_control_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/profile_controller.cpp
+    # Phase 15 Plan 15-01 (INPUT-03/04/05): MockTransport-fed dispatch assertions for
+    # StreamDockInputService. Proves key press/release routes to the bound onPress/onRelease
+    # chain (INPUT-03), encoder CW/CCW fire distinct chains after the 16 ms coalescer
+    # (INPUT-04a/c), encoder press fires onPress and synthesises a paired release without any
+    # wire release frame (INPUT-04b), touch tap at X=350 routes to encoder 2 onPress via the
+    # provisional zone map (INPUT-05a), swipe-left/right emit pageNavRequested(-1/+1) (INPUT-05b),
+    # Sleep defers via QtExecutor (non-blocking pump thread), and two pump() calls do not re-open
+    # the transport (held-handle invariant).
+    test_stream_dock_input_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/stream_dock_input_service.cpp
+    # Phase 32 Plan 32-03 (BIND-05/07): Toggle Action dispatch. Proves the
+    # ProfileController::cycleInstanceState mutator advances instance.currentState
+    # mod N (0->1->2->0 for N=3), is a safe no-op for single-state / no-instance
+    # bindings, and persists the new index across a fresh-controller reload; plus
+    # the StreamDockInputService toggle seam (cycle hook + render hook fire per
+    # press with the NEW states[currentState] visual + a state-change willAppear,
+    # and a Multi Action does NOT trigger the toggle path). profile_controller.cpp
+    # + stream_dock_input_service.cpp are already in this target.
+    test_toggle_dispatch.cpp
+    # Phase 24 Plan 24-02 (DEVICES-10): per-family MockTransport byte tests proving the SAME
+    # capability-generic StreamDockControlService + StreamDockInputService drive AKP03 (6 keys +
+    # 3 encoders), AKP153 (15 keys), and AKP815 (15 keys). Asserts per-family image header
+    # (CmdImage/CmdBat "BAT" at bytes 5-7) + ULEND terminator, descriptor-driven max-key-index
+    # burst (no AKP05 10-key clamp), AKP03 all-3-encoder press/CW/CCW routing, and
+    # encoderCount=0 inert path for AKP153/AKP815 (no crash). Live confirmation: Phase 25.
+    # stream_dock_control_service.cpp + stream_dock_input_service.cpp are already linked above.
+    test_stream_dock_family.cpp
+    # Phase 16 Plan 16-01 (DISPLAY-09): MockTransport wire assertions for the
+    # StreamDockControlService DISPLAY-09 extension -- Q_INVOKABLE setBrightness
+    # (-> LIG) and clearAll (-> CLE). Covers brightness clamping (150->100),
+    # the CLE "clear all keys" path, and the no-op contract for non-display
+    # devices. Hardware-free gating proof; live witness is Phase 25.
+    test_stream_dock_controls.cpp
+    # Phase 16 Plan 16-02 (PROFILE-01): commit -> save -> fresh-controller load round-trip
+    # equality for keys, encoders, touch KeyState, and pages; plus repaint-on-load proof
+    # (BAT+ULEND per bound key via StreamDockControlService + MockTransport).
+    # profile_controller.cpp is already in the binary via the 14-02 entry above.
+    test_profile_persistence.cpp
+    # Phase 16 Plan 16-03 (PROFILE-02): page-scoped repaintPage(pageId) assertions --
+    # root paints root bindings, child paints child bindings not root (Pitfall 1 closed),
+    # missing-page no-ops cleanly; plus carousel pageNavRequested(+/-1) tests and
+    # single-root no-op guard (Decision 2). stream_dock_input_service.cpp is already in
+    # the binary via the Phase 15 entry above.
+    test_profile_pages.cpp
+    # qt_executor.cpp is already in the binary (test_qt_executor block above)
     # 2026-05-18 DPI table + Fn-layer: byte-level tests for the two new
     # AJ-series mouse capability surfaces - IDpiTableCapable (opcode 0x54,
     # FEA_CMD_MOUSE_SET_OPTIONPARAM1, per-profile 8-stage DPI table) and
@@ -113,8 +202,51 @@ add_executable(
     test_aj_series_keymatrix_readback.cpp
     test_profile_serialization.cpp
     test_profile_io.cpp
+    # Phase 29 Plan 29-03 (PLUGIN-23): multi-action verbs for ProfileController.
+    # Tests: appendKeyAction keeps existing, reorderKeyAction within onPress,
+    # removeKeyActionAt (last action -> empty), activeKeyBindings exposes full
+    # onPress actionList, and 2-action round-trip through save/load.
+    # profile_controller.cpp is already in the binary via the 14-02 entry above.
+    test_profile_multiaction.cpp
+    # Phase 31 (BIND-01/BIND-02): ActionInstance / ActionState core model +
+    # Profile schema v2 round-trip + v1->v2 migration tests (pure-core, no
+    # Qt/event loop). Runnable via ctest --preset linux-release -R action_instance.
+    test_action_instance.cpp
+    # Phase 32 (BIND-04/BIND-05): instanceChildrenToChain adapter (children ->
+    # ActionChain) tests -- pure-core, no Qt. Runnable via
+    # ctest --preset linux-release -R multiaction. The adapter TU is compiled
+    # into ajazz_core (linked below), so no extra source entry is needed.
+    test_multiaction_dispatch.cpp
+    # Phase 34 Plan 01 (APROF-01/02/04 Wave 0): IActiveWindowWatcher factory +
+    # recording-stub + injectForeground seam tests. active_window_watcher_test.cpp
+    # is GREEN against the stub (makeDefaultActiveWindowWatcher() is provided by
+    # ajazz::core, already linked — mirror of test_input_synth.cpp: include header
+    # + link core, no extra stub re-link). app_profile_switch_test.cpp (APROF-02)
+    # and app_lifecycle_events_test.cpp (APROF-04) are RED scaffolds tagged
+    # [!shouldfail] — they compile + register + run, visibly pending until Plan 04
+    # wires the matcher + lifecycle fan-out. Run: ctest -R active_window (green) and
+    # ctest -R 'app_profile_switch|app_lifecycle_events' (registered + expected-fail).
+    test_active_window_watcher.cpp
+    test_app_profile_switch.cpp
+    # Phase 34 Plan 34-04 (EVENT-03): switchToProfile inbound token resolution
+    # (resolveSwitchToProfileToken — exact id / name-scoped / bad-token reject).
+    # ProfileController is already compiled in this target (14-02 entry).
+    test_switch_to_profile.cpp
+    # NOTE: test_app_lifecycle_events.cpp (APROF-04) + test_system_did_wake.cpp
+    # (EVENT-03) exercise the live registered-only fan-out and so need
+    # SdPluginServer + app_event_dispatch + WebSockets — registered in the
+    # AJAZZ_HAVE_WEBSOCKETS-gated block below, not here.
     test_event_bus.cpp
     test_action_engine.cpp
+    # Phase 21-03 (PLUGIN-12): BuiltinActionRegistry pure-core dispatch table tests (Task 1)
+    # + BuiltinActionsService per-UUID handler e2e tests (Task 2). The Task-1 portion uses only
+    # std headers + Catch2 (no Qt). The Task-2 portion links builtin_actions_service.cpp (which
+    # includes QJsonDocument + QSettings). builtin_action_registry.cpp is linked directly as a
+    # re-compiled core TU (same pattern as test_action_engine + stream_dock_control_service).
+    # stream_dock_input_service.cpp is already in the binary (Phase 15 entry above).
+    test_builtin_actions.cpp
+    ${CMAKE_SOURCE_DIR}/src/core/src/builtin_action_registry.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/builtin_actions_service.cpp
     # Streamdock catalogue fetcher: pure helpers + cache + fallback. The
     # fetcher source is compiled directly into the test binary so we don't
     # need to factor it out of the app target.
@@ -126,6 +258,17 @@ add_executable(
     # different path.
     test_opendeck_catalog_fetcher.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_catalog_fetcher.cpp
+    # Mirabox-GitHub catalogue fetcher (open StreamDock-Plugins repo): the
+    # GitHub Contents-API shape (a flat JSON array of {name,path,type} dir
+    # entries) + the dir-name → display-name humaniser. Also pulled in because
+    # plugin_catalog_model.cpp (below) now references MiraboxGithubCatalogFetcher.
+    test_mirabox_github_catalog_fetcher.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/mirabox_github_catalog_fetcher.cpp
+    # Mirabox-GitHub installer: pure bundle-root detection + path-safety helpers
+    # (the async fetch is exercised live). Also pulled in because
+    # plugin_catalog_model.cpp (below) now references MiraboxGithubInstaller.
+    test_mirabox_github_installer.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/mirabox_github_installer.cpp
     # PluginCatalogProxyModel: pins the filter contract for the Plugin
     # Store GridView (HIGH-1/HIGH-2 fix from quick task 260513-u0b). The
     # proxy references PluginCatalogModel::Roles only — no networking,
@@ -190,11 +333,11 @@ add_executable(
     # wrappers, intentionally not exercised here.
     test_firmware_update_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/firmware_update_service.cpp
-    # Property Inspector URL policy: pure C++ helpers (no QtWebEngine), so we
-    # link the source directly into this test binary without dragging the
-    # WebEngine dependency in. Coverage in test_pi_bridge.cpp.
-    test_pi_bridge.cpp
-    ${CMAKE_SOURCE_DIR}/src/app/src/pi_url_policy.cpp
+    # Shared per-context plugin settings store: pure Qt6::Core (QSaveFile,
+    # QJsonDocument, QStandardPaths). Linked here so its symbols resolve even
+    # when AJAZZ_HAVE_WEBSOCKETS is OFF (the websocket block adds it only
+    # conditionally for test_plugin_device_bridge.cpp).
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_settings_store.cpp
     # Phase 7 / Plan 07-02 / TRUST-03: loadTrustRoots corpus — positive cases
     # (BOM, escape sequences, top-level array, boundary entry counts 1/2/100/1024),
     # negative cases (>1 MB byte cap, 1025-entry overcount, truncated JSON, malformed
@@ -226,6 +369,15 @@ add_executable(
 # import platform-specific sandbox headers (bwrap on Linux, sandbox-exec on macOS).
 target_sources(ajazz_unit_tests PRIVATE test_out_of_process_plugin_host.cpp)
 target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plugins/include)
+
+# Phase 34 Plan 03 (APROF-01): the active-window debounce test (test_active_window_watcher.cpp)
+# includes the app-tier header-only ActiveWindowDebouncer (src/app/src/active_window_debounce.hpp),
+# which is gated by AJAZZ_FEATURE_ACTIVE_WINDOW and uses QTimer. Add the app src dir to the include
+# path and define the feature so the header is non-empty here. This pulls in only the QTimer-based
+# debouncer (no native backend TU, no Wayland/X11 link) — the unit suite verifies the coalescing
+# contract the live backends layer on top of, driven via QSignalSpy::wait / QTest::qWait.
+target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src)
+target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_FEATURE_ACTIVE_WINDOW=1)
 
 if(WIN32)
     # SEC-003 follow-up #51: Ed25519 manifest verifier — Win32 backend uses `_wspawnvp`. The test
@@ -282,6 +434,13 @@ endif()
 # interpreter-location-independent while the dedicated "unresolvable interpreter fails closed" case
 # still exercises a bare name.
 find_package(Python3 COMPONENTS Interpreter REQUIRED)
+# zlib for the directly-compiled sdplugin_extractor.cpp (raw DEFLATE inflate). The root CMakeLists
+# already provides ZLIB::ZLIB (vendored FetchContent alias by default, find_package under
+# AJAZZ_USE_SYSTEM_DEPS); only fall back to find_package when that target is not visible here. A
+# bare find_package(ZLIB) fails on the Windows CI runner, which has no findable system zlib.
+if(NOT TARGET ZLIB::ZLIB)
+    find_package(ZLIB REQUIRED)
+endif()
 set_source_files_properties(
     test_manifest_signer.cpp
     PROPERTIES
@@ -316,6 +475,16 @@ qt_add_resources(
     ${_acc_opendeck_fallback}
 )
 
+# Embed the bundled sdpi.css under the same QRC path the runtime binary uses
+# (`qrc:/qt/qml/AjazzControlCenter/streamdock/sdpi.css`), mirroring the streamdock/opendeck fallback
+# pattern above so qrc-presence assertions can resolve it without a full app binary.
+set(_acc_sdpi_css ${CMAKE_SOURCE_DIR}/resources/streamdeck/sdpi.css)
+set_source_files_properties(${_acc_sdpi_css} PROPERTIES QT_RESOURCE_ALIAS streamdock/sdpi.css)
+qt_add_resources(
+    ajazz_unit_tests "sdpi_css_test_resource" PREFIX "/qt/qml/AjazzControlCenter" FILES
+    ${_acc_sdpi_css}
+)
+
 target_link_libraries(
     ajazz_unit_tests
     PRIVATE ajazz::core
@@ -330,13 +499,20 @@ target_link_libraries(
             # used by the rest of the test binary (COD-031 invariant).
             nlohmann_json::nlohmann_json
             Qt6::Core
-            # CorePrivate exposes QZipReader / QZipWriter. plugin_catalog_model.cpp uses QZipReader
-            # to extract `.sdPlugin` archives (issue #62); the matching test builds a synthetic
-            # archive via QZipWriter and round-trips it through the extractor.
+            # CorePrivate exposes QZipWriter, used by the extractor test to build a synthetic
+            # archive that is round-tripped through sdplugin_extractor.cpp (which now reads via
+            # central-directory + zlib raw-inflate, not QZipReader).
             Qt6::CorePrivate
+            # zlib: sdplugin_extractor.cpp (compiled into this binary) raw-inflates plugin archives.
+            # Without it the link fails on inflate/inflateEnd.
+            ZLIB::ZLIB
             Qt6::Gui # QColor for BrandingService (no rendering required)
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration
+            # Qt6::Quick: linked explicitly (not only transitively via the optional WebEngine block
+            # below) so QtQuick's include dir is honest and preset-independent — the `dev` preset
+            # (no WebEngine) otherwise broke on a missing QtQuick include.
+            Qt6::Quick
             Qt6::Test # QSignalSpy
 )
 
@@ -349,6 +525,249 @@ if(AJAZZ_HAVE_WEBSOCKETS)
     )
     target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebSockets)
     target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+endif()
+
+# Phase 18 Plan 18-01 (PLUGIN-06): PluginManifest parser + gate unit tests. Links
+# plugin_manifest.cpp directly (pure Qt-Core-only; no WebEngine/WebSockets dep).
+# AJAZZ_TEST_REPO_ROOT lets the test locate the JSON fixtures under tests/unit/fixtures/manifests/
+# regardless of CWD when ctest runs the binary.
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_manifest.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_manifest.cpp
+)
+set_source_files_properties(
+    test_plugin_manifest.cpp PROPERTIES COMPILE_DEFINITIONS
+                                        "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
+
+# Phase 35 Plan 35-01 (WINPLG-01/02): classifyWindowsPlugin + supportsCurrentPlatform. Reuses
+# plugin_manifest.cpp (linked once above in the test_plugin_manifest block — do NOT re-add the
+# source or ODR-duplicate symbols). Pure Qt-Core-only (QFile/QDir/QTemporaryDir).
+target_sources(ajazz_unit_tests PRIVATE test_win_plugin_classification.cpp)
+
+# Phase 35 Plan 35-03 (WINPLG-03/VERIF-01): LoadedPluginsModel platformStatus derive (from
+# PluginInfo.winClass stamped by Plan 01). Links loaded_plugins_model.cpp directly — it is a
+# Q_OBJECT/QML_SINGLETON QAbstractListModel, so AUTOMOC (set ON above) + Qt6::Qml (already linked)
+# cover the moc + QtQmlIntegration deps. The derive is a private static, so the test exercises it
+# through the public PlatformStatusRole via data().
+target_sources(
+    ajazz_unit_tests PRIVATE test_loaded_plugins_model.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/loaded_plugins_model.cpp
+)
+
+# Phase 18 Plan 18-02 (PLUGIN-08): NodeRunner argv builder + injectable node detection. Links
+# node_runner.cpp directly (pure Qt-Core-only; no process launched at unit time). All cases inject a
+# fake NodeProbe — no live node is required or started.
+target_sources(
+    ajazz_unit_tests PRIVATE test_node_runner.cpp ${CMAKE_SOURCE_DIR}/src/app/src/node_runner.cpp
+)
+
+# Phase 18 Plan 18-03 (PLUGIN-11): Mirabox/Elgato compat shim tests. The pure-string case
+# (CompatTest::miraboxSocket_aliasedToElgato) compiles unconditionally — no WebEngine dep — and
+# asserts that kMiraboxShimSource contains the forwarding alias. The injection-point case
+# (CompatTest mirabox shim injects at document creation) is gated on AJAZZ_HAVE_WEBENGINE and builds
+# makeMiraboxShim() to assert DocumentCreation + MainWorld + matching sourceCode.
+# plugin_mirabox_shim.cpp is linked here via the conditional block below.
+target_sources(ajazz_unit_tests PRIVATE test_mirabox_compat.cpp)
+
+# When WebEngine is present, link plugin_mirabox_shim.cpp (contains makeMiraboxShim() which uses
+# QWebEngineScript) and add Qt6::WebEngineCore so QWebEngineScript is fully defined. The
+# kMiraboxShimSource string literal in the .cpp is always compiled (not gated); only the
+# QWebEngineScript builder needs WebEngine. The kMiraboxShimSource string literal compiles
+# unconditionally; only the QWebEngineScript builder needs WebEngine. The WebEngine link is also
+# required by plugin_manager.cpp (HTML plugin hosting), which is linked via AJAZZ_HAVE_WEBSOCKETS.
+if(AJAZZ_HAVE_WEBENGINE)
+    # Re-issue the find_package for the WebEngine components so the Qt6::WebEngineCore /
+    # WebEngineQuick / WebChannelQuick imported targets are defined in this CMakeLists scope (they
+    # were found in src/app/CMakeLists.txt, but CMake imported targets are not inherited across
+    # directory scopes — we must re-find them here). QUIET to suppress redundant noise.
+    find_package(Qt6 QUIET COMPONENTS WebEngineCore WebEngineQuick WebChannelQuick)
+    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
+    target_link_libraries(
+        ajazz_unit_tests PRIVATE Qt6::WebEngineCore Qt6::WebEngineQuick Qt6::WebChannelQuick
+    )
+    # plugin_manager.cpp (already linked via AJAZZ_HAVE_WEBSOCKETS) uses a private WebEngine header
+    # (qquickwebenginescriptcollection_p.h) when AJAZZ_HAVE_WEBENGINE is defined. Mirror the same
+    # fallback that src/app/CMakeLists.txt uses to find that private include.
+    find_package(Qt6 QUIET COMPONENTS WebEngineQuickPrivate)
+    if(Qt6WebEngineQuickPrivate_FOUND)
+        target_link_libraries(ajazz_unit_tests PRIVATE Qt6::WebEngineQuickPrivate)
+    else()
+        set(_we_priv_test "${Qt6WebEngineQuick_INCLUDE_DIRS}/QtWebEngineQuick"
+                          "/${Qt6WebEngineQuick_VERSION}/QtWebEngineQuick/private"
+        )
+        string(CONCAT _we_priv_test_path ${_we_priv_test})
+        target_include_directories(ajazz_unit_tests PRIVATE "${_we_priv_test_path}")
+    endif()
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBENGINE=1)
+else()
+    # Without WebEngine, we still need plugin_mirabox_shim.cpp to compile the kMiraboxShimSource
+    # constant (the pure-string test needs it). The WebEngine-guarded makeMiraboxShim() body is
+    # excluded by #if defined(AJAZZ_HAVE_WEBENGINE), so no QWebEngineScript include is dragged in.
+    target_sources(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src/plugin_mirabox_shim.cpp)
+endif()
+
+# Phase 18 Plan 18-04 (PLUGIN-07): PluginCrashTracker — pure 3-in-30s window with injected clock.
+# Pure Qt-Core-only; no QProcess, no real clock. All cases inject synthetic timestamps.
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_crash_tracker.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_crash_tracker.cpp
+)
+
+# Phase 22 Plan 22-01 (PLUGIN-14): plugin_verify_gate unit suite. Tests the three-way verdict
+# (signed->SelfSigned, tampered->Refused, unsigned->Refused, signer-unavailable->Refused) and the
+# verdictToTrustLevel vocabulary contract. plugin_verify_gate.cpp calls verifyManifest from the
+# manifest_signer TU already compiled into this binary (WIN32 / else blocks above).
+# AJAZZ_TEST_REPO_ROOT lets verifyStagedPlugin locate scripts/sign-plugin-manifest.py when the test
+# builds a ManifestSignerConfig from AJAZZ_PLUGIN_VERIFIER_SCRIPT (which for the test binary points
+# at the source-tree script, same as test_manifest_signer.cpp).
+target_sources(
+    ajazz_unit_tests PRIVATE test_plugin_verify_gate.cpp
+                             ${CMAKE_SOURCE_DIR}/src/app/src/plugin_verify_gate.cpp
+)
+
+# Phase 22 Plan 22-02 (PLUGIN-14): installFromFile staging->verify->promote unit suite. Tests:
+# signed+confirm->promoted, tampered->Refused (staging-before-promote invariant), self-signed
+# without confirm->not promoted, non-zip/oversized->rejected, file:// URL accepted.
+# plugin_catalog_model.cpp is already compiled into this binary (test_plugin_catalog_proxy_model
+# entry above). plugin_verify_gate.cpp is already compiled (22-01 entry above). AJAZZ_TEST_REPO_ROOT
+# lets the test locate scripts/sign-plugin-manifest.py for keygen/sign.
+target_sources(ajazz_unit_tests PRIVATE test_plugin_install_from_file.cpp)
+set_source_files_properties(
+    test_plugin_install_from_file.cpp PROPERTIES COMPILE_DEFINITIONS
+                                                 "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
+
+# Phase 22 Plan 22-02 (PLUGIN-14): no-phone-home / offline-default assertion suite. Tests:
+# construction with online=OFF makes no live HTTP request; opt-in enabled exercises live branch;
+# installFromFile triggers no online fetch; onlineCatalogEnabled defaults false. Uses
+# ACC_STREAMDOCK_CATALOG_URL=disabled env seam + QStandardPaths::setTestModeEnabled.
+# plugin_catalog_model.cpp already compiled (test_plugin_catalog_proxy_model entry above).
+target_sources(ajazz_unit_tests PRIVATE test_catalog_offline.cpp)
+# US1 (002-streamdeck-plugin-ui): install availability state machine + the no-browser invariant.
+# plugin_catalog_model.cpp already compiled (above).
+target_sources(ajazz_unit_tests PRIVATE test_plugin_catalog_install.cpp)
+set(_pvg_defs
+    "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+    "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""
+    "AJAZZ_PLUGIN_TRUST_ROOTS=\"${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json\""
+)
+set_source_files_properties(
+    test_plugin_verify_gate.cpp PROPERTIES COMPILE_DEFINITIONS "${_pvg_defs}"
+)
+set(_pvg_gate_defs
+    "AJAZZ_PLUGIN_VERIFIER_SCRIPT=\"${CMAKE_SOURCE_DIR}/scripts/sign-plugin-manifest.py\""
+    "AJAZZ_PLUGIN_TRUST_ROOTS=\"${CMAKE_SOURCE_DIR}/resources/trusted_publishers.json\""
+)
+set_source_files_properties(
+    ${CMAKE_SOURCE_DIR}/src/app/src/plugin_verify_gate.cpp PROPERTIES COMPILE_DEFINITIONS
+                                                                      "${_pvg_gate_defs}"
+)
+
+# Phase 18 Plan 18-04 (PLUGIN-07/08): PluginManager discovery + spawn + lifecycle tests. Needs
+# Qt6::CorePrivate (QZipWriter for fixture archives), Qt6::WebSockets for SdPluginServer, and
+# Qt6::Test for QSignalSpy. All process spawn is mocked — no real node or process is started.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_plugin_lifecycle.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/plugin_manager.cpp
+    )
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_PLUGIN_MANAGER=1)
+endif()
+
+# Phase 27 Plan 27-05 (PLUGIN-17): PluginManager concurrency regression — one crash disables only
+# itself, siblings survive (guards the 5725cb0 shared-key collision). Also covers the WR-02
+# HTML-no-respawn guard (process==nullptr UUID not re-spawned on crash). Gated on
+# AJAZZ_HAVE_WEBSOCKETS like test_plugin_lifecycle.cpp (plugin_manager.cpp is compiled in that block
+# above). plugin_manager.cpp is already compiled via the lifecycle block.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(ajazz_unit_tests PRIVATE test_plugin_concurrency.cpp)
+endif()
+
+# Phase 30 Plan 30-01 (HOST-02 Wave-0 scaffold / Plan 30-03 HOST-01 four-runtime + dispatch proof):
+# HOST-02 tests (GREEN after 30-02) + HOST-01 four-runtime no-regression + IPluginHost2*-pointer
+# dispatch contract test (WARNING-2 fix). unified_plugin_host.cpp linked for the aggregator tests.
+# plugin_manager.cpp + SdPluginServer are already compiled above.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_plugin_host2.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/unified_plugin_host.cpp
+    )
+endif()
+
+# Phase 21 Plan 21-01 (PLUGIN-12): IInputSynthesizer fake-backend assertions. test_input_synth.cpp
+# defines a FakeSynth recording subclass and exercises makeDefaultInputSynthesizer() from
+# ajazz::core (already linked above). No direct stub re-link needed — makeDefaultInputSynthesizer()
+# is already provided by ajazz::core (mirror of test_action_engine.cpp pattern: include header +
+# link core).
+target_sources(ajazz_unit_tests PRIVATE test_input_synth.cpp)
+
+# AJAZZ_FEATURE_INPUT_SYNTH is now ON by default (the Volume dial + built-in system actions need the
+# real OS backend, not the no-op stub). The option is PRIVATE on ajazz_core, so the test TU cannot
+# see it via linkage. Mirror it onto the test target so test_input_synth.cpp can tell whether
+# makeDefaultInputSynthesizer() returns the no-op stub (flag OFF) or a real OS backend (flag ON):
+# the stub-only contract assertions (OUTPUT methods return true; capture never grabs) hold ONLY for
+# the stub. With a real backend, OUTPUT results are environment-dependent (no /dev/uinput on CI) and
+# capture behavior is platform-specific, so those cases are compiled out and replaced with the
+# environment-independent real-backend invariant.
+if(AJAZZ_FEATURE_INPUT_SYNTH)
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_FEATURE_INPUT_SYNTH=1)
+endif()
+
+# Phase 19 Plans 19-01/19-02 (PLUGIN-10): PluginDeviceBridge pure-helper, ContextRegistry, and e2e
+# loopback tests. Gated on AJAZZ_HAVE_WEBSOCKETS — the bridge header composes SdPluginServer (Phase
+# 17) and drives StreamDockControlService (Phase 14) via assignKeyImage. Links
+# plugin_device_bridge.cpp + stream_dock_control_service.cpp directly (both already in the
+# AJAZZ_HAVE_WEBSOCKETS block since stream_dock_control_service.cpp is unconditional above, but the
+# e2e test needs AJAZZ_HAVE_WEBSOCKETS for QWebSocket + SdPluginServer). profile_controller.cpp is
+# already linked above (Phase 14 entry). COMPILE_DEFINITION AJAZZ_HAVE_WEBSOCKETS=1 is already set
+# by the sd_plugin_server block.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests
+        PRIVATE test_plugin_device_bridge.cpp
+                test_encoder_layout_renderer.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/plugin_device_bridge.cpp
+                ${CMAKE_SOURCE_DIR}/src/app/src/encoder_layout_renderer.cpp
+                # plugin_settings_store.cpp is already linked unconditionally above — do NOT add it
+                # again here to avoid duplicate-symbol linker errors. The websocket-conditional
+                # block only adds plugin_device_bridge.cpp.
+    )
+    target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_HAVE_WEBSOCKETS=1)
+
+    # Phase 34 Plan 34-02 (EVENT-02): willAppear payload completeness. Asserts the REAL bridge
+    # envelope captured off a loopback WebSocket client (the e2e seam already used by
+    # test_plugin_device_bridge.cpp), so it shares the WebSockets + bridge link above.
+    target_sources(ajazz_unit_tests PRIVATE willappear_payload_test.cpp)
+
+    # Phase 34 Plan 34-02 (EVENT-04): Knob->Encoder controller-token normalization audit. Uses the
+    # same loopback bridge e2e seam for the encoder-emission assertion plus affordanceMask()
+    # (plugin_manifest.cpp is already linked unconditionally below in the test_plugin_manifest block
+    # -- do NOT re-add it).
+    target_sources(ajazz_unit_tests PRIVATE controller_token_test.cpp)
+
+    # Phase 34 Plan 34-04 (APROF-04 / EVENT-03): host-level outbound event fan-out.
+    # app_event_dispatch.cpp (registered-only delivery + length-bounded payload) drives the live
+    # SdPluginServer; test_system_did_wake + test_app_lifecycle_events register a loopback plugin
+    # (same e2e seam as test_plugin_device_bridge) and assert registered-only delivery via the
+    # eventSent signal.
+    target_sources(
+        ajazz_unit_tests PRIVATE test_system_did_wake.cpp test_app_lifecycle_events.cpp
+                                 ${CMAKE_SOURCE_DIR}/src/app/src/app_event_dispatch.cpp
+    )
+endif()
+
+# Phase 21 Plan 21-02 (PLUGIN-12): ObsClient obs-websocket v5 auth handshake tests. Hardware-free:
+# loopback QWebSocketServer mock OBS server (bound to 127.0.0.1). Mirrors the test_sd_plugin_server
+# block: links obs_client.cpp + Qt6::WebSockets directly (both already available when
+# AJAZZ_HAVE_WEBSOCKETS). Gated identically so the suite builds on minimal Qt installs without the
+# WebSockets module.
+if(AJAZZ_HAVE_WEBSOCKETS)
+    target_sources(
+        ajazz_unit_tests PRIVATE test_obs_client.cpp ${CMAKE_SOURCE_DIR}/src/app/src/obs_client.cpp
+    )
+    # AJAZZ_HAVE_WEBSOCKETS compile definition + Qt6::WebSockets already set by the sd_plugin_server
+    # block above — no duplication needed here.
 endif()
 
 # Protocol-header tests need access to the backends' private headers. The streamdock fetcher TU we

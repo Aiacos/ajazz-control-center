@@ -1,0 +1,57 @@
+{
+	"UUID": "com.ajazz.sysmon2",
+	"Name": "System Monitor (btop)",
+	"Author": "AJAZZ Control Center",
+	"Version": "0.1.0",
+	"Description": "Native btop-powered hardware monitor with btop-styled tiles",
+	"Category": "System Monitor (btop)",
+	"Icon": "icon",
+	"SDKVersion": 2,
+	"Software": { "MinimumVersion": "0.0" },
+	"OS": [{ "Platform": "linux", "MinimumVersion": "0.0" }],
+	"CodePath": "ajazz-sysmon-x86_64-unknown-linux-gnu",
+	"CodePathLin": "ajazz-sysmon-x86_64-unknown-linux-gnu",
+	"CodePaths": {
+		"x86_64-unknown-linux-gnu": "ajazz-sysmon-x86_64-unknown-linux-gnu"
+	},
+	"Actions": [
+		{
+			"UUID": "com.ajazz.sysmon2.monitor",
+			"Name": "Monitor",
+			"Icon": "icon",
+			"Tooltip": "System monitor, btop-styled — pick a metric and thresholds",
+			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
+			"PropertyInspectorPath": "property-inspector.html",
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		},
+		{
+			"UUID": "com.ajazz.sysmon2.cpu",
+			"Name": "CPU",
+			"Icon": "icon",
+			"Tooltip": "CPU usage, btop-styled",
+			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		},
+		{
+			"UUID": "com.ajazz.sysmon2.gpu",
+			"Name": "GPU Monitor",
+			"Icon": "icon",
+			"Tooltip": "GPU monitor, btop-styled — utilisation, temperature or VRAM",
+			"Controllers": ["Keypad", "Encoder"],
+			"Encoder": {
+				"layout": "$X1",
+				"TriggerDescription": { "Rotate": "Switch metric", "Push": "Next metric" }
+			},
+			"PropertyInspectorPath": "property-inspector.html",
+			"States": [{ "Image": "icon", "Title": "", "FontSize": 16 }]
+		}
+	]
+}

@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.28)
 
 project(
     ajazz-control-center
-    VERSION 0.1.1
+    VERSION 2.0.0
     DESCRIPTION "Cross-platform control center for AJAZZ devices"
     HOMEPAGE_URL "https://github.com/Aiacos/ajazz-control-center"
     LANGUAGES CXX C
@@ -41,10 +41,17 @@ option(AJAZZ_ENABLE_COVERAGE "Enable code coverage instrumentation" OFF)
 # Clang sanitizer runtime); the tests/CMakeLists.txt gate errors out at configure time if
 # AJAZZ_BUILD_FUZZ_TESTS=ON is paired with GCC/MSVC, surfacing the constraint up front.
 option(AJAZZ_BUILD_FUZZ_TESTS "Build libFuzzer harnesses (Clang only, opt-in)" OFF)
+# Phase 21-01 (PLUGIN-12): IInputSynthesizer native OS backends. ON by default so the built-in
+# system actions (e.g. the Volume dial: Linux uinput / Windows SendInput / macOS CGEvent) actually
+# drive the OS instead of the no-op recording stub. The per-OS TU still self-guards with the
+# platform #if, and the stub remains the fallback when this is OFF (hardware-free builds/tests, no
+# /dev/uinput, no OS Accessibility permission). Mirrors the AJAZZ_HAVE_WEBSOCKETS gating pattern.
+option(AJAZZ_FEATURE_INPUT_SYNTH "Build native OS input synthesis backends" ON)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 include(Warnings)
 include(Sanitizers)
+include(StreamdockSidecar)
 
 # -----------------------------------------------------------------------------
 # Dependencies
@@ -166,9 +173,9 @@ if(AJAZZ_USE_SYSTEM_DEPS)
     # config provided when it is absent.
     if(NOT TARGET hidapi::hidapi)
         add_library(ajazz_hidapi_compat INTERFACE)
-        foreach(backend hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
-            if(TARGET ${backend})
-                target_link_libraries(ajazz_hidapi_compat INTERFACE ${backend})
+        foreach(hidapi_backend hidapi::hidraw hidapi::libusb hidapi::winapi hidapi::darwin)
+            if(TARGET ${hidapi_backend})
+                target_link_libraries(ajazz_hidapi_compat INTERFACE ${hidapi_backend})
             endif()
         endforeach()
         add_library(hidapi::hidapi ALIAS ajazz_hidapi_compat)
@@ -176,6 +183,10 @@ if(AJAZZ_USE_SYSTEM_DEPS)
     # nlohmann::json stays PRIVATE-linked to `ajazz_plugins` (COD-031); see
     # `src/plugins/CMakeLists.txt`. The config target is nlohmann_json::nlohmann_json.
     find_package(nlohmann_json 3.12 REQUIRED)
+    # zlib: raw DEFLATE inflate for the plugin-archive extractor (sdplugin_extractor.cpp). Provided
+    # by the Flatpak freedesktop runtime / distro under AJAZZ_USE_SYSTEM_DEPS; the config target is
+    # ZLIB::ZLIB.
+    find_package(ZLIB REQUIRED)
 else()
     # hidapi — vendored via FetchContent for reproducibility
     FetchContent_Declare(
@@ -186,6 +197,13 @@ else()
     )
     set(HIDAPI_BUILD_HIDTEST OFF CACHE BOOL "")
     set(HIDAPI_WITH_TESTS OFF CACHE BOOL "")
+    # Link hidapi statically. Upstream defaults BUILD_SHARED_LIBS to ON, which made the app depend
+    # on a hidapi.dll / libhidapi-hidraw.so that the Windows MSI/ZIP never shipped (issue #88:
+    # "hidapi.dll missing" on first launch). Our own libraries are static already (BUILD_SHARED_LIBS
+    # was previously unset = OFF), so forcing the cache value only affects the vendored hidapi. Must
+    # be CACHE FORCE: hidapi's policy floor keeps CMP0077 at OLD, so a plain normal-variable set()
+    # would be clobbered by its option() call.
+    set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
     # hidapi-0.14.0 declares cmake_minimum_required(VERSION 3.1.3) at the root and 3.6.3 under
     # libusb/. CMake 4.0 dropped compatibility for policies introduced before 3.5, and CMake 4.x
     # emits `Compatibility with CMake < 3.10 will be removed` deprecation warnings when the vendored
@@ -210,6 +228,47 @@ else()
     set(JSON_BuildTests OFF CACHE BOOL "Disable nlohmann tests" FORCE)
     set(JSON_Install OFF CACHE BOOL "Disable nlohmann install rules" FORCE)
     FetchContent_MakeAvailable(nlohmann_json)
+
+    # zlib — vendored via FetchContent for reproducibility. The plugin-archive extractor
+    # (sdplugin_extractor.cpp) uses the raw <zlib.h> inflate API. `find_package(ZLIB)` cannot locate
+    # a zlib on the Windows CI runner (Qt bundles zlib but does not export it as a findable CMake
+    # package), so vendoring is the only platform-uniform path. Pinned to v1.3.1.
+    FetchContent_Declare(
+        zlib
+        GIT_REPOSITORY https://github.com/madler/zlib.git
+        GIT_TAG v1.3.1
+        GIT_SHALLOW TRUE
+    )
+    set(ZLIB_BUILD_EXAMPLES OFF CACHE BOOL "Disable zlib examples" FORCE)
+    # Suppress zlib's install() rules: they run during `cpack` and install headers + libs to the
+    # absolute prefix baked at configure (e.g. /usr/local/lib), which breaks packaging (macOS
+    # DragNDrop: EACCES on /usr/local; Windows WIX: install-tree error) and would pollute deb/rpm
+    # payloads. We link zlibstatic PRIVATE-only — nothing of zlib belongs in the installed package.
+    set(SKIP_INSTALL_ALL ON)
+    # zlib v1.3.1 targets cmake_minimum_required < 3.10; force a 3.10 policy floor for the
+    # subproject so CMake 4.x accepts it without the `Compatibility with CMake < 3.10` deprecation
+    # (same handling as hidapi above; violates our zero-warnings invariant otherwise).
+    set(CMAKE_POLICY_VERSION_MINIMUM 3.10 CACHE STRING "" FORCE)
+    FetchContent_MakeAvailable(zlib)
+    unset(CMAKE_POLICY_VERSION_MINIMUM CACHE)
+    unset(SKIP_INSTALL_ALL)
+    # zlib's headers (zlib.h) use constructs our strict warning wall rejects (-Wold-style-cast et
+    # al.). find_package(ZLIB) headers come in via -isystem (warnings suppressed); FetchContent
+    # propagates them as plain -I, so mark them SYSTEM explicitly or sdplugin_extractor.cpp fails
+    # under -Werror.
+    get_target_property(_ajazz_zlib_inc zlibstatic INTERFACE_INCLUDE_DIRECTORIES)
+    if(_ajazz_zlib_inc)
+        set_target_properties(
+            zlibstatic PROPERTIES INTERFACE_SYSTEM_INCLUDE_DIRECTORIES "${_ajazz_zlib_inc}"
+        )
+    endif()
+    # zlib's CMake exports `zlibstatic`/`zlib`, not the canonical `ZLIB::ZLIB` config target that
+    # the code links (and that find_package(ZLIB) would provide). Synthesise the alias from the
+    # static lib (no runtime DLL to deploy on Windows). The `zlibstatic` target carries include dirs
+    # for both the source tree and the generated zconf.h, so `#include <zlib.h>` resolves.
+    if(NOT TARGET ZLIB::ZLIB)
+        add_library(ZLIB::ZLIB ALIAS zlibstatic)
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------
@@ -218,9 +277,14 @@ endif()
 add_subdirectory(src/core)
 add_subdirectory(src/devices)
 
-if(AJAZZ_BUILD_PYTHON_HOST)
-    add_subdirectory(src/plugins)
-endif()
+# ajazz::plugins is built UNCONDITIONALLY: the app links it unconditionally so the Ed25519
+# plugin-verify gate is always present (fail-closed — see Phase 22 note at src/app/CMakeLists.txt).
+# The library is Qt-free and pybind11-free (the out-of-process host execs python3 at runtime, no
+# compile-time Python dep), so it builds regardless of AJAZZ_BUILD_PYTHON_HOST; only the host
+# *runtime* defs in src/app are gated by that option. Guarding this subdir behind
+# AJAZZ_BUILD_PYTHON_HOST broke -DAJAZZ_BUILD_PYTHON_HOST=OFF builds (CodeQL) with "Target
+# ajazz-control-center links to ajazz::plugins but the target was not found".
+add_subdirectory(src/plugins)
 
 if(AJAZZ_BUILD_APP)
     add_subdirectory(src/app)
@@ -229,6 +293,12 @@ endif()
 if(AJAZZ_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+# Bundled first-party plugins (ajazz-sysmon monitor; Linux-only for now).
+option(AJAZZ_BUNDLE_PLUGINS "Build + install the bundled first-party plugins" ON)
+if(AJAZZ_BUNDLE_PLUGINS)
+    add_subdirectory(plugins)
 endif()
 
 # -----------------------------------------------------------------------------
@@ -313,6 +383,28 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     # .deb
     set(CPACK_DEBIAN_PACKAGE_MAINTAINER "Lorenzo Argentieri <uni.lorenzo.a@gmail.com>")
     set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+    # SHLIBDEPS only sees LINKED sonames (it yields the versioned libqt6* deps, including the Qt >=
+    # 6.8 floor the binary is built against — installs fail cleanly on older distros instead of
+    # shipping a broken app). Everything loaded at RUNTIME must be declared by hand: the QML modules
+    # the app imports (QtQuick/Controls/Dialogs/Effects/Layouts/WebEngine/WebChannel — names
+    # verified against Ubuntu 25.04 "plucky", the first Ubuntu with Qt 6.8) and python3 for the
+    # out-of-process plugin host. nodejs is only needed by node-based .sdPlugin bundles ->
+    # Recommends, not Depends. The fully self-contained Linux artifact remains the Flatpak (org.kde
+    # 6.8 runtime bundles Qt + QML + sidecar + sysmon). NOTE (nightly .deb audit 2026-07-03):
+    # shlibdeps could not map the aqt-provisioned Qt sonames to Debian packages, so the generated
+    # Depends carried NO Qt at all. The qml6-module-* deps below transitively pull the
+    # QtQml/Quick/WebEngine runtime; the direct-linked Qt libs that no QML module implies
+    # (Widgets/Svg/WebSockets) are declared explicitly, with t64/legacy alternation for the time64
+    # renames.
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS
+        "python3 (>= 3.10), libqt6widgets6t64 (>= 6.8) | libqt6widgets6 (>= 6.8), \
+libqt6svg6 (>= 6.8), libqt6websockets6 (>= 6.8), \
+qml6-module-qtquick, qml6-module-qtquick-controls, \
+qml6-module-qtquick-dialogs, qml6-module-qtquick-effects, qml6-module-qtquick-layouts, \
+qml6-module-qtquick-templates, qml6-module-qtquick-window, qml6-module-qtqml-workerscript, \
+qml6-module-qtwebengine, qml6-module-qtwebchannel"
+    )
+    set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "nodejs (>= 18)")
     set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
     set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "${PROJECT_HOMEPAGE_URL}")
     set(_pkg "${CMAKE_SOURCE_DIR}/packaging/linux")
@@ -324,6 +416,15 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(CPACK_RPM_PACKAGE_GROUP "Applications/System")
     set(CPACK_RPM_PACKAGE_URL "${PROJECT_HOMEPAGE_URL}")
     set(CPACK_RPM_PACKAGE_AUTOREQ ON)
+    # Same runtime-vs-linked split as the .deb block above: AUTOREQ covers the linked libs; QML
+    # modules + the python plugin host are runtime-loaded. Fedora ships every QtQuick QML module in
+    # qt6-qtdeclarative.
+    set(CPACK_RPM_PACKAGE_REQUIRES
+        "python3 >= 3.10, qt6-qtbase >= 6.8, qt6-qtbase-gui >= 6.8, qt6-qtsvg >= 6.8, \
+qt6-qtwebsockets >= 6.8, qt6-qtdeclarative >= 6.8, qt6-qtwebengine >= 6.8, \
+qt6-qtwebchannel >= 6.8"
+    )
+    set(CPACK_RPM_PACKAGE_SUGGESTS "nodejs")
     # CPack's RPM generator ignores CPACK_PACKAGE_DESCRIPTION; the per-generator variable is
     # required to populate the spec %description block. Build the prose with string(APPEND) so each
     # source line stays under cmake-lint's 100-column ceiling without splitting the runtime value.
@@ -376,6 +477,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(_ajazz_wix_license "${CMAKE_BINARY_DIR}/LICENSE.txt")
     configure_file("${CMAKE_SOURCE_DIR}/LICENSE" "${_ajazz_wix_license}" COPYONLY)
     set(CPACK_RESOURCE_FILE_LICENSE "${_ajazz_wix_license}")
+    # Start Menu shortcut (issue #88: the MSI installed no launcher at all). CPack's WiX generator
+    # only emits shortcuts for entries listed in CPACK_PACKAGE_EXECUTABLES.
+    set(CPACK_PACKAGE_EXECUTABLES "ajazz-control-center" "AJAZZ Control Center")
+    set(CPACK_WIX_PROGRAM_MENU_FOLDER "AJAZZ Control Center")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(CPACK_GENERATOR "DragNDrop;TGZ")
     set(CPACK_DMG_VOLUME_NAME "AJAZZ Control Center")

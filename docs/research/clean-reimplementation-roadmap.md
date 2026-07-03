@@ -469,6 +469,14 @@ ______________________________________________________________________
 
 ### 3.1 Elgato Stream Deck v6-compatible plugin host (`SDPluginServer`)
 
+> **STATUS 2026-07-03: SHIPPED.** This item is implemented and live-verified:
+> `SdPluginServer` (`src/app/src/sd_plugin_server.cpp`, Qt6::WebSockets) +
+> `PluginManager` (discover/spawn/rediscover, node + HTML + native plugins) +
+> `PluginDeviceBridge` are wired at runtime and drive the curated plugin set
+> end-to-end (sysmon, starterpack, OBS StreamDock, Weather, oasystem — see
+> `docs/architecture/PRODUCTION-READINESS.md`). The section below is kept as
+> the original design rationale; do NOT schedule this as pending work.
+
 - **What the vendor does**:
   [`akp05_vendor.md` §5](../protocols/streamdeck/akp05_vendor.md) — the
   Stream Dock app implements a **verbatim** Elgato Stream Deck SDK v6

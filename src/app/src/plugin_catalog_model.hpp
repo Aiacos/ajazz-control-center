@@ -30,11 +30,13 @@
 #include <QStringList>
 #include <QtQmlIntegration>
 #include <QUrl>
+#include <QVariantList>
 #include <QVariantMap>
 
 class QNetworkAccessManager;
 
 #include <memory>
+#include <set>
 #include <type_traits>
 #include <vector>
 
@@ -45,6 +47,7 @@ namespace ajazz::app {
 
 class StreamdockCatalogFetcher;
 class OpenDeckCatalogFetcher;
+class MiraboxGithubCatalogFetcher;
 
 /// Single catalogue entry shown by the Plugin Store grid.
 ///
@@ -91,8 +94,10 @@ struct CatalogEntry {
      * (Streamdock) or `releaseAsset.browserDownloadUrl` (OpenDeck)
      * fields. Empty when the source feed does not surface a direct
      * download (e.g. a community page that only exposes a landing-page
-     * URL). When empty, @ref PluginCatalogModel::install falls back to
-     * the @ref openUpstream browser bridge.
+     * URL). When empty / non-https, the row is reported as **not
+     * installable in-app** (see @ref InstallableInAppRole) and
+     * @ref PluginCatalogModel::install is a no-op returning false — it no
+     * longer opens a browser (US1, spec FR-006).
      */
     QUrl downloadUrl = {};
 };
@@ -129,6 +134,10 @@ class PluginCatalogModel : public QAbstractListModel {
     Q_PROPERTY(
         qint64 opendeckFetchedAtUnixMs READ opendeckFetchedAtUnixMs NOTIFY opendeckStateChanged)
     Q_PROPERTY(int opendeckCount READ opendeckCount NOTIFY countChanged)
+    Q_PROPERTY(bool onlineCatalogEnabled READ onlineCatalogEnabled WRITE setOnlineCatalogEnabled
+                   NOTIFY onlineCatalogEnabledChanged)
+    Q_PROPERTY(bool allowUnsignedPlugins READ allowUnsignedPlugins WRITE setAllowUnsignedPlugins
+                   NOTIFY allowUnsignedPluginsChanged)
 
 public:
     /// QML singleton factory — see BrandingService::create for the pattern.
@@ -155,6 +164,9 @@ public:
         EnabledRole,                 ///< True when the installed plugin is currently enabled.
         SourceRole,                  ///< "local" | "community" | "streamdock".
         StreamdockProductIdRole,     ///< Upstream Streamdock product id (when source==streamdock).
+        DownloadUrlRole,             ///< Direct download URL (QUrl) for in-app install.
+        InstallableInAppRole,        ///< True iff a resolvable https package URL exists (US1).
+        UnavailableReasonRole,       ///< Short reason shown when not installable in-app (US1).
     };
 
     // No default on `parent`: see BrandingService — a default-constructible
@@ -173,6 +185,105 @@ public:
 
     /// Number of installed plugins; surfaces the @c installedCount QML property.
     [[nodiscard]] int installedCount() const;
+
+    /**
+     * @brief Flattened list of bindable actions across all installed plugins.
+     *
+     * Scans @c userPluginsDir() for @c *.sdPlugin directories, parses each
+     * @c manifest.json (skipping unparsable or non-runnable manifests), and
+     * returns one entry per declared action. Each entry is a QVariantMap with:
+     *   - @c pluginName            — owning plugin's display name.
+     *   - @c actionId              — the action UUID (reverse-DNS); stored as
+     *                                Action::id when bound to a key.
+     *   - @c actionName            — action display label.
+     *   - @c icon                  — file:// URL of the action (or plugin)
+     *                                icon, or "" when none resolves on disk.
+     *   - @c propertyInspectorPath — relative PI HTML path (for Workstream C),
+     *                                or "" when the action has no inspector.
+     *   - @c controllers           — QStringList (Keypad/Knob/...), for
+     *                                surface-aware filtering.
+     *
+     * The QML Action Library re-queries this on the @c installedCountChanged
+     * signal so newly-installed plugins appear without a restart.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList installedActions() const;
+
+    /**
+     * @brief Plugin-level icon for an installed plugin, as a `data:` URI.
+     *
+     * @param installDirName the on-disk `<id>.sdPlugin` directory name (the
+     *        `pluginUuid` that @ref installedActions reports and the OpenDeck
+     *        `list_plugins` bridge keys on). Must be a single path segment
+     *        under @ref userPluginsDir(); a value containing `/`, `\\` or `..`
+     *        is rejected (path-traversal guard) and yields an empty string.
+     *
+     * Resolves the manifest top-level @c Icon (then @c CategoryIcon), probing
+     * the common Elgato spellings (bare, `.png`, `@2x.png`, `.svg`), and
+     * returns the file inlined as a `data:<mime>;base64,...` URI — the form the
+     * embedded OpenDeck SPA can load directly (its renderer passes `data:` URIs
+     * through verbatim; a file:// or webserver-relative path does not load
+     * cross-origin in the `opendeck://app/` webview). Returns "" when the
+     * plugin is absent, unparsable, or ships no resolvable icon.
+     */
+    [[nodiscard]] Q_INVOKABLE QString pluginIconDataUri(QString const& installDirName) const;
+
+    /**
+     * @brief Force the Action Library to re-query @ref installedActions().
+     *
+     * @ref installedActions() reads the live install directory, but the QML
+     * Action Library only re-queries it on @c installedCountChanged — a signal
+     * the catalogue emits from its own install/uninstall flow. Plugins that
+     * appear on disk through any OTHER path (a sideloaded `.sdPlugin` picked up
+     * by @c PluginManager::rediscover(), say) therefore stay invisible until an
+     * app restart. Calling this re-emits @c installedCountChanged so the library
+     * refetches from disk immediately. Idempotent and cheap (no I/O of its own).
+     */
+    Q_INVOKABLE void refreshInstalled();
+
+    /**
+     * @brief Installed plugins that cannot run on the current platform (#83).
+     *
+     * Companion to @ref installedActions: scans the same install directory and
+     * returns the plugins whose actions installedActions() drops for platform
+     * reasons, so the UI can show them as "installed but unrunnable" instead of
+     * silently hiding them (the official Elgato `com.elgato.*` set ships native
+     * Windows/macOS binaries with no Linux code path — they install but never
+     * surface an action). Each entry is a QVariantMap:
+     *   - @c id        — plugin directory id (`<id>.sdPlugin` minus the suffix)
+     *   - @c name      — manifest Name
+     *   - @c version   — manifest Version
+     *   - @c author    — manifest Author
+     *   - @c platforms — comma-joined manifest OS platforms (e.g. "mac, windows")
+     *   - @c reason    — "noCodePath" (no build for this OS) | "osVersion"
+     *                    (OS / Software.MinimumVersion gate)
+     *   - @c detail    — human-readable one-liner for the status chip
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantList installedUnsupportedPlugins() const;
+
+    /**
+     * @brief Diagnostic counters from the most recent installedActions() scan.
+     *
+     * Returns a QVariantMap with integer keys:
+     *   - @c installedCount      — number of actions returned by installedActions().
+     *   - @c hiddenByVisibility  — actions filtered because VisibleInActionsList=false.
+     *   - @c skippedUuidName     — actions skipped due to empty UUID or Name.
+     *   - @c skippedParseFailure — plugins whose manifest failed to parse entirely.
+     *
+     * Hidden actions are intentionally NOT counted as errors (Pitfall 7, PLUGIN-18).
+     * Returns all-zeros before the first installedActions() call.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantMap lastScanDiagnostics() const;
+
+    /**
+     * @brief Resolve a single installed action by its UUID (Workstream C).
+     *
+     * Returns the same QVariantMap shape as one @ref installedActions entry
+     * (adds @c propertyInspectorAbsPath — the absolute PI HTML path — and
+     * @c pluginUuid — the install-dir name used as the settings-storage key),
+     * or an empty map when no installed plugin declares @p actionId. Used by
+     * the Inspector to load a bound plugin action's Property Inspector.
+     */
+    [[nodiscard]] Q_INVOKABLE QVariantMap actionInfo(QString const& actionId) const;
 
     /**
      * @brief Re-populate the model from the current source.
@@ -248,6 +359,48 @@ public:
     Q_INVOKABLE bool install(QString const& uuid);
 
     /**
+     * @brief Install a plugin from a local `.sdPlugin` or `.zip` file.
+     *
+     * Implements the staging→verify→promote sequence (T-22-toctou):
+     *
+     *   1. Read the file (capped at @c kMaxPluginDownloadBytes) and run
+     *      @ref validateDownloadedArchive — on error, emit
+     *      @c installFinished(path, false, err) and return false.
+     *   2. @ref extractSdPluginArchive into a STAGING directory (never
+     *      directly into @c installedPlugins/).
+     *   3. @ref verifyStagedPlugin on the extracted @c manifest.json:
+     *      - @c Refused: quarantine (remove) staging dir, emit
+     *        @c installFinished(false, reason), return false.
+     *      - @c SelfSigned without @p userConfirmedUnsigned: emit
+     *        @c installFinished(false, "self-signed plugin -- confirm to install")
+     *        so QML can show a warning dialog; return false.
+     *      - @c SelfSigned with @p userConfirmedUnsigned=true, or
+     *        @c Trusted: promote staging dir into the Phase-18
+     *        @c installedPlugins/ layout (atomic rename).
+     *   4. On promote: emit @c dataChanged + @c installedCountChanged +
+     *      @c installFinished(path, true, "").
+     *
+     * @p localPathOrUrl accepts either a filesystem path or a @c file://
+     *   URL (e.g. from @c FileDialog.selectedFile); it is normalised via
+     *   @c QUrl::fromUserInput / @c toLocalFile internally.
+     *
+     * @param localPathOrUrl Local path or @c file:// URL of the archive.
+     * @param userConfirmedUnsigned Pass @c true when the user has
+     *        explicitly confirmed installation of a self-signed plugin
+     *        via the QML warning dialog. Default is @c false (refuse
+     *        without explicit confirmation).
+     * @return False when the install was refused synchronously (size/
+     *         magic check, signature Refused, self-signed without
+     *         confirm). True when the install succeeded and the plugin
+     *         was promoted into @c installedPlugins/.
+     *
+     * Terminal outcome is always delivered via @ref installFinished.
+     * Uses the local path as the key (uuid equivalent) in that signal.
+     */
+    Q_INVOKABLE bool installFromFile(QString const& localPathOrUrl,
+                                     bool userConfirmedUnsigned = false);
+
+    /**
      * @brief Validate a freshly-downloaded `.sdPlugin` blob before it is
      *        written to disk (WR-04): enforces a size cap and the ZIP magic.
      *
@@ -261,6 +414,155 @@ public:
 
     /// Mark a plugin as removed. Returns true on success.
     Q_INVOKABLE bool uninstall(QString const& uuid);
+
+    /**
+     * @brief Physically remove an installed plugin by its on-disk install-dir
+     *        name (the `<name>.sdPlugin` folder under @ref userPluginsDir() —
+     *        the `pluginUuid` reported by @ref installedActions() and the
+     *        OpenDeck `list_plugins` bridge command).
+     *
+     * Unlike @ref uninstall (which keys off the *catalogue* uuid and only flips
+     * the row's install state), this deletes the directory so the disk-backed
+     * @ref installedActions() view reflects the removal, clears any key/dial
+     * bindings owned by the plugin's manifest UUID (T037), and best-effort
+     * reconciles the matching catalogue row's Installed state. The name is
+     * sanitised against path traversal before any filesystem write.
+     *
+     * @param installDirName Bare `<...>.sdPlugin` leaf name (no separators).
+     * @return true when the directory was found and removed.
+     */
+    Q_INVOKABLE bool removeInstalledPlugin(QString const& installDirName);
+
+    // ------------------------------------------------------------------
+    // No-phone-home opt-in (PLUGIN-14 anti-feature, T-22-phonehome).
+    //
+    // The online Streamdock + OpenDeck catalogue fetchers do NOT run
+    // automatically on construction. The user must explicitly enable the
+    // live fetch via a QSettings-backed flag (default: false). The
+    // offline snapshot (cache + bundled fallback) still populates the
+    // store rows regardless of the flag.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Whether the online catalogue fetch is enabled.
+     *
+     * When false (the default), only the cached / bundled snapshot is
+     * served; no outbound request is made. When true, @ref reload()
+     * triggers a live fetch from the upstream Streamdock / OpenDeck
+     * endpoints.
+     *
+     * The value is persisted via @c QSettings under
+     * @c plugins/onlineCatalogEnabled so the user's choice survives
+     * app restarts.
+     */
+    [[nodiscard]] Q_INVOKABLE bool onlineCatalogEnabled() const;
+
+    /**
+     * @brief Set and persist the online-catalogue-enabled flag.
+     *
+     * Callable from QML as
+     * @c PluginCatalog.setOnlineCatalogEnabled(true/false).
+     * When enabled, immediately triggers @ref refreshOnline() to
+     * populate the streamdock / opendeck rows.
+     */
+    Q_INVOKABLE void setOnlineCatalogEnabled(bool enabled);
+
+    /**
+     * @brief Trigger a live online catalogue refresh.
+     *
+     * Calls the underlying fetcher @c refresh() only when
+     * @ref onlineCatalogEnabled() is @c true (PLUGIN-14 / T-22-phonehome).
+     * When the flag is @c false this is a no-op — the Refresh button is also
+     * disabled in QML when the switch is off, but the C++ guard is the
+     * authoritative no-phone-home enforcement point.
+     *
+     * Use @ref reload() to also reset the local / mock rows in addition
+     * to the live fetch.
+     */
+    Q_INVOKABLE void refreshOnline();
+
+    // ------------------------------------------------------------------
+    // Trust UX: app-level allow-unsigned setting (Plan 27-04 / PLUGIN-16).
+    //
+    // Mirrors the onlineCatalogEnabled pattern (QSettings-persisted,
+    // Q_PROPERTY with READ/WRITE/NOTIFY). The env var
+    // AJAZZ_ALLOW_UNTRUSTED_PLUGINS remains functional for CI/dev runs
+    // and is OR-gated with this setting in the Unsigned install branch.
+    //
+    // CR-01 invariant: this setting gates ONLY VerifyVerdict::Unsigned.
+    // VerifyVerdict::Refused (tampered) is unconditional-quarantine;
+    // the setting NEVER applies to the Refused branch.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Whether unsigned (no signature block) plugins may be installed.
+     *
+     * When false (the default), only plugins with a valid Ed25519 signature
+     * accepted by the trust roots, or an explicit per-call
+     * @p userConfirmedUnsigned=true consent, can be installed. When true,
+     * @ref installFromFile promotes Unsigned plugins without per-call
+     * consent (the setting supplies the consent globally).
+     *
+     * The env var @c AJAZZ_ALLOW_UNTRUSTED_PLUGINS is OR-gated with this
+     * flag so headless / CI runs continue to work without touching the UI.
+     *
+     * Persisted under @c plugins/allowUnsignedPlugins via QSettings.
+     *
+     * CR-01: this flag is NEVER applied to @c VerifyVerdict::Refused
+     * (tampered) packages — those are always quarantined.
+     */
+    [[nodiscard]] Q_INVOKABLE bool allowUnsignedPlugins() const;
+
+    /**
+     * @brief Set and persist the allow-unsigned-plugins flag.
+     *
+     * Callable from QML as @c PluginCatalog.setAllowUnsignedPlugins(true/false).
+     */
+    Q_INVOKABLE void setAllowUnsignedPlugins(bool allow);
+
+    /**
+     * @brief Consent-install a specific unsigned plugin that has already
+     *        been verified as @c VerifyVerdict::Unsigned (no signature block).
+     *
+     * Records per-plugin consent in QSettings
+     * (@c plugins/allowed/<uuid>=true) so subsequent launches do not
+     * require re-consent. Then re-runs the install/promote path for the
+     * plugin so it becomes immediately runnable.
+     *
+     * If the plugin was quarantined by the launch-sweep
+     * (@c <uuid>.sdPlugin.disabled — an unsigned sideload found on disk
+     * without consent), explicit consent restores the directory to
+     * @c <uuid>.sdPlugin first, after re-verifying the quarantined
+     * manifest in place (a @c Refused manifest is never restored, CR-01).
+     *
+     * CR-01: returns @c false immediately when the plugin row's trust level
+     * is @c "tampered" — there is no UI consent path for an Ed25519-invalid
+     * (attack) package. The per-plugin consent mechanism is ONLY for
+     * the @c Unsigned (developer sideload) case.
+     *
+     * @param uuid Plugin UUID (installed directory name without
+     *        @c .sdPlugin, or the manifest UUID field).
+     * @return @c true when consent was recorded and the plugin is now
+     *         in a runnable state; @c false when the UUID is unknown,
+     *         the plugin is tampered/invalid, or the re-install failed.
+     */
+    Q_INVOKABLE bool allowPlugin(QString const& uuid);
+
+    // ------------------------------------------------------------------
+    // Test seam: override the plugins directory so unit tests write to a
+    // temp dir instead of the real QStandardPaths::AppDataLocation.
+    // ------------------------------------------------------------------
+
+    /**
+     * @brief Override the plugins directory for tests.
+     *
+     * When non-empty, @ref userPluginsDir() returns this path instead of
+     * deriving it from @c QStandardPaths::AppDataLocation. Must be set
+     * before any @ref installFromFile or @ref install call.
+     *
+     * @note This is a test seam — production callers must not call this.
+     */
+    static void setPluginsDirOverride(QString const& dir);
 
     /**
      * @brief Open the plugin's upstream catalogue page in the user's
@@ -303,12 +605,29 @@ public:
 signals:
     /// Emitted when the catalogue size changes (after @ref reload()).
     void countChanged();
+
+    /**
+     * @brief Emitted after installedActions() completes with per-category skip counts.
+     *
+     * @p errorSkipCount  = empty-UUID/Name skips.
+     * @p hiddenCount     = intentionally hidden (VisibleInActionsList=false) — NOT errors.
+     * @p parseFailureCount = plugins that could not be parsed at all.
+     * @p totalScanned    = total action entries examined (including hidden + skipped).
+     */
+    void skippedActionsChanged(int errorSkipCount,
+                               int hiddenCount,
+                               int parseFailureCount,
+                               int totalScanned);
     /// Emitted whenever an install / uninstall flips a row's state.
     void installedCountChanged();
     /// Emitted whenever @ref streamdockState changes.
     void streamdockStateChanged();
     /// Emitted whenever @ref opendeckState changes.
     void opendeckStateChanged();
+    /// Emitted when the online-catalogue-enabled flag changes.
+    void onlineCatalogEnabledChanged();
+    /// Emitted when the allow-unsigned-plugins flag changes.
+    void allowUnsignedPluginsChanged();
 
     /**
      * @brief Per-row download progress in [0, 100].
@@ -331,7 +650,42 @@ signals:
      */
     void installFinished(QString const& uuid, bool success, QString const& error);
 
+    /**
+     * @brief Emitted when a plugin is uninstalled (feature 002 US3/T037).
+     *
+     * Wired in application.cpp to ProfileController::clearBindingsForPlugin so a
+     * key/dial bound to the uninstalled plugin's action reverts to unbound
+     * instead of referencing a gone plugin. Distinct from installedCountChanged
+     * (which only triggers a catalogue/action-list refresh).
+     */
+    void pluginUninstalled(QString const& uuid);
+
+    /**
+     * @brief A promote path is about to REPLACE an existing install dir
+     *        (re-install / store update).
+     *
+     * Wired in application.cpp to PluginManager::unloadPlugin so the RUNNING
+     * old copy is torn down (exitApp -> kill -> m_live erase) before its dir
+     * vanishes; the post-install rediscover() then respawns the fresh copy
+     * (audit 3.2). Deliberately DISTINCT from pluginUninstalled: that one also
+     * clears the user's bindings, which an update must preserve.
+     */
+    void pluginWillBeReplaced(QString const& installDirName);
+
 private:
+    /// One-shot log guard for installedActions() skip messages: the method is
+    /// polled continuously by the UI, so per-scan INFO logging of the same
+    /// skipped plugin floods the log (UI-tour audit 2026-07-03). Keyed by
+    /// "<plugin name>/<reason>"; mutable because installedActions() is const.
+    mutable std::set<QString> m_loggedSkips;
+
+    /// Test seam: grants unit tests access to the private row-injection
+    /// internals (@ref replaceStreamdockRows) so the install-availability and
+    /// install() no-op logic can be exercised deterministically WITHOUT
+    /// widening the production API. Defined only in the test binary. Mirrors
+    /// the existing `setPluginsDirOverride` test-only convention.
+    friend struct PluginCatalogTestAccess;
+
     /// Per-row install bookkeeping kept outside @ref CatalogEntry so the
     /// catalogue feed (which is read-only) and the local user state stay
     /// cleanly separated.
@@ -344,6 +698,27 @@ private:
     /// signed catalogue index defined in docs/architecture/PLUGIN-SDK.md.
     static std::vector<CatalogEntry> mockFixture();
 
+    /// Single source of truth for unsigned-install consent (Plan 27-04).
+    ///
+    /// Returns @c true when the user has granted consent via the
+    /// @c allowUnsignedPlugins setting OR via the
+    /// @c AJAZZ_ALLOW_UNTRUSTED_PLUGINS CI/dev env var.
+    ///
+    /// CR-01: call this ONLY in the @c VerifyVerdict::Unsigned branch.
+    /// Never call it for @c VerifyVerdict::Refused (tampered).
+    [[nodiscard]] bool consentToUnsigned() const;
+
+    /// Phase 6c: seed bundled first-party plugins (install payload under
+    /// `share/ajazz-control-center/bundled-plugins/` on GenericDataLocation,
+    /// or `$AJAZZ_BUNDLED_PLUGINS_DIR` for dev/test) into @p pluginsDir on
+    /// first run. Skips dirs that already exist or are quarantined; a
+    /// `plugins/seeded/<uuid>` QSettings marker records every seed so a
+    /// plugin the user later DELETES is never re-seeded. Persists the
+    /// per-plugin consent key (`plugins/allowed/<uuid>`) for what it copies —
+    /// bundled plugins are first-party, so they must survive the
+    /// unsigned-verify launch sweep without the global toggle.
+    void seedBundledPlugins(QString const& pluginsDir);
+
     /// Replace the Streamdock-sourced rows with @p rows, emitting the
     /// minimal `dataChanged` / model reset surface required.
     void replaceStreamdockRows(std::vector<CatalogEntry> rows);
@@ -352,11 +727,52 @@ private:
     /// @ref replaceStreamdockRows with `source == "opendeck"`.
     void replaceOpendeckRows(std::vector<CatalogEntry> rows);
 
+    /// Replace the Mirabox-GitHub-sourced rows with @p rows. Mirrors
+    /// @ref replaceStreamdockRows with `source == "mirabox-github"`.
+    void replaceMiraboxGithubRows(std::vector<CatalogEntry> rows);
+
+    /// Finalize a Mirabox-GitHub install: the bundle has been assembled into
+    /// @p stagingDir (a dot-prefixed dir inside @p destDir that the plugin
+    /// scanner ignores). Resolves the install dir name from the manifest UUID,
+    /// runs the verify gate (Refused → quarantine), then atomically renames the
+    /// staging dir into @c <destDir>/<uuid>.sdPlugin and flips the install bit.
+    /// Same verify → promote contract the network install path uses.
+    void finalizeAssembledInstall(QString const& uuid,
+                                  QString const& stagingDir,
+                                  QString const& destDir);
+
+    /// audit 3.3: after a successful install landing at @p keepDirName, remove
+    /// any OTHER installed directory whose manifest resolves to the same
+    /// plugin-owner UUID (CDN installs are named by numeric product id, file
+    /// installs by manifest UUID — the same plugin could exist twice).
+    /// Emits pluginWillBeReplaced for each duplicate so the running old copy
+    /// is torn down; the user's bindings are preserved (the owner UUID stays
+    /// installed under @p keepDirName).
+    void dedupeDuplicateInstalls(QString const& keepDirName);
+
     /// rowCount() with no arguments, matching the Q_PROPERTY READ shape.
     [[nodiscard]] int rowCountSimple() const { return static_cast<int>(m_rows.size()); }
 
     std::vector<CatalogEntry> m_rows;       ///< Catalogue snapshot.
     QHash<QString, InstallState> m_install; ///< Install / enabled state by UUID.
+
+    // Last-scan diagnostic counters (from installedActions()).
+    mutable int m_lastInstalledCount = 0;
+    mutable int m_lastHiddenByVisibility = 0;
+    mutable int m_lastSkippedUuidName = 0;
+    mutable int m_lastSkippedParseFailure = 0;
+    mutable int m_lastSkippedOsVersion = 0; ///< GAP-28A: manifestRunnableHere() rejections
+    mutable int m_lastTotalScanned = 0;
+
+    /// QSettings-backed flag; default true (online catalog on unless the user
+    /// turned it off). Network stays fully gated on this flag — see ctor.
+    bool m_onlineCatalogEnabled = true;
+
+    /// QSettings-backed flag; default false (unsigned plugins blocked unless
+    /// the user explicitly enabled the setting or the env var is set).
+    /// Gates ONLY VerifyVerdict::Unsigned installs. CR-01: NEVER applied
+    /// to Refused/tampered packages.
+    bool m_allowUnsignedPlugins = false;
 
     /// Shared QNetworkAccessManager for plugin downloads (install path).
     /// Created lazily on the first `install()` call so the cheap mock
@@ -379,6 +795,10 @@ private:
     std::unique_ptr<OpenDeckCatalogFetcher> m_opendeckFetcher;
     QString m_opendeckStateString = QStringLiteral("loading");
     qint64 m_opendeckFetchedAtUnixMs = 0;
+
+    /// Mirabox-GitHub mirror (open StreamDock-Plugins repo) — same lifetime /
+    /// lazy-creation contract as the other fetchers.
+    std::unique_ptr<MiraboxGithubCatalogFetcher> m_miraboxGithubFetcher;
 };
 
 // See BrandingService static_assert — same QML_SINGLETON dual-instance trap.

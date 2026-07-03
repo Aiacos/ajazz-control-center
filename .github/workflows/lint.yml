@@ -43,7 +43,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           # Full history so pre-commit can diff accurately.
           fetch-depth: 0
@@ -62,7 +62,7 @@ jobs:
           token: ${{ secrets.LINT_AUTOFIX_PAT || secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: "3.12"
           cache: pip
@@ -79,7 +79,7 @@ jobs:
               /usr/bin/clang-tidy-18 100
 
       - name: Cache pre-commit
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae  # v5.0.5
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/pre-commit
           key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
@@ -109,7 +109,7 @@ jobs:
              github.event.pull_request.head.repo.full_name == github.repository)
             || github.event_name == 'push'
           )
-        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9  # v7.1.0
+        uses: stefanzweifel/git-auto-commit-action@4a55954c782fc1ea30b9056cd3e7a2b40ca8887d  # v7.2.0
         with:
           commit_message: "style: apply pre-commit auto-fixes"
           commit_user_name: ajazz-bot
@@ -128,7 +128,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # The webui CMake block (AJAZZ_BUILD_WEBUI, default ON) runs `npm ci`
+          # in the opendeck submodule at CONFIGURE time now that this runner's
+          # Qt includes qtwebengine — without the submodule the configure (and
+          # thus the compdb clang-tidy needs) hard-fails on a missing
+          # package.json.
+          submodules: recursive
       - name: Install toolchain
         # Qt is installed via install-qt-action below; here we only install
         # the system bits CMake / clang-tidy need to be able to configure
@@ -142,6 +149,7 @@ jobs:
             libusb-1.0-0-dev libhidapi-dev \
             libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
             libxcb-cursor-dev libxkbcommon-x11-dev \
+            libwayland-dev wayland-protocols \
             clang-tidy-18
           sudo update-alternatives --install /usr/bin/clang-tidy clang-tidy \
               /usr/bin/clang-tidy-18 100
@@ -155,11 +163,31 @@ jobs:
         uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
           version: 6.8.3
-          modules: qtwebsockets
+          # qtwebengine (+deps qtwebchannel qtpositioning) entered with the
+          # embedded OpenDeck SPA (opendeck_scheme_handler.hpp includes
+          # QWebEngineUrlSchemeHandler); without it clang-tidy hard-errors on
+          # every WebEngine TU (develop Lint failure 2026-07-02).
+          modules: qtwebsockets qtwebengine qtwebchannel qtpositioning
           cache: true
 
       - name: Configure
-        run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF
+        # AJAZZ_BUILD_SIDECAR=OFF: clang-tidy analyses C++ only and never builds,
+        # so skip wiring the Rust sidecar (no cargo on this lint runner).
+        run: cmake --preset dev -DAJAZZ_ENABLE_WERROR=OFF -DAJAZZ_BUILD_SIDECAR=OFF
+
+      - name: Generate build-time headers needed for analysis
+        # qtwaylandscanner outputs (qwayland-*.h + *-client-protocol.h, the
+        # includes of active_window_watcher_wayland.cpp) are produced at
+        # BUILD time, but this job only configures — clang-tidy hard-errors
+        # with "file not found" on them. Exposed when the wayland system
+        # deps were added to this job: the TU only enters
+        # compile_commands.json once Qt6::WaylandClient is found. Build just
+        # the scanner outputs (seconds, not a full compile). xargs -r keeps
+        # this a no-op if a future configure drops the wayland backend.
+        run: |
+          ninja -C build/dev -t targets all \
+            | awk -F': ' '/(qwayland-[^:]*\.h|client-protocol\.h):/ {print $1}' \
+            | xargs -r ninja -C build/dev
 
       - name: Run clang-tidy on every translation unit
         run: |
@@ -188,9 +216,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: "3.12"
 

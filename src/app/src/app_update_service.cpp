@@ -183,8 +183,8 @@ void AppUpdateService::setIncludeNightly(bool enabled) {
 }
 
 QString AppUpdateService::currentVersion() const {
-    // qApp->applicationVersion() is set in main.cpp via
-    // QApplication::setApplicationVersion("0.1.0"). When the harness
+    // qApp->applicationVersion() is set in main.cpp from CMake's project(VERSION)
+    // via the AJAZZ_APP_VERSION compile definition. When the harness
     // doesn't construct a QCoreApplication (defensive) fall back to a
     // safe sentinel so QML bindings stay well-typed.
     if (QCoreApplication::instance() != nullptr) {

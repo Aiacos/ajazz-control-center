@@ -50,12 +50,26 @@ public:
      */
     [[nodiscard]] static bool tryActivateExisting(QString const& name, int timeoutMs = 200);
 
+    /**
+     * @brief Forward a streamdeck:// deep link to the primary instance.
+     *
+     * OS scheme activation spawns a NEW process with the URL as argv; when a
+     * primary already runs, the secondary hands the URL over on the same
+     * local socket ("deeplink <url>\n") and exits. Returns false when no
+     * primary was found (caller handles the URL itself after startup).
+     */
+    [[nodiscard]] static bool
+    forwardDeepLink(QString const& name, QString const& url, int timeoutMs = 200);
+
     /// Stable, per-user socket name suitable for both QLocalServer/QLocalSocket.
     [[nodiscard]] static QString defaultSocketName();
 
 signals:
     /// Emitted on the GUI thread when a secondary launch asks to be shown.
     void showRequested();
+
+    /// Emitted when a secondary launch hands over a streamdeck:// deep link.
+    void deepLinkRequested(QString const& url);
 
 private:
     QString name_;

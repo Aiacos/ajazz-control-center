@@ -2,11 +2,71 @@
 
 > **"Stream Dock Plus"-class controller**: 10 LCD keys (2×5) + 4 endless
 > rotary encoders + a horizontal touchscreen strip + USB hub.
+
+## ✅ Hardware-confirmed render model (live AKP05E `0x0300:0x3004`, 2026-05-31)
+
+> **This section is the source of truth and supersedes the hypothesised
+> "Wire protocol" / "Image upload" sections further down** (kept for history,
+> annotated). Confirmed on a live `0x0300:0x3004` "HOTSPOTEKUSB HID DEMO" unit
+> (fw `V3.AKP05E.01.007`) by driving the panel and reading off the result; the
+> matching code is `src/devices/streamdeck/src/akp05.cpp`.
+
+**Every display surface is addressed through the single `BAT` opcode** (`0x42 0x41 0x54`), distinguished only by the *wire byte* at packet offset 12 (offset
+13 on the wire after the POSIX `0x00` report-id prepend). The vendor `ENC`,
+`MAI`, and `DRA` opcodes **render nothing on this firmware** — do not use them.
+
+| Wire byte (BAT offset 12) | Physical surface                                     | Image size  | Rotation   |
+| ------------------------- | ---------------------------------------------------- | ----------- | ---------- |
+| `1..4`                    | the 4 touch-strip zones (aligned to encoders E1..E4) | 128×128     | **Rot180** |
+| `5`                       | **no visible surface** — do not use                  | —           | —          |
+| `6..10`                   | bottom-row keys K6..K10                              | **112×112** | **Rot180** |
+| `11..15`                  | top-row keys K1..K5                                  | **112×112** | **Rot180** |
+
+> **Keys = 112×112, uniform for all 10** (opendeck-akp05 `mappings.rs:166`;
+> hardware-confirmed 2026-06-01 — a 112 buffer fills every key 1:1). Was 85, then
+> briefly 120 (overflowed the 112 LCD → row skew that *looked* like a per-key margin).
 >
-> ⚠️ **In-tree gap (2026-05-14):** the current `akp05.cpp` models *15 keys
-> (3×5) + 4 encoders + touch strip*. That is wrong — the AKP05 / N4 has
-> only **10 LCD keys arranged 2 rows × 5 columns**. Tracking in `TODO.md`
-> under "AKP05 layout reconciliation".
+> **Strip zones = 128×128 squares**, one above each knob. The 4 zones are discrete
+> (the knobs are physically spaced) so there are gaps between them by design — they
+> do not tile into a continuous strip. Zone size is cosmetic; opendeck-akp05
+> `mappings.rs:174` uses 176×112.
+
+- **Orientation:** the panel mounts every LCD inverted, so each image is
+  **pre-rotated 180°** before encoding (`akp05KeyTransform` / `akp05EncoderTransform`
+  both `rotationDegrees=180`). Key *order* is unaffected — rotation is per-image.
+- **Logical→wire key map** (`akp05KeyWire`, commit `037bd8d`): logical key
+  1..5 → wire 11..15 (top row), 6..10 → wire 6..10 (bottom row).
+- **The 4 strip zones ARE the encoder displays** — there is no separate encoder
+  LCD. `IEncoderCapable::setEncoderImage(idx 0..3)` renders to BAT wire byte
+  `idx+1` (commit `cb00677`). One 128×128 square per knob; the 4 zones are
+  discrete with gaps by design (see the size note up top).
+- **Upload framing:** `BAT` header → JPEG payload in 1024-byte chunks → `ULEND`
+  commit sentinel. `ULEND` at buffer offset `5..9` (`buildUploadFinished`) is
+  hardware-accepted; mirajazz's offset-3 form also works (device is lenient).
+- **Brightness:** `LIG` (`0x4C 0x49 0x47`), percent at byte 10 — works.
+
+**Do NOT send `CRT DIS` at open().** It wedges the display: the app
+opens→closes(`STP`)→reopens the device at startup, and a `DIS,STP,DIS` churn
+leaves the panel backlit-but-black until a physical replug. (`open()` sends only
+the `VER` probe; the service owns `LIG`.)
+
+**Stuck-display recovery = physical replug.** On systemd ≥258, a USB
+re-enumeration storm can leave the display controller wedged (backlight on,
+image layer dead) and drop the `uaccess` ACL; `udevadm trigger` does NOT fix it.
+A real unplug/replug does. This is distinct from any software bug — re-run the
+known-good `scripts/akp05_color_probe.py` to tell device-state from a code fault.
+
+**Input (key/encoder/touch) is unreachable on this `0x3004` demo unit** —
+see [`akp05_input_corrections.md` §7.1](./akp05_input_corrections.md). Output
+(above) works fully.
+
+______________________________________________________________________
+
+> ⚠️ **Historical note (2026-05-14):** the sections below were written before
+> any live hardware and contain hypotheses now corrected by the model above
+> (the "15 keys" gap is fixed; VID:PID is `0x0300:0x3004`; the strip is BAT
+> wire 1..4, NOT `ENC`/`MAI`; images are 85×85 Rot180, NOT 60×60 Rot0). Kept
+> for provenance; trust the confirmed model when they disagree.
 
 ## Hardware
 
@@ -33,17 +93,16 @@ see [`_research-sources.md`](./_research-sources.md).
 
 ### Variants
 
-| Codename         | Marketing name               | VID          | PID          | Notes                                                                                                                           |
-| ---------------- | ---------------------------- | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------- |
-| `akp05`          | AJAZZ AKP05                  | unknown      | unknown      | The OpenDeck author of `[opendeck-akp05]` could not confirm the USB ID (no hardware sample). Likely shares a Mirabox vendor ID. |
-| `akp05e`         | AJAZZ AKP05E (white / black) | unknown      | unknown      | Sold via `ajazzbrand.com` at USD 99.99. Believed firmware-identical to N4.                                                      |
-| `akp05e_pro`     | AJAZZ AKP05E PRO             | unknown      | unknown      | Same form factor; "PRO" SKU mostly trims/material change.                                                                       |
-| **`mirabox_n4`** | **Mirabox N4**               | **`0x6603`** | **`0x1007`** | The only known canonical USB ID. Confirmed via `[opendeck-akp05]/40-opendeck-akp05.rules`.                                      |
+| Codename         | Marketing name               | VID          | PID          | Notes                                                                                                                                                         |
+| ---------------- | ---------------------------- | ------------ | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `akp05`          | AJAZZ AKP05                  | `0x0300`     | `0x5001`     | Provisional AJAZZ-branded PID per `[opendeck-akp05]`; no live sample confirmed.                                                                               |
+| **`akp05e`**     | AJAZZ AKP05E (white / black) | **`0x0300`** | **`0x3004`** | **Confirmed live 2026-05-21+** (fw `V3.AKP05E.01.007`) on a "HOTSPOTEKUSB HID DEMO" white-label unit. Output fully works; input unreachable on this demo SKU. |
+| `akp05e_pro`     | AJAZZ AKP05E PRO             | unknown      | unknown      | Same form factor; "PRO" SKU mostly trims/material change.                                                                                                     |
+| **`mirabox_n4`** | **Mirabox N4**               | **`0x6603`** | **`0x1007`** | The only known canonical USB ID. Confirmed via `[opendeck-akp05]/40-opendeck-akp05.rules`.                                                                    |
 
-⚠️ The current `register.cpp` lists `0x0300:0x5001` for `akp05` — there is
-**no public source** for that pair. It must have been a placeholder. Until
-we capture an AKP05/AKP05E unit and learn its real VID:PID, keep the
-placeholder registered but mark the entry `scaffolded` in `devices.yaml`.
+ℹ️ `register.cpp` registers `0x0300:0x3004` (AKP05E, **live-confirmed**),
+`0x6603:0x1007` (Mirabox N4), and `0x0300:0x5001` (provisional AKP05). The
+`0x3004` entry is the one validated against physical hardware in this repo.
 
 ## Layout
 
@@ -131,25 +190,31 @@ Mirabox devices — to verify):
 
 ### Output reports (host → device)
 
-| Command                                   | Bytes 5..7                         | Payload                                                      |
-| ----------------------------------------- | ---------------------------------- | ------------------------------------------------------------ |
-| `LIG` (brightness)                        | `0x4C 0x49 0x47`                   | byte 10 = percent                                            |
-| `BAT` (key image)                         | `0x42 0x41 0x54`                   | size + 1-based key index                                     |
-| **`ENC`** (encoder LCD area in the strip) | `0x45 0x4E 0x43`                   | size + 0-based encoder index — confirm vs `[opendeck-akp05]` |
-| **`MAI`** (full-width touch strip)        | `0x4D 0x41 0x49`                   | size only (target is implicit)                               |
-| `STP`, `CLE`, `LOG`, `HAN`                | shared with the rest of the family | unchanged                                                    |
+> ❌ **CORRECTED — see the confirmed render model at the top.** On the live
+> `0x3004` firmware, `ENC` and `MAI` render **nothing**; the strip zones use
+> `BAT` at wire bytes 1..4. The table below is the original hypothesis.
 
-These opcode words match what's in `src/devices/streamdeck/src/akp05_protocol.hpp`
-but **are not yet attested in any third-party reference** — when the
-real capture lands, they may turn out to be misnamed. Treat as
-hypothetical until then.
+| Command                       | Bytes 5..7                         | Payload                                          |
+| ----------------------------- | ---------------------------------- | ------------------------------------------------ |
+| `LIG` (brightness)            | `0x4C 0x49 0x47`                   | byte 10 = percent                                |
+| `BAT` (key image)             | `0x42 0x41 0x54`                   | size + wire byte (1..4 strip zones, 6..15 keys)  |
+| ~~`ENC`~~ (blank on `0x3004`) | `0x45 0x4E 0x43`                   | unused — strip zones use `BAT` wire 1..4 instead |
+| ~~`MAI`~~ (blank on `0x3004`) | `0x4D 0x41 0x49`                   | unused — no whole-strip surface on this firmware |
+| `STP`, `CLE`, `LOG`, `HAN`    | shared with the rest of the family | unchanged                                        |
 
 ### Image upload
 
+> ❌ **CORRECTED — see the confirmed render model at the top.** Live `0x3004`:
+> keys are **112×112 JPEG `Rot180`** (NOT 60×60 Rot0, NOT the 85 once recorded
+> here); the strip is **4 discrete 128×128 zones `Rot180`** (gaps between them by
+> design — see top), each addressed by its own `BAT` wire byte (1..4) — NOT a
+> single 800×480 split. The original `[opendeck-akp05]` guess below was wrong on
+> both size and orientation.
+
 Per `[opendeck-akp05]/[opendeck-akp03]` the image format for the N4 keys
-should be very close to AKP03 (60×60 JPEG `Rot0`). For the touch strip we
-expect a 800×480 JPEG split across the 4 encoder zones (`Rot0`). To
-confirm with a capture.
+was guessed to be close to AKP03 (60×60 JPEG `Rot0`), with the touch strip a
+800×480 JPEG split across the 4 encoder zones (`Rot0`). The live unit disproved
+this — see the confirmed render model.
 
 ## Edge cases and quirks
 

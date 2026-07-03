@@ -1,0 +1,26 @@
+{
+  "Name": "High MinVersion Plugin",
+  "Author": "Future Developer",
+  "Version": "99.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "Test",
+  "CategoryIcon": "icons/category.png",
+  "Description": "A plugin requiring a far-future app version to test Software.MinimumVersion rejection.",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "11.0" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "Software": { "MinimumVersion": "99.0" },
+  "CodePath": "code/plugin.js",
+  "Actions": [
+    {
+      "UUID": "com.example.highver.action",
+      "Name": "High Version Action",
+      "Icon": "icons/action.png",
+      "States": [
+        {}
+      ]
+    }
+  ]
+}

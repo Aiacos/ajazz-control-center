@@ -1,5 +1,16 @@
 # Plugin SDK
 
+> ⚠️ **SCOPE / ACCURACY BANNER (2026-06).** This document describes an
+> **aspirational `.acplugin` language-agnostic SDK that is NOT the implemented
+> system.** The runtime that actually loads Elgato/OpenDeck `.sdPlugin` packages
+> today is the **Stream Deck WebSocket protocol** implemented by `SdPluginServer`
+> + `PluginManager` + `PluginDeviceBridge`. For the real, source-of-truth wire
+> contract see
+> [`../protocols/streamdeck/elgato_plugin_protocol.md`](../protocols/streamdeck/elgato_plugin_protocol.md);
+> for the bug/gap inventory see [`PLUGIN-GAP-ANALYSIS.md`](PLUGIN-GAP-ANALYSIS.md).
+> Treat the `.acplugin` design below as a future-direction sketch, not current
+> behavior.
+
 This document specifies the **public** plugin SDK for AJAZZ Control Center
 (`acc`). It complements the [in-process Python host](PLUGIN-SYSTEM.md) —
 which targets first-party scripting — by defining an **out-of-process,

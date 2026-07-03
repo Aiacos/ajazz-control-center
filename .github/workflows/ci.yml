@@ -43,7 +43,14 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # Release/nightly packaging checks out submodules (OpenDeck SPA +
+          # btop for the sysmon bundle) — the PR matrix must exercise the SAME
+          # build paths or packaging-only breakage ships silently to the
+          # release workflow (runs 28618367640/28619135595: sysmon bundle
+          # compile + wayland deps failed only at release time).
+          submodules: recursive
 
       # ---- Pitfall 11 invariant: `hid_open` must stay inside hid_transport.cpp
       # Runs only on Linux (the source tree is identical across runners — one
@@ -61,6 +68,39 @@ jobs:
           fi
           echo "hid_open invariant OK — only hid_transport.cpp opens HID handles."
 
+      # ---- Phase 30 HOST-03 invariants: loopback-only bind + SIGPIPE handler
+      # Runs only on Linux (source tree is identical across runners — one check
+      # is enough) and BEFORE any Qt install / build step for fast failure.
+      - name: Enforce loopback-only + SIGPIPE invariants (Phase 30)
+        if: runner.os == 'Linux'
+        run: |
+          # QHostAddress::Any must appear only in comments, never in live code.
+          # The existing comment hits in sd_plugin_server.{cpp,hpp} document the
+          # security delta from the vendor bind — they are excluded by the filter.
+          if grep -rn 'QHostAddress::Any' src/ | grep -vP ':[0-9]+:\s*(//|[*])'; then
+            echo "::error::QHostAddress::Any found in non-comment source — loopback-only violated."
+            exit 1
+          fi
+          # SIGPIPE handler must be present in main.cpp so a broken plugin IPC
+          # pipe cannot kill the host process.
+          if ! grep -n 'SIGPIPE' src/app/src/main.cpp | grep -q 'SIG_IGN'; then
+            echo "::error::SIGPIPE SIG_IGN handler missing from main.cpp."
+            exit 1
+          fi
+          echo "Loopback-only + SIGPIPE invariants OK."
+
+      # ---- VERIF-02 milestone modularity gates (v2.0)
+      # Runs only on Linux (source tree is identical across runners) and BEFORE
+      # any Qt install / build step for fast failure. Delegates to the scripted,
+      # comment-aware gates so the local run and CI agree byte-for-byte. This
+      # EXTENDS — does not replace — the Phase-30 QHostAddress::Any/SIGPIPE gate
+      # above (which fails even faster on the security-critical bind). The
+      # script re-checks QHostAddress::Any plus the mirajazz/nlohmann/makeAkp
+      # modularity boundaries.
+      - name: Enforce milestone modularity gates (VERIF-02)
+        if: runner.os == 'Linux'
+        run: bash scripts/verif-milestone-gates.sh
+
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
@@ -70,6 +110,8 @@ jobs:
               libudev-dev libusb-1.0-0-dev libhidapi-dev \
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
+              libwayland-dev wayland-protocols libx11-dev \
+              g++-14 \
               python3-dev python3-pip
 
       - name: Install macOS deps
@@ -91,11 +133,21 @@ jobs:
           # tolerates its absence (find_package(... QUIET) sets
           # AJAZZ_HAVE_WEBSOCKETS=OFF), but for CI we want the .cpp
           # actually compiled so the integration is exercised.
-          modules: qtshadertools qtwebsockets
+          # qtwebengine (+qtwebchannel/qtpositioning deps): required for the
+          # OpenDeck SPA embed — without it the webui block silently builds
+          # the native QML fallback and the WebEngine TUs are never compiled
+          # in the PR matrix (packaging parity; see release.yml).
+          # qtwayland (Qt6::WaylandClient + qtwaylandscanner, Phase 34 APROF-01
+          # watcher) is NO LONGER a separate module: the 2026-06 restructure of
+          # the Qt online repo folded the qtwayland archive into the BASE
+          # desktop install (only qtwaylandcompositor remains an addon), and
+          # requesting the old module name now hard-fails aqtinstall on every
+          # platform ("packages ['qtwayland'] were not found").
+          modules: qtshadertools qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # ---- Python ---------------------------------------------------------
       - name: Set up Python
-        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1  # v6.3.0
         with:
           python-version: "3.11"
           # Cache the pip wheel store keyed on pyproject.toml so the
@@ -113,6 +165,45 @@ jobs:
       # Python lacks `cryptography` (SEC-003 #51 follow-up).
       - name: Install Python package
         run: pip install -e .[dev]
+
+      # The Ed25519 verify gate (manifest_signer.cpp::resolveTrustedExecutable)
+      # runs the verifier with the SYSTEM python3 from a vetted dir
+      # (/usr/bin, /usr/local/bin, /bin) — NEVER via $PATH — so a PATH-hijack
+      # cannot forge a "valid signature" verdict (CWE-426). `setup-python`
+      # installs `cryptography` into its OWN interpreter, which the vetted
+      # /usr/bin/python3 cannot import; on macOS that interpreter therefore
+      # exits 1 on every `verify` (ModuleNotFoundError), which the C++ side
+      # maps to SignatureState::Invalid → every signed plugin verifies as
+      # Refused and the self-signed gate tests fail. The Linux runner's
+      # /usr/bin/python3 already carries cryptography, so this is macOS-only.
+      # Install cryptography INTO the vetted interpreter the verifier actually
+      # uses; the final import is a hard gate so a silent install miss fails
+      # loudly here instead of as a confusing verdict mismatch later.
+      - name: Install cryptography into the vetted python3 (macOS verifier)
+        if: runner.os == 'macOS'
+        run: |
+          sudo /usr/bin/python3 -m ensurepip 2>/dev/null || true
+          sudo /usr/bin/python3 -m pip install "cryptography>=42.0" \
+            || sudo /usr/bin/python3 -m pip install --break-system-packages "cryptography>=42.0" \
+            || /usr/bin/python3 -m pip install --user "cryptography>=42.0" \
+            || /usr/bin/python3 -m pip install --user --break-system-packages "cryptography>=42.0"
+          /usr/bin/python3 -c "import sys, cryptography; print('cryptography', cryptography.__version__, 'importable by', sys.executable)"
+
+      # ---- Rust toolchain (mirajazz Stream Dock sidecar) ------------------
+      # The CMake build compiles the out-of-process streamdock-host sidecar via
+      # cargo (cmake/StreamdockSidecar.cmake). GitHub runners ship Rust, but pin
+      # stable explicitly + cache the cargo store so the mirajazz git dependency
+      # is fetched/compiled once per Cargo.lock instead of every run.
+      - name: Set up Rust (stable)
+        run: rustup toolchain install stable --profile minimal --no-self-update && rustup default stable
+      - name: Cache cargo registry + git
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: ${{ runner.os }}-cargo-${{ hashFiles('streamdock-host/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       # ---- Configure, build, test -----------------------------------------
       - name: Configure
@@ -156,19 +247,27 @@ jobs:
     if: github.event_name == 'push'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # Build-path parity with the build matrix (webui/bundle blocks are
+          # exercised, not silently skipped). See the build job note.
+          submodules: recursive
       - name: Install deps
         run: |
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build lcov libudev-dev \
               libusb-1.0-0-dev libhidapi-dev python3-dev \
-              libgl1-mesa-dev libxkbcommon-dev
+              libgl1-mesa-dev libxkbcommon-dev \
+              libwayland-dev wayland-protocols libx11-dev
 
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
           version: 6.8.3
           cache: true
-          modules: qtwebsockets
+          # qtwayland ships in the BASE desktop install since the 2026-06 Qt
+          # repo restructure (see the build job note) — do not list it here.
+          # qtwebengine et al.: packaging parity, see the build job note.
+          modules: qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # Same rationale as the `build` job: the C++ test_manifest_signer.cpp
       # cases exec `python3 sign-plugin-manifest.py` which imports
@@ -285,7 +384,11 @@ jobs:
             lsan_options_relative: ""
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+        with:
+          # Build-path parity with the build matrix (webui/bundle blocks are
+          # exercised, not silently skipped). See the build job note.
+          submodules: recursive
       - name: Install deps
         run: |
           sudo apt-get update
@@ -294,12 +397,19 @@ jobs:
               libudev-dev libusb-1.0-0-dev libhidapi-dev \
               libgl1-mesa-dev libxkbcommon-dev libxcb1-dev \
               libxcb-cursor-dev libxkbcommon-x11-dev \
+              libwayland-dev wayland-protocols libx11-dev \
               python3-dev python3-pip
       - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
         with:
           version: 6.8.3
           cache: true
-          modules: qtshadertools qtwebsockets
+          # qtwayland (Qt6::WaylandClient + qtwaylandscanner, Phase 34 APROF-01
+          # watcher) is NO LONGER a separate module: the 2026-06 restructure of
+          # the Qt online repo folded the qtwayland archive into the BASE
+          # desktop install (only qtwaylandcompositor remains an addon), and
+          # requesting the old module name now hard-fails aqtinstall on every
+          # platform ("packages ['qtwayland'] were not found").
+          modules: qtshadertools qtwebsockets qtwebengine qtwebchannel qtpositioning
 
       # Same rationale as the `build` job: ctest runs the manifest verifier
       # tests which exec `python3 sign-plugin-manifest.py`, importing

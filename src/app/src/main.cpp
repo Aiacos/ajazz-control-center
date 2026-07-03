@@ -15,6 +15,7 @@
 #include "app_icon.hpp"
 #include "application.hpp"
 #include "branding_service.hpp"
+#include "opendeck_bridge.hpp"
 #include "single_instance_guard.hpp"
 #include "tray_controller.hpp"
 
@@ -23,13 +24,29 @@
 #include <QCommandLineParser>
 #include <QIcon>
 #include <QQmlApplicationEngine>
+#include <QQmlContext>
 #include <QQuickStyle>
+#include <QTimer>
 #include <QWindow>
+
+#ifdef Q_OS_WIN
+#include <QDir>
+#include <QSettings>
+#endif
+#ifdef Q_OS_MACOS
+#include <QFileOpenEvent>
+#endif
 
 #ifdef AJAZZ_HAVE_WEBENGINE
 #include <QtWebEngineQuick/QtWebEngineQuick>
+#ifdef AJAZZ_HAVE_WEBUI
+#include "opendeck_scheme_handler.hpp"
+
+#include <QWebEngineProfile>
+#endif
 #endif
 
+#include <csignal>
 #include <iostream>
 #include <optional>
 
@@ -42,8 +59,70 @@
 #ifndef AJAZZ_APP_ID
 #define AJAZZ_APP_ID "io.github.Aiacos.AjazzControlCenter"
 #endif
+#ifndef AJAZZ_APP_VERSION
+#define AJAZZ_APP_VERSION "0.0.0"
+#endif
+
+namespace {
+
+#ifdef Q_OS_WIN
+/// Register the streamdeck:// URL scheme for the current user (idempotent).
+/// HKCU\Software\Classes needs no elevation and covers both the MSI and the
+/// portable ZIP install (production audit blocker 2, Windows leg). The shell
+/// command re-launches us with the URL as argv[1]; the existing single-instance
+/// hand-off in main() then forwards it to the primary instance.
+void registerStreamdeckSchemeWindows() {
+    QString const exe = QDir::toNativeSeparators(QCoreApplication::applicationFilePath());
+    QSettings cls(QStringLiteral("HKEY_CURRENT_USER\\Software\\Classes\\streamdeck"),
+                  QSettings::NativeFormat);
+    cls.setValue(QStringLiteral("."), QStringLiteral("URL:Stream Deck deep link"));
+    cls.setValue(QStringLiteral("URL Protocol"), QString{});
+    cls.setValue(QStringLiteral("shell/open/command/."),
+                 QStringLiteral("\"%1\" \"%2\"").arg(exe, QStringLiteral("%1")));
+}
+#endif
+
+#ifdef Q_OS_MACOS
+/// macOS delivers URL-scheme activations as QFileOpenEvent to the running
+/// application object (LaunchServices re-activates the bundle instead of
+/// spawning a second process, so the argv path never fires). Route the URL to
+/// Application::handleDeepLink. CFBundleURLTypes lives in resources/macos/
+/// Info.plist.in.
+class DeepLinkOpenFilter final : public QObject {
+public:
+    explicit DeepLinkOpenFilter(ajazz::app::Application& controller, QObject* parent)
+        : QObject(parent), m_controller(controller) {}
+
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override {
+        if (event->type() == QEvent::FileOpen) {
+            auto const* openEvent = static_cast<QFileOpenEvent*>(event);
+            QString const url = openEvent->url().toString();
+            if (url.startsWith(QStringLiteral("streamdeck://"))) {
+                m_controller.handleDeepLink(url);
+                return true;
+            }
+        }
+        return QObject::eventFilter(watched, event);
+    }
+
+private:
+    ajazz::app::Application& m_controller;
+};
+#endif
+
+} // anonymous namespace
 
 int main(int argc, char* argv[]) {
+#ifndef _WIN32
+    // Ignore SIGPIPE process-wide. The out-of-process plugin host writes to a
+    // child via a pipe; if the child exits/crashes mid-IPC, the next ::write()
+    // to the closed read end raises SIGPIPE, whose default disposition kills
+    // the whole GUI app *before* the write()'s EPIPE return can be handled.
+    // Ignoring it lets ::write() return -1/EPIPE so the host's existing error
+    // path runs instead. Windows _write() returns EPIPE without a signal.
+    ::signal(SIGPIPE, SIG_IGN);
+#endif
 #ifdef AJAZZ_HAVE_WEBENGINE
     // Qt WebEngine requires its renderer-process initialiser to run BEFORE
     // any QGuiApplication / QApplication is constructed; otherwise the
@@ -52,6 +131,11 @@ int main(int argc, char* argv[]) {
     // (see `AJAZZ_BUILD_PROPERTY_INSPECTOR`); minimal Qt installs and
     // headless CI builds compile this branch out and stay on the
     // schema-driven Property Inspector renderer at runtime.
+#ifdef AJAZZ_HAVE_WEBUI
+    // Register the custom scheme that serves the bundled OpenDeck SPA with a
+    // clean web origin (opendeck://app/). MUST precede QtWebEngine init.
+    ajazz::app::registerOpenDeckScheme();
+#endif
     QtWebEngineQuick::initialize();
 #endif
     // Use QApplication (not QGuiApplication) because TrayController relies on
@@ -60,7 +144,9 @@ int main(int argc, char* argv[]) {
     QApplication::setOrganizationDomain("github.com/Aiacos/ajazz-control-center");
     QApplication::setApplicationName(AJAZZ_PRODUCT_NAME);
     QApplication::setApplicationDisplayName(AJAZZ_PRODUCT_NAME);
-    QApplication::setApplicationVersion("0.1.0");
+    // Single-source of truth: CMake's project(VERSION) via AJAZZ_APP_VERSION. A hardcoded
+    // literal here shipped "0.1.0" in every release regardless of the actual tag (issue #88).
+    QApplication::setApplicationVersion(QStringLiteral(AJAZZ_APP_VERSION));
     // setDesktopFileName must match the actual basename of the installed
     // .desktop file, *not* the reverse-DNS app id. Linux distros install us
     // as `share/applications/ajazz-control-center.desktop` (see
@@ -74,6 +160,13 @@ int main(int argc, char* argv[]) {
     QApplication::setQuitOnLastWindowClosed(false);
 
     QApplication app(argc, argv);
+#ifdef Q_OS_WIN
+    // streamdeck:// scheme registration (per-user, idempotent) — production
+    // audit blocker 2: Linux registers via the .desktop x-scheme-handler,
+    // Windows needs the HKCU\Software\Classes key written by the app itself so
+    // the ZIP install is covered too.
+    registerStreamdeckSchemeWindows();
+#endif
     // Window icon shown in the taskbar, alt-tab list and X11 _NET_WM_ICON.
     // Window icon resolution mirrors the tray (see tray_controller.cpp): the
     // theme name "ajazz-control-center" tells xdg / Wayland compositors and
@@ -153,7 +246,21 @@ int main(int argc, char* argv[]) {
     // they double-click the .desktop entry, the tray icon, or the autostart
     // hook fires while a manual launch is already up.
     auto const socketName = ajazz::app::SingleInstanceGuard::defaultSocketName();
-    if (ajazz::app::SingleInstanceGuard::tryActivateExisting(socketName)) {
+    // A streamdeck:// positional argument means the OS scheme handler spawned
+    // us for a plugin deep link (didReceiveDeepLink). When a primary already
+    // runs, hand the URL over instead of raising a second window.
+    QString deepLinkArg;
+    for (QString const& a : app.arguments().mid(1)) {
+        if (a.startsWith(QStringLiteral("streamdeck://"))) {
+            deepLinkArg = a;
+            break;
+        }
+    }
+    if (!deepLinkArg.isEmpty() &&
+        ajazz::app::SingleInstanceGuard::forwardDeepLink(socketName, deepLinkArg)) {
+        return 0;
+    }
+    if (deepLinkArg.isEmpty() && ajazz::app::SingleInstanceGuard::tryActivateExisting(socketName)) {
         return 0;
     }
     ajazz::app::SingleInstanceGuard instanceGuard(socketName);
@@ -165,10 +272,43 @@ int main(int argc, char* argv[]) {
 
     ajazz::app::Application controller;
     controller.bootstrap();
+#ifdef Q_OS_MACOS
+    // Deep links arrive as QFileOpenEvent on macOS (LaunchServices activates
+    // the running bundle; no second process, no argv). Parent = app: the
+    // filter dies before `controller` (both outlive the event loop).
+    app.installEventFilter(new DeepLinkOpenFilter(controller, &app));
+#endif
 
     QQmlApplicationEngine engine;
     controller.exposeToQml(engine);
-    engine.loadFromModule("AjazzControlCenter", "Main");
+
+    // OpenDeck UI integration: the OpenDeck Svelte SPA is embedded as the
+    // STREAMDECK editor pane (qml/OpenDeckPane.qml, mounted by ProfileEditor when
+    // the active device is a stream controller). The native shell (Main.qml) is
+    // always the root and keeps the device sidebar + the mouse and keyboard
+    // editors. We therefore expose the bridge + the bundle flag unconditionally
+    // (gated only by the WebEngine/SPA compile-time availability) and serve the
+    // SPA over the custom opendeck://app/ scheme, regardless of which device is
+    // selected — ProfileEditor decides when to show the pane.
+#ifdef AJAZZ_HAVE_WEBUI
+    bool const webUiBundlePresent = true;
+#else
+    bool const webUiBundlePresent = false;
+#endif
+    engine.rootContext()->setContextProperty(QStringLiteral("AppHasWebUiBundle"),
+                                             webUiBundlePresent);
+#ifdef AJAZZ_HAVE_WEBENGINE
+    engine.rootContext()->setContextProperty(QStringLiteral("OpenDeckBridgeObject"),
+                                             controller.openDeckBridge());
+#ifdef AJAZZ_HAVE_WEBUI
+    // Serve the bundled SPA via the custom scheme so SvelteKit routes from a
+    // clean origin and Fetch works. Handler is parented to qApp.
+    QWebEngineProfile::defaultProfile()->installUrlSchemeHandler(
+        QByteArray(ajazz::app::kOpenDeckScheme), new ajazz::app::OpenDeckSchemeHandler(qApp));
+#endif
+#endif
+
+    engine.loadFromModule("AjazzControlCenter", QStringLiteral("Main"));
     if (engine.rootObjects().isEmpty()) {
         return -1;
     }
@@ -204,6 +344,20 @@ int main(int argc, char* argv[]) {
     // Re-raise on subsequent launches (single-instance contract).
     QObject::connect(
         &instanceGuard, &ajazz::app::SingleInstanceGuard::showRequested, &app, showAllWindows);
+#ifdef AJAZZ_HAVE_WEBSOCKETS
+    // Deep links: forwarded by scheme-activated secondaries, or carried on our
+    // own argv when we ARE the scheme-activated launch (dispatched after the
+    // event loop starts so plugins have registered).
+    QObject::connect(&instanceGuard,
+                     &ajazz::app::SingleInstanceGuard::deepLinkRequested,
+                     &controller,
+                     &ajazz::app::Application::handleDeepLink);
+    if (!deepLinkArg.isEmpty()) {
+        QTimer::singleShot(3000, &controller, [&controller, deepLinkArg]() {
+            controller.handleDeepLink(deepLinkArg);
+        });
+    }
+#endif
 
     return app.exec();
 }

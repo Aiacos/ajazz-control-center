@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Media Control" action
+     (opendeck.multimedia -> com.hotspot.streamdock.system.multimedia).
+     Settings contract: {"key": "PlayPause" | "Stop" | "Next" | "Previous"}. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="key">Action</label>
+    <select id="key">
+        <option value="PlayPause">Play / pause</option>
+        <option value="Stop">Stop</option>
+        <option value="Next">Next track</option>
+        <option value="Previous">Previous track</option>
+    </select>
+    <div class="hint">Sent as a system media key on press (or dial press).</div>
+    <script>
+        "use strict";
+        const keyEl = document.getElementById("key");
+        function applySettings(s) {
+            if (typeof s.key === "string" && s.key !== "") {
+                keyEl.value = s.key;
+            }
+        }
+        keyEl.addEventListener("change", () => save({ key: keyEl.value }));
+    </script>
+</body>
+</html>

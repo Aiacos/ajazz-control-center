@@ -1,5 +1,10 @@
 # Plugin Development
 
+> ℹ️ **SCOPE BANNER (2026-06).** This page covers **first-party Python plugins**.
+> For Elgato/OpenDeck `.sdPlugin` packages (the Stream Deck ecosystem format, a
+> separate WebSocket runtime) see the canonical protocol reference
+> `docs/protocols/streamdeck/elgato_plugin_protocol.md`.
+
 AJAZZ Control Center runs plugins in a **child Python process** spawned
 by the host on demand. The host talks to the child over line-delimited
 JSON on a pair of pipes; a crash in plugin code (or a misbehaving C

@@ -103,6 +103,10 @@ SinkSlot& sinkSlot() noexcept {
 
 } // namespace
 
+std::shared_ptr<LogSink> makeStderrSink() {
+    return std::make_shared<StderrSink>();
+}
+
 void setLogSink(std::shared_ptr<LogSink> sink) noexcept {
     if (!sink) {
         // Reset to the default — callers typically use this in a test

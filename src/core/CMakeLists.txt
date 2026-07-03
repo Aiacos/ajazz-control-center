@@ -7,11 +7,40 @@ add_library(
     src/profile_io.cpp
     src/profile_bundle.cpp
     src/action_engine.cpp
+    # Phase 32 (BIND-04/BIND-05): instanceChildrenToChain -- the Multi Action
+    # dispatch seam converting ActionInstance.children into the flat ActionChain
+    # the ActionEngine already walks. Pure-core (no Qt, no nlohmann; COD-031).
+    src/action_chain_adapter.cpp
     src/executor.cpp
     src/macro_recorder.cpp
     src/notification_service.cpp
     src/logger.cpp
+    # Debug epic Phase 1: reusable LogSink building blocks (fan-out tee,
+    # bounded queryable ring buffer, append-to-file). No Qt / no JSON, so
+    # they stay inside the COD-031 boundary and back the out-of-process
+    # debug log stream wired up in the app tier.
+    src/log_sinks.cpp
     src/hotplug_monitor.cpp
+    # Phase 21-01: IInputSynthesizer — always-compiled stub (AJAZZ_FEATURE_INPUT_SYNTH OFF by
+    # default keeps the gating test hardware-free). The OS TUs are added unconditionally below
+    # so they participate in every build; each TU is self-empty unless both
+    # AJAZZ_FEATURE_INPUT_SYNTH and the platform #if are satisfied.
+    src/input_synthesizer_stub.cpp
+    src/input_synthesizer_linux.cpp
+    src/input_synthesizer_win.cpp
+    src/input_synthesizer_mac.cpp
+    # Phase 34-01 (APROF-01): IActiveWindowWatcher — always-compiled recording
+    # stub + default factory. Qt-free + nlohmann-free (COD-031), mirroring the
+    # input_synthesizer split. The per-OS watcher backends (wayland/x11/win/mac)
+    # are app-tier TUs (they need Qt6::WaylandClient / libX11 / AppKit) and live
+    # in src/app/CMakeLists.txt, NOT here — only the pure-core stub + factory
+    # belong in ajazz_core.
+    src/active_window_watcher_stub.cpp
+    # Phase 21-03: BuiltinActionRegistry — pure-core UUID->handler dispatch table (no Qt, no
+    # nlohmann; COD-031). The app tier (BuiltinActionsService) populates it with handlers for the
+    # ~24 com.hotspot.streamdock.* built-in UUIDs; the plugin executor short-circuits to it BEFORE
+    # the Phase-19 bridge path. settingsJson is passed verbatim (parsed app-tier).
+    src/builtin_action_registry.cpp
 )
 
 add_library(ajazz::core ALIAS ajazz_core)
@@ -41,3 +70,14 @@ elseif(WIN32)
 endif()
 
 set_target_properties(ajazz_core PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# ----------------------------------------------------------------------------
+# Phase 21-01: AJAZZ_FEATURE_INPUT_SYNTH — native OS input synthesis backends. When ON, the per-OS
+# TUs (Linux uinput / Windows SendInput / macOS CGEvent) are active and
+# makePlatformInputSynthesizer() is defined. Default OFF so the gating test stays hardware-free (no
+# /dev/uinput, no OS permissions needed). COD-031: no Qt added to the core target for this feature.
+# ----------------------------------------------------------------------------
+if(AJAZZ_FEATURE_INPUT_SYNTH)
+    target_compile_definitions(ajazz_core PRIVATE AJAZZ_FEATURE_INPUT_SYNTH=1)
+    message(STATUS "AJAZZ_FEATURE_INPUT_SYNTH ON — native OS input synthesis backends enabled")
+endif()

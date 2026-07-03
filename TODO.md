@@ -92,15 +92,9 @@ ______________________________________________________________________
       Layout-managed items in SettingsPage / ProfileEditor /
       RgbPicker → switched to `Layout.preferredWidth/Height`.
 
-- [ ] Replace all undefined Qt.tint calls in Theme.qml with Qt.lighter/darker or a custom tint helper to avoid runtime errors on all platforms
-  — **VALIDATION 2026-05-20: premise looks INVALID.** `Qt.tint(color, tint)` is a documented Qt 6 QML global, used 10× in `Theme.qml`, and the shipped light-theme contrast fix relies on it (it cleared the zero-`qmllint`-warnings bar and the 105/105 test run). No evidence of a runtime error. Close unless a concrete failure is reproduced.
-
 - [ ] Implement a timeout or explicit reset for the syncGlyphState property in DeviceRow.qml after a successful sync to prevent stale success icons persisting in the UI
 
 - [ ] Add proper error handling and logging for sandbox.decorate failures in out_of_process_plugin_host.cpp (POSIX) and out_of_process_plugin_host_win32.cpp (Windows) to abort launch when sandboxing cannot be applied
-
-- [ ] Verify that the Windows AppContainer sandbox destructor always runs and guard the FreeSid call against null pointers to prevent resource leaks or crashes
-  — **VALIDATION 2026-05-20: already satisfied.** `~Impl()` in `src/plugins/src/process_attributes_impl_win32.hpp` guards every `FreeSid` (`if (sid != nullptr)`, `if (appContainerSid != nullptr)`) and the token handle (`if (restrictedToken != nullptr)`); it is RAII so it runs deterministically on scope exit. The "verify" is done — keep only as a tracking note, or close.
 
 - [ ] Create integration tests that spawn a child process under each sandbox implementation (AppContainer, bwrap, macOS exec) and assert that the intended isolation constraints are enforced
 
@@ -118,226 +112,6 @@ ______________________________________________________________________
   new udev rule and grants the ACL persistently.
 
 ### Medium-effort fixes (1–4 hours)
-
-- [ ] **AKP05 (Stream Dock) image upload silently fails on Linux/hidraw —
-  HID Report-ID framing.** 🐧 **Platform-specific; needs Fedora hardware to
-  fix+verify.**
-
-  **Symptom (observed 2026-05-21):** on Windows the AKP05E (`0x0300:0x3004`)
-  shows our icon on key 1; on Fedora the same build shows nothing. The device
-  **IS detected** in the app on Fedora (appears in the device list), so this is
-  not enumeration/registration — it is the image *write* not reaching the panel.
-
-  **Root cause (hypothesis, high confidence):** the Stream Dock packets put the
-  ASCII `CRT` prefix at **byte 0** (`buildCmdHeader` → `pkt[0]=0x43`), i.e. there
-  is **no leading HID Report-ID byte**. hidapi's `hid_write` contract is that
-  `data[0]` is the Report ID (0x00 for single-/unnumbered-report devices) on
-  *all* platforms. Windows `WriteFile` tolerates the missing report-id byte (the
-  device receives `CRT…` from byte 0), but **Linux hidraw is strict**: it takes
-  `buffer[0]` (0x43) as the Report ID, so the panel gets misaligned/garbage and
-  renders nothing. This exact convention is already documented in
-  `docs/protocols/keyboard/via.md:10` — *"byte 0 : report id (0x00 on
-  Linux/macOS, omitted on Windows WriteFile)"*.
-
-  **Architectural complication (do NOT do a blanket transport fix):**
-  `HidTransport::write()` calls `hid_write` identically on all platforms, but the
-  backends DISAGREE on byte 0:
-
-  - **Streamdeck** (`akp03/akp05/akp153/akp815`): byte 0 = `'C'` (no report id).
-  - **Keyboard** (`proprietary_keyboard.cpp`): byte 0 = `0x00` report id already
-    (time-sync data packet, TFT chunks).
-  - **Mouse** (`aj_series`): byte 0 = `kReportId` (0x05) / 0x00 for the clock.
-
-  A blanket "prepend 0x00 on Linux" in `HidTransport::write` would fix streamdeck
-  but **double-prefix the keyboard/mouse** (which already carry a report-id byte)
-  and break them on Linux. So the fix must be either (a) targeted to the
-  streamdeck backends only, or (b) a unification of the byte-0 convention across
-  all backends (larger; touches every builder + test + the Windows path).
-
-  **Diagnostic tests to run on Fedora (pin the failure point before coding):**
-
-  1. ✅ Device detected in the app device list — confirmed 2026-05-21.
-  1. Run from a terminal capturing stderr and inspect the log:
-     `./ajazz-control-center 2> ak.log` then
-     `grep -iE "akp05|streamdeck|opened|write|hid|permission|denied" ak.log`.
-     - Does it log `opened VID=0300 PID=3004`? (if not → udev/permissions, step 3)
-     - Do the image `write()`s return success (>0) or error? A *successful* write
-       with no panel change ⇒ confirms the report-id framing hypothesis.
-  1. udev / hidraw permissions:
-     `ls /etc/udev/rules.d/ | grep -i ajazz` and `ls -l /dev/hidraw*`.
-     - Ensure `resources/linux/70-ajazz.rules` is installed (VID `0300` Stream
-       Dock family) and the `/dev/hidraw*` node for `0300:3004` is user-accessible
-       (`uaccess`); replug or `udevadm trigger --action=change` if ACLs are stale.
-  1. Cross-check with the AKP153 (`0x0300:0x1001`) on the SAME Fedora box — it
-     uses the identical `CRT`-at-byte-0 framing. If AKP153 image upload ALSO
-     fails on Linux, the report-id issue is family-wide (all Stream Dock); if
-     AKP153 works, the problem is AKP05-specific (1024-byte packet size, the
-     0x3004 firmware, or the secondary-screen path).
-
-  **Candidate fix (pending the diagnostics):** if step 2 confirms write-succeeds-
-  but-no-render, give the streamdeck output reports a leading `0x00` report-id
-  byte on Linux/macOS only (mirroring `via.md`), e.g. a small platform-guarded
-  helper in the streamdeck backends (NOT in shared `HidTransport::write`). Then
-  **regression-test BOTH**: re-confirm Windows still shows the key-1 icon, and
-  Fedora now does too. Add a unit test pinning the on-wire byte 0 per platform if
-  feasible.
-
-  Files: `src/devices/streamdeck/src/akp05.cpp` (`buildCmdHeader`, `sendImage`/
-  key-image path), `src/core/src/hid_transport.cpp` (`write`), `docs/protocols/ streamdeck/akp05.md`. Related: the Linux note in `via.md:10`.
-
-  **✅ HARDWARE-CONFIRMED on Fedora 2026-05-22 (branch `feat/linux-device-support`).**
-  The fix landed at the transport (not per backend): `makeHidTransport` gained a
-  `prependReportIdPosix` flag (default false) that the four streamdeck
-  constructors (`akp03/akp05/akp153/akp815.cpp`) set to `true`;
-  `HidTransport::write()` prepends a single `0x00` report-id byte **under
-  `#ifndef _WIN32` only**, so Windows is byte-for-byte unchanged and only
-  Linux/macOS get the report-number byte hidraw expects. Verified: Windows MSVC
-  build + tests pass; GCC `-Werror` clean.
-
-  **Fedora confirmation:** a `CRT LIG` brightness probe on the live AKP05E
-  (`0x0300:0x3004`, IF0 = `/dev/hidraw14`) with the `0x00` report-id prepend
-  (1025 B on the wire) made the panel brightness pulse bright↔dim — every write
-  ACKed full-length and the device acted on the packet. That confirms the
-  report-id-prepend **OUT write path** (the same path key-image upload rides) is
-  byte-aligned on hidraw, closing the root-cause framing question. Remaining (not
-  a framing bug): drive an end-to-end key-image render through the app UI (AKP05E
-  backend maturity is "scaffolded") and confirm the icon appears on key 1.
-
-  **Fedora 44 test plan (do these on the device):**
-
-  ```bash
-  git fetch origin && git checkout feat/linux-device-support
-  # one-time device access:
-  sudo cp resources/linux/70-ajazz.rules /etc/udev/rules.d/ \
-    && sudo udevadm control --reload-rules && sudo udevadm trigger --action=change
-  cmake --preset linux-release && cmake --build --preset linux-release
-  ctest --preset linux-release            # 365 tests must pass under GCC/-Werror too
-  ./build/linux-release/ajazz-control-center 2> akp05.log
-  ```
-
-  Then verify and record:
-
-  1. **Does the AKP05 first-key icon now render on Fedora?** (the headline check)
-  1. `grep -iE "opened VID=0300|akp05|streamdeck|write|hid" akp05.log` — the
-     device should open and the image `write()`s should not error.
-  1. If it STILL does not render: try the AKP153 (`0x0300:0x1001`) on the same box
-     to see whether the issue is family-wide; capture
-     `udevadm info -a /dev/hidrawN` for the `0300:3004` node; and confirm the
-     `0x00` prepend is actually firing (Linux build, so `_WIN32` is undefined).
-  1. If it renders on Fedora but you later see a regression on Windows, that is
-     the platform guard — re-confirm the `#ifndef _WIN32` boundary.
-
-- [x] **Make the AJ-series mouse battery (+ OLED clock) work on Linux/Fedora.**
-  ✅ **HARDWARE-CONFIRMED on Fedora 2026-05-22.**
-
-  **✅ Resolved (2026-05-22, commit `9019682`):** the mouse battery now reads on
-  Fedora — the app logs `[battery] queried ajazz_24g_8k: 100%` and the UI shows
-  the percent. The shipped read was a **two-step handshake**: SET_FEATURE a
-  `0x83` GET_BATTERY poke, then GET_FEATURE the status report. The status report
-  uses **report-id `0x00`**, so the frame is `[00, 00, charge, 01 01 01 02]` —
-  charge at **byte 2** (the old "byte 3 / report-id 0x05" framing was off by one
-  and rejected every valid frame). The OLED clock (`0x28`) and the usage-`0x02`
-  control-collection selection were also confirmed live. Historical
-  investigation notes below.
-
-  **Status (historical):** on Windows the mouse battery reads correctly (commit `376fb61`:
-  vendor status report `0x05`, via GET_FEATURE on the `0xFFFF`/usage-0x02
-  control collection) and the OLED clock sets (commit `0a1952e`: opcode `0x28`
-  with the 0xD7 marker via SET_FEATURE on the same collection). Both reads/writes
-  go through the vendor control collection selected by `controlUsagePage=0xFFFF`
-
-  - `controlUsage=0x02` (commit `69c64a1`). The whole feature must be confirmed
-    on Fedora.
-
-  **Why it may not work out-of-the-box on Fedora — two independent gates:**
-
-  1. **udev / hidraw permissions (device access).** The mouse is VID `0x3151`
-     (SONiX). The app opens `/dev/hidraw*` directly; without a udev rule granting
-     the logged-in user access, `hid_open_path` fails and battery/clock silently
-     return nothing.
-
-     - Install the project rules: `sudo cp resources/linux/70-ajazz.rules /etc/udev/rules.d/ && sudo udevadm control --reload-rules && sudo udevadm trigger --action=change` (VID prefix `3151` is covered there).
-     - Verify the control node is user-accessible:
-       `ls -l /dev/hidraw*` — the `0x3151:0x5007` MI_02 node should carry an ACL
-       for your user (`getfacl /dev/hidrawN` shows `user:<you>:rw-` when `uaccess`
-       applied). If stale (device was plugged in before the rule landed), replug
-       or `sudo udevadm trigger --action=change`.
-
-  1. **HID usage disambiguation on hidraw (the likely code gate).** The mouse
-     exposes TWO `0xFFFF` collections (usage 2 = control, usage 1 = not). On
-     Windows hidapi reliably reports `usage`, so `controlUsage=0x02` picks the
-     right node. On **Linux hidraw, `hid_enumerate`'s `usage`/`usage_page` can be
-     0 (unpopulated) for non-primary collections**; then `HidTransport::open`'s
-     match (`usage_page==m_usagePage && (m_usage==0 || usage==m_usage)`) finds no
-     candidate and **falls back to `hid_open(vid,pid)` = the first interface (the
-     boot mouse)**, where the battery/clock feature reports do not exist → silent
-     no-op on Fedora.
-
-  **Diagnostic on Fedora (run from a terminal, capture stderr):**
-
-  ```
-  ./ajazz-control-center 2> mouse.log
-  grep -iE "opened VID=3151|aj_series|battery|queried|hid_open|usage" mouse.log
-  ```
-
-  - Expect `opened VID=3151 PID=5007 (usage-page filtered)` + `queried ajazz_24g_8k: NN%`.
-  - If you see `opened VID=3151 …` **without** "(usage-page filtered)" or no
-    `queried ajazz_24g_8k` line ⇒ it opened the wrong interface ⇒ the hidraw
-    usage-unpopulated fallback (gate 2).
-  - Independently confirm which hidraw node is the control channel:
-    `for n in /dev/hidraw*; do udevadm info -q property $n | grep -E "HID_NAME|HID_PHYS|HID_UNIQ"; echo $n; done` and/or
-    a quick `python3 -c "import hid;[print(hex(d['usage_page']),hex(d['usage']),d['path']) for d in hid.enumerate(0x3151,0x5007)]"`
-    to see whether `usage` is populated on this kernel (cython-hidapi reads the
-    report descriptor; if it shows `0xffff/0x02` then the C++ should match too).
-
-  **Fix (if gate 2 is confirmed):** make `HidTransport::open` resilient to an
-  unpopulated `usage` on hidraw — two-pass match: first try `usage_page` **and**
-  `usage`; if no candidate matched AND no enumerated entry for this VID:PID
-  reported a non-zero `usage` at all, fall back to a `usage_page`-only match
-  (still selecting a `0xFFFF` node) before the final `hid_open(vid,pid)` fallback.
-  Keep Windows behaviour identical (where `usage` is populated, the strict match
-  wins). Add a log line distinguishing "usage+page filtered" vs "page-only
-  filtered" vs "first-interface fallback" so future Linux triage is one grep.
-  Re-verify on BOTH OSes: Windows still `queried ajazz_24g_8k`, Fedora now does
-  too. Files: `src/core/src/hid_transport.cpp` (`open()` match loop).
-
-  Note: the same hidraw `usage`-unpopulated risk applies to the AK980 PRO
-  keyboard, but its control collection `0xFF13` is a SINGLE collection
-  (`controlUsage=0`, matched by usage page alone) so it is unaffected.
-
-  **🟢 IMPLEMENTED on branch `feat/linux-device-support` (`db21686`) — pending
-  Fedora hardware confirmation.** `HidTransport::open()` now does the two-pass
-  match described above (pass 1 `usage_page`+`usage`, pass 2 `usage_page`-only
-  fallback for hidraw's unpopulated `usage`), and logs which match kind won
-  (`usage+page filtered` / `usage-page filtered` / `first-interface` / `default`).
-  Windows is unaffected (it reports `usage`, so pass 1 wins). Verified: Windows
-  MSVC build + 365 tests; the two-pass logic compiles under
-  `g++ -std=c++20 -Wall -Wextra`.
-
-  **Fedora 44 test plan (after the build steps in the AKP05 item above):**
-
-  ```bash
-  ./build/linux-release/ajazz-control-center 2> mouse.log
-  grep -iE "opened VID=3151|aj_series|battery|queried" mouse.log
-  # direct device probe (bypasses the app — pins app-vs-device):
-  python3 scripts/aj_mouse_probe.py --enumerate     # is 'usage' populated on hidraw?
-  python3 scripts/aj_mouse_probe.py --battery       # reads report 0x05 byte 3
-  ```
-
-  Then verify and record:
-
-  1. Log shows `opened VID=3151 PID=5007 (usage+page filtered)` **or**
-     `(usage-page filtered)` — either is the control collection (good). If it
-     shows `(first-interface)` or `(default)`, the match dropped through ⇒ open a
-     follow-up (the hidraw enumeration didn't expose 0xFFFF at all → may need a
-     report-descriptor-based selection).
-  1. `queried ajazz_24g_8k: NN%` appears (battery works) and the **OLED basetta
-     clock** follows a manual "Sync time" from the app (clock 0x28 works).
-  1. If `aj_mouse_probe.py --battery` reads a % but the **app** does not, that is
-     still an app-side interface-selection gap (report it with the
-     `--enumerate` output so the exact `usage`/`usage_page` values are known).
-  1. After a wireless replug, the battery should stay grey then jump to the real
-     value (no transient 1% — frame validation from commit `1f2be0c`).
 
 - [ ] **AKP05 v3 framing migration**. Per `[mirajazz]`'s protocol-version
   taxonomy (see `docs/protocols/streamdeck/_research-sources.md`), the
@@ -426,22 +200,6 @@ ______________________________________________________________________
   produces mostly whitespace and looks worse than the current
   geometric placeholder. Either ask AJAZZ for a square logo or design a
   custom monogram inspired by the wordmark.
-
-- [ ] **profile-buttons — wire Apply / Revert / Restore defaults to real
-  paths** (surfaced by source-level `TODO(profile-buttons)` at
-  `src/app/qml/Main.qml:111`). Today the three ProfileEditor buttons
-  toast `"not implemented yet"` because `ProfileController` lacks the
-  default-path resolution (`QStandardPaths::AppDataLocation/profile.json`)
-
-  - a "Save as" file dialog for explicit paths. Wire-up needs:
-    (1) `ProfileController::saveProfile()` / `loadProfile()` no-arg
-    overloads that pick the default path, (2) a `QFileDialog` trigger for
-    "Save as" / "Open profile…", (3) decide what to do about
-    `PropertyInspector.qml` / `NativePropertyInspector.qml`, which are
-    currently dead QML (no `PropertyInspector{}` or `NativePropertyInspector{}`
-    instantiation anywhere — `Main.qml:124` uses only `Inspector {}`).
-    Either re-hook them once the buttons actually save something the
-    inspector can re-render, or delete them from the QML module. ≈ 1 day.
 
 - [ ] **via_keyboard — per-LED RGB matrix path** (source-level stub
   `throw std::runtime_error` at `src/devices/keyboard/src/via_keyboard.cpp:185`).
@@ -800,47 +558,113 @@ ______________________________________________________________________
   `QJsonDocument` parser when the app-layer reader lands. Tracking
   bug only — no behavior change needed yet.
 
-### Plugin SDK + Store (multi-week, milestone-level)
+### Plugin SDK + Store — SHIPPED (reconciled 2026-07-03)
 
-> User-requested in this session. **Not autonomous-feasible** end-to-end;
-> document and break down so the work can be parallelized.
+> The 2026-05 breakdown below described work that has since landed and been
+> live-verified; the stale open checkboxes made this file plan ~8 weeks of
+> already-shipped engineering. What shipped: **`SdPluginServer`** (the
+> Stream-Deck-compatible WebSocket bridge), **`PluginManager`** (discover /
+> spawn / rediscover-after-install / crash lifecycle for node + HTML +
+> native plugins, wired in `Application::startBackgroundServices`), the
+> **Property Inspector** dual-WS relay (M1-M5 complete), the multi-source
+> install pipeline (file / online catalog / GitHub), and the Elgato compat
+> layer — see `docs/architecture/PRODUCTION-READINESS.md` for the audited
+> feature matrix and remaining caveats. Genuine residuals:
 
-- [ ] **Plugin process spawner** (sandboxed sub-processes, stdio or
-  Unix-socket transport). ≈ 3-4 days.
-- [ ] **WebSocket protocol bridge** (Stream Deck-compatible JSON event
-  router, plugin → app and app → plugin). ≈ 5-7 days.
-- [ ] **Plugin lifecycle manager** (install / load / unload / state
-  persistence). ≈ 5-7 days.
-- **Property Inspector embedding** (Qt WebEngine for HTML PI, with
-  bridged messages to the plugin process) — five-step roadmap:
-  - [x] **M1** — controller stub + CMake gating (`AJAZZ_BUILD_PROPERTY_INSPECTOR`).
-  - [x] **M2** — Qt WebEngine surface, per-plugin `QWebEngineProfile`
-    isolation, conservative `QWebEngineSettings` baseline,
-    `QtWebEngineQuick::initialize()` in main.cpp, `PIWebView.qml`
-    behind a Loader switcher.
-  - [x] **M3** — `PIBridge` QObject exposing the Stream Deck SDK-2
-    `\$SD` API surface via `QWebChannel` (registered as `"$SD"` on the
-    page's channel). Method bodies are logging stubs.
-  - [x] **M4** — settings persistence for `setSettings` / `getSettings`
-    / `setGlobalSettings` / `getGlobalSettings` to per-context JSON
-    files under `QStandardPaths::AppDataLocation/plugins/<plugin>/`.
-    Atomic writes via `QSaveFile`, path-traversal validation on uuid
-    components, 1 MiB size cap. Per-context settings land at
-    `settings/<contextUuid>.json`; plugin-wide at `global.json`. Getter
-    methods stay async (return-via-signal contract preserved). All
-    M4-side code is gated by `AJAZZ_HAVE_WEBENGINE` and lives in
-    `src/app/src/pi_bridge.cpp`.
-  - [ ] **M5** — bridge `\$SD.sendToPlugin` and `sendToPropertyInspector`
-    over the plugin-host WebSocket. Depends on **Plugin process spawner**
-    - **WebSocket protocol bridge** below.
 - [ ] **Catalog backend** (registry, ratings, version pins, Sigstore
   signing). Server-side, ≈ 2-3 weeks; out of repo until protocol stabilises.
-- [ ] **Stream Deck plugin compat layer** (translate Elgato manifests
-  - WS messages to ours; Property Inspector iframe quirks). ≈ 1-2 weeks.
+- Standing policy: do NOT auto-adopt the vendor store endpoints
+  (`space.key123.vip` / `47.106.243.57:8088` / `hotspot-oss-bucket` OSS) —
+  anti-feature per `akp05_vendor.md` §8; OpenDeck-style multi-source
+  install (file / GitHub release / URL) is the sanctioned model.
 
-**Total realistic estimate**: 6-10 weeks of focused engineering for a
-v1; backend catalog and the AJAZZ Streamdock store bridge are parallel
-workstreams.
+### Out-of-process debug control channel (2026-05-29)
+
+> Shipped (`feat/streamdock`): an opt-in JSON-RPC control channel so an agent
+> can drive **and observe the whole app out-of-process** via the
+> `scripts/ajazz-debug` client (23 methods). Unified logs (tee stderr+file+ring
+>
+> - `qInstallMessageHandler` bridge so Qt `qCDebug` is captured too,
+>   `b3b0a0f`/`997c180`), a `QLocalServer` JSON-RPC server gated by
+>   `AJAZZ_DEBUG_CONTROL` (UDS, 0600) + `scripts/ajazz-debug` (`0ba3ece`),
+>   device/input/profile/plugin/`action.run` control (`bf881a1`), and
+>   `qml.tree/get/set/invoke/click` + `screenshot` (`e0319ea`). Drive a running
+>   instance: launch with `AJAZZ_DEBUG_CONTROL=1`, then
+>   `scripts/ajazz-debug <method> --params '{…}'`. Deferred:
+
+- [ ] **`raw.hidWrite`** is a not-implemented stub (honest error). `IDevice`
+  has no public raw-write seam and adding one crosses the "RE is source of
+  truth for wire format" hard rule — wire deliberately with an RE cross-check
+  only if a real need appears.
+- [x] **QML `objectName` coverage** (`028eeca`) + **visual-tree traversal**
+  (`f172e8b`). Header nav, Apply/Revert/Restore/Clear, brightness slider, each
+  `key_<index>`, and each `deviceRow_<codename>` are addressable; qml.tree/find
+  now union `QQuickItem::childItems()` so Repeater/ListView delegates are
+  reachable. Verified live (clicked navSettings + key_0). Add objectNames to
+  more controls as needed; `qml.tree` shows what's addressable.
+- [ ] **`qml.invoke` multi-arg.** Currently zero-arg only (covers
+  `clicked()`/triggers); richer calls need qml.set-then-invoke or an arg-coercing
+  `invokeMethod` path.
+- [ ] **Automated coverage for the live socket + facade.** The JSON-RPC
+  framing/dispatch is unit-tested (`test_debug_control_server.cpp`); the
+  QLocalServer round-trip and the facade handlers were verified live
+  (isolated offscreen instance) but lack a headless integration test.
+- [ ] **GCC 16 `-Werror=null-dereference`** false positive in
+  `profile_controller.cpp:619` (Qt `QHash` inlining). Unblocked locally only
+  (`-Wno-error=null-dereference` in the gitignored build cache); land a real
+  `fix(profiles):` before CI bumps to GCC 16.
+
+### Plugin + profile + debug epic — follow-ups (2026-05-29)
+
+> Shipped this session (`feat/streamdock`): online catalog on by default
+> (`32abda6`), plugin **action picker** in the editor (`39a551b`, `f4be70a`),
+> **Property Inspector** loads for a bound plugin action (`0307e4d`),
+> **multi-profile** library + device-scoped switcher (`977e369`, `42c6838`),
+> and a **plugin debug console** with protocol log + input/response simulation
+> (`2ca3a7f`). Remaining:
+
+- [ ] **Live click-through verification** of the Property Inspector + debug
+  console. Could not be self-verified in the dev environment (no Wayland
+  input-injection tool; the AKP05E demo unit's input path is unreachable).
+  Walk: drag *Toggle Demo* onto a key → click it → PI HTML renders in the
+  Inspector → type in the field → confirm it persists to
+  `AppDataLocation/plugins/com.test.demo.sdPlugin/settings/<context>.json`;
+  then **Debug** → *Key down* → confirm the transcript logs the routing.
+- [ ] **Reconcile PI settings vs. profile binding.** `PIBridge.setSettings`
+  persists to a per-context JSON file under the plugin dir (Stream Deck
+  model), but the key's `Action::settingsJson` in the profile is separate —
+  two stores for the same logical settings. Decide the source of truth and
+  sync (or document the split). `pi_bridge.cpp` + `profile_controller.cpp`.
+- [ ] **Encoder / touch-zone action binding + PI.** Only keys have a live
+  preview model + `actionId` readback (`DeviceView` bindings). The encoder
+  and touch-strip drop paths don't resolve a plugin action's PI, and the
+  dials/zones don't show a bound icon. Extend `actionInfo` resolution +
+  `EncoderDial`/`TouchStripLane` to match the key path.
+- [ ] **Debug console: log outbound host→plugin events.** The transcript taps
+  inbound (`SdPluginServer::actionReceived`) + device events, but
+  `sendEvent()` is a method (no signal) so host→plugin frames aren't logged.
+  Add a tap (signal or a `PluginDebug.record()` call inside `sendEvent`).
+- [ ] **Debug console test.** No automated coverage for
+  `PluginDebugService::simulateKey/...` → `PluginDeviceBridge::onDeviceEvent`
+  routing (skipped — would force linking the whole bridge/server chain).
+  Add a focused integration test once the bridge test fixture is cheaper.
+- [ ] **End-to-end with a *running* plugin.** The installed `com.test.demo`
+  plugin is signed but does not spawn a process; `keyDown` routing to a live
+  plugin (and its `setImage` repaint round-trip) is unverified on real input.
+- [ ] **Profile pages / folders UI.** `Profile::pages` + `OpenFolder` /
+  `BackToParent` actions exist in core; no UI to create/navigate folders.
+- [ ] **Profile import/export UI.** `profile_bundle.{hpp,cpp}` implements
+  `.ajazzprofile` ZIP import/export in core; wire a QML affordance into the
+  `ProfileBar`.
+- [ ] **Unsaved-changes guard on profile switch.** `ProfileBar` switching
+  calls `loadProfileById` immediately; unsaved edits are discarded silently.
+  Prompt (or auto-save) before switching.
+- [ ] **Remove the dev test plugin.** `com.test.demo.sdPlugin` was hand-
+  installed into `AppDataLocation/plugins/` to verify the PI; delete it once
+  a real plugin is available, or keep as a fixture and document it.
+- [ ] **Tray Switch-profile submenu.** `loadProfileById` now resolves via the
+  library index (was a stub, issue #24); confirm `TrayController:: rebuildProfileSubmenu` lists all profiles (it historically showed only the
+  active one) now that `knownProfileIds()` returns the full set.
 
 ### UI polish (incremental)
 

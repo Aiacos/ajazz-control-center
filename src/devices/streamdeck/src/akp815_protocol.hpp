@@ -14,11 +14,12 @@
  * `[ajazz-sdk]/src/protocol/codes.rs::PID_AJAZZ_AKP815`. Detailed
  * specifications live in `docs/protocols/streamdeck/akp815.md`.
  *
- * Framing reuses the AKP153 packet layout (512-byte CRT-prefixed packets);
- * the only differences are the image geometry and the strip dimensions —
- * see `akp153_protocol.hpp` for the shared opcodes.
+ * Framing uses the family v1-API packet layout (512-byte CRT-prefixed
+ * packets); the only differences from the other v1-API devices are the image
+ * geometry and the strip dimensions. The byte-level command builders live in
+ * `akp815_wire.hpp`.
  *
- * @see akp153_protocol.hpp
+ * @see akp815_wire.hpp
  * @see ../_research-sources.md
  */
 #pragma once

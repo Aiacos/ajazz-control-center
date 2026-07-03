@@ -23,6 +23,16 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang|AppleClang")
     if(AJAZZ_ENABLE_WERROR)
         target_compile_options(ajazz_warnings INTERFACE -Werror)
     endif()
+    # GCC 16.x's -Wnull-dereference turned over-eager on std::vector element access inlined through
+    # lambdas (e.g. the install() reply handler in plugin_catalog_model.cpp): it reports false
+    # positives originating in <bits/stl_vector.h> that -Werror then makes fatal, and they are not
+    # silenceable from the call site (even an explicit bounds check before the access doesn't
+    # convince it). The CI toolchains (older GCC / Clang / MSVC) don't hit this. Neutralise the flag
+    # on GCC >= 16 ONLY — appended last so it wins over -Wnull-dereference — keeping the warning
+    # active everywhere else.
+    if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU" AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 16)
+        target_compile_options(ajazz_warnings INTERFACE -Wno-null-dereference)
+    endif()
 elseif(MSVC)
     # /wd4702 (unreachable code): Qt's own headers (qmetatype.h, qvariant.h, qjsengine.h) emit C4702
     # under /W4, which /WX then promotes to a hard error when the qmlcache-generated translation

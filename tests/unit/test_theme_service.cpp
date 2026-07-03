@@ -155,3 +155,31 @@ TEST_CASE("ThemeService: setMode persists to QSettings and the next instance res
     ThemeService restored(&branding);
     REQUIRE(restored.mode() == QStringLiteral("light"));
 }
+
+TEST_CASE("ThemeService: setAccentHex persists + emits accentChanged; brand keyword clears",
+          "[theme][delta-f]") {
+    qtApp();
+    clearThemeSettings();
+
+    BrandingService branding(nullptr);
+    ThemeService theme(&branding);
+    REQUIRE(theme.accentHex().isEmpty()); // default = brand accent
+
+    QSignalSpy spy(&theme, &ThemeService::accentChanged);
+    theme.setAccentHex(QStringLiteral("#204cfe"));
+    CHECK(theme.accentHex() == QStringLiteral("#204cfe"));
+    CHECK(spy.count() == 1);
+
+    // A fresh instance reads the persisted override from QSettings.
+    ThemeService reloaded(&branding);
+    CHECK(reloaded.accentHex() == QStringLiteral("#204cfe"));
+
+    // "brand" (and empty) clear the override back to the brand accent.
+    theme.setAccentHex(QStringLiteral("brand"));
+    CHECK(theme.accentHex().isEmpty());
+    CHECK(spy.count() == 2);
+
+    // Setting the same value again is a no-op (no extra signal).
+    theme.setAccentHex(QString{});
+    CHECK(spy.count() == 2);
+}

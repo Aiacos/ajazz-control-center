@@ -68,6 +68,23 @@ Flathub enforces these. Tick every box before opening a PR.
   prebuilt binaries. (Non-redistributable blobs would need `type: extra-data` —
   we have none.)
 
+### Stream Dock Rust sidecar (mirajazz) — REQUIRED for a working build
+
+- [ ] **The `streamdock-host` module must be present and its git pin must point to
+  a release that contains `streamdock-host/`.** The Stream Dock families
+  (AKP03/AKP05-N4/AKP153) are driven by an out-of-process Rust sidecar; without it
+  those devices never open. The manifest carries: the `org.freedesktop.Sdk.Extension.rust-stable`
+  SDK extension, `-DAJAZZ_BUILD_SIDECAR=OFF` on the app module, the dedicated
+  `streamdock-host` module (offline cargo build), and a vendored
+  `packaging/flathub/cargo-sources.json`.
+- [ ] **⚠ The pinned `tag: v0.1.0 / commit 731c70b…` PREDATES the sidecar.** Before
+  submitting the sidecar release, bump the tag+commit in BOTH the
+  `ajazz-control-center` and `streamdock-host` modules to the mirajazz-inclusive
+  release tag, and regenerate `cargo-sources.json` from `streamdock-host/Cargo.lock`.
+- [ ] Note: the offline sidecar build is exercised by the Flathub linter/build-bot
+  (`§3`) and the `release.yml` flatpak build — it is NOT covered by the local CMake
+  ctest suite.
+
 ### Permissions (keep minimal; prefer portals)
 
 - [x] Static permissions are minimal: `ipc`, `wayland` + `fallback-x11`, `dri`,

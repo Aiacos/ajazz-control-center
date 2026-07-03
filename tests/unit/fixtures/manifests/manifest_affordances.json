@@ -1,0 +1,72 @@
+{
+  "Name": "Affordance Test Plugin",
+  "Author": "Test Author",
+  "Version": "1.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "Test",
+  "CategoryIcon": "icons/category.png",
+  "Description": "Covers all controller token variants for affordanceMask() unit tests.",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.11" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "CodePath": "code/plugin.js",
+  "Actions": [
+    {
+      "UUID": "com.example.test.keypad_only",
+      "Name": "Keypad Only",
+      "Icon": "icons/key.png",
+      "Controllers": ["Keypad"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.absent_controllers",
+      "Name": "Absent Controllers",
+      "Icon": "icons/key.png",
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.knob_only",
+      "Name": "Knob Only",
+      "Icon": "icons/knob.png",
+      "Controllers": ["Knob"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.encoder_only",
+      "Name": "Encoder Only",
+      "Icon": "icons/encoder.png",
+      "Controllers": ["Encoder"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.keypad_knob",
+      "Name": "Keypad and Knob",
+      "Icon": "icons/keyknob.png",
+      "Controllers": ["Keypad", "Knob"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.secondary_screen",
+      "Name": "Secondary Screen Only",
+      "Icon": "icons/strip.png",
+      "Controllers": ["SecondaryScreen"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.keypad_info_secondary",
+      "Name": "Keypad Information SecondaryScreen",
+      "Icon": "icons/multi.png",
+      "Controllers": ["Keypad", "Information", "SecondaryScreen"],
+      "States": [{ "Image": "icons/state0.png" }]
+    },
+    {
+      "UUID": "com.example.test.information_only",
+      "Name": "Information Only",
+      "Icon": "icons/info.png",
+      "Controllers": ["Information"],
+      "States": [{ "Image": "icons/state0.png" }]
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+[package]
+name = "streamdock-host"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# Out-of-process Rust sidecar for the AJAZZ Stream Dock (AKP05/N4) family,
+# built on the `mirajazz` crate. The Qt/C++ app spawns this binary and speaks
+# newline-delimited JSON over stdin/stdout (one JSON object per line):
+#
+#   sidecar -> app : {"event":"connected","serial":"...","vid":768,"pid":12292,"firmware":"..."}
+#                    {"event":"input","serial":"...","raw":"...","code":N,"state":N}
+#                    {"event":"pong"} / {"event":"error","msg":"..."}
+#   app -> sidecar : {"cmd":"ping"}
+#                    {"cmd":"set_brightness","serial":"...","percent":50}   (needs --allow-output)
+#
+# Output commands (brightness/images) trigger mirajazz `initialize()` which
+# sends `CRT DIS` — known to risk wedging the demo panel via open/close churn.
+# A long-lived sidecar holds ONE handle and sends DIS once; output is still
+# gated behind --allow-output until that hypothesis is validated on hardware.
+
+[dependencies]
+mirajazz = { git = "https://github.com/4ndv/mirajazz" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time", "io-std", "io-util", "sync"] }
+futures-lite = "2.6"
+serde_json = "1"
+# image 0.25 matches the version mirajazz uses; DynamicImage flows into set_button_image.
+image = { version = "0.25", default-features = false }
+base64 = "0.22"
+
+[[bin]]
+name = "streamdock-host"
+path = "src/main.rs"

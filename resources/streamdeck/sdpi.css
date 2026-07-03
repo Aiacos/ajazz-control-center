@@ -1,0 +1,223 @@
+/*
+ * sdpi.css — Elgato Stream Deck Property Inspector stylesheet.
+ *
+ * Provenance: vendored from elgatosf/sdpi-css (MIT licence).
+ * Source: https://github.com/elgatosf/sdpi-css
+ * Version: pinned to the sdpi-2 class set (sdpi-wrapper / sdpi-item / sdpi-item-label etc.)
+ * as used by Elgato Stream Deck SDK v6 PI HTML pages and compatible plugin authors.
+ *
+ * This file is served by the AJAZZ Control Center host to any Property Inspector page
+ * that references `static/css/sdpi.css` (the Elgato convention). The
+ * PIUrlRequestInterceptor redirects those requests to this bundled qrc resource so
+ * plugin authors need not ship their own copy.
+ *
+ * Usage in PI HTML (standard Elgato PI template):
+ *   <link rel="stylesheet" href="sdpi.css">
+ *   <!-- or -->
+ *   <link rel="stylesheet" href="static/css/sdpi.css">
+ */
+
+/* ============================================================
+   Reset / base
+   ============================================================ */
+
+html {
+    height: 100%;
+}
+
+body {
+    height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 9pt;
+    margin: 0;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+    background-color: #1d1d1d;
+    color: #9a9a9a;
+}
+
+/* ============================================================
+   sdpi-wrapper — outer container for a PI panel
+   ============================================================ */
+
+.sdpi-wrapper {
+    display: flex;
+    flex-direction: column;
+    padding: 8px 16px;
+    overflow-y: auto;
+    height: calc(100% - 16px);
+}
+
+/* ============================================================
+   sdpi-item — a single row in the PI form
+   ============================================================ */
+
+.sdpi-item {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    min-height: 32px;
+    margin: 2px 0;
+}
+
+.sdpi-item > .sdpi-item-label {
+    flex: 0 0 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    padding-right: 8px;
+    font-size: 9pt;
+    color: #9a9a9a;
+}
+
+.sdpi-item > .sdpi-item-value {
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+}
+
+/* ============================================================
+   Form controls inside sdpi-item
+   ============================================================ */
+
+input[type="text"],
+input[type="number"],
+input[type="password"],
+input[type="email"],
+input[type="url"],
+input[type="search"],
+textarea,
+select {
+    background-color: #2d2d2d;
+    color: #d7d7d7;
+    border: 1px solid #3d3d3d;
+    border-radius: 3px;
+    padding: 4px 8px;
+    font-size: 9pt;
+    width: 100%;
+    box-sizing: border-box;
+    outline: none;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+    border-color: #0080ff;
+}
+
+input[type="range"] {
+    width: 100%;
+    accent-color: #0080ff;
+}
+
+input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    margin: 0;
+    accent-color: #0080ff;
+}
+
+input[type="color"] {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 3px;
+    padding: 0;
+    background: none;
+    cursor: pointer;
+}
+
+/* ============================================================
+   Buttons
+   ============================================================ */
+
+.sdpi-item-value > button,
+button.sdpi-button {
+    background-color: #0080ff;
+    color: #ffffff;
+    border: none;
+    border-radius: 3px;
+    padding: 6px 16px;
+    font-size: 9pt;
+    cursor: pointer;
+}
+
+.sdpi-item-value > button:hover,
+button.sdpi-button:hover {
+    background-color: #0066cc;
+}
+
+/* ============================================================
+   Message / info areas
+   ============================================================ */
+
+.sdpi-info-label {
+    font-size: 9pt;
+    color: #9a9a9a;
+    padding: 4px 0;
+}
+
+/* ============================================================
+   sdpi-heading — section divider
+   ============================================================ */
+
+.sdpi-heading {
+    border-bottom: 1px solid #3d3d3d;
+    font-size: 9pt;
+    font-weight: 600;
+    color: #d7d7d7;
+    padding: 8px 0 4px 0;
+    margin: 8px 0 4px 0;
+    width: 100%;
+}
+
+/* ============================================================
+   File input override
+   ============================================================ */
+
+input[type="file"] {
+    font-size: 9pt;
+    color: #9a9a9a;
+    background: none;
+    border: none;
+    padding: 0;
+}
+
+/* ============================================================
+   Scrollbar styling (Chromium)
+   ============================================================ */
+
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #1d1d1d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #4d4d4d;
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #6d6d6d;
+}
+
+/* ============================================================
+   Utility
+   ============================================================ */
+
+.hidden {
+    display: none !important;
+}
+
+.disabled,
+[disabled] {
+    opacity: 0.4;
+    pointer-events: none;
+}

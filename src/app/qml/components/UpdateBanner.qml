@@ -41,7 +41,10 @@ Rectangle {
 
     Layout.fillWidth: true
     Layout.preferredHeight: bannerRow.implicitHeight + Theme.spacingMd * 2
-    color: Theme.accent2
+    // In-palette dark layer (UI audit 2026-06-09: the blue accent2 fill was
+    // the only off-palette element in the dark+red scheme). The accent lives
+    // on the primary button, not the banner background.
+    color: Theme.bgRowHover
     border.color: Theme.borderSubtle
     border.width: 1
 

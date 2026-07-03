@@ -75,6 +75,18 @@ struct PluginInfo {
     /// but its public key is not in the bundled trust roots — UI uses
     /// this distinction to colour the verification chip.
     std::string publisher;
+
+    /// Windows-plugin classification verdict, cached at scan/install time
+    /// (WINPLG-01/02). Stored as a plain @c int — NOT the app-tier
+    /// @c ajazz::app::WinPluginClass enum — to keep this plugins-tier header
+    /// free of any Qt or third-party-JSON or app dependency (COD-031 boundary). The UI
+    /// model (LoadedPluginsModel, Plan 02) mirrors this mapping to render the
+    /// "Runs natively" / "Requires Wine" / "Unsupported on this OS" chip
+    /// WITHOUT re-scanning the bundle (PluginInfo carries no bundle path).
+    ///
+    /// Mapping (mirror of ajazz::app::WinPluginClass):
+    ///   0 = NotWindowsOnly, 1 = WsOnlyIpc, 2 = VendorDll.
+    int winClass{0};
 };
 
 /**

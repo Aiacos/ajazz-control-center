@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Open URL" action (opendeck.openurl).
+     Settings contract: {"url": "https://..."} — only http/https is accepted
+     by the browser handler (WR-01 scheme gate). -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="url">URL</label>
+    <input type="text" id="url" placeholder="https://example.com" spellcheck="false" inputmode="url">
+    <div class="hint">Opens in your default browser. Only http/https URLs run.</div>
+    <script>
+        "use strict";
+        const urlEl = document.getElementById("url");
+        function applySettings(s) {
+            if (typeof s.url === "string") {
+                urlEl.value = s.url;
+            }
+        }
+        urlEl.addEventListener("change", () => save({ url: urlEl.value }));
+    </script>
+</body>
+</html>

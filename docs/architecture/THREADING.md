@@ -29,7 +29,9 @@ It **must never block on USB I/O**. All transport calls happen on device I/O thr
 Each open device starts a reader thread inside `IDevice::open()`. Concretely:
 
 ```cpp
-void Akp03Device::open() {
+// Illustrative: a custom HID backend (e.g. AjSeriesMouse / Akp815Device) opens
+// its transport and drives a poll loop on an I/O thread.
+void DeviceBackend::open() {
     transport_->open(...);
     reader_ = std::jthread([this](std::stop_token st) {
         while (!st.stop_requested()) {

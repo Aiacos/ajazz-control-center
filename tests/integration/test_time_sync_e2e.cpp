@@ -7,11 +7,12 @@
  * end-to-end without real hardware, using:
  *   * `HotplugMonitor::injectEvent` (ARCH-02 shim from Phase 3) to drive
  *     synthetic deviceArrived events.
- *   * A real `Akp153Device` factory (from `ajazz::streamdeck::registerAll`)
+ *   * The real `Akp815Device` factory (from `ajazz::streamdeck::registerAll`)
  *     so the synthetic event resolves to a real backend that returns
  *     `TimeSyncResult::NotImplemented` honestly. The stub's WARN-once via
- *     `s_warned_akp153` is observable in the log (not asserted here — that
- *     is unit-test surface).
+ *     `s_warned_akp815` is observable in the log (not asserted here — that
+ *     is unit-test surface). (AKP153/AKP05 moved to the mirajazz sidecar in
+ *     experiment/mirajazz Slice D; AKP815 is the surviving custom backend.)
  *   * `TimeSyncService` wired to a `DeviceLookup` that calls
  *     `DeviceRegistry::open()` directly (production wiring shape from
  *     Application — A-04 shared_ptr capture).
@@ -85,9 +86,9 @@ TEST_CASE("Phase 5 e2e: synthetic Stream Dock arrival -> onDeviceArrived -> NotI
           "[time-sync][integration][e2e]") {
     qtAppIntegration();
 
-    // Real registry + real Stream Dock factories. The synthetic arrival
-    // injected below will resolve to the AKP153 factory, which is the
-    // 5-line stub from Plan 05-02 returning NotImplemented honestly.
+    // Real registry + real Stream Dock factory. The synthetic arrival
+    // injected below resolves to the AKP815 factory, whose IClockCapable stub
+    // returns NotImplemented honestly (Plan 05-02).
     DeviceRegistry registry;
     ajazz::streamdeck::registerAll(registry);
 
@@ -97,9 +98,9 @@ TEST_CASE("Phase 5 e2e: synthetic Stream Dock arrival -> onDeviceArrived -> NotI
     QSignalSpy okSpy(&svc, &ajazz::app::TimeSyncService::syncSucceeded);
     QSignalSpy failSpy(&svc, &ajazz::app::TimeSyncService::syncFailed);
 
-    // Synthetic hotplug arrival for the AKP153 (Mirabox V1 canonical pair
-    // 0x5548:0x6674). Drive it through onDeviceArrived directly — the
-    // synchronous test seam — and assert the NotImplemented result. The
+    // Synthetic hotplug arrival for the AKP815 (Mirabox V1 0x5548:0x6672).
+    // Drive it through onDeviceArrived directly — the synchronous test seam —
+    // and assert the NotImplemented result. The
     // 300 ms debounced path (onDeviceArrivedDebounced) is exercised by
     // the unit test in Plan 05-04; here we focus on the e2e chain
     // through a real backend.
@@ -109,7 +110,7 @@ TEST_CASE("Phase 5 e2e: synthetic Stream Dock arrival -> onDeviceArrived -> NotI
     // an INFO log + glyph (handled by Main.qml in the runtime). At the
     // integration-test boundary the contract is asserted by failSpy
     // staying at 0.
-    svc.onDeviceArrived(QStringLiteral("akp153_v1"));
+    svc.onDeviceArrived(QStringLiteral("akp815"));
 
     // No QTimer wait needed — onDeviceArrived is synchronous in this
     // test seam. The doPush call has already returned by now.
@@ -134,11 +135,11 @@ TEST_CASE("Phase 5 e2e: manual sync (setSystemTimeOn) emits syncFailed on NotImp
     // D-02 manual path: invoke setSystemTimeOn directly. The QML
     // Sync button (Plan 05-06) is exactly this call. syncFailed MUST
     // fire — the toast surface is the user-initiated lane.
-    svc.setSystemTimeOn(QStringLiteral("akp153_v1"));
+    svc.setSystemTimeOn(QStringLiteral("akp815"));
 
     REQUIRE(okSpy.count() == 0);
     REQUIRE(failSpy.count() == 1);
-    REQUIRE(failSpy.first().at(0).toString() == QStringLiteral("akp153_v1"));
+    REQUIRE(failSpy.first().at(0).toString() == QStringLiteral("akp815"));
     REQUIRE(failSpy.first().at(1).toString().contains(QStringLiteral("not yet implemented")));
 }
 
@@ -158,7 +159,7 @@ TEST_CASE("Phase 5 e2e: autoSync=false suppresses the auto-sync path entirely",
     // With autoSync=false, onDeviceArrived must be a no-op — no signals
     // fire, no INFO log, no backend invocation. This is the gate test
     // for the autoSync Q_PROPERTY contract from Plan 05-04.
-    svc.onDeviceArrived(QStringLiteral("akp153_v1"));
+    svc.onDeviceArrived(QStringLiteral("akp815"));
 
     REQUIRE(okSpy.count() == 0);
     REQUIRE(failSpy.count() == 0);

@@ -9,10 +9,12 @@ struct `ajazz::core::Profile` (see `src/core/include/ajazz/core/profile.hpp`)
 is internal naming; the field names declared below are the on-disk JSON
 keys produced by `profileToJson()` and consumed by `profileFromJson()`.
 
-| C++ field                 | JSON wire key | Why they differ                 |
-| ------------------------- | ------------- | ------------------------------- |
-| `Profile::deviceCodename` | `"device"`    | shorter, schema-natural         |
-| `Action::settingsJson`    | `"settings"`  | underlying type is escaped JSON |
+| C++ field                  | JSON wire key | Why they differ                              |
+| -------------------------- | ------------- | -------------------------------------------- |
+| `Profile::deviceCodename`  | `"device"`    | shorter, schema-natural                      |
+| `Action::settingsJson`     | `"settings"`  | underlying type is escaped JSON              |
+| `ActionInstance::settings` | `"settings"`  | escaped JSON string, mirrors Action.settings |
+| `ActionInstance::id`       | `"id"`        | reader also accepts `"uuid"`                 |
 
 ## Schema (current)
 
@@ -61,18 +63,53 @@ keys produced by `profileToJson()` and consumed by `profileFromJson()`.
         "onPress":     { "type": "array", "items": { "$ref": "#/$defs/Action" } },
         "onRelease":   { "type": "array", "items": { "$ref": "#/$defs/Action" } },
         "onLongPress": { "type": "array", "items": { "$ref": "#/$defs/Action" } },
-        "state":       { "$ref": "#/$defs/KeyState" }
+        "state":       { "$ref": "#/$defs/KeyState" },
+        "instance":    { "$ref": "#/$defs/ActionInstance" }
       }
     },
     "EncoderBinding": {
       "type": "object",
       "description": "Rotary-encoder binding: clockwise, counter-clockwise, and press chains.",
       "properties": {
-        "onCw":    { "type": "array", "items": { "$ref": "#/$defs/Action" } },
-        "onCcw":   { "type": "array", "items": { "$ref": "#/$defs/Action" } },
-        "onPress": { "type": "array", "items": { "$ref": "#/$defs/Action" } },
-        "state":   { "$ref": "#/$defs/KeyState" }
+        "onCw":     { "type": "array", "items": { "$ref": "#/$defs/Action" } },
+        "onCcw":    { "type": "array", "items": { "$ref": "#/$defs/Action" } },
+        "onPress":  { "type": "array", "items": { "$ref": "#/$defs/Action" } },
+        "state":    { "$ref": "#/$defs/KeyState" },
+        "instance": { "$ref": "#/$defs/ActionInstance" }
       }
+    },
+    "ActionInstance": {
+      "type": "object",
+      "description": "Additive OpenDeck/StreamDeck-shaped action instance bound to a key or encoder (Phase 31, BIND-01). Drives Toggle Action (states[] + currentState), Multi Action (recursive children), and per-instance settings. Absent => the binding has no instance.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Dotted plugin action id, e.g. com.elgato.counter.increment. The reader also accepts the alias key `uuid`. Omitted from the wire when empty."
+        },
+        "states": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ActionState" },
+          "description": "Per-state visuals. The writer always emits this array form. The reader also accepts a legacy singular `state` object and folds it into a one-element array (lazy v1->v2 migration)."
+        },
+        "currentState": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "0-based active state index. Defensively clamped to 0 on read when out of range."
+        },
+        "settings": {
+          "type": "string",
+          "description": "Opaque per-instance configuration, stored as an escaped JSON string (NOT a nested object) exactly like Action.settings, so the wire stays linear and unknown sub-keys round-trip untouched."
+        },
+        "children": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/ActionInstance" },
+          "description": "Recursive child instances run sequentially (Multi Action nesting)."
+        }
+      }
+    },
+    "ActionState": {
+      "description": "A single visual state of an ActionInstance. Carries the same fields as #/$defs/KeyState (imagePath/text/background/foreground/fontSize); on the wire a state element is exactly a KeyState object.",
+      "$ref": "#/$defs/KeyState"
     },
     "Action": {
       "type": "object",
@@ -189,4 +226,22 @@ keys produced by `profileToJson()` and consumed by `profileFromJson()`.
 - **`settings` is a string, not an object.** The wire format escapes the
   inner JSON so unknown sub-keys round-trip exactly. UIs that want to
   edit settings as a nested object should `JSON.parse(action.settings)`
-  on read and `JSON.stringify(obj)` on write.
+  on read and `JSON.stringify(obj)` on write. This applies equally to
+  `ActionInstance.settings`.
+- **Legacy singular `state` inside an instance folds to `states[]`.** The
+  reader accepts a legacy singular `"state"` object inside an
+  `ActionInstance` and folds it into a `states[]` array of one (lazy v1->v2
+  migration); the writer always emits `states[]`. Discrimination is by key
+  presence (`instance` / `states`), never by an explicit schema-version
+  field.
+- **`touchZones` is deprecated for dial devices (feature 002 US3).** On Stream
+  Deck + class dial devices the touch-strip segment above each dial belongs to
+  that dial: the segment renders the dial's `encoders[N]` bound-action feedback
+  and a tap on it routes to that dial's action (one control = dial + segment,
+  the Elgato model). The editor no longer creates independent `touchZones`
+  bindings for dial devices, and the writer emits none for new dial profiles.
+  `touchZones` is **retained for read-compat**: a legacy profile carrying
+  `touchZones` loads losslessly (the reader keeps parsing it; no crash, no data
+  loss). When both `encoders[N]` and a legacy `touchZones[N]` are present, the
+  encoder (dial) wins. Non-dial devices that expose touch zones (if any) are
+  unaffected.

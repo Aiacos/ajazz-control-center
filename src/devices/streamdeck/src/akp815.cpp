@@ -13,10 +13,11 @@
  *  | LCD strip        | 854×480, Rot0          | 800×480, Rot0         |
  *  | USB VID:PID      | 0x5548:0x6674          | 0x5548:0x6672         |
  *
- *  The backend delegates the wire-level state machine (open / close /
- *  key event parsing / brightness / clear) to the AKP153 implementation
- *  by reusing `akp153::*` builders and the same `parseInputReport`. The
- *  only behavioural difference is the `DisplayInfo` returned to callers,
+ *  The backend drives the family v1-API wire-level state machine (open /
+ *  close / key event parsing / brightness / clear) through the shared
+ *  `akp815::*` builders in `akp815_wire.hpp` (byte-identical to the former
+ *  AKP153 backend, which used the same framing). The only behavioural
+ *  difference is the `DisplayInfo` returned to callers,
  *  which determines how the image-pipeline phase will resize and rotate
  *  the bitmap before pushing it through `BAT` chunks.
  *
@@ -28,8 +29,9 @@
 #include "ajazz/core/hid_transport.hpp"
 #include "ajazz/core/logger.hpp"
 #include "ajazz/streamdeck/streamdeck.hpp"
-#include "akp153_protocol.hpp"
 #include "akp815_protocol.hpp"
+#include "akp815_wire.hpp"
+#include "image_pipeline.hpp"
 
 #include <algorithm>
 #include <array>
@@ -53,7 +55,7 @@ std::once_flag s_warned_akp815;
  *  Wraps the same wire-level state machine as @ref Akp153Device but with
  *  a different display geometry (5×3 100×100 keys plus an 800×480 strip).
  *  All write paths (`setKeyImage`, `setBrightness`, `clearKey`, `flush`)
- *  reuse the AKP153 `akp153::build*` helpers because the opcode bytes are
+ *  use the shared `akp815::build*` wire helpers because the opcode bytes are
  *  identical at the v1 API. The differences kick in inside the image
  *  pipeline (phase 2) when the source bitmap is resized and rotated for
  *  the AKP815's 100×100 / `Rot180` slots.
@@ -109,12 +111,12 @@ public:
         }
         try {
             auto stop = std::array<std::uint8_t, akp815::PacketSize>{};
-            stop[0] = akp153::CmdPrefix[0];
-            stop[1] = akp153::CmdPrefix[1];
-            stop[2] = akp153::CmdPrefix[2];
-            stop[5] = akp153::CmdStop[0];
-            stop[6] = akp153::CmdStop[1];
-            stop[7] = akp153::CmdStop[2];
+            stop[0] = akp815::CmdPrefix[0];
+            stop[1] = akp815::CmdPrefix[1];
+            stop[2] = akp815::CmdPrefix[2];
+            stop[5] = akp815::CmdStop[0];
+            stop[6] = akp815::CmdStop[1];
+            stop[7] = akp815::CmdStop[2];
             (void)m_transport->write(stop);
         } catch (...) { /* best-effort */
         }
@@ -140,7 +142,7 @@ public:
             // byte 9, no press/release polarity), so we reuse the AKP153
             // parser to keep a single source of truth for the v1-API
             // input pipeline.
-            if (auto ev = akp153::parseInputReport({buf.data(), n})) {
+            if (auto ev = akp815::parseInputReport({buf.data(), n})) {
                 DeviceEvent devEv{};
                 devEv.kind =
                     ev->pressed ? DeviceEvent::Kind::KeyPressed : DeviceEvent::Kind::KeyReleased;
@@ -185,12 +187,32 @@ public:
                            static_cast<int>(akp815::KeyCount));
             return;
         }
-        // The image pipeline that resizes to 100×100 and rotates 180° is
-        // tracked in `TODO.md` → "AKP815 image pipeline". Here we accept
-        // pre-encoded JPEG payloads verbatim, mirroring the AKP153 path.
-        (void)width;
-        (void)height;
-        sendImage(keyIndex, rgba);
+        // Encode the RGBA8888 the caller hands us (stream_dock_control_service
+        // converts to Format_RGBA8888) to the device's wire image: 100×100 JPEG,
+        // Rot180, no mirror. These per-key values are RE-confirmed (akp815.md
+        // §Image format / [ajazz-sdk] key_image_format(); akp_device_matrix.md)
+        // and match image_pipeline.hpp's documented AKP815 transform. (Rot180 is
+        // RE-sourced; final orientation is pending visual confirmation on a
+        // physical AKP815, exactly as AKP05E's render was.) Before this the raw
+        // RGBA was sent as-is under a jpegEncoded=true header, so keys could not
+        // render at all.
+        ImageTransform const xform{
+            .targetWidth = akp815::KeyWidthPx,
+            .targetHeight = akp815::KeyHeightPx,
+            .format = ImageFormat::Jpeg,
+            .rotationDegrees = 180,
+            .mirror = false,
+            .jpegQuality = 85,
+        };
+        try {
+            auto const jpeg = encodeForDevice(rgba, width, height, xform);
+            sendImage(keyIndex, jpeg);
+        } catch (std::exception const& e) {
+            AJAZZ_LOG_WARN("akp815",
+                           "setKeyImage: encode failed for key {}: {}",
+                           static_cast<int>(keyIndex),
+                           e.what());
+        }
     }
 
     void setKeyColor(std::uint8_t keyIndex, Rgb color) override {
@@ -210,7 +232,7 @@ public:
             return;
         }
         auto const pkt =
-            (keyIndex == 0xff) ? akp153::buildClearAll() : akp153::buildClearKey(keyIndex);
+            (keyIndex == 0xff) ? akp815::buildClearAll() : akp815::buildClearKey(keyIndex);
         (void)m_transport->write(pkt);
     }
 
@@ -222,19 +244,19 @@ public:
     }
 
     void setBrightness(std::uint8_t percent) override {
-        auto const pkt = akp153::buildSetBrightness(percent);
+        auto const pkt = akp815::buildSetBrightness(percent);
         (void)m_transport->write(pkt);
     }
 
     void flush() override {
         // Shares the AKP153 `STP` opcode.
         auto stop = std::array<std::uint8_t, akp815::PacketSize>{};
-        stop[0] = akp153::CmdPrefix[0];
-        stop[1] = akp153::CmdPrefix[1];
-        stop[2] = akp153::CmdPrefix[2];
-        stop[5] = akp153::CmdStop[0];
-        stop[6] = akp153::CmdStop[1];
-        stop[7] = akp153::CmdStop[2];
+        stop[0] = akp815::CmdPrefix[0];
+        stop[1] = akp815::CmdPrefix[1];
+        stop[2] = akp815::CmdPrefix[2];
+        stop[5] = akp815::CmdStop[0];
+        stop[6] = akp815::CmdStop[1];
+        stop[7] = akp815::CmdStop[2];
         (void)m_transport->write(stop);
     }
 
@@ -277,7 +299,7 @@ private:
             return;
         }
         auto const header =
-            akp153::buildImageHeader(keyIndex, static_cast<std::uint16_t>(jpeg.size()));
+            akp815::buildImageHeader(keyIndex, static_cast<std::uint16_t>(jpeg.size()));
         (void)m_transport->write(header);
 
         std::size_t offset = 0;
@@ -289,8 +311,8 @@ private:
             offset += take;
         }
         // P3.7: emit the 5-byte ULEND commit sentinel after the image burst.
-        // AKP815 reuses akp153 builders (it has no separate protocol header).
-        (void)m_transport->write(akp153::buildUploadFinished());
+        // AKP815 owns its wire builders in akp815_wire.hpp.
+        (void)m_transport->write(akp815::buildUploadFinished());
     }
 
     DeviceDescriptor m_descriptor; ///< Static hardware description.
@@ -305,6 +327,21 @@ private:
 
 core::DevicePtr makeAkp815(core::DeviceDescriptor const& d, core::DeviceId id) {
     return std::make_shared<Akp815Device>(d, std::move(id));
+}
+
+/**
+ * @brief Test-only factory exposing the @c Akp815Device COD-026 DI constructor
+ *        across translation-unit boundaries.
+ *
+ * Production code uses @ref makeAkp815 above; this overload exposes the same
+ * backend with a substitutable transport so unit tests can assert byte-level
+ * wire-format equality via @c MockTransport::writes() without touching real
+ * HID hardware.
+ */
+core::DevicePtr makeAkp815WithTransport(core::DeviceDescriptor const& d,
+                                        core::DeviceId id,
+                                        core::TransportPtr transport) {
+    return std::make_shared<Akp815Device>(d, std::move(id), std::move(transport));
 }
 
 } // namespace ajazz::streamdeck

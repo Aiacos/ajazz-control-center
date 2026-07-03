@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<!-- Property Inspector for the builtin "Device Brightness" action
+     (opendeck.brightness). Settings contract: {"value": 0..100} — the
+     device.brightness handler accepts "value" (alias of "level") and clamps
+     to [0..100]. -->
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <link rel="stylesheet" href="pi.css">
+    <script src="pi.js"></script>
+</head>
+<body>
+    <label for="value">Brightness</label>
+    <input type="range" id="value" min="0" max="100" step="5" value="80">
+    <output id="valueOut" for="value">80</output>
+    <div class="hint">Applied to the device when the key is pressed.</div>
+    <script>
+        "use strict";
+        const valueEl = document.getElementById("value");
+        const outEl = document.getElementById("valueOut");
+        function applySettings(s) {
+            const v = Number(s.value ?? s.level);
+            if (Number.isFinite(v)) {
+                valueEl.value = String(v);
+                outEl.value = String(v);
+            }
+        }
+        valueEl.addEventListener("input", () => { outEl.value = valueEl.value; });
+        valueEl.addEventListener("change", () => save({ value: Number(valueEl.value) }));
+    </script>
+</body>
+</html>

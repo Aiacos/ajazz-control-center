@@ -23,18 +23,66 @@ A backend's source tree therefore typically contains:
 
 ```
 src/devices/streamdeck/
-├── include/ajazz/streamdeck/streamdeck.hpp   # registerAll() declaration
+├── include/ajazz/streamdeck/streamdeck.hpp   # registerAll() + makeAkp815 decl
 └── src/
     ├── register.cpp                          # IRegistry registration
-    ├── akp153.cpp                            # IDevice impl
-    ├── akp153_protocol.hpp                   # wire-format helpers
-    ├── akp03.cpp
-    ├── akp03_protocol.hpp
-    ├── akp05.cpp
-    └── akp05_protocol.hpp
+    ├── akp815.cpp                            # IDevice impl (custom carve-out)
+    ├── akp815_protocol.hpp                   # geometry constants
+    ├── akp815_wire.hpp                       # v1-API wire-format helpers
+    ├── akp815_wire.cpp
+    └── akp_common_protocol.hpp               # family-shared command words
 ```
 
-The `*_protocol.hpp` files are **pure wire-format**: no Qt, no logging, no I/O. They consist of `constexpr` constants and free functions that take/return `std::span<std::uint8_t>`. This makes them trivially unit-testable in `tests/unit/` via capture-replay fixtures.
+The AKP03 / AKP05-N4 / AKP153 Stream Dock families no longer have in-tree C++
+backends: they are driven by the out-of-process **mirajazz Rust sidecar**
+(`streamdock-host/`), proxied in by `SidecarStreamDockDevice`
+(`src/app/src/sidecar_stream_dock_device.*`) and registered via
+`streamDockSidecarDescriptors()`. **AKP815** is the carve-out that keeps a custom
+C++ backend (it is not a mirajazz device). The `*_protocol.hpp` / `akp815_wire.*`
+files are **pure wire-format**: no Qt, no logging, no I/O — `constexpr` constants
+and free functions over `std::span<std::uint8_t>`, trivially unit-testable.
+
+### streamdock-host sidecar JSON protocol
+
+The app (`SidecarStreamDockDevice`) spawns `streamdock-host` and speaks
+**newline-delimited JSON over stdin/stdout** — exactly one JSON object per line.
+The sidecar enumerates every mirajazz-driven SKU at startup, then streams input
+and accepts output commands.
+
+**app → sidecar (commands):**
+
+| `cmd`            | Fields                          | Notes                               |
+| ---------------- | ------------------------------- | ----------------------------------- |
+| `ping`           | —                               | Liveness probe; replies `pong`.     |
+| `set_brightness` | `serial`, `percent`             | Output — requires `--allow-output`. |
+| `set_image`      | `serial`, `key`, image payload  | Output — requires `--allow-output`. |
+| `render_test`    | `serial`, …                     | Output — paints a test pattern.     |
+
+**sidecar → app (events):**
+
+| `event`        | Fields                                              | Meaning                                     |
+| -------------- | -------------------------------------------------- | ------------------------------------------- |
+| `connected`    | `serial`, `vid`, `pid`, `firmware`, `family`, `name` | One per physical unit found at startup.      |
+| `ready`        | `device_count`, `output_allowed`                   | Enumeration finished.                        |
+| `input`        | `serial`, `code` (byte 9), `state` (byte 10), `raw`  | A raw input report (see input note).         |
+| `pong`         | —                                                  | Reply to `ping`.                             |
+| `ok`           | `cmd`, `serial`                                    | A command succeeded.                         |
+| `error`        | `msg`                                              | Protocol / command error (non-fatal).        |
+| `device_error` | `serial`, `msg`                                    | A device read failed; its reader task exits. |
+
+**Output gating (`--allow-output`).** Brightness/image commands trigger mirajazz
+`initialize()`, which sends `CRT DIS` — known to risk wedging the demo panel via
+open/close churn. A long-lived sidecar holds ONE handle and sends DIS once for
+the handle lifetime; output stays gated behind `--allow-output` until that
+no-wedge behaviour is validated on retail hardware.
+
+**Input note.** The reader forwards the raw report's `code` (byte 9) and `state`
+(byte 10); `ACK…OK` acknowledgement frames that ride the same channel are
+discarded (`is_ack_frame`; see
+`docs/protocols/streamdeck/akp05_input_corrections.md` §2.1). The byte→event
+decode (key / encoder / touch) happens app-side in `mapSidecarInput`; the
+per-family encoder/touch codes there are **PROVISIONAL** pending calibration on a
+retail AKP05E (the `0x3004` demo unit emits no input).
 
 ## Capability catalog
 

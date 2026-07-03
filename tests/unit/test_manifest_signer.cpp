@@ -45,6 +45,7 @@
 namespace fs = std::filesystem;
 using ajazz::plugins::loadTrustRoots;
 using ajazz::plugins::ManifestSignerConfig;
+using ajazz::plugins::SignatureState;
 using ajazz::plugins::TrustedPublisher;
 using ajazz::plugins::verifyManifest;
 
@@ -383,6 +384,124 @@ TEST_CASE("loadTrustRoots: malformed entry never cross-pairs", "[manifest-signer
     REQUIRE(roots.size() == 1);
     REQUIRE(roots[0].keyB64 == "KEY2");
     REQUIRE(roots[0].name == "Trusted Two");
+    fs::remove_all(tmp);
+}
+
+// ---------------------------------------------------------------------------
+// SignatureState classification: None / Valid / Invalid
+// ---------------------------------------------------------------------------
+
+TEST_CASE("manifest verifier: unsigned manifest has signatureState None", "[manifest-signer]") {
+    // A manifest with NO Ed25519Signature and NO Ed25519PublicKey -> SignatureState::None
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-state-none";
+    fs::create_directories(tmp);
+    auto const manifest = tmp / "manifest.json";
+    writeFile(manifest, kMinimalManifestJson);
+
+    auto const result = verifyManifest(manifest, makeConfig());
+    REQUIRE_FALSE(result.valid);
+    REQUIRE(result.signatureState == SignatureState::None);
+
+    fs::remove_all(tmp);
+}
+
+TEST_CASE("manifest verifier: tampered manifest has signatureState Invalid", "[manifest-signer]") {
+    // A manifest WITH a signature block whose Ed25519 verify fails -> SignatureState::Invalid
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-state-invalid";
+    fs::create_directories(tmp);
+    auto const keys = tmp / "keys";
+    auto const manifest = tmp / "manifest.json";
+
+    REQUIRE(
+        runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()}) ==
+        0);
+    writeFile(manifest, kMinimalManifestJson);
+    REQUIRE(runChild({pythonExe(),
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      manifest.string(),
+                      "--priv-key",
+                      (keys / "priv.pem").string()}) == 0);
+
+    // Tamper: flip one byte in the description
+    auto blob = readFile(manifest);
+    auto const pos = blob.find("Fixture used");
+    REQUIRE(pos != std::string::npos);
+    blob[pos] = 'X';
+    writeFile(manifest, blob);
+
+    auto const result = verifyManifest(manifest, makeConfig());
+    REQUIRE_FALSE(result.valid);
+    REQUIRE(result.signatureState == SignatureState::Invalid);
+
+    fs::remove_all(tmp);
+}
+
+TEST_CASE("manifest verifier: valid manifest has signatureState Valid", "[manifest-signer]") {
+    // A validly-signed manifest -> SignatureState::Valid, valid == true
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-state-valid";
+    fs::create_directories(tmp);
+    auto const keys = tmp / "keys";
+    auto const manifest = tmp / "manifest.json";
+
+    REQUIRE(
+        runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()}) ==
+        0);
+    writeFile(manifest, kMinimalManifestJson);
+    REQUIRE(runChild({pythonExe(),
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      manifest.string(),
+                      "--priv-key",
+                      (keys / "priv.pem").string()}) == 0);
+
+    auto const result = verifyManifest(manifest, makeConfig());
+    REQUIRE(result.valid);
+    REQUIRE(result.signatureState == SignatureState::Valid);
+
+    fs::remove_all(tmp);
+}
+
+TEST_CASE("manifest verifier: unavailable verifier classifies by signature-block presence",
+          "[manifest-signer]") {
+    // When verifierScript is missing: unsigned -> None; signed-but-unverifiable -> Invalid
+    auto const tmp = fs::temp_directory_path() / "ajazz-test-signer-state-unavail";
+    fs::create_directories(tmp);
+    auto const keys = tmp / "keys";
+    auto const unsignedManifest = tmp / "unsigned.json";
+    auto const signedManifest = tmp / "signed.json";
+
+    // Build unsigned manifest
+    writeFile(unsignedManifest, kMinimalManifestJson);
+
+    // Build a validly-signed manifest (we just need the signature block present)
+    REQUIRE(
+        runChild({pythonExe(), verifierScript().string(), "keygen", "--out-dir", keys.string()}) ==
+        0);
+    writeFile(signedManifest, kMinimalManifestJson);
+    REQUIRE(runChild({pythonExe(),
+                      verifierScript().string(),
+                      "sign",
+                      "--manifest",
+                      signedManifest.string(),
+                      "--priv-key",
+                      (keys / "priv.pem").string()}) == 0);
+
+    ManifestSignerConfig cfg;
+    cfg.pythonExecutable = pythonExe();
+    cfg.verifierScript = "/nonexistent/no-such-verifier.py"; // script missing
+    cfg.trustedPublishersFile = fs::path{};
+
+    auto const unsignedResult = verifyManifest(unsignedManifest, cfg);
+    REQUIRE_FALSE(unsignedResult.valid);
+    REQUIRE(unsignedResult.signatureState == SignatureState::None);
+
+    auto const signedResult = verifyManifest(signedManifest, cfg);
+    REQUIRE_FALSE(signedResult.valid);
+    REQUIRE(signedResult.signatureState == SignatureState::Invalid);
+
     fs::remove_all(tmp);
 }
 

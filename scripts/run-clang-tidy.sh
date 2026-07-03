@@ -15,10 +15,17 @@ if [[ ! -f $COMPDB ]]; then
 fi
 
 # Filter to project sources only — clang-tidy on hidapi / pybind11 is noisy.
+# Headers (.hpp) and platform-gated TUs (*_win32.cpp on Linux) have no entry
+# in the compdb; clang-tidy hard-errors on them, so keep only files the
+# compdb actually knows how to compile.
 files=()
 for f in "$@"; do
     case "$f" in
-        src/* | tests/*) files+=("$f") ;;
+        src/* | tests/*)
+            if grep -qF "\"$(basename "$f")\"" "$COMPDB" || grep -qF "/$f" "$COMPDB"; then
+                files+=("$f")
+            fi
+            ;;
     esac
 done
 
@@ -26,4 +33,24 @@ if [[ ${#files[@]} -eq 0 ]]; then
     exit 0
 fi
 
-clang-tidy --quiet -p "$BUILD_DIR" "${files[@]}"
+# Build-time generated headers (qtwaylandscanner: qwayland-*.h +
+# *-client-protocol.h) don't exist on a configured-but-never-built tree and
+# clang-tidy hard-errors on their includes. Generate just the scanner
+# outputs first; no-op when the wayland backend isn't configured.
+if command -v ninja >/dev/null 2>&1 && [[ -f ${BUILD_DIR}/build.ninja ]]; then
+    ninja -C "$BUILD_DIR" -t targets all 2>/dev/null |
+        awk -F': ' '/(qwayland-[^:]*\.h|client-protocol\.h):/ {print $1}' |
+        xargs -r ninja -C "$BUILD_DIR" >/dev/null
+fi
+
+# GCC >= 15 writes C++20 module-scanning flags (-fmodules-ts,
+# -fmodule-mapper=..., -fdeps-format=p1689r5, -fdeps-file=..., -fdeps-target=...)
+# into compile_commands.json; clang-tidy's clang driver rejects them as
+# "unknown argument" hard errors. Strip them into a filtered copy of the
+# compdb so the hook works regardless of the configuring compiler.
+TIDY_DB_DIR="$(mktemp -d)"
+trap 'rm -rf "$TIDY_DB_DIR"' EXIT
+sed -E 's/-f(deps-format|deps-file|deps-target|module-mapper)=[^" ]*//g; s/-fmodules-ts//g' \
+    "$COMPDB" >"${TIDY_DB_DIR}/compile_commands.json"
+
+clang-tidy --quiet -p "$TIDY_DB_DIR" "${files[@]}"

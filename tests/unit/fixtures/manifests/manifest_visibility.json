@@ -1,0 +1,76 @@
+{
+  "Name": "Visibility Test Plugin",
+  "Author": "Test Author",
+  "Version": "1.0.0",
+  "Icon": "icons/plugin.png",
+  "Category": "Test",
+  "CategoryIcon": "icons/category.png",
+  "Description": "Covers VisibleInActionsList, Encoder block, multi-state Name/Title/ShowTitle, DisableAutomaticStates, and default Settings.",
+  "SDKVersion": 1,
+  "OS": [
+    { "Platform": "mac", "MinimumVersion": "10.11" },
+    { "Platform": "windows", "MinimumVersion": "10" }
+  ],
+  "CodePath": "code/plugin.js",
+  "Actions": [
+    {
+      "UUID": "com.example.test.hidden",
+      "Name": "Hidden Internal Action",
+      "Icon": "icons/hidden.png",
+      "Controllers": ["Keypad"],
+      "VisibleInActionsList": false,
+      "States": [
+        {
+          "Image": "icons/state0.png"
+        }
+      ]
+    },
+    {
+      "UUID": "com.example.test.encoder",
+      "Name": "Encoder Dial Action",
+      "Icon": "icons/encoder.png",
+      "Controllers": ["Encoder"],
+      "VisibleInActionsList": true,
+      "DisableAutomaticStates": true,
+      "Encoder": {
+        "Icon": "icons/encoder_dial.png",
+        "layout": "$A0",
+        "TriggerDescription": {
+          "Rotate": "Turn to adjust",
+          "Push": "Press to confirm",
+          "Touch": "Tap for menu",
+          "LongTouch": "Hold to reset"
+        }
+      },
+      "States": [
+        {
+          "Image": "icons/state0.png",
+          "Name": "Off",
+          "Title": "Idle",
+          "ShowTitle": false
+        }
+      ]
+    },
+    {
+      "UUID": "com.example.test.multistate",
+      "Name": "Multi-State Action",
+      "Icon": "icons/multi.png",
+      "Controllers": ["Keypad"],
+      "Settings": { "mode": "default", "brightness": 50 },
+      "States": [
+        {
+          "Image": "icons/state0.png",
+          "Name": "State Zero",
+          "Title": "Inactive",
+          "ShowTitle": true
+        },
+        {
+          "Image": "icons/state1.png",
+          "Name": "State One",
+          "Title": "Active",
+          "ShowTitle": false
+        }
+      ]
+    }
+  ]
+}

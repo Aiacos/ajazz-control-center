@@ -6,6 +6,184 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- **AKP05 Pro/retail SKUs registered** (2026-07-03, issue #85): `0x0300:0x3013` (AKP05E Pro),
+  `0x3014` (AKP05CN Pro) and `0x3006` (AKP05 retail) are now recognised by the sidecar and the
+  device registry — PIDs and protocol (v3, AKP05E image formats) mirrored from the upstream
+  `opendeck-akp05` mappings. PROVISIONAL until hardware-confirmed; unlike the `0x3004` demo
+  unit (whose firmware ships with input disabled — re-confirmed live 2026-07-03 with a raw
+  hidraw capture: zero bytes while pressing/rotating), retail Pro units report working input
+  upstream.
+- **"System" builtin actions are now bindable from the editor** (2026-07-03, user report: no
+  volume control, no way to rotate profiles/pages): Volume (media key up/down/mute), Media
+  Control (play-pause/stop/next/previous), Next/Previous Page and Rotate Profiles now appear in
+  a dedicated "System" category of the action picker with in-tree icons and Property Inspectors
+  (volume.html, multimedia.html). Their executors had existed since Phase 21 but nothing ever
+  advertised them to the SPA. `profile.rotate` also gained a real implementation (it only
+  logged a deferral before): it cycles wrap-around through the active device's profiles —
+  live-verified Default -> Streaming on the AKP05E. Existing bindings with canonical
+  `com.hotspot.streamdock.*` ids are no longer mislabelled "(plugin not installed)" and now
+  resolve their builtin icon + PI.
+- **System Monitor sampling in milliseconds, default 100 ms** (2026-07-03, user request): the
+  PI field is now "Sample every (ms)" (50-60000, default 100); the plugin renders and the
+  btop-metrics-helper collects at the fastest live tile's cadence. Settings stored by older
+  builds (seconds) are converted transparently. Live-verified: helper respawns with
+  `--interval-ms 100`, tiles repaint at 10 Hz.
+
+- **Manifest `Profiles[]` support — shipped-profile switching** (2026-07-03, production audit
+  blocker 1): the Elgato manifest `Profiles[]` array is now parsed
+  (`Name`/`DeviceType`/`Readonly`/`DontAutoSwitchWhenInstalled`/`AutoInstall`), and a
+  `switchToProfile` whose token names a profile the plugin ships lazily materializes it as a
+  real, user-editable profile scoped to the event's device (else the active device) and
+  switches to it — enforcing the §1.4 rule that a plugin may only switch to a profile it
+  ships. Bounded limitation, documented in `PRODUCTION-READINESS.md`: the bundled
+  `.streamDeckProfile` layout content is not imported yet (ZIP-internal format undocumented
+  in the RE corpus; no local artifact to verify against — the profile starts empty).
+- **`streamdeck://` deep-link registration on Windows and macOS** (2026-07-03, production audit
+  blocker 2): Windows self-registers the scheme under `HKCU\Software\Classes` at startup
+  (no elevation; covers MSI and portable ZIP installs); macOS declares `CFBundleURLTypes`
+  via a custom `Info.plist.in` and routes `QFileOpenEvent` activations to
+  `Application::handleDeepLink`. Code-complete; runtime verification on real Windows/macOS
+  hosts pending.
+
+- **Production-readiness audit** (2026-07-03): feature-by-feature comparison against the official
+  Elgato SDK docs + live UI tour with per-surface screenshot verification + packaging-artifact
+  inspection. Results and the remaining blockers live in
+  `docs/architecture/PRODUCTION-READINESS.md`. Fixed on the spot: per-state `setImage`/`setTitle`
+  with `target` routing (blocker 3), editor now follows debug-RPC/hot-plug device activation,
+  installedActions log spam de-duplicated, deb/rpm runtime dependencies declared (the published
+  nightly .deb had NO Qt dependencies at all — shlibdeps cannot map aqt-provisioned Qt).
+- **System Monitor: configurable sample interval** (2026-07-02): every sysmon tile's Property
+  Inspector gains a "Sample every (s)" field (0.25–60 s, default 1 s). The tile's render loop
+  follows its own interval; the shared btop-metrics-helper is respawned with `--interval-ms`
+  set to the fastest interval across live tiles, so slowing all tiles genuinely reduces
+  collection frequency. willAppear settings are now merged (not replaced) plugin-side so
+  host repaint waves carrying empty settings can no longer revert a live PI edit.
+  Live-verified: helper respawns 1000→5000 ms and back; tile cadence follows the setting.
+
+### Fixed
+
+- **Physical key presses ran the NEIGHBOURING key's builtin/Toggle/Multi-Action chain**
+  (2026-07-03, found while cross-checking the vendor RE input conventions): the wire key index
+  is 1-based (`device.hpp` contract, `akp05_input_corrections.md` §2 — confirmed against the
+  official StreamDock app's `report[9]` handling) but the profile binding map is 0-based, and
+  `StreamDockInputService::dispatch()` looked bindings up with the raw wire value. Plugin
+  actions were unaffected (the bridge converts correctly), which is why this survived every
+  plugin-focused live pass. Fixed with a single conversion at dispatch; unit tests that had
+  codified the off-by-one (0-based injections) were realigned to the wire convention and a
+  regression test pins it. Live-verified: wire key 7 fires the key-B2 binding, wire 6 fires B1.
+- **Editor canvas could go permanently blank** (2026-07-03, found live): when the active profile
+  belonged to a different device, the SPA's `get_selected_profile` non-active-device branch
+  always returned null because `ProfileController::profilesForDevice` entries carried no on-disk
+  `path` — the whole key grid vanished until the right profile happened to be re-activated.
+  The `path` key is now included and the editor shapes the remembered profile from disk.
+- **Property Inspector lost the typed text after every keystroke** (2026-07-03, user report on
+  the starterpack Run Command PI): each PI `setSettings` was mirrored into the profile binding
+  via `updateBindingSettings`, which emitted `profileChanged` — the SPA reloaded the profile and
+  remounted the PI iframe per character. Settings-only writes now emit a narrower
+  `bindingSettingsUpdated` signal that the SPA bridge does not mirror as a profile reload.
+  Live-verified: a full command typed into "Key down" persists to the binding.
+- **Starterpack "Device Brightness" dial never changed the panel** (2026-07-03, user report):
+  the OpenDeck `deviceBrightness` event was mirror-only — it reached the SPA's
+  SettingsView.svelte, a component our embed never mounts, so the hardware write upstream
+  relies on never happened. The host now writes the panel directly ("set" absolute, "adjust"
+  relative to the last written level, tracked per device in StreamDockControlService).
+  Live-verified on the AKP05E: set 25 -> 25%, adjust +50 -> 75%.
+- **Windows package defects reported in #88** (2026-07-03): three distinct root causes fixed.
+  (1) The in-app version showed "0.1.0" regardless of the release — it was a hardcoded literal
+  in `main.cpp`; the app version now single-sources from CMake `project(VERSION)` via the
+  `AJAZZ_APP_VERSION` compile definition, and the project version itself was bumped to 2.0.0
+  (it had been stuck at 0.1.1 through the v1.0/v1.1 tags). (2) The MSI created no Start Menu
+  shortcut — `CPACK_PACKAGE_EXECUTABLES` + `CPACK_WIX_PROGRAM_MENU_FOLDER` were never set.
+  (3) `hidapi.dll` was missing at first launch — vendored hidapi defaults to a shared build;
+  it is now linked statically everywhere (`BUILD_SHARED_LIBS OFF` for the FetchContent tree),
+  which also stops libhidapi/.pc artifacts leaking into the Linux deb/rpm payloads.
+- **Dial actions: Switch Profile / Device Brightness now work** (2026-07-02, found live on the
+  AKP05E): the starterpack's OpenDeck-extension events `switchProfile` and `deviceBrightness`
+  were not in the plugin server's routed-action set and died as "unhandled event"; and on
+  press-only encoder hardware (AKP05E) plugins never received `dialUp` at all — the synthesised
+  encoder release only fired a test signal, so every `dial_up`-driven plugin action (profile
+  switch, OBS scene commit) was a no-op. Both routed/delivered now; dialUp fires exactly once
+  per press on every family. Live-verified: dial press/rotation switches the active profile,
+  brightness rotation reaches the host handler, the StreamDock OBS plugin's scene dial commits
+  `SetCurrentProgramScene` on press.
+- **Release packaging pipeline green-up** (2026-07-02, runs 28602454635 → 28621191730): wayland/x11
+  dev packages on the linux deb+rpm legs; Flatpak builder image moved to the maintained
+  `ghcr.io/flathub-infra` registry with the org.kde 6.8 runtime (Qt ≥ 6.8 wayland `PRIVATE_CODE`
+  codegen; the CMake side now also degrades gracefully on Qt 6.7); vendored zlib install rules
+  suppressed (`SKIP_INSTALL_ALL`) so cpack no longer tries to install into `/usr/local`
+  (macOS DMG EACCES / Windows WIX failure); sysmon bundle helper builds with g++ ≥ 14
+  (btop needs `std::ranges::to`); packaging legs configure with `-DAJAZZ_ENABLE_WERROR=OFF`
+  (a GCC 13 `-Wnull-dereference` false positive must not block shipping — the per-PR CI matrix
+  keeps warnings-as-errors); per-PR CI now checks out submodules and installs g++-14 so the
+  packaging build paths are exercised before merge.
+
+### Added
+
+- **Elgato-parity plugin UI for keys & dials + one-click install** (feature 002, 2026-06-19):
+  - **Install replaces Open**: the Plugin Store row is now a single in-app action
+    (Install → Installing N% → Installed / disabled "Not installable in-app"). The
+    browser "Open page ↗" fallback is removed; a source without a resolvable https
+    package is shown disabled with a reason, never as a browser launch.
+  - **Dominant key preview**: selecting a plugin-bound key shows an Elgato-style
+    140px preview (action image + bottom title overlay, live `image://livekey`),
+    with a sensible placeholder when an action has no image/title.
+  - **Dial owns its touch-strip segment**: on Stream Deck + class devices the
+    segment above each dial mirrors that dial's bound action and a tap selects the
+    dial (one control = dial + segment, the Elgato model). The independent
+    touch-zone binding is retired for dial devices; legacy profiles carrying
+    `touchZones` still load losslessly (read-compat).
+  - Uninstalling a plugin now reverts any key/dial bound to its actions to unbound
+    (no stale reference, no crash).
+- **Built-in dial layouts (`$X1/$A0/$A1/$B1/$B2/$C1`) + `setFeedback`/`setFeedbackLayout`**
+  (2026-06-10): the encoder feedback surface (the touch-strip zone above each dial) now renders
+  the Stream Deck SDK built-in layouts — title/icon/value items, plain + gradient progress bars,
+  the `$C1` dual-bar mixer row — driven by the manifest `Encoder.layout`/`Encoder.Icon` at mount
+  and by `setFeedback` (item merge) / `setFeedbackLayout` (runtime switch) / `setText` (title
+  alias) at runtime. Replaces the long-standing "aux-surface rendering deferred to Phase 23"
+  stub. Live-verified on the AKP05E (dialRotate -> bar updates 42%->57%->72%).
+- **OpenDeck/Elgato plugin-protocol parity completion** (2026-06-09/10, verified live on the AKP05E
+  against a full OpenDeck source analysis): mount-time default state-image render
+  (`States[i].Image` with action-`Icon` fallback painted the moment an action lands on a key —
+  a plugin that never pushes `setImage`, e.g. `com.jk.weather`, now shows its icon instead of a
+  blank key); host-side **automatic state cycle** for 2-state actions on `keyUp` (honours
+  `DisableAutomaticStates`, paints the new state image, the `keyUp` envelope carries the new
+  state, `titleParametersDidChange` follows — also after inbound `setState`); manifest-level
+  `PropertyInspectorPath` now backfills actions that declare none (Elgato default-PI semantics).
+- `plugin.installFromCatalog {uuid}` debug RPC driving the PluginStore tile install from the
+  debug channel.
+
+### Fixed
+
+- **Plugin children no longer outlive the host** (`PR_SET_PDEATHSIG` on both spawn sites — the
+  graceful exitApp→terminate→kill protocol lives in the destructor and never ran on
+  SIGTERM/SIGKILL; 11 orphaned `node` processes had accumulated across killed sessions). A
+  clean exit (code 0) of a plugin child is now logged instead of being indistinguishable from
+  "never spawned".
+- **Action-picker gate unified with the spawn gate**: `installedActions()` compared
+  `Software.MinimumVersion` against the real app version (0.1.x) instead of the emulated
+  Stream Deck version (6.9), hiding actions of plugins that were running (observed live with
+  Weather); it also now mirrors the spawn step's effective-CodePath check so Windows-native
+  bundles don't surface bindable-but-dead actions on Linux.
+- **In-place rebind** (a different action dropped on the same key) now sends `willDisappear`
+  to the old plugin, clears the lingering frame + stale title overlay, paints the new action's
+  default image, and no longer inherits the old action's state index.
+- Canvas live-render mirror survives profile-model rebuilds (one-shot renders such as the
+  mount-time default icon vanished from the editor while staying on the device).
+- CI: `qtwayland` removed from `install-qt-action` modules (the 2026-06 Qt online-repo
+  restructure folded it into the base desktop install; requesting the old module name
+  hard-failed all three platform legs); first cross-platform exposure of the v2.0 phases fixed
+  three platform-specific failures (missing `override` under Apple Clang `-Werror`; exit-time
+  `QCoreApplication` destructor SEGFAULT on Qt 6.8.3; a `processEvents`-based test pump that
+  never actually waited on the windows-2022 runner).
+
+### Changed
+
+- UI palette polish: update banner re-skinned to the dark in-palette layer (was the only blue
+  element in the dark+red scheme), encoder dial rings reserve the accent for focus/selection,
+  empty-key index numbers muted.
+
 ## [0.1.1] - 2026-06-04
 
 ### Fixed

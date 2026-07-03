@@ -13,10 +13,21 @@
 # LTS-based KDE runtime — which also ships flatpak >= 1.15, enabling the
 # fine-grained `--device=usb` instead of the blanket `--device=all` that the 6.7
 # runtime forced. Bump runtime-version as KDE publishes newer non-EOL branches.
+# ⚠ RELEASE-BLOCKER until the tag/commit below is bumped to a mirajazz-inclusive
+#   release. The `tag: v0.1.0 / commit 731c70b…` pinned in the ajazz-control-center
+#   module PREDATES the Stream Dock mirajazz sidecar (streamdock-host/ did not
+#   exist then). Submitting as-is would ship an app whose Stream Dock devices
+#   (AKP03/AKP05-N4/AKP153) never open. When cutting the sidecar release, bump
+#   BOTH the app-module tag+commit AND keep the `streamdock-host` module below in
+#   sync. See packaging/flathub/SUBMITTING.md.
 app-id: io.github.Aiacos.AjazzControlCenter
 runtime: org.kde.Platform
 runtime-version: '6.8'
 sdk: org.kde.Sdk
+# rust-stable SDK extension: required to build the out-of-process streamdock-host
+# Rust sidecar offline (mirrors packaging/flatpak/*.yml).
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
 command: ajazz-control-center
 
 finish-args:
@@ -99,6 +110,9 @@ modules:
       # sandbox) and is a host resource — device access inside Flatpak is via
       # the USB portal + the host's own rule.
       - -DAJAZZ_INSTALL_UDEV_RULES=OFF
+      # The Rust sidecar is built by the dedicated `streamdock-host` module below
+      # (cargo can't fetch crates in the offline sandbox during the app build).
+      - -DAJAZZ_BUILD_SIDECAR=OFF
     sources:
       # Flathub builds from source. Pin to the released tag AND its commit so the
       # build is reproducible and verifiable. Bump both on every release (see the
@@ -126,3 +140,35 @@ modules:
       # rasterise it ("file-read-error"). The PNG hicolor sizes (incl. 64 + 128 +
       # 256) are enough for AppStream and the desktop icon.
       - rm -f /app/share/icons/hicolor/scalable/apps/io.github.Aiacos.AjazzControlCenter.svg
+
+  # Out-of-process mirajazz Rust sidecar driving the AKP03/AKP05-N4/AKP153 Stream
+  # Dock families. Mirrors packaging/flatpak/*.yml, but Flathub builds from source
+  # so the source is a pinned git checkout (NOT type: dir). Built OFFLINE from the
+  # vendored cargo-sources.json (the sandbox has no network).
+  #
+  # ⚠ The git tag+commit here MUST match the ajazz-control-center module above AND
+  #   point to a release that contains streamdock-host/ (i.e. NOT v0.1.0). Bump
+  #   both together at release time. Regenerate cargo-sources.json after changing
+  #   the Rust deps:
+  #     python3 flatpak-cargo-generator.py streamdock-host/Cargo.lock \
+  #       -o packaging/flathub/cargo-sources.json
+  #
+  # NOTE: this module's offline build is verified by the Flathub CI / the
+  # release.yml flatpak build, not by the local CMake test suite.
+  - name: streamdock-host
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin
+      env:
+        CARGO_HOME: /run/build/streamdock-host/cargo
+    build-commands:
+      - cargo --offline build --release --manifest-path streamdock-host/Cargo.toml
+      - install -Dm755 streamdock-host/target/release/streamdock-host
+          /app/bin/streamdock-host
+    sources:
+      - type: git
+        url: https://github.com/Aiacos/ajazz-control-center.git
+        # Keep tag+commit in sync with the ajazz-control-center module above.
+        tag: v0.1.0
+        commit: 731c70b2b0bc078b317fcc97fa2e8ae9c22a8c22
+      - cargo-sources.json
