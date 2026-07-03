@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **"System" builtin actions are now bindable from the editor** (2026-07-03, user report: no
+  volume control, no way to rotate profiles/pages): Volume (media key up/down/mute), Media
+  Control (play-pause/stop/next/previous), Next/Previous Page and Rotate Profiles now appear in
+  a dedicated "System" category of the action picker with in-tree icons and Property Inspectors
+  (volume.html, multimedia.html). Their executors had existed since Phase 21 but nothing ever
+  advertised them to the SPA. `profile.rotate` also gained a real implementation (it only
+  logged a deferral before): it cycles wrap-around through the active device's profiles —
+  live-verified Default -> Streaming on the AKP05E. Existing bindings with canonical
+  `com.hotspot.streamdock.*` ids are no longer mislabelled "(plugin not installed)" and now
+  resolve their builtin icon + PI.
+- **System Monitor sampling in milliseconds, default 100 ms** (2026-07-03, user request): the
+  PI field is now "Sample every (ms)" (50-60000, default 100); the plugin renders and the
+  btop-metrics-helper collects at the fastest live tile's cadence. Settings stored by older
+  builds (seconds) are converted transparently. Live-verified: helper respawns with
+  `--interval-ms 100`, tiles repaint at 10 Hz.
+
 - **Manifest `Profiles[]` support — shipped-profile switching** (2026-07-03, production audit
   blocker 1): the Elgato manifest `Profiles[]` array is now parsed
   (`Name`/`DeviceType`/`Readonly`/`DontAutoSwitchWhenInstalled`/`AutoInstall`), and a
@@ -41,6 +57,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Editor canvas could go permanently blank** (2026-07-03, found live): when the active profile
+  belonged to a different device, the SPA's `get_selected_profile` non-active-device branch
+  always returned null because `ProfileController::profilesForDevice` entries carried no on-disk
+  `path` — the whole key grid vanished until the right profile happened to be re-activated.
+  The `path` key is now included and the editor shapes the remembered profile from disk.
+- **Property Inspector lost the typed text after every keystroke** (2026-07-03, user report on
+  the starterpack Run Command PI): each PI `setSettings` was mirrored into the profile binding
+  via `updateBindingSettings`, which emitted `profileChanged` — the SPA reloaded the profile and
+  remounted the PI iframe per character. Settings-only writes now emit a narrower
+  `bindingSettingsUpdated` signal that the SPA bridge does not mirror as a profile reload.
+  Live-verified: a full command typed into "Key down" persists to the binding.
+- **Starterpack "Device Brightness" dial never changed the panel** (2026-07-03, user report):
+  the OpenDeck `deviceBrightness` event was mirror-only — it reached the SPA's
+  SettingsView.svelte, a component our embed never mounts, so the hardware write upstream
+  relies on never happened. The host now writes the panel directly ("set" absolute, "adjust"
+  relative to the last written level, tracked per device in StreamDockControlService).
+  Live-verified on the AKP05E: set 25 -> 25%, adjust +50 -> 75%.
 - **Windows package defects reported in #88** (2026-07-03): three distinct root causes fixed.
   (1) The in-app version showed "0.1.0" regardless of the release — it was a hardcoded literal
   in `main.cpp`; the app version now single-sources from CMake `project(VERSION)` via the
