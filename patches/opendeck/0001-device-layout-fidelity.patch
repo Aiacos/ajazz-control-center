@@ -1,0 +1,100 @@
+diff --git a/src/components/DeviceView.svelte b/src/components/DeviceView.svelte
+index e97db8a..c9f4ac5 100644
+--- a/src/components/DeviceView.svelte
++++ b/src/components/DeviceView.svelte
+@@ -82,11 +82,11 @@
+
+ 	$: gridRowLengths = [
+ 		...Array(device.rows).fill(device.columns),
+-		...(device.encoders > 0 ? [device.encoders] : []),
+ 		...(device.touchpoints > 0 ? [device.touchpoints] : []),
++		...(device.encoders > 0 ? [device.encoders] : []),
+ 	];
+-	$: encoderRowIndex = device.rows;
+-	$: touchpointRowIndex = device.rows + (device.encoders > 0 ? 1 : 0);
++	$: touchpointRowIndex = device.rows;
++	$: encoderRowIndex = device.rows + (device.touchpoints > 0 ? 1 : 0);
+
+ 	function flatIndexFromRowCol(row: number, col: number): number {
+ 		let index = 0;
+@@ -210,34 +210,35 @@
+ 		</div>
+
+ 		<div class="flex flex-row" role="row">
+-			{#each { length: device.encoders } as _, i}
++			{#each { length: device.touchpoints } as _, i}
+ 				<Key
+-					context={{ device: device.id, profile: profile.id, controller: "Encoder", position: i }}
+-					bind:inslot={profile.sliders[i]}
++					context={{ device: device.id, profile: profile.id, controller: "Keypad", position: (device.rows * device.columns) + i }}
++					bind:inslot={profile.keys[(device.rows * device.columns) + i]}
+ 					on:dragover={handleDragOver}
+-					on:drop={(event) => handleDrop(event, "Encoder", i)}
+-					on:dragstart={(event) => handleDragStart(event, "Encoder", i)}
++					on:drop={(event) => handleDrop(event, "Keypad", (device.rows * device.columns) + i)}
++					on:dragstart={(event) => handleDragStart(event, "Keypad", (device.rows * device.columns) + i)}
+ 					{handlePaste}
+ 					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
+-					label="Encoder {i + 1}"
+-					tabindex={focusedRow === encoderRowIndex && focusedCol === i ? 0 : -1}
++					isTouchPoint
++					height={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 96 : 72}
++					label="Touch point {i + 1}"
++					tabindex={focusedRow === touchpointRowIndex && focusedCol === i ? 0 : -1}
+ 				/>
+ 			{/each}
+ 		</div>
+
+ 		<div class="flex flex-row" role="row">
+-			{#each { length: device.touchpoints } as _, i}
++			{#each { length: device.encoders } as _, i}
+ 				<Key
+-					context={{ device: device.id, profile: profile.id, controller: "Keypad", position: (device.rows * device.columns) + i }}
+-					bind:inslot={profile.keys[(device.rows * device.columns) + i]}
++					context={{ device: device.id, profile: profile.id, controller: "Encoder", position: i }}
++					bind:inslot={profile.sliders[i]}
+ 					on:dragover={handleDragOver}
+-					on:drop={(event) => handleDrop(event, "Keypad", (device.rows * device.columns) + i)}
+-					on:dragstart={(event) => handleDragStart(event, "Keypad", (device.rows * device.columns) + i)}
++					on:drop={(event) => handleDrop(event, "Encoder", i)}
++					on:dragstart={(event) => handleDragStart(event, "Encoder", i)}
+ 					{handlePaste}
+ 					size={device.id.startsWith("sd-") && device.rows == 4 && device.columns == 8 ? 192 : 144}
+-					isTouchPoint
+-					label="Touch point {i + 1}"
+-					tabindex={focusedRow === touchpointRowIndex && focusedCol === i ? 0 : -1}
++					label="Encoder {i + 1}"
++					tabindex={focusedRow === encoderRowIndex && focusedCol === i ? 0 : -1}
+ 				/>
+ 			{/each}
+ 		</div>
+diff --git a/src/components/Key.svelte b/src/components/Key.svelte
+index 6629c34..a83b7f0 100644
+--- a/src/components/Key.svelte
++++ b/src/components/Key.svelte
+@@ -146,6 +146,10 @@
+ 	let canvas: HTMLCanvasElement;
+ 	let lock = new CanvasLock();
+ 	export let size = 144;
++	// Touch-strip segments are physically rectangular (wider than tall);
++	// when set, the canvas becomes size x height instead of a square.
++	export let height: number | null = null;
++	$: canvasHeight = height ?? size;
+ 	$: (async () => {
+ 		const sl = structuredClone(slot);
+ 		if (!sl) {
+@@ -191,12 +195,12 @@
+ 	<canvas
+ 		bind:this={canvas}
+ 		class="relative border-3 border-neutral-700 rounded-3xl outline-none outline-offset-2 outline-blue-500"
+-		style={`margin: ${-((size + 3 * 2 /* border */ - 132 /* desired outer size */) / 2)}px;`}
++		style={`margin: ${-((canvasHeight + 3 * 2 /* border */ - (132 * canvasHeight) / size) / 2)}px ${-((size + 3 * 2 /* border */ - 132 /* desired outer size */) / 2)}px;`}
+ 		class:outline-solid={active && ((slot && $inspectedInstance == slot.context) || (context && $inspectedInstance == context))}
+ 		class:rounded-full!={context?.controller == "Encoder"}
+ 		class:bg-black={slot != null}
+ 		width={size}
+-		height={size}
++		height={canvasHeight}
+ 		draggable={slot != null}
+ 		{tabindex}
+ 		{role}

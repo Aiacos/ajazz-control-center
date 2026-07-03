@@ -29,8 +29,27 @@ if [[ ! -f $shim ]]; then
     exit 1
 fi
 
-echo "build-webui: installing deps in $webui_dir"
 cd "$webui_dir"
+
+# Local UI patches (patches/opendeck/*.patch): device-layout fidelity fixes we
+# carry until upstreamed (keys -> touch strip -> dials row order matching the
+# physical hardware; rectangular touch-strip segments). Idempotent: an
+# already-applied patch (dev working tree) is detected via --reverse --check
+# and skipped; CI's pristine submodule checkout gets it applied fresh.
+for p in "$repo_root"/patches/opendeck/*.patch; do
+    [[ -e $p ]] || continue
+    if git apply --check "$p" 2>/dev/null; then
+        git apply "$p"
+        echo "build-webui: applied $(basename "$p")"
+    elif git apply --reverse --check "$p" 2>/dev/null; then
+        echo "build-webui: $(basename "$p") already applied"
+    else
+        echo "build-webui: ERROR — $(basename "$p") does not apply (submodule bumped?)" >&2
+        exit 1
+    fi
+done
+
+echo "build-webui: installing deps in $webui_dir"
 if [[ -f package-lock.json ]]; then npm ci; else npm install; fi
 # esbuild's native binary postinstall is sometimes skipped under restrictive npm
 # configs; ensure it's present so vite/esbuild can run.
