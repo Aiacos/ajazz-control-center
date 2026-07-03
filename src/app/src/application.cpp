@@ -1038,15 +1038,47 @@ Application::Application(QObject* parent)
                 }
                 // Resolve the token to a known profile id (exact id, then name
                 // scoped to the device — RESEARCH Open Q3). Unresolvable -> reject.
-                QString const resolvedId =
+                QString resolvedId =
                     resolveSwitchToProfileToken(*m_profileController, profileToken, deviceToken);
                 if (resolvedId.isEmpty()) {
-                    AJAZZ_LOG_WARN("plugin",
-                                   "switchToProfile: token '{}' from plugin {} matched no known "
-                                   "profile — ignored",
-                                   profileToken.toStdString(),
-                                   pluginUuid.toStdString());
-                    return; // bad token: no crash, no activation
+                    // Not in the library yet — lazily materialize a profile the
+                    // plugin SHIPS in its manifest Profiles[] (§1.4: a plugin may
+                    // switch only to a profile it ships; production audit
+                    // blocker 1). Scoped to the device named in the event, else
+                    // the active device. The bundled .streamDeckProfile layout
+                    // content is NOT imported (format undocumented in our RE
+                    // corpus); the profile starts empty and is user-editable.
+                    QString const shipped =
+                        m_pluginManager
+                            ? m_pluginManager->shippedProfileName(pluginUuid, profileToken)
+                            : QString{};
+                    QString const codename =
+                        !deviceToken.isEmpty()
+                            ? deviceToken
+                            : (m_streamDockInput ? m_streamDockInput->activeDeviceCodename()
+                                                 : QString{});
+                    if (shipped.isEmpty() || codename.isEmpty()) {
+                        AJAZZ_LOG_WARN("plugin",
+                                       "switchToProfile: token '{}' from plugin {} matched no "
+                                       "known profile and no shipped Profiles[] entry — ignored",
+                                       profileToken.toStdString(),
+                                       pluginUuid.toStdString());
+                        return; // bad token: no crash, no activation
+                    }
+                    QString const activeBeforeCreate = m_profileController->activeProfileId();
+                    // createProfile persists AND activates the fresh profile.
+                    resolvedId = m_profileController->createProfile(shipped, codename);
+                    AJAZZ_LOG_INFO(
+                        "plugin",
+                        "switchToProfile: materialized shipped profile '{}' for device {} "
+                        "(plugin {}; bundled layout import pending — starts empty)",
+                        shipped.toStdString(),
+                        codename.toStdString(),
+                        pluginUuid.toStdString());
+                    if (!activeBeforeCreate.isEmpty() && activeBeforeCreate != resolvedId) {
+                        s_prevProfileByPlugin[pluginUuid] = activeBeforeCreate;
+                    }
+                    return; // created + activated in one step
                 }
                 AJAZZ_LOG_INFO("plugin",
                                "switchToProfile: plugin {} -> profile '{}'",

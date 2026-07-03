@@ -90,6 +90,18 @@ struct PluginOsRequirement {
     QString minimumVersion; ///< OS[].MinimumVersion (may be empty)
 };
 
+/// Bundled-profile declaration (per elgato_plugin_protocol.md §1.4 Profiles[]).
+/// `name` is a path to a `.streamDeckProfile` inside the bundle with the
+/// extension omitted (e.g. "Profiles/Spotify"); the user-visible profile name
+/// is its basename. A plugin may `switchToProfile` only to a profile it ships.
+struct PluginProfileDecl {
+    QString name;                            ///< Name (required)
+    int deviceType{-1};                      ///< DeviceType (§6.3 enum, required)
+    bool readonly{false};                    ///< Readonly (default false)
+    bool dontAutoSwitchWhenInstalled{false}; ///< DontAutoSwitchWhenInstalled (default false)
+    bool autoInstall{true};                  ///< AutoInstall (default true)
+};
+
 /**
  * @brief Parsed representation of a plugin's manifest.json.
  *
@@ -143,6 +155,13 @@ struct PluginManifest {
     /// the plugin for every app), preserving backwards-compatible fan-out.
     QStringList applicationsToMonitor;
 
+    // --- Bundled profiles (Elgato Profiles[]) ---
+    /// Profiles this plugin ships (§1.4). Parsed so switchToProfile can resolve
+    /// a shipped-profile name; the .streamDeckProfile layout content itself is
+    /// NOT imported yet (the ZIP-internal format is undocumented in our RE
+    /// corpus — see PRODUCTION-READINESS.md blocker 1 for the bounded scope).
+    std::vector<PluginProfileDecl> profiles;
+
     // --- Actions ---
     std::vector<PluginAction> actions; ///< Actions array
 
@@ -173,6 +192,14 @@ enum class Affordance : int { Key = 1, Dial = 2, TouchZone = 4 };
 /// Key=1, Dial=2, TouchZone=4. Empty or absent Controllers list defaults to Key only.
 /// ["Information"]-only returns 0 (non-draggable — no physical drop surface).
 [[nodiscard]] int affordanceMask(QStringList const& controllers) noexcept;
+
+/// Resolve a switchToProfile token against a manifest's shipped Profiles[]
+/// declarations (§1.4: a plugin may switch only to a profile it ships).
+/// Matches the token against each declaration's full `Name` and its basename
+/// (the `Name` is a bundle-relative path with the extension omitted), exact
+/// first, then case-insensitively. Returns the canonical user-visible profile
+/// name (the basename) or an empty string when nothing matches.
+[[nodiscard]] QString matchShippedProfileName(PluginManifest const& manifest, QString const& token);
 
 /// Normalize an application token (a foreground appId or an ApplicationsToMonitor
 /// entry) to the watcher's app-identity contract: path base name, trailing

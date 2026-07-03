@@ -1,0 +1,37 @@
+{
+    "Name": "Profile Shipper",
+    "Author": "Fixture",
+    "Version": "1.0.0",
+    "Icon": "icon",
+    "Category": "Test",
+    "CategoryIcon": "icon",
+    "Description": "Fixture manifest declaring bundled Profiles[] (elgato_plugin_protocol.md 1.4)",
+    "SDKVersion": 2,
+    "CodePath": "app.html",
+    "Software": { "MinimumVersion": "0.1" },
+    "OS": [{ "Platform": "windows", "MinimumVersion": "10" }],
+    "Profiles": [
+        {
+            "Name": "Profiles/Gaming Mode",
+            "DeviceType": 7,
+            "Readonly": true,
+            "DontAutoSwitchWhenInstalled": true
+        },
+        {
+            "Name": "Basic",
+            "DeviceType": 0,
+            "AutoInstall": false
+        },
+        {
+            "DeviceType": 3
+        }
+    ],
+    "Actions": [
+        {
+            "UUID": "com.fixture.profileshipper.action",
+            "Name": "Action",
+            "Icon": "icon",
+            "States": [{}]
+        }
+    ]
+}

@@ -1202,6 +1202,22 @@ bool PluginManager::monitorsApplication(QString const& pluginUuid, QString const
     return false;
 }
 
+QString PluginManager::shippedProfileName(QString const& pluginUuid, QString const& token) const {
+    if (pluginUuid.isEmpty() || token.isEmpty()) {
+        return {};
+    }
+    // Resolve by the SAME identity registeredPlugins() carries (PUUID when
+    // present, else the .sdPlugin directory key) — see monitorsApplication.
+    for (auto const& [key, live] : m_live) {
+        QString const registeredId = live.manifest.puuid.isEmpty() ? key : live.manifest.puuid;
+        if (registeredId != pluginUuid) {
+            continue;
+        }
+        return matchShippedProfileName(live.manifest, token);
+    }
+    return {};
+}
+
 // ---------------------------------------------------------------------------
 // IPluginHost2 overrides (the .sdPlugin sub-host implementation)
 // ---------------------------------------------------------------------------

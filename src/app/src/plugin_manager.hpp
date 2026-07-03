@@ -458,6 +458,22 @@ public:
     [[nodiscard]] bool monitorsApplication(QString const& pluginUuid, QString const& appId) const;
 
     /**
+     * @brief Resolve a switchToProfile token against @p pluginUuid's shipped Profiles[].
+     *
+     * elgato_plugin_protocol.md §1.4: a plugin may switchToProfile only to a
+     * profile it ships. The plugin is resolved by the same -pluginUUID identity
+     * as monitorsApplication (PUUID, else the .sdPlugin directory key); the
+     * token is then matched by matchShippedProfileName (full Name or basename,
+     * exact then case-insensitive).
+     *
+     * @param pluginUuid  Registered plugin UUID.
+     * @param token       The switchToProfile "profile" payload value.
+     * @return            Canonical user-visible profile name, or empty when the
+     *                    plugin is unknown or ships no matching profile.
+     */
+    [[nodiscard]] QString shippedProfileName(QString const& pluginUuid, QString const& token) const;
+
+    /**
      * @brief Inject the provider for the `-info.devices[]` array (F1).
      *
      * The registration `-info` payload must advertise the currently-connected

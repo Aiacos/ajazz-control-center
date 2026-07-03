@@ -662,3 +662,57 @@ TEST_CASE("resolveEffectiveCodePath falls back to a cross-platform script code p
     CHECK(resolveEffectiveCodePath(*n).isEmpty());
 #endif
 }
+
+// ---------------------------------------------------------------------------
+// Test: Profiles[] parsing (elgato_plugin_protocol.md 1.4) + shipped-name match
+// ---------------------------------------------------------------------------
+
+TEST_CASE("PluginManifestTest parses Profiles array with spec defaults", "[plugin-manifest]") {
+    auto const m = parseFixture("with_profiles.json");
+    REQUIRE(m.has_value());
+    // The third entry has no Name (required per 1.4) -> skipped.
+    REQUIRE(m->profiles.size() == 2);
+
+    PluginProfileDecl const& gaming = m->profiles[0];
+    CHECK(gaming.name == QStringLiteral("Profiles/Gaming Mode"));
+    CHECK(gaming.deviceType == 7);
+    CHECK(gaming.readonly);
+    CHECK(gaming.dontAutoSwitchWhenInstalled);
+    CHECK(gaming.autoInstall); // absent -> default true
+
+    PluginProfileDecl const& basic = m->profiles[1];
+    CHECK(basic.name == QStringLiteral("Basic"));
+    CHECK(basic.deviceType == 0);
+    CHECK_FALSE(basic.readonly);                    // absent -> default false
+    CHECK_FALSE(basic.dontAutoSwitchWhenInstalled); // absent -> default false
+    CHECK_FALSE(basic.autoInstall);
+}
+
+TEST_CASE("PluginManifestTest manifest without Profiles yields empty list", "[plugin-manifest]") {
+    auto const m = parseFixture("elgato_v6_keypad.json");
+    REQUIRE(m.has_value());
+    CHECK(m->profiles.empty());
+}
+
+TEST_CASE("PluginManifestTest matchShippedProfileName resolves tokens", "[plugin-manifest]") {
+    auto const m = parseFixture("with_profiles.json");
+    REQUIRE(m.has_value());
+
+    // Full declared Name path and its basename both resolve to the basename
+    // (the user-visible profile name).
+    CHECK(matchShippedProfileName(*m, QStringLiteral("Profiles/Gaming Mode")) ==
+          QStringLiteral("Gaming Mode"));
+    CHECK(matchShippedProfileName(*m, QStringLiteral("Gaming Mode")) ==
+          QStringLiteral("Gaming Mode"));
+    CHECK(matchShippedProfileName(*m, QStringLiteral("Basic")) == QStringLiteral("Basic"));
+
+    // Case-insensitive fallback (manifests authored on case-insensitive FSes).
+    CHECK(matchShippedProfileName(*m, QStringLiteral("gaming mode")) ==
+          QStringLiteral("Gaming Mode"));
+
+    // Unknown, empty and whitespace tokens do not match (a plugin may switch
+    // only to a profile it ships).
+    CHECK(matchShippedProfileName(*m, QStringLiteral("Not Shipped")).isEmpty());
+    CHECK(matchShippedProfileName(*m, QString{}).isEmpty());
+    CHECK(matchShippedProfileName(*m, QStringLiteral("   ")).isEmpty());
+}

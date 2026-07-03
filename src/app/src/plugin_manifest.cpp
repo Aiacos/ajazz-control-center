@@ -363,7 +363,56 @@ std::optional<PluginManifest> parsePluginManifest(QByteArray const& json) {
         }
     }
 
+    // Profiles[] — optional (elgato_plugin_protocol.md §1.4). Name is required
+    // per spec; entries without one are unusable as switchToProfile targets and
+    // are skipped. DeviceType is required by the spec but tolerated when absent
+    // (-1 sentinel) — a wrong device type must not hide the profile name from
+    // the switchToProfile resolver.
+    QJsonArray const profilesArr = root.value(QStringLiteral("Profiles")).toArray();
+    m.profiles.reserve(static_cast<std::size_t>(profilesArr.size()));
+    for (QJsonValue const& pv : profilesArr) {
+        QJsonObject const po = pv.toObject();
+        PluginProfileDecl decl;
+        decl.name = po.value(QStringLiteral("Name")).toString();
+        if (decl.name.isEmpty()) {
+            continue;
+        }
+        decl.deviceType = po.value(QStringLiteral("DeviceType")).toInt(-1);
+        decl.readonly = po.value(QStringLiteral("Readonly")).toBool(false);
+        decl.dontAutoSwitchWhenInstalled =
+            po.value(QStringLiteral("DontAutoSwitchWhenInstalled")).toBool(false);
+        decl.autoInstall = po.value(QStringLiteral("AutoInstall")).toBool(true);
+        m.profiles.push_back(std::move(decl));
+    }
+
     return m;
+}
+
+QString matchShippedProfileName(PluginManifest const& manifest, QString const& token) {
+    if (token.trimmed().isEmpty()) {
+        return {};
+    }
+    // The user-visible profile name is the basename of the declared Name path
+    // (§1.4: Name is bundle-relative with the .streamDeckProfile ext omitted).
+    auto const basenameOf = [](QString const& name) {
+        qsizetype const slash = name.lastIndexOf(QLatin1Char('/'));
+        return slash < 0 ? name : name.mid(slash + 1);
+    };
+    // Exact match first (full Name, then basename), then case-insensitive:
+    // manifests are authored on case-insensitive filesystems and plugins are
+    // sloppy about casing in the switchToProfile payload.
+    for (PluginProfileDecl const& decl : manifest.profiles) {
+        if (token == decl.name || token == basenameOf(decl.name)) {
+            return basenameOf(decl.name);
+        }
+    }
+    for (PluginProfileDecl const& decl : manifest.profiles) {
+        if (token.compare(decl.name, Qt::CaseInsensitive) == 0 ||
+            token.compare(basenameOf(decl.name), Qt::CaseInsensitive) == 0) {
+            return basenameOf(decl.name);
+        }
+    }
+    return {};
 }
 
 // ---------------------------------------------------------------------------
