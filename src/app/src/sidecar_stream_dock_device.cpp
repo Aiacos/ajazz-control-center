@@ -410,6 +410,16 @@ void SidecarStreamDockDevice::handleLine(QByteArray const& line) {
         break;
     case Type::Input: {
         auto const devEv = mapSidecarInput(ev->code, ev->state);
+        // Log EVERY input frame the mirajazz sidecar delivers — mapped or not.
+        // The AKP05 code map is PROVISIONAL (N4-derived; the 0x3004 demo unit
+        // emits nothing to calibrate against), so an unmapped code was dropped
+        // silently before: on a retail/Pro unit this line is how the real code
+        // map gets calibrated straight from `scripts/ajazz-debug log.tail`.
+        AJAZZ_LOG_INFO("sidecar",
+                       "input: code=0x{:02x} state={} -> {}",
+                       ev->code,
+                       ev->state,
+                       devEv ? "mapped" : "UNMAPPED (calibration needed)");
         if (devEv) {
             core::EventCallback cb;
             {
