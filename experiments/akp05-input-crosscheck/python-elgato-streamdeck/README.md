@@ -72,6 +72,12 @@ USB-node write — a disruptive change to running apps, not done automatically.
 The hidraw path (`scripts/akp05_input_probe.py`) can read concurrently without
 disrupting them, but that is a different transport, not this library.
 
+**Non-invasive hidraw substitute run (2026-07-04):** a 30 s passive
+`scripts/akp05_input_probe.py` capture on hidraw16/17 — run *concurrently* with
+the live `opendeck-akp05` plugin driving the device — recorded **0 input frames**
+across all controls. This is a 6th vantage point (passive hidraw alongside a
+live mirajazz-based reader) agreeing with §7.1: the demo unit emits no input.
+
 ## Reading the result
 
 - **0 nonzero frames** → agrees with the proof chain; the demo unit's input
