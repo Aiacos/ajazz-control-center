@@ -43,7 +43,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           # Release/nightly packaging checks out submodules (OpenDeck SPA +
           # btop for the sysmon bundle) — the PR matrix must exercise the SAME
@@ -247,7 +247,7 @@ jobs:
     if: github.event_name == 'push'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           # Build-path parity with the build matrix (webui/bundle blocks are
           # exercised, not silently skipped). See the build job note.
@@ -384,7 +384,7 @@ jobs:
             lsan_options_relative: ""
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
         with:
           # Build-path parity with the build matrix (webui/bundle blocks are
           # exercised, not silently skipped). See the build job note.
