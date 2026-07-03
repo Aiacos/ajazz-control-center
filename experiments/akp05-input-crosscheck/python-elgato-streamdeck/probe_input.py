@@ -17,13 +17,22 @@ firmware rather than on our stack.
 Why a bespoke harness and not just ``DeviceManager().enumerate()``:
 python-elgato-streamdeck only enumerates *Elgato* VID/PID pairs (USB VID
 0x0fd9). The AKP05E is VID 0x0300, so the high-level API never sees it. We
-therefore go one layer down to the raw HIDAPI transport, open 0300:3004 by
-VID/PID, and poll ``read()`` -- exactly what a StreamDeck subclass would do
-once its device table knew the PID.
+therefore go one layer down to the raw transport, enumerate 0300:3004 by
+VID/PID, open it, and poll ``read()`` -- exactly what a StreamDeck subclass
+would do once its device table knew the PID.
 
-Setup (project rule: NO system installs -- use a throwaway venv):
+IMPORTANT (verified live 2026-07-04): the current library ships a single
+**libusb-backed** transport (``LibUSBHIDAPI``, loading libhidapi-libusb via
+ctypes) -- NOT a hidraw transport. ``enumerate()`` sees the device, but
+``open()`` claims the USB interface via libusb, which needs write access to
+the USB bus node AND requires detaching the kernel usbhid driver -- so it
+conflicts with anything already holding the device over hidraw (the OpenDeck
+akp05 plugin, Wine's winedevice.exe, our own app/sidecar). Free the device
+and grant USB-node write before expecting open() to succeed.
+
+Setup (throwaway venv; the transport uses the SYSTEM libhidapi-libusb):
     python3 -m venv /tmp/sd-venv && . /tmp/sd-venv/bin/activate
-    pip install streamdeck hidapi      # or: pip install streamdeck cython-hidapi
+    pip install streamdeck            # LibUSBHIDAPI loads libhidapi-libusb.so.0 via ctypes
 
 Run:
     python3 probe_input.py                      # run until Ctrl-C
@@ -41,48 +50,59 @@ import contextlib
 import sys
 import time
 
+# The current python-elgato-streamdeck ships a single libusb-backed transport
+# (LibUSBHIDAPI, loading libhidapi-libusb via ctypes). enumerate(vid, pid)
+# returns ready-to-open Device objects directly -- there is no connect() step.
 try:
-    from StreamDeck.Transport.HIDAPI import HIDAPI
+    from StreamDeck.Transport.LibUSBHIDAPI import LibUSBHIDAPI
 except ImportError:
-    HIDAPI = None
+    LibUSBHIDAPI = None
 
 VID = 0x0300
 PID = 0x3004
 
+_OPEN_HELP = (
+    "Could not open any interface. LibUSBHIDAPI claims the USB interface via "
+    "libusb, so it needs BOTH:\n"
+    "  1. write access to the USB bus node, e.g.\n"
+    "       sudo setfacl -m u:$(id -u):rw /dev/bus/usb/<BUS>/<DEV>\n"
+    "     (find <BUS>/<DEV> in `lsusb` for 0300:3004), and\n"
+    "  2. the device NOT held by another process -- libusb must detach the\n"
+    "     kernel usbhid driver, which conflicts with anything using hidraw:\n"
+    "     the OpenDeck akp05 plugin, Wine's winedevice.exe, or our own\n"
+    "     app/sidecar. Stop those first (check: fuser /dev/hidraw*)."
+)
+
 
 def main() -> int:
-    """Open every 0300:3004 interface via HIDAPI, poll input, report the verdict."""
+    """Open every 0300:3004 interface via libusb, poll input, report the verdict."""
     parser = argparse.ArgumentParser(description="AKP05E input cross-check")
     parser.add_argument(
         "--seconds", type=float, default=0.0, help="stop after N seconds (0 = until Ctrl-C)"
     )
     args = parser.parse_args()
 
-    if HIDAPI is None:
-        sys.exit("python-elgato-streamdeck not installed: pip install streamdeck hidapi")
+    if LibUSBHIDAPI is None:
+        sys.exit("python-elgato-streamdeck not installed: pip install streamdeck")
     try:
-        transport = HIDAPI()
+        transport = LibUSBHIDAPI()
     except Exception as exc:
-        sys.exit(f"HIDAPI backend failed to load ({exc}). Try: pip install hidapi")
+        sys.exit(f"libusb HIDAPI backend failed to load ({exc}). Need libhidapi-libusb.so.")
 
-    matches = list(transport.enumerate(vid=VID, pid=PID))
+    matches = list(transport.enumerate(VID, PID))
     if not matches:
-        sys.exit(
-            f"No {VID:#06x}:{PID:#06x} device found by the HIDAPI transport. "
-            "Plugged in and readable? sudo setfacl -m u:$(id -u):rw /dev/hidraw*"
-        )
-    print(f"Found {len(matches)} interface(s) for {VID:#06x}:{PID:#06x}; opening each.")
+        sys.exit(f"No {VID:#06x}:{PID:#06x} device enumerated. Plugged in?")
+    print(f"Enumerated {len(matches)} interface(s) for {VID:#06x}:{PID:#06x}; opening each.")
 
     devices = []
-    for info in matches:
+    for dev in matches:
         try:
-            dev = transport.connect(info)
             dev.open()
             devices.append(dev)
         except Exception as exc:
             print(f"  interface open failed (non-fatal): {exc}")
     if not devices:
-        sys.exit("Could not open any interface -- permission or exclusive-claim issue.")
+        sys.exit(_OPEN_HELP)
 
     print(f"Opened {len(devices)} interface(s). Press keys / turn dials / touch the strip.")
     print("Any nonzero read below overturns the 'input unreachable' finding.\n")

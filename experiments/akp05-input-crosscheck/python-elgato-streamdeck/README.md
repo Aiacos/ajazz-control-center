@@ -33,8 +33,8 @@ major result — capture it immediately.
 
 Note the library only enumerates Elgato VID `0x0fd9` at its high level, so
 `DeviceManager().enumerate()` never sees the AKP05E. The harness drops to the
-raw HIDAPI transport and opens `0300:3004` directly — the same path a
-`StreamDeck` subclass would take once its device table knew the PID.
+raw transport and opens `0300:3004` directly — the same path a `StreamDeck`
+subclass would take once its device table knew the PID.
 
 ## Run
 
@@ -42,12 +42,35 @@ Project rule: **no system installs.** Use a throwaway venv.
 
 ```bash
 python3 -m venv /tmp/sd-venv && . /tmp/sd-venv/bin/activate
-pip install streamdeck hidapi        # or: pip install streamdeck cython-hidapi
+pip install streamdeck               # transport uses the SYSTEM libhidapi-libusb.so.0
 python3 probe_input.py --seconds 60  # then press keys / turn dials / touch strip
 ```
 
-If `/dev/hidraw*` is root-only (systemd ≥258 `uaccess` regression, see
-`CLAUDE.md`), grant transient access: `sudo setfacl -m u:$(id -u):rw /dev/hidraw*`.
+## Live-run result (2026-07-04) — the transport is libusb, and open() is blocked here
+
+Verified on the actual `0300:3004` unit. The current library ships a single
+**libusb-backed** transport (`LibUSBHIDAPI`); there is no hidraw transport.
+The probe behaves like this:
+
+- `enumerate(0x0300, 0x3004)` → **2 interfaces found** (libusb sees the device).
+- `open()` → **fails: "Could not open HID device"** on both interfaces.
+
+Two independent blockers, both real on this machine:
+
+1. **USB bus node not writable.** `/dev/bus/usb/001/022` is `root:root rw-rw-r--` with **no `uaccess` ACL** (unlike the hidraw nodes, which have
+   one). libusb needs write access to claim. Transient dev fix:
+   `sudo setfacl -m u:$(id -u):rw /dev/bus/usb/001/022` (renumber per `lsusb`).
+1. **The device is already held over hidraw.** libusb must detach the kernel
+   `usbhid` driver to claim the interface, which conflicts with existing
+   holders. `fuser /dev/hidraw16 /dev/hidraw17` showed:
+   - the **OpenDeck `opendeck-akp05-linux` plugin** (ambiso, v0.10.2), and
+   - **Wine's `winedevice.exe`**, which grabs *all* hidraw nodes including the
+     AKP05E's.
+
+So a definitive libusb read requires stopping those holders **and** granting
+USB-node write — a disruptive change to running apps, not done automatically.
+The hidraw path (`scripts/akp05_input_probe.py`) can read concurrently without
+disrupting them, but that is a different transport, not this library.
 
 ## Reading the result
 
