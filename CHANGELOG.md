@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **Manifest `Profiles[]` support — shipped-profile switching** (2026-07-03, production audit
+  blocker 1): the Elgato manifest `Profiles[]` array is now parsed
+  (`Name`/`DeviceType`/`Readonly`/`DontAutoSwitchWhenInstalled`/`AutoInstall`), and a
+  `switchToProfile` whose token names a profile the plugin ships lazily materializes it as a
+  real, user-editable profile scoped to the event's device (else the active device) and
+  switches to it — enforcing the §1.4 rule that a plugin may only switch to a profile it
+  ships. Bounded limitation, documented in `PRODUCTION-READINESS.md`: the bundled
+  `.streamDeckProfile` layout content is not imported yet (ZIP-internal format undocumented
+  in the RE corpus; no local artifact to verify against — the profile starts empty).
+- **`streamdeck://` deep-link registration on Windows and macOS** (2026-07-03, production audit
+  blocker 2): Windows self-registers the scheme under `HKCU\Software\Classes` at startup
+  (no elevation; covers MSI and portable ZIP installs); macOS declares `CFBundleURLTypes`
+  via a custom `Info.plist.in` and routes `QFileOpenEvent` activations to
+  `Application::handleDeepLink`. Code-complete; runtime verification on real Windows/macOS
+  hosts pending.
+
 - **Production-readiness audit** (2026-07-03): feature-by-feature comparison against the official
   Elgato SDK docs + live UI tour with per-surface screenshot verification + packaging-artifact
   inspection. Results and the remaining blockers live in
@@ -25,6 +41,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **Windows package defects reported in #88** (2026-07-03): three distinct root causes fixed.
+  (1) The in-app version showed "0.1.0" regardless of the release — it was a hardcoded literal
+  in `main.cpp`; the app version now single-sources from CMake `project(VERSION)` via the
+  `AJAZZ_APP_VERSION` compile definition, and the project version itself was bumped to 2.0.0
+  (it had been stuck at 0.1.1 through the v1.0/v1.1 tags). (2) The MSI created no Start Menu
+  shortcut — `CPACK_PACKAGE_EXECUTABLES` + `CPACK_WIX_PROGRAM_MENU_FOLDER` were never set.
+  (3) `hidapi.dll` was missing at first launch — vendored hidapi defaults to a shared build;
+  it is now linked statically everywhere (`BUILD_SHARED_LIBS OFF` for the FetchContent tree),
+  which also stops libhidapi/.pc artifacts leaking into the Linux deb/rpm payloads.
 - **Dial actions: Switch Profile / Device Brightness now work** (2026-07-02, found live on the
   AKP05E): the starterpack's OpenDeck-extension events `switchProfile` and `deviceBrightness`
   were not in the plugin server's routed-action set and died as "unhandled event"; and on
