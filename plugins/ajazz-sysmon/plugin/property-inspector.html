@@ -34,8 +34,8 @@
 	</div>
 	<div class="row"><label for="warn">Warn &ge;</label><input id="warn" type="number" step="1" placeholder="default" /></div>
 	<div class="row"><label for="crit">Crit &ge;</label><input id="crit" type="number" step="1" placeholder="default" /></div>
-	<div class="row"><label for="interval">Sample every (s)</label><input id="interval" type="number" step="0.5" min="0.25" max="60" placeholder="1" /></div>
-	<div class="hint">Thresholds colour the value green / amber / red. Leave blank for per-metric defaults. Sample interval sets how often this tile refreshes (0.25&ndash;60&nbsp;s; data collection follows the fastest tile).</div>
+	<div class="row"><label for="interval">Sample every (ms)</label><input id="interval" type="number" step="50" min="50" max="60000" placeholder="100" /></div>
+	<div class="hint">Thresholds colour the value green / amber / red. Leave blank for per-metric defaults. Sample interval sets how often this tile refreshes (50&ndash;60000&nbsp;ms, default 100; data collection follows the fastest tile).</div>
 
 	<script>
 		let ws = null, uuid = null;
@@ -46,13 +46,15 @@
 			if (s.metric) $("metric").value = s.metric;
 			$("warn").value = (s.warn ?? "");
 			$("crit").value = (s.crit ?? "");
-			$("interval").value = (s.interval ?? "");
+			// interval_ms is the current key; fall back to the legacy seconds
+			// field (settings persisted before the ms switch), converted.
+			$("interval").value = (s.interval_ms ?? (s.interval != null ? Math.round(s.interval * 1000) : ""));
 		}
 
 		function send() {
 			if (!ws || ws.readyState !== 1) return;
 			const num = (v) => (v === "" || v === null ? null : Number(v));
-			const payload = { metric: $("metric").value, warn: num($("warn").value), crit: num($("crit").value), interval: num($("interval").value) };
+			const payload = { metric: $("metric").value, warn: num($("warn").value), crit: num($("crit").value), interval_ms: num($("interval").value) };
 			ws.send(JSON.stringify({ event: "setSettings", context: uuid, payload }));
 		}
 

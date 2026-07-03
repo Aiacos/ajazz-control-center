@@ -536,19 +536,29 @@ struct MonitorSettings {
 	metric: String,
 	warn: Option<f32>,
 	crit: Option<f32>,
-	/// Sampling/refresh cadence in SECONDS (PI "Sample every"). None = 1 s.
-	/// Drives this instance's render loop; the helper's collection cadence
-	/// follows the MINIMUM across all live instances (one shared process).
+	/// LEGACY sampling cadence in SECONDS (pre-2026-07-03 PI). Kept only so
+	/// settings stored by older builds keep their cadence (converted to ms by
+	/// effective_interval_ms); the PI writes `interval_ms` now.
 	interval: Option<f32>,
+	/// Sampling/refresh cadence in MILLISECONDS (PI "Sample every"). None =
+	/// 100 ms. Drives this instance's render loop; the helper's collection
+	/// cadence follows the MINIMUM across all live instances (one process).
+	interval_ms: Option<u64>,
 }
 
-/// Clamp an instance interval to something sane (0.25 s .. 60 s).
-fn clamp_interval_s(v: f32) -> f32 {
-	if v.is_finite() {
-		v.clamp(0.25, 60.0)
-	} else {
-		1.0
-	}
+/// Clamp an instance interval to something sane (50 ms .. 60 s).
+fn clamp_interval_ms(v: u64) -> u64 {
+	v.clamp(50, 60_000)
+}
+
+/// Effective per-instance cadence in ms. Precedence: `interval_ms` (current
+/// PI), then the legacy seconds `interval` (settings persisted by builds
+/// before the ms switch, converted), else the 100 ms default.
+fn effective_interval_ms(s: &MonitorSettings) -> u64 {
+	let raw = s
+		.interval_ms
+		.or_else(|| s.interval.filter(|v| v.is_finite() && *v > 0.0).map(|v| (v * 1000.0) as u64));
+	clamp_interval_ms(raw.unwrap_or(100))
 }
 
 impl MonitorSettings {
@@ -572,7 +582,7 @@ fn settings_map() -> &'static Mutex<HashMap<InstanceId, MonitorSettings>> {
 /// 1 s tile must not be starved because another tile asked for 30 s).
 fn sample_interval_ms() -> &'static std::sync::atomic::AtomicU64 {
 	static A: OnceLock<std::sync::atomic::AtomicU64> = OnceLock::new();
-	A.get_or_init(|| std::sync::atomic::AtomicU64::new(1000))
+	A.get_or_init(|| std::sync::atomic::AtomicU64::new(100))
 }
 
 /// Wakes run_helper() to respawn the helper with a new --interval-ms.
@@ -609,16 +619,19 @@ fn merge_settings(id: &InstanceId, incoming: &MonitorSettings, default: &str) {
 	if incoming.interval.is_some() {
 		entry.interval = incoming.interval;
 	}
+	if incoming.interval_ms.is_some() {
+		entry.interval_ms = incoming.interval_ms;
+	}
 }
 
 fn apply_sample_interval() {
-	let min_s = settings_map()
+	let ms = settings_map()
 		.lock()
 		.unwrap()
 		.values()
-		.map(|s| clamp_interval_s(s.interval.unwrap_or(1.0)))
-		.fold(f32::INFINITY, f32::min);
-	let ms = if min_s.is_finite() { (min_s * 1000.0) as u64 } else { 1000 };
+		.map(effective_interval_ms)
+		.min()
+		.unwrap_or(100);
 	use std::sync::atomic::Ordering;
 	if sample_interval_ms().swap(ms, Ordering::Relaxed) != ms {
 		helper_notify().notify_one();
@@ -647,7 +660,7 @@ async fn render_once(inst: &Instance, id: &InstanceId, fixed: Option<Metric>) ->
 
 /// Spawn the render loop for one instance. `fixed` pins the metric;
 /// otherwise the metric is read from the live per-instance settings. The
-/// cadence follows the instance's "Sample every" setting (default 1 s),
+/// cadence follows the instance's "Sample every" setting (default 100 ms),
 /// re-read every frame so a PI change applies without respawning the task.
 fn spawn_render(inst: Arc<Instance>, id: InstanceId, fixed: Option<Metric>) -> JoinHandle<()> {
 	tokio::spawn(async move {
@@ -655,11 +668,11 @@ fn spawn_render(inst: Arc<Instance>, id: InstanceId, fixed: Option<Metric>) -> J
 			if !render_once(&inst, &id, fixed).await {
 				break;
 			}
-			let secs = {
+			let ms = {
 				let map = settings_map().lock().unwrap();
-				clamp_interval_s(map.get(&id).and_then(|s| s.interval).unwrap_or(1.0))
+				map.get(&id).map(effective_interval_ms).unwrap_or(100)
 			};
-			tokio::time::sleep(Duration::from_millis((secs * 1000.0) as u64)).await;
+			tokio::time::sleep(Duration::from_millis(ms)).await;
 		}
 	})
 }
@@ -685,9 +698,18 @@ async fn cycle_metric(instance: &Instance, ticks: i16, default: &str) {
 	let next = Metric::ALL[cycled_index(idx, ticks, Metric::ALL.len())];
 	// Thresholds reset to the new metric's defaults by design; the sampling
 	// interval is metric-independent and must survive the cycle.
-	let prev_interval = settings_map().lock().unwrap().get(&id).and_then(|s| s.interval);
-	let settings =
-		MonitorSettings { metric: next.id().into(), warn: None, crit: None, interval: prev_interval };
+	let (prev_interval, prev_interval_ms) = {
+		let map = settings_map().lock().unwrap();
+		let s = map.get(&id);
+		(s.and_then(|s| s.interval), s.and_then(|s| s.interval_ms))
+	};
+	let settings = MonitorSettings {
+		metric: next.id().into(),
+		warn: None,
+		crit: None,
+		interval: prev_interval,
+		interval_ms: prev_interval_ms,
+	};
 	settings_map().lock().unwrap().insert(id.clone(), settings.clone());
 	let _ = instance.set_settings(&settings).await;
 	render_once(instance, &id, None).await;
@@ -913,6 +935,30 @@ async fn main() -> OpenActionResult<()> {
 #[cfg(test)]
 mod tests {
 	use super::*;
+
+	#[test]
+	fn interval_defaults_to_100ms() {
+		assert_eq!(effective_interval_ms(&MonitorSettings::default()), 100);
+	}
+
+	#[test]
+	fn interval_ms_wins_and_clamps() {
+		let s = MonitorSettings { interval_ms: Some(10), ..Default::default() };
+		assert_eq!(effective_interval_ms(&s), 50); // clamped up to the 50 ms floor
+		let s = MonitorSettings { interval_ms: Some(250), interval: Some(5.0), ..Default::default() };
+		assert_eq!(effective_interval_ms(&s), 250); // ms key beats legacy seconds
+		let s = MonitorSettings { interval_ms: Some(999_999), ..Default::default() };
+		assert_eq!(effective_interval_ms(&s), 60_000); // ceiling
+	}
+
+	#[test]
+	fn legacy_seconds_interval_converts() {
+		// Settings persisted by pre-ms builds carried seconds in `interval`.
+		let s = MonitorSettings { interval: Some(2.5), ..Default::default() };
+		assert_eq!(effective_interval_ms(&s), 2_500);
+		let s = MonitorSettings { interval: Some(f32::NAN), ..Default::default() };
+		assert_eq!(effective_interval_ms(&s), 100); // non-finite -> default
+	}
 
 	#[test]
 	fn snapshot_parses_with_gpu() {
