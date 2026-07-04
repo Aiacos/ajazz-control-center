@@ -80,6 +80,13 @@ void registerAll(core::DeviceRegistry& registry) {
         {0x3151, 0x5008, "AJAZZ AJ159 APEX (wired) / AJ179 APEX", "aj159_apex_wired"},
         {0x3151, 0x4026, "AJAZZ AJ159 APEX (2.4G)", "aj159_apex_24g"},
         {0x3151, 0x4027, "AJAZZ AJ159 APEX 2.4G dongle (paired kbd+mouse)", "aj159_apex_dongle"},
+        // AJ159 PRO (2.4G 8K, PAW3395 sensor) — issue #75. PID 0x402d sits in
+        // the same 0x3151 APEX block, so it enumerates on the shared AJ-series
+        // wire format via makeAjSeries. PROVISIONAL: no local hardware; left out
+        // of the TFT/battery gating lambdas below (capabilities stay dpi+rgb,
+        // matching the scaffolded APEX 2.4G sibling) until a USB capture from
+        // the reporter confirms DPI/RGB/battery round-trips on this unit.
+        {0x3151, 0x402d, "AJAZZ AJ159PRO 2.4G 8K", "aj159_pro_24g"},
         // Partner-VID rebadges (KZZI / akko / VKMS / rongyuan /
         // MagneticJade) catalogued in aj_series_device_matrix.md §7.1.
         // NOT registered here per trademark/licensing risk note in §7.1.

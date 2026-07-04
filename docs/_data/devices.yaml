@@ -468,6 +468,17 @@ devices:
     dpi_stages: 8
     notes: "Paired 2.4G dongle exposing both keyboard + mouse child interfaces (dongle_common path per aj_series_device_matrix.md §1.2). Promotion blocked on P3.12."
 
+  - codename: aj159_pro_24g
+    family: mouse
+    name: "AJAZZ AJ159PRO 2.4G 8K"
+    vid: "0x3151"
+    pid: "0x402d"
+    maturity: scaffolded
+    capabilities: [dpi, rgb]
+    protocol_doc: docs/protocols/mouse/aj_series_opcode_table.md
+    dpi_stages: 8
+    notes: "AJ159 PRO (2.4G 8K, PAW3395 sensor) reported in issue #75. PID 0x402d is in the same 0x3151 APEX block and rides the shared AJ-series backend, so it enumerates on the existing wire format. PROVISIONAL: no local hardware; capabilities gated to dpi+rgb (matching the scaffolded APEX 2.4G sibling) until a USB capture from the reporter confirms DPI/RGB/battery round-trips."
+
   - codename: ajazz_24g_8k
     family: mouse
     name: "AJAZZ AJ159 APEX"
