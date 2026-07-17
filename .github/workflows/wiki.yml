@@ -65,6 +65,6 @@ jobs:
 
       - name: Push wiki
         if: steps.check.outputs.should_sync == 'true'
-        uses: Andrew-Chen-Wang/github-wiki-action@64efa0a9436db17670a2259e0ac249d6f08bb352  # v5.0.4
+        uses: Andrew-Chen-Wang/github-wiki-action@1bbb4280446f9630e8e21a18012cbacf3b0f992e  # v5.0.6
         with:
           path: docs/wiki
