@@ -359,36 +359,103 @@ jobs:
       - name: Build
         run: cmake --build build/macos-release
 
+      - name: Install to staging (deploys Qt runtime)
+        # cpack's internal install would run macdeployqt AFTER signing, leaving every nested
+        # framework unsigned and failing notarization. So install explicitly to a staging prefix
+        # first — this runs the deploy script (qt_generate_deploy_qml_app_script -> macdeployqt,
+        # src/app/CMakeLists.txt) — and sign the STAGED bundle, then package from staging.
+        run: |
+          set -euo pipefail
+          cmake --install build/macos-release --prefix "$RUNNER_TEMP/acc-stage"
+
       - name: Code-sign .app bundle
         if: env.APPLE_CERT_BASE64 != ''
         # `--options runtime` is required by Apple notarization (hardened
         # runtime). `--deep` recurses into the bundle so all nested
-        # frameworks/dylibs are signed with the same identity.
+        # frameworks/dylibs are signed with the same identity. The bundle
+        # name is the CMake target name: ajazz-control-center.app.
         run: |
           set -euo pipefail
-          APP=$(find build/macos-release -name "AjazzControlCenter.app" -maxdepth 4 | head -1)
-          if [ -z "$APP" ]; then echo "::error::No .app bundle found" >&2; exit 1; fi
+          APP=$(find "$RUNNER_TEMP/acc-stage" -name "ajazz-control-center.app" -maxdepth 3 | head -1)
+          if [ -z "$APP" ]; then echo "::error::No .app bundle found in staging" >&2; exit 1; fi
           codesign --force --deep --timestamp --options runtime \
               --sign "$APPLE_SIGNING_IDENTITY" "$APP"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Package (DMG + TGZ)
         working-directory: build/macos-release
-        # Same hdiutil "Resource busy" retry as nightly.yml — see the
-        # comment there. A release run is the worst place to eat the flake.
+        # Packaged from the signed staging tree rather than cpack, because cpack re-installs from
+        # the build tree (dropping the staged signature). create-dmg + tar produce the same
+        # artifacts cpack DragNDrop/TGZ did (same filenames the publish job expects), with the
+        # signed bundle intact. hdiutil intermittently fails with "Resource busy" on hosted
+        # macOS runners (XProtect scans the fresh mount) — retry up to 3 times, same as the
+        # old cpack loop.
         run: |
+          set -euo pipefail
+          APP=$(find "$RUNNER_TEMP/acc-stage" -name "ajazz-control-center.app" -maxdepth 3 | head -1)
+          if [ -z "$APP" ]; then echo "::error::No .app bundle found in staging" >&2; exit 1; fi
+          APP_BASENAME=$(basename "$APP")
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
+          DMG_NAME="ajazz-control-center-${VERSION}-Darwin.dmg"
+          TGZ_NAME="ajazz-control-center-${VERSION}-Darwin.tar.gz"
           for attempt in 1 2 3; do
-            if cpack -G DragNDrop; then
+            if create-dmg \
+                --volname "AJAZZ Control Center" \
+                --window-pos 200 120 \
+                --window-size 800 400 \
+                --icon-size 100 \
+                --icon "$APP_BASENAME" 200 190 \
+                --app-drop-link 600 185 \
+                --no-internet-enable \
+                "$DMG_NAME" "$APP" >/dev/null 2>&1; then
               break
             fi
             if [ "$attempt" = 3 ]; then
-              echo "::error::cpack -G DragNDrop failed after 3 attempts"
+              echo "::error::create-dmg failed after 3 attempts"
               exit 1
             fi
-            echo "::warning::cpack -G DragNDrop attempt ${attempt} failed (hdiutil flake?), retrying in 10s"
+            echo "::warning::create-dmg attempt ${attempt} failed (hdiutil flake?), retrying in 10s"
             sleep 10
           done
-          cpack -G TGZ
+          tar -C "$RUNNER_TEMP/acc-stage" -czf "$TGZ_NAME" "$APP_BASENAME"
+
+      - name: Verify Qt runtime bundled in package
+        working-directory: build/macos-release
+        # Same gate as nightly.yml's macOS leg: without this, a bundle with no Frameworks/ dir
+        # ships silently and the app aborts at launch with "dyld: Library not loaded:
+        # @rpath/QtWebSockets.framework/...". Runs before notarization so a broken artifact
+        # never burns an Apple notary submission.
+        run: |
+          set -euo pipefail
+          tgz=$(ls *.tar.gz | head -1)
+          if [ -z "$tgz" ]; then echo "::error::No TGZ produced — cannot verify Qt runtime" >&2; exit 1; fi
+          dest="$RUNNER_TEMP/acc-pkg-verify"
+          rm -rf "$dest" && mkdir -p "$dest"
+          tar -xzf "$tgz" -C "$dest"
+          app=$(find "$dest" -name "*.app" -maxdepth 3 | head -1)
+          if [ -z "$app" ]; then echo "::error::No .app in $tgz" >&2; exit 1; fi
+          required=(
+            "$app/Contents/Frameworks/QtWidgets.framework/Versions/A/QtWidgets"
+            "$app/Contents/Frameworks/QtWebEngineCore.framework/Versions/A/QtWebEngineCore"
+            "$app/Contents/PlugIns/platforms/libqcocoa.dylib"
+            "$app/Contents/Resources/qml/AjazzControlCenter/qmldir"
+            "$app/Contents/Resources/qml/QtQuick/Controls/qmldir"
+          )
+          missing=0
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing: ${f#$app/Contents/}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::group::package contents"
+            find "$app/Contents" -maxdepth 3 | sort
+            echo "::endgroup::"
+            echo "::error::Qt runtime missing from macOS package. macdeployqt did not populate the bundle." >&2
+            exit 1
+          fi
+          echo "OK: Qt runtime + QML module bundled (QtWidgets.framework, QtWebEngineCore.framework, qcocoa platform plugin, AjazzControlCenter + QtQuick.Controls qml dirs)"
 
       - name: Notarize + staple DMG
         if: env.APPLE_CERT_BASE64 != ''

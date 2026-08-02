@@ -219,6 +219,50 @@ jobs:
             sleep 10
           done
           cpack -G TGZ
+      - name: Verify Qt runtime bundled in package
+        working-directory: build/macos-release
+        # Guard against the macOS twin of the v0.1.0 Windows regression (and of the 2.0.0
+        # hidapi.dll bug, §8): cpack -G DragNDrop/TGZ succeeds even when the bundle has no
+        # Frameworks/ dir at all, shipping a package that aborts at launch with "dyld: Library
+        # not loaded: @rpath/QtWebSockets.framework/..." — the bundle's only rpath is
+        # @executable_path/../Frameworks, which nothing ever populated. The deploy script
+        # (qt_generate_deploy_qml_app_script, runs macdeployqt) executes at cpack's internal
+        # install step, so inspect the PACKAGED artifact, not the build tree. Extract the TGZ
+        # and assert the Qt runtime is actually present: the core widget framework, the
+        # WebEngine framework (qtwebengine is a required deploy input, see the install-qt-action
+        # comment above) and the cocoa platform plugin (without it the app aborts with "no Qt
+        # platform plugin could be initialized").
+        run: |
+          set -euo pipefail
+          tgz=$(ls *.tar.gz | head -1)
+          if [ -z "$tgz" ]; then echo "::error::No TGZ produced — cannot verify Qt runtime" >&2; exit 1; fi
+          dest="$RUNNER_TEMP/acc-pkg-verify"
+          rm -rf "$dest" && mkdir -p "$dest"
+          tar -xzf "$tgz" -C "$dest"
+          app=$(find "$dest" -name "*.app" -maxdepth 3 | head -1)
+          if [ -z "$app" ]; then echo "::error::No .app in $tgz" >&2; exit 1; fi
+          required=(
+            "$app/Contents/Frameworks/QtWidgets.framework/Versions/A/QtWidgets"
+            "$app/Contents/Frameworks/QtWebEngineCore.framework/Versions/A/QtWebEngineCore"
+            "$app/Contents/PlugIns/platforms/libqcocoa.dylib"
+            "$app/Contents/Resources/qml/AjazzControlCenter/qmldir"
+            "$app/Contents/Resources/qml/QtQuick/Controls/qmldir"
+          )
+          missing=0
+          for f in "${required[@]}"; do
+            if [ ! -f "$f" ]; then
+              echo "::error::missing: ${f#$app/Contents/}"
+              missing=1
+            fi
+          done
+          if [ "$missing" -ne 0 ]; then
+            echo "::group::package contents"
+            find "$app/Contents" -maxdepth 3 | sort
+            echo "::endgroup::"
+            echo "::error::Qt runtime missing from macOS package. macdeployqt did not populate the bundle." >&2
+            exit 1
+          fi
+          echo "OK: Qt runtime + QML module bundled (QtWidgets.framework, QtWebEngineCore.framework, qcocoa platform plugin, AjazzControlCenter + QtQuick.Controls qml dirs)"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: nightly-macos

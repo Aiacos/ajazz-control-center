@@ -64,6 +64,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Fixed
 
+- **macOS packages shipped without any Qt runtime** (2026-08-02, found while installing the
+  nightly on an Intel Mac): the deploy step (`qt_generate_deploy_qml_app_script`, which runs
+  `macdeployqt`) was gated `if(WIN32)` in `src/app/CMakeLists.txt`, so every cpack DragNDrop DMG /
+  TGZ — nightly and release — contained a bare `ajazz-control-center.app` whose only rpath
+  (`@executable_path/../Frameworks`) pointed at a directory nothing ever populated. The installed
+  app aborted at launch with `dyld: Library not loaded: @rpath/QtWebSockets.framework/...` — the
+  same failure class as the v0.1.0 "no Qt DLLs" Windows regression, but with no verification gate
+  anywhere on the macOS leg. The deploy now also runs on macOS; both `nightly.yml` and
+  `release.yml` gained a "Verify Qt runtime bundled in package" gate (mirroring the Windows one)
+  that extracts the TGZ and asserts QtWidgets.framework, QtWebEngineCore.framework and the
+  `libqcocoa.dylib` platform plugin are inside the bundle. `release.yml` additionally signs the
+  staged bundle after deploy (the old order signed the build-tree bundle before cpack's install
+  step ran macdeployqt, leaving every nested framework unsigned) and packages from staging with
+  `create-dmg` + `tar` instead of cpack.
 - **Physical key presses ran the NEIGHBOURING key's builtin/Toggle/Multi-Action chain**
   (2026-07-03, found while cross-checking the vendor RE input conventions): the wire key index
   is 1-based (`device.hpp` contract, `akp05_input_corrections.md` §2 — confirmed against the
