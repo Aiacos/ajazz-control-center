@@ -438,6 +438,8 @@ jobs:
             "$app/Contents/Frameworks/QtWidgets.framework/Versions/A/QtWidgets"
             "$app/Contents/Frameworks/QtWebEngineCore.framework/Versions/A/QtWebEngineCore"
             "$app/Contents/PlugIns/platforms/libqcocoa.dylib"
+            "$app/Contents/Resources/qml/AjazzControlCenter/qmldir"
+            "$app/Contents/Resources/qml/QtQuick/Controls/qmldir"
           )
           missing=0
           for f in "${required[@]}"; do
@@ -453,7 +455,7 @@ jobs:
             echo "::error::Qt runtime missing from macOS package. macdeployqt did not populate the bundle." >&2
             exit 1
           fi
-          echo "OK: Qt runtime bundled (QtWidgets.framework, QtWebEngineCore.framework, qcocoa platform plugin)"
+          echo "OK: Qt runtime + QML module bundled (QtWidgets.framework, QtWebEngineCore.framework, qcocoa platform plugin, AjazzControlCenter + QtQuick.Controls qml dirs)"
 
       - name: Notarize + staple DMG
         if: env.APPLE_CERT_BASE64 != ''
