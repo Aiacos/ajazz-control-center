@@ -972,15 +972,19 @@ install(TARGETS ajazz-control-center RUNTIME DESTINATION bin BUNDLE DESTINATION 
 # by AJAZZ_BUILD_SIDECAR.
 ajazz_add_streamdock_sidecar(ajazz-control-center)
 
-# Windows: bundle the Qt runtime into the install tree so the CPack WIX MSI and ZIP (which harvest
-# the whole install tree) are self-contained. Without this the package ships ONLY
-# ajazz-control-center.exe and the installed app fails to start with "The code execution cannot
-# proceed because Qt6Widgets.dll was not found" (Qt6Widgets is pulled in by QApplication in main.cpp
-# + QSystemTrayIcon in tray_controller.cpp). qt_generate_deploy_qml_app_script runs windeployqt (Qt
-# libs + platform/style/imageformat/tls plugins + the QML module imports) at `cmake --install` time,
-# populating bin/ before CPack harvests it. NOTE: validated by the windows-2022 MSI job — cannot be
+# Windows/macOS: bundle the Qt runtime into the install tree so the CPack WIX MSI / ZIP (which
+# harvest the whole install tree) and the DragNDrop DMG / TGZ are self-contained. Without this the
+# package ships ONLY the bare binary/bundle: on Windows the installed app fails to start with "The
+# code execution cannot proceed because Qt6Widgets.dll was not found" (Qt6Widgets is pulled in by
+# QApplication in main.cpp + QSystemTrayIcon in tray_controller.cpp), and on macOS it aborts at
+# launch with "dyld: Library not loaded: @rpath/QtWebSockets.framework/..." — the bundle's only
+# rpath is @executable_path/../Frameworks, which nothing ever populated. qt_generate_deploy_qml_app_script
+# runs windeployqt (Windows) or macdeployqt (macOS) — Qt libs + platform/style/imageformat/tls
+# plugins + the QML module imports — at `cmake --install` time, populating the install tree before
+# CPack harvests it. NOTE: the Windows path is validated by the windows-2022 MSI job; the macOS
+# path by the macos-14 DMG job's "Verify Qt runtime bundled" gate (nightly.yml) — neither can be
 # exercised on Linux.
-if(WIN32)
+if(WIN32 OR APPLE)
     qt_generate_deploy_qml_app_script(
         TARGET ajazz-control-center OUTPUT_SCRIPT _ajazz_deploy_script
         NO_UNSUPPORTED_PLATFORM_ERROR NO_TRANSLATIONS
