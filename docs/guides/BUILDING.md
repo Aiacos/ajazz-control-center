@@ -124,6 +124,40 @@ flatpak-builder --user --install --force-clean build-flatpak \
     packaging/flatpak/io.github.Aiacos.AjazzControlCenter.yml
 ```
 
+### Packaging an AppImage
+
+The `.deb` / `.rpm` nightly artifacts pin Qt >= 6.8 (the aqt-provisioned
+toolchain the binaries are built against) and therefore refuse to install on
+older distros — Ubuntu 24.04 LTS ships Qt 6.4.2 and has no
+`qml6-module-qtquick-*` packages at all (only Ubuntu 25.04 "plucky" / Qt 6.8
+adds them). The AppImage is the distro-agnostic channel: it bundles the full
+Qt 6.8 runtime, the app's QML imports and the `streamdock-host` sidecar, so
+the same artifact runs on any glibc x86-64 distro regardless of its distro
+Qt.
+
+```bash
+# 1. build the linux-release preset (bundles Qt libs + QML imports)
+cmake --preset linux-release
+cmake --build --preset linux-release
+
+# 2. package (linuxdeploy + its Qt plugin are downloaded on first run)
+./scripts/package-appimage.sh
+```
+
+produces `build/linux-release/ajazz-control-center-<version>-x86_64.AppImage`.
+
+The udev rule ships *inside* the AppImage at `usr/lib/udev/rules.d/`; on
+hosts that never had a native package installed, extract it next to the
+binary (the app only needs it for HID access, not to launch):
+
+```bash
+./ajazz-control-center-2.0.0-x86_64.AppImage --appimage-extract
+sudo install -m 644 squashfs-root/usr/lib/udev/rules.d/70-ajazz.rules \
+    /etc/udev/rules.d/
+sudo udevadm control --reload-rules
+rm -rf squashfs-root
+```
+
 ## Troubleshooting the build
 
 - `make doctor` prints a health check of your toolchain.

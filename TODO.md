@@ -858,4 +858,5 @@ ______________________________________________________________________
 - HID protocol fuzzer using the existing `tests/integration/fixtures/`
   as a corpus seed (libfuzzer + ASan, would catch regressions in
   AKP153/AKP05 frame parsers).
-- AppImage build path alongside Flatpak (broader Linux distro reach).
+- AppImage build path alongside Flatpak (broader Linux distro reach). See
+  `scripts/package-appimage.sh` + `docs/guides/BUILDING.md#packaging-an-appimage`.
