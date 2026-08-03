@@ -78,6 +78,19 @@ jobs:
         run: |
           cpack -G DEB
           cpack -G RPM
+      - name: Package (AppImage)
+        working-directory: build/linux-release
+        # The .deb/.rpm pins Qt >= 6.8 (see CPACK_DEBIAN_PACKAGE_DEPENDS in
+        # CMakeLists.txt) and therefore refuses to install on older distros —
+        # Ubuntu 24.04 LTS ships Qt 6.4.2 and has no qml6-module-qtquick-*
+        # packages. The AppImage bundles the Qt 6.8 runtime + QML imports so the
+        # nightly runs on any glibc x86-64 distro. See docs/guides/BUILDING.md
+        # → "Packaging an AppImage". Uses the same linux-release build tree; the Qt
+        # prefix is auto-detected from the build's CMake cache (Qt6_DIR).
+        run: |
+          chmod +x "$GITHUB_WORKSPACE/scripts/package-appimage.sh"
+          "$GITHUB_WORKSPACE/scripts/package-appimage.sh" \
+            -b "$GITHUB_WORKSPACE/build/linux-release"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: nightly-linux
@@ -85,6 +98,7 @@ jobs:
           path: |
             build/linux-release/*.deb
             build/linux-release/*.rpm
+            build/linux-release/*.AppImage
 
   # ---------------------------------------------------------------------------
   # Windows — MSI + portable ZIP
@@ -255,8 +269,9 @@ jobs:
         run: |
           set -euo pipefail
           mapfile -t files < <(find . -type f \( \
-              -name '*.deb' -o -name '*.rpm' -o -name '*.msi' -o \
-              -name '*.zip' -o -name '*.dmg' -o -name '*.tar.gz' \) | sort)
+              -name '*.deb' -o -name '*.rpm' -o -name '*.AppImage' -o \
+              -name '*.msi' -o -name '*.zip' -o -name '*.dmg' -o \
+              -name '*.tar.gz' \) | sort)
           if [ ${#files[@]} -eq 0 ]; then
             echo "No artifacts found to checksum"; exit 1
           fi
@@ -296,6 +311,9 @@ jobs:
             > These builds are **untested** and not signed for production
             > use. They are intended for early testers and contributors.
             > For stable builds, see the tagged releases.
+            >
+            > The AppImage runs on any glibc x86-64 distro (bundles the Qt 6.8
+            > runtime); the .deb/.rpm require Qt >= 6.8 (Ubuntu 25.04+, Fedora 42+).
           prerelease: true
           fail_on_unmatched_files: false
           files: |
