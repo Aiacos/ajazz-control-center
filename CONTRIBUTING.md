@@ -1,188 +1,20 @@
-# Contributing to AJAZZ Control Center
+# Contributing
 
-Thank you for your interest in improving AJAZZ Control Center. This document describes the conventions, branching model and review workflow for contributions of any kind — code, documentation, device captures, UI/UX, translations.
+Thanks for contributing to this project.
 
-> **Read this first:** [`GUIDELINES.md`](GUIDELINES.md) is the canonical reference for project-wide engineering rules — coding standards, the two-command build rule, branding, security, default UX expectations and more. This document focuses on the mechanical contribution flow.
+## Setup
 
-## Code of conduct
+1. Fork and clone this repository.
+2. Install dependencies from the project toolchain files.
+3. Run the test suite (or build) before opening a pull request.
 
-Be respectful, patient and constructive. Hardware reverse engineering is a collaborative, iterative effort: nobody owns a device family, and nobody is expected to know everything. Questions are always welcome.
+## Pull requests
 
-## How to contribute
+- Keep changes focused and clearly described.
+- Link related issues (for example `Fixes #123`).
+- Include a short test plan.
+- Match existing code style.
 
-### 1. Open an issue first for non-trivial work
+## Conduct
 
-For anything beyond a typo fix or a small bug, open a GitHub issue and describe what you want to do. This avoids duplicated effort and gives maintainers a chance to flag architectural concerns early.
-
-### 2. Fork, branch, pull request
-
-- Fork the repository to your account (external contributors), or branch
-  directly (maintainers).
-- Create a topic branch **off `develop`**: `feat/akp03-backend`,
-  `fix/qml-profile-drag-crash`, `docs/adding-a-device`.
-- Keep commits focused and reviewable. Squash trivia; preserve logically distinct steps.
-- Open a PR **against `develop`** (the default branch). Link the issue it
-  closes. `main` is release-only: it receives a single promotion PR from
-  `develop` when a release is cut, never feature PRs directly.
-
-### 3. Commit style
-
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-
-```
-feat(streamdeck): add AKP03 backend scaffolding
-fix(core): close HID handle on disconnect race
-docs(protocols): document AKP153 set-brightness frame
-ci: enable macOS arm64 runner
-```
-
-Scopes match top-level module directories (`core`, `app`, `streamdeck`, `keyboard`, `mouse`, `plugins`, `ui`, `ci`, `docs`).
-
-### 4. Coding standards
-
-- **C++20**, `-Wall -Wextra -Wpedantic`, treat-warnings-as-errors in CI.
-- `clang-format` + `clang-tidy` configuration lives at the repository root; run `cmake --build --target format` before pushing.
-- Prefer `std::` over Qt containers at module boundaries; Qt types inside UI and QObject-owning code only.
-- No raw `new`/`delete`; use `std::unique_ptr` or Qt parent ownership.
-- **Python 3.11+**, `ruff` for linting, `black` for formatting, full type hints on public plugin API.
-- **QML**: one component per file, `PascalCase` filenames, imports sorted, use `required property` where possible.
-
-#### Linters and the auto-fix flow
-
-Every formatter and linter the project enforces is wired through `pre-commit`,
-so nothing in CI is supposed to fail in a way you can't reproduce locally.
-You almost never need to remember any of these names — the hooks fire
-automatically — but here's the shape of the loop in case you need to debug
-a CI failure or run things by hand:
-
-1. `make precommit` (one-time per clone) installs the git hooks: a
-   per-commit hook (`clang-format`, `ruff`, `cmake-format`, `mdformat`,
-   `typos`, `actionlint`, `regenerate-docs`, JSON-Schema validators), a
-   `commit-msg` hook (`conventional-pre-commit`), and a `pre-push` hook
-   (`clang-tidy` static analysis).
-1. On `git commit` the per-commit hooks run on staged files; auto-fixable
-   issues (whitespace, format, ruff `--fix`, mdformat, cmake-format,
-   shfmt, typos, README/wiki AUTOGEN regeneration) are applied in place
-   and the commit is re-staged transparently.
-1. On `git push` clang-tidy runs across the whole tree against the
-   currently-configured CMake build directory. Slow (~30 s on a warm
-   build cache) but catches what the per-commit hooks can't see.
-1. If you've left clang-tidy issues in your branch, `make tidy-fix`
-   applies the fixes that clang-tidy can apply automatically (the
-   `modernize-*` and `readability-*` checks); review with `git add -p`
-   before re-staging.
-1. `make lint-all` runs every hook on every file (the same thing CI does
-   in the Lint workflow). Run it before opening a PR if you want CI
-   parity locally.
-1. On a PR opened from a branch in this repo, the Lint workflow's
-   "Commit auto-fixes" step pushes any remaining auto-fixes back to
-   the PR head as a `style:` commit, so the human reviewer always sees
-   a green tree. Forks don't get this push (security boundary) — fork
-   contributors should run `make lint-all` themselves before pushing.
-   - **Heads-up:** unless the repo has a `LINT_AUTOFIX_PAT` secret, that
-     `style:` commit is pushed with the default `GITHUB_TOKEN`, which does
-     **not** re-trigger the check suite. The required checks then sit
-     "waiting for status" on the fix commit. Push any follow-up commit (or
-     close/reopen the PR) to make them run. The simplest avoidance is to
-     run `make lint-all` locally so there is nothing left to auto-fix.
-
-If a hook is being noisy and the fix isn't trivially obvious, run
-`pre-commit run --hook-id <id> --all-files --verbose` to see exactly
-which files and which rule are unhappy.
-
-### 5. Tests
-
-- Every new module ships with unit tests (`tests/unit`) covering protocol encoders/decoders.
-- Device backends include integration tests that replay recorded USB captures (no hardware required in CI).
-- Target coverage for `src/core` and protocol encoders is **≥ 85 %**.
-
-### 6. Adding a new device
-
-See [`docs/guides/ADDING_A_DEVICE.md`](docs/guides/ADDING_A_DEVICE.md). In short:
-
-1. Capture USB traffic with Wireshark + usbmon (Linux) or USBPcap (Windows).
-1. Document the protocol in `docs/protocols/<family>/<model>.md`.
-1. Implement the backend under `src/devices/<family>/<model>/`.
-1. Add at least one capture-replay integration test.
-1. **Add an entry to `docs/_data/devices.yaml`** — the README support matrix
-   and every table in the wiki are regenerated from this YAML. Do not edit
-   the tables by hand; see §7.2 below.
-
-### 7. Documentation
-
-Any change that alters a public API, configuration file, packaging artifact or user-visible behavior must update the corresponding documentation page.
-
-#### 7.1 Docs live in two places
-
-- `README.md` — repository landing page.
-- `docs/wiki/*.md` — published to the GitHub Wiki on every push to `main`
-  by the `wiki.yml` workflow.
-
-Keep deep-dive content in the wiki; keep the README short and marketing-y.
-
-#### 7.2 README and wiki are generated — never hand-edit AUTOGEN blocks
-
-Device tables, statistics and legends appear in multiple files. To avoid
-drift, they are **generated** from a single source of truth:
-
-- **Source of truth:** [`docs/_data/devices.yaml`](docs/_data/devices.yaml)
-- **Generator:** [`scripts/generate-docs.py`](scripts/generate-docs.py)
-- **Targets:** `README.md`, `docs/wiki/Supported-Devices.md`,
-  `docs/wiki/Home.md`
-
-Inside each target, a block of the form
-
-```markdown
-<!-- BEGIN AUTOGEN: devices-by-family -->
-   … generated table …
-<!-- END AUTOGEN: devices-by-family -->
-```
-
-is rewritten in place on every run. Available block names:
-`devices-table`, `devices-by-family`, `platform-matrix`, `stats`,
-`legend`, `toc-wiki`.
-
-**Workflow:**
-
-```bash
-# Edit the source
-$EDITOR docs/_data/devices.yaml
-
-# Regenerate all AUTOGEN blocks
-make docs
-
-# Commit both the YAML and the regenerated files together
-git add docs/_data/devices.yaml README.md docs/wiki/
-git commit -m "docs(devices): add AKP815"
-```
-
-**Automation keeps this invariant:**
-
-- A pre-commit hook (`regenerate-docs`) runs `make docs` whenever
-  `docs/_data/**`, `src/devices/**`, the generator script, the README or
-  any wiki page changes — so you (almost) never have to remember `make docs`.
-- CI runs `python3 scripts/generate-docs.py --check` and fails a PR if
-  any AUTOGEN block is out of date.
-
-If you *really* need custom prose next to a generated table, add it
-*outside* the `BEGIN`/`END` markers. Anything between the markers will be
-overwritten.
-
-### 8. Signing off
-
-By submitting a PR you certify that your contribution complies with the [Developer Certificate of Origin](https://developercertificate.org/). Add a `Signed-off-by:` trailer to each commit (`git commit -s`).
-
-## Review process
-
-- Two maintainer approvals required for changes that touch `src/core` or the public plugin API.
-- One approval for device backends, UI, docs.
-- CI must be green on all three OS runners. Flaky tests are fixed, never retried.
-
-## Release cadence
-
-A release is cut by promoting `develop` into `main` via a pull request;
-tags `v*` are then created from `main` and trigger the release workflow.
-Tags follow [Semantic Versioning 2.0.0](https://semver.org/). Release notes are generated from Conventional Commits history.
-
-The full branching model, the CI/CD pipeline, and the step-by-step release
-runbook live in **[`docs/RELEASING.md`](docs/RELEASING.md)**.
+Be respectful and constructive in reviews and discussions.
