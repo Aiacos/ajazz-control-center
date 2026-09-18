@@ -35,7 +35,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
           # and the bundled sysmon plugin (btop submodule) — without this the
@@ -51,7 +51,7 @@ jobs:
               libwayland-dev wayland-protocols libx11-dev \
               g++-14 \
               python3-dev rpm file
-      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+      - uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
@@ -94,14 +94,14 @@ jobs:
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
           # and the bundled sysmon plugin (btop submodule) — without this the
           # webui/bundle CMake blocks silently skip and ship a bare app.
           submodules: recursive
       - uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756  # v1.13.0
-      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+      - uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
@@ -167,7 +167,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Packaged artifacts must carry the OpenDeck SPA (webui submodule)
           # and the bundled sysmon plugin (btop submodule) — without this the
@@ -175,7 +175,7 @@ jobs:
           submodules: recursive
       - name: Install deps
         run: brew install ninja create-dmg
-      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+      - uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
@@ -236,7 +236,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           fetch-depth: 0
           submodules: recursive
@@ -283,7 +283,7 @@ jobs:
           git push origin -f nightly
 
       - name: Publish / update release
-        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64  # v3.0.3
         with:
           tag_name: nightly
           name: "Nightly · ${{ github.sha }}"

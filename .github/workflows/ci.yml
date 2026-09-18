@@ -43,7 +43,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Release/nightly packaging checks out submodules (OpenDeck SPA +
           # btop for the sysmon bundle) — the PR matrix must exercise the SAME
@@ -124,7 +124,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756  # v1.13.0
       - name: Install Qt 6
-        uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+        uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
@@ -247,7 +247,7 @@ jobs:
     if: github.event_name == 'push'
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Build-path parity with the build matrix (webui/bundle blocks are
           # exercised, not silently skipped). See the build job note.
@@ -260,7 +260,7 @@ jobs:
               libgl1-mesa-dev libxkbcommon-dev \
               libwayland-dev wayland-protocols libx11-dev
 
-      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+      - uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
@@ -384,7 +384,7 @@ jobs:
             lsan_options_relative: ""
             tsan_options: halt_on_error=1:second_deadlock_stack=1
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0  # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           # Build-path parity with the build matrix (webui/bundle blocks are
           # exercised, not silently skipped). See the build job note.
@@ -399,7 +399,7 @@ jobs:
               libxcb-cursor-dev libxkbcommon-x11-dev \
               libwayland-dev wayland-protocols libx11-dev \
               python3-dev python3-pip
-      - uses: jurplel/install-qt-action@48d3ad6db93f3627c8ee7a0454bc6f3744f7e730  # v4.3.1
+      - uses: jurplel/install-qt-action@bcb88e3bed2e992f5f9e24c0f9e364a231d278eb  # v4.4.0
         with:
           version: 6.8.3
           cache: true
