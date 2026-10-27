@@ -32,4 +32,13 @@ namespace ajazz::app {
 [[nodiscard]] QIcon makeAppIcon(QString const& svgResourcePath,
                                 QString const& fallbackResourcePath = {});
 
+/**
+ * @brief Add a compact charge gauge to each raster size in an application icon.
+ *
+ * @param baseIcon The unmodified application icon.
+ * @param percent Battery charge, clamped to 0..100.
+ * @return A multi-resolution icon with a charge gauge in its lower-right corner.
+ */
+[[nodiscard]] QIcon makeBatteryStatusIcon(QIcon const& baseIcon, int percent);
+
 } // namespace ajazz::app

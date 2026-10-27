@@ -565,7 +565,13 @@ Application::Application(QObject* parent)
     QObject::connect(m_debouncer.get(),
                      &HotplugDebouncer::coalesced,
                      m_deviceModel.get(),
-                     [this](core::HotplugEvent const&) { m_deviceModel->refresh(); });
+                     [this](core::HotplugEvent const& event) {
+                         m_deviceModel->refresh();
+                         char const* const action =
+                             event.action == core::HotplugAction::Arrived ? "arrival" : "removal";
+                         AJAZZ_LOG_INFO("app", "refreshing battery state after device {}", action);
+                         m_battery->onDevicesChanged();
+                     });
 
     // OpenDeck UI (Phase 2B): give the bridge the live device-image path
     // (update_image -> set_image) and push backend changes to the web UI as
@@ -1457,6 +1463,7 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     SettingsService::registerInstance(m_settings.get());
     MouseService::registerInstance(m_mouse.get());
     BatteryService::registerInstance(m_battery.get());
+    m_trayController->trackBatteryService(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
     FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
     // Phase 16 Plan 16-01 (DISPLAY-09): QML_SINGLETON exposure for the Stream Dock

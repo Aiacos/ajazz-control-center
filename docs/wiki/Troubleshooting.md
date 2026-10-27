@@ -81,6 +81,28 @@ the connected device. If the log says that the device is not connected or does
 not support mouse settings, refresh the device list and check the hidraw ACL.
 If `hid_open failed` appears, follow the udev steps above before retrying.
 
+## Mouse battery percentage is missing from the tray
+
+The tray shows a charge gauge when at least one connected device has a current
+battery reading. The tooltip and tray menu list each available device. When
+more than one battery device is connected, the gauge uses the lowest reported
+percentage.
+
+Check the application log for a battery query result:
+
+```text
+[battery] query <device> completed in <milliseconds> ms (reading available)
+```
+
+If the result says `reading unavailable` or the log contains `hid_open failed`,
+check that the device is connected and follow the Linux hidraw permission steps
+above. Battery polling can be disabled in the application settings; when it is
+disabled, no new tray reading is requested. A disconnected device's cached
+reading is removed after the device list refreshes.
+
+For implementation and test coverage, see
+[Mouse Battery Tray Indicator](../architecture/MOUSE-BATTERY-TRAY.md).
+
 ## Windows: device is detected but no input / no display
 
 - Exit the AJAZZ vendor app completely (check the system tray).

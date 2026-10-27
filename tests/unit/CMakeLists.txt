@@ -314,6 +314,12 @@ add_executable(
     # initial state.
     test_battery_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/battery_service.cpp
+    # Battery readings need to reach the tray independently of the device list.
+    # This unit suite drives BatteryService with a mock mouse and observes the
+    # TrayController state without requiring a live HID device or tray host.
+    test_tray_battery.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/tray_controller.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/app_icon.cpp
     # SettingsService (2026-05-18 issue #57 / QML wire-up): pins the
     # clampResponseLevel helper that QML uses to preview the persisted
     # response-time level without a HID round-trip. The wider service
@@ -516,6 +522,8 @@ target_link_libraries(
             # Without it the link fails on inflate/inflateEnd.
             ZLIB::ZLIB
             Qt6::Gui # QColor for BrandingService (no rendering required)
+            Qt6::Widgets # QSystemTrayIcon and QMenu used by TrayController
+            Qt6::Svg # App icon rendering used during tray creation
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration
             # Qt6::Quick: linked explicitly (not only transitively via the optional WebEngine block

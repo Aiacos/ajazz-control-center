@@ -5,14 +5,17 @@
  */
 #include "app_icon.hpp"
 
+#include <QColor>
 #include <QIcon>
 #include <QImage>
 #include <QPainter>
 #include <QPixmap>
+#include <QRectF>
 #include <QString>
 #include <QSvgRenderer>
 #include <Qt>
 
+#include <algorithm>
 #include <array>
 
 namespace ajazz::app {
@@ -53,6 +56,56 @@ QIcon makeAppIcon(QString const& svgResourcePath, QString const& fallbackResourc
     QIcon icon;
     for (int const sz : Sizes) {
         icon.addPixmap(renderAt(renderer, sz));
+    }
+    return icon;
+}
+
+QIcon makeBatteryStatusIcon(QIcon const& baseIcon, int percent) {
+    if (baseIcon.isNull()) {
+        return {};
+    }
+
+    static constexpr std::array<int, 9> Sizes = {16, 22, 24, 32, 48, 64, 128, 256, 512};
+    int const charge = std::clamp(percent, 0, 100);
+    QColor const chargeColor = charge < 20   ? QColor(231, 76, 60)
+                               : charge < 40 ? QColor(241, 196, 15)
+                                             : QColor(46, 204, 113);
+    QIcon icon;
+    for (int const size : Sizes) {
+        QPixmap const source = baseIcon.pixmap(size, size);
+        if (source.isNull()) {
+            continue;
+        }
+
+        QImage image = source.toImage().convertToFormat(QImage::Format_ARGB32_Premultiplied);
+        int const extent = image.width();
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing);
+        qreal const scale = static_cast<qreal>(extent) / 32.0;
+        qreal const badgeWidth = std::max(8.0, extent * 0.47);
+        qreal const badgeHeight = std::max(6.0, extent * 0.27);
+        qreal const margin = std::max(0.5, extent * 0.04);
+        QRectF const badge(
+            extent - badgeWidth - margin, extent - badgeHeight - margin, badgeWidth, badgeHeight);
+        painter.setPen(QPen(QColor(255, 255, 255), std::max(1.0, scale)));
+        painter.setBrush(QColor(24, 26, 30, 245));
+        painter.drawRoundedRect(badge, extent * 0.06, extent * 0.06);
+
+        QRectF const body(badge.x() + scale,
+                          badge.y() + scale,
+                          badge.width() - 3.0 * scale,
+                          badge.height() - 2.0 * scale);
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(255, 255, 255, 90));
+        painter.drawRect(body);
+        QRectF const fill(body.x(), body.y(), body.width() * charge / 100.0, body.height());
+        painter.setBrush(chargeColor);
+        painter.drawRect(fill);
+        QRectF const terminal(
+            body.right() + scale, body.y() + body.height() * 0.28, scale, body.height() * 0.44);
+        painter.drawRect(terminal);
+        painter.end();
+        icon.addPixmap(QPixmap::fromImage(image));
     }
     return icon;
 }

@@ -9,6 +9,8 @@
  */
 #pragma once
 
+#include <QHash>
+#include <QIcon>
 #include <QObject>
 #include <QPointer>
 #include <QString>
@@ -27,6 +29,7 @@ class QMenu;
 namespace ajazz::app {
 
 class BrandingService;
+class BatteryService;
 class ProfileController;
 
 /**
@@ -92,16 +95,36 @@ public:
     void ensureTray(QQmlApplicationEngine* engine);
 
     /**
-     * @brief Update the tray tooltip + warning glyph for low-battery devices.
+     * @brief Forward battery service updates to the tray presentation.
      *
-     * Closes #34 (battery awareness in tray). Called by ProfileController /
-     * DeviceModel whenever a wireless device polls a fresh battery reading.
+     * @param service Application-owned service that emits per-device readings.
+     */
+    void trackBatteryService(BatteryService* service);
+
+    /**
+     * @brief Format the latest readings for all battery-capable devices.
      *
-     * @param deviceName User-visible name (e.g. "AJ339 Pro").
-     * @param percent    0..100; values < 20 colour the tooltip with a warning
-     *                   prefix and emit a single notification.
+     * @return One device and percentage per line, or an empty string if no
+     *         current readings are available.
+     */
+    [[nodiscard]] QString batterySummary() const;
+
+    /**
+     * @brief Store a reading and refresh the tray tooltip and menu summary.
+     *
+     * Values below 20 percent are labelled as low battery. A warning
+     * notification is shown only when a device first crosses below that level.
+     *
+     * @param deviceName Device codename emitted by @ref BatteryService.
+     * @param percent Battery charge, clamped to 0..100.
      */
     Q_INVOKABLE void setDeviceBattery(QString const& deviceName, int percent);
+
+    /**
+     * @brief Remove a reading after the service reports the device unavailable.
+     * @param deviceName Device codename used by BatteryService.
+     */
+    Q_INVOKABLE void clearDeviceBattery(QString const& deviceName);
 
     /**
      * @brief Toggle the global "paused" state.
@@ -129,6 +152,9 @@ signals:
     /// Emitted when the user picks a profile from the Switch-profile submenu.
     void profileSwitchRequested(QString const& profileId);
 
+    /// Emitted after the stored per-device battery state changes.
+    void batterySummaryChanged(QString const& summary);
+
 private:
     /// Build the tray context menu (Show / Pause / Switch / Quit).
     void buildMenu();
@@ -136,15 +162,20 @@ private:
     /// Refresh the Switch-profile submenu after ProfileController changes.
     void rebuildProfileSubmenu();
 
+    /// Refresh tooltip and menu status from the cached readings.
+    void refreshBatteryPresentation();
+
     BrandingService* branding_;
     ProfileController* profiles_;
     QPointer<QSystemTrayIcon> tray_;
+    QIcon baseTrayIcon_;
     QPointer<QMenu> menu_;
     QPointer<QMenu> profileMenu_;
     QPointer<QAction> pauseAction_;
+    QPointer<QAction> batteryAction_;
     bool startMinimized_;
     bool paused_{false};
-    QString batteryTooltip_; ///< Last battery summary sent via setDeviceBattery().
+    QHash<QString, int> deviceBattery_; ///< Device codename -> latest percent.
 };
 
 // QML_SINGLETON dual-instance trap: TrayController stays safe today only

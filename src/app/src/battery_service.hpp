@@ -12,8 +12,9 @@
  *   * @ref queryBattery(codename) — manual one-shot query, invoked by the QML
  *     "Refresh battery" button (or by the implicit poll timer if enabled).
  *   * @ref pollAll() — iterate every registered device codename + query the
- *     ones that advertise @ref ajazz::core::Capability::Battery. Called by
- *     the optional 15-second poll timer (matches vendor cadence per
+ *     ones that advertise @ref ajazz::core::Capability::Battery. Called once
+ *     after startup when polling is enabled, after device arrival, and by the
+ *     optional recurring 15-second timer (matches vendor cadence per
  *     @c ak980pro_vendor.md §3 — @c FUN_004358c0).
  *
  * Persistent: @c pollEnabled flag is mirrored into
@@ -22,7 +23,8 @@
  * that "just works").
  *
  * @note Thread-affine: lives on the Qt main thread. Polled queries are
- *       dispatched onto the device's I/O thread by the underlying transport.
+ *       performed synchronously through the underlying transport; query time
+ *       is logged so HID-open delays can be distinguished from protocol waits.
  *
  * @see TimeSyncService (sister singleton with identical lookup contract).
  * @see IBatteryCapable (capability mix-in).
@@ -114,6 +116,14 @@ public:
      */
     Q_INVOKABLE void pollAll();
 
+    /**
+     * @brief Reconcile battery state after the connected device set changes.
+     *
+     * Disconnected readings are always removed. Connected devices are queried
+     * only while automatic polling is enabled.
+     */
+    void onDevicesChanged();
+
     /// Test-only: number of completed queries since construction (manual + auto).
     [[nodiscard]] int totalQueryCount() const noexcept;
 
@@ -149,6 +159,7 @@ signals:
 private:
     /// Helper: do the dynamic_cast + batteryPercent() call + signal emission.
     void doQuery(QString const& codename);
+    void clearDisconnected(std::vector<QString> const& connected);
 
     DeviceLookup m_lookup;
     BatteryDeviceEnumeration m_enumerate;

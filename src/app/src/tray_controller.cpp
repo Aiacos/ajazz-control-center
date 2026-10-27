@@ -5,7 +5,9 @@
  */
 #include "tray_controller.hpp"
 
+#include "ajazz/core/logger.hpp"
 #include "app_icon.hpp"
+#include "battery_service.hpp"
 #include "branding_service.hpp"
 #include "profile_controller.hpp"
 
@@ -16,6 +18,7 @@
 #include <QQmlApplicationEngine>
 #include <QQmlEngine>
 #include <QSettings>
+#include <QStringList>
 #include <QSystemTrayIcon>
 #include <QWindow>
 
@@ -128,11 +131,10 @@ void TrayController::ensureTray(QQmlApplicationEngine* engine) {
     // Shell with the AppIndicator extension) always paint the embedded
     // ladder regardless of theme lookup outcome, so the icon never
     // collapses to the platform missing-icon glyph.
-    QIcon const icon = QIcon::fromTheme(QStringLiteral("ajazz-control-center"), embedded);
-    tray_->setIcon(icon);
-    tray_->setToolTip(branding_ ? branding_->productName()
-                                : QStringLiteral("AJAZZ Control Center"));
+    baseTrayIcon_ = QIcon::fromTheme(QStringLiteral("ajazz-control-center"), embedded);
+    tray_->setIcon(baseTrayIcon_);
     buildMenu();
+    refreshBatteryPresentation();
     tray_->show();
 
     // Left-click on the tray icon toggles the main window's visibility — a
@@ -164,23 +166,59 @@ void TrayController::ensureTray(QQmlApplicationEngine* engine) {
             });
 }
 
-void TrayController::setDeviceBattery(QString const& deviceName, int percent) {
-    if (!tray_) {
-        return; // Tray hasn't been created yet (headless session).
+void TrayController::trackBatteryService(BatteryService* service) {
+    if (!service) {
+        return;
     }
+    connect(service,
+            &BatteryService::batteryQueried,
+            this,
+            &TrayController::setDeviceBattery,
+            Qt::UniqueConnection);
+    connect(service,
+            &BatteryService::batteryUnavailable,
+            this,
+            &TrayController::clearDeviceBattery,
+            Qt::UniqueConnection);
+}
+
+QString TrayController::batterySummary() const {
+    QStringList devices = deviceBattery_.keys();
+    std::sort(devices.begin(), devices.end());
+    QStringList readings;
+    readings.reserve(devices.size());
+    for (auto const& deviceName : devices) {
+        int const percent = deviceBattery_.value(deviceName);
+        QString const label = percent < 20 ? tr("Low battery, %1").arg(deviceName) : deviceName;
+        readings.push_back(QStringLiteral("%1: %2%").arg(label, QString::number(percent)));
+    }
+    return readings.join(QLatin1Char('\n'));
+}
+
+void TrayController::setDeviceBattery(QString const& deviceName, int percent) {
     auto const clamped = std::clamp(percent, 0, 100);
-    QString const prefix = clamped < 20 ? tr("⚠ Low battery") : tr("Battery");
-    batteryTooltip_ =
-        QStringLiteral("%1 %2: %3%").arg(prefix, deviceName, QString::number(clamped));
-    auto const baseTip =
-        branding_ ? branding_->productName() : QStringLiteral("AJAZZ Control Center");
-    tray_->setToolTip(baseTip + QStringLiteral("\n") + batteryTooltip_);
-    if (clamped < 20) {
+    auto const previous = deviceBattery_.constFind(deviceName);
+    bool const wasLow = previous != deviceBattery_.cend() && previous.value() < 20;
+    deviceBattery_.insert(deviceName, clamped);
+    AJAZZ_LOG_INFO(
+        "tray-battery", "tray battery updated: {} {}%", deviceName.toStdString(), clamped);
+    refreshBatteryPresentation();
+    emit batterySummaryChanged(batterySummary());
+    if (clamped < 20 && !wasLow && tray_) {
         tray_->showMessage(tr("Low battery"),
                            tr("%1 is at %2%").arg(deviceName, QString::number(clamped)),
                            QSystemTrayIcon::Warning,
                            5000);
     }
+}
+
+void TrayController::clearDeviceBattery(QString const& deviceName) {
+    if (deviceBattery_.remove(deviceName) == 0) {
+        return;
+    }
+    AJAZZ_LOG_INFO("tray-battery", "tray battery cleared: {}", deviceName.toStdString());
+    refreshBatteryPresentation();
+    emit batterySummaryChanged(batterySummary());
 }
 
 void TrayController::setPaused(bool paused) {
@@ -219,12 +257,41 @@ void TrayController::buildMenu() {
         });
     }
 
+    batteryAction_ = menu_->addAction(tr("Battery: unavailable"));
+    batteryAction_->setEnabled(false);
+
     menu_->addSeparator();
 
     auto* quit = menu_->addAction(tr("Quit"));
     connect(quit, &QAction::triggered, this, &TrayController::quitRequested);
 
     tray_->setContextMenu(menu_);
+}
+
+void TrayController::refreshBatteryPresentation() {
+    QString const summary = batterySummary();
+    QString const batteryText =
+        summary.isEmpty()
+            ? tr("Battery: unavailable")
+            : tr("Battery: %1").arg(summary).replace(QLatin1Char('\n'), QStringLiteral(" | "));
+    if (batteryAction_) {
+        batteryAction_->setText(batteryText);
+    }
+    if (tray_) {
+        if (deviceBattery_.isEmpty()) {
+            tray_->setIcon(baseTrayIcon_);
+        } else {
+            int charge = 100;
+            for (int const current : deviceBattery_) {
+                charge = std::min(charge, current);
+            }
+            tray_->setIcon(makeBatteryStatusIcon(baseTrayIcon_, charge));
+        }
+        QString const productName =
+            branding_ ? branding_->productName() : QStringLiteral("AJAZZ Control Center");
+        tray_->setToolTip(productName + QStringLiteral("\n") +
+                          (summary.isEmpty() ? tr("Battery: unavailable") : summary));
+    }
 }
 
 void TrayController::rebuildProfileSubmenu() {

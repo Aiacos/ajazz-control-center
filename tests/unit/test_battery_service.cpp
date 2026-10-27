@@ -18,6 +18,8 @@
 #include "battery_service.hpp"
 #include "qt_app_fixture.hpp"
 
+#include <QSettings>
+#include <QSignalSpy>
 #include <QString>
 
 #include <cstdint>
@@ -97,4 +99,69 @@ TEST_CASE("BatteryService: lastKnownPercent caches successes and resets on unava
 
     // Codenames the service has never seen always return -1.
     REQUIRE(svc.lastKnownPercent(QStringLiteral("never-queried")) == -1);
+}
+
+TEST_CASE("BatteryService: first battery reading is queried without waiting for poll interval",
+          "[battery-service][startup]") {
+    ajazz::tests::qtApp();
+    QSettings settings;
+    settings.remove(QStringLiteral("battery/poll-enabled"));
+
+    auto mock = std::make_shared<MockBatteryDevice>(descFor("ajazz_mouse"));
+    mock->m_next = static_cast<std::uint8_t>(61);
+    ajazz::app::BatteryService svc(
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; },
+        [] { return std::vector<QString>{QStringLiteral("ajazz_mouse")}; },
+        nullptr);
+    QSignalSpy readings(&svc, &ajazz::app::BatteryService::batteryQueried);
+
+    REQUIRE(readings.wait(1500));
+    REQUIRE(readings.count() == 1);
+    CHECK(readings.constFirst().at(0).toString() == QStringLiteral("ajazz_mouse"));
+    CHECK(readings.constFirst().at(1).toInt() == 61);
+}
+
+TEST_CASE("BatteryService: disabling polling cancels the queued initial query",
+          "[battery-service][startup]") {
+    ajazz::tests::qtApp();
+    QSettings settings;
+    settings.remove(QStringLiteral("battery/poll-enabled"));
+
+    auto mock = std::make_shared<MockBatteryDevice>(descFor("ajazz_mouse"));
+    mock->m_next = static_cast<std::uint8_t>(61);
+    ajazz::app::BatteryService svc(
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; },
+        [] { return std::vector<QString>{QStringLiteral("ajazz_mouse")}; },
+        nullptr);
+    QSignalSpy readings(&svc, &ajazz::app::BatteryService::batteryQueried);
+    svc.setPollEnabled(false);
+    svc.onDevicesChanged();
+
+    CHECK_FALSE(readings.wait(100));
+    CHECK(svc.lastKnownPercent(QStringLiteral("ajazz_mouse")) == -1);
+}
+
+TEST_CASE("BatteryService: disconnect clears the last known battery reading",
+          "[battery-service][disconnect]") {
+    ajazz::tests::qtApp();
+    QSettings settings;
+    settings.remove(QStringLiteral("battery/poll-enabled"));
+
+    auto mock = std::make_shared<MockBatteryDevice>(descFor("ajazz_mouse"));
+    mock->m_next = static_cast<std::uint8_t>(61);
+    std::vector<QString> connected{QStringLiteral("ajazz_mouse")};
+    ajazz::app::BatteryService svc(
+        [mock](QString const&) -> std::shared_ptr<ajazz::core::IDevice> { return mock; },
+        [&connected] { return connected; },
+        nullptr);
+    QSignalSpy unavailable(&svc, &ajazz::app::BatteryService::batteryUnavailable);
+
+    svc.pollAll();
+    REQUIRE(svc.lastKnownPercent(QStringLiteral("ajazz_mouse")) == 61);
+    connected.clear();
+    svc.onDevicesChanged();
+
+    CHECK(svc.lastKnownPercent(QStringLiteral("ajazz_mouse")) == -1);
+    REQUIRE(unavailable.count() == 1);
+    CHECK(unavailable.constFirst().at(0).toString() == QStringLiteral("ajazz_mouse"));
 }
