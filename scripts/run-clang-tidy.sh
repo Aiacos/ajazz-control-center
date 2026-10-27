@@ -46,11 +46,13 @@ fi
 # GCC >= 15 writes C++20 module-scanning flags (-fmodules-ts,
 # -fmodule-mapper=..., -fdeps-format=p1689r5, -fdeps-file=..., -fdeps-target=...)
 # into compile_commands.json; clang-tidy's clang driver rejects them as
-# "unknown argument" hard errors. Strip them into a filtered copy of the
-# compdb so the hook works regardless of the configuring compiler.
+# "unknown argument" hard errors. GCC also emits -mno-direct-extern-access
+# for this toolchain, which clang does not implement. Strip these flags into
+# a filtered copy of the compdb so the hook works regardless of the compiler
+# used to configure the build.
 TIDY_DB_DIR="$(mktemp -d)"
 trap 'rm -rf "$TIDY_DB_DIR"' EXIT
-sed -E 's/-f(deps-format|deps-file|deps-target|module-mapper)=[^" ]*//g; s/-fmodules-ts//g' \
+sed -E 's/-f(deps-format|deps-file|deps-target|module-mapper)=[^" ]*//g; s/-fmodules-ts//g; s/-mno-direct-extern-access//g' \
     "$COMPDB" >"${TIDY_DB_DIR}/compile_commands.json"
 
 clang-tidy --quiet -p "$TIDY_DB_DIR" "${files[@]}"

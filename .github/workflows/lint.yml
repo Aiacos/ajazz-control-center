@@ -6,8 +6,8 @@ name: Lint
 # locally. This applies BOTH to:
 #   * PRs from within the same repo (not forks) -> pushed to the PR head
 #     branch (the feature branch). This is the primary GitFlow path:
-#     feature -> develop, develop -> main.
-#   * direct pushes to main / develop -> pushed back to that branch. With
+#     feature -> dev, dev -> main.
+#   * direct pushes to main / dev -> pushed back to that branch. With
 #     "require a pull request before merging" branch protection enabled,
 #     this only succeeds if github-actions[bot] is on the bypass list;
 #     otherwise the PR path above has already produced a clean tree and
@@ -17,8 +17,9 @@ name: Lint
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
+    branches: [main, dev]
   workflow_dispatch:
 
 permissions:
@@ -94,12 +95,12 @@ jobs:
         run: |
           pre-commit run --all-files --show-diff-on-failure --color always
 
-      - name: Commit auto-fixes (PR head branch or direct push to main/develop)
+      - name: Commit auto-fixes (PR head branch or direct push to main/dev)
         # continue-on-error so a push REJECTED by "require a pull request
         # before merging" branch protection (when github-actions[bot] is not
         # on the bypass list) does not turn the whole job red. On a PR the
         # head branch is unprotected so the push succeeds; on a protected
-        # main/develop the PR that produced the merge has already applied the
+        # main/dev the PR that produced the merge has already applied the
         # same fixes, so a rejected push here is benign.
         continue-on-error: true
         if: |
@@ -166,7 +167,7 @@ jobs:
           # qtwebengine (+deps qtwebchannel qtpositioning) entered with the
           # embedded OpenDeck SPA (opendeck_scheme_handler.hpp includes
           # QWebEngineUrlSchemeHandler); without it clang-tidy hard-errors on
-          # every WebEngine TU (develop Lint failure 2026-07-02).
+          # every WebEngine TU (dev Lint failure 2026-07-02).
           modules: qtwebsockets qtwebengine qtwebchannel qtpositioning
           cache: true
 
@@ -222,8 +223,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install mdformat + linkcheck
-        run: pip install mdformat mdformat-gfm mdformat-tables mdformat-frontmatter pyyaml
+      - name: Install documentation generator dependency
+        run: pip install pyyaml
 
       - name: README + wiki AUTOGEN blocks are in sync
         run: python3 scripts/generate-docs.py --check
@@ -243,14 +244,6 @@ jobs:
         # scripts/sign-plugin-manifest.py has its own coverage in
         # tests/. Same as `pyproject.toml [tool.pytest.ini_options]`.
         run: pytest -ra --strict-markers
-
-      - name: Check Markdown formatting (via pre-commit, single source of truth)
-        # Delegate to the pre-commit mdformat hook so the exclude list
-        # stays in lockstep with .pre-commit-config.yaml and contributors
-        # never see CI-only formatting failures.
-        run: |
-          pip install pre-commit
-          pre-commit run mdformat --all-files --color always
 
       - name: Lychee (link checker)
         uses: lycheeverse/lychee-action@8646ba30535128ac92d33dfc9133794bfdd9b411  # v2.8.0

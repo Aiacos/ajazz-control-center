@@ -112,6 +112,7 @@ qt_add_executable(
     # ISettingsCapable inside the service so non-capable devices return the vendor-default tuple
     # instead of crashing.
     src/settings_service.cpp
+    src/mouse_service.cpp
     src/plugin_catalog_proxy_model.cpp
     src/streamdock_catalog_fetcher.cpp
     src/opendeck_catalog_fetcher.cpp
@@ -537,6 +538,8 @@ set(ACC_QML_MODULE_SOURCES
     src/lighting_service.hpp
     src/settings_service.cpp
     src/settings_service.hpp
+    src/mouse_service.cpp
+    src/mouse_service.hpp
     src/battery_service.cpp
     src/battery_service.hpp
     src/app_update_service.cpp
@@ -992,8 +995,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/ajazz-control-center.desktop
             DESTINATION share/applications
     )
-    install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/70-ajazz.rules DESTINATION lib/udev/rules.d)
-
     # ----------------------------------------------------------------------
     # hicolor icon theme entries.
     #

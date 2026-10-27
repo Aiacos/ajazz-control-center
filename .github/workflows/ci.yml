@@ -5,9 +5,9 @@ name: CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: [main, dev]
   pull_request:
-    branches: [main, develop]
+    branches: [main, dev]
   workflow_dispatch:
 
 concurrency:
@@ -18,6 +18,23 @@ permissions:
   contents: read
 
 jobs:
+  promotion-source:
+    name: Promotion source
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Validate source repository for main
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [[ "$BASE_REF" == "main" ]]; then
+            if [[ "$HEAD_REPO" != "$GITHUB_REPOSITORY" ]]; then
+              echo "::error::Pull requests into main must come from this repository."
+              exit 1
+            fi
+          fi
+
   # ---------------------------------------------------------------------------
   # Build & test matrix — Linux, Windows, macOS.
   # ---------------------------------------------------------------------------
@@ -338,6 +355,7 @@ jobs:
         with:
           name: coverage
           path: coverage.info
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # Sanitizer matrix — Linux only (closes #41).

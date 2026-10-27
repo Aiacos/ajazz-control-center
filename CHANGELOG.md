@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- **AJ-series mouse settings bridge** (2026-10-03): the Mouse tab now uses a
+  QML `MouseService` to apply the complete DPI table, polling rate and lift-off
+  distance through the existing AJ-series capability interfaces. Applied values
+  are persisted in the user settings store and restored on the next launch.
+  The service emits explicit `mouse-service` trace entries, and unit coverage
+  protects the unavailable-device and QML bridge contracts.
+
 - **AKP05 Pro/retail SKUs registered** (2026-07-03, issue #85): `0x0300:0x3013` (AKP05E Pro),
   `0x3014` (AKP05CN Pro) and `0x3006` (AKP05 retail) are now recognised by the sidecar and the
   device registry — PIDs and protocol (v3, AKP05E image formats) mirrored from the upstream
@@ -63,6 +70,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   Live-verified: helper respawns 1000→5000 ms and back; tile cadence follows the setting.
 
 ### Fixed
+
+- **Mouse Apply was a visual no-op** (2026-10-03): DPI, polling-rate and
+  lift-off controls were local QML placeholders. Apply now performs the HID
+  writes before saving the host profile state. A QML binding loop that could
+  reset DPI values to 50 was also removed by handling only user modifications.
+- **AJ159 hidraw access diagnostics** (2026-10-03): failed HID opens now include
+  the operating-system error and point to the AJAZZ udev rule when permissions
+  are the cause. The Linux rule is validated by a unit test.
 
 - **Physical key presses ran the NEIGHBOURING key's builtin/Toggle/Multi-Action chain**
   (2026-07-03, found while cross-checking the vendor RE input conventions): the wire key index

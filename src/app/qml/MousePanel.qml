@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//
-// Mouse configuration tab: exposes DPI stage configuration (one stage per
-// `dpiStageCount`), USB polling-rate selection, and lift-off distance.
-//
-// Properties:
-//   * `dpiStageCount` — number of DPI stages to expose (default 0).
-//
-// Backend wiring is pending; the values are local placeholders.
+// Mouse configuration backed by MouseService. Values are pushed over HID by
+// ProfileEditor when the user presses Apply.
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Controls
@@ -16,8 +10,33 @@ import "components"
 
 Item {
     id: root
-
+    objectName: "mousePanel"
+    property string deviceCodename: ""
     property int dpiStageCount: 0
+    property var dpiValues: []
+    property int pollingRate: 125
+    property real liftOff: 1.5
+
+    function reload() {
+        var snapshot = MouseService.current(root.deviceCodename)
+        if (snapshot.available) {
+            root.dpiValues = snapshot.dpi
+            root.pollingRate = snapshot.pollingRate
+            root.liftOff = snapshot.liftOff
+        } else {
+            var defaults = []
+            for (var i = 0; i < root.dpiStageCount; ++i) defaults.push(800 + i * 400)
+            root.dpiValues = defaults
+        }
+    }
+
+    function applySettings() {
+        return MouseService.apply(root.deviceCodename, root.dpiValues,
+                                  root.pollingRate, root.liftOff)
+    }
+
+    onDeviceCodenameChanged: reload()
+    Component.onCompleted: reload()
 
     EmptyState {
         anchors.centerIn: parent
@@ -38,39 +57,36 @@ Item {
             delegate: RowLayout {
                 id: stageRow
                 required property int index
-                Label {
-                    text: qsTr("Stage %1").arg(stageRow.index + 1)
-                    color: Theme.fgMuted
-                    font.pixelSize: Theme.fontSm
-                }
+                Label { text: qsTr("Stage %1").arg(stageRow.index + 1); color: Theme.fgMuted }
                 SpinBox {
-                    from: 100
-                    to: 26000
-                    stepSize: 100
-                    value: 800 + stageRow.index * 400
-                    Accessible.role: Accessible.SpinBox
+                    objectName: "dpiStage%1".arg(stageRow.index + 1)
+                    from: 50; to: 42000; stepSize: 50
+                    value: root.dpiValues.length > stageRow.index ? root.dpiValues[stageRow.index] : 800 + stageRow.index * 400
+                    onValueModified: {
+                        var next = root.dpiValues.slice()
+                        while (next.length <= stageRow.index) next.push(800 + next.length * 400)
+                        next[stageRow.index] = value
+                        root.dpiValues = next
+                    }
                     Accessible.name: qsTr("DPI for stage %1").arg(stageRow.index + 1)
                 }
             }
         }
-
         Label { text: qsTr("Polling rate (Hz)"); color: Theme.fgMuted; font.pixelSize: Theme.fontSm }
         ComboBox {
-            model: [ 125, 250, 500, 1000, 2000, 4000, 8000 ]
-            Accessible.role: Accessible.ComboBox
+            objectName: "pollingRateBox"
+            model: [125, 250, 500, 1000, 2000, 4000, 8000]
+            currentIndex: Math.max(0, model.indexOf(root.pollingRate))
+            onActivated: root.pollingRate = model[currentIndex]
             Accessible.name: qsTr("Polling rate")
         }
-
         Label { text: qsTr("Lift-off distance (mm)"); color: Theme.fgMuted; font.pixelSize: Theme.fontSm }
         Slider {
-            from: 1.0
-            to: 2.0
-            stepSize: 0.1
-            value: 1.5
-            Accessible.role: Accessible.Slider
+            objectName: "liftOffSlider"
+            from: 1.0; to: 2.0; stepSize: 1.0; value: root.liftOff
+            onMoved: root.liftOff = value
             Accessible.name: qsTr("Lift-off distance")
         }
-
         Item { Layout.fillHeight: true }
     }
 }

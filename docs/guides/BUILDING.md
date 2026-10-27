@@ -24,6 +24,20 @@ which:
    immediately — no group membership, no logout, no replug.
 1. Configures CMake with the `dev` preset and builds.
 
+### Installing a user build on Linux
+
+To keep the system package untouched while testing a local build, install into
+the user prefix:
+
+```fish
+cmake --install build/dev --prefix $HOME/.local
+```
+
+The application binary and desktop files are installed in the user prefix. The
+udev rule is intentionally a system file and still belongs in
+`/etc/udev/rules.d/`; install it with `make udev` or a distribution package.
+The application does not need to be run as root.
+
 Common follow-up targets:
 
 | Command          | What it does                                                     |

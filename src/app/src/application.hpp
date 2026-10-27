@@ -23,6 +23,7 @@
 #include "firmware_update_service.hpp"
 #include "lighting_service.hpp"
 #include "loaded_plugins_model.hpp"
+#include "mouse_service.hpp"
 #include "opendeck_bridge.hpp"
 #include "plugin_catalog_model.hpp"
 #include "plugin_debug_service.hpp"
@@ -278,19 +279,20 @@ private:
                     ///< dynamic_cast to IFirmwareLightingCapable inside the
                     ///< service to enumerate / activate modes.
     std::unique_ptr<SettingsService>
-        m_settings; ///< 2026-05-18: AK980 PRO ISettingsCapable bridge
-                    ///< (issue #57). Same DeviceLookup pattern as
-                    ///< LightingService; dynamic_cast to ISettingsCapable
-                    ///< inside the service to push / read the AK-series
-                    ///< settings batch (fn-layer / sleep / response).
-    std::unique_ptr<BatteryService>
-        m_battery; ///< 2026-05-18: per-device battery polling for wireless
-                   ///< IBatteryCapable devices (AK980 PRO today). Owns a
-                   ///< 15-s QTimer that calls a per-codename query lambda
-                   ///< filtered by descriptor.hasBattery && connected.
-                   ///< Surfaces results to QML via batteryQueried /
-                   ///< batteryUnavailable; QML BatteryIndicator mounts in
-                   ///< DeviceRow.
+        m_settings;                        ///< 2026-05-18: AK980 PRO ISettingsCapable bridge
+                                           ///< (issue #57). Same DeviceLookup pattern as
+                                           ///< LightingService; dynamic_cast to ISettingsCapable
+                                           ///< inside the service to push / read the AK-series
+                                           ///< settings batch (fn-layer / sleep / response).
+    std::unique_ptr<MouseService> m_mouse; ///< QML bridge for mouse DPI/polling/LOD.
+    std::unique_ptr<BatteryService> m_battery; ///< 2026-05-18: per-device battery polling for
+                                               ///< wireless IBatteryCapable devices (including
+                                               ///< AJ-series mice). Performs an initial query and
+                                               ///< owns a 15-s QTimer that calls a per-codename
+                                               ///< query lambda filtered by descriptor.hasBattery
+                                               ///< && connected. Surfaces results to QML via
+                                               ///< batteryQueried / batteryUnavailable; QML
+                                               ///< BatteryIndicator mounts in DeviceRow.
     std::unique_ptr<AppUpdateService>
         m_appUpdate; ///< 2026-05-18: GitHub-Releases-driven in-app update checker
                      ///< (notify-only per docs/architecture/APP-AUTO-UPDATE.md).

@@ -6,6 +6,7 @@ add_executable(
     test_opendeck_bridge.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/opendeck_shaping.cpp
     test_logger.cpp
+    test_hid_transport_error.cpp
     # Debug epic Phase 1: tee / ring-buffer / file LogSink building blocks.
     test_log_sinks.cpp
     # Debug epic Phase 1: pure Qt->core log mapping + level parsing (the
@@ -17,6 +18,9 @@ add_executable(
     test_debug_control_server.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/debug_control_server.cpp
     test_device_registry.cpp
+    test_linux_udev_rules.cpp
+    test_mouse_service.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/mouse_service.cpp
     # ARCH-04 (Phase 09): host-side RGBA→JPEG/PNG pipeline. Locks JPEG/PNG magic bytes,
     # rotation/mirror transforms (AKP153 Rot90+mirror, AKP815 Rot180), and validation
     # contracts (zero-area, dim mismatch).
@@ -310,6 +314,12 @@ add_executable(
     # initial state.
     test_battery_service.cpp
     ${CMAKE_SOURCE_DIR}/src/app/src/battery_service.cpp
+    # Battery readings need to reach the tray independently of the device list.
+    # This unit suite drives BatteryService with a mock mouse and observes the
+    # TrayController state without requiring a live HID device or tray host.
+    test_tray_battery.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/tray_controller.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/src/app_icon.cpp
     # SettingsService (2026-05-18 issue #57 / QML wire-up): pins the
     # clampResponseLevel helper that QML uses to preview the persisted
     # response-time level without a HID round-trip. The wider service
@@ -377,6 +387,7 @@ target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/plug
 # debouncer (no native backend TU, no Wayland/X11 link) — the unit suite verifies the coalescing
 # contract the live backends layer on top of, driven via QSignalSpy::wait / QTest::qWait.
 target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/app/src)
+target_include_directories(ajazz_unit_tests PRIVATE ${CMAKE_SOURCE_DIR}/src/core/src)
 target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_FEATURE_ACTIVE_WINDOW=1)
 
 if(WIN32)
@@ -452,6 +463,10 @@ set_source_files_properties(
 # other test-only hooks behind the same guard. Production ajazz_core builds never define this, so
 # the symbols disappear from the library ABI entirely.
 target_compile_definitions(ajazz_unit_tests PRIVATE AJAZZ_TESTING)
+set_source_files_properties(
+    test_linux_udev_rules.cpp PROPERTIES COMPILE_DEFINITIONS
+                                         "AJAZZ_TEST_REPO_ROOT=\"${CMAKE_SOURCE_DIR}\""
+)
 
 # Set the AUTOMOC flag for the fetcher TU we pull in from the app target — StreamdockCatalogFetcher
 # is a Q_OBJECT so it needs moc to run.
@@ -507,6 +522,8 @@ target_link_libraries(
             # Without it the link fails on inflate/inflateEnd.
             ZLIB::ZLIB
             Qt6::Gui # QColor for BrandingService (no rendering required)
+            Qt6::Widgets # QSystemTrayIcon and QMenu used by TrayController
+            Qt6::Svg # App icon rendering used during tray creation
             Qt6::Network
             Qt6::Qml # QML_NAMED_ELEMENT in plugin_catalog_model.hpp pulls in QtQmlIntegration
             # Qt6::Quick: linked explicitly (not only transitively via the optional WebEngine block

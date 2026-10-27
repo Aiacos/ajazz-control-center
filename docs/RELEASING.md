@@ -13,25 +13,26 @@ ______________________________________________________________________
 
 Two long-lived branches:
 
-| Branch    | Role                                                                                            |
-| --------- | ----------------------------------------------------------------------------------------------- |
-| `develop` | **Integration / default branch.** All work merges here first.                                   |
-| `main`    | **Release-only.** Receives a single promotion PR from `develop`, then carries the release tags. |
+| Branch | Role                                                                                                                  |
+| ------ | --------------------------------------------------------------------------------------------------------------------- |
+| `dev`  | **Integration / default branch.** All work merges here first.                                                         |
+| `main` | **Release branch.** Receives reviewed PRs from `dev` or an in-repository topic branch, then carries the release tags. |
 
 Flow:
 
 ```
 feat/… ┐
-fix/…  ├──PR──▶ develop ──promotion PR──▶ main ──tag vX.Y.Z──▶ Release
+fix/…  ├──PR──▶ dev ──promotion PR──▶ main ──tag vX.Y.Z──▶ Release
 chore/…┘
 ```
 
-- Cut short-lived topic branches **off `develop`** (`feat/…`, `fix/…`,
-  `docs/…`, `chore/…`) and open a PR **into `develop`**.
-- `main` **never** receives feature PRs directly — only the `develop → main`
-  promotion PR (see §3).
+- Cut short-lived topic branches **off `dev`** (`feat/…`, `fix/…`,
+  `docs/…`, `chore/…`) and open a PR **into `dev`**.
+- Pull requests into `main` must come from this repository and pass the full
+  required check set. The normal release path remains `dev → main`; a fix may
+  target `main` directly from a topic branch when needed.
 - Both branches are protected: no direct pushes, no force-push, PR required.
-  Never push directly to `develop` or `main`.
+  Never push directly to `dev` or `main`.
 
 ______________________________________________________________________
 
@@ -41,19 +42,30 @@ All workflows live in [`.github/workflows/`](../.github/workflows/).
 
 ### Per-PR / per-push
 
-| Workflow              | Trigger                              | What it does                                                                                                                                      |
-| --------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **CI** (`ci.yml`)     | push/PR to `main`, `develop`         | Build + test matrix (ubuntu / windows-2022 / macos-14); `Code coverage` (push only, ≥40% floor); `Sanitizers` (ASan+UBSan, TSan).                 |
-| **Lint** (`lint.yml`) | push to `main`/`develop`, any PR     | Runs every pre-commit hook; **auto-fixes** formatting and pushes a `style:` commit back to the branch. Plus `clang-tidy` and a docs/markdown job. |
-| **CodeQL**            | push/PR to `main`/`develop` + weekly | Static security analysis (C++ + Python).                                                                                                          |
-| **Secret scan**       | push/PR to `main`/`develop` + weekly | gitleaks.                                                                                                                                         |
-| **Dependency Review** | PR to `main`/`develop`               | Flags vulnerable / incompatibly-licensed dependency changes.                                                                                      |
+| Workflow              | Trigger                           | What it does                                                                                                                                      |
+| --------------------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **CI** (`ci.yml`)     | push/PR to `main`, `dev`          | Build + test matrix (ubuntu / windows-2022 / macos-14); `Code coverage` (push only, ≥40% floor); `Sanitizers` (ASan+UBSan, TSan).                 |
+| **Lint** (`lint.yml`) | push/PR to `main`, `dev`          | Runs every pre-commit hook; **auto-fixes** formatting and pushes a `style:` commit back to the branch. Plus `clang-tidy` and a docs/markdown job. |
+| **CodeQL**            | push/PR to `main`, `dev` + weekly | Static security analysis (C++ + Python).                                                                                                          |
+| **Secret scan**       | push/PR to `main`, `dev` + weekly | gitleaks.                                                                                                                                         |
+| **Dependency Review** | PR to `main`, `dev`               | Flags vulnerable / incompatibly-licensed dependency changes.                                                                                      |
 
-**Required status checks** (must be green before a PR merges to `develop` or
-`main`): `pre-commit (all hooks)`, `clang-tidy (static analysis)`,
-`docs (markdown + links)`. The build matrix and sanitizers are **not** required
-(matrix job names are version-interpolated and brittle); add them from
-**Settings → Branches** if you want them enforced.
+**Required status checks** on both `dev` and `main`: `pre-commit (all hooks)`,
+`clang-tidy (static analysis)`, `docs (markdown + links)`,
+`Build ubuntu-24.04 · Release`, `Build windows-2022 · Release`, and
+`Build macos-14 · Release`. The CI `Promotion source` check also requires PRs
+into `main` to come from this repository. Sanitizers and
+coverage are informational and are not required for merge. Fix any failing
+required check before merging.
+
+Use GitHub Actions logs from the repository checkout:
+
+```bash
+gh run list --repo Userbash/AJAZZ-Control-Center --branch dev
+gh run view <run-id> --repo Userbash/AJAZZ-Control-Center --log-failed
+gh run watch <run-id> --repo Userbash/AJAZZ-Control-Center
+gh run download <run-id> --repo Userbash/AJAZZ-Control-Center
+```
 
 > **Auto-fix note:** the Lint workflow pushes auto-fix commits using
 > `secrets.LINT_AUTOFIX_PAT` (a repo-admin PAT) so the fix commit re-triggers
@@ -78,10 +90,10 @@ ______________________________________________________________________
 A release is **just a tag on `main`**. The pipeline does the rest. Pick the
 new version `X.Y.Z` per [SemVer](https://semver.org/).
 
-### Step 1 — Prepare the version bump (on a topic branch off `develop`)
+### Step 1 — Prepare the version bump (on a topic branch off `dev`)
 
 ```bash
-git checkout develop && git pull
+git checkout dev && git pull --ff-only
 git checkout -b chore/release-X.Y.Z
 ```
 
@@ -107,17 +119,17 @@ git checkout -b chore/release-X.Y.Z
    ```
 
 1. Commit (`chore(release): bump to X.Y.Z`), push, open a PR **into
-   `develop`**, let CI go green, merge.
+   `dev`**, let CI go green, merge.
 
-### Step 2 — Promote `develop` → `main`
+### Step 2 — Promote `dev` → `main`
 
 ```bash
-gh pr create --base main --head develop \
-  --title "Promote develop → main (vX.Y.Z)"
+gh pr create --base main --head dev \
+  --title "Promote dev → main (vX.Y.Z)"
 ```
 
 Wait for the required checks to pass, then merge (a **merge commit**, not
-squash — preserve the history). Do **not** delete `develop`.
+squash — preserve the history). Do **not** delete `dev`.
 
 ### Step 3 — Tag `main` to trigger the release
 
@@ -148,4 +160,4 @@ ______________________________________________________________________
 
 For an urgent fix on a published release: branch off `main`
 (`fix/hotfix-X.Y.Z+1`), PR **into `main`**, tag, then **back-merge `main` into
-`develop`** so the fix isn't lost on the next promotion.
+`dev`** so the fix isn't lost on the next promotion.

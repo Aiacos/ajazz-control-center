@@ -206,6 +206,7 @@ Rectangle {
                 sourceComponent: rgbPickerComp
             }
             Loader {
+                id: mouseLoader
                 active: stack.currentIndex === 1 && root._showMouse
                 sourceComponent: mousePanelComp
             }
@@ -249,7 +250,11 @@ Rectangle {
                 PrimaryButton {
                     objectName: "applyButton"
                     text: qsTr("Apply")
-                    onClicked: root.applyRequested()
+                    onClicked: {
+                        if (mouseLoader.item && root._showMouse)
+                            mouseLoader.item.applySettings()
+                        root.applyRequested()
+                    }
                     accessibleDescription: qsTr("Persist the current changes and push them to the device")
                 }
             }
@@ -279,7 +284,7 @@ Rectangle {
     // ---- Component definitions for the Loaders (mouse + keyboard tabs) -----
 
     Component { id: rgbPickerComp;   RgbPicker    { deviceCodename: root.codename } }
-    Component { id: mousePanelComp;  MousePanel   { dpiStageCount: root._dpiStageCount } }
+    Component { id: mousePanelComp;  MousePanel   { deviceCodename: root.codename; dpiStageCount: root._dpiStageCount } }
     Component { id: settingsRowComp; SettingsRow  { deviceCodename: root.codename; hasSettings: root._hasSettings; hasClock: root._hasClock; deviceMaturity: root._maturity } }
     Component { id: firmwarePanelComp; FirmwarePanel { deviceCodename: root.codename; deviceFamily: root._family } }
 }

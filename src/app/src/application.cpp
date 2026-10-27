@@ -197,6 +197,18 @@ Application::Application(QObject* parent)
               return nullptr;
           },
           this)),
+      m_mouse(std::make_unique<MouseService>(
+          [this](QString const& codename) -> std::shared_ptr<core::IDevice> {
+              auto const descriptors = m_deviceRegistry.enumerate();
+              for (auto const& d : descriptors) {
+                  if (QString::fromStdString(d.codename) == codename) {
+                      return m_deviceRegistry.open(core::DeviceId{
+                          .vendorId = d.vendorId, .productId = d.productId, .serial = {}});
+                  }
+              }
+              return nullptr;
+          },
+          this)),
       // 2026-05-18 P3.d: BatteryService gets the same DeviceLookup pattern
       // (codename -> shared_ptr<IDevice>) used by TimeSyncService and
       // LightingService. The enumerator returns the codenames of currently-
@@ -553,7 +565,13 @@ Application::Application(QObject* parent)
     QObject::connect(m_debouncer.get(),
                      &HotplugDebouncer::coalesced,
                      m_deviceModel.get(),
-                     [this](core::HotplugEvent const&) { m_deviceModel->refresh(); });
+                     [this](core::HotplugEvent const& event) {
+                         m_deviceModel->refresh();
+                         char const* const action =
+                             event.action == core::HotplugAction::Arrived ? "arrival" : "removal";
+                         AJAZZ_LOG_INFO("app", "refreshing battery state after device {}", action);
+                         m_battery->onDevicesChanged();
+                     });
 
     // OpenDeck UI (Phase 2B): give the bridge the live device-image path
     // (update_image -> set_image) and push backend changes to the web UI as
@@ -1443,7 +1461,9 @@ void Application::exposeToQml(QQmlApplicationEngine& engine) {
     TimeSyncService::registerInstance(m_timeSync.get());
     LightingService::registerInstance(m_lighting.get());
     SettingsService::registerInstance(m_settings.get());
+    MouseService::registerInstance(m_mouse.get());
     BatteryService::registerInstance(m_battery.get());
+    m_trayController->trackBatteryService(m_battery.get());
     AppUpdateService::registerInstance(m_appUpdate.get());
     FirmwareUpdateService::registerInstance(m_firmwareUpdate.get());
     // Phase 16 Plan 16-01 (DISPLAY-09): QML_SINGLETON exposure for the Stream Dock

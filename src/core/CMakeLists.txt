@@ -2,6 +2,7 @@ add_library(
     ajazz_core STATIC
     src/device_registry.cpp
     src/hid_transport.cpp
+    src/hid_transport_error.cpp
     src/event_bus.cpp
     src/profile.cpp
     src/profile_io.cpp

@@ -8,8 +8,11 @@
 #include "ajazz/core/capabilities.hpp"
 #include "ajazz/core/logger.hpp"
 
+#include <QElapsedTimer>
 #include <QSettings>
 #include <QTimer>
+
+#include <algorithm>
 
 namespace ajazz::app {
 
@@ -46,6 +49,11 @@ BatteryService::BatteryService(DeviceLookup lookup,
     connect(m_pollTimer, &QTimer::timeout, this, &BatteryService::pollAll);
     if (m_pollEnabled) {
         m_pollTimer->start();
+        QTimer::singleShot(0, this, [this]() {
+            if (m_pollEnabled) {
+                pollAll();
+            }
+        });
     }
 }
 
@@ -92,8 +100,36 @@ void BatteryService::pollAll() {
         return;
     }
     auto const codenames = m_enumerate();
+    clearDisconnected(codenames);
     for (auto const& codename : codenames) {
         doQuery(codename);
+    }
+}
+
+void BatteryService::onDevicesChanged() {
+    if (!m_enumerate) {
+        return;
+    }
+    auto const codenames = m_enumerate();
+    clearDisconnected(codenames);
+    if (!m_pollEnabled) {
+        return;
+    }
+    for (auto const& codename : codenames) {
+        doQuery(codename);
+    }
+}
+
+void BatteryService::clearDisconnected(std::vector<QString> const& connected) {
+    auto const previousCodenames = m_lastKnown.keys();
+    for (auto const& previous : previousCodenames) {
+        if (std::find(connected.begin(), connected.end(), previous) != connected.end()) {
+            continue;
+        }
+        m_lastKnown.remove(previous);
+        AJAZZ_LOG_INFO(
+            "battery", "cleared stale reading after disconnect: {}", previous.toStdString());
+        emit batteryUnavailable(previous);
     }
 }
 
@@ -110,9 +146,19 @@ int BatteryService::lastKnownPercent(QString const& codename) const {
 }
 
 void BatteryService::doQuery(QString const& codename) {
+    QElapsedTimer elapsed;
+    elapsed.start();
+    auto logResult = [&codename, &elapsed](char const* result) {
+        AJAZZ_LOG_INFO("battery",
+                       "query {} completed in {} ms ({})",
+                       codename.toStdString(),
+                       elapsed.elapsed(),
+                       result);
+    };
     ++m_totalQueries;
     if (!m_lookup) {
         emit batteryUnavailable(codename);
+        logResult("no device lookup");
         return;
     }
     // A-04 / D-01 amendment 3: hold the shared_ptr in a LOCAL for the duration
@@ -122,6 +168,7 @@ void BatteryService::doQuery(QString const& codename) {
     if (!device) {
         m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
+        logResult("device not found");
         return;
     }
     // Pitfall 2: dynamic_cast + null-check inline.
@@ -129,6 +176,7 @@ void BatteryService::doQuery(QString const& codename) {
     if (!battery) {
         m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
+        logResult("battery capability missing");
         return;
     }
     auto const result = battery->batteryPercent();
@@ -136,12 +184,14 @@ void BatteryService::doQuery(QString const& codename) {
         // Wired / no battery / I/O failure — honest "unavailable" advertisement.
         m_lastKnown.remove(codename);
         emit batteryUnavailable(codename);
+        logResult("reading unavailable");
         return;
     }
     int const percent = static_cast<int>(*result);
     AJAZZ_LOG_INFO("battery", "queried {}: {}%", codename.toStdString(), percent);
     m_lastKnown.insert(codename, percent);
     emit batteryQueried(codename, percent);
+    logResult("reading available");
 }
 
 } // namespace ajazz::app
