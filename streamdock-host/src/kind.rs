@@ -17,6 +17,9 @@ pub enum Family {
     Akp03,
     /// AKP153 / Mirabox HSV293S — key grid, no encoders.
     Akp153,
+    /// AKP01E — one landscape touchscreen, 4×3 button page, no encoders.
+    /// Image geometry is not hardware-confirmed; output stays gated.
+    Akp01e,
 }
 
 /// Connection + geometry parameters for one device family member.
@@ -69,6 +72,10 @@ pub fn params_for(vid: u16, pid: u16) -> Option<DeviceParams> {
         (0x5548, 0x6674) => p(Family::Akp153, 1, 15, 0, "Ajazz AKP153 (Mirabox V1)"),
         (0x0300, 0x1010) => p(Family::Akp153, 1, 15, 0, "Ajazz AKP153E (V2)"),
         (0x0300, 0x1020) => p(Family::Akp153, 1, 15, 0, "Ajazz AKP153R"),
+        // AKP01E visual-screen dock. Firmware on the attached unit answered
+        // GET_FEATURE 0x01 with "V3.AKP01E.02.012" (protocol 3). 12 touch
+        // buttons, no encoders. Per-key JPEG size is not confirmed.
+        (0x0300, 0x3015) => p(Family::Akp01e, 3, 12, 0, "Ajazz AKP01E"),
         _ => None,
     }
 }
@@ -95,6 +102,14 @@ pub fn key_image_format(family: Family) -> ImageFormat {
             size: (85, 85),
             rotation: ImageRotation::Rot90,
             mirror: ImageMirroring::Both,
+        },
+        // 320×240 panel, 4×3 button page → 80×80 cells. Not confirmed on the
+        // wire; set_image stays behind --allow-output.
+        Family::Akp01e => ImageFormat {
+            mode: ImageMode::JPEG,
+            size: (80, 80),
+            rotation: ImageRotation::Rot0,
+            mirror: ImageMirroring::None,
         },
     }
 }
@@ -151,6 +166,16 @@ mod tests {
         assert_eq!(p.protocol_version, 1);
         assert_eq!(p.encoder_count, 0);
         assert_eq!(p.key_count, 15); // parity with our descriptor, not opendeck's 18
+    }
+
+    #[test]
+    fn akp01e_is_pv3_twelve_buttons_no_encoders() {
+        let p = params_for(0x0300, 0x3015).expect("AKP01E known");
+        assert_eq!(p.family, Family::Akp01e);
+        assert_eq!(p.protocol_version, 3);
+        assert_eq!(p.key_count, 12);
+        assert_eq!(p.encoder_count, 0);
+        assert_eq!(key_image_format(Family::Akp01e).size, (80, 80));
     }
 
     #[test]

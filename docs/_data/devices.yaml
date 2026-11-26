@@ -321,6 +321,18 @@ devices:
     protocol_doc: docs/protocols/streamdeck/akp05.md
     notes: "Retail non-E AKP05; PID mirrored from upstream opendeck-akp05. Same provisional status as akp05e_pro. Supersedes the 0x5001 placeholder as the likely real retail PID."
 
+  - codename: akp01e
+    family: streamdeck
+    name: "AJAZZ AKP01E"
+    vid: "0x0300"
+    pid: "0x3015"
+    keys: 12
+    encoders: 0
+    maturity: probed
+    capabilities: [display, firmware]
+    protocol_doc: docs/protocols/streamdeck/akp05.md
+    notes: "USB-C visual-screen dock. One landscape LCD with three vendor modes (full-screen image, 4x3 touch buttons, GIF). USB product string on the attached unit is HOTSPOTEKUSB HID DEMO. GET_FEATURE report 0x01 returned V3.AKP01E.02.012. Control collection is usage page 0xFFA0 usage 1. Button image upload is not confirmed. Driven by the mirajazz sidecar."
+
   # ----- Keyboards ---------------------------------------------------------
   - codename: via_generic
     family: keyboard

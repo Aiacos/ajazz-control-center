@@ -48,6 +48,8 @@ const KNOWN_VID_PIDS: &[(u16, u16)] = &[
     (0x5548, 0x6674),
     (0x0300, 0x1010),
     (0x0300, 0x1020),
+    // AKP01E visual-screen dock (control collection 0xFFA0 usage 1)
+    (0x0300, 0x3015),
 ];
 
 fn build_queries() -> Vec<DeviceQuery> {
@@ -331,11 +333,12 @@ async fn handle_render_test(devices: &DeviceMap, cmd: &serde_json::Value, allow_
                 200u8.wrapping_sub(key.wrapping_mul(13)),
             );
             // AKP05 indices 0..3 are encoder touch zones; other families have none.
-            let (fmt, dim) = if family == Family::Akp05 && key < 4 {
-                (zone_image_format(), 128u32)
+            let fmt = if family == Family::Akp05 && key < 4 {
+                zone_image_format()
             } else {
-                (key_image_format(family), 112u32)
+                key_image_format(family)
             };
+            let dim = fmt.size.0 as u32;
             device.set_button_image(key, fmt, make_solid(dim, dim, r, g, b)).await?;
         }
         device.flush().await
