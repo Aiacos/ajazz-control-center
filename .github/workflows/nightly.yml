@@ -200,6 +200,20 @@ jobs:
             -DAJAZZ_ENABLE_WERROR=OFF
       - name: Build
         run: cmake --build build/macos-release
+      - name: Verify Qt runtime is bundled into the installed app
+        run: |
+          set -euo pipefail
+          DEST="${RUNNER_TEMP}/acc-install"
+          cmake --install build/macos-release --prefix "$DEST"
+          APP=$(find "$DEST" -name 'ajazz-control-center.app' -type d | head -1)
+          if [ -z "$APP" ]; then echo "::error::No .app bundle found after install" >&2; exit 1; fi
+          for fw in QtCore QtGui QtQml QtQuick QtWebSockets; do
+            if [ ! -d "$APP/Contents/Frameworks/${fw}.framework" ]; then
+              echo "::error::${fw}.framework missing from $APP — the DMG would not launch" >&2
+              exit 1
+            fi
+          done
+          echo "OK: Qt runtime bundled in $APP"
       - name: Package (DMG + TGZ)
         working-directory: build/macos-release
         # hdiutil (driving cpack -G DragNDrop) intermittently fails with

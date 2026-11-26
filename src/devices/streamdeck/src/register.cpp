@@ -118,6 +118,26 @@ std::vector<core::DeviceDescriptor> streamDockSidecarDescriptors() {
     out.push_back(akp05(0x0300, 0x3014, "AJAZZ AKP05CN Pro", "akp05cn_pro"));
     out.push_back(akp05(0x0300, 0x3006, "AJAZZ AKP05 (retail)", "akp05_retail"));
 
+    // AKP01E: USB-C visual-screen dock. One landscape LCD (full-screen image,
+    // a 4×3 touch-button page, or a GIF). The attached unit answered the same
+    // GET_FEATURE report 0x01 probe as the AKP05E with "V3.AKP01E.02.012".
+    // Composite HID: the control collection is usage page 0xFFA0 usage 1.
+    // Button-image geometry is not confirmed, so this row only advertises the
+    // 12 touch keys the vendor button mode shows.
+    out.push_back(DeviceDescriptor{
+        .vendorId = 0x0300,
+        .productId = 0x3015,
+        .family = DeviceFamily::StreamDeck,
+        .model = "AJAZZ AKP01E",
+        .codename = "akp01e",
+        .keyCount = 12,
+        .gridColumns = 4,
+        .encoderCount = 0,
+        .keyRows = 3,
+        .controlUsagePage = 0xFFA0,
+        .controlUsage = 0x0001,
+    });
+
     return out;
 }
 

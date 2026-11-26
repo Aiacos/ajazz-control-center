@@ -988,6 +988,27 @@ if(WIN32)
     install(SCRIPT "${_ajazz_deploy_script}")
 endif()
 
+# macOS: cpack harvests the install tree. Without macdeployqt that tree links
+# Qt via @rpath and Contents/Frameworks is empty, so the DMG dies at launch
+# with "Library not loaded: @rpath/QtCore.framework". The deploy script runs
+# at install time (the same moment the Windows block runs windeployqt). When
+# APPLE_SIGNING_IDENTITY is set, macdeployqt signs the bundled frameworks too,
+# which the later notarization step requires.
+if(APPLE)
+    set(_ajazz_macos_deploy_options "")
+    if(DEFINED ENV{APPLE_SIGNING_IDENTITY} AND NOT "$ENV{APPLE_SIGNING_IDENTITY}" STREQUAL "")
+        list(APPEND _ajazz_macos_deploy_options "-codesign=$ENV{APPLE_SIGNING_IDENTITY}")
+    endif()
+    qt_generate_deploy_qml_app_script(
+        TARGET ajazz-control-center
+        OUTPUT_SCRIPT _ajazz_macos_deploy_script
+        NO_UNSUPPORTED_PLATFORM_ERROR
+        NO_TRANSLATIONS
+        DEPLOY_TOOL_OPTIONS ${_ajazz_macos_deploy_options}
+    )
+    install(SCRIPT "${_ajazz_macos_deploy_script}")
+endif()
+
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     install(FILES ${CMAKE_SOURCE_DIR}/resources/linux/ajazz-control-center.desktop
             DESTINATION share/applications
